@@ -12,7 +12,7 @@ git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
 python3 -m venv .venv
 source .venv/bin/activate
-pip3 install -e .
+pip3 install -e '.[agent-claude]'
 ```
 
 2. Claude Agent SKILL 前置配置

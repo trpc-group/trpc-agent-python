@@ -156,7 +156,7 @@ class AgentTool(BaseTool):
                     parts=[Part.from_text(text=str(input_value))],
                 )
             # Import Runner here to avoid circular import
-            from trpc_agent_sdk._runners import Runner
+            from trpc_agent_sdk.runners import Runner
 
             runner = Runner(
                 app_name=f"{self.agent.name}{AGENT_TOOL_APP_NAME_SUFFIX}",
