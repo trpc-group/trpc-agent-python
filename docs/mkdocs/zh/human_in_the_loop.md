@@ -44,7 +44,7 @@ async def human_approval_required(task_description: str, details: dict) -> dict:
     }
 
 
-from trpc_agent.tools import LongRunningFunctionTool
+from trpc_agent_sdk.tools import LongRunningFunctionTool
 approval_tool = LongRunningFunctionTool(human_approval_required)
 ```
 
@@ -54,9 +54,9 @@ approval_tool = LongRunningFunctionTool(human_approval_required)
 
 ```python
 import os
-from trpc_agent.agents import LlmAgent
-from trpc_agent.models import OpenAIModel
-from trpc_agent.tools import LongRunningFunctionTool
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.tools import LongRunningFunctionTool
 
 def create_agent():
     model = OpenAIModel(
@@ -206,7 +206,7 @@ from langgraph.prebuilt import tools_condition, ToolNode
 from langgraph.types import interrupt, Command
 from langgraph.checkpoint.memory import InMemorySaver
 
-from trpc_agent.agents import langgraph_llm_node, langgraph_tool_node
+from trpc_agent_sdk.agents import langgraph_llm_node, langgraph_tool_node
 
 
 @tool
@@ -294,7 +294,7 @@ def build_graph():
 ### 2. 创建LangGraphAgent
 
 ```python
-from trpc_agent.agents import LangGraphAgent
+from trpc_agent_sdk.agents import LangGraphAgent
 
 def create_agent():
     """Create a LangGraph Agent with human-in-the-loop support"""
@@ -323,11 +323,11 @@ LangGraphAgent的Human-In-The-Loop处理方式与LlmAgent相同，都是通过�
 from dataclasses import dataclass
 from typing import Optional
 
-from trpc_agent.runners import Runner
-from trpc_agent.sessions import InMemorySessionService
-from trpc_agent.agents import LangGraphAgent
-from trpc_agent.events import LongRunningEvent
-from trpc_agent.types import Content, Part, FunctionResponse
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.agents import LangGraphAgent
+from trpc_agent_sdk.events import LongRunningEvent
+from trpc_agent_sdk.types import Content, Part, FunctionResponse
 
 
 @dataclass

@@ -174,7 +174,7 @@ async def append_event(self, session: Session, event: Event) -> Event:
 
 **配置**（`SessionServiceConfig`）：
 ```python
-from trpc_agent.sessions import SessionServiceConfig
+from trpc_agent_sdk.sessions import SessionServiceConfig
 
 session_config = SessionServiceConfig(
     event_ttl_seconds=3600,  # 事件 TTL：1 小时
@@ -200,7 +200,7 @@ session_config = SessionServiceConfig(
 
 **TTL 配置**（`SessionServiceConfig`）：
 ```python
-from trpc_agent.sessions import SessionServiceConfig
+from trpc_agent_sdk.sessions import SessionServiceConfig
 
 session_config = SessionServiceConfig(
     ttl=SessionServiceConfig.create_ttl_config(
@@ -256,7 +256,7 @@ async def get_session(...) -> Optional[Session]:
 
 **配置**（`SummarizerSessionManager`）：
 ```python
-from trpc_agent.sessions import SummarizerSessionManager, SessionSummarizer
+from trpc_agent_sdk.sessions import SummarizerSessionManager, SessionSummarizer
 
 summarizer = SessionSummarizer(...)
 summarizer_manager = SummarizerSessionManager(summarizer=summarizer)
@@ -303,7 +303,7 @@ trpc-agent 提供了三种 `SessionService` 实现，方便根据场景选择合
 
 **配置示例**：
 ```python
-from trpc_agent.sessions import InMemorySessionService, SessionServiceConfig
+from trpc_agent_sdk.sessions import InMemorySessionService, SessionServiceConfig
 
 session_config = SessionServiceConfig(
     event_ttl_seconds=3600,  # 事件 TTL：1 小时
@@ -352,7 +352,7 @@ session_service = InMemorySessionService(session_config=session_config)
 
 **配置示例**：
 ```python
-from trpc_agent.sessions import RedisSessionService, SessionServiceConfig
+from trpc_agent_sdk.sessions import RedisSessionService, SessionServiceConfig
 import os
 
 # 从环境变量读取 Redis 配置
@@ -427,7 +427,7 @@ EXPIRE session:weather_app:user_001:session_123 86400  # 24 小时后过期
 
 **配置示例**：
 ```python
-from trpc_agent.sessions import SqlSessionService, SessionServiceConfig
+from trpc_agent_sdk.sessions import SqlSessionService, SessionServiceConfig
 import os
 
 # 从环境变量读取 MySQL 配置
@@ -565,8 +565,8 @@ client:                                            # 客户端调用的后端配
 import os
 from trpc.config import config
 from trpc.plugin import setup
-from trpc_agent_ecosystem.session_service.trpc_redis_session_service import TrpcRedisSessionService
-from trpc_agent.sessions import SessionServiceConfig
+from trpc_agent_sdk.server.session_service.trpc_redis_session_service import TrpcRedisSessionService
+from trpc_agent_sdk.sessions import SessionServiceConfig
 
 # 加载 trpc-python 配置及环境
 config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "trpc_python.yaml"))
@@ -596,7 +596,7 @@ session_service = TrpcRedisSessionService(
 - TTL 机制与 `RedisSessionService` 相同（Redis 自动过期）
 
 **相关示例**：
-- 📁 [`examples/trpc_redis_session_service/trpc_main.py`](../../../examples/trpc_redis_session_service/trpc_main.py) - 完整的 TRPC Redis Session Service 使用示例
+- 📁 [`examples/session_service_with_redis/run_agent.py`](../../../examples/session_service_with_redis/run_agent.py) - 完整的 TRPC Redis Session Service 使用示例
 
 ---
 
@@ -630,8 +630,8 @@ session_service = TrpcRedisSessionService(
 
 ```python
 import uuid
-from trpc_agent.sessions import InMemorySessionService, SessionServiceConfig
-from trpc_agent.runners import Runner
+from trpc_agent_sdk.sessions import InMemorySessionService, SessionServiceConfig
+from trpc_agent_sdk.runners import Runner
 
 # 1. 创建 SessionService
 session_config = SessionServiceConfig(
@@ -666,7 +666,7 @@ async for event in runner.run_async(
 
 ```python
 import uuid
-from trpc_agent.sessions import InMemorySessionService
+from trpc_agent_sdk.sessions import InMemorySessionService
 
 session_service = InMemorySessionService()
 

@@ -33,11 +33,11 @@ from typing import Any
 
 from typing_extensions import Annotated
 
-from trpc_agent.agents import LlmAgent
-from trpc_agent.models import OpenAIModel
-from trpc_agent.tools import FunctionTool
-from trpc_agent.types import GenerateContentConfig
-from trpc_agent_dsl.graph import (
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.tools import FunctionTool
+from trpc_agent_sdk.types import GenerateContentConfig
+from trpc_agent_sdk.dsl.graph import (
     GraphAgent,
     NodeConfig,
     STATE_KEY_LAST_RESPONSE,
@@ -170,9 +170,9 @@ def create_agent() -> GraphAgent:
 import asyncio
 import uuid
 
-from trpc_agent.runners import Runner
-from trpc_agent.sessions import InMemorySessionService
-from trpc_agent.types import Content, Part
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.types import Content, Part
 
 
 async def main() -> None:
@@ -295,8 +295,8 @@ graph.add_node(
 场景：在节点内直接调用模型；若配置 tools，会在同一 llm_node 内完成 function_call → 执行工具 → 回填 function_response → 再次调用模型的循环。
 
 ```python
-from trpc_agent.tools import FunctionTool
-from trpc_agent.types import GenerateContentConfig
+from trpc_agent_sdk.tools import FunctionTool
+from trpc_agent_sdk.types import GenerateContentConfig
 
 async def my_tool(query: str) -> dict[str, str]:
     return {"result": f"Processed: {query}"}
@@ -330,7 +330,7 @@ graph.add_llm_node(
 场景：在图中执行一段静态代码（如 Python/Shell），结果写入内置状态；可通过 `STATE_KEY_NODE_RESPONSES[name]` 取该节点输出。
 
 ```python
-from trpc_agent.code_executors import UnsafeLocalCodeExecutor
+from trpc_agent_sdk.code_executors import UnsafeLocalCodeExecutor
 
 graph.add_code_node(
     name="run_script",
@@ -352,11 +352,11 @@ graph.add_code_node(
 场景：在图中接入一个知识检索节点，使用已有的 `LangchainKnowledgeSearchTool` 做检索，结果写入状态。
 
 ```python
-from trpc_agent_ecosystem.knowledge.tools import LangchainKnowledgeSearchTool
-from trpc_agent_ecosystem.knowledge.trag_adapter import TragAuthParams
-from trpc_agent_ecosystem.knowledge.trag_adapter import TragDocumentLoader
-from trpc_agent_ecosystem.knowledge.trag_adapter import TragDocumentLoaderParams
-from trpc_agent_ecosystem.knowledge.trag_knowledge import TragKnowledge
+from trpc_agent_sdk.server.knowledge.tools import LangchainKnowledgeSearchTool
+from trpc_agent_sdk.server.knowledge.trag_adapter import TragAuthParams
+from trpc_agent_sdk.server.knowledge.trag_adapter import TragDocumentLoader
+from trpc_agent_sdk.server.knowledge.trag_adapter import TragDocumentLoaderParams
+from trpc_agent_sdk.server.knowledge.trag_knowledge import TragKnowledge
 
 
 def _create_trag_knowledge(auth_params: TragAuthParams) -> TragKnowledge:
@@ -480,7 +480,7 @@ from typing import Any
 from google.genai.types import Content
 from typing_extensions import Annotated
 
-from trpc_agent_dsl.graph import (
+from trpc_agent_sdk.dsl.graph import (
     State,
     append_list,
     merge_dict,
@@ -560,7 +560,7 @@ StateMapper 用于显式控制 agent_node 的数据流，分为两步：
 - Agent Node 执行完成后，我们希望把它的最终回复写回 Graph 的 query_reply
 
 ```python
-from trpc_agent_dsl.graph import StateMapper, STATE_KEY_USER_INPUT
+from trpc_agent_sdk.dsl.graph import StateMapper, STATE_KEY_USER_INPUT
 
 graph.add_agent_node(
     node_id="query_orchestrator",
@@ -593,7 +593,7 @@ graph.add_agent_node(
 - 节点级：add_node(..., callbacks=node_callbacks)，只作用于当前节点
 
 ```python
-from trpc_agent_dsl.graph import NodeCallbacks, StateGraph
+from trpc_agent_sdk.dsl.graph import NodeCallbacks, StateGraph
 
 
 global_callbacks = NodeCallbacks()
@@ -648,7 +648,7 @@ Graph 模块内置了一组常用状态 Key 常量，建议统一使用常量读
 ### 在 Graph 运行中读取
 
 ```python
-from trpc_agent_dsl.graph import (
+from trpc_agent_sdk.dsl.graph import (
     State,
     STATE_KEY_USER_INPUT,
     STATE_KEY_LAST_RESPONSE,
@@ -670,7 +670,7 @@ async def inspect_state_node(state: State) -> dict[str, str]:
 ### 在 Graph 外读取
 
 ```python
-from trpc_agent_dsl.graph import STATE_KEY_LAST_RESPONSE, STATE_KEY_NODE_RESPONSES
+from trpc_agent_sdk.dsl.graph import STATE_KEY_LAST_RESPONSE, STATE_KEY_NODE_RESPONSES
 
 
 session = await session_service.get_session(
@@ -689,7 +689,7 @@ if session and session.state:
 Graph 提供 interrupt(...)，可在节点中暂停执行并等待外部决策：
 
 ```python
-from trpc_agent_dsl.graph import interrupt
+from trpc_agent_sdk.dsl.graph import interrupt
 
 
 async def approval_gate(state: State) -> dict[str, Any]:
@@ -706,8 +706,8 @@ async def approval_gate(state: State) -> dict[str, Any]:
 Runner 侧会收到 LongRunningEvent，客户端通过 FunctionResponse 恢复：
 
 ```python
-from trpc_agent.events import LongRunningEvent
-from trpc_agent.types import Content, FunctionResponse, Part
+from trpc_agent_sdk.events import LongRunningEvent
+from trpc_agent_sdk.types import Content, FunctionResponse, Part
 
 async for event in runner.run_async(...):
     if isinstance(event, LongRunningEvent):

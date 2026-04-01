@@ -55,7 +55,7 @@ skills/
     ...
 ```
 
-仓库和解析：[trpc_agent/skills/_repository.py](../../../trpc_agent/skills/_repository.py)
+仓库和解析：[trpc_agent/skills/_repository.py](../../../trpc_agent_sdk/skills/_repository.py)
 
 ## 快速开始
 
@@ -96,12 +96,12 @@ SKILLS_ROOT=./skills
 
 ```python
 import os
-from trpc_agent.agents.llm_agent import LlmAgent
-from trpc_agent.models import OpenAIModel
-from trpc_agent.skills import SkillToolSet
-from trpc_agent.skills import create_default_skill_repository
-from trpc_agent.code_executors import create_local_workspace_runtime
-from trpc_agent.code_executors import create_container_workspace_runtime
+from trpc_agent_sdk.agents.llm_agent import LlmAgent
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.skills import SkillToolSet
+from trpc_agent_sdk.skills import create_default_skill_repository
+from trpc_agent_sdk.code_executors import create_local_workspace_runtime
+from trpc_agent_sdk.code_executors import create_container_workspace_runtime
 
 # 创建工作空间运行时（本地或容器）
 workspace_runtime = create_local_workspace_runtime()
@@ -175,8 +175,8 @@ Always use environment variables in commands:
 - **智能提示指导**：在提示词中明确说明工作流程，引导 LLM 按正确顺序调用工具
 - **Token 优化**：通过 `skill_select_tools` 仅加载需要的工具，显著减少上下文大小
 - **代码位置**：
-  - 工具定义：[trpc_agent/skills/_tools.py](../../../trpc_agent/skills/_tools.py)
-  - 运行器：[trpc_agent/skills/_run_tool.py](../../../trpc_agent/skills/_run_tool.py)
+  - 工具定义：[trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
+  - 运行器：[trpc_agent/skills/_run_tool.py](../../../trpc_agent_sdk/skills/_run_tool.py)
 
 ### 3) 运行示例
 
@@ -361,7 +361,7 @@ to use the custom output directory. Write all output files to $OUTPUT_DIR (which
 
 `SKILLS_ROOT` 不仅支持本地目录路径，还支持 URL 格式。框架会自动下载远端归档包、解压并缓存到本地，后续调用直接命中缓存无需重复下载。
 
-相关实现：[trpc_agent/skills/_url_root.py](../../../trpc_agent/skills/_url_root.py)
+相关实现：[trpc_agent/skills/_url_root.py](../../../trpc_agent_sdk/skills/_url_root.py)
 
 #### 支持的输入格式
 
@@ -497,7 +497,7 @@ https://github.com/anthropics/skills
 
 ### `skill_list`
 
-**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent/skills/_tools.py)
+**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
 
 **输入参数**：无
 
@@ -538,7 +538,7 @@ Assistant: Let me check what skills are available.
 
 ### `skill_list_tools`
 
-**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent/skills/_tools.py)
+**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
 
 **输入参数**：
 - `skill_name`（必需）：技能名称
@@ -609,7 +609,7 @@ Overview
 
 ### `skill_select_tools`
 
-**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent/skills/_tools.py)
+**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
 
 **输入参数**：
 - `skill_name`（必需）：技能名称
@@ -692,7 +692,7 @@ Assistant:
 
 ### `skill_load`
 
-**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent/skills/_tools.py)
+**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
 
 **输入参数**：
 - `skill_name`（必需）：技能名称
@@ -770,7 +770,7 @@ Assistant:
 
 ### `skill_select_docs`
 
-**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent/skills/_tools.py)
+**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
 
 **输入参数**：
 - `skill_name`（必需）：技能名称
@@ -844,7 +844,7 @@ Assistant: I need additional reference.
 
 ### `skill_list_docs`
 
-**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent/skills/_tools.py)
+**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
 
 **输入参数**：
 - `skill_name`（必需）：技能名称
@@ -896,7 +896,7 @@ Assistant: Let me check what documentation is available.
 
 ### `skill_run`
 
-**声明位置**：[trpc_agent/skills/_run_tool.py](../../../trpc_agent/skills/_run_tool.py)
+**声明位置**：[trpc_agent/skills/_run_tool.py](../../../trpc_agent_sdk/skills/_run_tool.py)
 
 **输入参数**：
 - `skill`（必需）：技能名称
@@ -1066,12 +1066,12 @@ LLM 调用 skill_run(skill="python-math", command="python3 scripts/fib.py 10")
 
 ## 运行环境
 
-**接口定义**：[trpc_agent/code_executors/_base_workspace_runtime.py](../../../trpc_agent/code_executors/_base_workspace_runtime.py)
+**接口定义**：[trpc_agent/code_executors/_base_workspace_runtime.py](../../../trpc_agent_sdk/code_executors/_base_workspace_runtime.py)
 
 **实现方式**：
-- **本地执行器**：[trpc_agent/code_executors/local/_local_ws_runtime.py](../../../trpc_agent/code_executors/local/_local_ws_runtime.py)
+- **本地执行器**：[trpc_agent/code_executors/local/_local_ws_runtime.py](../../../trpc_agent_sdk/code_executors/local/_local_ws_runtime.py)
   - 直接在本地系统执行命令，适合开发和测试
-- **容器执行器**（Docker）：[trpc_agent/code_executors/container/_container_ws_runtime.py](../../../trpc_agent/code_executors/container/_container_ws_runtime.py)
+- **容器执行器**（Docker）：[trpc_agent/code_executors/container/_container_ws_runtime.py](../../../trpc_agent_sdk/code_executors/container/_container_ws_runtime.py)
   - 在 Docker 容器中执行，提供更好的隔离性
 
 **容器执行器注意事项**：
@@ -1328,7 +1328,7 @@ LLM 调用对应的工具：get_current_weather(city="Beijing")
 **文件**: `agent/tools/_tools.py`
 
 ```python
-from trpc_agent.tools import register_tool
+from trpc_agent_sdk.tools import register_tool
 
 @register_tool("get_current_weather")
 def get_current_weather(city: str, unit: str = "celsius") -> dict:
@@ -1409,8 +1409,8 @@ Example 4: Ask someone name information
 
 ```python
 # agent/tools/_dynamic.py
-from trpc_agent.tools import FunctionTool
-from trpc_agent.skills import DynamicSkillToolSet, BaseSkillRepository
+from trpc_agent_sdk.tools import FunctionTool
+from trpc_agent_sdk.skills import DynamicSkillToolSet, BaseSkillRepository
 from ._tools import ask_name_information
 
 def create_skill_dynamic_tool_set(skill_repository: BaseSkillRepository, only_active_skills: bool = True):
@@ -1428,7 +1428,7 @@ def create_skill_dynamic_tool_set(skill_repository: BaseSkillRepository, only_ac
     )
 
 # agent/agent.py
-from trpc_agent.agents.llm_agent import LlmAgent
+from trpc_agent_sdk.agents.llm_agent import LlmAgent
 from .tools import create_skill_tool_set, create_skill_dynamic_tool_set
 
 def create_agent():
@@ -1453,8 +1453,8 @@ def create_agent():
 ```python
 #!/usr/bin/env python3
 import asyncio
-from trpc_agent.runners import Runner
-from trpc_agent.sessions import InMemorySessionService
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import InMemorySessionService
 from agent.agent import root_agent
 
 async def main():
@@ -1695,7 +1695,7 @@ Here are the results for your requests:
 
 ```python
 # 1. 定义所有工具 (agent/tools/_tools.py)
-from trpc_agent.tools import register_tool
+from trpc_agent_sdk.tools import register_tool
 
 @register_tool("get_current_weather")
 def get_current_weather(city: str, unit: str = "celsius") -> dict:
@@ -1717,8 +1717,8 @@ def ask_name_information(name: str, country: str = "China") -> dict:
     return {"name": name, "age": 20, "country": country}
 
 # 2. 配置 available_tools (agent/tools/_dynamic.py)
-from trpc_agent.tools import FunctionTool
-from trpc_agent.skills import DynamicSkillToolSet
+from trpc_agent_sdk.tools import FunctionTool
+from trpc_agent_sdk.skills import DynamicSkillToolSet
 
 def create_skill_dynamic_tool_set(skill_repository):
     available_tools = {
@@ -1991,7 +1991,7 @@ def create_skill_dynamic_tool_set(skill_repository: BaseSkillRepository, only_ac
 
 **检查**:
 ```python
-from trpc_agent.skills import SKILL_TOOLS_STATE_KEY_PREFIX
+from trpc_agent_sdk.skills import SKILL_TOOLS_STATE_KEY_PREFIX
 key = f"{SKILL_TOOLS_STATE_KEY_PREFIX}my-skill"
 print(f"Tools state: {ctx.session_state.get(key)}")
 ```

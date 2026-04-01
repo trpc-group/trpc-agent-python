@@ -42,13 +42,13 @@
 ### 构建 CodeExecutor
 
 ```python
-from trpc_agent.agents import LlmAgent
-from trpc_agent.models import LLMModel
-from trpc_agent.models import OpenAIModel
-from trpc_agent.code_executors import BaseCodeExecutor
-from trpc_agent.code_executors import UnsafeLocalCodeExecutor
-from trpc_agent.code_executors import ContainerCodeExecutor
-from trpc_agent.log import logger
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import LLMModel
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.code_executors import BaseCodeExecutor
+from trpc_agent_sdk.code_executors import UnsafeLocalCodeExecutor
+from trpc_agent_sdk.code_executors import ContainerCodeExecutor
+from trpc_agent_sdk.log import logger
 
 def _create_code_executor(code_executor_type: str = "unsafe_local") -> BaseCodeExecutor:
     """Create a code executor.
@@ -253,7 +253,7 @@ print(result)
 
 ## 123 沙箱环境 CodeExecutor 使用
 
-参考：[Pcg123 沙箱环境使用示例](../../../examples/code_executors_with_pcg123/README.md)
+参考：Pcg123 沙箱环境使用示例（示例待补充）
 
 ## 常见问题
 

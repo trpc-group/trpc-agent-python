@@ -80,7 +80,7 @@ timeout 300
 ### 1. 初始化 RedisStorage
 
 ```python
-from trpc_agent.storage import RedisStorage
+from trpc_agent_sdk.storage import RedisStorage
 
 # 异步模式（推荐）
 storage = RedisStorage(
@@ -111,8 +111,8 @@ storage = RedisStorage(
 ### 2. 定义 Redis 命令
 
 ```python
-from trpc_agent.storage import RedisCommand, RedisExpire, RedisCondition
-from trpc_agent.types import Ttl
+from trpc_agent_sdk.storage import RedisCommand, RedisExpire, RedisCondition
+from trpc_agent_sdk.types import Ttl
 
 # 字符串操作命令
 set_command = RedisCommand(
@@ -144,8 +144,8 @@ hgetall_command = RedisCommand(
 ```python
 import asyncio
 import json
-from trpc_agent.storage import RedisStorage, RedisCommand, RedisExpire, RedisCondition
-from trpc_agent.types import Ttl
+from trpc_agent_sdk.storage import RedisStorage, RedisCommand, RedisExpire, RedisCondition
+from trpc_agent_sdk.types import Ttl
 
 async def basic_example():
     # 初始化存储
@@ -676,8 +676,8 @@ async with storage.create_db_session() as conn:
 import asyncio
 import json
 from datetime import datetime, timedelta
-from trpc_agent.storage import RedisStorage, RedisCommand, RedisExpire, RedisCondition
-from trpc_agent.types import Ttl
+from trpc_agent_sdk.storage import RedisStorage, RedisCommand, RedisExpire, RedisCondition
+from trpc_agent_sdk.types import Ttl
 
 class CacheService:
     """缓存服务类示例"""
