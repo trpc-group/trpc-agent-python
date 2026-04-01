@@ -21,7 +21,7 @@ import asyncio
 import uuid
 
 from dotenv import load_dotenv
-from trpc_agent_sdk.models import constants as const
+from trpc_agent_sdk.models import _constants as const
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.server.agents.claude import destroy_claude_env
 from trpc_agent_sdk.server.agents.claude import setup_claude_env

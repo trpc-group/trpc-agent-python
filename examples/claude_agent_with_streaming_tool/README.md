@@ -68,9 +68,13 @@ async for event in runner.run_async(...):
 
 ## 环境要求
 
-- Python 3.10+（推荐 3.12）
-- trpc-agent 框架
-- claude-agent-sdk
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+python3 -m venv .venv
+source .venv/bin/activate
+pip3 install -e '.[agent-claude]'
+```
 
 ## 运行示例
 
