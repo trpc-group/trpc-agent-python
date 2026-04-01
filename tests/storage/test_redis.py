@@ -47,7 +47,7 @@ class TestRedisStorage:
     @pytest.mark.asyncio
     async def test_create_redis_engine_async(self, async_storage):
         """Test creating async Redis connection pool."""
-        with patch('trpc_agent.storage._redis.AsyncConnectionPool') as mock_pool:
+        with patch('trpc_agent_sdk.storage._redis.AsyncConnectionPool') as mock_pool:
             mock_pool.from_url.return_value = MagicMock()
 
             await async_storage.create_redis_engine()
@@ -58,7 +58,7 @@ class TestRedisStorage:
     @pytest.mark.asyncio
     async def test_create_redis_engine_sync(self, sync_storage):
         """Test creating sync Redis connection pool."""
-        with patch('trpc_agent.storage._redis.SyncConnectionPool') as mock_pool:
+        with patch('trpc_agent_sdk.storage._redis.SyncConnectionPool') as mock_pool:
             mock_pool.from_url.return_value = MagicMock()
 
             await sync_storage.create_redis_engine()
@@ -71,7 +71,7 @@ class TestRedisStorage:
         """Test creating Redis engine when pool already exists."""
         async_storage._redis_pool = MagicMock()
 
-        with patch('trpc_agent.storage._redis.AsyncConnectionPool') as mock_pool:
+        with patch('trpc_agent_sdk.storage._redis.AsyncConnectionPool') as mock_pool:
             await async_storage.create_redis_engine()
             # Should not create new pool
             mock_pool.from_url.assert_not_called()
@@ -79,7 +79,7 @@ class TestRedisStorage:
     @pytest.mark.asyncio
     async def test_create_redis_engine_error(self, async_storage):
         """Test error handling when creating Redis engine."""
-        with patch('trpc_agent.storage._redis.AsyncConnectionPool.from_url') as mock_from_url:
+        with patch('trpc_agent_sdk.storage._redis.AsyncConnectionPool.from_url') as mock_from_url:
             mock_from_url.side_effect = Exception("Connection error")
 
             with pytest.raises(ValueError, match="Failed to create Redis connection pool"):
@@ -92,7 +92,7 @@ class TestRedisStorage:
         mock_pool = AsyncMock(spec=AsyncConnectionPool)
         async_storage._redis_pool = mock_pool
 
-        with patch('trpc_agent.storage._redis.AsyncRedis') as mock_redis:
+        with patch('trpc_agent_sdk.storage._redis.AsyncRedis') as mock_redis:
             mock_redis.return_value = MagicMock()
             session = await async_storage.create_redis_session()
 
@@ -105,7 +105,7 @@ class TestRedisStorage:
         mock_pool = MagicMock()
         sync_storage._redis_pool = mock_pool
 
-        with patch('trpc_agent.storage._redis.SyncRedis') as mock_redis:
+        with patch('trpc_agent_sdk.storage._redis.SyncRedis') as mock_redis:
             mock_redis.return_value = MagicMock()
             session = await sync_storage.create_redis_session()
 

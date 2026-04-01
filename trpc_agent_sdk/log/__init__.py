@@ -4,7 +4,7 @@
 """
 TRPC Agent Logging Module
 
-This module provides a unified logging system for the trpc_agent framework.
+This module provides a unified logging system for the trpc_agent_sdk framework.
 """
 
 from . import _logger as logger

@@ -1,6 +1,6 @@
 # MCP Tools 示例
 
-本示例展示了如何在 trpc_agent 中使用 MCP（Model Context Protocol）协议集成外部工具服务器。
+本示例展示了如何在 trpc_agent_sdk 中使用 MCP（Model Context Protocol）协议集成外部工具服务器。
 
 ## 功能说明
 
@@ -18,7 +18,7 @@ Python版本: 3.10+（强烈建议使用3.12）
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
-cd trpc-agent
+cd trpc-agent-python
 python3 -m venv .venv
 source .venv/bin/activate
 pip3 install -e .

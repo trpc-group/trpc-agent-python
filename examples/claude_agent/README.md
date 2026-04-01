@@ -19,7 +19,7 @@ Python版本: 3.10+(强烈建议使用3.12)
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
-cd trpc-agent
+cd trpc-agent-python
 python3 -m venv .venv
 source .venv/bin/activate
 pip3 install -e .[agent-claude]
@@ -46,8 +46,8 @@ python3 run_agent.py
 ClaudeAgent Basic Demo - Weather Query
 ================================================================================
 
-[2026-01-12 11:13:20][INFO][trpc_agent][trpc_agent_ecosystem/agents/claude/_setup.py:209][2947095] Proxy server proxy process started (PID: 2948120)
-[2026-01-12 11:13:20][INFO][trpc_agent][trpc_agent_ecosystem/agents/claude/_setup.py:226][2947095] Proxy server is ready at http://0.0.0.0:8082
+[2026-01-12 11:13:20][INFO][trpc_agent_sdk][trpc_agent_ecosystem/agents/claude/_setup.py:209][2947095] Proxy server proxy process started (PID: 2948120)
+[2026-01-12 11:13:20][INFO][trpc_agent_sdk][trpc_agent_ecosystem/agents/claude/_setup.py:226][2947095] Proxy server is ready at http://0.0.0.0:8082
 🆔 Session ID: 9b405d41...
 📝 User: What is the weather in Beijing?
 
@@ -59,7 +59,7 @@ The current weather in Beijing is sunny with a temperature of 25°C and humidity
 ================================================================================
 Demo completed!
 ================================================================================
-[2026-01-12 11:13:27][INFO][trpc_agent][trpc_agent_ecosystem/agents/claude/_setup.py:262][2947095] Terminating proxy process (PID: 2948120)...
-[2026-01-12 11:13:27][INFO][trpc_agent][trpc_agent_ecosystem/agents/claude/_setup.py:274][2947095] Subprocess terminated successfully.
+[2026-01-12 11:13:27][INFO][trpc_agent_sdk][trpc_agent_ecosystem/agents/claude/_setup.py:262][2947095] Terminating proxy process (PID: 2948120)...
+[2026-01-12 11:13:27][INFO][trpc_agent_sdk][trpc_agent_ecosystem/agents/claude/_setup.py:274][2947095] Subprocess terminated successfully.
 🧹 Claude environment cleaned up
 ```

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright @ 2026 Tencent.com
+# Copyright @ 2025 Tencent.com
 """Skill toolset for integrating skills into the agent tool system.
 
 This module provides the SkillToolSet class which makes skills available
@@ -29,13 +29,14 @@ from ._registry import SKILL_REGISTRY
 from ._registry import SkillToolFunction
 from ._repository import BaseSkillRepository
 from ._repository import FsSkillRepository
-from ._run_tool import SkillRunTool
-from ._tools import skill_list
-from ._tools import skill_list_docs
-from ._tools import skill_list_tools
-from ._tools import skill_load
-from ._tools import skill_select_docs
-from ._tools import skill_select_tools
+from .tools import SkillExecTool
+from .tools import SkillRunTool
+from .tools import skill_list
+from .tools import skill_list_docs
+from .tools import skill_list_tools
+from .tools import skill_load
+from .tools import skill_select_docs
+from .tools import skill_select_tools
 
 
 class SkillToolSet(ToolSetABC):
@@ -71,6 +72,7 @@ class SkillToolSet(ToolSetABC):
         self.name = "skill_toolset"
         self._repository = repository or FsSkillRepository(*(paths or []))
         self._run_tool = SkillRunTool(repository=self._repository, **run_tool_kwargs)
+        self._exec_tool = SkillExecTool(run_tool=self._run_tool)
         self._tools: List[Callable] = [
             skill_load,
             skill_list,
@@ -102,6 +104,7 @@ class SkillToolSet(ToolSetABC):
         agent_context.with_metadata(SKILL_REGISTRY_KEY, SKILL_REGISTRY)
         agent_context.with_metadata(SKILL_REPOSITORY_KEY, self._repository)
         tools.append(self._run_tool)
+        tools.append(self._exec_tool)
         for skill_function in skill_functions:
             try:
                 tools.append(FunctionTool(func=skill_function))

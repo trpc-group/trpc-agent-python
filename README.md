@@ -1,6 +1,6 @@
-# tRPC-Agent
+# tRPC-Agent-PY
 
-tRPC-Agent是一个多Agent应用开发框架，与tRPC-Python框架及生态打通，提供开箱即用的Agent，可以快速开发、调试、部署、调用Agent服务。
+tRPC-Agent-PY 是一个多 Agent 应用开发框架的 Python 语言版本，提供开箱即用的Agent，可以快速开发、调试、部署、调用Agent服务。
 
 <img src="docs/images/architecture.png" alt="tRPC-Agent Architecture" width="800"/>
 
@@ -34,26 +34,14 @@ tRPC-Agent是一个多Agent应用开发框架，与tRPC-Python框架及生态打
 
 Python版本: 3.10+ (推荐 python3.12)
 
-建议直接使用下面的IT云研发环境:
-
-【tlinux3-trpc-python3.12】，点击链接即可使用模板创建云研发环境：https://devc.woa.com/open/env?templateUid=template-51ocxanvsj4e&bs=devc
-
-或者镜像环境：
-
-```sh
-# python3.10
-mirrors.tencent.com/todacc/trpc-agent-compile_tlinux3.2_py_310:0.1.1
-# python3.12
-mirrors.tencent.com/todacc/trpc-agent-compile_tlinux3.2_py_312:0.1.0
-```
 
 ### 安装
 
 使用 `pip` 安装：
 ```bash
-pip install trpc-agent_sdk
+pip install trpc-agent-py
 # 如果期望安装带有redis特性的 session，采用扩展安装，如下：
-# pip install trpc-agent_sdk[redis]
+# pip install trpc-agent-py[redis]
 ```
 
 ## 快速体验
@@ -87,78 +75,16 @@ root_agent = LlmAgent(
     name="test_agent",
     description="A helpful assistant for conversation",
     model=OpenAIModel(
-        model_name="deepseek-v3-local-II",
-        api_key=os.environ.get("API_KEY", ""),
-        base_url="http://v2.open.venus.woa.com/llmproxy", # 此处用的是内部代理的deepseek模型
+        model_name=os.environ.get("TRPC_AGENT_MODEL_NAME", ""),
+        api_key=os.environ.get("TRPC_AGENT_API_KEY", ""),
+        base_url=os.environ.get("TRPC_AGENT_BASE_URL", ""), 
     ),
     instruction="You are a helpful assistant. Answer user questions.",
     tools=[FunctionTool(get_weather)],
 )
 ```
 
-#### 3. 启动Debug Server以调试Agent
 
-注意，如果系统没有npm，linux系统下可以执行如下命令安装：
-```bash
-wget https://nodejs.org/dist/v22.17.0/node-v22.17.0-linux-x64.tar.xz
-tar -xvf node-v22.17.0-linux-x64.tar.xz
-ln -s node-v22.17.0-linux-x64/bin/node /usr/bin/node
-ln -s node-v22.17.0-linux-x64/bin/npm /usr/bin/npm
-```
-
-执行如下命令启动Debug Server：
-```bash
-# 获取本机IP地址
-export HOST_IP=$(hostname -I | awk '{print $1}')
-echo "HOST_IP: $HOST_IP"
-
-# 启动Web UI Server
-git clone https://github.com/google/adk-web.git
-cd adk-web
-npm install
-# --backend 填写 tRPC Agent Debug Server的地址
-#   Web UI Server会通过这个地址转发流量到tRPC Agent Debug Server
-npm run serve --backend=http://$HOST_IP:8000
-
-# 启动tRPC Agent Debug Server，注意：API_KEY需要替换为你的DeepSeek API Key
-export API_KEY=your_deepseek_api_key
-python -m trpc_agent.server.debug.server --agents path-to-trpc_test_agents --host $HOST_IP  --port 8000
-```
-
-#### 4. 打开浏览器访问：http://$HOST_IP:4200 ，如下所示，即可愉快的和你的Agent对话了
-
-<img src="docs/images/debug_ui.png" alt="tRPC Agent Debug UI" width="800"/>
-
-### 使用其他模型体验
-
-如果你没有DeepSeek官方的API Key，可以替换成[腾讯太极机器学习平台](https://taiji.woa.com/web-llm/web/home_api)的DeepSeek模型，申请API Key之后，需要稍微修改下Agent的构造，如下所示
-
-```python
-import os
-from trpc_agent_sdk.agents import LlmAgent
-from trpc_agent_sdk.models import OpenAIModel
-from trpc_agent_sdk.tools import FunctionTool
-
-async def get_weather(city: str) -> str:
-    """Get the weather of a city"""
-    return f"The weather of {city} is sunny."
-
-root_agent = LlmAgent(
-    name="test_agent",
-    description="A helpful assistant for conversation",
-    model=OpenAIModel(
-        model_name="DeepSeek-R1-Online",
-        api_key="your_taiji_api_key",
-        base_url="http://api.taiji.woa.com/openapi",
-        client_args={"default_headers": { "Accept": "*/*" }}
-    ),
-    instruction="You are a helpful assistant. Answer user questions.",
-    tools=[FunctionTool(get_weather)],
-    generate_content_config=types.GenerateContentConfig(
-        http_options=types.HttpOptions(extra_body={"openai_infer": True})
-    ),
-)
-```
 
 ## 更多文档
 

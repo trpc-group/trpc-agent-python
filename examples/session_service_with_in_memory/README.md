@@ -21,7 +21,7 @@
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
-cd trpc-agent
+cd trpc-agent-python
 python3 -m venv .venv
 source .venv/bin/activate
 pip3 install -e .
@@ -72,7 +72,7 @@ python3 examples/session_service_with_in_memory/run_agent.py
 ============================================================
 First run
 ============================================================
-🤖 Assistant: [2026-02-03 22:09:50][INFO][trpc_agent][trpc_agent/sessions/_in_memory_session_service.py:372][1247921] Cleanup task started with interval: 5.0s
+🤖 Assistant: [2026-02-03 22:09:50][INFO][trpc_agent_sdk][trpc_agent_sdk/sessions/_in_memory_session_service.py:372][1247921] Cleanup task started with interval: 5.0s
 No, I don't have the ability to remember personal details like your name between conversations. How can I assist you today?
 ----------------------------------------
 🤖 Assistant: No, I don't have the ability to remember personal details like your favorite color. However, I'm happy to help you with anything you need! What can I do for you today?
@@ -110,7 +110,7 @@ The weather in Paris is currently sunny with a temperature of 25 degrees Celsius
 ----------------------------------------
 🤖 Assistant: Yes, Alice! Your favorite color is blue. How can I assist you today?
 ----------------------------------------
-[2026-02-03 22:10:20][INFO][trpc_agent][trpc_agent/sessions/_in_memory_session_service.py:367][1247921] Cleanup completed: deleted 3 items (1 sessions, 1 user states, 1 app states)
+[2026-02-03 22:10:20][INFO][trpc_agent_sdk][trpc_agent_sdk/sessions/_in_memory_session_service.py:367][1247921] Cleanup completed: deleted 3 items (1 sessions, 1 user states, 1 app states)
 ============================================================
 Third run
 ============================================================
@@ -131,7 +131,7 @@ The weather in Paris is currently sunny with a temperature of 25 degrees Celsius
 ----------------------------------------
 🤖 Assistant: Yes, Alice! You mentioned that your favorite color is blue. It's a lovely choice! 😊 Is there anything else you'd like to share or ask?
 ----------------------------------------
-[2026-02-03 22:10:52][INFO][trpc_agent][trpc_agent/sessions/_in_memory_session_service.py:392][1247921] Cleanup task stopped
+[2026-02-03 22:10:52][INFO][trpc_agent_sdk][trpc_agent_sdk/sessions/_in_memory_session_service.py:392][1247921] Cleanup task stopped
 ```
 
 ### 关键对比：三次运行的行为差异

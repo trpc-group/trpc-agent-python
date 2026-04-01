@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright @ 2026 Tencent.com
+# Copyright @ 2025 Tencent.com
 """Utils for TRPC Agent skills system.
 
 This module provides utility functions for the skills system.

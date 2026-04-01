@@ -72,9 +72,9 @@ class TestIsIpValid:
 class TestGetIpFromNetifaces:
     """Test suite for get_ip_from_netifaces function."""
 
-    @patch('trpc_agent.utils._address_info._get_ip_from_netifaces')
-    @patch('trpc_agent.utils._address_info._get_ip_from_psutil')
-    @patch('trpc_agent.utils._address_info._get_ip_fallback')
+    @patch('trpc_agent_sdk.utils._address_info._get_ip_from_netifaces')
+    @patch('trpc_agent_sdk.utils._address_info._get_ip_from_psutil')
+    @patch('trpc_agent_sdk.utils._address_info._get_ip_fallback')
     def test_get_ip_from_netifaces_linux(self, mock_fallback, mock_psutil, mock_netifaces):
         """Test getting IP on Linux using netifaces."""
         mock_netifaces.return_value = "192.168.1.100"
@@ -86,9 +86,9 @@ class TestGetIpFromNetifaces:
         assert result == "192.168.1.100"
         mock_netifaces.assert_called_once()
 
-    @patch('trpc_agent.utils._address_info._IS_WINDOWS', True)
-    @patch('trpc_agent.utils._address_info._get_ip_from_psutil')
-    @patch('trpc_agent.utils._address_info._get_ip_fallback')
+    @patch('trpc_agent_sdk.utils._address_info._IS_WINDOWS', True)
+    @patch('trpc_agent_sdk.utils._address_info._get_ip_from_psutil')
+    @patch('trpc_agent_sdk.utils._address_info._get_ip_fallback')
     def test_get_ip_from_netifaces_windows(self, mock_fallback, mock_psutil):
         """Test getting IP on Windows using psutil."""
         mock_psutil.return_value = "10.0.0.1"
@@ -99,9 +99,9 @@ class TestGetIpFromNetifaces:
         assert result == "10.0.0.1"
         mock_psutil.assert_called_once()
 
-    @patch('trpc_agent.utils._address_info._get_ip_from_netifaces')
-    @patch('trpc_agent.utils._address_info._get_ip_from_psutil')
-    @patch('trpc_agent.utils._address_info._get_ip_fallback')
+    @patch('trpc_agent_sdk.utils._address_info._get_ip_from_netifaces')
+    @patch('trpc_agent_sdk.utils._address_info._get_ip_from_psutil')
+    @patch('trpc_agent_sdk.utils._address_info._get_ip_fallback')
     def test_get_ip_from_netifaces_fallback(self, mock_fallback, mock_psutil, mock_netifaces):
         """Test getting IP using fallback method."""
         mock_netifaces.return_value = ""
@@ -117,8 +117,8 @@ class TestGetIpFromNetifaces:
 class TestGetCurrentIp:
     """Test suite for get_current_ip function."""
 
-    @patch('trpc_agent.utils._address_info.is_in_docker')
-    @patch('trpc_agent.utils._address_info.get_ip_from_netifaces')
+    @patch('trpc_agent_sdk.utils._address_info.is_in_docker')
+    @patch('trpc_agent_sdk.utils._address_info.get_ip_from_netifaces')
     def test_get_current_ip_not_in_docker(self, mock_get_ip, mock_is_docker):
         """Test getting IP when not in Docker."""
         mock_is_docker.return_value = False
@@ -129,8 +129,8 @@ class TestGetCurrentIp:
         assert result == "203.0.113.1"
         mock_get_ip.assert_called_once()
 
-    @patch('trpc_agent.utils._address_info.is_in_docker')
-    @patch('trpc_agent.utils._address_info.get_ip_from_netifaces')
+    @patch('trpc_agent_sdk.utils._address_info.is_in_docker')
+    @patch('trpc_agent_sdk.utils._address_info.get_ip_from_netifaces')
     def test_get_current_ip_in_docker_with_node_ip(self, mock_get_ip, mock_is_docker):
         """Test getting IP in Docker with NODE_IP environment variable."""
         mock_is_docker.return_value = True
@@ -141,8 +141,8 @@ class TestGetCurrentIp:
         assert result == "203.0.113.1"
         mock_get_ip.assert_not_called()
 
-    @patch('trpc_agent.utils._address_info.is_in_docker')
-    @patch('trpc_agent.utils._address_info.get_ip_from_netifaces')
+    @patch('trpc_agent_sdk.utils._address_info.is_in_docker')
+    @patch('trpc_agent_sdk.utils._address_info.get_ip_from_netifaces')
     def test_get_current_ip_in_docker_invalid_node_ip(self, mock_get_ip, mock_is_docker):
         """Test getting IP in Docker with invalid NODE_IP."""
         mock_is_docker.return_value = True
@@ -154,8 +154,8 @@ class TestGetCurrentIp:
         assert result == "203.0.113.1"
         mock_get_ip.assert_called_once()
 
-    @patch('trpc_agent.utils._address_info.is_in_docker')
-    @patch('trpc_agent.utils._address_info.get_ip_from_netifaces')
+    @patch('trpc_agent_sdk.utils._address_info.is_in_docker')
+    @patch('trpc_agent_sdk.utils._address_info.get_ip_from_netifaces')
     def test_get_current_ip_in_docker_no_node_ip(self, mock_get_ip, mock_is_docker):
         """Test getting IP in Docker without NODE_IP."""
         mock_is_docker.return_value = True

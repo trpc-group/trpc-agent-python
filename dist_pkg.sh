@@ -1,6 +1,6 @@
 #!/bin/sh
 
-INIT_PY="trpc_agent/version.py"
+INIT_PY="trpc_agent_sdk/version.py"
 
 version=$(grep -oP "__version__ = '\K[^']+" "$INIT_PY")
 

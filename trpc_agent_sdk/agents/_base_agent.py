@@ -157,7 +157,7 @@ class BaseAgent(AgentABC):
     """Allow agent to execute code blocks from model responses using the provided
     CodeExecutor.
 
-    Check out available code executions in `trpc_agent.code_executors` package.
+    Check out available code executions in `trpc_agent_sdk.code_executors` package.
 
     NOTE:
         To use model's built-in code executor, use the `BuiltInCodeExecutor`.

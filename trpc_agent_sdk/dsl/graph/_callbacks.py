@@ -76,7 +76,7 @@ OnNodeErrorCallback = Callable[[NodeCallbackContext, dict[str, Any], Exception],
 
 # Agent event callback: Called when sub-agent emits an event
 # Args: (context, state, event) -> None
-# The event parameter is a trpc_agent.events.Event instance
+# The event parameter is a trpc_agent_sdk.events.Event instance
 AgentEventCallback = Callable[[NodeCallbackContext, dict[str, Any], "Event"], Awaitable[None]]
 
 # =============================================================================

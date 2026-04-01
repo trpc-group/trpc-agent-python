@@ -64,7 +64,7 @@ class TestUnsafeLocalCodeExecutor:
 
         assert isinstance(delimiter, CodeBlockDelimiter)
 
-    @patch('trpc_agent.code_executors.local._unsafe_local_code_executor.async_execute_command')
+    @patch('trpc_agent_sdk.code_executors.local._unsafe_local_code_executor.async_execute_command')
     async def test_execute_code_python(self, mock_async_execute):
         """Test executing Python code."""
         mock_async_execute.return_value = CommandExecResult(stdout="hello\nworld",
@@ -84,7 +84,7 @@ class TestUnsafeLocalCodeExecutor:
         assert result.outcome == Outcome.OUTCOME_OK
         mock_async_execute.assert_called_once()
 
-    @patch('trpc_agent.code_executors.local._unsafe_local_code_executor.async_execute_command')
+    @patch('trpc_agent_sdk.code_executors.local._unsafe_local_code_executor.async_execute_command')
     async def test_execute_code_bash(self, mock_async_execute):
         """Test executing Bash code."""
         mock_async_execute.return_value = CommandExecResult(stdout="output", stderr="", exit_code=0, is_timeout=False)
@@ -98,7 +98,7 @@ class TestUnsafeLocalCodeExecutor:
         assert result.outcome == Outcome.OUTCOME_OK
         mock_async_execute.assert_called_once()
 
-    @patch('trpc_agent.code_executors.local._unsafe_local_code_executor.async_execute_command')
+    @patch('trpc_agent_sdk.code_executors.local._unsafe_local_code_executor.async_execute_command')
     async def test_execute_code_from_code_field(self, mock_async_execute):
         """Test executing code from code field when no code_blocks."""
         mock_async_execute.return_value = CommandExecResult(stdout="output", stderr="", exit_code=0, is_timeout=False)
@@ -113,7 +113,7 @@ class TestUnsafeLocalCodeExecutor:
         assert len(code_input.code_blocks) == 1
         assert code_input.code_blocks[0].language == "python"
 
-    @patch('trpc_agent.code_executors.local._unsafe_local_code_executor.async_execute_command')
+    @patch('trpc_agent_sdk.code_executors.local._unsafe_local_code_executor.async_execute_command')
     async def test_execute_code_multiple_blocks(self, mock_async_execute):
         """Test executing multiple code blocks."""
         mock_async_execute.side_effect = [
@@ -134,7 +134,7 @@ class TestUnsafeLocalCodeExecutor:
         assert result.outcome == Outcome.OUTCOME_OK
         assert mock_async_execute.call_count == 2
 
-    @patch('trpc_agent.code_executors.local._unsafe_local_code_executor.async_execute_command')
+    @patch('trpc_agent_sdk.code_executors.local._unsafe_local_code_executor.async_execute_command')
     async def test_execute_code_with_execution_id(self, mock_async_execute):
         """Test executing code with execution_id."""
         mock_async_execute.return_value = CommandExecResult(stdout="output", stderr="", exit_code=0, is_timeout=False)
@@ -148,7 +148,7 @@ class TestUnsafeLocalCodeExecutor:
         assert "output" in result.output
         assert result.outcome == Outcome.OUTCOME_OK
 
-    @patch('trpc_agent.code_executors.local._unsafe_local_code_executor.async_execute_command')
+    @patch('trpc_agent_sdk.code_executors.local._unsafe_local_code_executor.async_execute_command')
     async def test_execute_code_with_work_dir(self, mock_async_execute):
         """Test executing code with custom work directory."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -168,7 +168,7 @@ class TestUnsafeLocalCodeExecutor:
             call_kwargs = mock_async_execute.call_args[1]
             assert tmpdir in str(call_kwargs.get('work_dir', ''))
 
-    @patch('trpc_agent.code_executors.local._unsafe_local_code_executor.async_execute_command')
+    @patch('trpc_agent_sdk.code_executors.local._unsafe_local_code_executor.async_execute_command')
     async def test_execute_code_subprocess_error(self, mock_async_execute):
         """Test handling subprocess errors."""
         # Simulate command failure with non-zero return code
@@ -185,7 +185,7 @@ class TestUnsafeLocalCodeExecutor:
         assert "failed" in result.output.lower()
         assert result.outcome == Outcome.OUTCOME_FAILED
 
-    @patch('trpc_agent.code_executors.local._unsafe_local_code_executor.async_execute_command')
+    @patch('trpc_agent_sdk.code_executors.local._unsafe_local_code_executor.async_execute_command')
     async def test_execute_code_unsupported_language(self, mock_async_execute):
         """Test executing code with unsupported language."""
         executor = UnsafeLocalCodeExecutor()

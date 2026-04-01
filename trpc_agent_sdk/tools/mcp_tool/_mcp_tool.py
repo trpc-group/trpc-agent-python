@@ -28,13 +28,13 @@ from ._mcp_session_manager import MCPSessionManager
 
 
 class MCPTool(BaseTool):
-    """Turns an MCP Tool into a Tool for trpc_agent.
+    """Turns an MCP Tool into a Tool for trpc_agent_sdk.
 
      Internally, the tool initializes from a MCP Tool, and uses the MCP Session to
      call the tool.
 
      Note: For API key authentication, only header-based API keys are supported.
-     Query and cookie-based API keys will result in authentication errors.trpc_agent.
+     Query and cookie-based API keys will result in authentication errors.trpc_agent_sdk.
      """
 
     def __init__(

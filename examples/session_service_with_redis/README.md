@@ -44,7 +44,7 @@ examples/redis_session_service/
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
-cd trpc-agent
+cd trpc-agent-python
 python3 -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip3 install -e .

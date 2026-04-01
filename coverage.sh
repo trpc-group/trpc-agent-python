@@ -10,6 +10,6 @@ rm -rf .coverage
 rm -rf htmlcov*
 
 
-test_dir=trpc_agent
+test_dir=trpc_agent_py
 pytest --cov-report html --cov-report term --cov-report xml --cov=$test_dir tests/  \
        --junitxml=test-ngtest-ut-$test_dir.xml > cov.tmp

@@ -1,6 +1,6 @@
 # LangGraph Agent 基础示例
 
-本示例演示 LangGraphAgent 的基础用法，展示如何使用 trpc_agent 框架集成 LangGraph 构建智能体。
+本示例演示 LangGraphAgent 的基础用法，展示如何使用 trpc_agent_sdk 框架集成 LangGraph 构建智能体。
 
 ## 功能说明
 
@@ -20,7 +20,7 @@ Python版本: 3.10+(强烈建议使用3.12)
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
-cd trpc-agent
+cd trpc-agent-python
 python3 -m venv .venv
 source .venv/bin/activate
 pip3 install -e .

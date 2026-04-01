@@ -13,7 +13,7 @@ from pydantic import PrivateAttr
 
 class AgentContext(BaseModel):
     """
-    AgentContext is user context for trpc_agent.
+    AgentContext is user context for trpc_agent_sdk.
     Used to control the interaction between user and framework.
     """
 

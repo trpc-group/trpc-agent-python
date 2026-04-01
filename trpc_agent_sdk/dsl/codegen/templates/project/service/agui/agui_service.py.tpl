@@ -19,7 +19,7 @@ async def heath_check(request: Request) -> dict:
 def _create_agui_agent() -> AgUiAgent:
     from agent.agent import root_agent
     return AgUiAgent(
-        trpc_agent=root_agent,
+        trpc_agent_sdk=root_agent,
         app_name="generated_agui_app",
     )
 

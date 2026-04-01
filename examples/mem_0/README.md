@@ -30,7 +30,7 @@ pip3 install mem0ai
 pip3 sentence-transformers qdrant-client
 
 # 使用 trpc-agent 的开发依赖安装
-pip install trpc-agent[mem0] --extra-index-url https://mirrors.tencent.com/repository/pypi/tencent_pypi/simple/
+pip install trpc-agent-py[mem0]
 ```
 
 ### 环境配置

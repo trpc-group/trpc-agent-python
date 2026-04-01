@@ -18,7 +18,7 @@ Python版本: 3.10+(强烈建议使用3.12)
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
-cd trpc-agent
+cd trpc-agent-python
 python3 -m venv .venv
 source .venv/bin/activate
 pip3 install -e .[agent-claude]
@@ -45,8 +45,8 @@ python3 run_agent.py
 🎯 ClaudeAgent Cancellation Demo
 ================================================================================
 
-[2026-01-13 14:24:10][INFO][trpc_agent][trpc_agent_ecosystem/agents/claude/_setup.py:222][1388253] Proxy server proxy process started (PID: 1389619)
-[2026-01-13 14:24:10][INFO][trpc_agent][trpc_agent_ecosystem/agents/claude/_setup.py:239][1388253] Proxy server is ready at http://0.0.0.0:8082
+[2026-01-13 14:24:10][INFO][trpc_agent_sdk][trpc_agent_ecosystem/agents/claude/_setup.py:222][1388253] Proxy server proxy process started (PID: 1389619)
+[2026-01-13 14:24:10][INFO][trpc_agent_sdk][trpc_agent_ecosystem/agents/claude/_setup.py:239][1388253] Proxy server is ready at http://0.0.0.0:8082
 📋 Scenario 1: Cancel During Streaming
 --------------------------------------------------------------------------------
 🆔 Session ID: 2c0b370c...
@@ -57,15 +57,15 @@ python3 run_agent.py
 ⏳ [Received 10 events, triggering cancellation...]
 's what I
 ⏸️  Requesting cancellation after 10 events...
-[2026-01-13 14:24:15][INFO][trpc_agent][trpc_agent/cancel/_cancel.py:98][1388253] Run marked for cancellation (app_name: claude_agent_cancel_demo)(user: demo_user)(session: 2c0b370c-af5f-4bc9-a4bd-784ea97fd197)
-[2026-01-13 14:24:15][INFO][trpc_agent][trpc_agent/cancel/_cancel.py:215][1388253] Cancelling run for session 2c0b370c-af5f-4bc9-a4bd-784ea97fd197
-[2026-01-13 14:24:15][INFO][trpc_agent][trpc_agent/runners.py:351][1388253] Run for session 2c0b370c-af5f-4bc9-a4bd-784ea97fd197 was cancelled
+[2026-01-13 14:24:15][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:98][1388253] Run marked for cancellation (app_name: claude_agent_cancel_demo)(user: demo_user)(session: 2c0b370c-af5f-4bc9-a4bd-784ea97fd197)
+[2026-01-13 14:24:15][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:215][1388253] Cancelling run for session 2c0b370c-af5f-4bc9-a4bd-784ea97fd197
+[2026-01-13 14:24:15][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:351][1388253] Run for session 2c0b370c-af5f-4bc9-a4bd-784ea97fd197 was cancelled
 
 ⏳ [Received 11 events, triggering cancellation...]
 
 ❌ Run was cancelled: Run for session 2c0b370c-af5f-4bc9-a4bd-784ea97fd197 was cancelled
 
-[2026-01-13 14:24:15][INFO][trpc_agent][trpc_agent/runners.py:147][1388253] Cancel completed for user_id demo_user, session 2c0b370c-af5f-4bc9-a4bd-784ea97fd197
+[2026-01-13 14:24:15][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:147][1388253] Cancel completed for user_id demo_user, session 2c0b370c-af5f-4bc9-a4bd-784ea97fd197
 ✓ Cancellation requested: True
 
 💡 Result: The partial response was saved to session with cancellation message
@@ -91,8 +91,8 @@ If you meant something else, please clarify, and I'll be happy to assist.
 ⏳ [Tool call detected...]
 
 ⏸️  Tool call detected! Requesting cancellation during tool execution...
-[2026-01-13 14:24:29][INFO][trpc_agent][trpc_agent/cancel/_cancel.py:98][1388253] Run marked for cancellation (app_name: claude_agent_cancel_demo)(user: demo_user)(session: 4e9a24b5-10c1-4066-90fd-d42f32e6a2e9)
-[2026-01-13 14:24:29][INFO][trpc_agent][trpc_agent/cancel/_cancel.py:215][1388253] Cancelling run for session 4e9a24b5-10c1-4066-90fd-d42f32e6a2e9
+[2026-01-13 14:24:29][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:98][1388253] Run marked for cancellation (app_name: claude_agent_cancel_demo)(user: demo_user)(session: 4e9a24b5-10c1-4066-90fd-d42f32e6a2e9)
+[2026-01-13 14:24:29][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:215][1388253] Cancelling run for session 4e9a24b5-10c1-4066-90fd-d42f32e6a2e9
 Task exception was never retrieved
 future: <Task finished name='Task-41' coro=<<async_generator_athrow without __name__>()> exception=ProcessError('Command failed with exit code 143 (exit code: 143)\nError output: Check stderr output for details')>
 Traceback (most recent call last):
@@ -100,11 +100,11 @@ Traceback (most recent call last):
     raise self._exit_error
 claude_agent_sdk._errors.ProcessError: Command failed with exit code 143 (exit code: 143)
 Error output: Check stderr output for details
-[2026-01-13 14:24:29][INFO][trpc_agent][trpc_agent/runners.py:351][1388253] Run for session 4e9a24b5-10c1-4066-90fd-d42f32e6a2e9 was cancelled
+[2026-01-13 14:24:29][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:351][1388253] Run for session 4e9a24b5-10c1-4066-90fd-d42f32e6a2e9 was cancelled
 
 ❌ Run was cancelled: Run for session 4e9a24b5-10c1-4066-90fd-d42f32e6a2e9 was cancelled
 
-[2026-01-13 14:24:29][INFO][trpc_agent][trpc_agent/runners.py:147][1388253] Cancel completed for user_id demo_user, session 4e9a24b5-10c1-4066-90fd-d42f32e6a2e9
+[2026-01-13 14:24:29][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:147][1388253] Cancel completed for user_id demo_user, session 4e9a24b5-10c1-4066-90fd-d42f32e6a2e9
 ✓ Cancellation requested: True
 
 💡 Result: Incomplete function calls were cleaned up from session
@@ -121,7 +121,7 @@ Would you like me to try fetching the weather information for Shanghai and Beiji
 ================================================================================
 ✅ Demo completed!
 ================================================================================
-[2026-01-13 14:24:36][INFO][trpc_agent][trpc_agent_ecosystem/agents/claude/_setup.py:275][1388253] Terminating proxy process (PID: 1389619)...
-[2026-01-13 14:24:36][INFO][trpc_agent][trpc_agent_ecosystem/agents/claude/_setup.py:287][1388253] Subprocess terminated successfully.
+[2026-01-13 14:24:36][INFO][trpc_agent_sdk][trpc_agent_ecosystem/agents/claude/_setup.py:275][1388253] Terminating proxy process (PID: 1389619)...
+[2026-01-13 14:24:36][INFO][trpc_agent_sdk][trpc_agent_ecosystem/agents/claude/_setup.py:287][1388253] Subprocess terminated successfully.
 🧹 Claude environment cleaned up
 ```

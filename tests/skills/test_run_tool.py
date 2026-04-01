@@ -275,10 +275,10 @@ class TestSkillRunTool:
         self.mock_fs.stage_directory = AsyncMock()
         self.mock_runner.run_program = AsyncMock(return_value=WorkspaceRunResult(exit_code=0))
 
-        with patch('trpc_agent.skills._run_tool.compute_dir_digest', return_value="digest123"):
-            with patch('trpc_agent.skills._run_tool.ensure_layout'):
-                with patch('trpc_agent.skills._run_tool.load_metadata') as mock_load:
-                    with patch('trpc_agent.skills._run_tool.save_metadata'):
+        with patch('trpc_agent_sdk.skills._run_tool.compute_dir_digest', return_value="digest123"):
+            with patch('trpc_agent_sdk.skills._run_tool.ensure_layout'):
+                with patch('trpc_agent_sdk.skills._run_tool.load_metadata') as mock_load:
+                    with patch('trpc_agent_sdk.skills._run_tool.save_metadata'):
                         from trpc_agent_sdk.skills._types import SkillWorkspaceMetadata
                         mock_load.return_value = SkillWorkspaceMetadata()
 
@@ -292,9 +292,9 @@ class TestSkillRunTool:
         tool = SkillRunTool(repository=self.mock_repository)
         workspace = WorkspaceInfo(id="ws-123", path="/tmp/workspace")
 
-        with patch('trpc_agent.skills._run_tool.compute_dir_digest', return_value="digest123"):
-            with patch('trpc_agent.skills._run_tool.ensure_layout'):
-                with patch('trpc_agent.skills._run_tool.load_metadata') as mock_load:
+        with patch('trpc_agent_sdk.skills._run_tool.compute_dir_digest', return_value="digest123"):
+            with patch('trpc_agent_sdk.skills._run_tool.ensure_layout'):
+                with patch('trpc_agent_sdk.skills._run_tool.load_metadata') as mock_load:
                     from trpc_agent_sdk.skills._types import SkillWorkspaceMetadata, SkillMetadata
                     metadata = SkillWorkspaceMetadata()
                     metadata.skills["test-skill"] = SkillMetadata(name="test-skill", digest="digest123")
@@ -324,10 +324,10 @@ class TestSkillRunTool:
             timed_out=False
         ))
 
-        with patch('trpc_agent.skills._run_tool.compute_dir_digest', return_value="digest123"):
-            with patch('trpc_agent.skills._run_tool.ensure_layout'):
-                with patch('trpc_agent.skills._run_tool.load_metadata') as mock_load:
-                    with patch('trpc_agent.skills._run_tool.save_metadata'):
+        with patch('trpc_agent_sdk.skills._run_tool.compute_dir_digest', return_value="digest123"):
+            with patch('trpc_agent_sdk.skills._run_tool.ensure_layout'):
+                with patch('trpc_agent_sdk.skills._run_tool.load_metadata') as mock_load:
+                    with patch('trpc_agent_sdk.skills._run_tool.save_metadata'):
                         from trpc_agent_sdk.skills._types import SkillWorkspaceMetadata
                         mock_load.return_value = SkillWorkspaceMetadata()
 
@@ -364,10 +364,10 @@ class TestSkillRunTool:
         ])
         self.mock_fs.collect_outputs = AsyncMock(return_value=mock_output)
 
-        with patch('trpc_agent.skills._run_tool.compute_dir_digest', return_value="digest123"):
-            with patch('trpc_agent.skills._run_tool.ensure_layout'):
-                with patch('trpc_agent.skills._run_tool.load_metadata') as mock_load:
-                    with patch('trpc_agent.skills._run_tool.save_metadata'):
+        with patch('trpc_agent_sdk.skills._run_tool.compute_dir_digest', return_value="digest123"):
+            with patch('trpc_agent_sdk.skills._run_tool.ensure_layout'):
+                with patch('trpc_agent_sdk.skills._run_tool.load_metadata') as mock_load:
+                    with patch('trpc_agent_sdk.skills._run_tool.save_metadata'):
                         from trpc_agent_sdk.skills._types import SkillWorkspaceMetadata
                         mock_load.return_value = SkillWorkspaceMetadata()
 
@@ -410,10 +410,10 @@ class TestSkillRunTool:
             duration=1.0
         ))
 
-        with patch('trpc_agent.skills._run_tool.compute_dir_digest', return_value="digest123"):
-            with patch('trpc_agent.skills._run_tool.ensure_layout'):
-                with patch('trpc_agent.skills._run_tool.load_metadata') as mock_load:
-                    with patch('trpc_agent.skills._run_tool.save_metadata'):
+        with patch('trpc_agent_sdk.skills._run_tool.compute_dir_digest', return_value="digest123"):
+            with patch('trpc_agent_sdk.skills._run_tool.ensure_layout'):
+                with patch('trpc_agent_sdk.skills._run_tool.load_metadata') as mock_load:
+                    with patch('trpc_agent_sdk.skills._run_tool.save_metadata'):
                         from trpc_agent_sdk.skills._types import SkillWorkspaceMetadata
                         mock_load.return_value = SkillWorkspaceMetadata()
 
