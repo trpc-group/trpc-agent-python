@@ -157,7 +157,7 @@ def create_agent():
     """Create a simple LangGraph agent.
 
     This agent demonstrates:
-    - Basic LangGraph integration with trpc_agent
+    - Basic LangGraph integration with trpc_agent_sdk
     - Tool calling with @langgraph_tool_node decorator
     - LLM node with @langgraph_llm_node decorator
     """
@@ -179,7 +179,7 @@ def create_agent_with_subgraph():
     """Create a LangGraph agent with subgraph support.
 
     This agent demonstrates:
-    - Subgraph streaming with trpc_agent
+    - Subgraph streaming with trpc_agent_sdk
     - Parent graph with routing logic
     - Calculator subgraph for math operations
 

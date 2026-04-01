@@ -267,7 +267,7 @@ class LangGraphAgent(BaseAgent):
                         # This follows the behavior of the original SafeFormatter approach
                         return match.group()
 
-            # Use regex pattern similar to adk-python but simpler for trpc_agent
+            # Use regex pattern similar to adk-python but simpler for trpc_agent_sdk
             # This matches {variable_name} patterns including optional ones with ?
             pattern = r"\{[^{}]*\}"
             result = re.sub(pattern, replace_placeholder, instruction)

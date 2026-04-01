@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright @ 2026 Tencent.com
+# Copyright @ 2025 Tencent.com
 """Types for TRPC Agent skills system.
 
 This module defines types for the skills system.
@@ -37,6 +37,36 @@ def format_datetime(data: Optional[datetime]) -> str:
     return data.isoformat()
 
 
+class SkillRequires(BaseModel):
+    """Runtime requirements declared in SKILL.md frontmatter."""
+
+    bins: list[str] = Field(default_factory=list, description="Binaries that must all be present on PATH")
+    any_bins: list[str] = Field(default_factory=list, description="At least one of these binaries must be on PATH")
+    env: list[str] = Field(default_factory=list, description="Environment variable names that must be set")
+    config: list[str] = Field(default_factory=list, description="Config keys that must be available")
+    install: list[str] = Field(default_factory=list, description="Install commands / hints (informational)")
+
+
+class SkillFrontMatter(BaseModel):
+    """Extended frontmatter fields parsed from SKILL.md (OpenClaw-compatible)."""
+
+    skill_key: str = Field(default="", description="Alternative key used for config lookup; falls back to skill name")
+    primary_env: str = Field(default="", description="Primary API-key env-var name (used when api_key is set)")
+    emoji: str = Field(default="", description="Display emoji")
+    homepage: str = Field(default="", description="Skill homepage URL")
+    always: bool = Field(default=False, description="When True the skill is always eligible regardless of requirements")
+    os: list[str] = Field(default_factory=list, description="Allowed OS identifiers (linux / darwin / windows)")
+    requires: SkillRequires = Field(default_factory=SkillRequires, description="Runtime requirements")
+
+
+class SkillConfig(BaseModel):
+    """Per-skill configuration supplied by the host application."""
+
+    enabled: Optional[bool] = Field(default=None, description="Explicit enable/disable override; None means unset")
+    api_key: str = Field(default="", description="API key injected as the primary_env variable")
+    env: dict[str, str] = Field(default_factory=dict, description="Extra environment variables for this skill")
+
+
 class SkillSummary(BaseModel):
     """Minimal information for a skill (name and description only)."""
 
@@ -60,9 +90,6 @@ class SkillResource(BaseModel):
 class Skill(BaseModel):
     """Full content of a skill including metadata, body, and resources."""
 
-    path: Path = Field(default=Path(""), description="Path to the skill directory")
-    """ path to the skill directory"""
-
     summary: SkillSummary = Field(default_factory=SkillSummary, description="Skill summary")
     """ skill summary"""
 
@@ -74,6 +101,9 @@ class Skill(BaseModel):
 
     tools: list[str] = Field(default_factory=list, description="Tool names defined in SKILL.md")
     """ tool names extracted from Tools section in SKILL.md"""
+
+    base_dir: str = Field(default="", description="Absolute path to the skill directory (set by repository)")
+    """ absolute path populated by the repository; used for __BASE_DIR__ placeholder replacement"""
 
 
 class SkillMetadata(BaseModel):

@@ -3,7 +3,7 @@
 # Copyright @ 2026 Tencent.com
 """Base logger interface for TRPC Agent framework.
 
-This module defines the abstract base class that all loggers in the trpc_agent
+This module defines the abstract base class that all loggers in the trpc_agent_sdk
 framework must implement. It provides a unified interface for logging operations.
 """
 

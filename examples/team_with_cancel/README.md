@@ -20,7 +20,7 @@ Python版本: 3.10+(强烈建议使用3.12)
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
-cd trpc-agent
+cd trpc-agent-python
 python3 -m venv .venv
 source .venv/bin/activate
 pip3 install -e .
@@ -59,19 +59,19 @@ python3 run_agent.py
 ⏳ [Received 10 events, triggering cancellation...]
  to your needs
 ⏸️  Requesting cancellation after 10 events...
-[2026-01-13 14:17:25][INFO][trpc_agent][trpc_agent/cancel/_cancel.py:98][1358209] Run marked for cancellation (app_name: content_team_cancel_demo)(user: demo_user)(session: 71b89a00-0ac8-4e65-937f-3566c338872f)
+[2026-01-13 14:17:25][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:98][1358209] Run marked for cancellation (app_name: content_team_cancel_demo)(user: demo_user)(session: 71b89a00-0ac8-4e65-937f-3566c338872f)
 
 ⏳ [Received 11 events, triggering cancellation...]
-. Here's[2026-01-13 14:17:25][INFO][trpc_agent][trpc_agent/cancel/_cancel.py:215][1358209] Cancelling run for session 71b89a00-0ac8-4e65-937f-3566c338872f
-[2026-01-13 14:17:25][INFO][trpc_agent][trpc_agent/teams/_team_agent.py:459][1358209] TeamAgent 'content_team_with_cancel' cancelled during leader planning
+. Here's[2026-01-13 14:17:25][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:215][1358209] Cancelling run for session 71b89a00-0ac8-4e65-937f-3566c338872f
+[2026-01-13 14:17:25][INFO][trpc_agent_sdk][trpc_agent_sdk/teams/_team_agent.py:459][1358209] TeamAgent 'content_team_with_cancel' cancelled during leader planning
 
 ⏳ [Received 12 events, triggering cancellation...]
-[2026-01-13 14:17:25][INFO][trpc_agent][trpc_agent/runners.py:351][1358209] Run for session 71b89a00-0ac8-4e65-937f-3566c338872f was cancelled, Run for session 71b89a00-0ac8-4e65-937f-3566c338872f was cancelled
+[2026-01-13 14:17:25][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:351][1358209] Run for session 71b89a00-0ac8-4e65-937f-3566c338872f was cancelled, Run for session 71b89a00-0ac8-4e65-937f-3566c338872f was cancelled
 ⏳ [Received 13 events, triggering cancellation...]
 
 ❌ Team execution was cancelled: Run for session 71b89a00-0ac8-4e65-937f-3566c338872f was cancelled
 
-[2026-01-13 14:17:25][INFO][trpc_agent][trpc_agent/runners.py:147][1358209] Cancel completed for user_id demo_user, session 71b89a00-0ac8-4e65-937f-3566c338872f
+[2026-01-13 14:17:25][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:147][1358209] Cancel completed for user_id demo_user, session 71b89a00-0ac8-4e65-937f-3566c338872f
 ✓ Cancellation requested: True
 
 💡 Result: Leader's partial response and cancellation record saved to team memory
@@ -116,14 +116,14 @@ Let me know how I can assist you further!
 [researcher] [Researcher Tool: searching for 'types of renewable energy benefits and current trends 2023'...]
 
 ⏸️  Member tool detected! Requesting cancellation during member execution...
-[2026-01-13 14:17:32][INFO][trpc_agent][trpc_agent/cancel/_cancel.py:98][1358209] Run marked for cancellation (app_name: content_team_cancel_demo)(user: demo_user)(session: 042335a7-f9cd-4126-8cad-6142afea6430)
-[2026-01-13 14:17:33][WARNING][trpc_agent][trpc_agent/runners.py:149][1358209] Cancel wait timeout (1.0s) reached for user_id demo_user, session 042335a7-f9cd-4126-8cad-6142afea6430. The execution may still be running.
+[2026-01-13 14:17:32][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:98][1358209] Run marked for cancellation (app_name: content_team_cancel_demo)(user: demo_user)(session: 042335a7-f9cd-4126-8cad-6142afea6430)
+[2026-01-13 14:17:33][WARNING][trpc_agent_sdk][trpc_agent_sdk/runners.py:149][1358209] Cancel wait timeout (1.0s) reached for user_id demo_user, session 042335a7-f9cd-4126-8cad-6142afea6430. The execution may still be running.
 ✓ Cancellation requested: True
 [Researcher Tool: search completed for 'types of renewable energy benefits and current trends 2023']
 📊 [researcher] Tool Result: {'query': 'types of renewable energy benefits and current trends 2023', 'results': [{'title': 'About types of renewable energy benefits and current trends 2023 - Overview', 'snippet': 'Comprehensive information about types of renewable energy benefits and current trends 2023...'}, {'title': 'Latest developments in types of renewable energy benefits and current trends 2023', 'snippet': 'Recent news and updates on types of renewable energy benefits and current trends 2023...'}], 'total_results': 2}
-[2026-01-13 14:17:35][INFO][trpc_agent][trpc_agent/cancel/_cancel.py:215][1358209] Cancelling run for session 042335a7-f9cd-4126-8cad-6142afea6430
-[2026-01-13 14:17:35][INFO][trpc_agent][trpc_agent/teams/_team_agent.py:459][1358209] TeamAgent 'content_team_with_cancel' cancelled during delegation to researcher
-[2026-01-13 14:17:35][INFO][trpc_agent][trpc_agent/runners.py:351][1358209] Run for session 042335a7-f9cd-4126-8cad-6142afea6430 was cancelled, Run for session 042335a7-f9cd-4126-8cad-6142afea6430 was cancelled
+[2026-01-13 14:17:35][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:215][1358209] Cancelling run for session 042335a7-f9cd-4126-8cad-6142afea6430
+[2026-01-13 14:17:35][INFO][trpc_agent_sdk][trpc_agent_sdk/teams/_team_agent.py:459][1358209] TeamAgent 'content_team_with_cancel' cancelled during delegation to researcher
+[2026-01-13 14:17:35][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:351][1358209] Run for session 042335a7-f9cd-4126-8cad-6142afea6430 was cancelled, Run for session 042335a7-f9cd-4126-8cad-6142afea6430 was cancelled
 
 ❌ Team execution was cancelled: Run for session 042335a7-f9cd-4126-8cad-6142afea6430 was cancelled
 

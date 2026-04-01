@@ -140,7 +140,7 @@ class LiteLLMModel(OpenAIModel):
             return
         if importlib.util.find_spec("litellm") is None:
             raise ImportError(
-                "LiteLLM support requires: pip install trpc-agent[litellm] or pip install litellm>=1.75.5")
+                "LiteLLM support requires: pip install trpc-agent-py[litellm] or pip install litellm>=1.75.5")
         os.environ.setdefault("LITELLM_MODE", "PRODUCTION")
         LiteLLMModel._litellm_imported = True
 

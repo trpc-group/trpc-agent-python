@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright @ 2026 Tencent.com
+# Copyright @ 2025 Tencent.com
 """
 Skill repository module.
 
 This module provides a model-agnostic Agent Skills repository.
-A skill is a folder containing a SKILL.md file with YAML front
+A skill is a folder containing a SKILL.md file with optional YAML front
 matter and a Markdown body, plus optional doc files.
+
+This file implements filesystem scanning plus SKILL.md parsing directly.
 """
 
 from __future__ import annotations
@@ -14,13 +16,11 @@ from __future__ import annotations
 import abc
 import os
 from pathlib import Path
-from typing import Dict
 from typing import List
 from typing import Optional
 from typing_extensions import override
 
 import yaml
-
 from trpc_agent_sdk.code_executors import BaseWorkspaceRuntime
 from trpc_agent_sdk.code_executors import create_local_workspace_runtime
 from trpc_agent_sdk.log import logger
@@ -31,13 +31,77 @@ from ._types import SkillResource
 from ._types import SkillSummary
 from ._url_root import SkillRootResolver
 
+BASE_DIR_PLACEHOLDER = "__BASE_DIR__"
+
+
+def _split_front_matter(content: str) -> tuple[dict[str, str], str]:
+    """Split markdown into (front matter dict, body) with optional YAML front matter."""
+    text = content.replace("\r\n", "\n")
+    if not text.startswith("---\n"):
+        return {}, text
+    idx = text.find("\n---\n", 4)
+    if idx < 0:
+        return {}, text
+    raw_yaml = text[4:idx]
+    body = text[idx + 5:]
+    try:
+        parsed = yaml.safe_load(raw_yaml) or {}
+        if not isinstance(parsed, dict):
+            return {}, body
+    except Exception:
+        return {}, body
+    out: dict[str, str] = {}
+    for k, v in parsed.items():
+        key = str(k).strip()
+        if not key:
+            continue
+        if v is None:
+            out[key] = ""
+        else:
+            out[key] = str(v)
+    return out, body
+
+
+def _parse_tools_from_body(body: str) -> list[str]:
+    """Parse tool names from the Tools section in body text."""
+    tool_names: list[str] = []
+    in_tools_section = False
+    for line in body.split("\n"):
+        stripped = line.strip()
+        if stripped.lower().startswith("tools:"):
+            in_tools_section = True
+            continue
+        if not in_tools_section:
+            continue
+        if stripped and not stripped.startswith("-") and not stripped.startswith("#"):
+            if ":" in stripped or (stripped[0].isupper() and any(
+                    stripped.startswith(s) for s in ["Overview", "Examples", "Usage", "Description", "Installation"])):
+                break
+        if stripped.startswith("#"):
+            continue
+        if stripped.startswith("-"):
+            tool_name = stripped[1:].strip()
+            if tool_name and not tool_name.startswith("#"):
+                tool_names.append(tool_name)
+    return tool_names
+
+
+def _is_doc_file(name: str) -> bool:
+    name_lower = name.lower()
+    return name_lower.endswith(".md") or name_lower.endswith(".txt")
+
+
+def _read_skill_file(path: Path) -> tuple[dict[str, str], str]:
+    content = path.read_text(encoding="utf-8")
+    return _split_front_matter(content)
+
 
 class BaseSkillRepository(abc.ABC):
     """
     Base class for a source of skills.
 
-    This is an abstract interface that defines the contract
-    for skill repositories.
+    Defines the public contract that all skill repository implementations
+    must satisfy.  Parsing internals are left entirely to subclasses.
     """
 
     def __init__(self, workspace_runtime: BaseWorkspaceRuntime):
@@ -47,124 +111,93 @@ class BaseSkillRepository(abc.ABC):
     def workspace_runtime(self) -> BaseWorkspaceRuntime:
         return self._workspace_runtime
 
-    def _parse_summary(self, header: dict, out: Skill) -> None:
-        """
-        Return the names of all available skills.
-        """
-        out.summary.name = header.get('name', '')
-        out.summary.description = header.get('description', '')
-
-    def _parse_body(self, body: str, out: Skill) -> None:
-        """
-        Return the body of the skill.
-        """
-        out.body = body
-
-    @abc.abstractmethod
-    def _parse_all(self, path: str, out: Skill) -> None:
-        """
-        Return the body of the skill.
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def summaries(self) -> List[SkillSummary]:
-        """
-        Return all available skill summaries.
-
-        Returns:
-            List of skill summaries
-        """
-        raise NotImplementedError
-
     def user_prompt(self) -> str:
-        """
-        Return the user prompt for the skill repository.
-        """
         return ""
 
     @abc.abstractmethod
+    def summaries(self) -> List[SkillSummary]:
+        """Return summaries for all indexed skills."""
+        raise NotImplementedError
+
+    @abc.abstractmethod
     def get(self, name: str) -> Skill:
-        """
-        Return a full skill by name.
-
-        Args:
-            name: The skill name
-
-        Returns:
-            The full skill object
+        """Return a full :class:`Skill` by name.
 
         Raises:
-            Exception: If skill not found
+            ValueError: If the skill is not found.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
     def skill_list(self) -> list[str]:
-        """
-        Return the names of all available skills.
-
-        Returns:
-            List of skill names
-        """
+        """Return the names of all indexed skills."""
         raise NotImplementedError
 
     @abc.abstractmethod
     def path(self, name: str) -> str:
-        """
-        Return the directory path that contains the given skill.
-
-        This allows staging the whole skill folder for execution.
-
-        Args:
-            name: The skill name
-
-        Returns:
-            The directory path containing the skill
+        """Return the directory path that contains the given skill.
 
         Raises:
-            Exception: If skill not found
+            ValueError: If the skill is not found.
         """
         raise NotImplementedError
+
+    @abc.abstractmethod
+    def refresh(self) -> None:
+        """Refresh skill roots and rebuild repository index."""
+        raise NotImplementedError
+
+    def skill_run_env(self, skill_name: str) -> dict[str, str]:
+        """Return the environment variables for the given skill.
+        """
+        return {}
 
 
 class FsSkillRepository(BaseSkillRepository):
     """
-    Implements BaseSkillRepository backed by filesystem roots.
+    Implements :class:`BaseSkillRepository` backed by filesystem roots.
 
-    This class scans one or more root directories for skills
-    and provides access to them.
+    Scans one or more root directories for ``SKILL.md`` files.
 
-    Attributes:
-        roots: List of root directories to scan
-        index: Mapping from skill name to directory path
+    The special placeholder ``__BASE_DIR__`` inside skill body and doc files
+    is replaced at :meth:`get` time with the skill's absolute directory path.
     """
 
-    def __init__(self, *roots: str, workspace_runtime: Optional[BaseWorkspaceRuntime] = None):
+    def __init__(
+        self,
+        *roots: str,
+        workspace_runtime: Optional[BaseWorkspaceRuntime] = None,
+        resolver: Optional[SkillRootResolver] = None,
+    ):
         """
         Create a FsSkillRepository scanning the given roots.
 
         Args:
-            *roots: Variable number of root directory paths
-
-        Raises:
-            Exception: If scanning fails
+            *roots: Variable number of root directory paths (local paths,
+                    ``file://`` URLs, or ``http(s)://`` archive URLs).
+            workspace_runtime: Optional workspace runtime to use.
+            resolver: Optional skill root resolver to use.
         """
         if workspace_runtime is None:
             workspace_runtime = create_local_workspace_runtime()
         super().__init__(workspace_runtime)
-        self._skill_paths: dict[str, str] = {}
+        self._resolver = resolver or SkillRootResolver()
+        self._skill_paths: dict[str, str] = {}  # name -> base dir
+        self._all_descriptions: dict[str, str] = {}  # name -> description
+
         self._skill_roots: list[str] = []
-        if isinstance(roots, tuple):
-            new_roots = []
-            for root in roots:
-                if isinstance(root, str):
-                    new_roots.append(root)
-                elif isinstance(root, list):
-                    new_roots.extend(root)
-            roots = new_roots
-        self._resolve_skill_roots(roots)
-        self._scan()
+        flat_roots: list[str] = []
+        for root in roots:
+            if isinstance(root, str):
+                flat_roots.append(root)
+            elif isinstance(root, list):
+                flat_roots.extend(root)
+        self._resolve_skill_roots(flat_roots)
+        self.refresh()
+
+    # ------------------------------------------------------------------
+    # Root resolution
+    # ------------------------------------------------------------------
 
     def _resolve_skill_roots(self, roots: list[str]) -> None:
         """
@@ -178,357 +211,189 @@ class FsSkillRepository(BaseSkillRepository):
         """
         for root in roots:
             try:
-                path = SkillRootResolver(root).resolve()
+                path = self._resolver.resolve(root)
                 self._skill_roots.append(path)
             except Exception as ex:
                 logger.warning("Failed to resolve skill root %s: %s", root, ex)
                 continue
 
-    @override
-    def path(self, name: str) -> str:
-        """
-        Return the directory path that contains the given skill.
+    # ------------------------------------------------------------------
+    # Indexing
+    # ------------------------------------------------------------------
 
-        This allows staging the whole skill folder for execution.
-
-        Args:
-            name: The skill name
-
-        Returns:
-            The directory path containing the skill
-
-        Raises:
-            Exception: If skill not found
-        """
-        if name not in self._skill_paths:
-            raise ValueError(f"skill '{name}' not found")
-        return self._skill_paths[name]
-
-    def _scan(self) -> None:
-        """
-        Scan all root directories for skills.
-
-        This method walks through each root directory, looking for
-        SKILL.md files and indexing them by skill name.
-
-        Raises:
-            Exception: If scanning encounters errors
-        """
-        seen = set()
+    def _index(self) -> None:
+        """Scan all roots and index available skills."""
+        self._skill_paths = {}
+        self._all_descriptions = {}
+        seen: set[str] = set()
 
         for root in self._skill_roots:
             if not root:
                 continue
-
-            # Clean and resolve the path
             root_path = Path(root).resolve()
-
-            # Skip if already seen
             if str(root_path) in seen:
                 continue
             seen.add(str(root_path))
 
-            # Walk the directory tree
             try:
-                for dirpath, dirnames, filenames in os.walk(root_path):
-                    # Check if SKILL.md exists in this directory
+                for dirpath, _dirs, _files in os.walk(root_path):
                     skill_file_path = Path(dirpath) / SKILL_FILE
-
                     if not skill_file_path.is_file():
                         continue
-
-                    # Try to parse the summary
                     try:
-                        skill = Skill()
-                        front_matter, _ = self._parse_yaml(str(skill_file_path))
-                        self._parse_summary(front_matter, skill)
-                        if not skill.summary.name:
-                            continue
-
-                        # Record first occurrence; later ones ignored
-                        if skill.summary.name not in self._skill_paths:
-                            self._skill_paths[skill.summary.name] = dirpath
-                            logger.debug("Found skill '%s' at %s in %s files %s", skill.summary.name, dirpath, dirnames,
-                                         filenames)
+                        self._index_one(dirpath, skill_file_path)
                     except Exception as ex:  # pylint: disable=broad-except
-                        logger.debug("Failed to parse skill at %s: %s", skill_file_path, ex)
-                        continue
+                        logger.debug("Failed to index skill at %s: %s", skill_file_path, ex)
 
             except Exception as ex:  # pylint: disable=broad-except
                 logger.warning("Error scanning root %s: %s", root_path, ex)
-                continue
 
-    def _parse_yaml(self, path: str) -> tuple[dict, str]:
-        """
-        Parse front matter name/description only from a skill file.
+    def _index_one(self, dirpath: str, skill_file_path: Path) -> None:
+        """Index a single skill directory found at *dirpath*."""
+        front_matter, _ = _read_skill_file(skill_file_path)
+        name = front_matter.get("name", "").strip()
+        if not name:
+            name = Path(dirpath).name.strip()
+        if not name:
+            return
+        # First occurrence wins.
+        if name in self._skill_paths:
+            return
 
-        Args:
-            path: Path to the skill file
+        self._all_descriptions[name] = front_matter.get("description", "").strip()
+        self._skill_paths[name] = dirpath
+        logger.debug("Found skill '%s' at %s", name, dirpath)
 
-        Returns:
-            Tuple of (front_matter dict, body string)
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    @override
+    def path(self, name: str) -> str:
+        """Return the directory path that contains the given skill.
 
         Raises:
-            Exception: If file cannot be read or parsed
+            ValueError: If the skill is not found.
         """
-        skill_path = Path(path)
-        try:
-            content = skill_path.read_text(encoding='utf-8')
-        except Exception as ex:  # pylint: disable=broad-except
-            raise Exception(f"Failed to read file {skill_path}: {ex}")
-
-        return self.from_markdown(content)
+        key = name.strip()
+        if key not in self._skill_paths:
+            raise ValueError(f"skill '{name}' not found")
+        return self._skill_paths[key]
 
     @override
     def summaries(self) -> List[SkillSummary]:
-        """
-        Return all available skill summaries.
-
-        Returns:
-            List of skill summaries
-        """
-        out = []
-
-        for name, dir_path in self._skill_paths.items():
-            skill_file_path = Path(dir_path) / SKILL_FILE
-
+        """Return summaries for all indexed skills, sorted by name."""
+        out: list[SkillSummary] = []
+        for name in sorted(self._skill_paths):
+            skill_file_path = Path(self._skill_paths[name]) / SKILL_FILE
             try:
-                skill = Skill()
-                front_matter, _ = self._parse_yaml(str(skill_file_path))
-                self._parse_summary(front_matter, skill)
-                summary = skill.summary
+                front_matter, _ = _read_skill_file(skill_file_path)
+                summary = SkillSummary(
+                    name=front_matter.get("name", "").strip(),
+                    description=front_matter.get("description", "").strip(),
+                )
                 if not summary.name:
                     summary.name = name
                 out.append(summary)
             except Exception as ex:  # pylint: disable=broad-except
                 logger.warning("Failed to parse summary for skill '%s': %s", name, ex)
-                continue
-
         return out
 
     @override
     def get(self, name: str) -> Skill:
-        """
-        Return a full skill by name.
+        """Return a full :class:`Skill` by name.
 
-        Args:
-            name: The skill name
-
-        Returns:
-            The full skill object
+        The ``__BASE_DIR__`` placeholder inside the skill body and all doc
+        files is replaced with the skill's absolute directory path.
 
         Raises:
-            Exception: If skill not found or parsing fails
+            ValueError: If the skill is not found.
         """
-        if name not in self._skill_paths:
-            raise ValueError(f"skill '{name}' not found")
-
-        dir_path = Path(self._skill_paths[name])
-        skill_file_path = dir_path / SKILL_FILE
-
-        # Parse the skill file
+        dir_path = Path(self.path(name))
+        front_matter, body = _read_skill_file(dir_path / SKILL_FILE)
         skill = Skill()
-        self._parse_all(str(skill_file_path), skill)
+        skill.base_dir = str(dir_path)
+        skill.summary.name = front_matter.get("name", "").strip() or name
+        skill.summary.description = front_matter.get("description", "").strip()
+        skill.body = body
+        skill.tools = _parse_tools_from_body(skill.body)
 
-        if not skill.summary.name:
-            skill.summary.name = name
-
-        # Collect auxiliary documents (recursively)
-        resources = skill.resources
-
-        # Recursively find all files in the skill directory
-        for entry in dir_path.rglob('*'):
-            if not entry.is_file() or entry.name.startswith('.') or '.git' in entry.parts:
-                continue
-
-            entry_name = entry.name
-
-            # Skip the main skill file
-            if entry_name.lower() == SKILL_FILE.lower():
-                continue
-
-            # Only include doc files
-            if not self._is_doc_file(entry_name):
-                continue
-
-            try:
-                content = entry.read_text(encoding='utf-8')
-                # Use relative path from skill directory to preserve subdirectory structure
-                relative_path = entry.relative_to(dir_path)
-                resources.append(SkillResource(path=str(relative_path), content=content))
-            except Exception as ex:  # pylint: disable=broad-except
-                logger.warning("Failed to read doc file %s: %s", entry, ex)
-                continue
+        if skill.base_dir:
+            skill.body = skill.body.replace(BASE_DIR_PLACEHOLDER, skill.base_dir)
+        skill.resources.extend(self._read_docs(dir_path, skill.base_dir))
 
         return skill
 
     @override
     def skill_list(self) -> list[str]:
-        """
-        Return the names of all available skills.
-
-        Returns:
-            List of skill names
-        """
-
-        return list(self._skill_paths.keys())
+        """Return the names of all indexed skills, sorted."""
+        return sorted(self._skill_paths)
 
     @override
-    def _parse_body(self, body: str, out: Skill) -> None:
-        """
-        Return the body of the skill.
-        """
-        out.body = body
-        out.tools = self._parse_tools_from_body(body)
+    def refresh(self) -> None:
+        self._index()
 
-    @override
-    def _parse_all(self, path: str, out: Skill) -> None:
-        """
-        Parse front matter, Markdown body, and tool names from a skill file.
+    def _read_docs(self, dir_path: Path, base_dir: str) -> list[SkillResource]:
+        """Read auxiliary docs (readDocs equivalent in Go repository)."""
+        docs: list[SkillResource] = []
+        for entry in dir_path.rglob("*"):
+            if not entry.is_file():
+                continue
+            if entry.name.startswith(".") or ".git" in entry.parts:
+                continue
+            if entry.name.lower() == SKILL_FILE.lower():
+                continue
+            if not _is_doc_file(entry.name):
+                continue
+            try:
+                content = entry.read_text(encoding="utf-8")
+                if base_dir:
+                    content = content.replace(BASE_DIR_PLACEHOLDER, base_dir)
+                rel_path = entry.relative_to(dir_path).as_posix()
+                docs.append(SkillResource(path=rel_path, content=content))
+            except Exception as ex:  # pylint: disable=broad-except
+                logger.warning("Failed to read doc file %s: %s", entry, ex)
+        docs.sort(key=lambda d: d.path)
+        return docs
 
-        Args:
-            path: Path to the skill file
-
-        Returns:
-            Tuple of (Summary, body content, tool names)
-
-        Raises:
-            Exception: If file cannot be read or parsed
-        """
-        front_matter, body = self._parse_yaml(path)
-        self._parse_summary(front_matter, out)
-        self._parse_body(body, out)
+    # ------------------------------------------------------------------
+    # Backward-compatible shims
+    # ------------------------------------------------------------------
 
     @classmethod
-    def from_markdown(cls, content: str) -> tuple[Dict[str, str], str]:
+    def from_markdown(cls, content: str) -> tuple[dict[str, str], str]:
+        """Split SKILL.md content into ``(frontmatter dict, body)``.
+
+        .. deprecated::
+            Prefer repository-native front matter splitting directly.
         """
-        Split content into front matter map and body.
-
-        Front matter is expected to be in YAML format between --- delimiters.
-
-        Args:
-            text: The full text content
-
-        Returns:
-            Tuple of (front_matter dict, body string)
-        """
-        # Parse YAML frontmatter (between --- markers)
-        if not content.startswith("---"):
-            raise ValueError("SKILL.md must start with YAML frontmatter (---)")
-
-        parts = content.split("---", 2)
-        if len(parts) < 3:
-            raise ValueError("SKILL.md must have YAML frontmatter between --- markers")
-
-        yaml_content = parts[1].strip()
-        markdown_content = parts[2].strip()
-
-        try:
-            metadata_dict = yaml.safe_load(yaml_content)
-            if not isinstance(metadata_dict, dict):
-                raise ValueError("YAML frontmatter must be a dictionary")
-        except yaml.YAMLError as ex:
-            raise ValueError(f"Invalid YAML in frontmatter: {ex}") from ex
-
-        return metadata_dict, markdown_content
-
-    @staticmethod
-    def _is_doc_file(name: str) -> bool:
-        """
-        Check if a filename is a documentation file.
-
-        Args:
-            name: The filename to check
-
-        Returns:
-            True if the file is a doc file (.md or .txt)
-        """
-        name_lower = name.lower()
-        return name_lower.endswith('.md') or name_lower.endswith('.txt')
+        return _split_front_matter(content)
 
     @staticmethod
     def _parse_tools_from_body(body: str) -> list[str]:
+        """Parse tool names from the ``Tools:`` section.
+
+        .. deprecated::
+            Prefer repository-native tool parser directly.
         """
-        Parse tool names from the Tools section in SKILL.md body.
-
-        The Tools section should be formatted as:
-        ```
-        Tools:
-        - tool_name_1
-        - tool_name_2
-        # - commented_tool (this will be ignored)
-        ```
-
-        Args:
-            body: The markdown body content from SKILL.md
-
-        Returns:
-            List of tool names found in the Tools section
-
-        Rules:
-        1. Tools section is case-insensitive (Tools:, tools:, TOOLS:)
-        2. Tool names start with "-" on a new line
-        3. Lines starting with "#" are treated as comments and ignored
-        4. Tool names are stripped of whitespace
-        """
-        tool_names = []
-        lines = body.split('\n')
-        in_tools_section = False
-
-        for line in lines:
-            stripped_line = line.strip()
-
-            # Check if we're entering the Tools section (case-insensitive)
-            if stripped_line.lower().startswith('tools:'):
-                in_tools_section = True
-                continue
-
-            # If we're in the Tools section
-            if in_tools_section:
-                # Stop parsing if we hit another section (starts with capital letter followed by colon)
-                # or if we hit a blank line followed by a section header
-                if stripped_line and not stripped_line.startswith('-') and not stripped_line.startswith('#'):
-                    # Check if it's a section header (e.g., "Overview", "Examples")
-                    if ':' in stripped_line or (stripped_line and stripped_line[0].isupper() and any(
-                            stripped_line.startswith(s)
-                            for s in ['Overview', 'Examples', 'Usage', 'Description', 'Installation'])):
-                        break
-
-                # Skip comments (lines starting with #)
-                if stripped_line.startswith('#'):
-                    continue
-
-                # Parse tool names (lines starting with -)
-                if stripped_line.startswith('-'):
-                    # Remove the leading "-" and strip whitespace
-                    tool_name = stripped_line[1:].strip()
-
-                    # Skip if it's a comment after the dash (e.g., "- # commented")
-                    if tool_name.startswith('#'):
-                        continue
-
-                    # Skip empty lines
-                    if not tool_name:
-                        continue
-
-                    tool_names.append(tool_name)
-                    logger.debug("Found tool in SKILL.md: %s", tool_name)
-
-        return tool_names
+        return _parse_tools_from_body(body)
 
 
-def create_default_skill_repository(*roots: str,
-                                    workspace_runtime: Optional[BaseWorkspaceRuntime] = None) -> FsSkillRepository:
-    """
-    Create a new filesystem skill repository.
+def create_default_skill_repository(
+    *roots: str,
+    workspace_runtime: Optional[BaseWorkspaceRuntime] = None,
+) -> FsSkillRepository:
+    """Create a new filesystem skill repository.
 
     Args:
-        roots: List of root directories to scan
-        workspace_runtime: Optional workspace runtime to use
-
+        roots: Root directories (or URLs) to scan for skills.
+        workspace_runtime: Optional workspace runtime.
     Returns:
-        A new default skill repository
+        A configured :class:`FsSkillRepository`.
     """
     if workspace_runtime is None:
         workspace_runtime = create_local_workspace_runtime()
-    return FsSkillRepository(*roots, workspace_runtime=workspace_runtime)
+    return FsSkillRepository(
+        *roots,
+        workspace_runtime=workspace_runtime,
+    )

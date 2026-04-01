@@ -10,7 +10,7 @@ This package provides a CLI entrypoint:
 
 import os
 
-# Avoid trpc_agent reporter side-effects during codegen startup/import.
+# Avoid trpc_agent_sdk reporter side-effects during codegen startup/import.
 os.environ.setdefault("DISABLE_TRPC_AGENT_REPORT", "true")
 
 from ._cli import ServiceMode

@@ -20,6 +20,7 @@ from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.models import LlmRequest
 
 from .._base_agent import BaseAgent
+
 if TYPE_CHECKING:
     from .._llm_agent import LlmAgent
 

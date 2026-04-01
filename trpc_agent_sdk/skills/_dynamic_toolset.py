@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright @ 2026 Tencent.com
+# Copyright @ 2025 Tencent.com
 """Dynamic skill toolset for loading tools from skills.
 
 This module provides DynamicSkillToolSet which dynamically loads tools
@@ -229,19 +229,16 @@ class DynamicSkillToolSet(BaseToolSet):
             # Only get skills that are active in current turn (in state_delta)
             skills_to_process = self._get_active_skills_from_delta(ctx)
             if skills_to_process:
-                logger.info("Processing active skills from current turn: %s", skills_to_process)
-                logger.info("Processing active skills from current turn: %s", skills_to_process)
+                logger.debug("Processing active skills from current turn: %s", skills_to_process)
             else:
                 # Fallback: if no active skills, consider all loaded skills
                 # This handles the case where skills were loaded in previous turns
                 skills_to_process = self._get_loaded_skills_from_state(ctx)
                 if skills_to_process:
                     logger.debug("No active skills in current turn, using all loaded skills: %s", skills_to_process)
-                    logger.debug("No active skills in current turn, using all loaded skills: %s", skills_to_process)
         else:
             # Get all loaded skills from session
             skills_to_process = self._get_loaded_skills_from_state(ctx)
-            logger.debug("Processing all loaded skills: %s", skills_to_process)
             logger.debug("Processing all loaded skills: %s", skills_to_process)
 
         if not skills_to_process:
@@ -360,26 +357,33 @@ class DynamicSkillToolSet(BaseToolSet):
         key = SKILL_TOOLS_STATE_KEY_PREFIX + skill_name
         v = get_state_delta(ctx, key)
         if not v:
-            return []
+            # Fallback to SKILL.md defaults when explicit selection state is absent.
+            return self._get_skill_default_tools(skill_name)
 
         v_str = v.decode('utf-8') if isinstance(v, bytes) else str(v)
 
         if v_str == "*":
             # Select all tools defined in the skill
-            try:
-                sk = self._skill_repository.get(skill_name)
-                if sk is None:
-                    return []
-                return sk.tools
-            except Exception as ex:  # pylint: disable=broad-except
-                logger.warning("Failed to get skill '%s': %s", skill_name, ex)
-                logger.warning("Failed to get skill '%s': %s", skill_name, ex)
-                return []
+            return self._get_skill_default_tools(skill_name)
 
         try:
             arr = json.loads(v_str)
-            return arr if isinstance(arr, list) else []
+            if isinstance(arr, list):
+                return arr
+            return self._get_skill_default_tools(skill_name)
         except json.JSONDecodeError:
             logger.warning("Failed to parse tools selection for skill '%s': %s", skill_name, v_str)
             logger.warning("Failed to parse tools selection for skill '%s': %s", skill_name, v_str)
+            return self._get_skill_default_tools(skill_name)
+
+    def _get_skill_default_tools(self, skill_name: str) -> list[str]:
+        """Return default tools from SKILL.md for a loaded skill."""
+        try:
+            sk = self._skill_repository.get(skill_name)
+            if sk is None:
+                return []
+            return list(sk.tools or [])
+        except Exception as ex:  # pylint: disable=broad-except
+            logger.warning("Failed to get default tools for skill '%s': %s", skill_name, ex)
+            logger.warning("Failed to get default tools for skill '%s': %s", skill_name, ex)
             return []

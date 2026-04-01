@@ -1,7 +1,23 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright @ 2026 Tencent.com
-"""TRPC Agent Skills package."""
+# Copyright @ 2025 Tencent.com
+"""TRPC Agent Skills System.
+
+This module provides a skills system inspired by Anthropic's skills pattern,
+allowing agents to dynamically load and use specialized capabilities.
+
+Skills are self-contained directories that include:
+- SKILL.md: Metadata and instructions in YAML frontmatter
+- Scripts and resources
+- Tool definitions and implementations
+
+Example:
+    >>> from trpc_agent_sdk.skills import SkillRegistry, SkillToolSet
+    >>> registry = SkillRegistry()
+    >>> # Register skills...
+    >>> toolset = SkillToolSet()
+    >>> tools = await toolset.get_tools()
+"""
 
 from ._common import BaseSelectionResult
 from ._common import SelectionMode
@@ -21,26 +37,16 @@ from ._constants import SKILL_REGISTRY_KEY
 from ._constants import SKILL_REPOSITORY_KEY
 from ._constants import SKILL_TOOLS_STATE_KEY_PREFIX
 from ._dynamic_toolset import DynamicSkillToolSet
-from ._registry import SKILL_REGISTRY
 from ._registry import SkillRegistry
 from ._repository import BaseSkillRepository
 from ._repository import FsSkillRepository
 from ._repository import create_default_skill_repository
-from ._run_tool import ArtifactInfo
-from ._run_tool import SkillRunInput
-from ._run_tool import SkillRunOutput
-from ._run_tool import SkillRunTool
-from ._tools import SkillSelectDocsResult
-from ._tools import SkillSelectToolsResult
-from ._tools import skill_list
-from ._tools import skill_list_docs
-from ._tools import skill_list_tools
-from ._tools import skill_load
-from ._tools import skill_select_docs
-from ._tools import skill_select_tools
 from ._toolset import SkillToolSet
 from ._types import Skill
+from ._types import SkillConfig
+from ._types import SkillFrontMatter
 from ._types import SkillMetadata
+from ._types import SkillRequires
 from ._types import SkillResource
 from ._types import SkillSummary
 from ._types import SkillWorkspaceInputRecord
@@ -63,6 +69,13 @@ from ._utils import load_metadata
 from ._utils import save_metadata
 from ._utils import set_state_delta
 from ._utils import shell_quote
+from .tools import SkillRunTool
+from .tools import skill_list
+from .tools import skill_list_docs
+from .tools import skill_list_tools
+from .tools import skill_load
+from .tools import skill_select_docs
+from .tools import skill_select_tools
 
 __all__ = [
     "BaseSelectionResult",
@@ -84,25 +97,15 @@ __all__ = [
     "SKILL_TOOLS_STATE_KEY_PREFIX",
     "DynamicSkillToolSet",
     "SkillRegistry",
-    "SKILL_REGISTRY",
     "BaseSkillRepository",
     "FsSkillRepository",
     "create_default_skill_repository",
-    "ArtifactInfo",
-    "SkillRunInput",
-    "SkillRunOutput",
-    "SkillRunTool",
-    "SkillSelectDocsResult",
-    "SkillSelectToolsResult",
-    "skill_list",
-    "skill_list_docs",
-    "skill_list_tools",
-    "skill_load",
-    "skill_select_docs",
-    "skill_select_tools",
     "SkillToolSet",
     "Skill",
+    "SkillConfig",
+    "SkillFrontMatter",
     "SkillMetadata",
+    "SkillRequires",
     "SkillResource",
     "SkillSummary",
     "SkillWorkspaceInputRecord",
@@ -125,4 +128,11 @@ __all__ = [
     "save_metadata",
     "set_state_delta",
     "shell_quote",
+    "SkillRunTool",
+    "skill_list",
+    "skill_list_docs",
+    "skill_list_tools",
+    "skill_load",
+    "skill_select_docs",
+    "skill_select_tools",
 ]
