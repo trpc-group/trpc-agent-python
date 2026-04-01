@@ -76,8 +76,12 @@ class LlmProcessor:
                 yield self._create_error_event(context, "validation_unexpected_error", f"Validation error: {str(ex)}")
                 return
 
-            # Step 2: Call the model and process responses with telemetry tracing
-            with tracer.start_as_current_span('call_llm'):
+            # Step 2: Call the model and process responses with telemetry tracing.
+            # Avoid start_as_current_span in async generators because cancellation can
+            # close the generator from a different context, which may trigger
+            # "Token was created in a different Context" during detach.
+            span = tracer.start_span('call_llm')
+            try:
                 event_id = Event.new_id()
                 final_llm_response = None
 
@@ -106,6 +110,8 @@ class LlmProcessor:
                                    request,
                                    final_llm_response,
                                    instruction_metadata=instruction_metadata)
+            finally:
+                span.end()
 
         except Exception as ex:  # pylint: disable=broad-except
             logger.error("LLM call failed for agent %s: %s", author, ex)

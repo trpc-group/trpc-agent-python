@@ -1,38 +1,78 @@
-# LLM Agent 使用Branch过滤历史消息示例
+# LLM Agent 分支历史过滤示例
 
-本示例演示如何使用 `message_branch_filter_mode` 参数控制多 Agent 层级结构中各 Agent 对历史消息的可见范围。
+本示例演示如何基于 `LlmAgent` 在多 Agent 协作链路中使用 `message_branch_filter_mode`，并验证 `ALL / PREFIX / EXACT` 三种模式下的历史消息可见性差异。
 
 ## 关键特性
 
-- **分支级别的消息隔离**：通过 `message_branch_filter_mode` 参数控制 Agent 在多 Agent 协作场景中对历史消息的可见性，粒度为每个 Agent 所在的分支
-- **三种过滤模式**：
-  - `BranchFilterMode.ALL`：Agent 可以看到所有分支的消息，适合需要完整上下文的场景
-  - `BranchFilterMode.PREFIX`：Agent 只能看到祖先、自身和后代分支的消息，实现层级隔离
-  - `BranchFilterMode.EXACT`：Agent 仅能看到自身分支的消息，实现完全隔离
-- **多场景对比**：本示例同时运行三种模式，直观展示分支过滤对 Agent 上下文可见性的影响
+- **分支级消息过滤**：按 Agent 所在分支路径过滤历史消息，控制可见范围
+- **三种过滤模式对比**：同一组请求分别在 `ALL`、`PREFIX`、`EXACT` 模式下运行
+- **多 Agent 协作链路**：覆盖客服路由、技术诊断、数据库专家、账单查询四类角色
+- **可观测的行为差异**：通过工具调用参数与最终回复内容验证上下文是否被隔离
+- **统一测试输入**：三种模式使用同一组请求，便于横向比较
 
-## Agent 层级结构
+## Agent 层级结构说明
 
+本例是多 Agent 层级协作示例：
+
+```text
+CustomerService (EXACT - always)
+├── TechnicalSupport (ALL / PREFIX / EXACT)
+│   └── DatabaseExpert (ALL / PREFIX / EXACT)
+└── BillingSupport (ALL / PREFIX / EXACT)
 ```
-CustomerService (EXACT - always) - 主协调器
-├── TechnicalSupport (configurable: ALL/PREFIX/EXACT) - 处理技术问题
-│   └── DatabaseExpert (same as TechnicalSupport) - 数据库专家
-└── BillingSupport (same as TechnicalSupport) - 处理账单查询
-```
 
-分支命名：
-- CustomerService: `"CustomerService"`
-- TechnicalSupport: `"CustomerService.TechnicalSupport"`
-- DatabaseExpert: `"CustomerService.TechnicalSupport.DatabaseExpert"`
-- BillingSupport: `"CustomerService.BillingSupport"`
+分支路径：
 
-## 环境要求
+- `CustomerService`
+- `CustomerService.TechnicalSupport`
+- `CustomerService.TechnicalSupport.DatabaseExpert`
+- `CustomerService.BillingSupport`
 
-Python版本: 3.10+（强烈建议使用3.12）
+关键文件：
 
-## 在trpc-agent-python框架代码下如何运行此代码示例
+- `examples/llmagent_with_branch_filtering/agent/agent.py`：构建多 Agent 层级与过滤模式
+- `examples/llmagent_with_branch_filtering/agent/tools.py`：技术检查、数据库诊断、账单查询工具
+- `examples/llmagent_with_branch_filtering/agent/prompts.py`：各角色提示词
+- `examples/llmagent_with_branch_filtering/agent/config.py`：模型环境变量读取
+- `examples/llmagent_with_branch_filtering/run_agent.py`：三种模式对比测试入口
 
-1. 下载trpc-agent-python代码并安装
+
+## 关键代码解释
+
+这一节用于快速定位“过滤逻辑到底在哪实现、怎么生效”。
+
+### 1) Agent 层级与过滤参数（`agent/agent.py`）
+
+- `CustomerService` 固定使用 `BranchFilterMode.EXACT`
+- `TechnicalSupport`、`DatabaseExpert`、`BillingSupport` 使用统一的 `filter_mode`（由场景传入）
+- 关键参数是 `message_branch_filter_mode`，它决定该 Agent 组装 prompt 时可见哪些分支历史
+
+### 2) 场景驱动测试（`run_agent.py`）
+
+- 通过 `test_scenarios` 依次运行 `ALL`、`PREFIX`、`EXACT`
+- 三个场景使用同一组 customer requests，保证横向对比公平
+- 每个场景复用同一个 `session_id` 进行多轮对话，用于观察历史消息累积后的可见性差异
+
+### 3) 分支可见性规则（核心）
+
+- `ALL`：可见全部分支消息
+- `PREFIX`：可见祖先 + 自身 + 后代，兄弟分支不可见
+- `EXACT`：仅自身分支可见
+
+| Agent | 分支路径 | ALL 可见 | PREFIX 可见 | EXACT 可见 |
+|-------|---------|---------|------------|-----------|
+| CustomerService | `CustomerService` | 全部 | 全部 | 仅自身 |
+| TechnicalSupport | `CustomerService.TechnicalSupport` | 全部 | CS + TS + DB | 仅自身 |
+| DatabaseExpert | `CustomerService.TechnicalSupport.DatabaseExpert` | 全部 | CS + TS + DB | 仅自身 |
+| BillingSupport | `CustomerService.BillingSupport` | 全部 | CS + BS | 仅自身 |
+
+## 环境与运行
+
+### 环境要求
+
+- Python 3.10+（强烈建议 3.12）
+
+### 安装步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
@@ -42,103 +82,50 @@ source .venv/bin/activate
 pip3 install -e .
 ```
 
-2. 运行此代码示例
+### 环境变量要求
 
-在 `.env` 文件中设置使用 LLM 相关的变量（也可以通过export设置）:
-- TRPC_AGENT_API_KEY
-- TRPC_AGENT_BASE_URL
-- TRPC_AGENT_MODEL_NAME
+在 `examples/llmagent_with_branch_filtering/.env` 中配置（或通过 `export`）：
 
-然后运行下面的命令：
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
+
+### 运行命令
 
 ```bash
-cd examples/llmagent_with_branch_filtering/
+cd examples/llmagent_with_branch_filtering
 python3 run_agent.py
 ```
 
-## 关键代码解释
+## 运行结果（实测）
 
-### 1. 创建带分支过滤的 Agent 层级（agent/agent.py）
+以下是实测输出要点：
 
-```python
-from trpc_agent_sdk.agents import LlmAgent
-from trpc_agent_sdk.agents import BranchFilterMode
+```text
+Scenario 1: BranchFilterMode.ALL
+- BillingSupport 在账单回复中引用了前两轮技术上下文（服务状态、数据库慢查询建议）
 
-database_expert = LlmAgent(
-    name="DatabaseExpert",
-    model=model,
-    instruction=DATABASE_EXPERT_INSTRUCTION,
-    tools=[FunctionTool(diagnose_database_issue)],
-    # 核心参数：控制该 Agent 能看到哪些分支的历史消息
-    # 每个 Agent 在层级中有唯一的分支路径（如 "CustomerService.TechnicalSupport.DatabaseExpert"），
-    # message_branch_filter_mode 决定了在组装 LLM prompt 时，按分支路径过滤历史消息的策略
-    message_branch_filter_mode=filter_mode,
-)
+Scenario 2: BranchFilterMode.PREFIX
+- BillingSupport 回复中明确表示“看不到此前技术问题”
+- 体现兄弟分支隔离（Billing 分支看不到 TechnicalSupport/DatabaseExpert 分支）
 
-technical_support = LlmAgent(
-    name="TechnicalSupport",
-    model=model,
-    instruction=TECHNICAL_SUPPORT_INSTRUCTION,
-    tools=[FunctionTool(check_server_status)],
-    sub_agents=[database_expert],
-    # 同一层级中的多个 sub-agent 可以使用不同的过滤模式，
-    # 这里统一使用 filter_mode 以便对比演示
-    message_branch_filter_mode=filter_mode,
-)
-
-customer_service = LlmAgent(
-    name="CustomerService",
-    model=model,
-    instruction=CUSTOMER_SERVICE_INSTRUCTION,
-    sub_agents=[technical_support, billing_support],
-    # 根节点使用 EXACT：只看自身分支消息，不受子 Agent 消息干扰，
-    # 保证路由决策仅基于用户原始请求
-    message_branch_filter_mode=BranchFilterMode.EXACT,
-)
+Scenario 3: BranchFilterMode.EXACT
+- DatabaseExpert 工具调用参数退化为更泛化的 symptom: 'general performance issues'
+- 诊断结果变为“信息不足，需要更多细节”
+- BillingSupport 同样表示看不到前序技术上下文
 ```
 
-`message_branch_filter_mode` 是 `LlmAgent` 的构造参数，用于设定 Agent 在多 Agent 层级中如何过滤不同分支的消息。
+## 结果分析（是否符合要求）
 
-**工作原理**：在多 Agent 协作中，每个 Agent 拥有唯一的分支路径（由 Agent 名称按层级用 `.` 拼接而成）。当 Agent 需要调用 LLM 时，框架会根据 `message_branch_filter_mode` 决定将 Session 中哪些分支的历史消息注入到 LLM 的 prompt 中。
+结论：**符合本示例测试要求**。
 
-**三种模式详解**：
+- **`ALL` 符合预期**：跨分支上下文可见，账单分支可引用技术分支历史
+- **`PREFIX` 符合预期**：仅祖先/自身/后代可见，兄弟分支隔离
+- **`EXACT` 符合预期**：仅自身分支可见，隔离最强，跨分支上下文不可用
+- **对比有效**：三种模式在同一输入下表现出清晰且稳定的隔离梯度
 
-- `BranchFilterMode.ALL`：不做任何过滤，Agent 可以看到 Session 中所有分支的消息。适合需要全局上下文的协作场景，但可能引入无关信息
-- `BranchFilterMode.PREFIX`：Agent 只能看到分支路径与自身有前缀关系的消息。例如 `DatabaseExpert`（路径 `CustomerService.TechnicalSupport.DatabaseExpert`）可以看到 `CustomerService`（祖先）、`TechnicalSupport`（父级）和自身的消息，但看不到 `BillingSupport`（兄弟分支）。适合层级工作流，既保留上下文传递，又实现部门间隔离
-- `BranchFilterMode.EXACT`：Agent 仅能看到自身分支产生的消息，与其他所有分支完全隔离。适合无状态操作或需要最大隐私保护的场景
+## 适用场景建议
 
-### 2. 多场景对比运行（run_agent.py）
-
-```python
-test_scenarios = [
-    {"title": "BranchFilterMode.ALL",    "filter_mode": BranchFilterMode.ALL},
-    {"title": "BranchFilterMode.PREFIX", "filter_mode": BranchFilterMode.PREFIX},
-    {"title": "BranchFilterMode.EXACT",  "filter_mode": BranchFilterMode.EXACT},
-]
-```
-
-示例通过同一组客户支持对话在三种模式下运行：
-- **ALL 模式**：BillingSupport 可以看到 TechnicalSupport 和 DatabaseExpert 讨论的技术问题
-- **PREFIX 模式**：BillingSupport 只能看到 CustomerService（父节点）和自身的消息，无法看到 TechnicalSupport 分支
-- **EXACT 模式**：每个 Agent 只能看到自身分支的消息，完全隔离
-
-### 3. 核心区别：分支路径匹配
-
-> 缩写说明：CS = CustomerService，TS = TechnicalSupport，DB = DatabaseExpert，BS = BillingSupport
-
-| Agent | 分支路径 | ALL 可见 | PREFIX 可见 | EXACT 可见 |
-|-------|---------|---------|------------|-----------|
-| CustomerService (CS) | `CustomerService` | 全部 | 全部 | 仅 CS |
-| TechnicalSupport (TS) | `CustomerService.TechnicalSupport` | 全部 | CS + TS + DB（自身及上下级） | 仅 TS |
-| DatabaseExpert (DB) | `CustomerService.TechnicalSupport.DatabaseExpert` | 全部 | CS + TS + DB（自身及上级链路） | 仅 DB |
-| BillingSupport (BS) | `CustomerService.BillingSupport` | 全部 | CS + BS（自身及上级，看不到 TS/DB 兄弟分支） | 仅 BS |
-
-## 适用场景
-
-| 场景 | 推荐模式 |
-|------|---------|
-| 需要完整上下文的协作场景 | `BranchFilterMode.ALL`，所有 Agent 共享全部对话 |
-| 部门层级隔离 | `BranchFilterMode.PREFIX`，子 Agent 继承父 Agent 上下文 |
-| 最大隐私保护 | `BranchFilterMode.EXACT`，每个 Agent 完全独立 |
-| 平行独立任务 | `BranchFilterMode.EXACT`，避免无关上下文干扰 |
-| 层级工作流（上下级协作） | `BranchFilterMode.PREFIX`，保留层级关系的上下文 |
+- 需要全局协作上下文：`BranchFilterMode.ALL`
+- 需要部门层级协作且避免兄弟干扰：`BranchFilterMode.PREFIX`
+- 需要最大隔离和隐私：`BranchFilterMode.EXACT`

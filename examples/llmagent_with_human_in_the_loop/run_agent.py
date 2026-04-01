@@ -1,14 +1,19 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+#
+# Copyright @ 2026 Tencent.com
+
 import asyncio
 import uuid
 import time
 from dataclasses import dataclass
 from typing import Optional
 
-from trpc_agent.runners import Runner
-from trpc_agent.sessions import InMemorySessionService
-from trpc_agent.agents import LlmAgent
-from trpc_agent.events import LongRunningEvent
-from trpc_agent.types import Content, Part, FunctionResponse
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.events import LongRunningEvent
+from trpc_agent_sdk.types import Content, Part, FunctionResponse
 
 from dotenv import load_dotenv
 # Load environment variables from the .env file
