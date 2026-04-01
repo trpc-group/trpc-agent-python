@@ -43,7 +43,7 @@ examples/redis_session_service/
 ### 1. 安装 trpc-agent-python
 
 ```bash
-git clone https://git.woa.com/trpc-python/trpc-python-agent/trpc-agent
+git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent
 python3 -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate

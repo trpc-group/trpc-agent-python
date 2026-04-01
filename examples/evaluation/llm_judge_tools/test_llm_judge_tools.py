@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright @ 2026 Tencent.com
-"""为裁判 Agent 注册工具的示例：使用 llm_rubric_response，在 rubric 中规定工具的调用时机与用法。"""
+"""Example of registering tools for a judge agent.
+
+Uses llm_rubric_response and defines in the rubric when and how tools must be called.
+"""
 
 import os
 
@@ -12,14 +15,19 @@ from trpc_agent_sdk.tools import FunctionTool
 
 
 def get_eval_policy() -> str:
-    """裁判在打分前必须调用的工具：返回本用例的判定标准。裁判须先调用本工具获取标准，再仅按返回的条款逐条判定。"""
-    return ("本用例判定标准（共 3 条）：\n"
-            "1. 最终回答须包含明确的温度数值（如 18、18°C）。\n"
-            "2. 最终回答须包含天气状况描述（如晴、多云、阴）。\n"
-            "3. 回答须与用户问题直接相关，不得答非所问。")
+    """Tool that the judge must call before scoring.
+
+    Returns the evaluation criteria for this test case. The judge must call this
+    tool first, then score strictly against each returned rule.
+    """
+    return ("Evaluation criteria for this case (3 rules):\n"
+            "1. The final answer must include an explicit temperature value (for example, 18 or 18°C).\n"
+            "2. The final answer must include a weather condition description (for example, sunny, cloudy, overcast).\n"
+            "3. The answer must be directly relevant to the user's question and not off-topic.")
 
 
-# 为 llm_rubric_response 的 judge agent 注册工具；rubric 中已规定「必须先调用 get_eval_policy 再按返回条款判定」
+# Register tools for the llm_rubric_response judge agent.
+# The rubric already requires calling get_eval_policy first, then scoring by returned rules.
 LLM_EVALUATOR_REGISTRY.register_judge_tools(
     "llm_rubric_response",
     [FunctionTool(get_eval_policy)],
@@ -28,7 +36,11 @@ LLM_EVALUATOR_REGISTRY.register_judge_tools(
 
 @pytest.mark.asyncio
 async def test_llm_judge_with_tools():
-    """使用 llm_rubric_response：裁判按 rubric 须先调用 get_eval_policy 获取判定标准，再按标准条款打分。"""
+    """Use llm_rubric_response.
+
+    The judge must call get_eval_policy first to get criteria from the rubric,
+    then score according to those criteria.
+    """
     test_dir = os.path.dirname(os.path.abspath(__file__))
     eval_set_path = os.path.join(test_dir, "agent", "judge_tools.evalset.json")
 
