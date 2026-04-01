@@ -39,6 +39,6 @@ pip3 install -e .
 然后运行下面的命令：
 
 ```bash
-cd examples/tool_with_agent_tool/
+cd examples/agent_tools/
 python3 run_agent.py
 ```
