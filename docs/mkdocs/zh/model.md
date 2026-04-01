@@ -29,10 +29,10 @@ export TRPC_AGENT_MODEL_NAME="your-model-name"
 ### 创建模型与 Agent
 
 ```python
-from trpc_agent.agents import LlmAgent
-from trpc_agent.models import LLMModel
-from trpc_agent.models import OpenAIModel
-from trpc_agent.tools import FunctionTool
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import LLMModel
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.tools import FunctionTool
 
 from .prompts import INSTRUCTION
 from .tools import get_weather_report
@@ -110,7 +110,7 @@ export TRPC_AGENT_MODEL_NAME="your-model-name"
 #### 代码方式
 
 ```python
-from trpc_agent.models import OpenAIModel
+from trpc_agent_sdk.models import OpenAIModel
 
 model = OpenAIModel(
     model_name="deepseek-chat",
@@ -124,7 +124,7 @@ model = OpenAIModel(
 #### hunyuan模型调用方式
 
 ```python
-from trpc_agent.models import OpenAIModel
+from trpc_agent_sdk.models import OpenAIModel
 
 LlmAgent(
     ...,
@@ -145,7 +145,7 @@ LlmAgent(
     ...,
     model=OpenAIModel(
         model_name="hunyuan-t1-vision-20250619",
-        api_key="xxx", # 替换为实际的key
+        api_key="your-api-key", # 替换为实际的key
         base_url="https://api.hunyuan.cloud.tencent.com/v1",
         # 增加头部
         client_args={ "default_headers": {"Accept": "*/*", "Content-Type": "application/json"}},
@@ -154,7 +154,7 @@ LlmAgent(
 
 query_text = "请你介绍一下这张图片"
 
-image_path = "xxx/xxx.png"
+image_path = "your-image-path"
 with open(image_path, "rb") as f:
             image_data = f.read()
 
@@ -190,7 +190,7 @@ export TRPC_AGENT_MODEL_NAME="your-model-name"
 以智谱大模型为例：
 
 ```python
-from trpc_agent.models import AnthropicModel
+from trpc_agent_sdk.models import AnthropicModel
 
 LlmAgent(
     ...,
@@ -220,8 +220,8 @@ export TRPC_AGENT_MODEL_NAME="your-model-name"
 ### 代码方式显式创建模型
 
 ```python
-from trpc_agent.models import LiteLLMModel
-from trpc_agent.agents.llm_agent import LlmAgent
+from trpc_agent_sdk.models import LiteLLMModel
+from trpc_agent_sdk.agents.llm_agent import LlmAgent
 
 model = LiteLLMModel(
     model_name="openai/gpt-4o",   # 必填：provider/model
@@ -236,7 +236,7 @@ LlmAgent(..., model=model, instruction="...")
 不显式实例化 `LiteLLMModel`，只传模型名字符串；框架根据 `ModelRegistry` 的 `supported_models` 正则匹配到 LiteLLMModel 并创建实例。此时 API Key、base_url 等依赖环境变量（如 `OPENAI_API_KEY`、`OPENAI_API_BASE`）。
 
 ```python
-from trpc_agent.agents.llm_agent import LlmAgent
+from trpc_agent_sdk.agents.llm_agent import LlmAgent
 
 LlmAgent(..., model="openai/gpt-4o", instruction="...")
 ```
@@ -367,7 +367,7 @@ class ResponseABC(BaseModel):
 Runner 默认以流式方式返回事件，`event.partial` 为 True 时表示 LLM 流式返回的 Token。可通过 `run_config=RunConfig(streaming=False)` 关闭流式。
 
 ```python
-from trpc_agent.configs import RunConfig
+from trpc_agent_sdk.configs import RunConfig
 
 async for event in runner.run_async(
     user_id=user_id,
@@ -383,7 +383,7 @@ async for event in runner.run_async(
 通过 `GenerateContentConfig` 调整 LLM 的生成行为，如 temperature、top_p、max_output_tokens 等：
 
 ```python
-from trpc_agent.types import GenerateContentConfig
+from trpc_agent_sdk.types import GenerateContentConfig
 
 LlmAgent(
     name="weather_agent",

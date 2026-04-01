@@ -67,7 +67,7 @@ python -m trpc_agent_dsl.codegen --dsl-text "$(cat workflow.json)" -o examples/d
 
 ## DSL 结构总览
 
-DSL 定义见：[trpc_agent_dsl/codegen/dsl_schema.json](../../../trpc_agent_dsl/codegen/dsl_schema.json)。
+DSL 定义见：[trpc_agent_sdk/dsl/codegen/dsl_schema.json](../../../trpc_agent_sdk/dsl/codegen/dsl_schema.json)。
 
 ## 当前支持的 node_type（Python code generator）
 

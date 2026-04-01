@@ -90,7 +90,7 @@ graph_builder.add_edge("chatbot", END)
 在本框架中，常见节点写法如下：
 
 ```python
-from trpc_agent.agents import langgraph_llm_node
+from trpc_agent_sdk.agents import langgraph_llm_node
 
 @langgraph_llm_node
 def chatbot_node(state: MyState, config):
@@ -101,7 +101,7 @@ def chatbot_node(state: MyState, config):
 
 ```python
 from langchain_core.tools import tool
-from trpc_agent.agents.langgraph_agent import tool_node
+from trpc_agent_sdk.agents.langgraph_agent import tool_node
 
 @tool
 @tool_node
@@ -156,7 +156,7 @@ graph_builder = StateGraph(MyState)
 `LangGraphAgent` 真正接收的不是 `StateGraph` 构建器本身，而是 `compile()` 之后的图对象。框架中的 `LangGraphAgent` 明确要求传入已编译图。
 
 ```python
-from trpc_agent.agents.langgraph_agent import LangGraphAgent
+from trpc_agent_sdk.agents.langgraph_agent import LangGraphAgent
 
 graph = graph_builder.compile()
 
@@ -182,7 +182,7 @@ agent = LangGraphAgent(
 相关参数遵循LlmAgent的参数说明。
 
 ```python
-from trpc_agent.agents.langgraph_agent import LangGraphAgent
+from trpc_agent_sdk.agents.langgraph_agent import LangGraphAgent
 
 # 假设已经构建了LangGraph
 graph = build_your_langgraph()
@@ -239,7 +239,7 @@ def build_graph():
 用于装饰调用LLM的节点，自动记录LLM调用信息：
 
 ```python
-from trpc_agent.agents import langgraph_llm_node
+from trpc_agent_sdk.agents import langgraph_llm_node
 
 @langgraph_llm_node
 def chatbot_node(state: State):
@@ -258,7 +258,7 @@ def custom_chatbot(state: CustomState):
 用于装饰工具执行节点，自动记录工具调用信息，注意@tool_node必须放在LangGraph的@tool装饰器之后：
 
 ```python
-from trpc_agent.agents.langgraph_agent import tool_node
+from trpc_agent_sdk.agents.langgraph_agent import tool_node
 from langchain_core.tools import tool
 
 @tool
@@ -285,7 +285,7 @@ def calculate(operation: str, a: float, b: float) -> str:
 - 其他配置如果需要，均可以通过RunConfig配置，目前只支持 `stream_mode` 和 `runnable_config` 两个配置项，如有需要，欢迎提issue。
 
 ```python
-from trpc_agent.agents.run_config import RunConfig
+from trpc_agent_sdk.agents.run_config import RunConfig
 
 run_config = RunConfig(
     agent_run_config={
@@ -305,7 +305,7 @@ runner.run_async(..., run_config=run_config)
 在获取Event之后，可以获取LangGraph的原始响应数据，如下所示：
 
 ```python
-from trpc_agent.agents.langgraph_agent import get_langgraph_payload
+from trpc_agent_sdk.agents.langgraph_agent import get_langgraph_payload
 
 async for event in runner.run_async(...):
     langgraph_payload = get_langgraph_payload(event)
@@ -320,7 +320,7 @@ async for event in runner.run_async(...):
 在LangGraph节点中可以访问trpc_agent的上下文信息：
 
 ```python
-from trpc_agent.agents.langgraph_agent import get_langgraph_agent_context
+from trpc_agent_sdk.agents.langgraph_agent import get_langgraph_agent_context
 
 @langgraph_llm_node
 def context_aware_node(state: State, config: RunnableConfig):
@@ -365,7 +365,7 @@ LangGraphAgent支持两种内存管理方式：
 ```python
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import StreamWriter
-from trpc_agent.agents.utils import LangGraphEventWriter
+from trpc_agent_sdk.agents.utils import LangGraphEventWriter
 
 def custom_node(
     state: State,
@@ -448,9 +448,9 @@ event_writer.write_custom({
 ```python
 from typing import AsyncGenerator
 from ag_ui.core import BaseEvent, EventType, CustomEvent
-from trpc_agent.events import Event as TrpcEvent
-from trpc_agent.agents.utils import LangGraphEventType, get_event_type
-from trpc_agent_ecosystem.ag_ui._plugin._langgraph_event_translator import (
+from trpc_agent_sdk.events import Event as TrpcEvent
+from trpc_agent_sdk.agents.utils import LangGraphEventType, get_event_type
+from trpc_agent_sdk.server.ag_ui._plugin._langgraph_event_translator import (
     AgUiLangGraphEventTranslator,
     AgUiTranslationContext,
 )
@@ -530,7 +530,7 @@ class CustomAgUiEventTranslator(AgUiLangGraphEventTranslator):
 在创建 `AgUiAgent` 时注入自定义转换器：
 
 ```python
-from trpc_agent_ecosystem.ag_ui import AgUiAgent
+from trpc_agent_sdk.server.ag_ui import AgUiAgent
 
 def create_agui_agent() -> AgUiAgent:
     """创建带有自定义事件转换器的 AgUiAgent"""
@@ -551,4 +551,4 @@ def create_agui_agent() -> AgUiAgent:
 
 完整的 LangGraph Agent 示例见：
 - 基础示例：[examples/langgraph_agent](../../../examples/langgraph_agent/README.md)
-- AG-UI 自定义事件示例：[examples/trpc_agui_with_langgraph_custom](../../../examples/trpc_agui_with_langgraph_custom/README.md)
+- AG-UI 自定义事件示例：examples/trpc_agui_with_langgraph_custom（示例待补充）
