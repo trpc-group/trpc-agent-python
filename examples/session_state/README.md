@@ -36,9 +36,9 @@ pip3 install -e .
 ### 2. 配置环境变量
 
 在 `.env` 文件中设置 LLM 相关变量（或通过 export 设置）:
-- `TRPC_AGENT_API_KEY`
-- `TRPC_AGENT_BASE_URL`
-- `TRPC_AGENT_MODEL_NAME`
+- `TRPC_AGENT_API_KEY="your-api-key"`
+- `TRPC_AGENT_BASE_URL="your-base-url"`
+- `TRPC_AGENT_MODEL_NAME="your-model-name"`
 
 ### 3. 运行示例
 

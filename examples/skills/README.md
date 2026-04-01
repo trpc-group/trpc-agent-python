@@ -56,15 +56,15 @@ cd examples/skills
 # Option 1: Create a .env file
 cat > .env << EOF
 TRPC_AGENT_API_KEY=your-api-key
-TRPC_AGENT_BASE_URL=http://v2.open.venus.woa.com/llmproxy
-TRPC_AGENT_MODEL_NAME=deepseek-v3-local-II
+TRPC_AGENT_BASE_URL=https://api.deepseek.com/v1
+TRPC_AGENT_MODEL_NAME=deepseek-chat
 SKILLS_ROOT=./skills
 EOF
 
 # Option 2: Export environment variables
 export TRPC_AGENT_API_KEY="your-api-key"
-export TRPC_AGENT_BASE_URL="http://v2.open.venus.woa.com/llmproxy"
-export TRPC_AGENT_MODEL_NAME="deepseek-v3-local-II"
+export TRPC_AGENT_BASE_URL="https://api.deepseek.com/v1"
+export TRPC_AGENT_MODEL_NAME="deepseek-chat"
 export SKILLS_ROOT="./skills"
 ```
 
@@ -134,8 +134,8 @@ To customize the example, modify the corresponding files:
 ```python
 # In agent/config.py, modify get_model_config() or set environment variables:
 export TRPC_AGENT_API_KEY="your-api-key"
-export TRPC_AGENT_BASE_URL="http://v2.open.venus.woa.com/llmproxy"
-export TRPC_AGENT_MODEL_NAME="deepseek-v3-local-II"
+export TRPC_AGENT_BASE_URL="https://api.deepseek.com/v1"
+export TRPC_AGENT_MODEL_NAME="deepseek-chat"
 ```
 
 **2. Change skills root** (environment variable):
@@ -185,8 +185,8 @@ you already have on your machine, using the `user-file-ops` skill.
    ```bash
    cd examples/skills
    export TRPC_AGENT_API_KEY="your-api-key"
-   export TRPC_AGENT_BASE_URL="http://v2.open.venus.woa.com/llmproxy"
-   export TRPC_AGENT_MODEL_NAME="deepseek-v3-local-II"
+   export TRPC_AGENT_BASE_URL="https://api.deepseek.com/v1"
+   export TRPC_AGENT_MODEL_NAME="deepseek-chat"
    python3 run_agent.py
    ```
 

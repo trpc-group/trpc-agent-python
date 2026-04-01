@@ -1,0 +1,3 @@
+shenzhen weather: sunny
+guangzhou weather: rain
+shanghai weather: cloud
