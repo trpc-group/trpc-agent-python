@@ -117,10 +117,10 @@ from ._evaluator_registry import EVALUATOR_REGISTRY
 from ._evaluator_registry import EvaluatorRegistry
 from ._final_response_evaluator import FinalResponseEvaluator
 from ._in_memory_eval_sets_manager import InMemoryEvalSetsManager
-from ._llm_criterion import JudgeModelOptions
-from ._llm_criterion import LLMJudgeCriterion
 from ._llm_criterion import DEFAULT_KNOWLEDGE_TOOL_NAMES
 from ._llm_criterion import DEFAULT_NUM_SAMPLES
+from ._llm_criterion import JudgeModelOptions
+from ._llm_criterion import LLMJudgeCriterion
 from ._llm_criterion import Rubric
 from ._llm_criterion import RubricContent
 from ._llm_criterion import RubricScore

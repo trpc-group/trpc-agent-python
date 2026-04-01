@@ -51,14 +51,14 @@ mirrors.tencent.com/todacc/trpc-agent-compile_tlinux3.2_py_312:0.1.0
 
 使用 `pip` 安装：
 ```bash
-pip install trpc-agent --extra-index-url https://mirrors.tencent.com/repository/pypi/tencent_pypi/simple/
+pip install trpc-agent_sdk
 # 如果期望安装带有redis特性的 session，采用扩展安装，如下：
-# pip install trpc-agent[redis] --extra-index-url https://mirrors.tencent.com/repository/pypi/tencent_pypi/simple/
+# pip install trpc-agent_sdk[redis]
 ```
 
 ## 快速体验
 
-如果你不想编写任何代码，我们也提供了一个例子 [trpc-agent-examples](https://git.woa.com/trpc-python/trpc-python-agent/trpc-agent-examples) 供你快速体验。
+如果你不想编写任何代码，我们也提供了一个例子 [examples/quickstart](./examples/quickstart/) 供你快速体验。
 
 如果你想体验Agent的开发过程，请按下面的指引操作。
 
