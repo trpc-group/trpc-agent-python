@@ -27,7 +27,11 @@
 ### 1) 安装依赖
 
 ```bash
-pip install trpc-agent
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent
+python3 -m venv .venv
+source .venv/bin/activate
+pip3 install -e .
 ```
 
 若需使用容器执行器，请确保本机已安装并启动 Docker。
