@@ -1,0 +1,25 @@
+# 构建和分发目录
+build/
+dist/
+*.egg-info/
+
+# 虚拟环境
+venv/
+env/
+.venv/
+.env/
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# 文档
+docs/
+
+# 临时文件
+*.tmp
+*.temp
+
+# exapmle
+examples/

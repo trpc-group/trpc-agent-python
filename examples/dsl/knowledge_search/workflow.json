@@ -1,0 +1,165 @@
+{
+  "version": "1.0",
+  "name": "knowledge_search_example",
+  "description": "Demonstrates Knowledge Search node for RAG (Retrieval-Augmented Generation)",
+  "nodes": [
+    {
+      "id": "start",
+      "label": "Start",
+      "node_type": "builtin.start",
+      "config": {}
+    },
+    {
+      "id": "save_question",
+      "label": "Save Question",
+      "node_type": "builtin.set_state",
+      "config": {
+        "assignments": [
+          {
+            "field": "user_question",
+            "expr": {
+              "expression": "state.user_input",
+              "format": "cel"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "query_rewriter",
+      "label": "Query Rewriter",
+      "node_type": "builtin.llmagent",
+      "config": {
+        "model_spec": {
+          "provider": "openai",
+          "model_name": "env:OPENAI_MODEL",
+          "base_url": "env:OPENAI_BASE_URL",
+          "api_key": "env:OPENAI_API_KEY"
+        },
+        "instruction": "You are a query rewriting assistant. Rewrite the user's question into a clear, concise search query optimized for vector similarity search.\n\nUser question: {{state.user_question}}\n\nReturn a JSON object with:\n- search_query: string\n- keywords: string[]\n\nDo not include any extra keys.",
+        "description": "Rewrites user questions into optimized search queries",
+        "output_format": {
+          "type": "json",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "search_query": {
+                "type": "string",
+                "description": "The optimized search query"
+              },
+              "keywords": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Key terms extracted from the question"
+              }
+            },
+            "required": ["search_query", "keywords"],
+            "additionalProperties": false
+          }
+        },
+        "temperature": 0.3
+      }
+    },
+    {
+      "id": "knowledge_search",
+      "label": "Knowledge Search",
+      "node_type": "builtin.knowledge_search",
+      "config": {
+        "query": "{{input.output_parsed.search_query}}",
+        "max_results": 5,
+        "min_score": 0.5,
+        "connector": {
+          "type": "trag",
+          "token": "env:TRAG_TOKEN",
+          "rag_code": "env:TRAG_RAG_CODE",
+          "namespace": "env:TRAG_NAMESPACE",
+          "collection": "env:TRAG_COLLECTION"
+        },
+        "conditioned_filter": {
+          "field": "metadata.category",
+          "operator": "eq",
+          "value": "machine-learning"
+        }
+      }
+    },
+    {
+      "id": "format_docs",
+      "label": "Format Documents",
+      "node_type": "builtin.transform",
+      "config": {
+        "expr": {
+          "expression": "{ \"doc_count\": size(input.output_parsed.documents), \"doc_1\": size(input.output_parsed.documents) > 0 ? input.output_parsed.documents[0].text : \"\", \"doc_2\": size(input.output_parsed.documents) > 1 ? input.output_parsed.documents[1].text : \"\", \"doc_3\": size(input.output_parsed.documents) > 2 ? input.output_parsed.documents[2].text : \"\", \"score_1\": size(input.output_parsed.documents) > 0 ? input.output_parsed.documents[0].score : 0.0 }",
+          "format": "cel"
+        }
+      }
+    },
+    {
+      "id": "answer_generator",
+      "label": "Answer Generator",
+      "node_type": "builtin.llmagent",
+      "config": {
+        "model_spec": {
+          "provider": "openai",
+          "model_name": "env:OPENAI_MODEL",
+          "base_url": "env:OPENAI_BASE_URL",
+          "api_key": "env:OPENAI_API_KEY"
+        },
+        "instruction": "You are a helpful assistant. Based on the retrieved documents provided in the context, answer the user's question. If the documents don't contain relevant information, say so honestly.\n\nRetrieved {{input.output_parsed.doc_count}} documents (top score: {{input.output_parsed.score_1}}):\n\n--- Document 1 ---\n{{input.output_parsed.doc_1}}\n\n--- Document 2 ---\n{{input.output_parsed.doc_2}}\n\n--- Document 3 ---\n{{input.output_parsed.doc_3}}\n\nUser's original question: {{state.user_question}}",
+        "description": "Generates answers based on retrieved knowledge",
+        "temperature": 0.7,
+        "max_tokens": 2048
+      }
+    },
+    {
+      "id": "end",
+      "label": "End",
+      "node_type": "builtin.end",
+      "config": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_start_save",
+      "source": "start",
+      "target": "save_question"
+    },
+    {
+      "id": "edge_save_rewriter",
+      "source": "save_question",
+      "target": "query_rewriter"
+    },
+    {
+      "id": "edge_rewriter_search",
+      "source": "query_rewriter",
+      "target": "knowledge_search"
+    },
+    {
+      "id": "edge_search_format",
+      "source": "knowledge_search",
+      "target": "format_docs"
+    },
+    {
+      "id": "edge_format_generator",
+      "source": "format_docs",
+      "target": "answer_generator"
+    },
+    {
+      "id": "edge_generator_end",
+      "source": "answer_generator",
+      "target": "end"
+    },
+    {
+      "id": "edge_end_final",
+      "source": "end",
+      "target": "__end__"
+    }
+  ],
+  "start_node_id": "start",
+  "state_variables": [
+    {
+      "name": "user_question",
+      "kind": "string",
+      "description": "The original user question"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "name": "memory-agent-auto",
+  "description": "Demo builtin.llmagent with memory_search tool (auto memory extraction is runner-level).",
+  "version": "1.0",
+  "start_node_id": "start",
+  "nodes": [
+    {
+      "id": "start",
+      "node_type": "builtin.start"
+    },
+    {
+      "id": "agent",
+      "node_type": "builtin.llmagent",
+      "label": "Memory Agent",
+      "config": {
+        "model_spec": {
+          "provider": "openai",
+          "model_name": "env:OPENAI_MODEL",
+          "base_url": "env:OPENAI_BASE_URL",
+          "api_key": "env:OPENAI_API_KEY"
+        },
+        "instruction": "You are a helpful assistant. Use memory_search to recall relevant user facts when needed.",
+        "tools": [
+          { "type": "memory_search" }
+        ],
+        "stream": true
+      }
+    },
+    {
+      "id": "end",
+      "node_type": "builtin.end",
+      "config": {}
+    }
+  ],
+  "edges": [
+    { "source": "start", "target": "agent" },
+    { "source": "agent", "target": "end" }
+  ]
+}

@@ -1,0 +1,23 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright @ 2026 Tencent.com
+"""Route Agent config module"""
+
+import os
+
+
+def get_model_config() -> tuple[str, str, str]:
+    """Get LLM model config from environment variables
+
+    Returns:
+        tuple: (api_key, base_url, model_name)
+    """
+    api_key = os.getenv('TRPC_AGENT_API_KEY', '')
+    base_url = os.getenv('TRPC_AGENT_BASE_URL', '')
+    model_name = os.getenv('TRPC_AGENT_MODEL_NAME', '')
+
+    if not api_key or not base_url or not model_name:
+        raise ValueError(
+            'TRPC_AGENT_API_KEY, TRPC_AGENT_BASE_URL, and TRPC_AGENT_MODEL_NAME must be set in environment variables')
+
+    return api_key, base_url, model_name

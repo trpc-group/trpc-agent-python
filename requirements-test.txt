@@ -1,0 +1,9 @@
+pytest
+pytest-mock
+pytest-asyncio
+pyparsing>=2.4.2
+pytest-cov
+unittest-xml-reporting
+rouge-score
+pandas
+tabulate
