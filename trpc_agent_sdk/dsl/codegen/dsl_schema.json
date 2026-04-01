@@ -1,0 +1,1187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/engine_dsl.schema.json",
+  "title": "Engine DSL Schema",
+  "description": "JSON Schema for the trpc-agent-go engine DSL (Graph/Node/Edge/etc.).",
+  "type": "object",
+  "$defs": {
+    "Graph": {
+      "type": "object",
+      "required": ["name", "nodes", "edges", "start_node_id"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Optional DSL version string (e.g., \"1.0\")."
+        },
+        "name": {
+          "type": "string",
+          "description": "Graph name (used for display and logging)."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the graph."
+        },
+        "nodes": {
+          "type": "array",
+          "description": "Executable nodes that make up the graph.",
+          "items": { "$ref": "#/$defs/Node" }
+        },
+        "edges": {
+          "type": "array",
+          "description": "Direct edges between nodes (unconditional control flow).",
+          "items": { "$ref": "#/$defs/Edge" }
+        },
+        "conditional_edges": {
+          "type": "array",
+          "description": "Conditional routing edges evaluated after a node finishes.",
+          "items": { "$ref": "#/$defs/ConditionalEdge" }
+        },
+        "state_variables": {
+          "type": "array",
+          "description": "Graph-level state variables declared by the author.",
+          "items": { "$ref": "#/$defs/StateVariable" }
+        },
+        "start_node_id": {
+          "type": "string",
+          "description": "ID of the visual start node (usually builtin.start). When a builtin.start node is present, it is used directly as the executable entry point."
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Arbitrary graph-level metadata (tags, owner, etc.).",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "BaseNode": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique node identifier within the graph."
+        },
+        "label": {
+          "type": "string",
+          "description": "Optional UI label for this node."
+        },
+        "node_version": {
+          "type": "string",
+          "description": "Optional component version."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this node does."
+        }
+      }
+    },
+    "Node": {
+      "type": "object",
+      "required": ["id", "node_type"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique node identifier within the graph."
+        },
+        "label": {
+          "type": "string",
+          "description": "Optional UI label for this node."
+        },
+        "node_version": {
+          "type": "string",
+          "description": "Optional component version."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this node does."
+        },
+        "node_type": {
+          "type": "string",
+          "enum": ["builtin.start", "builtin.llmagent", "builtin.end", "builtin.mcp", "builtin.knowledge_search", "builtin.while", "builtin.user_approval", "builtin.transform", "builtin.set_state"],
+          "description": "Node type identifier."
+        },
+        "config": {
+          "description": "Node-specific configuration. Required for all node types except builtin.start."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "node_type": { "const": "builtin.start" } }
+          },
+          "then": {
+            "properties": {
+              "config": {
+                "type": "object",
+                "description": "Start node has no configurable fields.",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "node_type": { "const": "builtin.llmagent" } }
+          },
+          "then": {
+            "required": ["config"],
+            "properties": {
+              "config": { "$ref": "#/$defs/AgentConfig" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "node_type": { "const": "builtin.end" } }
+          },
+          "then": {
+            "required": ["config"],
+            "properties": {
+              "config": { "$ref": "#/$defs/EndConfig" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "node_type": { "const": "builtin.mcp" } }
+          },
+          "then": {
+            "required": ["config"],
+            "properties": {
+              "config": { "$ref": "#/$defs/MCPConfig" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "node_type": { "const": "builtin.knowledge_search" } }
+          },
+          "then": {
+            "required": ["config"],
+            "properties": {
+              "config": { "$ref": "#/$defs/KnowledgeSearchConfig" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "node_type": { "const": "builtin.while" } }
+          },
+          "then": {
+            "required": ["config"],
+            "properties": {
+              "config": { "$ref": "#/$defs/WhileConfig" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "node_type": { "const": "builtin.user_approval" } }
+          },
+          "then": {
+            "required": ["config"],
+            "properties": {
+              "config": { "$ref": "#/$defs/UserApprovalConfig" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "node_type": { "const": "builtin.transform" } }
+          },
+          "then": {
+            "required": ["config"],
+            "properties": {
+              "config": { "$ref": "#/$defs/TransformConfig" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "node_type": { "const": "builtin.set_state" } }
+          },
+          "then": {
+            "required": ["config"],
+            "properties": {
+              "config": { "$ref": "#/$defs/SetStateConfig" }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "AgentConfig": {
+      "type": "object",
+      "required": ["model_spec"],
+      "properties": {
+        "model_spec": {
+          "$ref": "#/$defs/ModelSpec",
+          "description": "Resolved model specification used by the framework to construct a concrete model instance."
+        },
+        "instruction": {
+          "type": "string",
+          "description": "System prompt / instruction for the agent."
+        },
+        "user_message": {
+          "type": "string",
+          "description": "Optional per-node user message content. When set, this value is used as the user message sent to the model for this node (instead of the workflow's state.user_input). Supports template strings with {{...}} placeholders, evaluated at runtime against state/input/nodes. Note: this does not mutate state.user_input; it only affects this node's invocation message."
+        },
+        "history": {
+          "type": "string",
+          "description": "Controls how much conversation history is included when calling the model. Values: \"session\" (default, includes all prior turns + current request, suitable for long-term memory scenarios), \"request\" (only messages from current request, reduces token usage and avoids context pollution), \"invocation\" (only current invocation, completely isolated, suitable for independent tasks that shouldn't inherit context). Note: This only affects what the node *reads* from history; events are still written to session.",
+          "enum": ["session", "request", "invocation"],
+          "default": "session"
+        },
+        "tools": {
+          "type": "array",
+          "description": "List of tool specifications available to this agent.",
+          "items": { "$ref": "#/$defs/ToolSpec" }
+        },
+        "skills": {
+          "$ref": "#/$defs/SkillsConfig",
+          "description": "Agent Skills configuration. When present, registers skill_* tools and enables running skill scripts."
+        },
+        "executor": {
+          "$ref": "#/$defs/SkillsExecutorConfig",
+          "description": "Code executor configuration used by Agent Skills (skill_run). When skills is enabled and executor is not set, defaults to local."
+        },
+        "output_format": {
+          "type": "object",
+          "description": "Controls how the agent returns its response (e.g., text vs. JSON).",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Output mode for this agent.",
+              "enum": ["text", "json"],
+              "default": "text"
+            },
+            "schema": {
+              "type": "object",
+              "description": "JSON Schema for structured output when type = \"json\".",
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "planner": {
+          "$ref": "#/$defs/PlannerConfig",
+          "description": "Optional planner configuration. When specified, enables planning capabilities for this agent."
+        },
+        "temperature": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.0
+        },
+        "max_tokens": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "top_p": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "stream": {
+          "type": "boolean",
+          "description": "Enable token streaming. When true, the model will stream responses token by token instead of returning the complete response at once.",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "SkillsConfig": {
+      "type": "object",
+      "required": ["roots"],
+      "properties": {
+        "roots": {
+          "type": "array",
+          "description": "One or more skills roots. Supports local paths and http(s):// URLs (downloaded and cached).",
+          "items": { "type": "string" }
+        },
+        "load_mode": {
+          "type": "string",
+          "description": "Controls how long skill bodies/docs loaded via skill_load remain in the system prompt. turn (default): available for all model requests in the current invocation, then cleared when the next invocation begins. once: available for the next model request only, then cleared immediately after injection. session (legacy): persists across invocations until cleared or the session expires.",
+          "enum": ["turn", "once", "session"],
+          "default": "turn"
+        },
+        "tooling_guidance": {
+          "type": "string",
+          "description": "Override built-in skills tooling/workspace guidance. Empty string disables the guidance block."
+        },
+        "allowed_commands": {
+          "type": "array",
+          "description": "Optional allowlist for skill_run command (no shell syntax).",
+          "items": { "type": "string" }
+        },
+        "denied_commands": {
+          "type": "array",
+          "description": "Optional denylist for skill_run command (no shell syntax).",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "SkillsExecutorConfig": {
+      "description": "Code executor configuration for skills.",
+      "oneOf": [
+        { "$ref": "#/$defs/SkillsExecutorLocal" },
+        { "$ref": "#/$defs/SkillsExecutorPCG123" }
+      ]
+    },
+    "SkillsExecutorLocal": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "local" },
+        "work_dir": {
+          "type": "string",
+          "description": "Workspace root for local execution. Empty uses a temp dir per workspace."
+        },
+        "workspace_mode": {
+          "type": "string",
+          "description": "Workspace mode: isolated (default, safer) or trusted_local (unsafe).",
+          "enum": ["isolated", "trusted_local"],
+          "default": "isolated"
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "description": "Timeout for ExecuteCode (code blocks). skill_run has its own timeout per call.",
+          "minimum": 0
+        },
+        "clean_temp_files": {
+          "type": "boolean",
+          "description": "Whether to cleanup temporary files (when work_dir is empty)."
+        },
+        "inputs_host": {
+          "type": "string",
+          "description": "Host directory exposed under work/inputs when auto_inputs is enabled."
+        },
+        "auto_inputs": {
+          "type": "boolean",
+          "description": "Enable/disable automatic mapping of inputs_host into work/inputs.",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "SkillsExecutorPCG123": {
+      "type": "object",
+      "required": ["type", "language", "secret_id", "secret_key"],
+      "properties": {
+        "type": { "const": "pcg123" },
+        "language": {
+          "type": "string",
+          "description": "PCG123 executor language. For skills, only python3.10 is supported (python310 is accepted as an alias).",
+          "enum": ["python3.10", "python310"]
+        },
+        "secret_id": {
+          "type": "string",
+          "description": "PCG123 SecretID. Supports env:VAR_NAME format (when allowEnvSecrets is enabled)."
+        },
+        "secret_key": {
+          "type": "string",
+          "description": "PCG123 SecretKey. Supports env:VAR_NAME format (when allowEnvSecrets is enabled)."
+        },
+        "execute_timeout_seconds": {
+          "type": "integer",
+          "description": "Remote execute timeout in seconds.",
+          "minimum": 0
+        },
+        "idle_timeout_seconds": {
+          "type": "integer",
+          "description": "Remote idle timeout in seconds.",
+          "minimum": 0
+        },
+        "shared": {
+          "type": "boolean",
+          "description": "Shared executor mode (recommended for testing)."
+        },
+        "interactive": {
+          "type": "boolean",
+          "description": "Interactive mode for the remote executor."
+        }
+      },
+      "additionalProperties": false
+    },
+    "PlannerConfig": {
+      "type": "object",
+      "description": "Planner configuration for the agent. WARNING: 'react' planner uses tag-based output which conflicts with structured output (output_format.type='json'). Do not use 'react' planner with structured output.",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["react", "builtin"],
+          "description": "Planner type. 'react' uses explicit planning tags (incompatible with structured output). 'builtin' uses model's native thinking capabilities."
+        },
+        "config": {
+          "$ref": "#/$defs/BuiltinPlannerConfig",
+          "description": "Planner-specific configuration. Only used when type is 'builtin'."
+        }
+      },
+      "additionalProperties": false
+    },
+    "BuiltinPlannerConfig": {
+      "type": "object",
+      "description": "Configuration for builtin planner that uses model's native thinking capabilities.",
+      "properties": {
+        "reasoning_effort": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "Reasoning effort for OpenAI o-series models."
+        },
+        "thinking_enabled": {
+          "type": "boolean",
+          "description": "Enable thinking mode for Claude/Gemini models."
+        },
+        "thinking_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Max tokens for thinking mode."
+        }
+      },
+      "additionalProperties": false
+    },
+    "ToolSpec": {
+      "type": "object",
+      "description": "Unified tool specification. Use 'type' field to specify the tool type.",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["mcp", "web_search", "knowledge_search", "code_interpreter", "memory_search"],
+          "description": "Tool type identifier."
+        }
+      },
+      "oneOf": [
+        { "$ref": "#/$defs/MCPToolSpec" },
+        { "$ref": "#/$defs/WebSearchToolSpec" },
+        { "$ref": "#/$defs/KnowledgeSearchToolSpec" },
+        { "$ref": "#/$defs/CodeInterpreterToolSpec" },
+        { "$ref": "#/$defs/MemorySearchToolSpec" }
+      ]
+    },
+    "MCPToolSpec": {
+      "type": "object",
+      "description": "MCP (Model Context Protocol) tool configuration.",
+      "required": ["type", "server_url"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "mcp",
+          "description": "Tool type identifier."
+        },
+        "server_url": {
+          "type": "string",
+          "description": "MCP server URL (e.g., https://mcp.example.com/mcp)."
+        },
+        "transport": {
+          "type": "string",
+          "enum": ["streamable_http", "sse"],
+          "description": "Transport mechanism for MCP.",
+          "default": "streamable_http"
+        },
+        "server_label": {
+          "type": "string",
+          "description": "Optional label for this MCP server. Used as a prefix for tool names (e.g., 'deepwiki_read_wiki') to avoid naming conflicts when multiple MCP servers are configured. Note: The prefix is joined with a single underscore."
+        },
+        "allowed_tools": {
+          "type": "array",
+          "description": "Optional list of tool names from this MCP server that the agent is allowed to call.",
+          "items": { "type": "string" }
+        },
+        "headers": {
+          "type": "object",
+          "description": "Optional HTTP headers to include when connecting to the MCP server.",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "WebSearchToolSpec": {
+      "type": "object",
+      "description": "Web search tool configuration (DuckDuckGo, Google, etc.).",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "web_search",
+          "description": "Tool type identifier."
+        },
+        "provider": {
+          "type": "string",
+          "enum": ["duckduckgo", "google", "bing"],
+          "description": "Search provider.",
+          "default": "duckduckgo"
+        },
+        "api_key": {
+          "type": "string",
+          "description": "API key for providers that require it. Supports env:VAR_NAME format."
+        },
+        "max_results": {
+          "type": "integer",
+          "description": "Maximum number of results to return.",
+          "minimum": 1,
+          "default": 10
+        }
+      },
+      "additionalProperties": false
+    },
+    "AgenticFilterFieldInfo": {
+      "type": "object",
+      "description": "Agentic filter field configuration for knowledge search. Used to guide the LLM to generate valid filter conditions.",
+      "properties": {
+        "values": {
+          "type": ["array", "null"],
+          "description": "Optional allowed values for this field. When omitted/null/empty, the LLM may infer any value. When provided as a non-empty array, the LLM should use exact values only (do not add annotations).",
+          "items": {}
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional human-readable description of the field's semantics. This is included in the tool description to help the LLM choose correct filters."
+        }
+      },
+      "additionalProperties": false
+    },
+    "KnowledgeSearchToolSpec": {
+      "type": "object",
+      "description": "Knowledge search tool configuration with remote knowledge service connector.",
+      "required": ["type", "connector"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "knowledge_search",
+          "description": "Tool type identifier."
+        },
+        "name": {
+          "type": "string",
+          "description": "Optional tool name. Required when multiple knowledge_search tools are configured."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional tool description/prompt that will be set to the tool description. This helps guide the agent on when and how to use this knowledge search tool."
+        },
+        "connector": {
+          "$ref": "#/$defs/ConnectorConfig",
+          "description": "Remote knowledge service connection configuration."
+        },
+        "max_results": {
+          "type": "integer",
+          "description": "Maximum number of results to return from knowledge search (top-k).",
+          "minimum": 1,
+          "default": 10
+        },
+        "min_score": {
+          "type": "number",
+          "description": "Minimum relevance score threshold (0.0 to 1.0).",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.0
+        },
+        "conditioned_filter": {
+          "$ref": "#/$defs/FilterCondition",
+          "description": "Optional static filter condition applied to all searches. Supports comparison operators (eq, ne, gt, gte, lt, lte, in, not in, like, not like, between) and logical operators (and, or) for combining multiple conditions."
+        },
+        "agentic_filter_info": {
+          "type": "object",
+          "description": "Optional agentic filter info. When provided, codegen will create an agentic knowledge search tool that allows the LLM to generate dynamic filter conditions using the described fields and values.",
+          "additionalProperties": { "$ref": "#/$defs/AgenticFilterFieldInfo" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "FilterCondition": {
+      "type": "object",
+      "description": "Filter condition for knowledge search. Supports comparison operators (eq, ne, gt, gte, lt, lte, in, not in, like, not like, between) and logical operators (and, or) for combining multiple conditions. See examples below.",
+      "required": ["operator"],
+      "properties": {
+        "field": {
+          "type": "string",
+          "description": "The metadata field to filter on. Required for comparison operators, not used for logical operators (and, or)."
+        },
+        "operator": {
+          "type": "string",
+          "enum": ["eq", "ne", "gt", "gte", "lt", "lte", "in", "not in", "like", "not like", "between", "and", "or"],
+          "description": "Comparison operator (eq, ne, gt, gte, lt, lte, in, not in, like, not like, between) or logical operator (and, or)."
+        },
+        "value": {
+          "description": "For comparison operators: single value (string/number/boolean) for most operators, array for 'in'/'not in'/'between'. For logical operators (and, or): array of FilterCondition objects."
+        }
+      },
+      "examples": [
+        {
+          "description": "Single condition: field equals value",
+          "value": {
+            "field": "metadata.category",
+            "operator": "eq",
+            "value": "machine-learning"
+          }
+        },
+        {
+          "description": "Single condition: field not equals value",
+          "value": {
+            "field": "metadata.status",
+            "operator": "ne",
+            "value": "archived"
+          }
+        },
+        {
+          "description": "Greater than comparison",
+          "value": {
+            "field": "metadata.version",
+            "operator": "gt",
+            "value": 2
+          }
+        },
+        {
+          "description": "Greater than or equal comparison",
+          "value": {
+            "field": "metadata.score",
+            "operator": "gte",
+            "value": 0.8
+          }
+        },
+        {
+          "description": "Less than comparison",
+          "value": {
+            "field": "metadata.age",
+            "operator": "lt",
+            "value": 100
+          }
+        },
+        {
+          "description": "Less than or equal comparison",
+          "value": {
+            "field": "metadata.priority",
+            "operator": "lte",
+            "value": 5
+          }
+        },
+        {
+          "description": "IN operator: value in array",
+          "value": {
+            "field": "metadata.category",
+            "operator": "in",
+            "value": ["machine-learning", "programming", "ai"]
+          }
+        },
+        {
+          "description": "NOT IN operator: value not in array",
+          "value": {
+            "field": "metadata.status",
+            "operator": "not in",
+            "value": ["archived", "deleted"]
+          }
+        },
+        {
+          "description": "LIKE operator: string pattern matching",
+          "value": {
+            "field": "metadata.title",
+            "operator": "like",
+            "value": "%deep learning%"
+          }
+        },
+        {
+          "description": "NOT LIKE operator: string pattern not matching",
+          "value": {
+            "field": "metadata.content",
+            "operator": "not like",
+            "value": "%deprecated%"
+          }
+        },
+        {
+          "description": "BETWEEN operator: value in range",
+          "value": {
+            "field": "metadata.price",
+            "operator": "between",
+            "value": [10, 100]
+          }
+        },
+        {
+          "description": "Multiple conditions with AND",
+          "value": {
+            "operator": "and",
+            "value": [
+              {"field": "metadata.category", "operator": "eq", "value": "ml"},
+              {"field": "metadata.status", "operator": "eq", "value": "active"}
+            ]
+          }
+        },
+        {
+          "description": "Multiple conditions with OR",
+          "value": {
+            "operator": "or",
+            "value": [
+              {"field": "metadata.category", "operator": "eq", "value": "ai"},
+              {"field": "metadata.category", "operator": "eq", "value": "machine-learning"}
+            ]
+          }
+        },
+        {
+          "description": "Nested conditions with AND and OR",
+          "value": {
+            "operator": "and",
+            "value": [
+              {"field": "metadata.category", "operator": "eq", "value": "ml"},
+              {
+                "operator": "or",
+                "value": [
+                  {"field": "metadata.status", "operator": "eq", "value": "active"},
+                  {"field": "metadata.status", "operator": "eq", "value": "pending"}
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "description": "Complex nested conditions",
+          "value": {
+            "operator": "and",
+            "value": [
+              {"field": "metadata.category", "operator": "in", "value": ["ml", "ai"]},
+              {"field": "metadata.score", "operator": "gte", "value": 0.7},
+              {
+                "operator": "or",
+                "value": [
+                  {"field": "metadata.status", "operator": "eq", "value": "active"},
+                  {"field": "metadata.priority", "operator": "gt", "value": 5}
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "ConnectorConfig": {
+      "description": "Remote knowledge service connector configuration. Discriminated union based on 'type' field.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "TRAG knowledge service connector",
+          "required": ["type", "endpoint", "token", "rag_code", "namespace", "collection"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "trag",
+              "description": "Knowledge service type: TRAG"
+            },
+            "endpoint": {
+              "type": "string",
+              "description": "TRAG service endpoint (http(s):// URL, polaris:// service, or TRPC service name). Supports env:VAR_NAME format."
+            },
+            "token": {
+              "type": "string",
+              "description": "TRAG authentication token. Supports env:VAR_NAME format."
+            },
+            "rag_code": {
+              "type": "string",
+              "description": "TRAG instance/RAG code. Supports env:VAR_NAME format."
+            },
+            "namespace": {
+              "type": "string",
+              "description": "TRAG namespace code. Supports env:VAR_NAME format."
+            },
+            "collection": {
+              "type": "string",
+              "description": "TRAG collection/table name. Supports env:VAR_NAME format."
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "TAIJI knowledge service connector",
+          "required": ["type", "endpoint", "token", "app_id", "ws_id"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "taiji",
+              "description": "Knowledge service type: TAIJI"
+            },
+            "endpoint": {
+              "type": "string",
+              "description": "TAIJI service endpoint (http(s):// URL, polaris:// service, or TRPC service name). Supports env:VAR_NAME format."
+            },
+            "token": {
+              "type": "string",
+              "description": "TAIJI authentication token. Supports env:VAR_NAME format."
+            },
+            "app_id": {
+              "type": "string",
+              "description": "TAIJI application/embedding index ID. Supports env:VAR_NAME format."
+            },
+            "ws_id": {
+              "type": "string",
+              "description": "TAIJI workspace ID. Supports env:VAR_NAME format."
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "LINGSHAN knowledge service connector",
+          "required": ["type", "endpoint", "knowledge_base_id"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "lingshan",
+              "description": "Knowledge service type: LINGSHAN"
+            },
+            "endpoint": {
+              "type": "string",
+              "description": "LINGSHAN service endpoint (http(s):// URL, polaris:// service, or TRPC service name). Supports env:VAR_NAME format."
+            },
+            "knowledge_base_id": {
+              "type": "string",
+              "description": "LINGSHAN knowledge base ID. Supports env:VAR_NAME format."
+            },
+            "headers": {
+              "type": "object",
+              "description": "Optional HTTP headers to include when connecting to the LINGSHAN service. Values support env:VAR_NAME format.",
+              "additionalProperties": { "type": "string" }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CodeInterpreterToolSpec": {
+      "type": "object",
+      "description": "Code interpreter tool configuration.",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "code_interpreter",
+          "description": "Tool type identifier."
+        },
+        "executor": {
+          "$ref": "#/$defs/ExecutorConfig",
+          "description": "Code executor configuration. Defaults to local executor."
+        }
+      },
+      "additionalProperties": false
+    },
+    "MemorySearchToolSpec": {
+      "type": "object",
+      "description": "Memory search tool configuration. Requires MemoryService in invocation context.",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "memory_search",
+          "description": "Tool type identifier."
+        }
+      },
+      "additionalProperties": false
+    },
+    "ExecutorConfig": {
+      "type": "object",
+      "description": "Code executor configuration.",
+      "required": ["type"],
+      "oneOf": [
+        { "$ref": "#/$defs/LocalExecutorConfig" },
+        { "$ref": "#/$defs/ContainerExecutorConfig" }
+      ]
+    },
+    "LocalExecutorConfig": {
+      "type": "object",
+      "description": "Local code executor configuration.",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "const": "local" },
+        "work_dir": { "type": "string" },
+        "timeout_seconds": { "type": "integer", "minimum": 1, "default": 30 },
+        "clean_temp_files": { "type": "boolean", "default": true }
+      },
+      "additionalProperties": false
+    },
+    "ContainerExecutorConfig": {
+      "type": "object",
+      "description": "Container-based code executor configuration.",
+      "required": ["type", "image"],
+      "properties": {
+        "type": { "type": "string", "const": "container" },
+        "image": { "type": "string" },
+        "timeout_seconds": { "type": "integer", "minimum": 1, "default": 60 }
+      },
+      "additionalProperties": false
+    },
+    "ModelSpec": {
+      "type": "object",
+      "required": ["provider", "model_name", "api_key"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "Model provider name (e.g., \"openai\", \"anthropic\")."
+        },
+        "model_name": {
+          "type": "string",
+          "description": "Concrete model name understood by the provider (e.g., \"deepseek-chat\", \"gpt-4o\")."
+        },
+        "base_url": {
+          "type": "string",
+          "description": "Optional base URL override for provider requests."
+        },
+        "api_key": {
+          "type": "string",
+          "description": "Provider API key. Supports env:VAR_NAME format."
+        },
+        "headers": {
+          "type": "object",
+          "description": "Optional static HTTP headers for provider requests.",
+          "additionalProperties": { "type": "string" }
+        },
+        "extra_fields": {
+          "type": "object",
+          "description": "Provider-specific extra fields serialized into request payloads.",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "EndConfig": {
+      "type": "object",
+      "properties": {
+        "output_schema": {
+          "type": "object",
+          "description": "JSON Schema for the structured final output.",
+          "additionalProperties": true
+        },
+        "expr": {
+          "$ref": "#/$defs/Expression",
+          "description": "Expression that evaluates to the structured final output."
+        }
+      },
+      "additionalProperties": false
+    },
+    "TransformConfig": {
+      "type": "object",
+      "properties": {
+        "output_schema": {
+          "type": "object",
+          "description": "JSON Schema for the transformed output object.",
+          "additionalProperties": true
+        },
+        "expr": {
+          "$ref": "#/$defs/Expression",
+          "description": "Expression that evaluates to the transformed object."
+        }
+      },
+      "additionalProperties": false
+    },
+    "SetStateConfig": {
+      "type": "object",
+      "properties": {
+        "assignments": {
+          "type": "array",
+          "description": "List of {field, expr} objects describing state updates.",
+          "items": {
+            "type": "object",
+            "required": ["field", "expr"],
+            "properties": {
+              "field": { "type": "string" },
+              "expr": { "$ref": "#/$defs/Expression" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "UserApprovalConfig": {
+      "type": "object",
+      "description": "Configuration for a human-in-the-loop approval step.",
+      "required": ["message", "routing"],
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Approval message shown to the user."
+        },
+        "reprompt_on_loop": {
+          "type": "boolean",
+          "description": "When true, if the workflow loops back to this user approval node within the same run/resume lineage, the node will interrupt again and require a fresh decision instead of reusing the previous one.",
+          "default": false
+        },
+        "routing": {
+          "type": "object",
+          "required": ["approve", "reject"],
+          "additionalProperties": false,
+          "properties": {
+            "approve": {
+              "type": "string",
+              "description": "Target node ID when user approves"
+            },
+            "reject": {
+              "type": "string",
+              "description": "Target node ID when user rejects"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "WhileBody": {
+      "type": "object",
+      "required": ["nodes", "edges", "start_node_id", "exit_node_id"],
+      "properties": {
+        "nodes": { "type": "array", "items": { "$ref": "#/$defs/Node" } },
+        "edges": { "type": "array", "items": { "$ref": "#/$defs/Edge" } },
+        "conditional_edges": { "type": "array", "items": { "$ref": "#/$defs/ConditionalEdge" } },
+        "start_node_id": { "type": "string" },
+        "exit_node_id": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "WhileConfig": {
+      "type": "object",
+      "required": ["body", "condition"],
+      "properties": {
+        "body": { "$ref": "#/$defs/WhileBody" },
+        "condition": { "$ref": "#/$defs/Expression" },
+        "max_iterations": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "MCPRemoteConfig": {
+      "type": "object",
+      "description": "Remote MCP server configuration shared by builtin.mcp and llmagent mcp tools.",
+      "required": ["server_url"],
+      "properties": {
+        "name": { "type": "string" },
+        "server_url": { "type": "string" },
+        "transport": { "type": "string", "enum": ["streamable_http", "sse"] },
+        "timeout": { "type": "number" },
+        "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+        "allowed_tools": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "MCPConfig": {
+      "type": "object",
+      "description": "Configuration for a standalone MCP node that calls a single MCP tool.",
+      "oneOf": [
+        { "required": ["mcp", "function"] },
+        { "required": ["server_url", "tool"] }
+      ],
+      "properties": {
+        "mcp": { "$ref": "#/$defs/MCPRemoteConfig" },
+        "function": { "type": "string" },
+        "server_url": { "type": "string" },
+        "tool": { "type": "string" },
+        "transport": { "type": "string", "enum": ["streamable_http", "sse"] },
+        "timeout": { "type": "number" },
+        "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+        "input_schema": { "type": "object", "additionalProperties": true },
+        "output_schema": { "type": "object", "additionalProperties": true },
+        "params": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/Expression" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "KnowledgeSearchConfig": {
+      "type": "object",
+      "description": "Configuration for a standalone Knowledge Search node using remote knowledge service.",
+      "required": ["query", "connector"],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query string. Supports {{...}} placeholders evaluated against state/input/nodes at runtime."
+        },
+        "connector": {
+          "$ref": "#/$defs/ConnectorConfig",
+          "description": "Remote knowledge service connection configuration."
+        },
+        "max_results": {
+          "type": "integer",
+          "description": "Maximum number of search results to return (top-k).",
+          "minimum": 1,
+          "default": 10
+        },
+        "min_score": {
+          "type": "number",
+          "description": "Minimum similarity score threshold (0.0-1.0).",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.0
+        },
+        "conditioned_filter": {
+          "$ref": "#/$defs/FilterCondition",
+          "description": "Optional static filter condition applied to all searches. Supports comparison operators (eq, ne, gt, gte, lt, lte, in, not in, like, not like, between) and logical operators (and, or) for combining multiple conditions."
+        }
+      },
+      "additionalProperties": false
+    },
+    "Edge": {
+      "type": "object",
+      "required": ["source", "target"],
+      "properties": {
+        "id": { "type": "string" },
+        "source": { "type": "string" },
+        "target": { "type": "string" },
+        "label": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "ConditionalEdge": {
+      "type": "object",
+      "required": ["from", "condition"],
+      "properties": {
+        "id": { "type": "string" },
+        "from": { "type": "string" },
+        "condition": { "$ref": "#/$defs/Condition" }
+      },
+      "additionalProperties": false
+    },
+    "Condition": {
+      "type": "object",
+      "required": ["cases"],
+      "properties": {
+        "cases": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Case" }
+        },
+        "default": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "Case": {
+      "type": "object",
+      "required": ["predicate", "target"],
+      "properties": {
+        "name": { "type": "string" },
+        "predicate": { "$ref": "#/$defs/Expression" },
+        "target": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "Expression": {
+      "type": "object",
+      "required": ["expression"],
+      "properties": {
+        "expression": { "type": "string" },
+        "format": { "type": "string", "enum": ["cel"], "default": "cel" }
+      },
+      "additionalProperties": false
+    },
+    "StateVariable": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "kind": { "type": "string", "enum": ["string", "number", "boolean", "object", "array", "opaque"] },
+        "json_schema": { "type": "object", "additionalProperties": true },
+        "description": { "type": "string" },
+        "default": {},
+        "reducer": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "graph": { "$ref": "#/$defs/Graph" }
+  }
+}

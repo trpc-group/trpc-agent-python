@@ -1,0 +1,45 @@
+{
+  "name": "skills-agent-local",
+  "description": "Demo builtin.llmagent with Agent Skills enabled (local executor)",
+  "version": "1.0",
+  "start_node_id": "start",
+  "nodes": [
+    {
+      "id": "start",
+      "node_type": "builtin.start"
+    },
+    {
+      "id": "agent",
+      "node_type": "builtin.llmagent",
+      "label": "Skills Agent",
+      "config": {
+        "model_spec": {
+          "provider": "openai",
+          "model_name": "env:OPENAI_MODEL",
+          "base_url": "env:OPENAI_BASE_URL",
+          "api_key": "env:OPENAI_API_KEY"
+        },
+        "instruction": "You are a concise, helpful assistant that can use Agent Skills. When needed, list skills, load a relevant skill, then run commands exactly as documented. Prefer writing outputs to $OUTPUT_DIR (out/) and reading host inputs from $WORK_DIR/inputs.",
+        "skills": {
+          "roots": ["./skills"],
+          "load_mode": "turn"
+        },
+        "executor": {
+          "type": "local",
+          "work_dir": "./skill_workspace",
+          "workspace_mode": "isolated"
+        },
+        "stream": true
+      }
+    },
+    {
+      "id": "end",
+      "node_type": "builtin.end",
+      "config": {}
+    }
+  ],
+  "edges": [
+    { "source": "start", "target": "agent" },
+    { "source": "agent", "target": "end" }
+  ]
+}

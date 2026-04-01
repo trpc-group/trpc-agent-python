@@ -1,0 +1,119 @@
+{
+  "version": "1.0",
+  "name": "output_text_test",
+  "description": "Tests output_text access for nodes without structured output schema, and conditional edge routing based on output_text.",
+  "nodes": [
+    {
+      "id": "start",
+      "label": "Start",
+      "node_type": "builtin.start",
+      "config": {}
+    },
+    {
+      "id": "classifier",
+      "label": "Classifier (simulates LLM text output)",
+      "node_type": "builtin.transform",
+      "config": {
+        "expr": {
+          "expression": "state.user_input.contains('love') || state.user_input.contains('great') ? 'positive' : (state.user_input.contains('hate') || state.user_input.contains('terrible') ? 'negative' : 'neutral')",
+          "format": "cel"
+        }
+      }
+    },
+    {
+      "id": "handle_positive",
+      "label": "Handle Positive",
+      "node_type": "builtin.transform",
+      "config": {
+        "expr": {
+          "expression": "{ \"sentiment\": \"positive\", \"message\": \"Great! The sentiment is positive.\", \"text_response\": input.output_text }",
+          "format": "cel"
+        }
+      }
+    },
+    {
+      "id": "handle_negative",
+      "label": "Handle Negative",
+      "node_type": "builtin.transform",
+      "config": {
+        "expr": {
+          "expression": "{ \"sentiment\": \"negative\", \"message\": \"The sentiment is negative.\", \"text_response\": input.output_text }",
+          "format": "cel"
+        }
+      }
+    },
+    {
+      "id": "handle_neutral",
+      "label": "Handle Neutral",
+      "node_type": "builtin.transform",
+      "config": {
+        "expr": {
+          "expression": "{ \"sentiment\": \"neutral\", \"message\": \"The sentiment is neutral.\", \"text_response\": input.output_text }",
+          "format": "cel"
+        }
+      }
+    },
+    {
+      "id": "end",
+      "label": "End",
+      "node_type": "builtin.end",
+      "config": {
+        "expr": {
+          "expression": "has(nodes.handle_positive) && has(nodes.handle_positive.output_parsed) ? nodes.handle_positive.output_parsed : (has(nodes.handle_negative) && has(nodes.handle_negative.output_parsed) ? nodes.handle_negative.output_parsed : nodes.handle_neutral.output_parsed)",
+          "format": "cel"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_start_classifier",
+      "source": "start",
+      "target": "classifier"
+    },
+    {
+      "id": "edge_positive_end",
+      "source": "handle_positive",
+      "target": "end"
+    },
+    {
+      "id": "edge_negative_end",
+      "source": "handle_negative",
+      "target": "end"
+    },
+    {
+      "id": "edge_neutral_end",
+      "source": "handle_neutral",
+      "target": "end"
+    }
+  ],
+  "conditional_edges": [
+    {
+      "id": "cond_sentiment",
+      "from": "classifier",
+      "condition": {
+        "type": "builtin",
+        "cases": [
+          {
+            "name": "positive",
+            "predicate": {
+              "expression": "input.output_text.contains('positive')",
+              "format": "cel"
+            },
+            "target": "handle_positive"
+          },
+          {
+            "name": "negative",
+            "predicate": {
+              "expression": "input.output_text.contains('negative')",
+              "format": "cel"
+            },
+            "target": "handle_negative"
+          }
+        ],
+        "default": "handle_neutral"
+      }
+    }
+  ],
+  "start_node_id": "start"
+}
