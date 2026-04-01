@@ -6,8 +6,8 @@ from enum import Enum
 from typing import Any
 from typing import Dict
 from typing import List
-
 from pydantic import BaseModel
+
 
 from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import BaseDocumentTransformer

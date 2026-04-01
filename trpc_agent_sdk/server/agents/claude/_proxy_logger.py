@@ -9,10 +9,10 @@ import os
 from typing import Optional
 
 from trpc_agent_sdk.log import BaseLogger
+from trpc_agent_sdk.log import DefaultLogger
 from trpc_agent_sdk.log import LogLevel
 from trpc_agent_sdk.log import register_logger
 from trpc_agent_sdk.log import set_default_logger
-from trpc_agent_sdk.log import DefaultLogger
 
 
 class ProxyLogger(DefaultLogger):

@@ -21,8 +21,8 @@ from ._constants import SKILL_REGISTRY_KEY
 from ._constants import SKILL_REPOSITORY_KEY
 from ._constants import SKILL_TOOLS_STATE_KEY_PREFIX
 from ._dynamic_toolset import DynamicSkillToolSet
-from ._registry import SkillRegistry
 from ._registry import SKILL_REGISTRY
+from ._registry import SkillRegistry
 from ._repository import BaseSkillRepository
 from ._repository import FsSkillRepository
 from ._repository import create_default_skill_repository

@@ -33,7 +33,7 @@ Python版本: 3.10+（强烈建议使用3.12）
 1. 下载trpc-agent-python代码并安装
 
 ```bash
-git clone https://git.woa.com/trpc-python/trpc-python-agent/trpc-agent
+git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent
 python3 -m venv .venv
 source .venv/bin/activate
