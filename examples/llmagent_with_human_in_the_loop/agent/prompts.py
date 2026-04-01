@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright @ 2025 Tencent.com
+# Copyright @ 2026 Tencent.com
 """ prompts for agent"""
 
 MAIN_AGENT_INSTRUCTION = """You are an assistant that can handle long-running operations requiring human approval.

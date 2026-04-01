@@ -15,7 +15,6 @@ To make a module discoverable automatically, define in `<module>/_cli.py`:
 - optional `CLI_COMMAND_HELP = "help text"`
 
 If `CLI_COMMAND_PATH` is omitted, command path is derived from the module path.
-Example: `trpc_agent_sdk.dsl.codegen._cli` -> `dsl codegen`.
 """
 
 from __future__ import annotations
@@ -56,8 +55,8 @@ def register_cli(
     """Register a module that exposes a Typer app.
 
     Args:
-        module_path: Python module path, e.g. `trpc_agent_sdk.dsl.codegen._cli`.
-        command_path: Optional command hierarchy. Example: ("dsl", "codegen").
+        module_path: Python module path,.
+        command_path: Optional command hierarchy.
             If omitted, module-level `CLI_COMMAND_PATH` or derived path is used.
         app_attr: Attribute name that points to a `typer.Typer` app.
         help_text: Optional help text shown for the subcommand.
@@ -107,13 +106,6 @@ def _auto_discover_cli_modules() -> None:
             continue
         register_cli(module_name)
 
-
-# Keep `codegen` as a first-class top-level command for convenience.
-register_cli(
-    "trpc_agent_sdk.dsl.codegen._cli",
-    command_path=("codegen",),
-    help_text="Generate Python project from workflow DSL JSON.",
-)
 
 
 def _build_app() -> typer.Typer:
