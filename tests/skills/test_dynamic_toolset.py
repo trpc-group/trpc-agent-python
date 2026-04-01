@@ -210,7 +210,7 @@ class TestDynamicSkillToolSet:
             available_tools=None
         )
 
-        with patch('trpc_agent.skills._dynamic_toolset.get_tool', return_value=None):
+        with patch('trpc_agent_sdk.skills._dynamic_toolset.get_tool', return_value=None):
             resolved = await toolset._resolve_tool("nonexistent", self.mock_ctx)
 
         assert resolved is None
@@ -224,7 +224,7 @@ class TestDynamicSkillToolSet:
         )
 
         global_tool = MockTool("global_tool")
-        with patch('trpc_agent.skills._dynamic_toolset.get_tool', return_value=global_tool):
+        with patch('trpc_agent_sdk.skills._dynamic_toolset.get_tool', return_value=global_tool):
             resolved = await toolset._resolve_tool("global_tool", self.mock_ctx)
 
         assert resolved is not None
@@ -327,7 +327,7 @@ class TestDynamicSkillToolSet:
             f"{SKILL_TOOLS_STATE_KEY_PREFIX}test-skill": json.dumps(["nonexistent_tool"])
         }
 
-        with patch('trpc_agent.skills._dynamic_toolset.get_tool', return_value=None):
+        with patch('trpc_agent_sdk.skills._dynamic_toolset.get_tool', return_value=None):
             tools = await toolset.get_tools(self.mock_ctx)
 
         # Should return empty list (tool not found)
@@ -590,7 +590,7 @@ class TestDynamicSkillToolSet:
             f"{SKILL_TOOLS_STATE_KEY_PREFIX}test-skill": json.dumps(["tool1"])
         }
 
-        with patch('trpc_agent.skills._dynamic_toolset.get_tool', return_value=None):
+        with patch('trpc_agent_sdk.skills._dynamic_toolset.get_tool', return_value=None):
             tools = await toolset.get_tools(self.mock_ctx)
 
         # Should return empty list (no tools resolved)
@@ -619,8 +619,8 @@ class TestDynamicSkillToolSet:
 
     def test_init_with_string_tools(self):
         """Test initialization with string tool names."""
-        with patch('trpc_agent.skills._dynamic_toolset.get_tool') as mock_get_tool, \
-             patch('trpc_agent.skills._dynamic_toolset.get_tool_set') as mock_get_toolset:
+        with patch('trpc_agent_sdk.skills._dynamic_toolset.get_tool') as mock_get_tool, \
+             patch('trpc_agent_sdk.skills._dynamic_toolset.get_tool_set') as mock_get_toolset:
 
             tool1 = MockTool("tool1")
             mock_get_tool.return_value = tool1
@@ -643,7 +643,7 @@ class TestDynamicSkillToolSet:
         )
 
         tool = MockTool("test_tool")
-        with patch('trpc_agent.skills._dynamic_toolset.get_tool', return_value=tool):
+        with patch('trpc_agent_sdk.skills._dynamic_toolset.get_tool', return_value=tool):
             result = toolset._find_tool_by_name("test_tool")
 
         assert result is True
@@ -657,8 +657,8 @@ class TestDynamicSkillToolSet:
         )
 
         mock_toolset = MockToolSet("test_toolset", [])
-        with patch('trpc_agent.skills._dynamic_toolset.get_tool', return_value=None), \
-             patch('trpc_agent.skills._dynamic_toolset.get_tool_set', return_value=mock_toolset):
+        with patch('trpc_agent_sdk.skills._dynamic_toolset.get_tool', return_value=None), \
+             patch('trpc_agent_sdk.skills._dynamic_toolset.get_tool_set', return_value=mock_toolset):
             result = toolset._find_tool_by_name("test_toolset")
 
         assert result is True
@@ -671,8 +671,8 @@ class TestDynamicSkillToolSet:
             available_tools=None
         )
 
-        with patch('trpc_agent.skills._dynamic_toolset.get_tool', return_value=None), \
-             patch('trpc_agent.skills._dynamic_toolset.get_tool_set', return_value=None):
+        with patch('trpc_agent_sdk.skills._dynamic_toolset.get_tool', return_value=None), \
+             patch('trpc_agent_sdk.skills._dynamic_toolset.get_tool_set', return_value=None):
             result = toolset._find_tool_by_name("nonexistent")
 
         assert result is False

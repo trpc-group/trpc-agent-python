@@ -27,7 +27,7 @@ examples/fastapi_server/
 ### 1. 安装依赖
 
 ```bash
-pip3 install trpc_agent
+pip3 install trpc_agent_sdk
 ```
 
 ### 2. 启动服务
@@ -299,7 +299,7 @@ You: /quit
 Goodbye!
 ```
 
-> **说明**：工具调用结果需使用天气 Agent（`--agent_module trpc_agent.server.fastapi.agent.agent`）启动服务才能触发；默认 Assistant Agent 不含工具。
+> **说明**：工具调用结果需使用天气 Agent（`--agent_module trpc_agent_sdk.server.fastapi.agent.agent`）启动服务才能触发；默认 Assistant Agent 不含工具。
 
 ---
 

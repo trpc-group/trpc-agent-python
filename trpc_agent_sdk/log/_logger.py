@@ -3,12 +3,12 @@
 # Copyright @ 2026 Tencent.com
 """Unified logger module for TRPC Agent framework.
 
-This module provides the main logging interface for the trpc_agent framework.
+This module provides the main logging interface for the trpc_agent_sdk framework.
 It offers global logging functions that can be used throughout the codebase
 and provides logger management capabilities.
 
 Usage:
-    import trpc_agent.log.logger as logger
+    import trpc_agent_sdk.log.logger as logger
 
     logger.info("This is an info message")
     logger.debug("Debug message with args: %s", some_value)
@@ -33,7 +33,7 @@ _default_logger_name: str = "default"  # pylint: disable=invalid-name
 _current_logger: Optional[BaseLogger] = None  # pylint: disable=invalid-name
 
 # Initialize with default logger
-_default_logger: BaseLogger = DefaultLogger(name="trpc_agent")  # pylint: disable=invalid-name
+_default_logger: BaseLogger = DefaultLogger(name="trpc_agent_sdk")  # pylint: disable=invalid-name
 _loggers[_default_logger_name] = _default_logger  # pylint: disable=invalid-name
 _current_logger: BaseLogger = _default_logger  # pylint: disable=invalid-name
 

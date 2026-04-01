@@ -220,7 +220,7 @@ class TestLogUnsupportedConfigOptions:
             top_k=1,
             safety_settings=[{"category": "HARM", "threshold": "BLOCK_MEDIUM"}],
         )
-        with patch("trpc_agent.models._litellm_model.logger") as mock_logger:
+        with patch("trpc_agent_sdk.models._litellm_model.logger") as mock_logger:
             model._log_unsupported_config_options(config)
         mock_logger.warning.assert_called_once()
         call_msg = mock_logger.warning.call_args[0][0]
@@ -231,7 +231,7 @@ class TestLogUnsupportedConfigOptions:
     def test_no_warning_when_none_of_unsupported_set(self):
         model = LiteLLMModel(model_name="openai/gpt-4")
         config = GenerateContentConfig(max_output_tokens=100, temperature=0.5)
-        with patch("trpc_agent.models._litellm_model.logger") as mock_logger:
+        with patch("trpc_agent_sdk.models._litellm_model.logger") as mock_logger:
             model._log_unsupported_config_options(config)
         mock_logger.warning.assert_not_called()
 

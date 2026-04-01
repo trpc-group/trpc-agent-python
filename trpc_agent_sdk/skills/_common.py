@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright @ 2026 Tencent.com
+# Copyright @ 2025 Tencent.com
 """Common utilities for skill selection operations.
 
 This module provides generic functions for selecting skill resources (docs, tools, etc.)
@@ -19,7 +19,6 @@ from typing import TypeVar
 
 from pydantic import BaseModel
 from pydantic import Field
-
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.log import logger
 

@@ -20,7 +20,7 @@ Python版本: 3.10+(强烈建议使用3.12)
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
-cd trpc-agent
+cd trpc-agent-python
 python3 -m venv .venv
 source .venv/bin/activate
 pip3 install -e .
@@ -62,17 +62,17 @@ python3 run_agent.py
 ⏳ [Received 10 events, triggering cancellation...]
  and professionally
 ⏸️  Requesting cancellation after 10 events...
-[2026-01-13 14:23:19][INFO][trpc_agent][trpc_agent/cancel/_cancel.py:98][1382035] Run marked for cancellation (app_name: langgraph_calculator_cancel_demo)(user: demo_user)(session: 4fab25f6-1fc2-43de-81a8-4b61b9a375b8)
+[2026-01-13 14:23:19][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:98][1382035] Run marked for cancellation (app_name: langgraph_calculator_cancel_demo)(user: demo_user)(session: 4fab25f6-1fc2-43de-81a8-4b61b9a375b8)
 
 ⏳ [Received 11 events, triggering cancellation...]
-. Here[2026-01-13 14:23:19][INFO][trpc_agent][trpc_agent/cancel/_cancel.py:215][1382035] Cancelling run for session 4fab25f6-1fc2-43de-81a8-4b61b9a375b8
-[2026-01-13 14:23:19][INFO][trpc_agent][trpc_agent/runners.py:351][1382035] Run for session 4fab25f6-1fc2-43de-81a8-4b61b9a375b8 was cancelled
+. Here[2026-01-13 14:23:19][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:215][1382035] Cancelling run for session 4fab25f6-1fc2-43de-81a8-4b61b9a375b8
+[2026-01-13 14:23:19][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:351][1382035] Run for session 4fab25f6-1fc2-43de-81a8-4b61b9a375b8 was cancelled
 
 ⏳ [Received 12 events, triggering cancellation...]
 
 ❌ Run was cancelled: Run for session 4fab25f6-1fc2-43de-81a8-4b61b9a375b8 was cancelled
 
-[2026-01-13 14:23:19][INFO][trpc_agent][trpc_agent/runners.py:147][1382035] Cancel completed for user_id demo_user, session 4fab25f6-1fc2-43de-81a8-4b61b9a375b8
+[2026-01-13 14:23:19][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:147][1382035] Cancel completed for user_id demo_user, session 4fab25f6-1fc2-43de-81a8-4b61b9a375b8
 ✓ Cancellation requested: True
 
 💡 Result: The partial response was saved to session with cancellation message
@@ -99,19 +99,19 @@ Would you like me to reintroduce myself and explain what I can do, or is there s
 ⏳ [Tool call detected...]
 
 ⏸️  Tool call detected! Requesting cancellation during tool execution...
-[2026-01-13 14:23:21][INFO][trpc_agent][trpc_agent/cancel/_cancel.py:98][1382035] Run marked for cancellation (app_name: langgraph_calculator_cancel_demo)(user: demo_user)(session: 1b20b6d1-b21a-47ce-9598-1f06be96b835)
+[2026-01-13 14:23:21][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:98][1382035] Run marked for cancellation (app_name: langgraph_calculator_cancel_demo)(user: demo_user)(session: 1b20b6d1-b21a-47ce-9598-1f06be96b835)
 [Tool executing: calculating 123.0 multiply 456.0...]
 [Tool completed: result = 56088.0]
 [Tool executing: analyzing 1000 sales data points...]
 [Tool completed: analysis done]
 📊 [Tool Result: {'result': 'Calculation result: 123.0 multiply 456.0 = 56088.0'}]
 📊 [Tool Result: {'result': 'Data Analysis Report:\n- Data Type: sales\n- Sample Size: 1000\n- Mean: 42.5\n- Median: 40.0\n- Std Dev: 15.3\n- Key Insight: Data shows positive trend'}]
-[2026-01-13 14:23:21][INFO][trpc_agent][trpc_agent/cancel/_cancel.py:215][1382035] Cancelling run for session 1b20b6d1-b21a-47ce-9598-1f06be96b835
-[2026-01-13 14:23:21][INFO][trpc_agent][trpc_agent/runners.py:351][1382035] Run for session 1b20b6d1-b21a-47ce-9598-1f06be96b835 was cancelled
+[2026-01-13 14:23:21][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:215][1382035] Cancelling run for session 1b20b6d1-b21a-47ce-9598-1f06be96b835
+[2026-01-13 14:23:21][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:351][1382035] Run for session 1b20b6d1-b21a-47ce-9598-1f06be96b835 was cancelled
 
 ❌ Run was cancelled: Run for session 1b20b6d1-b21a-47ce-9598-1f06be96b835 was cancelled
 
-[2026-01-13 14:23:21][INFO][trpc_agent][trpc_agent/runners.py:147][1382035] Cancel completed for user_id demo_user, session 1b20b6d1-b21a-47ce-9598-1f06be96b835
+[2026-01-13 14:23:21][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:147][1382035] Cancel completed for user_id demo_user, session 1b20b6d1-b21a-47ce-9598-1f06be96b835
 ✓ Cancellation requested: True
 
 💡 Result: Incomplete function calls were cleaned up from session

@@ -28,6 +28,7 @@ import tempfile
 import zipfile
 from enum import Enum
 from enum import IntEnum
+from typing import Optional
 from urllib.parse import ParseResult
 from urllib.parse import urlparse
 
@@ -540,9 +541,15 @@ class SkillRootResolver:
         root: The raw skill-root string supplied by the caller.
     """
 
-    def __init__(self, root: str) -> None:
-        self._root = root
-        self._extractor = ArchiveExtractor()
+    def __init__(self, extractor: Optional[ArchiveExtractor] = None) -> None:
+        """
+        Create a SkillRootResolver.
+
+        Args:
+            root: The raw skill-root string supplied by the caller.
+            extractor: The archive extractor to use.
+        """
+        self._extractor = extractor or ArchiveExtractor()
 
     # ------------------------------------------------------------------
     # Static helpers
@@ -799,7 +806,7 @@ class SkillRootResolver:
     # Public interface
     # ------------------------------------------------------------------
 
-    def resolve(self) -> str:
+    def resolve(self, root: str) -> str:
         """Resolve the skill root to an absolute local directory path.
 
         - Empty / whitespace-only strings return ``""`` immediately.
@@ -815,7 +822,7 @@ class SkillRootResolver:
         Raises:
             ValueError: If the URL scheme is not supported.
         """
-        root = self._root.strip()
+        root = root.strip()
         if not root:
             return ""
 

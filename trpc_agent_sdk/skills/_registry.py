@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright @ 2026 Tencent.com
+# Copyright @ 2025 Tencent.com
 """Skill registry for managing loaded skills.
 
 This module provides the SkillRegistry class which maintains a registry of

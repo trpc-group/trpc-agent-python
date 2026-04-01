@@ -15,7 +15,7 @@ from trpc.plugin import PluginType
 from trpc.plugin import register_plugin
 
 # pylint: disable=unused-import
-import trpc_agent
+import trpc_agent_sdk
 # import trpc_naming_polaris as _
 # import trpc_metrics_runtime as _
 # pylint: enable=unused-import
@@ -35,7 +35,7 @@ from agui_service import register_agui_agent
 @register_plugin(PluginType.USER_DEFINED, "trpc_agent_log")
 def set_trpc_agent_logger():
     """Set tRPC-Agent logger."""
-    trpc_agent.log.set_logger(logger)
+    trpc_agent_sdk.log.set_logger(logger)
 
 
 DEFAULT_CONF_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "trpc_python.yaml"))

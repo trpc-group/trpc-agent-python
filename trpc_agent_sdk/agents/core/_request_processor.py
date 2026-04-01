@@ -877,7 +877,7 @@ class RequestProcessor:
         {session_key}, etc. with actual values from the session state.
 
         This implementation is inspired by adk-python's inject_session_state but
-        adapted for trpc_agent's architecture.
+        adapted for trpc_agent_sdk's architecture.
 
         Args:
             instruction: The instruction string containing template placeholders
@@ -918,7 +918,7 @@ class RequestProcessor:
                         # This follows the behavior of the original SafeFormatter approach
                         return match.group()
 
-            # Use regex pattern similar to adk-python but simpler for trpc_agent
+            # Use regex pattern similar to adk-python but simpler for trpc_agent_sdk
             # This matches {variable_name} patterns including optional ones with ?
             pattern = r'\{[^{}]*\}'
             result = re.sub(pattern, replace_placeholder, instruction)

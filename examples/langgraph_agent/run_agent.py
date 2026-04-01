@@ -4,7 +4,7 @@
 """
 LangGraph Calculator Agent Demo
 
-This example demonstrates basic LangGraphAgent usage with trpc_agent framework,
+This example demonstrates basic LangGraphAgent usage with trpc_agent_sdk framework,
 showing how to:
 1. Create a LangGraph with tool calling
 2. Run the agent with Runner

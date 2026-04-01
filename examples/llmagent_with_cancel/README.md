@@ -18,7 +18,7 @@ Python版本: 3.10+(强烈建议使用3.12)
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
-cd trpc-agent
+cd trpc-agent-python
 python3 -m venv .venv
 source .venv/bin/activate
 pip3 install -e .
@@ -60,13 +60,13 @@ python3 run_agent.py
 ⏳ [Received 10 events, triggering cancellation...]
  about. Whether
 ⏸️  Requesting cancellation after 10 events...
-[2026-01-13 14:21:03][INFO][trpc_agent][trpc_agent/cancel/_cancel.py:98][1369642] Run marked for cancellation (app_name: weather_agent_cancel_demo)(user: demo_user)(session: e4fea114-fa35-459e-89f5-cdf6cc4df8ab)
- you need[2026-01-13 14:21:03][INFO][trpc_agent][trpc_agent/cancel/_cancel.py:215][1369642] Cancelling run for session e4fea114-fa35-459e-89f5-cdf6cc4df8ab
-[2026-01-13 14:21:03][INFO][trpc_agent][trpc_agent/runners.py:351][1369642] Run for session e4fea114-fa35-459e-89f5-cdf6cc4df8ab was cancelled
+[2026-01-13 14:21:03][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:98][1369642] Run marked for cancellation (app_name: weather_agent_cancel_demo)(user: demo_user)(session: e4fea114-fa35-459e-89f5-cdf6cc4df8ab)
+ you need[2026-01-13 14:21:03][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:215][1369642] Cancelling run for session e4fea114-fa35-459e-89f5-cdf6cc4df8ab
+[2026-01-13 14:21:03][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:351][1369642] Run for session e4fea114-fa35-459e-89f5-cdf6cc4df8ab was cancelled
 
 ❌ Run was cancelled: Run for session e4fea114-fa35-459e-89f5-cdf6cc4df8ab was cancelled
 
-[2026-01-13 14:21:03][INFO][trpc_agent][trpc_agent/runners.py:147][1369642] Cancel completed for user_id demo_user, session e4fea114-fa35-459e-89f5-cdf6cc4df8ab
+[2026-01-13 14:21:03][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:147][1369642] Cancel completed for user_id demo_user, session e4fea114-fa35-459e-89f5-cdf6cc4df8ab
 ✓ Cancellation requested: True
 
 💡 Result: The partial response was saved to session with cancellation message
@@ -92,14 +92,14 @@ python3 run_agent.py
 [Tool executing: fetching weather for Shanghai...]
 
 ⏸️  Tool call detected! Requesting cancellation during tool execution...
-[2026-01-13 14:21:06][INFO][trpc_agent][trpc_agent/cancel/_cancel.py:98][1369642] Run marked for cancellation (app_name: weather_agent_cancel_demo)(user: demo_user)(session: 8bc1719c-25cf-427a-aad1-1f42b1b7c090)
-[2026-01-13 14:21:07][WARNING][trpc_agent][trpc_agent/runners.py:149][1369642] Cancel wait timeout (1.0s) reached for user_id demo_user, session 8bc1719c-25cf-427a-aad1-1f42b1b7c090. The execution may still be running.
+[2026-01-13 14:21:06][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:98][1369642] Run marked for cancellation (app_name: weather_agent_cancel_demo)(user: demo_user)(session: 8bc1719c-25cf-427a-aad1-1f42b1b7c090)
+[2026-01-13 14:21:07][WARNING][trpc_agent_sdk][trpc_agent_sdk/runners.py:149][1369642] Cancel wait timeout (1.0s) reached for user_id demo_user, session 8bc1719c-25cf-427a-aad1-1f42b1b7c090. The execution may still be running.
 ✓ Cancellation requested: True
 [Tool executing: weather for Shanghai fetched]
 [Tool completed: got result for Shanghai]
 📊 [Tool Result: {'city': 'Shanghai', 'temperature': '20°C', 'condition': 'Sunny', 'humidity': '80%'}]
-[2026-01-13 14:21:08][INFO][trpc_agent][trpc_agent/cancel/_cancel.py:215][1369642] Cancelling run for session 8bc1719c-25cf-427a-aad1-1f42b1b7c090
-[2026-01-13 14:21:08][INFO][trpc_agent][trpc_agent/runners.py:351][1369642] Run for session 8bc1719c-25cf-427a-aad1-1f42b1b7c090 was cancelled
+[2026-01-13 14:21:08][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:215][1369642] Cancelling run for session 8bc1719c-25cf-427a-aad1-1f42b1b7c090
+[2026-01-13 14:21:08][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:351][1369642] Run for session 8bc1719c-25cf-427a-aad1-1f42b1b7c090 was cancelled
 
 ❌ Run was cancelled: Run for session 8bc1719c-25cf-427a-aad1-1f42b1b7c090 was cancelled
 

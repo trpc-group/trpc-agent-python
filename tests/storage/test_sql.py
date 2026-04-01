@@ -48,7 +48,7 @@ class TestSqlStorage:
         """Synchronous SQL storage fixture with initialized engine."""
         storage = SqlStorage(is_async=False, db_url=db_url, metadata=StorageData.metadata)
         # Patch event.listen to work around SQLite pragma issue
-        with patch('trpc_agent.storage._sql.event.listen'):
+        with patch('trpc_agent_sdk.storage._sql.event.listen'):
             await storage.create_sql_engine()
         yield storage
         await storage.close()
@@ -58,7 +58,7 @@ class TestSqlStorage:
         """Asynchronous SQL storage fixture with initialized engine."""
         storage = SqlStorage(is_async=True, db_url=async_db_url, metadata=StorageData.metadata)
         # Patch event.listen to work around async engine event limitation
-        with patch('trpc_agent.storage._sql.event.listen'):
+        with patch('trpc_agent_sdk.storage._sql.event.listen'):
             await storage.create_sql_engine()
         yield storage
         await storage.close()
@@ -90,7 +90,7 @@ class TestSqlStorage:
         storage = SqlStorage(is_async=True, db_url=async_db_url, metadata=StorageData.metadata)
 
         # Patch event.listen to work around async engine event limitation
-        with patch('trpc_agent.storage._sql.event.listen'):
+        with patch('trpc_agent_sdk.storage._sql.event.listen'):
             await storage.create_sql_engine()
 
         assert storage._db_engine is not None
@@ -105,7 +105,7 @@ class TestSqlStorage:
         storage = SqlStorage(is_async=False, db_url=db_url, metadata=StorageData.metadata)
 
         # Patch event.listen to work around SQLite pragma issue in tests
-        with patch('trpc_agent.storage._sql.event.listen'):
+        with patch('trpc_agent_sdk.storage._sql.event.listen'):
             await storage.create_sql_engine()
 
         assert storage._db_engine is not None
@@ -129,16 +129,16 @@ class TestSqlStorage:
         """Test SQLite pragma is set when creating engine."""
         storage = SqlStorage(is_async=False, db_url="sqlite:///:memory:", metadata=StorageData.metadata)
 
-        with patch('trpc_agent.storage._sql.event.listen') as mock_event_listen:
-            with patch('trpc_agent.storage._sql.create_engine') as mock_create_engine:
+        with patch('trpc_agent_sdk.storage._sql.event.listen') as mock_event_listen:
+            with patch('trpc_agent_sdk.storage._sql.create_engine') as mock_create_engine:
                 mock_engine = MagicMock()
                 mock_engine.dialect.name = "sqlite"
                 mock_create_engine.return_value = mock_engine
 
-                with patch('trpc_agent.storage._sql.inspect') as mock_inspect:
+                with patch('trpc_agent_sdk.storage._sql.inspect') as mock_inspect:
                     mock_inspect.return_value = MagicMock()
 
-                    with patch('trpc_agent.storage._sql.sessionmaker') as mock_sessionmaker:
+                    with patch('trpc_agent_sdk.storage._sql.sessionmaker') as mock_sessionmaker:
                         mock_sessionmaker.return_value = MagicMock()
 
                         await storage.create_sql_engine()
@@ -151,7 +151,7 @@ class TestSqlStorage:
         """Test error handling for ArgumentError."""
         storage = SqlStorage(is_async=True, db_url="invalid://url", metadata=StorageData.metadata)
 
-        with patch('trpc_agent.storage._sql.create_async_engine') as mock_create_engine:
+        with patch('trpc_agent_sdk.storage._sql.create_async_engine') as mock_create_engine:
             mock_create_engine.side_effect = ArgumentError("Invalid URL", "url", None)
 
             with pytest.raises(ValueError, match="Invalid database URL format"):
@@ -162,7 +162,7 @@ class TestSqlStorage:
         """Test error handling for ImportError."""
         storage = SqlStorage(is_async=True, db_url="sqlite+aiosqlite:///:memory:", metadata=StorageData.metadata)
 
-        with patch('trpc_agent.storage._sql.create_async_engine') as mock_create_engine:
+        with patch('trpc_agent_sdk.storage._sql.create_async_engine') as mock_create_engine:
             mock_create_engine.side_effect = ImportError("Module not found")
 
             with pytest.raises(ValueError, match="Database related module not found"):
@@ -173,7 +173,7 @@ class TestSqlStorage:
         """Test error handling for generic exception."""
         storage = SqlStorage(is_async=True, db_url="sqlite+aiosqlite:///:memory:", metadata=StorageData.metadata)
 
-        with patch('trpc_agent.storage._sql.create_async_engine') as mock_create_engine:
+        with patch('trpc_agent_sdk.storage._sql.create_async_engine') as mock_create_engine:
             mock_create_engine.side_effect = Exception("Connection error")
 
             with pytest.raises(ValueError, match="Failed to create database engine"):
@@ -470,7 +470,7 @@ class TestSqlStorage:
         storage = SqlStorage(is_async=True, db_url=async_db_url, metadata=StorageData.metadata)
 
         # Patch event.listen to work around async engine event limitation
-        with patch('trpc_agent.storage._sql.event.listen'):
+        with patch('trpc_agent_sdk.storage._sql.event.listen'):
             await storage.create_sql_engine()
 
         assert storage._db_engine is not None
@@ -484,7 +484,7 @@ class TestSqlStorage:
         storage = SqlStorage(is_async=False, db_url=db_url, metadata=StorageData.metadata)
 
         # Patch event.listen to work around SQLite pragma issue in tests
-        with patch('trpc_agent.storage._sql.event.listen'):
+        with patch('trpc_agent_sdk.storage._sql.event.listen'):
             await storage.create_sql_engine()
 
         assert storage._db_engine is not None

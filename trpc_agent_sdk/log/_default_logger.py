@@ -5,7 +5,7 @@
 
 This module provides a default logger implementation that uses Python's
 standard logging module as the backend. It serves as the reference
-implementation and fallback logger for the trpc_agent framework.
+implementation and fallback logger for the trpc_agent_sdk framework.
 """
 
 import logging
@@ -88,7 +88,7 @@ class DefaultLogger(BaseLogger):
     """Default logger implementation using Python's standard logging.
 
     This logger uses Python's built-in logging module as the backend and
-    provides a simple, reliable logging solution for trpc_agent.
+    provides a simple, reliable logging solution for trpc_agent_sdk.
 
     Attributes:
         logger: The underlying Python logger instance
@@ -96,7 +96,7 @@ class DefaultLogger(BaseLogger):
     """
 
     def __init__(self,
-                 name: str = "trpc_agent",
+                 name: str = "trpc_agent_sdk",
                  min_level: LogLevel = LogLevel.INFO,
                  extra_fields: Optional[Dict[str, Any]] = None):
         """Initialize the default logger.

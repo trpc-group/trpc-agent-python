@@ -38,7 +38,7 @@ async def run_weather_agent():
 
         # Create state variables for a new session
         # If session management is not required, there is no need to use the session_service,
-        # the trpc_agent will create a session automatically
+        # the trpc_agent_sdk will create a session automatically
         await session_service.create_session(
             app_name=app_name,
             user_id=user_id,
