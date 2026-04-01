@@ -1,0 +1,75 @@
+{
+  "name": "knowledge-agent",
+  "description": "Demo agent with knowledge_search tool (agentic mode)",
+  "version": "1.0",
+  "start_node_id": "start",
+  "nodes": [
+    {
+      "id": "start",
+      "node_type": "builtin.start"
+    },
+    {
+      "id": "agent",
+      "node_type": "builtin.llmagent",
+      "label": "Knowledge Agent",
+      "config": {
+        "model_spec": {
+          "provider": "openai",
+          "model_name": "env:OPENAI_MODEL",
+          "base_url": "env:OPENAI_BASE_URL",
+          "api_key": "env:OPENAI_API_KEY"
+        },
+        "instruction": "You are a helpful assistant with knowledge base access. Use the knowledge_search tool to find relevant information when answering user questions.",
+        "tools": [
+          {
+            "type": "knowledge_search",
+            "description": "Search for relevant information in the knowledge base to answer user questions accurately.",
+            "connector": {
+              "type": "trag",
+              "token": "env:TRAG_TOKEN",
+              "rag_code": "env:TRAG_RAG_CODE",
+              "namespace": "env:TRAG_NAMESPACE",
+              "collection": "env:TRAG_COLLECTION"
+            },
+            "max_results": 5,
+            "min_score": 0.5,
+            "agentic_filter_info": {
+              "metadata.category": {
+                "values": ["machine-learning", "nlp", "rag"],
+                "description": "Document category / topic."
+              },
+              "metadata.language": {
+                "values": ["zh", "en"],
+                "description": "Document language."
+              },
+              "metadata.author_id": {
+                "values": null,
+                "description": "Author identifier."
+              }
+            },
+            "conditioned_filter": {
+              "operator": "and",
+              "value": [
+                {
+                  "field": "metadata.category",
+                  "operator": "eq",
+                  "value": "machine-learning"
+                }
+              ]
+            }
+          }
+        ],
+        "temperature": 0.7
+      }
+    },
+    {
+      "id": "end",
+      "node_type": "builtin.end",
+      "config": {}
+    }
+  ],
+  "edges": [
+    { "source": "start", "target": "agent" },
+    { "source": "agent", "target": "end" }
+  ]
+}
