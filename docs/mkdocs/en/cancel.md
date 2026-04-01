@@ -1,22 +1,22 @@
 # Agent Cancel Mechanism
 
-During Agent execution, the output may sometimes not meet the user's requirements. In such cases, the user often interrupts the Agent execution, provides partial feedback (indicating which outputs before the interruption were unsatisfactory and what should be done next), and then lets the Agent continue execution.
+During Agent execution, the output may sometimes not meet the user's requirements. In such cases, users often interrupt the Agent execution, provide partial feedback (indicating which outputs before the interruption were unsatisfactory and what should be done next), and then let the Agent continue execution.
 
-For this scenario, the trpc-agent framework provides a Cancel mechanism that allows cancelling an Agent's ongoing operation while preserving partial content (content being streamed by the LLM, tool execution results in progress, etc.). This mechanism is based on a checkpoint design. In their implementations, each Agent checks at checkpoint locations (after an LLM streaming output chunk, after a tool call completes, etc.) whether the current Agent should be terminated. If termination is required, an exception is thrown, and the framework records and saves the partial information into the session history.
+For this scenario, the trpc-agent framework provides a Cancel mechanism that allows cancelling an Agent's ongoing operations while preserving partial content (content being streamed by the LLM, tool execution results in progress, etc.). This mechanism is based on a checkpoint design. During execution, each Agent checks at checkpoint locations (after an LLM streaming output chunk, after a tool call completes, etc.) whether the current Agent should be terminated. If termination is required, an exception is thrown, and the framework records and saves the partial information to the session history.
 
 This capability has been integrated into all Agents provided by the framework. Custom Agents implemented by other services can also be easily integrated.
 
 | Module Type | Module Name | Cancel Support | Description |
 |---------|---------|-------------|------|
 | Single Agent | `LlmAgent` | ✅ | Checkpoints set at LLM streaming output, tool execution, and other locations |
-| Single Agent | `LangGraphAgent` | ✅ | Checkpoints set in LangGraph streaming output |
-| Single Agent | `ClaudeAgent` | ✅ | Checkpoints set in Claude SDK streaming output |
-| Single Agent | `TrpcRemoteA2aAgent` | ✅ | Checkpoints set in HTTP streaming output |
-| Multi Agent | `ChainAgent` | ✅ | Exception propagated from sub-Agents |
+| Single Agent | `LangGraphAgent` | ✅ | Checkpoints set during LangGraph streaming output |
+| Single Agent | `ClaudeAgent` | ✅ | Checkpoints set during claude-sdk streaming output |
+| Single Agent | `TrpcRemoteA2aAgent` | ✅ | Checkpoints set during HTTP streaming output |
+| Multi Agent | `ChainAgent` | ✅ | Exception propagated from its sub-Agents |
 | Multi Agent | `ParallelAgent` | ✅ | Execution cancelled when any sub-Agent throws an exception |
-| Multi Agent | `CycleAgent` | ✅ | Exception propagated from sub-Agents |
+| Multi Agent | `CycleAgent` | ✅ | Exception propagated from its sub-Agents |
 | Multi Agent | `TeamAgent` | ✅ | Cancellable during both Leader and Member execution |
-| Agent Service | `TrpcA2aAgentService` | ✅ | Cancels remote Agent execution via the A2A protocol's cancel_task API |
+| Agent Service | `TrpcA2aAgentService` | ✅ | Cancels remote Agent execution via the A2A protocol's cancel_task interface |
 | Agent Service | `AgUiService` | ✅ | Agent automatically cancels execution upon SSE connection disconnect detection |
 
 
@@ -25,17 +25,17 @@ This capability has been integrated into all Agents provided by the framework. C
 ### Architecture Design
 
 As shown in the architecture below:
-- When the framework starts, it creates a global `_RunCancellationManager` object to manage Agent cancellation signals.
-- Users run and interrupt Agent execution through the Runner.
-    - The user executes an Agent via `run_async`. Before Agent execution, the Runner registers the current run information with the Manager through `register_run`. The SessionKey is a triplet of (app_name, user_id, session_id).
-    - The user cancels Agent execution via `cancel_run_async`. The Runner receives the `RunCancelledException` thrown by the Agent, completes the post-cancel processing (injecting partial streaming messages and partial tool call content into the Agent's session). After processing, the Runner generates an `AgentCancelledEvent` to convey the termination information, and the cancellation reason can be obtained through its error_message field.
-- Agents embed checkpoints during execution to integrate the Cancel capability.
-    - During Agent execution, `ctx.raise_if_cancelled` is used in the `_run_async_impl` implementation to check at each checkpoint (after an LLM streaming output chunk, after a tool call, etc.) whether the current execution has been cancelled. If `runner.cancel_run_async` has been called, the Agent's execution will be marked as cancelled, and `raise_if_cancelled` will throw a `RunCancelledException`.
-    - Generally, common checkpoints include: during LLM streaming output, after tool calls. Cancellation during tool call execution is not currently supported.
-- Agent services automatically call `runner.cancel_run_async` through their interfaces and obtain cancellation details from the AgentCancelledEvent returned by the Runner.
-    - For AG-UI services, since the protocol does not natively support cancellation, the client cancels Agent execution by disconnecting. The Agent service detects the connection disconnect exception and automatically calls `runner.cancel_run_async` to support this capability.
-    - For A2A services, the protocol natively supports cancellation through the `cancel_task` API. The framework already supports this API and adapts it to `runner.cancel_run_async`, but it needs to be used with hash-based routing. In multi-node deployment scenarios, configuring hash-based routing can be cumbersome. A simpler approach, similar to AG-UI, is for the Agent service to automatically detect the connection disconnect and call `runner.cancel_run_async`. However, due to the current underlying implementation of the a2a-sdk, the Agent will continue to execute after the connection is disconnected, so hash-based routing is temporarily required to complete the cancel operation.
-    - For custom services, it is recommended to implement cancellation logic triggered by connection disconnect. This approach has a low implementation cost, does not require hash-based routing, and the client simply needs to disconnect from the remote Agent.
+- When the framework starts, it creates a global `_RunCancellationManager` object to manage Agent cancellation signals
+- Users run and interrupt Agent execution through the Runner
+    - Users execute an Agent via `run_async`. Before execution, the Runner registers the current run information with the Manager via `register_run`. The SessionKey is a triplet of (app_name, user_id, session_id)
+    - Users cancel Agent execution via `cancel_run_async`. The Runner receives the `RunCancelledException` thrown by the Agent and completes post-cancel processing (injecting partial streaming messages, partial tool call content into the Agent's session). After processing, the Runner generates an `AgentCancelledEvent` to convey the termination information, and the cancellation reason can be obtained through its error_message field
+- Agents embed checkpoints during execution to integrate the Cancel capability
+    - During Agent execution, within the `_run_async_impl` implementation, `ctx.raise_if_cancelled` is used at various checkpoints (after LLM streaming output chunks, after tool calls, etc.) to check whether the current execution has been cancelled. If `runner.cancel_run_async` has been called, the Agent's execution is marked as cancelled, and `raise_if_cancelled` throws a `RunCancelledException`
+    - Common checkpoint locations include: during LLM streaming output, after tool calls. Cancellation during tool call execution is not currently supported
+- Agent services automatically invoke `runner.cancel_run_async` through their interfaces and obtain cancellation details via the AgentCancelledEvent returned by the Runner
+    - For AG-UI services, the protocol does not natively support cancellation. The client cancels Agent execution by disconnecting the connection. The Agent service detects the disconnection exception and automatically calls `runner.cancel_run_async` to support this capability
+    - For A2A services, the protocol natively supports cancellation via the `cancel_task` interface. The framework already supports this interface and adapts it to `runner.cancel_run_async`, but it requires hash-based routing. In multi-node deployment scenarios, configuring hash-based routing can be cumbersome. A simpler approach, similar to AG-UI, would be for the Agent service to automatically detect connection disconnection and call `runner.cancel_run_async`. However, due to the current underlying implementation of the a2a-sdk, the Agent continues to execute after disconnection, so hash-based routing is temporarily required to complete the cancel operation.
+    - For custom services, it is recommended to implement Agent cancellation logic triggered by connection disconnection. This approach has very low implementation cost, does not require hash-based routing, and the client simply disconnects from the remote Agent.
 
 <p align="center">
   <img src="../assets/imgs/agent_cancel.png" alt="Agent Cancel" />
@@ -46,12 +46,12 @@ As shown in the architecture below:
 When an Agent is cancelled, different session management strategies are applied depending on the scenario:
 
 **Scenario 1: Cancellation during LLM streaming output**
-- Session management: Messages from the start of the LLM response to the point of interruption are all preserved. After the streamed text of this portion, a message "User cancel the agent execution." is appended to make the Agent aware of the cancellation event.
-- Effect: In the next conversation turn, the user can point out which text was unreasonable, and the Agent will correct its output.
+- Session management: Messages from the start of the LLM response to the point of interruption are preserved. After this partial streamed text, a message "User cancel the agent execution." is appended to make the Agent aware of the cancellation event
+- Effect: In the next conversation turn, the user can indicate which text was unsatisfactory, and the Agent will correct its output
 
 **Scenario 2: Cancellation during tool execution**
-- Session management: For scenarios where an Agent needs to call multiple tools, e.g., tool 1 and tool 2, if the user cancels Agent execution while tool 1 is being called, the execution will skip tool 2's call after tool 1 completes and terminate. The call information for tool 2 in the current turn will be removed from the session history, as if the Agent never executed tool 2 in this turn. Similarly, after tool 1's call response, a message "User cancel the agent execution." is appended to make the Agent aware of the cancellation event.
-- Effect: In the next conversation turn, the Agent can sense that tool 2 was not called and may call tool 2.
+- Session management: For scenarios where the Agent needs to call multiple tools, e.g., tool 1 and tool 2, if the user cancels Agent execution while tool 1 is being called, the system waits for tool 1 to complete, then skips tool 2 and terminates. The call information for tool 2 in this turn is removed from the session history, as if the Agent never executed tool 2 in this turn. Similarly, after tool 1's call response, a message "User cancel the agent execution." is appended to make the Agent aware of the cancellation event
+- Effect: In the next conversation turn, the Agent can perceive that tool 2 was not called and may proceed to call tool 2.
 
 ### Limitations
 
@@ -64,7 +64,7 @@ When an Agent is cancelled, different session management strategies are applied 
 3. **Applicable scenarios**:
    - Single-node deployment
    - Client communicates with the Agent through the same connection (WebSocket, SSE)
-   - Cancellation is automatically triggered upon connection disconnect
+   - Cancellation is automatically triggered upon connection disconnection
 
 ## Basic Usage
 
@@ -73,9 +73,9 @@ When an Agent is cancelled, different session management strategies are applied 
 ```python
 import asyncio
 import uuid
-from trpc_agent.runners import Runner
-from trpc_agent.sessions import InMemorySessionService
-from trpc_agent.types import Content, Part
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.types import Content, Part
 
 async def main():
     runner = Runner(
@@ -107,7 +107,7 @@ async def main():
 
     task = asyncio.create_task(run_agent())
 
-    # Wait for a while then cancel
+    # Wait for a period then cancel
     await asyncio.sleep(2)
 
     # Cancel the run using the same user_id and session_id
@@ -115,7 +115,7 @@ async def main():
     success = await runner2.cancel_run_async(
         user_id=user_id,
         session_id=session_id,
-        timeout=3.0,  # Timeout for waiting the Agent cancel action to complete
+        timeout=3.0,  # Timeout for waiting the Agent cancel operation to complete
     )
     print(f"\nCancel request result: {success}")
 
@@ -128,9 +128,9 @@ asyncio.run(main())
 
 ### Agent Custom Service Examples
 
-#### Method 1: Cancellation based on connection disconnect (Recommended)
+#### Approach 1: Connection-disconnect-based cancellation (Recommended)
 
-In long-connection scenarios such as SSE/WebSocket, it is recommended to automatically trigger cancellation by detecting connection disconnects. This approach has a low implementation cost — the user simply disconnects to trigger the cancellation without requiring a separate cancel API.
+In long-connection scenarios such as SSE/WebSocket, it is recommended to automatically trigger cancellation by detecting connection disconnection. This approach has low implementation cost — users simply disconnect to trigger cancellation without requiring a separate cancel interface.
 
 The following is an example based on FastAPI SSE:
 
@@ -138,11 +138,11 @@ The following is an example based on FastAPI SSE:
 import asyncio
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
-from trpc_agent.runners import Runner
-from trpc_agent.agents import LlmAgent
-from trpc_agent.sessions import InMemorySessionService
-from trpc_agent.types import Content, Part
-from trpc_agent import cancel
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.types import Content, Part
+from trpc_agent_sdk import cancel
 
 app = FastAPI()
 
@@ -187,11 +187,11 @@ async def chat_endpoint(user_id: str, session_id: str, message: str, request: Re
                             yield f"data: {part.text}\n\n"
 
         except asyncio.CancelledError:
-            # Connection closed by client
+            # Connection closed by the client
             raise
         finally:
-            # Trigger cancel regardless of normal completion or disconnect
-            # This ensures Agent execution is properly terminated and partial results are saved
+            # Trigger cancel operation regardless of normal completion or disconnection
+            # This ensures the Agent execution is properly terminated and partial results are saved
             cleanup_event = await cancel.cancel_run(app_name, user_id, session_id)
 
             if cleanup_event is not None:
@@ -207,11 +207,11 @@ async def chat_endpoint(user_id: str, session_id: str, message: str, request: Re
     )
 ```
 
-This pattern is already implemented in the AG-UI service. See [trpc_agent_ecosystem/ag_ui/_plugin/_ag_ui_handler.py](../../../trpc_agent_ecosystem/ag_ui/_plugin/_ag_ui_handler.py) for reference.
+This pattern is already implemented in the AG-UI service. See [trpc_agent_sdk/server/ag_ui/_plugin/_ag_ui_handler.py](../../../trpc_agent_sdk/server/ag_ui/_plugin/_ag_ui_handler.py) for reference.
 
-#### Method 2: Explicit cancel API
+#### Approach 2: Explicit cancel interface
 
-If a separate cancel API (e.g., REST API) is needed, note the following. You can use this approach:
+If a standalone cancel interface (e.g., REST API) is needed, note the following considerations. You can use this approach:
 
 ```python
 from fastapi import FastAPI, HTTPException
@@ -221,7 +221,7 @@ runner = Runner(...)
 
 @app.post("/sessions/{user_id}/{session_id}/cancel")
 async def cancel_session_run(user_id: str, session_id: str):
-    """Cancel the run for the specified session"""
+    """Cancel the run for a specified session"""
     success = await runner.cancel_run_async(
         user_id=user_id,
         session_id=session_id,
@@ -236,31 +236,31 @@ async def cancel_session_run(user_id: str, session_id: str):
         )
 ```
 
-**Note**: This approach requires that the cancel request be sent to the same node running the Agent. In multi-node deployment scenarios, hash-based routing must be used to ensure that the cancel request is routed to the node executing the Agent.
+**Note**: This approach requires that the cancel request is sent to the same node running the Agent. In multi-node deployment scenarios, hash-based routing must be used to ensure the cancel request reaches the node executing the Agent.
 
 ## Agent Cancel Guide
 
 ### LlmAgent
 
-LlmAgent has checkpoints set at key positions in the execution flow:
+LlmAgent has checkpoints set at critical positions in the execution flow:
 
 **Checkpoint locations:**
-- At the start of each conversation turn
-- Before an LLM API call
+- At the beginning of each conversation turn
+- Before LLM API calls
 - During LLM streaming output (each chunk)
 - Before and after tool execution
 
 **Usage example:**
 
 ```python
-from trpc_agent.agents import LlmAgent
-from trpc_agent.models import OpenAIModel
-from trpc_agent.tools import FunctionTool
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.tools import FunctionTool
 
 # Define tools
 async def get_weather(city: str) -> dict:
-    """Get weather for a city"""
-    await asyncio.sleep(3)  # Simulate a time-consuming operation
+    """Get city weather"""
+    await asyncio.sleep(3)  # Simulate time-consuming operation
     return {"city": city, "temperature": "25°C", "condition": "Sunny"}
 
 # Create Agent
@@ -300,7 +300,7 @@ LangGraphAgent wraps LangGraph as a trpc-agent compatible Agent, and also suppor
 **Usage example:**
 
 ```python
-from trpc_agent.agents import LangGraphAgent
+from trpc_agent_sdk.agents import LangGraphAgent
 from langgraph.graph import StateGraph
 
 # Build LangGraph
@@ -334,17 +334,17 @@ await runner.cancel_run_async(user_id, session_id)
 
 ### ClaudeAgent
 
-ClaudeAgent runs in a subprocess mode using the Claude SDK. When cancelled, it terminates the subprocess.
+ClaudeAgent runs using the Claude SDK's subprocess mode. When cancelled, the subprocess is terminated.
 
 **Cancel implementation:**
-- When a cancel request is detected, a termination signal is sent to the Claude SDK subprocess
+- When a cancellation request is detected, a termination signal is sent to the Claude SDK subprocess
 - After the subprocess exits, partial responses are saved to the session
 
 **Usage example:**
 
 ```python
-from trpc_agent_ecosystem.agents.claude import ClaudeAgent, setup_claude_env
-from trpc_agent.models import OpenAIModel
+from trpc_agent_sdk.server.agents.claude import ClaudeAgent, setup_claude_env
+from trpc_agent_sdk.models import OpenAIModel
 
 model = OpenAIModel(model_name="deepseek-chat")
 
@@ -375,15 +375,15 @@ await runner.cancel_run_async(user_id, session_id)
 ```
 
 **Notes:**
-- Cancellation will cause the Claude SDK subprocess to be terminated. You may see `ProcessError` logs, which is expected behavior.
-- After the subprocess is terminated, partial responses will be saved to the session.
+- Cancel will cause the Claude SDK subprocess to be terminated. You may see `ProcessError` logs, which is expected behavior
+- After the subprocess is terminated, partial responses are saved to the session
 
 **Full example:**
 - [examples/claude_agent_with_cancel](../../../examples/claude_agent_with_cancel/README.md)
 
 ### TeamAgent
 
-TeamAgent supports Cancel during both Leader planning and Member execution.
+TeamAgent supports Cancel during both Leader planning and Member execution phases.
 
 **Cancel scenarios:**
 1. **Cancellation during Leader planning**: Saves the Leader's partial response
@@ -392,9 +392,9 @@ TeamAgent supports Cancel during both Leader planning and Member execution.
 **Usage example:**
 
 ```python
-from trpc_agent.agents import LlmAgent
-from trpc_agent.teams import TeamAgent
-from trpc_agent.tools import FunctionTool
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.teams import TeamAgent
+from trpc_agent_sdk.tools import FunctionTool
 
 # Create team members
 researcher = LlmAgent(
@@ -444,19 +444,19 @@ Agent services deployed via the A2A protocol support remote Cancel.
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                   Client                        │
+│                   Client                         │
 │  ┌───────────────────────────────────────────┐  │
 │  │         TrpcRemoteA2aAgent                │  │
 │  │     (Connect to remote A2A service)       │  │
 │  └─────────────┬─────────────────────────────┘  │
-│                │ A2A Protocol                   │
-│                │ (Supports Cancel)              │
+│                │ A2A Protocol                    │
+│                │ (Supports Cancel)               │
 └────────────────┼────────────────────────────────┘
                  │
                  │ HTTP
                  │
 ┌────────────────▼────────────────────────────────┐
-│                   Server                        │
+│                   Server                         │
 │  ┌───────────────────────────────────────────┐  │
 │  │      TrpcA2aAgentService                  │  │
 │  │  ┌─────────────────────────────────────┐  │  │
@@ -470,8 +470,8 @@ Agent services deployed via the A2A protocol support remote Cancel.
 **Server configuration:**
 
 ```python
-from trpc_agent_ecosystem.a2a import TrpcA2aAgentService
-from trpc_agent_ecosystem.a2a._core.executor import A2aAgentExecutorConfig
+from trpc_agent_sdk.server.a2a import TrpcA2aAgentService
+from trpc_agent_sdk.server.a2a._core.executor import A2aAgentExecutorConfig
 
 # Configure cancel wait timeout
 executor_config = A2aAgentExecutorConfig(
@@ -488,7 +488,7 @@ a2a_service = TrpcA2aAgentService(
 **Client usage:**
 
 ```python
-from trpc_agent_ecosystem.a2a.agent import TrpcRemoteA2aAgent
+from trpc_agent_sdk.server.a2a.agent import TrpcRemoteA2aAgent
 
 # Create remote Agent
 remote_agent = TrpcRemoteA2aAgent(
@@ -504,7 +504,7 @@ runner = Runner(
     session_service=InMemorySessionService(),
 )
 
-# Cancel sends a cancellation request to the remote service
+# Cancel will send a cancellation request to the remote service
 success = await runner.cancel_run_async(
     user_id=user_id,
     session_id=session_id,
@@ -522,7 +522,7 @@ success = await runner.cancel_run_async(
 It is recommended to configure the same timeout value for both.
 
 **Full example:**
-- [examples/trpc_a2a_with_cancel](../../../examples/trpc_a2a_with_cancel/README.md)
+- examples/trpc_a2a_with_cancel (example to be added)
 
 ### AG-UI
 
@@ -532,20 +532,20 @@ Agent services deployed via the AG-UI protocol automatically trigger Cancel when
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                   Client                        │
+│                   Client                         │
 │  ┌───────────────────────────────────────────┐  │
 │  │        @ag-ui/client                      │  │
 │  │    agent.abortRun() closes connection     │  │
 │  └─────────────┬─────────────────────────────┘  │
-│                │ AG-UI Protocol (SSE)           │
+│                │ AG-UI Protocol (SSE)            │
 └────────────────┼────────────────────────────────┘
                  │ HTTP
                  │ ⚡ Connection disconnected
                  │
 ┌────────────────▼────────────────────────────────┐
-│                   Server                        │
+│                   Server                         │
 │  ┌───────────────────────────────────────────┐  │
-│  │      AgUiService (detect disconnect)      │  │
+│  │      AgUiService (detects disconnect)     │  │
 │  │  ┌─────────────────────────────────────┐  │  │
 │  │  │  AgUiAgent.cancel_run()             │  │  │
 │  │  │    ↓                                │  │  │
@@ -561,7 +561,7 @@ Agent services deployed via the AG-UI protocol automatically trigger Cancel when
 **Server configuration:**
 
 ```python
-from trpc_agent_ecosystem.agui import AgUiAgent, AgUiService
+from trpc_agent_sdk.server.ag_ui import AgUiAgent, AgUiService
 
 # Create AG-UI Agent
 agui_agent = AgUiAgent(
@@ -598,13 +598,13 @@ agent.onEvent((event) => {
   console.log('Event:', event);
 });
 
-// Cancel run (close SSE connection)
+// Cancel run (closes SSE connection)
 agent.abortRun();
 ```
 
 **Cancel trigger mechanism:**
 - Client calls `agent.abortRun()` to close the SSE connection
-- Server detects the connection disconnect (`asyncio.CancelledError`)
+- Server detects the disconnection (`asyncio.CancelledError`)
 - Automatically invokes `cancel_run()` to trigger cooperative cancellation
 - Agent stops execution at the checkpoint
 - Partial responses and session state are saved
@@ -613,7 +613,7 @@ agent.abortRun();
 
 | Parameter | Default | Description |
 |------|--------|------|
-| `cancel_wait_timeout` | 3.0 | Timeout (in seconds) for waiting for the Cancel operation to complete. If this value is improperly configured, the Cancel operation may fail to execute successfully, causing streamed text to not be saved to the session. |
+| `cancel_wait_timeout` | 3.0 | Timeout (in seconds) for waiting the Cancel operation to complete. If this value is not properly configured, the Cancel operation may fail to execute successfully, causing streamed text to not be saved to the session. |
 
 **Full example:**
-- [examples/trpc_agui_with_cancel](../../../examples/trpc_agui_with_cancel/README.md)
+- examples/trpc_agui_with_cancel (example to be added)
