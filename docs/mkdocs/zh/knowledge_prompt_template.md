@@ -38,7 +38,7 @@ prompt = PromptTemplate.from_template(
 2. 基于此 prompt 对象构造 `LangchainKnowledge` 对象
 
 ```python
-from trpc_agent_ecosystem.knowledge.langchain_knowledge import LangchainKnowledge
+from trpc_agent_sdk.server.knowledge.langchain_knowledge import LangchainKnowledge
 
 rag = LangchainKnowledge(
     prompt_template=prompt,
@@ -74,7 +74,7 @@ prompt = ChatPromptTemplate([
 2. 基于此 prompt 对象构造 `LangchainKnowledge` 对象
 
 ```python
-from trpc_agent_ecosystem.knowledge.langchain_knowledge import LangchainKnowledge
+from trpc_agent_sdk.server.knowledge.langchain_knowledge import LangchainKnowledge
 
 rag = LangchainKnowledge(
     prompt_template=prompt,
@@ -125,7 +125,7 @@ prompt.invoke({
 2. 基于此 prompt 对象构造 `LangchainKnowledge` 对象
 
 ```python
-from trpc_agent_ecosystem.knowledge.langchain_knowledge import LangchainKnowledge
+from trpc_agent_sdk.server.knowledge.langchain_knowledge import LangchainKnowledge
 
 rag = LangchainKnowledge(
     prompt_template=prompt,

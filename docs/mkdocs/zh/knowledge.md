@@ -72,7 +72,7 @@ Langchain Knowledge 支持四种使用模式：
 
 - `retriever`: 检索器，实现根据文档构建数据库并支持检索文档，也可以支持重排序，例如：BM25Retrievr等。向量数据库和检索器不能同时为空，否则无法实现检索。当同时使用`vectorstore`和`retriever`时，`retriever`用于对`vectorstore`的检索结果进行重排序，这时要求`retriever`具备`from_documents`接口。
 
-组件使用说明见[tRPC-Python-Agent 框架中使用 LangChain RAG 组件](./langchain_components_guide.md)
+各组件使用说明见：[Document Loader](./knowledge_document_loader.md)、[Text Splitter](./knowledge_text_splitter.md)、[Embedder](./knowledge_embedder.md)、[VectorStore](./knowledge_vectorstore.md)、[Retrievers](./knowledge_retrievers.md)、[Prompt Template](./knowledge_prompt_template.md)、[自定义组件](./knowledge_custom_components.md)
 
 ### 核心方法详解
 
@@ -101,11 +101,11 @@ Langchain Knowledge 支持四种使用模式：
 Knowledge 系统采用分层架构，核心接口定义在 `trpc_agent` 中，具体实现在 `trpc_agent_ecosystem` 中：
 
 ```
-trpc_agent/knowledge/                    # 核心接口层
+trpc_agent_sdk/knowledge/                    # 核心接口层
 ├── _knowledge.py                       # KnowledgeBase 抽象基类、SearchRequest/SearchResult 数据模型
 └── _filter_expr.py                     # KnowledgeFilterExpr 统一过滤表达式
 
-trpc_agent_ecosystem/knowledge/          # 实现层
+trpc_agent_sdk/server/knowledge/          # 实现层
 ├── langchain_knowledge.py              # LangchainKnowledge —— 基于 LangChain 生态的 RAG 实现
 └── tools/
     └── langchain_knowledge_searchtool.py  # LangchainKnowledgeSearchTool / AgenticLangchainKnowledgeSearchTool
@@ -116,7 +116,7 @@ trpc_agent_ecosystem/knowledge/          # 实现层
 `KnowledgeBase` 是所有知识后端的抽象基类，定义了统一的搜索接口：
 
 ```python
-from trpc_agent.knowledge import KnowledgeBase, SearchRequest, SearchResult
+from trpc_agent_sdk.knowledge import KnowledgeBase, SearchRequest, SearchResult
 
 class KnowledgeBase(ABC):
     async def search(self, ctx: AgentContext, req: SearchRequest) -> SearchResult:
@@ -178,7 +178,7 @@ class KnowledgeBase(ABC):
 ### 过滤器示例
 
 ```python
-from trpc_agent.knowledge import KnowledgeFilterExpr
+from trpc_agent_sdk.knowledge import KnowledgeFilterExpr
 
 # 简单条件：类别等于 "machine-learning"
 simple_filter = KnowledgeFilterExpr.model_validate({
@@ -221,8 +221,8 @@ nested_filter = KnowledgeFilterExpr.model_validate({
 基础知识搜索工具，支持语义搜索和静态过滤，Agent 在对话中会自动调用该工具检索知识：
 
 ```python
-from trpc_agent_ecosystem.knowledge.tools import LangchainKnowledgeSearchTool
-from trpc_agent_ecosystem.knowledge.langchain_knowledge import SearchType
+from trpc_agent_sdk.server.knowledge.tools import LangchainKnowledgeSearchTool
+from trpc_agent_sdk.server.knowledge.langchain_knowledge import SearchType
 
 search_tool = LangchainKnowledgeSearchTool(
     rag=rag,                              # LangchainKnowledge 实例
@@ -241,10 +241,10 @@ search_tool = LangchainKnowledgeSearchTool(
 **第一步：创建工具并挂载到 Agent**
 
 ```python
-from trpc_agent.agents.llm_agent import LlmAgent
-from trpc_agent.knowledge import KnowledgeFilterExpr
-from trpc_agent_ecosystem.knowledge.tools import AgenticLangchainKnowledgeSearchTool
-from trpc_agent_ecosystem.knowledge.langchain_knowledge import SearchType
+from trpc_agent_sdk.agents.llm_agent import LlmAgent
+from trpc_agent_sdk.knowledge import KnowledgeFilterExpr
+from trpc_agent_sdk.server.knowledge.tools import AgenticLangchainKnowledgeSearchTool
+from trpc_agent_sdk.server.knowledge.langchain_knowledge import SearchType
 
 # 可选：静态过滤条件，始终生效
 static_filter = KnowledgeFilterExpr.model_validate({
@@ -327,13 +327,13 @@ try:
 except ModuleNotFoundError:
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from trpc_agent.agents import LlmAgent
-from trpc_agent.models import OpenAIModel
-from trpc_agent_ecosystem.knowledge.langchain_knowledge import (
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.server.knowledge.langchain_knowledge import (
     LangchainKnowledge,
     SearchType,
 )
-from trpc_agent_ecosystem.knowledge.tools import LangchainKnowledgeSearchTool
+from trpc_agent_sdk.server.knowledge.tools import LangchainKnowledgeSearchTool
 
 #  Prompt 模板 
 INSTRUCTION = "You are a helpful assistant. Be conversational and remember our previous exchanges."
@@ -411,10 +411,10 @@ try:
 except ModuleNotFoundError:
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from trpc_agent.context import new_agent_context
-from trpc_agent.knowledge import SearchRequest, SearchResult
-from trpc_agent.types import Part
-from trpc_agent_ecosystem.knowledge.langchain_knowledge import LangchainKnowledge
+from trpc_agent_sdk.context import new_agent_context
+from trpc_agent_sdk.knowledge import SearchRequest, SearchResult
+from trpc_agent_sdk.types import Part
+from trpc_agent_sdk.server.knowledge.langchain_knowledge import LangchainKnowledge
 
 from .prompts import rag_prompt
 
@@ -466,10 +466,10 @@ async def simple_search(query: str):
 ```
 
 ```python
-from trpc_agent.agents import LlmAgent
-from trpc_agent.models import LLMModel
-from trpc_agent.models import OpenAIModel
-from trpc_agent.tools import FunctionTool
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import LLMModel
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.tools import FunctionTool
 
 from .prompts import INSTRUCTION
 from .tools import simple_search
@@ -505,8 +505,8 @@ root_agent = create_agent()
 通过继承 `KnowledgeBase` 抽象基类，可以实现自定义的知识后端。只需实现 `search` 方法即可与框架的搜索工具无缝集成：
 
 ```python
-from trpc_agent.knowledge import KnowledgeBase, SearchRequest, SearchResult
-from trpc_agent.context import AgentContext
+from trpc_agent_sdk.knowledge import KnowledgeBase, SearchRequest, SearchResult
+from trpc_agent_sdk.context import AgentContext
 
 class MyKnowledge(KnowledgeBase):
     async def search(self, ctx: AgentContext, req: SearchRequest) -> SearchResult:

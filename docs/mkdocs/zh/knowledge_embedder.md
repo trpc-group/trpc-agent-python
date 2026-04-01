@@ -41,7 +41,7 @@ embedder = HuggingFaceEmbeddings(
 2. 基于此 embedder 对象构造 `LangchainKnowledge` 对象
 
 ```python
-from trpc_agent_ecosystem.knowledge.langchain_knowledge import LangchainKnowledge
+from trpc_agent_sdk.server.knowledge.langchain_knowledge import LangchainKnowledge
 
 rag = LangchainKnowledge(
     prompt_template=rag_prompt,

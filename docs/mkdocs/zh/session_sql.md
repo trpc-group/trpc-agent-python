@@ -68,7 +68,7 @@ GRANT ALL PRIVILEGES ON DATABASE test_db TO test_user;
 ### 1. 初始化 SqlStorage
 
 ```python
-from trpc_agent.storage import SqlStorage
+from trpc_agent_sdk.storage import SqlStorage
 
 # 异步模式（推荐）
 storage = SqlStorage(
@@ -93,7 +93,7 @@ storage = SqlStorage(
 from dataclasses import dataclass
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, Text
-from trpc_agent.storage import StorageData
+from trpc_agent_sdk.storage import StorageData
 
 @dataclass
 class UserData(StorageData):
@@ -113,7 +113,7 @@ class UserData(StorageData):
 
 ```python
 import asyncio
-from trpc_agent.storage import SqlStorage, SqlKey, SqlCondition
+from trpc_agent_sdk.storage import SqlStorage, SqlKey, SqlCondition
 
 async def basic_example():
     # 初始化存储
@@ -408,7 +408,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
-from trpc_agent.storage import StorageData
+from trpc_agent_sdk.storage import StorageData
 
 @dataclass
 class UserData(StorageData):
@@ -481,7 +481,7 @@ class ProductData(BaseModel):
 ```python
 import asyncio
 from datetime import datetime
-from trpc_agent.storage import SqlStorage, SqlKey, SqlCondition
+from trpc_agent_sdk.storage import SqlStorage, SqlKey, SqlCondition
 
 class UserService:
     """用户服务类示例"""
