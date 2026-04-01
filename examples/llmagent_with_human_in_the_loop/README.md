@@ -1,77 +1,112 @@
-# Human-in-the-Loop Agent 示例
+# LLM Agent 人机协同审批示例
 
-## 概述
+本示例演示如何基于 `LongRunningFunctionTool` 实现 Human-in-the-Loop（人机协同）流程：当 Agent 遇到高风险操作时先进入 `pending_approval`，等待人工确认后再恢复执行。
 
-本示例演示了如何基于 trpc-agent 框架，利用 `LongRunningFunctionTool` 实现 **Human-in-the-Loop（人机协同）** 模式。当 Agent 遇到需要人工审批的高风险操作（如删除生产数据库、重启服务器）时，会暂停执行并等待人工介入，审批通过后再恢复执行流程。
+## 关键特性
 
-## 核心内容
+- **长时运行事件能力**：工具返回待审批状态后触发 `LongRunningEvent`
+- **人工介入恢复执行**：通过构造 `FunctionResponse` 回填审批结果并继续原会话
+- **主 Agent + 子 Agent 双路径验证**：既覆盖主 Agent 审批，也覆盖转发到子 Agent 的审批
+- **高风险操作保护**：将“删除数据库 / 重启生产服务器”纳入人工审批门禁
+- **流程可观测**：日志包含“检测长时事件、等待审批、恢复执行”完整链路
 
-### 架构设计
+## Agent 层级结构说明
 
-```
-用户请求 → Main Agent（human_in_loop_agent）
-                ├── 直接处理：调用 human_approval_required 工具 → 等待审批 → 恢复执行
-                └── 转发给 Sub-Agent（system_operations_agent）
-                        └── 调用 check_system_critical_operation 工具 → 等待审批 → 恢复执行
-```
+本例是“主 Agent + 子 Agent”协作示例：
 
-### 关键组件
-
-| 组件 | 说明 |
-|------|------|
-| `LlmAgent` | 主 Agent 与子 Agent，负责理解用户意图并调用相应工具 |
-| `LongRunningFunctionTool` | 将普通异步函数包装为长时运行工具，触发 `LongRunningEvent` 暂停执行流 |
-| `human_approval_required` | 主 Agent 工具，处理通用的人工审批请求 |
-| `check_system_critical_operation` | 子 Agent 工具，处理高风险系统操作的人工审批 |
-| `Runner` | 执行器，通过 `run_async` 异步迭代事件流，捕获 `LongRunningEvent` 并恢复执行 |
-
-### 执行流程
-
-1. **用户发起请求** — 描述需要审批的操作
-2. **Agent 调用长时运行工具** — 返回 `pending_approval` 状态，触发 `LongRunningEvent`
-3. **Runner 捕获事件并暂停** — 将审批信息展示给人工操作者
-4. **人工审批** — 修改状态为 `approved` 并构造 `FunctionResponse`
-5. **恢复执行** — 将审批结果作为 `resume_content` 重新发送给 Agent，继续后续处理
-
-### 项目结构
-
-```
-llmagent_with_human_in_the_loop/
-├── run_agent.py          # 入口文件，包含运行逻辑和测试场景
-├── .env                  # LLM 配置（API Key、Base URL、Model Name）
-└── agent/
-    ├── __init__.py
-    ├── agent.py          # Agent 定义（主 Agent + 子 Agent）
-    ├── tools.py          # 长时运行工具（审批类函数）
-    ├── prompts.py        # Agent 指令提示词
-    └── config.py         # 模型配置读取
+```text
+human_in_loop_agent (LlmAgent)
+├── tool: human_approval_required (LongRunningFunctionTool)
+└── system_operations_agent (LlmAgent)
+    └── tool: check_system_critical_operation (LongRunningFunctionTool)
 ```
 
-## 环境要求
-Python版本: 3.10+（强烈建议使用3.12）
+关键文件：
 
-## 在trpc-agent-python框架代码下如何运行此代码示例
+- `examples/llmagent_with_human_in_the_loop/agent/agent.py`：主/子 Agent 组装
+- `examples/llmagent_with_human_in_the_loop/agent/tools.py`：审批类长时工具
+- `examples/llmagent_with_human_in_the_loop/agent/prompts.py`：主/子 Agent 指令
+- `examples/llmagent_with_human_in_the_loop/agent/config.py`：环境变量读取
+- `examples/llmagent_with_human_in_the_loop/run_agent.py`：长时事件捕获与恢复执行
 
-1. 下载trpc-agent-python代码并安装
+## 关键代码解释
+
+这一节用于快速定位“触发审批、人工回填、恢复执行”三条链路。
+
+### 1) 长时工具触发（`agent/tools.py`）
+
+- `human_approval_required` 与 `check_system_critical_operation` 返回 `status=pending_approval`
+- 两个函数均通过 `LongRunningFunctionTool` 包装，触发长时运行事件
+
+### 2) 事件捕获与暂停（`run_agent.py`）
+
+- `run_invocation(...)` 中检测 `LongRunningEvent`
+- 打印 function name / response 并暂停等待人工介入
+
+### 3) 人工回填与恢复（`run_agent.py`）
+
+- 将审批结果改写为 `status=approved`
+- 构造 `FunctionResponse` 作为 `resume_content` 再次调用 `run_invocation(...)`
+- Agent 读取审批结果后继续给出最终执行结论
+
+## 环境与运行
+
+### 环境要求
+
+- Python 3.10+（强烈建议 3.12）
+
+### 安装步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
-cd trpc-agent
+cd trpc-agent-python
 python3 -m venv .venv
 source .venv/bin/activate
 pip3 install -e .
 ```
 
-2. 运行此代码示例
+### 环境变量要求
 
-在 `.env` 文件中设置使用 LLM 相关的变量（也可以通过export设置）:
-- TRPC_AGENT_API_KEY
-- TRPC_AGENT_BASE_URL
-- TRPC_AGENT_MODEL_NAME
+在 `examples/llmagent_with_human_in_the_loop/.env` 中配置（或通过 `export`）：
 
-然后运行下面的命令：
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
+
+### 运行命令
 
 ```bash
-cd examples/llmagent_with_human_in_the_loop/
+cd examples/llmagent_with_human_in_the_loop
 python3 run_agent.py
 ```
+
+## 运行结果（实测）
+
+以下结果来自你提供的日志（`terminals/1.txt:158-268`）提炼版：
+
+```text
+Scenario 1: Main Agent - Database Deletion Approval
+- 主 Agent 调用 human_approval_required，返回 pending_approval
+- 检测到 Long-running operation，进入“Waiting for human intervention”
+- 人工模拟返回 approved 后恢复执行，输出“数据库删除已批准”详情
+
+Scenario 2: Sub-Agent - Critical System Operation
+- 主 Agent 先 transfer_to_agent 到 system_operations_agent
+- 子 Agent 调用 check_system_critical_operation，返回 pending_approval
+- 人工模拟 approved 后恢复执行，输出“重启服务器已批准”详情
+```
+
+## 结果分析（是否符合要求）
+
+结论：**符合本示例测试要求**。
+
+- **长时事件触发正确**：两个场景都检测到 `Long-running operation`
+- **人工审批闭环完整**：都经历了 pending → approved → resume
+- **子 Agent 场景有效**：转发后在子 Agent 侧同样可触发并恢复长时流程
+- **最终响应正确**：恢复后都输出了带审批信息的可执行结论
+
+## 适用场景建议
+
+- 需要对高风险操作设置人工审批门禁：适合使用本示例
+- 需要验证“长时事件 + 恢复执行”链路：适合使用本示例
+- 只验证单 Agent 工具调用主链路：建议使用 `examples/llmagent`

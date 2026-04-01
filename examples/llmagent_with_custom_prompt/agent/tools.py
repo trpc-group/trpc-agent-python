@@ -5,7 +5,7 @@
 
 
 def get_weather_report(city: str) -> dict:
-    """get weather information for the specified city"""
+    """Get weather information for the specified city"""
     weather_data = {
         "Beijing": {
             "temperature": "25°C",

@@ -12,7 +12,6 @@ from trpc_agent_sdk.tools import FunctionTool
 
 from .config import get_model_config
 from .prompts import COORDINATOR_INSTRUCTION
-from .prompts import CUSTOM_TRANSFER_MESSAGE
 from .prompts import TRANSLATION_INSTRUCTION
 from .prompts import WEATHER_INSTRUCTION
 from .tools import get_weather_report
@@ -20,8 +19,9 @@ from .tools import translate_text
 
 
 def _print_system_instruction(ctx: InvocationContext, req: LlmRequest):
-    """before_model_callback: 打印实际发送给 LLM 的 system instruction，
-    用于对比框架是否注入了名称和转发指令。"""
+    """before_model_callback: print the actual system instruction sent to LLM,
+    for comparing whether the framework has injected the name and transfer instruction.
+    """
     agent_name = ctx.agent.name
     instruction = req.config.system_instruction if req.config else "(empty)"
     print(f"\n{'·' * 60}")
@@ -45,8 +45,8 @@ def create_agent(
 
     Args:
         add_name: Whether the framework auto-injects agent name into instruction.
-                  True (default): framework adds "You are an agent who's name is [name]."
-                  False: no auto-injection, instruction is used as-is.
+                  True (default): framework adds "You are an agent who's name is [name]." to the instruction.
+                  False: no auto-injection, the instruction is used as-is.
         transfer_message: Controls transfer instruction injection for sub_agents.
                           None (default): framework auto-injects transfer instructions.
                           "": disables auto-injection entirely.

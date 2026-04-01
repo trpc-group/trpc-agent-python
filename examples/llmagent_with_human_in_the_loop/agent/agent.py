@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright @ 2025 Tencent.com
+# Copyright @ 2026 Tencent.com
 """ Agent module"""
 
-from trpc_agent.agents import LlmAgent
-from trpc_agent.models import LLMModel
-from trpc_agent.models import OpenAIModel
-from trpc_agent.tools import LongRunningFunctionTool
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import LLMModel
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.tools import LongRunningFunctionTool
 
-from .prompts import MAIN_AGENT_INSTRUCTION, SUB_AGENT_INSTRUCTION
-from .tools import human_approval_required, check_system_critical_operation
+from .prompts import MAIN_AGENT_INSTRUCTION
+from .prompts import SUB_AGENT_INSTRUCTION
+from .tools import check_system_critical_operation
+from .tools import human_approval_required
 from .config import get_model_config
 
 
@@ -21,7 +23,7 @@ def _create_model() -> LLMModel:
 
 
 def create_agent() -> LlmAgent:
-    """ Create an agent with Long Running Function Tools and Sub-Agents"""
+    """ Create an agent with long-running function tools and sub-agents"""
     model = _create_model()
 
     approval_tool = LongRunningFunctionTool(human_approval_required)

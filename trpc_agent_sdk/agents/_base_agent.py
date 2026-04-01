@@ -228,7 +228,10 @@ class BaseAgent(AgentABC):
         from trpc_agent_sdk.telemetry._trace import tracer
         from trpc_agent_sdk.telemetry._trace import trace_agent
 
-        with tracer.start_as_current_span(f"agent_run [{self.name}]"):
+        # Avoid start_as_current_span in async generators; cancellation may close
+        # the generator from another context and trigger detach token errors.
+        span = tracer.start_span(f"agent_run [{self.name}]")
+        try:
             ctx = self._create_invocation_context(parent_context)
             if ctx.agent_context is None:
                 ctx.agent_context = create_agent_context()
@@ -265,6 +268,8 @@ class BaseAgent(AgentABC):
                 )
                 # avoid memory leak
                 reset_invocation_ctx(token)
+        finally:
+            span.end()
 
     @abstractmethod
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:

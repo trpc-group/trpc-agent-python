@@ -4,84 +4,17 @@
 #
 # Copyright @ 2026 Tencent.com
 
-import asyncio
 import os
-from typing import List
-from typing import Optional
-from typing_extensions import override
 
 from trpc_agent_sdk.agents import LlmAgent
-from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.models import OpenAIModel
-from trpc_agent_sdk.tools import BaseTool
-from trpc_agent_sdk.tools import BaseToolSet
-from trpc_agent_sdk.tools import FunctionTool
 
 
-# =============================================================================
-# 1. Create a test toolset
-# =============================================================================
-async def sports(name: str) -> str:
-    """play sports
-
-    Args:
-        name: sport name
-
-    Returns:
-        sport name and time
-    """
-    await asyncio.sleep(3)
-    return f"{name} takes 3s"
+from .tools import HobbyToolSet
+from .prompts import INSTRUCTION
 
 
-async def watch_tv(tv: str):
-    """watch tv
-
-    Args:
-        tv: tv channel
-
-    Returns:
-        The content of the TV
-    """
-    await asyncio.sleep(5)
-    return f"{tv} is broadcasting News Network"
-
-
-async def listen_music(music: str):
-    """Listening to music
-
-    Args:
-        music: music name
-
-    Returns:
-        The content of the music
-    """
-    await asyncio.sleep(6)
-    return f"{music} is playing light music"
-
-
-class HobbyToolSet(BaseToolSet):
-    """Hobby Toolkit, mainly describing sports, watching TV and listening to music"""
-
-    def __init__(self):
-        super().__init__()
-        self.name = "hobby_toolset"
-        self.tools = []
-
-    @override
-    def initialize(self) -> None:
-        """Initialize the Toolkit"""
-        super().initialize()
-        self.tools = [
-            FunctionTool(sports),
-            FunctionTool(watch_tv),
-            FunctionTool(listen_music),
-        ]
-
-    @override
-    async def get_tools(self, invocation_context: Optional[InvocationContext] = None) -> List[BaseTool]:
-        return self.tools
 
 
 # =============================================================================
@@ -121,17 +54,12 @@ def create_agent():
 
     return LlmAgent(
         name="hobby_toolset_agent",
-        description="A helper demonstrating the use of the ToolSet for hobbies",
+        description="""A virtual person who loves life, select the appropriate tool based on the user's 
+        interest to obtain interest information, and provide friendly replies.""",
         model=model,
         tools=[hobby_toolset],
-        parallel_tool_calls=False,
-        instruction="""
-You are a virtual person who loves life, select the appropriate tool based on the user's interest to obtain interest information, and provide friendly replies.
-**Your task:**
-- If there is content related to running or sports in the conversation, you must call the sports tool, if no motion parameters are provided, the default is running
-- If there is content related to TV or tv in the conversation, you must call the watch_tv tool, if no tv parameters are provided, the default is cctv
-- If there is content related to music or music in the conversation, you must call the listen_music tool, if no music parameters are provided, the default is QQ music
-""",
+        parallel_tool_calls=True,
+        instruction=INSTRUCTION,
     )
 
 

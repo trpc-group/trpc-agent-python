@@ -31,7 +31,8 @@ async def run_agent():
     user_id = "demo_user"
 
     demo_queries = [
-        "Alice 喜欢边运动边看电视并且同时听音乐，请分析一下她运行看电视和听音乐相关的内容",
+        ("Alice likes to watch TV and listen to music while running,"
+         "please analyze the content related to running, watching TV and listening to music for her."),
     ]
 
     start = time.time()
