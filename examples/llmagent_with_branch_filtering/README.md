@@ -30,11 +30,11 @@ CustomerService (EXACT - always)
 
 关键文件：
 
-- `examples/llmagent_with_branch_filtering/agent/agent.py`：构建多 Agent 层级与过滤模式
-- `examples/llmagent_with_branch_filtering/agent/tools.py`：技术检查、数据库诊断、账单查询工具
-- `examples/llmagent_with_branch_filtering/agent/prompts.py`：各角色提示词
-- `examples/llmagent_with_branch_filtering/agent/config.py`：模型环境变量读取
-- `examples/llmagent_with_branch_filtering/run_agent.py`：三种模式对比测试入口
+- [examples/llmagent_with_branch_filtering/agent/agent.py](./agent/agent.py)：构建多 Agent 层级与过滤模式
+- [examples/llmagent_with_branch_filtering/agent/tools.py](./agent/tools.py)：技术检查、数据库诊断、账单查询工具
+- [examples/llmagent_with_branch_filtering/agent/prompts.py](./agent/prompts.py)：各角色提示词
+- [examples/llmagent_with_branch_filtering/agent/config.py](./agent/config.py)：模型环境变量读取
+- [examples/llmagent_with_branch_filtering/run_agent.py](./run_agent.py)：三种模式对比测试入口
 
 
 ## 关键代码解释
@@ -84,7 +84,7 @@ pip3 install -e .
 
 ### 环境变量要求
 
-在 `examples/llmagent_with_branch_filtering/.env` 中配置（或通过 `export`）：
+在 [examples/llmagent_with_branch_filtering/.env](./.env) 中配置（或通过 `export`）：
 
 - `TRPC_AGENT_API_KEY`
 - `TRPC_AGENT_BASE_URL`

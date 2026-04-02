@@ -26,7 +26,7 @@ async def run_weather_agent():
 
     user_id = "demo_user"
 
-    # 演示查询列表
+    # Demo query list
     demo_queries = [
         "What's the weather like today?",
         "What's the current weather in Beijing?",

@@ -12,10 +12,8 @@ def get_model_config() -> tuple[str, str, str]:
     url = os.getenv('TRPC_AGENT_BASE_URL', '')
     model_name = os.getenv('TRPC_AGENT_MODEL_NAME', '')
     if not api_key or not url or not model_name:
-        raise ValueError(
-            "TRPC_AGENT_API_KEY, TRPC_AGENT_BASE_URL, "
-            "and TRPC_AGENT_MODEL_NAME must be set in environment variables"
-        )
+        raise ValueError("TRPC_AGENT_API_KEY, TRPC_AGENT_BASE_URL, "
+                         "and TRPC_AGENT_MODEL_NAME must be set in environment variables")
     return api_key, url, model_name
 
 
@@ -27,10 +25,8 @@ def get_vectorstore_type() -> str:
     if not vstore_type:
         raise ValueError("VECTORSTORE_TYPE must be set in environment variables")
     if vstore_type not in ('pgvector', 'elasticsearch', 'tencentvdb'):
-        raise ValueError(
-            f"Unsupported VECTORSTORE_TYPE: {vstore_type}. "
-            "Supported: pgvector, elasticsearch, tencentvdb"
-        )
+        raise ValueError(f"Unsupported VECTORSTORE_TYPE: {vstore_type}. "
+                         "Supported: pgvector, elasticsearch, tencentvdb")
     return vstore_type
 
 
@@ -69,9 +65,7 @@ def get_tencentvdb_config() -> dict:
     collection_name = os.getenv('TENCENT_VDB_COLLECTION', 'LangChainCollection')
     t_vdb_embedding = os.getenv('TENCENT_VDB_EMBEDDING', 'bge-base-zh')
     if not url or not key:
-        raise ValueError(
-            "TENCENT_VDB_URL and TENCENT_VDB_KEY must be set in environment variables"
-        )
+        raise ValueError("TENCENT_VDB_URL and TENCENT_VDB_KEY must be set in environment variables")
     return {
         "url": url,
         "key": key,

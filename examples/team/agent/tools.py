@@ -19,10 +19,12 @@ async def search_web(query: str) -> str:
     search_results = {
         "renewable energy":
         "Research findings: In 2024, global renewable energy share reached 30%, solar costs dropped 89%, and wind capacity grew 15%.",
-        "可再生能源": "研究发现：2024年全球可再生能源占比达30%，太阳能成本下降89%，风电装机增长15%。",
+        "\u53ef\u518d\u751f\u80fd\u6e90":
+        "Research findings: In 2024, global renewable energy share reached 30%, solar costs dropped 89%, and wind capacity grew 15%.",
         "AI":
         "Latest AI trends: Large language models, multimodal AI, and AI agent technologies are rapidly developing. Applications span healthcare, finance, education, and more.",
-        "人工智能": "最新AI趋势：大语言模型、多模态AI和AI智能体技术正在快速发展。应用覆盖医疗、金融、教育等领域。",
+        "\u4eba\u5de5\u667a\u80fd":
+        "Latest AI trends: Large language models, multimodal AI, and AI agent technologies are rapidly developing. Applications span healthcare, finance, education, and more.",
     }
 
     for key, result in search_results.items():

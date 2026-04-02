@@ -17,8 +17,5 @@ def get_weather(city: str) -> str:
         "beijing": "Beijing: Sunny, 25C, humidity 45%",
         "shanghai": "Shanghai: Cloudy, 28C, humidity 65%",
         "shenzhen": "Shenzhen: Rainy, 30C, humidity 80%",
-        "北京": "北京：晴朗，25°C，湿度45%",
-        "上海": "上海：多云，28°C，湿度65%",
-        "Shenzhen": "深圳：下雨，30°C，湿度80%",
     }
     return weather_data.get(city.lower(), f"{city}: Partly cloudy, 22C, humidity 55%")

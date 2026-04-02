@@ -1,16 +1,39 @@
-# MultiAgent之Chain Agent的示例代码
+# ChainAgent 顺序链路示例
 
-## Chain Agent介绍
-- **模式**：顺序执行，通过 output_key 将前一个Agent的输出传递给下一个Agent，实现数据的顺序传递和处理
-- **适用场景**：需要按步骤处理的流水线任务，如文档处理（内容提取→翻译）
-- **特点**：始终按照sub_agents列表中的顺序执行，无论输入如何，每个Agent专注处理流程中的一个环节
+本示例演示 `ChainAgent` 将多个 `LlmAgent` 固定顺序串联，通过 `output_key` 把前一步结构化输出交给后一步（抽取 → 翻译）。
 
-## 环境要求
-Python版本: 3.10+（强烈建议使用3.12）
+## 关键特性
 
-## 在trpc-agent-python框架代码下如何运行此代码示例
+- 确定性执行顺序，无运行时路由
+- 子 Agent 分工：内容抽取与翻译
+- 控制台分别打印各子 Agent 产出
 
-1. 下载trpc-agent-python代码并安装
+## Agent 层级结构说明
+
+```text
+chain_root (ChainAgent)
+├── content_extractor (LlmAgent)
+└── translator (LlmAgent)
+```
+
+关键文件：
+
+- [examples/multi_agent_chain/agent/agent.py](./agent/agent.py)
+- [examples/multi_agent_chain/run_agent.py](./run_agent.py)
+- [examples/multi_agent_chain/.env](./.env)
+
+## 关键代码解释
+
+- `ChainAgent(sub_agents=[extractor_agent, translator_agent], ...)`
+- 上游输出键写入 runner state，下游指令中引用该键
+
+## 环境与运行
+
+### 环境要求
+
+- Python 3.10+（推荐 3.12）
+
+### 安装步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
@@ -20,16 +43,39 @@ source .venv/bin/activate
 pip3 install -e .
 ```
 
-2. 运行此代码示例
+### 环境变量要求
 
-在 `.env` 文件中设置使用 LLM 相关的变量（也可以通过export设置）:
-- TRPC_AGENT_API_KEY
-- TRPC_AGENT_BASE_URL
-- TRPC_AGENT_MODEL_NAME
+在 [examples/multi_agent_chain/.env](./.env) 中配置（或通过 `export` 设置）：
 
-然后运行下面的命令：
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
+
+### 运行命令
 
 ```bash
-cd examples/multi_agent_chain/
+cd examples/multi_agent_chain
 python3 run_agent.py
 ```
+
+## 运行结果（实测）
+
+
+```text
+Chain Agent Demo - Information Passing via output_key
+Processing Flow: Extraction → Translation
+[content_extractor] Output：（Markdown，含 # Smart Home Control System 等章节）
+[translator] Output：（英文化 Markdown，结构与上游对应）
+[END] multi_agent_chain (exit_code=0)
+```
+
+## 结果分析（是否符合要求）
+
+结论：**符合本示例测试要求**。
+
+- 两段 Markdown 输出先后打印，链路闭合；`exit_code=0`，`error.txt` 为空
+
+## 适用场景建议
+
+- ETL 式文本流水线：解析、重写、多语言固定步骤
+- 不需要协调者动态选子 Agent 的批处理任务

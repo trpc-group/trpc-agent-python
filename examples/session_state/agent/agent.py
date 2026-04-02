@@ -62,14 +62,16 @@ def create_chain_agent():
         name="requirement_analyzer",
         description="Analyze user requirements",
         model=_create_model(),
-        instruction="You are a requirement analysis expert. Please analyze the user's requirements and summarize the要点 in简洁的语言。",
+        instruction=
+        "You are a requirement analysis expert. Please analyze the user's requirements and summarize the key points in concise language.",
         output_key="analysis_result",  # Output saved to state
     )
     planner = LlmAgent(
         name="solution_planner",
         description="Develop a solution",
         model=_create_model(),
-        instruction="You are a solution planner. Based on the analysis results, develop a solution:\n\n{analysis_result}\n\nPlease provide specific action suggestions.",
+        instruction=
+        "You are a solution planner. Based on the analysis results, develop a solution:\n\n{analysis_result}\n\nPlease provide specific action suggestions.",
         output_key="solution_plan",
     )
     return ChainAgent(

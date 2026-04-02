@@ -8,9 +8,9 @@ from trpc_agent.models import LLMModel
 from trpc_agent.models import OpenAIModel
 from trpc_agent.tools import FunctionTool
 
+from .config import get_model_config
 from .prompts import INSTRUCTION
 from .tools import simple_search
-from .config import get_model_config
 
 
 def _create_model() -> LLMModel:

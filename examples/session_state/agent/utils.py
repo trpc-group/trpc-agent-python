@@ -7,7 +7,7 @@ from trpc_agent_sdk.sessions import InMemorySessionService
 
 async def print_session_state(session_service: InMemorySessionService, app_name: str, user_id: str, session_id: str,
                               title: str):
-    """打印当前状态，用于调试
+    """Print current state for debugging.
     Args:
         session_service: InMemorySessionService, the session service
         app_name: str, the name of the app
@@ -27,11 +27,11 @@ async def print_session_state(session_service: InMemorySessionService, app_name:
             user_items = {k: v for k, v in state_dict.items() if k.startswith("user:")}
             session_items = {k: v for k, v in state_dict.items() if not k.startswith(("app:", "user:", "temp:"))}
 
-            print(f"   📱 应用级状态: {app_items}")
-            print(f"   👤 用户级状态: {user_items}")
-            print(f"   💬 会话级状态: {session_items}")
+            print(f"   📱 App-level state: {app_items}")
+            print(f"   👤 User-level state: {user_items}")
+            print(f"   💬 Session-level state: {session_items}")
         else:
-            print("   无状态数据")
+            print("   No state data")
     except Exception as e:
-        print(f"   错误: {e}")
+        print(f"   Error: {e}")
     print("-" * 50)

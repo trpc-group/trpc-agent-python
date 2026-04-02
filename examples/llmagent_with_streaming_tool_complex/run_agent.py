@@ -23,7 +23,7 @@ import uuid
 from collections import defaultdict
 
 from dotenv import load_dotenv
-from trpc_agent_sdk.models import constants as const
+from trpc_agent_sdk.models import TOOL_STREAMING_ARGS
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content
@@ -65,7 +65,7 @@ async def run_test_scenario(runner, session_service, user_id, app_name, query, t
                     tool_name = part.function_call.name
                     streaming_event_count[tool_name] += 1
                     args = part.function_call.args or {}
-                    delta = args.get(const.TOOL_STREAMING_ARGS, "")
+                    delta = args.get(TOOL_STREAMING_ARGS, "")
                     if delta:
                         preview = delta[:50] + "..." if len(delta) > 50 else delta
                         print(f"  ⏳ [Streaming] {tool_name}: {preview}")
@@ -110,20 +110,23 @@ async def run_comprehensive_test():
     # Define test scenarios
     test_scenarios = [
         # Test 1: Sync function -> StreamingFunctionTool
-        ("Use write_file tool to create a file named test.txt, content is a short poem about spring.", "Test 1: Sync function -> StreamingFunctionTool"),
+        ("Use write_file tool to create a file named test.txt, content is a short poem about spring.",
+         "Test 1: Sync function -> StreamingFunctionTool"),
         # Test 2: Async function -> StreamingFunctionTool
         ("Use async_write_file tool to create a Python script named async_test.py, implement a simple hello world program.",
          "Test 2: Async function -> StreamingFunctionTool"),
         # Test 3: FunctionTool -> StreamingFunctionTool
-        ("Use append_file tool to append a log content to log.txt, record the current test status.", "Test 3: FunctionTool -> StreamingFunctionTool"),
+        ("Use append_file tool to append a log content to log.txt, record the current test status.",
+         "Test 3: FunctionTool -> StreamingFunctionTool"),
         # Test 4: Custom BaseTool with is_streaming=True
-        ("Use custom_write tool to create a configuration file named custom.json, include some application configurations.", "Test 4: Custom BaseTool with is_streaming=True"),
+        ("Use custom_write tool to create a configuration file named custom.json, include some application configurations.",
+         "Test 4: Custom BaseTool with is_streaming=True"),
         # Test 5: ToolSet streaming tool
         ("Use _create_file tool to create a Markdown document named toolset_test.md, introduce ToolSet functionality.",
          "Test 5: ToolSet containing streaming tool"),
         # Test 6: StreamingFunctionTool wrapping a plain function
-        ("Use save_document tool to save a document with the title \"Test Report\", content is about the test results of today.", "Test 6: StreamingFunctionTool wrapping a plain function"
-         ),
+        ("Use save_document tool to save a document with the title \"Test Report\", content is about the test results of today.",
+         "Test 6: StreamingFunctionTool wrapping a plain function"),
         # Test 7: Non-streaming tool comparison
         ("Use get_file_info tool to get the information of test.txt file.", "Test 7: Non-streaming tool (comparison)"),
         # Test 8: Mixed tools in one request

@@ -17,7 +17,7 @@ import asyncio
 import uuid
 
 from dotenv import load_dotenv
-from trpc_agent_sdk.models import constants as const
+from trpc_agent_sdk.models import TOOL_STREAMING_ARGS
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content
@@ -47,8 +47,8 @@ async def run_streaming_tool_demo():
 
     # Demo queries that will trigger write_file tool calls
     demo_queries = [
-        "请帮我创建一个简单的 HTML 页面，文件名为 index.html，内容是一个带有标题和段落的网页。",
-        # "请帮我写一个 Python 脚本 hello.py，实现一个简单的计算器功能。",
+        "Please create a simple HTML page named index.html with a title and a paragraph.",
+        # "Please write a Python script hello.py that implements a simple calculator.",
     ]
 
     for query in demo_queries:
@@ -79,7 +79,7 @@ async def run_streaming_tool_demo():
                     if part.function_call:
                         args = part.function_call.args or {}
                         # Use delta mode - only show the delta content
-                        delta = args.get(const.TOOL_STREAMING_ARGS, "")
+                        delta = args.get(TOOL_STREAMING_ARGS, "")
                         if delta:
                             # Show a preview of the streaming delta
                             preview = delta[:60] + "..." if len(delta) > 60 else delta

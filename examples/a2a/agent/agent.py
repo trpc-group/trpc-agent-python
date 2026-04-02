@@ -8,9 +8,9 @@ from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.models import OpenAIModel
 from trpc_agent_sdk.tools import FunctionTool
 
+from .config import get_model_config
 from .prompts import INSTRUCTION
 from .tools import get_weather_report
-from .config import get_model_config
 
 
 def _create_model() -> LLMModel:

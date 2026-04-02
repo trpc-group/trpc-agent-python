@@ -3,8 +3,8 @@
 # Copyright @ 2026 Tencent.com
 """ Tools for the agent. """
 
-import uuid
 import time
+import uuid
 
 
 async def human_approval_required(task_description: str, details: dict) -> dict:

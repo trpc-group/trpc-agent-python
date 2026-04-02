@@ -38,7 +38,7 @@ from ag_ui.core import SystemMessage
 from ag_ui.core import ToolCallEndEvent
 from ag_ui.core import ToolCallResultEvent
 from starlette.requests import Request
-
+from trpc_agent_sdk import cancel
 from trpc_agent_sdk import types
 from trpc_agent_sdk.agents import BaseAgent
 from trpc_agent_sdk.configs import RunConfig as TRPCRunConfig
@@ -50,6 +50,7 @@ from trpc_agent_sdk.memory import InMemoryMemoryService
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import BaseSessionService
 from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.tools import LongRunningFunctionTool
 from trpc_agent_sdk.types import Content
 
 from ._client_proxy_toolset import ClientProxyToolset
@@ -71,7 +72,7 @@ class AgUiAgent:
     def __init__(
         self,
         # TRPC Agent instance
-        trpc_agent_sdk: BaseAgent,
+        trpc_agent: BaseAgent,
         *,
         # App identification
         app_name: Optional[str] = None,
@@ -109,7 +110,7 @@ class AgUiAgent:
         """Initialize the AgUiAgent.
 
         Args:
-            trpc_agent_sdk: The TRPC agent instance to use
+            trpc_agent: The TRPC agent instance to use
             app_name: Static application name for all requests
             app_name_extractor: Function to extract app name dynamically from input
             user_id: Static user ID for all requests
@@ -140,7 +141,7 @@ class AgUiAgent:
         if user_id and user_id_extractor:
             raise ValueError("Cannot specify both 'user_id' and 'user_id_extractor'")
 
-        self._trpc_agent = trpc_agent_sdk
+        self._trpc_agent = trpc_agent
         self._static_app_name = app_name
         self._app_name_extractor = app_name_extractor
         self._static_user_id = user_id
@@ -216,7 +217,7 @@ class AgUiAgent:
 
         return None
 
-    def _get_app_name(self, input: RunAgentInput) -> str:
+    def get_app_name(self, input: RunAgentInput) -> str:
         """Resolve app name with clear precedence."""
         if self._static_app_name:
             return self._static_app_name
@@ -234,7 +235,7 @@ class AgUiAgent:
             logger.warning("Could not get agent name for app_name, using default: %s", ex)
             return "AG-UI TRPC Agent"
 
-    def _get_user_id(self, input: RunAgentInput) -> str:
+    def get_user_id(self, input: RunAgentInput) -> str:
         """Resolve user ID with clear precedence."""
         if self._static_user_id:
             return self._static_user_id
@@ -361,22 +362,21 @@ class AgUiAgent:
         """Create default RunConfig with streaming enabled."""
         return TRPCRunConfig(streaming=True)
 
-    def _extract_long_running_tool_names(self, trpc_agent_sdk: BaseAgent) -> List[str]:
+    def _extract_long_running_tool_names(self, agent: BaseAgent) -> List[str]:
         """Extract long-running tool names from the TRPC agent.
 
         Args:
-            trpc_agent_sdk: The TRPC agent to extract tool names from
+            agent: The TRPC agent to extract tool names from
 
         Returns:
             List of long-running tool names
         """
-        from trpc_agent_sdk.tools import LongRunningFunctionTool
 
         long_running_tool_names = []
 
-        if hasattr(trpc_agent_sdk, "tools") and trpc_agent_sdk.tools:
+        if hasattr(agent, "tools") and agent.tools:
             # Handle both single tool and list of tools
-            tools = trpc_agent_sdk.tools if isinstance(trpc_agent_sdk.tools, (list, tuple)) else [trpc_agent_sdk.tools]
+            tools = agent.tools if isinstance(agent.tools, (list, tuple)) else [agent.tools]
 
             for tool in tools:
                 # Check if it's a LongRunningFunctionTool
@@ -392,11 +392,11 @@ class AgUiAgent:
         logger.debug("Extracted long-running tool names: %s", long_running_tool_names)
         return long_running_tool_names
 
-    def _create_runner(self, trpc_agent_sdk: BaseAgent, user_id: str, app_name: str) -> Runner:
+    def _create_runner(self, agent: BaseAgent, user_id: str, app_name: str) -> Runner:
         """Create a new runner instance."""
         return Runner(
             app_name=app_name,
-            agent=trpc_agent_sdk,
+            agent=agent,
             session_service=self._session_manager._session_service,
             memory_service=self._memory_service,
         )
@@ -419,7 +419,6 @@ class AgUiAgent:
         Returns:
             True if cancellation was triggered successfully
         """
-        from trpc_agent_sdk import cancel
 
         # Use configured cancel_wait_timeout
         timeout = self._cancel_wait_timeout
@@ -834,8 +833,8 @@ class AgUiAgent:
 
             # If we found tool calls, add them to session state BEFORE cleanup
             if has_tool_calls:
-                app_name = self._get_app_name(input)
-                user_id = self._get_user_id(input)
+                app_name = self.get_app_name(input)
+                user_id = self.get_user_id(input)
                 for tool_call_id in tool_call_ids:
                     await self._add_pending_tool_call_with_context(
                         execution.thread_id,
@@ -883,11 +882,8 @@ class AgUiAgent:
         event_queue = asyncio.Queue()
         logger.debug("Created event queue %s for thread %s", id(event_queue), input.thread_id)
         # Extract necessary information
-        user_id = self._get_user_id(input)
-        app_name = self._get_app_name(input)
-
-        # Use the TRPC agent directly
-        trpc_agent_sdk = self._trpc_agent
+        user_id = self.get_user_id(input)
+        app_name = self.get_app_name(input)
 
         # Prepare agent modifications (SystemMessage and tools)
         agent_updates = {}
@@ -896,7 +892,7 @@ class AgUiAgent:
         if input.messages and isinstance(input.messages[0], SystemMessage):
             system_content = input.messages[0].content
             if system_content:
-                current_instruction = getattr(trpc_agent_sdk, "instruction", "") or ""
+                current_instruction = getattr(self._trpc_agent, "instruction", "")
 
                 if callable(current_instruction):
                     # Handle instructions provider
@@ -939,9 +935,12 @@ class AgUiAgent:
 
             # Get existing tools from the agent
             existing_tools = []
-            if hasattr(trpc_agent_sdk, "tools") and trpc_agent_sdk.tools:
-                existing_tools = (list(trpc_agent_sdk.tools) if isinstance(trpc_agent_sdk.tools,
-                                                                       (list, tuple)) else [trpc_agent_sdk.tools])
+            agent_tools = getattr(self._trpc_agent, "tools", [])
+            if agent_tools:
+                if isinstance(agent_tools, (list, tuple)):
+                    existing_tools = list(agent_tools)
+                else:
+                    existing_tools = [agent_tools]
 
             # if same tool is defined in frontend and backend then agent will only use the backend tool
             input_tools = []
@@ -962,8 +961,9 @@ class AgUiAgent:
             logger.debug("Will combine %s existing tools with proxy toolset", len(existing_tools))
 
         # Create a single copy of the agent with all updates if any modifications needed
+        agent = self._trpc_agent
         if agent_updates:
-            trpc_agent_sdk = trpc_agent_sdk.model_copy(update=agent_updates)
+            agent = self._trpc_agent.model_copy(update=agent_updates)
             logger.debug("Created modified agent copy with updates: %s", list(agent_updates.keys()))
 
         # Create background task
@@ -971,7 +971,7 @@ class AgUiAgent:
         task = asyncio.create_task(
             self._run_trpc_in_background(
                 input=input,
-                trpc_agent_sdk=trpc_agent_sdk,
+                agent=agent,
                 user_id=user_id,
                 app_name=app_name,
                 event_queue=event_queue,
@@ -983,7 +983,7 @@ class AgUiAgent:
 
     async def _run_trpc_in_background(self,
                                       input: RunAgentInput,
-                                      trpc_agent_sdk: BaseAgent,
+                                      agent: BaseAgent,
                                       user_id: str,
                                       app_name: str,
                                       event_queue: asyncio.Queue,
@@ -992,7 +992,7 @@ class AgUiAgent:
 
         Args:
             input: The run input
-            trpc_agent_sdk: The TRPC agent to run (already prepared with tools and SystemMessage)
+            agent: The TRPC agent to run (already prepared with tools and SystemMessage)
             user_id: User ID
             app_name: App name
             event_queue: Queue for emitting events
@@ -1003,7 +1003,7 @@ class AgUiAgent:
             # from _start_background_execution, so no additional agent copying needed here
 
             # Create runner
-            runner = self._create_runner(trpc_agent_sdk=trpc_agent_sdk, user_id=user_id, app_name=app_name)
+            runner = self._create_runner(agent=agent, user_id=user_id, app_name=app_name)
 
             # Create RunConfig
             run_config = self._run_config_factory(input)
@@ -1116,7 +1116,7 @@ class AgUiAgent:
                     logger.info("Converted HITL text to function_response for tool_call_id=%s", tool_call_id)
 
             # Extract long-running tool names from the agent
-            long_running_tool_names = self._extract_long_running_tool_names(trpc_agent_sdk)
+            long_running_tool_names = self._extract_long_running_tool_names(agent)
 
             # Create event translator
             event_translator = EventTranslator(long_running_tool_names=long_running_tool_names)

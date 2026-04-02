@@ -6,7 +6,7 @@
 from trpc_agent_sdk.agents import InvocationContext
 
 
-# ===== 示例2：工具中修改 State =====
+# ===== Example 2: Modify State in tools =====
 async def update_user_preference(preference: str, value: str, tool_context: InvocationContext) -> str:
     """update user preference
     Args:

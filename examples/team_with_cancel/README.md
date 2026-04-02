@@ -1,152 +1,58 @@
-# TeamAgent 取消功能示例
+# TeamAgent 取消示例
 
-本示例演示 TeamAgent 的取消功能，展示如何协作式地取消正在运行的Team智能体执行。
+本示例演示在 `TeamAgent` 运行过程中调用取消 API：覆盖 Leader 流式规划阶段、成员工具执行阶段等检查点，并验证取消后会话仍可基于记忆继续对话。
 
-## 功能说明
+## 关键特性
 
-本示例展示了 TeamAgent 的取消机制，包含三个真实场景:
-- **Leader规划期间取消**: 在Team Leader委派任务前触发取消
-- **Member执行期间取消**: 在Team Member执行过程中触发取消
+- `Runner` 与 SDK cancel 模块配合，在收到若干事件后主动 `cancel`
+- `content_team_with_cancel` 启用 `add_history_to_leader=True`、`num_history_runs=3` 保留上下文
+- 工具侧通过延迟模拟长操作，便于命中取消窗口
 
-Team会在下一个检查点(Leader或Member)停止，并保存部分进度、活动上下文和取消事件到Team记忆中。
+## Agent 层级结构说明
 
-## 环境要求
+- 根节点：`TeamAgent`（`content_team_with_cancel`）
+  - 成员：`researcher`（`LlmAgent`）、`writer`（`LlmAgent`）
 
-Python版本: 3.10+(强烈建议使用3.12)
+## 关键代码解释
 
-## 运行方法
+- `agent/agent.py`：与基础内容团队类似，但团队名与历史选项针对 cancel 演示调整
+- `run_agent.py`：多场景顺序执行——先触发取消再追问「what happened?」等
+- `agent/tools.py`：`search_web`、`check_grammar` 等（含延迟）
 
-1. 下载并安装 trpc-agent-python
+## 环境与运行
 
-```bash
-git clone https://github.com/trpc-group/trpc-agent-python.git
-cd trpc-agent-python
-python3 -m venv .venv
-source .venv/bin/activate
-pip3 install -e .
-```
-
-2. 在 `.env` 文件中设置环境变量(也可以通过export设置):
-   - TRPC_AGENT_API_KEY
-   - TRPC_AGENT_BASE_URL
-   - TRPC_AGENT_MODEL_NAME
-
-3. 运行示例:
+- Python 3.10+；仓库根目录 `pip install -e .`
+- 配置 `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL`、`TRPC_AGENT_MODEL_NAME`
 
 ```bash
-cd examples/team_with_cancel/
+cd examples/team_with_cancel
 python3 run_agent.py
 ```
 
-## 预期行为
+## 运行结果（实测）
 
-本示例演示三个场景:
-
-1. 场景1:在Leader规划过程取消 → 保存Leader部分响应和取消记录
-2. 场景2:在Member执行过程取消 → 保存Member部分响应到Team记忆
-
-输出如下所示:
-
-```bash
-📋 Scenario 1: Cancel During Leader planning (TeamAgent)
---------------------------------------------------------------------------------
-🆔 Session ID: 71b89a00...
-📝 User Query 1: Introduce yourself in details.
-
-⏳ Waiting for first 10 events...
-🤖 Team: 
-[content_team_with_cancel] I am your content team leader, responsible for coordinating tasks between researchers and writers to create high-quality content tailored
-⏳ [Received 10 events, triggering cancellation...]
- to your needs
-⏸️  Requesting cancellation after 10 events...
-[2026-01-13 14:17:25][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:98][1358209] Run marked for cancellation (app_name: content_team_cancel_demo)(user: demo_user)(session: 71b89a00-0ac8-4e65-937f-3566c338872f)
-
-⏳ [Received 11 events, triggering cancellation...]
-. Here's[2026-01-13 14:17:25][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:215][1358209] Cancelling run for session 71b89a00-0ac8-4e65-937f-3566c338872f
-[2026-01-13 14:17:25][INFO][trpc_agent_sdk][trpc_agent_sdk/teams/_team_agent.py:459][1358209] TeamAgent 'content_team_with_cancel' cancelled during leader planning
-
-⏳ [Received 12 events, triggering cancellation...]
-[2026-01-13 14:17:25][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:351][1358209] Run for session 71b89a00-0ac8-4e65-937f-3566c338872f was cancelled, Run for session 71b89a00-0ac8-4e65-937f-3566c338872f was cancelled
-⏳ [Received 13 events, triggering cancellation...]
-
-❌ Team execution was cancelled: Run for session 71b89a00-0ac8-4e65-937f-3566c338872f was cancelled
-
-[2026-01-13 14:17:25][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:147][1358209] Cancel completed for user_id demo_user, session 71b89a00-0ac8-4e65-937f-3566c338872f
-✓ Cancellation requested: True
-
-💡 Result: Leader's partial response and cancellation record saved to team memory
-
-📝 User Query 2: what happened?
-
-🤖 Team: 
-[content_team_with_cancel] It seems the previous task was interrupted by a cancellation before I could fully introduce myself. Let me complete that introduction now.
-
----
-
-I am your content team leader, responsible for coordinating tasks between researchers and writers to create high-quality content tailored to your needs. Here's a detailed introduction:
-
-1. **Role**: I oversee the content creation process, ensuring that research is thorough and writing is engaging and well-structured.
-2. **Team Members**:
-   - **Researcher**: An expert at finding and gathering accurate, relevant information.
-   - **Writer**: A skilled professional who crafts compelling, well-organized content.
-3. **Process**:
-   - I analyze your requests to determine what needs to be done.
-   - I delegate tasks to the appropriate team members (researcher or writer).
-   - I combine their work to deliver a polished final result.
-4. **Cancellation Handling**: If a task is interrupted, I can resume from where we left off in the next conversation.
-
-Let me know how I can assist you further!
-💡 Result: Team can respond with context from previous cancelled run
---------------------------------------------------------------------------------
-
-📋 Scenario 2: Cancel During Member Tool Execution (TeamAgent)
---------------------------------------------------------------------------------
-🆔 Session ID: 042335a7...
-📝 User Query 1: Research renewable energy and write a short article about it. Research should be simple.
-
-⏳ Waiting for member tool execution to start...
-🤖 Team: 
-[content_team_with_cancel] I will delegate the research task to the researcher first to gather simple information about renewable energy. Then, I will pass that information to the writer to create a short article. Let me proceed with the delegation.
-🔧 [content_team_with_cancel] Invoke Tool: delegate_to_member({'member_name': 'researcher', 'task': 'Research simple and key information about renewable energy, focusing on its types, benefits, and current trends. Keep the research concise and easy to understand.'})
-📊 [content_team_with_cancel] Tool Result: {'result': '{"marker":"__TEAM_DELEGATION__","action":"delegate_to_member","member_name":"researcher","task":"Research simple and key information about renewable energy, focusing on its types, benefits, and current trends. Keep the research concise and easy to understand."}'}
-
-🔧 [researcher] Invoke Tool: search_web({'query': 'types of renewable energy benefits and current trends 2023'})
-⏳ [Member tool 'search_web' detected...]
-
-[researcher] [Researcher Tool: searching for 'types of renewable energy benefits and current trends 2023'...]
-
-⏸️  Member tool detected! Requesting cancellation during member execution...
-[2026-01-13 14:17:32][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:98][1358209] Run marked for cancellation (app_name: content_team_cancel_demo)(user: demo_user)(session: 042335a7-f9cd-4126-8cad-6142afea6430)
-[2026-01-13 14:17:33][WARNING][trpc_agent_sdk][trpc_agent_sdk/runners.py:149][1358209] Cancel wait timeout (1.0s) reached for user_id demo_user, session 042335a7-f9cd-4126-8cad-6142afea6430. The execution may still be running.
-✓ Cancellation requested: True
-[Researcher Tool: search completed for 'types of renewable energy benefits and current trends 2023']
-📊 [researcher] Tool Result: {'query': 'types of renewable energy benefits and current trends 2023', 'results': [{'title': 'About types of renewable energy benefits and current trends 2023 - Overview', 'snippet': 'Comprehensive information about types of renewable energy benefits and current trends 2023...'}, {'title': 'Latest developments in types of renewable energy benefits and current trends 2023', 'snippet': 'Recent news and updates on types of renewable energy benefits and current trends 2023...'}], 'total_results': 2}
-[2026-01-13 14:17:35][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:215][1358209] Cancelling run for session 042335a7-f9cd-4126-8cad-6142afea6430
-[2026-01-13 14:17:35][INFO][trpc_agent_sdk][trpc_agent_sdk/teams/_team_agent.py:459][1358209] TeamAgent 'content_team_with_cancel' cancelled during delegation to researcher
-[2026-01-13 14:17:35][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:351][1358209] Run for session 042335a7-f9cd-4126-8cad-6142afea6430 was cancelled, Run for session 042335a7-f9cd-4126-8cad-6142afea6430 was cancelled
-
-❌ Team execution was cancelled: Run for session 042335a7-f9cd-4126-8cad-6142afea6430 was cancelled
-
-
-💡 Result: Member's partial response recorded in team memory with cancellation context
-
-📝 User Query 2: what happened?
-
-🤖 Team: 
-[content_team_with_cancel] The user's task is not finished. The research on renewable energy was interrupted by cancellation before any output was received. I will now continue the execution by delegating the research task again to the researcher.  
-
-Let me proceed with this.
-🔧 [content_team_with_cancel] Invoke Tool: delegate_to_member({'member_name': 'researcher', 'task': 'Research simple and key information about renewable energy, focusing on its types, benefits, and current trends. Keep the research concise and easy to understand.'})
-📊 [content_team_with_cancel] Tool Result: {'result': '{"marker":"__TEAM_DELEGATION__","action":"delegate_to_member","member_name":"researcher","task":"Research simple and key information about renewable energy, focusing on its types, benefits, and current trends. Keep the research concise and easy to understand."}'}
-
-🔧 [researcher] Invoke Tool: search_web({'query': 'types of renewable energy benefits and current trends 2023'})
-
-[researcher] [Researcher Tool: searching for 'types of renewable energy benefits and current trends 2023'...]
-[Researcher Tool: search completed for 'types of renewable energy benefits and current trends 2023']
-📊 [researcher] Tool Result: {'query': 'types of renewable energy benefits and current trends 2023', 'results': [{'title': 'About types of renewable energy benefits and current trends 2023 - Overview', 'snippet': 'Comprehensive information about types of renewable energy benefits and current trends 2023...'}, {'title': 'Latest developments in types of renewable energy benefits and current trends 2023', 'snippet': 'Recent news and updates on types of renewable energy benefits and current trends 2023...'}], 'total_results': 2}
-Here’s a concise overview of renewable energy, covering its types, benefits, and current trends:
-
-...
---------------------------------------------------------------------------------
 
 ```
+[START] team_with_cancel
+...
+⏸️  Requesting cancellation after 10 events...
+Run marked for cancellation ...
+TeamAgent 'content_team_with_cancel' cancelled during leader planning
+...
+❌ Team execution was cancelled: Run for session ... was cancelled
+...
+📝 User Query 2: what happened?
+...
+It seems the previous task ... was interrupted by a cancellation.
+...
+[END] team_with_cancel (exit_code=0)
+```
+
+## 结果分析（是否符合要求）
+
+符合本示例测试要求：`exit_code=0`；日志明确记录取消发生阶段与后续追问的上下文恢复，说明取消与记忆行为符合演示预期。
+
+## 适用场景建议
+
+- 长时团队任务需要用户中止、超时或上游信号中断时，接入 cancel 与会话历史策略
+- 可根据业务选择保留部分 partial 结果供下一轮继续

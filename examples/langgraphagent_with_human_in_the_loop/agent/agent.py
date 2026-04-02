@@ -3,32 +3,38 @@
 # Copyright @ 2025 Tencent.com
 """ Agent module"""
 
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated
+from typing import Literal
+from typing import TypedDict
 
 from langchain.chat_models import init_chat_model
-from langgraph.graph import StateGraph, START, END
-from langgraph.graph.message import add_messages
-from langgraph.prebuilt import tools_condition, ToolNode
-from langgraph.types import interrupt, Command, Interrupt
 from langgraph.checkpoint.memory import InMemorySaver
-
+from langgraph.graph import END
+from langgraph.graph import START
+from langgraph.graph import StateGraph
+from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode
+from langgraph.prebuilt import tools_condition
+from langgraph.types import Command
+from langgraph.types import Interrupt
+from langgraph.types import interrupt
 from trpc_agent.agents import LangGraphAgent
 from trpc_agent.agents import langgraph_llm_node
 
+from .config import get_model_config
 from .prompts import INSTRUCTION
 from .tools import execute_database_operation
-from .config import get_model_config
-
 
 # Compatibility patch: newer LangGraph removed Interrupt.ns, but the
 # trpc-agent framework still reads interrupt.ns to extract node name and id.
 # Derive ns from the "_node_name" field in interrupt.value + interrupt.id.
 if not hasattr(Interrupt, 'ns'):
+
     def _compat_ns(self):
         name = 'interrupt'
         if isinstance(self.value, dict):
             name = self.value.get('_node_name', name)
-        return (f"{name}:{self.id}",)
+        return (f"{name}:{self.id}", )
 
     Interrupt.ns = property(_compat_ns)
 
@@ -66,13 +72,11 @@ def _build_graph():
 
         if last_message and hasattr(last_message, "tool_calls") and last_message.tool_calls:
             tool_call = last_message.tool_calls[0]
-            task_info.update(
-                {
-                    "operation": tool_call.get("name", "unknown"),
-                    "arguments": tool_call.get("args", {}),
-                    "tool_call_id": tool_call.get("id", "unknown"),
-                }
-            )
+            task_info.update({
+                "operation": tool_call.get("name", "unknown"),
+                "arguments": tool_call.get("args", {}),
+                "tool_call_id": tool_call.get("id", "unknown"),
+            })
 
         decision = interrupt(task_info)
         approval_status = decision.get("status", "rejected")

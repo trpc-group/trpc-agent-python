@@ -144,17 +144,23 @@ def get_create_vectorstore_kwargs() -> dict:
         )
         config = get_tencentvdb_config()
         return {
-            "embeddings": None,
-            "connection_params": ConnectionParams(
+            "embeddings":
+            None,
+            "connection_params":
+            ConnectionParams(
                 url=config["url"],
                 key=config["key"],
                 username=config["username"],
                 timeout=20,
             ),
-            "index_params": IndexParams(dimension=768, replicas=0),
-            "database_name": config["database_name"],
-            "collection_name": config["collection_name"],
-            "t_vdb_embedding": config["t_vdb_embedding"],
+            "index_params":
+            IndexParams(dimension=768, replicas=0),
+            "database_name":
+            config["database_name"],
+            "collection_name":
+            config["collection_name"],
+            "t_vdb_embedding":
+            config["t_vdb_embedding"],
         }
     elif vstore_type == "pgvector":
         config = get_pgvector_config()

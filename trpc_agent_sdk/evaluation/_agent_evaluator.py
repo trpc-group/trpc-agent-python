@@ -43,7 +43,7 @@ from dataclasses import dataclass
 from typing import Any
 from typing import Optional
 
-from trpc_agent_sdk._runners import Runner
+from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.agents import BaseAgent
 
 from . import LocalEvalService

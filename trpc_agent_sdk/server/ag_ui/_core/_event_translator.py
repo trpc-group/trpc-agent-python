@@ -42,7 +42,6 @@ from ag_ui.core import ToolCallArgsEvent
 from ag_ui.core import ToolCallEndEvent
 from ag_ui.core import ToolCallResultEvent
 from ag_ui.core import ToolCallStartEvent
-
 from trpc_agent_sdk import types
 from trpc_agent_sdk.events import AgentCancelledEvent
 from trpc_agent_sdk.events import Event as TRPCEvent

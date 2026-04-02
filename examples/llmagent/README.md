@@ -25,11 +25,11 @@ weather_agent (LlmAgent)
 
 关键文件：
 
-- `examples/llmagent/agent/agent.py`：构建 `LlmAgent`、挂载工具、设置生成参数
-- `examples/llmagent/agent/tools.py`：天气查询工具实现
-- `examples/llmagent/agent/prompts.py`：提示词模板
-- `examples/llmagent/agent/config.py`：环境变量读取
-- `examples/llmagent/run_agent.py`：测试入口，执行 3 轮对话
+- [examples/llmagent/agent/agent.py](./agent/agent.py)：构建 `LlmAgent`、挂载工具、设置生成参数
+- [examples/llmagent/agent/tools.py](./agent/tools.py)：天气查询工具实现
+- [examples/llmagent/agent/prompts.py](./agent/prompts.py)：提示词模板
+- [examples/llmagent/agent/config.py](./agent/config.py)：环境变量读取
+- [examples/llmagent/run_agent.py](./run_agent.py)：测试入口，执行 3 轮对话
 
 ## 关键代码解释
 
@@ -73,7 +73,7 @@ pip3 install -e .
 
 ### 环境变量要求
 
-在 `examples/llmagent/.env` 中配置（或通过 `export`）：
+在 [examples/llmagent/.env](./.env) 中配置（或通过 `export`）：
 
 - `TRPC_AGENT_API_KEY`
 - `TRPC_AGENT_BASE_URL`

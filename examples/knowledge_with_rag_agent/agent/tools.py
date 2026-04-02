@@ -10,6 +10,7 @@ import tempfile
 from langchain_community.document_loaders import TextLoader
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
+
 try:
     from langchain.text_splitter import RecursiveCharacterTextSplitter
 except ModuleNotFoundError:

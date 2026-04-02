@@ -194,7 +194,8 @@ def create_agent() -> SmartDocumentProcessor:
     """ Create the smart document processor agent"""
     return SmartDocumentProcessor(
         name="smart_document_processor",
-        description="A smart document processing system that dynamically selects the optimal processing strategy based on document type",
+        description=
+        "A smart document processing system that dynamically selects the optimal processing strategy based on document type",
         model=_create_model(),
     )
 

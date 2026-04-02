@@ -31,7 +31,7 @@ Usage:
 
 Example Usage:
     from trpc_agent_sdk.tools import StreamingFunctionTool
-    from trpc_agent_sdk.models import constants as const
+    from trpc_agent_sdk.models import TOOL_STREAMING_ARGS
 
     def write_file(path: str, content: str) -> dict:
         '''Write content to a file.'''
@@ -52,7 +52,7 @@ Example Usage:
         if event.is_streaming_tool_call():
             for part in event.content.parts:
                 if part.function_call:
-                    delta = part.function_call.args.get(const.TOOL_STREAMING_ARGS, "")
+                    delta = part.function_call.args.get(TOOL_STREAMING_ARGS, "")
                     print(f"Streaming: {delta}")
 """
 

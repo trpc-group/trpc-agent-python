@@ -16,6 +16,7 @@ import tempfile
 from langchain_community.document_loaders import TextLoader
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
+
 # 兼容 LangChain 0.3.x 和 1.x.x 的导入方式
 try:
     from langchain.text_splitter import RecursiveCharacterTextSplitter
