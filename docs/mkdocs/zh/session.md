@@ -522,84 +522,6 @@ async def _cleanup_expired_async(self) -> None:
 
 ---
 
-#### TrpcRedisSessionService
-
-**工作原理**：使用 TRPC Redis 客户端存储会话数据，可以对接 TRPC 的生态插件。
-
-**实现特点**：
-- **存储方式**：与 `RedisSessionService` 相同（Redis Hash）
-- **客户端**：TRPC Redis 客户端（而非直接使用 redis-py）
-- **优势**：支持 TRPC 服务发现、负载均衡、监控告警等
-
-**持久性**：✅ **有**。数据持久化到 Redis。
-
-**适用场景**：
-- ✅ 企业级生产环境
-- ✅ 已有 TRPC 项目
-- ✅ 需要服务发现和负载均衡
-- ✅ 需要完善的监控和告警
-
-**安装依赖**：
-```bash
-pip install trpc-agent[redis] --extra-index-url https://mirrors.tencent.com/repository/pypi/tencent_pypi/simple/
-```
-
-**配置示例**：
-
-**1. 配置 `trpc_python.yaml`**：
-```yaml
-client:                                            # 客户端调用的后端配置
-  timeout: 1000                                    # 针对所有后端的请求最长处理时间
-  namespace: Development                           # 针对所有后端的环境
-  service:                                         # 针对单个后端的配置
-    - name: trpc.redis.test_example                # 后端服务的 service name
-      target: ip://127.0.0.1:6379
-      timeout: 5000                                # 当前请求最长处理时间
-      password: ${REDIS_PASSWORD}
-      redis:
-        db: 0
-```
-
-**2. 代码中使用**：
-```python
-import os
-from trpc.config import config
-from trpc.plugin import setup
-from trpc_agent_sdk.server.session_service.trpc_redis_session_service import TrpcRedisSessionService
-from trpc_agent_sdk.sessions import SessionServiceConfig
-
-# 加载 trpc-python 配置及环境
-config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "trpc_python.yaml"))
-config.load_global_config(config_path, 'utf-8')
-setup()
-
-# 创建 TrpcRedisSessionService
-session_config = SessionServiceConfig(
-    event_ttl_seconds=3600,
-    max_events=100,
-    ttl=SessionServiceConfig.create_ttl_config(
-        enable=True,
-        ttl_seconds=86400,  # 24 小时过期
-    ),
-)
-
-session_service = TrpcRedisSessionService(
-    name="trpc.redis.test_example",  # 与 trpc_python.yaml 中的 service name 对应
-    session_config=session_config,
-    expire=24 * 60 * 60,  # 1 天过期时间（兼容参数）
-)
-```
-
-**注意事项**：
-- `name` 参数必须与 `trpc_python.yaml` 中的 `service.name` 对应
-- 需要先加载 TRPC 配置（`config.load_global_config` 和 `setup()`）
-- TTL 机制与 `RedisSessionService` 相同（Redis 自动过期）
-
-**相关示例**：
-- 📁 [`examples/session_service_with_redis/run_agent.py`](../../../examples/session_service_with_redis/run_agent.py) - 完整的 TRPC Redis Session Service 使用示例
-
----
-
 ### 三种实现对比
 
 | 特性 | InMemorySessionService | RedisSessionService | SqlSessionService |
@@ -620,7 +542,6 @@ session_service = TrpcRedisSessionService(
 - **开发测试** → `InMemorySessionService`（零依赖，快速启动）
 - **生产环境（高性能）** → `RedisSessionService`（Redis 自动过期，无后台任务）
 - **生产环境（事务/查询）** → `SqlSessionService`（事务安全，支持复杂查询）
-- **企业级（TRPC 生态）** → `TrpcRedisSessionService`（服务发现、监控告警）
 
 ---
 
@@ -827,28 +748,6 @@ python3 run_agent.py
 ```bash
 cd examples/session_service_with_sql/
 python3 run_agent.py
-```
-
----
-
-#### TrpcRedisSessionService
-
-📁 **示例路径**：`examples/trpc_redis_session_service/`
-
-**说明**：
-- 演示 TRPC Redis Session Service 的使用
-- 展示 TRPC 框架集成
-- 演示 HTTP SSE 流式响应
-- 提供 TRPC 配置和测试方法
-
-**运行方式**：
-```bash
-# 终端1：启动 TRPC 服务
-cd examples/trpc_redis_session_service/
-python3 trpc_main.py
-
-# 终端2：运行测试客户端
-python3 test_service_rpc.py
 ```
 
 ---

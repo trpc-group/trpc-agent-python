@@ -1,81 +1,81 @@
-# SqlStorage 数据库存储使用指南
+# SqlStorage Database Storage Usage Guide
 
-本文档详细介绍了如何使用 `SqlStorage` 类进行数据库操作，包括 MySQL、PostgreSQL、SQLite 等数据库的支持。
+This document provides a detailed introduction on how to use the `SqlStorage` class for database operations, including support for MySQL, PostgreSQL, SQLite, and other databases.
 
-## 概述
+## Overview
 
-`SqlStorage` 是一个基于 SQLAlchemy 的异步/同步数据库存储实现，提供了统一的接口来处理各种 SQL 数据库操作。
+`SqlStorage` is an async/sync database storage implementation based on SQLAlchemy, providing a unified interface for handling various SQL database operations.
 
-## 核心组件
+## Core Components
 
-### 1. SqlStorage 类
-主要的存储类，提供数据库连接和操作接口。
+### 1. SqlStorage Class
+The primary storage class that provides database connection and operation interfaces.
 
-### 2. 辅助类
-- `SqlKey`: 用于标识数据库查询的键
-- `SqlCondition`: 用于定义查询条件
-- `StorageData`: 数据模型基类
+### 2. Helper Classes
+- `SqlKey`: Used to identify database query keys
+- `SqlCondition`: Used to define query conditions
+- `StorageData`: Base class for data models
 
-## 前置条件
+## Prerequisites
 
-### 1. 安装必需的依赖
+### 1. Install Required Dependencies
 
 ```bash
-# 核心依赖
+# Core dependencies
 pip install sqlalchemy
 
-# MySQL 支持
+# MySQL support
 pip install aiomysql PyMySQL
 
-# PostgreSQL 支持
+# PostgreSQL support
 pip install asyncpg psycopg2
 
-# SQLite 支持（Python 内置）
-# 无需额外安装
+# SQLite support (built into Python)
+# No additional installation required
 ```
 
-### 2. 数据库设置
+### 2. Database Setup
 
-#### MySQL 设置
+#### MySQL Setup
 ```sql
--- 创建数据库
+-- Create database
 CREATE DATABASE test_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- 创建用户（可选）
+-- Create user (optional)
 CREATE USER 'test_user'@'localhost' IDENTIFIED BY 'test_password';
 GRANT ALL PRIVILEGES ON test_db.* TO 'test_user'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-#### PostgreSQL 设置
+#### PostgreSQL Setup
 ```sql
--- 创建数据库
+-- Create database
 CREATE DATABASE test_db;
 
--- 创建用户（可选）
+-- Create user (optional)
 CREATE USER test_user WITH PASSWORD 'test_password';
 GRANT ALL PRIVILEGES ON DATABASE test_db TO test_user;
 ```
 
 ---
 
-## 基本使用方法
+## Basic Usage
 
-### 1. 初始化 SqlStorage
+### 1. Initialize SqlStorage
 
 ```python
 from trpc_agent_sdk.storage import SqlStorage
 
-# 异步模式（推荐）
+# Async mode (recommended)
 storage = SqlStorage(
     is_async=True,
     db_url="mysql+aiomysql://root:password@localhost/test_db",
-    echo=True,  # 启用 SQL 日志
+    echo=True,  # Enable SQL logging
     pool_size=10,
     max_overflow=20
 )
 
-# 同步模式
+# Sync mode
 storage = SqlStorage(
     is_async=False,
     db_url="mysql+pymysql://root:password@localhost/test_db",
@@ -83,7 +83,7 @@ storage = SqlStorage(
 )
 ```
 
-### 2. 定义数据模型
+### 2. Define Data Models
 
 ```python
 from dataclasses import dataclass
@@ -93,7 +93,7 @@ from trpc_agent_sdk.storage import StorageData
 
 @dataclass
 class UserData(StorageData):
-    """用户数据模型"""
+    """User data model"""
     __tablename__ = 'users'
 
     id: int = Column(Integer, primary_key=True, autoincrement=True)
@@ -105,26 +105,26 @@ class UserData(StorageData):
     updated_at: datetime = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 ```
 
-### 3. 基本操作示例
+### 3. Basic Operation Example
 
 ```python
 import asyncio
 from trpc_agent_sdk.storage import SqlStorage, SqlKey, SqlCondition
 
 async def basic_example():
-    # 初始化存储
+    # Initialize storage
     storage = SqlStorage(
         is_async=True,
         db_url="mysql+aiomysql://root:password@localhost/test_db"
     )
 
     try:
-        # 创建数据库引擎和表
+        # Create database engine and tables
         await storage.create_sql_engine()
 
-        # 使用数据库会话
+        # Use database session
         async with storage.create_db_session() as session:
-            # 创建新用户
+            # Create new user
             user = UserData(
                 username="john_doe",
                 email="john@example.com",
@@ -132,19 +132,19 @@ async def basic_example():
                 bio="Software engineer"
             )
 
-            # 添加用户
+            # Add user
             await storage.add(session, user)
             await storage.commit(session)
             await storage.refresh(session, user)
 
             print(f"Created user with ID: {user.id}")
 
-            # 获取用户
+            # Get user
             user_key = SqlKey(key=(user.id,), storage_cls=UserData)
             retrieved_user = await storage.get(session, user_key)
             print(f"Retrieved user: {retrieved_user.username}")
 
-            # 查询用户
+            # Query users
             query_key = SqlKey(key=(), storage_cls=UserData)
             condition = SqlCondition(
                 filters=[UserData.email.like('%@example.com')],
@@ -157,11 +157,11 @@ async def basic_example():
     finally:
         await storage.close()
 
-# 运行示例
+# Run example
 asyncio.run(basic_example())
 ```
 
-### 4. 配置管理
+### 4. Configuration Management
 
 ```python
 import os
@@ -170,7 +170,7 @@ from typing import Dict, Any
 
 @dataclass
 class DatabaseConfig:
-    """数据库配置类"""
+    """Database configuration class"""
     host: str = "localhost"
     port: int = 3306
     username: str = "root"
@@ -178,26 +178,26 @@ class DatabaseConfig:
     database: str = "test_db"
     charset: str = "utf8mb4"
 
-    # 连接池设置
+    # Connection pool settings
     pool_size: int = 10
     max_overflow: int = 20
     pool_timeout: int = 30
     pool_recycle: int = 3600
 
-    # SQLAlchemy 设置
+    # SQLAlchemy settings
     echo: bool = False
     echo_pool: bool = False
 
     def get_async_url(self) -> str:
-        """获取异步连接 URL"""
+        """Get async connection URL"""
         return f"mysql+aiomysql://{self.username}:{self.password}@{self.host}:{self.port}/{self.database}?charset={self.charset}"
 
     def get_sync_url(self) -> str:
-        """获取同步连接 URL"""
+        """Get sync connection URL"""
         return f"mysql+pymysql://{self.username}:{self.password}@{self.host}:{self.port}/{self.database}?charset={self.charset}"
 
     def get_engine_kwargs(self) -> Dict[str, Any]:
-        """获取引擎参数"""
+        """Get engine parameters"""
         return {
             "echo": self.echo,
             "echo_pool": self.echo_pool,
@@ -209,7 +209,7 @@ class DatabaseConfig:
 
     @classmethod
     def from_env(cls) -> 'DatabaseConfig':
-        """从环境变量创建配置"""
+        """Create configuration from environment variables"""
         return cls(
             host=os.getenv("DB_HOST", "localhost"),
             port=int(os.getenv("DB_PORT", "3306")),
@@ -220,59 +220,59 @@ class DatabaseConfig:
         )
 ```
 
-## SqlStorage 接口详解
+## SqlStorage Interface Details
 
-### 1. 核心接口
+### 1. Core Interfaces
 
-#### 数据库引擎管理
+#### Database Engine Management
 ```python
-# 创建数据库引擎和表
+# Create database engine and tables
 await storage.create_sql_engine()
 
-# 关闭数据库连接
+# Close database connection
 await storage.close()
 ```
 
-#### 会话管理
+#### Session Management
 ```python
-# 创建数据库会话（推荐使用上下文管理器）
+# Create database session (recommended to use context manager)
 async with storage.create_db_session() as session:
-    # 在这里执行数据库操作
+    # Execute database operations here
     pass
 
-# 创建原始会话（需要手动管理）
+# Create raw session (requires manual management)
 session = await storage.create_sql_session()
 ```
 
-### 2. CRUD 操作
+### 2. CRUD Operations
 
-#### 添加数据
+#### Add Data
 ```python
 async with storage.create_db_session() as session:
     user = UserData(username="test", email="test@example.com")
     await storage.add(session, user)
     await storage.commit(session)
-    await storage.refresh(session, user)  # 获取自动生成的 ID
+    await storage.refresh(session, user)  # Get auto-generated ID
 ```
 
-#### 获取数据
+#### Get Data
 ```python
 async with storage.create_db_session() as session:
-    # 通过主键获取
+    # Get by primary key
     user_key = SqlKey(key=(user_id,), storage_cls=UserData)
     user = await storage.get(session, user_key)
 ```
 
-#### 查询数据
+#### Query Data
 ```python
 async with storage.create_db_session() as session:
     query_key = SqlKey(key=(), storage_cls=UserData)
 
-    # 简单查询
+    # Simple query
     condition = SqlCondition()
     all_users = await storage.query(session, query_key, condition)
 
-    # 带条件查询
+    # Query with conditions
     condition = SqlCondition(
         filters=[
             UserData.email.like('%@example.com'),
@@ -284,7 +284,7 @@ async with storage.create_db_session() as session:
     filtered_users = await storage.query(session, query_key, condition)
 ```
 
-#### 删除数据
+#### Delete Data
 ```python
 async with storage.create_db_session() as session:
     delete_key = SqlKey(key=(), storage_cls=UserData)
@@ -293,7 +293,7 @@ async with storage.create_db_session() as session:
     await storage.commit(session)
 ```
 
-#### 更新数据
+#### Update Data
 ```python
 async with storage.create_db_session() as session:
     user_key = SqlKey(key=(user_id,), storage_cls=UserData)
@@ -306,23 +306,23 @@ async with storage.create_db_session() as session:
         await storage.refresh(session, user)
 ```
 
-### 3. 高级功能
+### 3. Advanced Features
 
-#### 事务管理
+#### Transaction Management
 ```python
 async with storage.create_db_session() as session:
     try:
-        # 执行多个操作
+        # Execute multiple operations
         await storage.add(session, user1)
         await storage.add(session, user2)
         await storage.commit(session)
     except Exception as e:
-        # 自动回滚（由上下文管理器处理）
+        # Auto-rollback (handled by context manager)
         print(f"Transaction failed: {e}")
         raise
 ```
 
-#### 批量操作
+#### Batch Operations
 ```python
 async with storage.create_db_session() as session:
     users = [
@@ -336,7 +336,7 @@ async with storage.create_db_session() as session:
     await storage.commit(session)
 ```
 
-#### 复杂查询条件
+#### Complex Query Conditions
 ```python
 from sqlalchemy import and_, or_
 
@@ -355,50 +355,50 @@ condition = SqlCondition(
 )
 ```
 
-## 数据库连接 URL
+## Database Connection URLs
 
 ### MySQL
 ```python
-# 异步连接（推荐）
+# Async connection (recommended)
 mysql_async_url = "mysql+aiomysql://username:password@host:port/database"
 
-# 同步连接
+# Sync connection
 mysql_sync_url = "mysql+pymysql://username:password@host:port/database"
 
-# 带参数的连接
+# Connection with parameters
 mysql_url = "mysql+aiomysql://user:pass@localhost/db?charset=utf8mb4&autocommit=true"
 
-# SSL 连接
+# SSL connection
 mysql_ssl_url = "mysql+pymysql://user:pass@host/db?ssl_ca=/path/to/ca.pem"
 ```
 
 ### PostgreSQL
 ```python
-# 异步连接
+# Async connection
 postgres_async_url = "postgresql+asyncpg://username:password@host:port/database"
 
-# 同步连接
+# Sync connection
 postgres_sync_url = "postgresql+psycopg2://username:password@host:port/database"
 
-# 带参数的连接
+# Connection with parameters
 postgres_url = "postgresql+asyncpg://user:pass@localhost/db?ssl=require"
 ```
 
 ### SQLite
 ```python
-# 异步连接
+# Async connection
 sqlite_async_url = "sqlite+aiosqlite:///path/to/database.db"
 
-# 同步连接
+# Sync connection
 sqlite_sync_url = "sqlite:///path/to/database.db"
 
-# 内存数据库
+# In-memory database
 sqlite_memory_url = "sqlite:///:memory:"
 ```
 
-## 数据模型定义
+## Data Model Definitions
 
-### 基本模型
+### Basic Model
 ```python
 from dataclasses import dataclass
 from datetime import datetime
@@ -408,7 +408,7 @@ from trpc_agent_sdk.storage import StorageData
 
 @dataclass
 class UserData(StorageData):
-    """用户数据模型"""
+    """User data model"""
     __tablename__ = 'users'
 
     id: int = Column(Integer, primary_key=True, autoincrement=True)
@@ -421,11 +421,11 @@ class UserData(StorageData):
     updated_at: datetime = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 ```
 
-### 关联模型
+### Relational Model
 ```python
 @dataclass
 class PostData(StorageData):
-    """文章数据模型"""
+    """Post data model"""
     __tablename__ = 'posts'
 
     id: int = Column(Integer, primary_key=True, autoincrement=True)
@@ -434,12 +434,12 @@ class PostData(StorageData):
     user_id: int = Column(Integer, ForeignKey('users.id'), nullable=False)
     created_at: datetime = Column(DateTime, default=datetime.utcnow)
 
-    # 关联关系（可选）
+    # Relationship (optional)
     # user = relationship("UserData", back_populates="posts")
 
 @dataclass
 class TagData(StorageData):
-    """标签数据模型"""
+    """Tag data model"""
     __tablename__ = 'tags'
 
     id: int = Column(Integer, primary_key=True, autoincrement=True)
@@ -448,12 +448,12 @@ class TagData(StorageData):
     created_at: datetime = Column(DateTime, default=datetime.utcnow)
 ```
 
-### 模型最佳实践
+### Model Best Practices
 ```python
 @dataclass
 class BaseModel(StorageData):
-    """基础模型类"""
-    __abstract__ = True  # 抽象基类，不会创建表
+    """Base model class"""
+    __abstract__ = True  # Abstract base class, will not create a table
 
     id: int = Column(Integer, primary_key=True, autoincrement=True)
     created_at: datetime = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -461,26 +461,26 @@ class BaseModel(StorageData):
 
 @dataclass
 class ProductData(BaseModel):
-    """产品数据模型"""
+    """Product data model"""
     __tablename__ = 'products'
 
     name: str = Column(String(100), nullable=False, index=True)
-    price: int = Column(Integer, nullable=False)  # 以分为单位存储
+    price: int = Column(Integer, nullable=False)  # Stored in cents
     description: str = Column(Text, nullable=True)
     is_available: bool = Column(Boolean, default=True, index=True)
     category_id: int = Column(Integer, ForeignKey('categories.id'), nullable=True)
 ```
 
-## 完整使用示例
+## Complete Usage Example
 
-### 实际应用示例
+### Practical Application Example
 ```python
 import asyncio
 from datetime import datetime
 from trpc_agent_sdk.storage import SqlStorage, SqlKey, SqlCondition
 
 class UserService:
-    """用户服务类示例"""
+    """User service class example"""
 
     def __init__(self, db_url: str):
         self.storage = SqlStorage(
@@ -492,11 +492,11 @@ class UserService:
         )
 
     async def initialize(self):
-        """初始化数据库"""
+        """Initialize database"""
         await self.storage.create_sql_engine()
 
     async def create_user(self, username: str, email: str, full_name: str = None) -> int:
-        """创建用户"""
+        """Create user"""
         async with self.storage.create_db_session() as session:
             user = UserData(
                 username=username,
@@ -512,13 +512,13 @@ class UserService:
             return user.id
 
     async def get_user_by_id(self, user_id: int) -> UserData:
-        """根据ID获取用户"""
+        """Get user by ID"""
         async with self.storage.create_db_session() as session:
             user_key = SqlKey(key=(user_id,), storage_cls=UserData)
             return await self.storage.get(session, user_key)
 
     async def find_users_by_email_domain(self, domain: str, limit: int = 10) -> list:
-        """根据邮箱域名查找用户"""
+        """Find users by email domain"""
         async with self.storage.create_db_session() as session:
             query_key = SqlKey(key=(), storage_cls=UserData)
             condition = SqlCondition(
@@ -529,7 +529,7 @@ class UserService:
             return await self.storage.query(session, query_key, condition)
 
     async def update_user_bio(self, user_id: int, bio: str) -> bool:
-        """更新用户简介"""
+        """Update user bio"""
         async with self.storage.create_db_session() as session:
             user_key = SqlKey(key=(user_id,), storage_cls=UserData)
             user = await self.storage.get(session, user_key)
@@ -542,7 +542,7 @@ class UserService:
             return False
 
     async def delete_inactive_users(self, days: int = 30) -> int:
-        """删除非活跃用户"""
+        """Delete inactive users"""
         from datetime import timedelta
         cutoff_date = datetime.utcnow() - timedelta(days=days)
 
@@ -555,40 +555,40 @@ class UserService:
                 ]
             )
 
-            # 先查询要删除的用户数量
+            # Query users to be deleted first
             users_to_delete = await self.storage.query(session, delete_key, condition)
             count = len(users_to_delete)
 
-            # 执行删除
+            # Execute deletion
             await self.storage.delete(session, delete_key, condition)
             await self.storage.commit(session)
 
             return count
 
     async def close(self):
-        """关闭数据库连接"""
+        """Close database connection"""
         await self.storage.close()
 
-# 使用示例
+# Usage example
 async def main():
     service = UserService("mysql+aiomysql://root:password@localhost/test_db")
 
     try:
         await service.initialize()
 
-        # 创建用户
+        # Create user
         user_id = await service.create_user("john_doe", "john@example.com", "John Doe")
         print(f"Created user with ID: {user_id}")
 
-        # 获取用户
+        # Get user
         user = await service.get_user_by_id(user_id)
         print(f"Retrieved user: {user.username}")
 
-        # 查找用户
+        # Find users
         users = await service.find_users_by_email_domain("example.com")
         print(f"Found {len(users)} users with example.com email")
 
-        # 更新用户
+        # Update user
         success = await service.update_user_bio(user_id, "Updated bio")
         print(f"Update successful: {success}")
 
@@ -599,14 +599,14 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-## 错误处理和最佳实践
+## Error Handling and Best Practices
 
-### 1. 异常处理
+### 1. Exception Handling
 ```python
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 async def safe_create_user(storage, username: str, email: str):
-    """安全创建用户的示例"""
+    """Safe user creation example"""
     async with storage.create_db_session() as session:
         try:
             user = UserData(username=username, email=email)
@@ -616,22 +616,22 @@ async def safe_create_user(storage, username: str, email: str):
             return user.id
 
         except IntegrityError as e:
-            print(f"数据完整性错误（可能是重复数据）: {e}")
+            print(f"Data integrity error (possibly duplicate data): {e}")
             return None
 
         except SQLAlchemyError as e:
-            print(f"数据库错误: {e}")
+            print(f"Database error: {e}")
             return None
 
         except Exception as e:
-            print(f"未知错误: {e}")
+            print(f"Unknown error: {e}")
             return None
 ```
 
-### 2. 连接管理
+### 2. Connection Management
 ```python
 class DatabaseManager:
-    """数据库管理器"""
+    """Database manager"""
 
     def __init__(self, db_url: str):
         self.storage = None
@@ -646,33 +646,33 @@ class DatabaseManager:
         if self.storage:
             await self.storage.close()
 
-# 使用方式
+# Usage
 async def example_with_manager():
     async with DatabaseManager("mysql+aiomysql://...") as storage:
         async with storage.create_db_session() as session:
-            # 执行数据库操作
+            # Execute database operations
             pass
 ```
 
-### 3. 性能优化建议
+### 3. Performance Optimization Recommendations
 
-#### 连接池配置
+#### Connection Pool Configuration
 ```python
 storage = SqlStorage(
     is_async=True,
     db_url=db_url,
-    pool_size=20,          # 连接池大小
-    max_overflow=30,       # 最大溢出连接数
-    pool_timeout=30,       # 获取连接超时时间
-    pool_recycle=3600,     # 连接回收时间（秒）
-    pool_pre_ping=True,    # 连接前测试
+    pool_size=20,          # Connection pool size
+    max_overflow=30,       # Maximum overflow connections
+    pool_timeout=30,       # Connection acquisition timeout
+    pool_recycle=3600,     # Connection recycle time (seconds)
+    pool_pre_ping=True,    # Pre-connection test
 )
 ```
 
-#### 批量操作
+#### Batch Operations
 ```python
 async def batch_create_users(storage, users_data: list):
-    """批量创建用户"""
+    """Batch create users"""
     async with storage.create_db_session() as session:
         try:
             for user_data in users_data:
@@ -684,168 +684,168 @@ async def batch_create_users(storage, users_data: list):
 
         except Exception as e:
             print(f"Batch operation failed: {e}")
-            # 会话会自动回滚
+            # Session will auto-rollback
 ```
 
-#### 查询优化
+#### Query Optimization
 ```python
-# 使用索引字段进行查询
+# Use indexed fields for queries
 condition = SqlCondition(
     filters=[
-        UserData.username == "john_doe",  # username 有索引
-        UserData.is_active == True        # is_active 有索引
+        UserData.username == "john_doe",  # username has index
+        UserData.is_active == True        # is_active has index
     ]
 )
 
-# 限制查询结果数量
+# Limit query result count
 condition = SqlCondition(
     filters=[UserData.created_at > datetime(2024, 1, 1)],
     order_func=lambda: UserData.created_at.desc(),
-    limit=100  # 限制结果数量
+    limit=100  # Limit result count
 )
 ```
 
-## 故障排除
+## Troubleshooting
 
-### 常见错误及解决方案
+### Common Errors and Solutions
 
-1. **连接错误**
+1. **Connection Error**
    ```python
-   # 错误: Can't connect to MySQL server
-   # 解决: 检查数据库服务状态和连接参数
+   # Error: Can't connect to MySQL server
+   # Solution: Check database service status and connection parameters
 
-   # 测试连接
+   # Test connection
    try:
        await storage.create_sql_engine()
-       print("数据库连接成功")
+       print("Database connection successful")
    except Exception as e:
-       print(f"连接失败: {e}")
+       print(f"Connection failed: {e}")
    ```
 
-2. **表不存在错误**
+2. **Table Not Found Error**
    ```python
-   # 错误: Table 'database.table_name' doesn't exist
-   # 解决: 确保调用了 create_sql_engine()
+   # Error: Table 'database.table_name' doesn't exist
+   # Solution: Ensure create_sql_engine() has been called
 
-   await storage.create_sql_engine()  # 这会创建所有表
+   await storage.create_sql_engine()  # This creates all tables
    ```
 
-3. **数据完整性错误**
+3. **Data Integrity Error**
    ```python
-   # 错误: Duplicate entry 'value' for key 'column_name'
-   # 解决: 检查唯一约束字段
+   # Error: Duplicate entry 'value' for key 'column_name'
+   # Solution: Check unique constraint fields
 
    try:
        await storage.add(session, user)
        await storage.commit(session)
    except IntegrityError:
-       print("数据已存在或违反约束条件")
+       print("Data already exists or violates constraint conditions")
    ```
 
-### 调试模式
+### Debug Mode
 ```python
-# 启用详细日志
+# Enable verbose logging
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
 storage = SqlStorage(
     is_async=True,
     db_url=db_url,
-    echo=True,        # 显示 SQL 语句
-    echo_pool=True,   # 显示连接池信息
+    echo=True,        # Display SQL statements
+    echo_pool=True,   # Display connection pool info
 )
 ```
 
-## 运行示例
+## Running Examples
 
 ```bash
-# 1. 安装依赖
+# 1. Install dependencies
 pip install sqlalchemy aiomysql
 
-# 2. 设置环境变量
+# 2. Set environment variables
 export DB_URL="mysql+aiomysql://root:password@localhost/test_db"
 
-# 3. 运行示例
+# 3. Run example
 python examples/storage/sql_example.py
 
-# 4. 使用不同数据库
+# 4. Use a different database
 export DB_URL="postgresql+asyncpg://user:pass@localhost/test_db"
 python examples/storage/sql_example.py
 ```
 
-## 可以支持的数据库如下
+## Supported Databases
 
 ### PostgreSQL
 - psycopg2
   ```txt
-  必须安装包：pip install psycopg2-binary
+  Required package: pip install psycopg2-binary
   url: "postgresql+psycopg2://username:password@localhost:5432/mydb"
   ```
 - asyncpg
   ```txt
-  必须安装包：pip install asyncpg
+  Required package: pip install asyncpg
   url: "postgresql+asyncpg://username:password@localhost:5432/mydb"
   ```
 - pg8000
   ```txt
-  必须安装包：pip install pg8000
+  Required package: pip install pg8000
   url: "postgresql+pg8000://username:password@localhost:5432/mydb"
   ```
 
 ###  MySQL/MariaDB
 - PyMySQL
   ```txt
-  必须安装包：pip install PyMySQL
+  Required package: pip install PyMySQL
   url: "mysql+pymysql://username:password@localhost:3306/mydb"
   ```
 - mysqlclient
   ```txt
-  必须安装包：pip install mysqlclient
+  Required package: pip install mysqlclient
   url: "mysql+mysqldb://username:password@localhost:3306/mydb"
   ```
 - mysqlconnector
   ```txt
-  必须安装包：pip install mysql-connector-python
+  Required package: pip install mysql-connector-python
   url: "mysql+mysqlconnector://username:password@localhost:3306/mydb"
   ```
 - aiomysql
   ```txt
-  必须安装包：pip install aiomysql
+  Required package: pip install aiomysql
   url: "mysql+aiomysql://username:password@localhost:3306/mydb"
   ```
 
 ### SQLite
 - sqlite3
   ```txt
-  # 系统自带，无需安装
+  # Built-in, no installation required
   url: "sqlite:///./test.db"
   ```
 - aiosqlite
   ```txt
-  必须安装包：pip install aiosqlite
+  Required package: pip install aiosqlite
   url: "sqlite+aiosqlite:///./test.db"
   ```
 
 ### Oracle
 - cx_Oracle
   ```txt
-  必须安装包：pip install cx_Oracle
+  Required package: pip install cx_Oracle
   url: "oracle+cx_oracle://username:password@localhost:1521/xe"
   ```
 - oracledb
   ```txt
-  必须安装包：pip install oracledb
+  Required package: pip install oracledb
   url: "oracle+oracledb://username:password@localhost:1521/xe"
   ```
 
 ### SQL Server
 - pyodbc
   ```txt
-  必须安装包：pip install pyodbc
+  Required package: pip install pyodbc
   url: "mssql+pyodbc://username:password@server:1433/database?driver=ODBC+Driver+17+for+SQL+Server"
   ```
 - pymssql
   ```txt
-  必须安装包：pip install pymssql
+  Required package: pip install pymssql
   url: "mssql+pymssql://username:password@server:1433/database"
   ```
