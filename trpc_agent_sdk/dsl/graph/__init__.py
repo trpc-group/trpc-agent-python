@@ -110,6 +110,11 @@ from ._state import merge_dict
 from ._state import messages_reducer
 from ._state_graph import CompiledStateGraph
 from ._state_graph import StateGraph
+from ._events import EventUtils
+from ._events import ExecutionPhase
+from ._events import ModelExecutionMetadata
+from ._events import NodeExecutionMetadata
+from ._events import ToolExecutionMetadata
 from ._state_mapper import StateMapper
 from ._state_mapper import SubgraphResult
 
@@ -157,4 +162,9 @@ __all__ = [
     "NodeCallbackContext",
     "create_logging_callbacks",
     "merge_callbacks",
+    "EventUtils",
+    "ExecutionPhase",
+    "ModelExecutionMetadata",
+    "NodeExecutionMetadata",
+    "ToolExecutionMetadata",
 ]
