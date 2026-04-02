@@ -29,7 +29,7 @@ pip3 install a2a-sdk python-dotenv
 
 ### 2. 配置环境变量
 
-在 `examples/a2a/.env` 中设置（也可通过 export）：
+在 [examples/a2a/.env](./.env) 中设置（也可通过 export）：
 
 ```bash
 TRPC_AGENT_API_KEY=...

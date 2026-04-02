@@ -23,11 +23,11 @@ weather_agent (LlmAgent)
 
 关键文件：
 
-- `examples/llmagent_with_model_create_fn/agent/agent.py`：定义 `create_model(custom_data)` 并注入 `LlmAgent`
-- `examples/llmagent_with_model_create_fn/agent/tools.py`：天气工具实现
-- `examples/llmagent_with_model_create_fn/agent/prompts.py`：提示词
-- `examples/llmagent_with_model_create_fn/agent/config.py`：环境变量读取
-- `examples/llmagent_with_model_create_fn/run_agent.py`：运行入口，传递 `RunConfig.custom_data`
+- [examples/llmagent_with_model_create_fn/agent/agent.py](./agent/agent.py)：定义 `create_model(custom_data)` 并注入 `LlmAgent`
+- [examples/llmagent_with_model_create_fn/agent/tools.py](./agent/tools.py)：天气工具实现
+- [examples/llmagent_with_model_create_fn/agent/prompts.py](./agent/prompts.py)：提示词
+- [examples/llmagent_with_model_create_fn/agent/config.py](./agent/config.py)：环境变量读取
+- [examples/llmagent_with_model_create_fn/run_agent.py](./run_agent.py)：运行入口，传递 `RunConfig.custom_data`
 
 ## 关键代码解释
 
@@ -68,7 +68,7 @@ pip3 install -e .
 
 ### 环境变量要求
 
-在 `examples/llmagent_with_model_create_fn/.env` 中配置（或通过 `export`）：
+在 [examples/llmagent_with_model_create_fn/.env](./.env) 中配置（或通过 `export`）：
 
 - `TRPC_AGENT_API_KEY`
 - `TRPC_AGENT_BASE_URL`

@@ -1,40 +1,53 @@
-# Streaming Tool 使用示例
+# 流式工具示例
 
-本示例展示了 `Streaming Tool` 与 `FunctionTool` 的组合使用，实现流式文件写入功能：
+本示例演示 `StreamingFunctionTool` 在工具参数生成过程中流式增量到达（配合 `TOOL_STREAMING_ARGS`），并与普通 `FunctionTool` 一起挂载在单智能体上，完成「边生成边写入」类任务。
 
-| 工具 | 类型 | 说明 |
-|------|------|------|
-| `write_file` | StreamingFunctionTool | 流式写入文件内容，支持实时查看生成进度 |
-| `get_file_info` | FunctionTool | 查询文件信息（非流式） |
+## 关键特性
 
-`Streaming Tool` 允许在 LLM 生成工具参数时实时接收增量内容，适用于大内容（如代码文件）的生成场景。
+- `event.is_streaming_tool_call()` 分支打印生成进度（字符数）
+- `write_file` 以流式参数接收大段代码内容；`get_file_info` 为非流式查询
+- `Runner` + 会话用于一次演示查询
 
-## 环境要求
+## Agent 层级结构说明
 
-Python版本: 3.10+（强烈建议使用3.12）
+- 根节点：`LlmAgent`（`streaming_tool_demo_agent`），工具：`StreamingFunctionTool(write_file)`、`FunctionTool(get_file_info)`
+- 无子 Agent
 
-## 在trpc-agent-python框架代码下如何运行此代码示例
+## 关键代码解释
 
-1. 下载trpc-agent-python代码并安装
+- `run_agent.py`：对流式工具调用累加 `delta`，打印 `⏳ Generated N chars...`；完成后打印工具结果
+- `agent/agent.py`：注册 `StreamingFunctionTool` 与 `FunctionTool`
+- `agent/tools.py`：实现 `write_file`、`get_file_info` 的具体逻辑
 
-```bash
-git clone https://github.com/trpc-group/trpc-agent-python.git
-cd trpc-agent-python
-python3 -m venv .venv
-source .venv/bin/activate
-pip3 install -e .
-```
+## 环境与运行
 
-2. 运行此代码示例
-
-在 `.env` 文件中设置使用 LLM 相关的变量（也可以通过export设置）:
-- TRPC_AGENT_API_KEY
-- TRPC_AGENT_BASE_URL
-- TRPC_AGENT_MODEL_NAME
-
-然后运行下面的命令：
+- Python 3.10+；仓库根目录 `pip install -e .`
+- 配置 `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL`、`TRPC_AGENT_MODEL_NAME`（可用 `.env`）
 
 ```bash
-cd examples/tool_with_streaming_tool/
+cd examples/streaming_tools
 python3 run_agent.py
 ```
+
+## 运行结果（实测）
+
+
+```
+[START] streaming_tools
+📝 User: 请帮我创建一个 Python 脚本 hello.py，实现简单的计算器功能
+⏳ Generated 2 chars...
+...
+✅ Code generation complete!
+📊 [Tool Result: {'success': True, 'path': 'hello.py', 'size': 837}]
+...
+[END] streaming_tools (exit_code=0)
+```
+
+## 结果分析（是否符合要求）
+
+符合本示例测试要求：`exit_code=0`；流式阶段有连续进度输出，最终 `write_file` 返回成功且路径与大小与日志一致，说明流式工具管线工作正常。
+
+## 适用场景建议
+
+- 生成长代码、长 JSON、大段模板等需要降低首字节延迟或展示进度时使用 `StreamingFunctionTool`
+- 与小型校验类工具并用时，保持非流式 `FunctionTool` 即可

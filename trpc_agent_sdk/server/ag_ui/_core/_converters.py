@@ -37,7 +37,6 @@ from ag_ui.core import TextInputContent
 from ag_ui.core import ToolCall
 from ag_ui.core import ToolMessage
 from ag_ui.core import UserMessage
-
 from trpc_agent_sdk import types
 from trpc_agent_sdk.events import Event as TRPCEvent
 from trpc_agent_sdk.log import logger

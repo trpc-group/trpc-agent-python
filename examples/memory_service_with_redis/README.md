@@ -1,21 +1,77 @@
 # Memory Service Redis 存储示例
 
-## 示例简介
+本示例演示如何使用 `RedisMemoryService` 在 Redis 中持久化跨会话记忆，并通过 TTL 自动过期机制实现低运维成本的记忆清理。
 
-本示例演示如何使用 **RedisMemoryService** 实现跨会话的记忆管理，并展示 **TTL（Time-To-Live）缓存淘汰机制** 的效果。
+## 关键特性
 
-### 核心特性
+- **Redis 持久化记忆**：记忆事件以 List 结构写入 Redis，可跨进程共享
+- **跨会话共享**：同一用户在不同 `session_id` 下可复用历史记忆
+- **TTL 自动淘汰**：通过 `EXPIRE` 机制自动删除过期记忆，无需后台清理任务
+- **语义检索能力**：通过 `load_memory` 按关键词召回相关记忆事件
+- **分布式友好**：天然适配多实例部署场景
 
-- ✅ **Redis 持久化**: 使用 `RedisMemoryService` 在 Redis 中持久化跨会话记忆数据
-- ✅ **跨会话共享**: 不同会话（session）可以共享同一份记忆数据
-- ✅ **TTL 缓存淘汰**: 配置记忆 10 秒 TTL，演示 Redis 自动过期清理
-- ✅ **语义搜索**: 通过 `load_memory` 工具根据查询关键词检索相关记忆
-- ✅ **自动清理**: Redis 的 EXPIRE 机制自动清理过期键，无需后台任务
-- ✅ **分布式支持**: Redis 存储支持跨进程、跨服务器共享记忆
+## Agent 层级结构说明
+
+```text
+weather_agent (LlmAgent)
+└── memory service: RedisMemoryService
+    └── storage: Redis (list per session key + TTL)
+```
+
+关键文件：
+
+- [examples/memory_service_with_redis/run_agent.py](./run_agent.py)
+- [examples/memory_service_with_redis/agent/agent.py](./agent/agent.py)
+- [examples/memory_service_with_redis/agent/config.py](./agent/config.py)
+- `trpc_agent_sdk/memory/_redis_memory_service.py`
+- `trpc_agent_sdk/storage/_redis.py`
+
+## 关键代码解释
+
+- `store_session()`：将事件追加写入 Redis List，并设置 TTL
+- `search_memory()`：扫描用户维度的记忆键并聚合过滤匹配事件
+- `load_memory` 工具：在对话中触发检索，验证跨会话记忆是否可用
+
+## 环境与运行
+
+### 环境要求
+
+- Python 3.10+（推荐 3.12）
+- Redis 服务可用（本地 / Docker / 远程）
+
+### 运行命令
+
+```bash
+cd examples/memory_service_with_redis
+python3 run_agent.py
+```
+
+## 运行结果（实测）
+
+本示例已在后文 `运行结果分析` 提供完整输出与三次运行对比（First/Second/Third Run），建议结合 Redis CLI 观测（`KEYS`、`TTL`、`LLEN`、`LRANGE`）。
+
+## 结果分析（是否符合要求）
+
+结论：**符合本示例测试目标**。
+
+- 记忆可跨会话复用（Second Run 可检索到 First Run 存储）
+- TTL 到期后自动淘汰（Third Run 过期后记忆失效）
+- Redis 无需额外清理线程即可完成生命周期管理
+
+## 适用场景建议
+
+- 需要可观测、可运维、可分布式扩展的记忆后端场景
+- 对 TTL 生命周期有明确控制需求的线上系统
+- 希望快速验证“持久化 + 检索 + 自动过期”闭环的工程场景
+
+---
+
+## 特有说明
+
+以下原始章节保留了完整的 Redis 运维命令、调试流程、实测对比、实现原理与 QA，便于深入排障和性能调优：
 
 ## 环境要求
 
-- Python 3.10+（强烈建议使用 3.12）
 - Redis 服务
 
 ## 安装和运行

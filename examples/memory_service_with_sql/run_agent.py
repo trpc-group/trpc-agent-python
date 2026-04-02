@@ -14,6 +14,7 @@ from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
+
 # Load environment variables from the .env file
 load_dotenv()
 
@@ -61,7 +62,7 @@ async def run_weather_agent():
     user_id = "sql_memory_user"
     current_session_id = "sql_memory_session"
 
-    # 演示查询列表
+    # Demo query list
     demo_queries = [
         "Do you remember my name?",
         "Do you remember my favorite color?",

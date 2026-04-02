@@ -15,9 +15,9 @@ load_dotenv()
 
 
 async def run_chain_agent():
-    """运行链式Agent演示"""
+    """Run the chained Agent demo."""
 
-    # 定义应用和用户信息
+    # App and user identifiers
     APP_NAME = "chain_agent_demo"
     USER_ID = "demo_user"
 
@@ -35,10 +35,10 @@ async def run_chain_agent():
     Main Features: Voice Control, Remote Monitoring, Automated Scene Setting.
     Technical Features: Support for multiple device connections, AI intelligent learning of user habits, cloud data synchronization.
     Target Users: Modern families pursuing a convenient lifestyle, technology enthusiasts.
-    Price: Starting from ¥999.
+    Price: Starting from CNY 999.
     """
 
-    print(f"Input content：{test_content}")
+    print(f"Input content: {test_content}")
     print("\nProcessing Flow: Extraction → Translation")
 
     user_message = Content(parts=[Part.from_text(text=test_content)])
@@ -48,7 +48,7 @@ async def run_chain_agent():
             if not event.partial:
                 for part in event.content.parts:
                     if part.text:
-                        print(f"\n[{event.author}] Output：")
+                        print(f"\n[{event.author}] Output:")
                         print(part.text)
                         print("-" * 40)
 

@@ -25,10 +25,10 @@ hobby_toolset_agent (LlmAgent)
 
 关键文件：
 
-- `examples/llmagent_with_parallal_tools/agent/agent.py`：Agent 创建与并行参数配置
-- `examples/llmagent_with_parallal_tools/agent/tools.py`：`HobbyToolSet` 与 3 个异步工具
-- `examples/llmagent_with_parallal_tools/agent/prompts.py`：工具调用规则提示词
-- `examples/llmagent_with_parallal_tools/run_agent.py`：运行入口与结果打印
+- [examples/llmagent_with_parallal_tools/agent/agent.py](./agent/agent.py)：Agent 创建与并行参数配置
+- [examples/llmagent_with_parallal_tools/agent/tools.py](./agent/tools.py)：`HobbyToolSet` 与 3 个异步工具
+- [examples/llmagent_with_parallal_tools/agent/prompts.py](./agent/prompts.py)：工具调用规则提示词
+- [examples/llmagent_with_parallal_tools/run_agent.py](./run_agent.py)：运行入口与结果打印
 
 ## 关键代码解释
 
@@ -68,7 +68,7 @@ pip3 install -e .
 
 ### 环境变量要求
 
-在 `examples/llmagent_with_parallal_tools/.env` 中配置（或通过 `export`）：
+在 [examples/llmagent_with_parallal_tools/.env](./.env) 中配置（或通过 `export`）：
 
 - `TRPC_AGENT_API_KEY`
 - `TRPC_AGENT_BASE_URL`

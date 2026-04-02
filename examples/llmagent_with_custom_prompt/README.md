@@ -22,11 +22,11 @@ Coordinator (LlmAgent)
 
 关键文件：
 
-- `examples/llmagent_with_custom_prompt/agent/agent.py`：Agent 构建与注入参数配置
-- `examples/llmagent_with_custom_prompt/agent/prompts.py`：基础提示词与自定义转发模板
-- `examples/llmagent_with_custom_prompt/agent/tools.py`：天气和翻译工具
-- `examples/llmagent_with_custom_prompt/agent/config.py`：环境变量读取
-- `examples/llmagent_with_custom_prompt/run_agent.py`：三种场景对比测试入口
+- [examples/llmagent_with_custom_prompt/agent/agent.py](./agent/agent.py)：Agent 构建与注入参数配置
+- [examples/llmagent_with_custom_prompt/agent/prompts.py](./agent/prompts.py)：基础提示词与自定义转发模板
+- [examples/llmagent_with_custom_prompt/agent/tools.py](./agent/tools.py)：天气和翻译工具
+- [examples/llmagent_with_custom_prompt/agent/config.py](./agent/config.py)：环境变量读取
+- [examples/llmagent_with_custom_prompt/run_agent.py](./run_agent.py)：三种场景对比测试入口
 
 ## 关键代码解释
 
@@ -68,7 +68,7 @@ pip3 install -e .
 
 ### 环境变量要求
 
-在 `examples/llmagent_with_custom_prompt/.env` 中配置（或通过 `export`）：
+在 [examples/llmagent_with_custom_prompt/.env](./.env) 中配置（或通过 `export`）：
 
 - `TRPC_AGENT_API_KEY`
 - `TRPC_AGENT_BASE_URL`

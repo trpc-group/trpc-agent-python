@@ -18,10 +18,6 @@ async def fetch_sales_data(region: str) -> str:
         "South": "South Region: Q1 sales $8M, Q2 sales $9.5M, Q3 sales $11M, Q4 sales $13M. Annual growth rate 22%.",
         "North": "North Region: Q1 sales $6M, Q2 sales $7M, Q3 sales $8.5M, Q4 sales $9.5M. Annual growth rate 15%.",
         "West": "West Region: Q1 sales $4M, Q2 sales $4.8M, Q3 sales $5.5M, Q4 sales $6.2M. Annual growth rate 12%.",
-        "东部": "东部区域：Q1销售额1200万，Q2销售额1500万，Q3销售额1800万，Q4销售额2100万。年增长率18%。",
-        "南部": "南部区域：Q1销售额800万，Q2销售额950万，Q3销售额1100万，Q4销售额1300万。年增长率22%。",
-        "北部": "北部区域：Q1销售额600万，Q2销售额700万，Q3销售额850万，Q4销售额950万。年增长率15%。",
-        "西部": "西部区域：Q1销售额400万，Q2销售额480万，Q3销售额550万，Q4销售额620万。年增长率12%。",
     }
     return sales_data.get(region, f"No data found for {region}")
 

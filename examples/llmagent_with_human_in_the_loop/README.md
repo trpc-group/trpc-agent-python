@@ -23,11 +23,11 @@ human_in_loop_agent (LlmAgent)
 
 关键文件：
 
-- `examples/llmagent_with_human_in_the_loop/agent/agent.py`：主/子 Agent 组装
-- `examples/llmagent_with_human_in_the_loop/agent/tools.py`：审批类长时工具
-- `examples/llmagent_with_human_in_the_loop/agent/prompts.py`：主/子 Agent 指令
-- `examples/llmagent_with_human_in_the_loop/agent/config.py`：环境变量读取
-- `examples/llmagent_with_human_in_the_loop/run_agent.py`：长时事件捕获与恢复执行
+- [examples/llmagent_with_human_in_the_loop/agent/agent.py](./agent/agent.py)：主/子 Agent 组装
+- [examples/llmagent_with_human_in_the_loop/agent/tools.py](./agent/tools.py)：审批类长时工具
+- [examples/llmagent_with_human_in_the_loop/agent/prompts.py](./agent/prompts.py)：主/子 Agent 指令
+- [examples/llmagent_with_human_in_the_loop/agent/config.py](./agent/config.py)：环境变量读取
+- [examples/llmagent_with_human_in_the_loop/run_agent.py](./run_agent.py)：长时事件捕获与恢复执行
 
 ## 关键代码解释
 
@@ -67,7 +67,7 @@ pip3 install -e .
 
 ### 环境变量要求
 
-在 `examples/llmagent_with_human_in_the_loop/.env` 中配置（或通过 `export`）：
+在 [examples/llmagent_with_human_in_the_loop/.env](./.env) 中配置（或通过 `export`）：
 
 - `TRPC_AGENT_API_KEY`
 - `TRPC_AGENT_BASE_URL`
