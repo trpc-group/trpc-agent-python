@@ -117,13 +117,13 @@ class TestSkill:
         summary = SkillSummary(name="test-skill", description="Test")
         resource = SkillResource(path="data.txt", content="content")
         skill = Skill(
-            path=Path("/path/to/skill"),
+            base_dir="/path/to/skill",
             summary=summary,
             body="skill body",
             resources=[resource]
         )
 
-        assert skill.path == Path("/path/to/skill")
+        assert skill.base_dir == "/path/to/skill"
         assert skill.summary == summary
         assert skill.body == "skill body"
         assert len(skill.resources) == 1
@@ -132,7 +132,7 @@ class TestSkill:
         """Test creating skill with defaults."""
         skill = Skill()
 
-        assert skill.path == Path("")
+        assert skill.base_dir == ""
         assert isinstance(skill.summary, SkillSummary)
         assert skill.body == ""
         assert skill.resources == []

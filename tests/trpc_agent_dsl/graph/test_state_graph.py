@@ -11,11 +11,11 @@ from unittest.mock import patch
 import pytest
 from langgraph.errors import GraphInterrupt
 from trpc_agent_sdk.dsl.graph._callbacks import NodeCallbacks
-from trpc_agent_sdk.dsl.graph._define import END
-from trpc_agent_sdk.dsl.graph._define import STATE_KEY_METADATA
-from trpc_agent_sdk.dsl.graph._define import STATE_KEY_STEP_NUMBER
-from trpc_agent_sdk.dsl.graph._define import STREAM_KEY_ACK
-from trpc_agent_sdk.dsl.graph._define import STREAM_KEY_EVENT
+from trpc_agent_sdk.dsl.graph._constants import END
+from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_METADATA
+from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_STEP_NUMBER
+from trpc_agent_sdk.dsl.graph._constants import STREAM_KEY_ACK
+from trpc_agent_sdk.dsl.graph._constants import STREAM_KEY_EVENT
 from trpc_agent_sdk.dsl.graph._memory_saver import MemorySaverOption
 from trpc_agent_sdk.dsl.graph._node_config import NodeConfig
 from trpc_agent_sdk.dsl.graph._state import State
@@ -114,8 +114,8 @@ class TestStateGraphBuilders:
             return graph
 
         with patch.object(StateGraph, "add_node", side_effect=fake_add_node), patch(
-                "trpc_agent_dsl.graph._state_graph.LLMNodeAction") as llm_action_cls, patch(
-                    "trpc_agent_dsl.graph._state_graph.AgentNodeAction") as agent_action_cls:
+                "trpc_agent_sdk.dsl.graph._state_graph.LLMNodeAction") as llm_action_cls, patch(
+                    "trpc_agent_sdk.dsl.graph._state_graph.AgentNodeAction") as agent_action_cls:
             llm_instance = llm_action_cls.return_value
             llm_instance.execute = AsyncMock(return_value={"llm": True})
             agent_instance = agent_action_cls.return_value
@@ -292,8 +292,8 @@ class TestStateGraphWrapperExecution:
             STATE_KEY_STEP_NUMBER: 3,
             "input": "value",
         }
-        with patch("trpc_agent_dsl.graph._state_graph.get_stream_writer", return_value=sink), patch(
-                "trpc_agent_dsl.graph._state_graph.get_config",
+        with patch("trpc_agent_sdk.dsl.graph._state_graph.get_stream_writer", return_value=sink), patch(
+                "trpc_agent_sdk.dsl.graph._state_graph.get_config",
                 return_value={"configurable": {
                     "invocation_context": invocation_ctx
                 }}):
@@ -336,8 +336,8 @@ class TestStateGraphWrapperExecution:
         wrapper, _ = _capture_added_wrapper(graph, lambda: graph.add_node("worker", action))
         sink = _AckingWriter()
 
-        with patch("trpc_agent_dsl.graph._state_graph.get_stream_writer", return_value=sink), patch(
-                "trpc_agent_dsl.graph._state_graph.get_config",
+        with patch("trpc_agent_sdk.dsl.graph._state_graph.get_stream_writer", return_value=sink), patch(
+                "trpc_agent_sdk.dsl.graph._state_graph.get_config",
                 return_value={"configurable": {}}):
             result = await wrapper({"input": "value"})
 
@@ -356,8 +356,8 @@ class TestStateGraphWrapperExecution:
         wrapper, _ = _capture_added_wrapper(graph, lambda: graph.add_node("worker", action))
         sink = _AckingWriter()
 
-        with patch("trpc_agent_dsl.graph._state_graph.get_stream_writer", return_value=sink), patch(
-                "trpc_agent_dsl.graph._state_graph.get_config",
+        with patch("trpc_agent_sdk.dsl.graph._state_graph.get_stream_writer", return_value=sink), patch(
+                "trpc_agent_sdk.dsl.graph._state_graph.get_config",
                 return_value={"configurable": {}}):
             result = await wrapper({STATE_KEY_STEP_NUMBER: 1})
 
@@ -384,8 +384,8 @@ class TestStateGraphWrapperExecution:
         wrapper, _ = _capture_added_wrapper(graph, lambda: graph.add_node("worker", action, callbacks=callbacks))
         sink = _AckingWriter()
 
-        with patch("trpc_agent_dsl.graph._state_graph.get_stream_writer", return_value=sink), patch(
-                "trpc_agent_dsl.graph._state_graph.get_config",
+        with patch("trpc_agent_sdk.dsl.graph._state_graph.get_stream_writer", return_value=sink), patch(
+                "trpc_agent_sdk.dsl.graph._state_graph.get_config",
                 return_value={"configurable": {}}):
             with pytest.raises(RuntimeError, match="requires InvocationContext"):
                 await wrapper({STATE_KEY_STEP_NUMBER: 2})
@@ -406,8 +406,8 @@ class TestStateGraphWrapperExecution:
         wrapper, _ = _capture_added_wrapper(graph, lambda: graph.add_node("worker", action))
         sink = _AckingWriter()
 
-        with patch("trpc_agent_dsl.graph._state_graph.get_stream_writer", return_value=sink), patch(
-                "trpc_agent_dsl.graph._state_graph.get_config",
+        with patch("trpc_agent_sdk.dsl.graph._state_graph.get_stream_writer", return_value=sink), patch(
+                "trpc_agent_sdk.dsl.graph._state_graph.get_config",
                 return_value={"configurable": {}}):
             with pytest.raises(TypeError, match="must return a dict or None"):
                 await wrapper({})
@@ -426,8 +426,8 @@ class TestStateGraphWrapperExecution:
         wrapper, _ = _capture_added_wrapper(graph, lambda: graph.add_node("worker", action))
         sink = _AckingWriter()
 
-        with patch("trpc_agent_dsl.graph._state_graph.get_stream_writer", return_value=sink), patch(
-                "trpc_agent_dsl.graph._state_graph.get_config",
+        with patch("trpc_agent_sdk.dsl.graph._state_graph.get_stream_writer", return_value=sink), patch(
+                "trpc_agent_sdk.dsl.graph._state_graph.get_config",
                 return_value={"configurable": {}}):
             with pytest.raises(GraphInterrupt):
                 await wrapper({})
@@ -474,9 +474,9 @@ class TestStateGraphBuilderCoverage:
             return graph
 
         with patch.object(StateGraph, "add_node", side_effect=fake_add_node), patch(
-                "trpc_agent_dsl.graph._state_graph.CodeNodeAction") as code_action_cls, patch(
-                    "trpc_agent_dsl.graph._state_graph.KnowledgeNodeAction") as knowledge_action_cls, patch(
-                        "trpc_agent_dsl.graph._state_graph.MCPNodeAction") as mcp_action_cls:
+                "trpc_agent_sdk.dsl.graph._state_graph.CodeNodeAction") as code_action_cls, patch(
+                    "trpc_agent_sdk.dsl.graph._state_graph.KnowledgeNodeAction") as knowledge_action_cls, patch(
+                        "trpc_agent_sdk.dsl.graph._state_graph.MCPNodeAction") as mcp_action_cls:
             code_action_cls.return_value.execute = AsyncMock(return_value={"code": True})
             knowledge_action_cls.return_value.execute = AsyncMock(return_value={"knowledge": True})
             mcp_action_cls.return_value.execute = AsyncMock(return_value={"mcp": True})

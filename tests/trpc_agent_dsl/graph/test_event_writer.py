@@ -5,8 +5,8 @@
 
 from google.genai.types import Content
 from google.genai.types import Part
-from trpc_agent_sdk.dsl.graph._define import STREAM_KEY_ACK
-from trpc_agent_sdk.dsl.graph._define import STREAM_KEY_EVENT
+from trpc_agent_sdk.dsl.graph._constants import STREAM_KEY_ACK
+from trpc_agent_sdk.dsl.graph._constants import STREAM_KEY_EVENT
 from trpc_agent_sdk.dsl.graph._event_writer import AsyncEventWriter
 from trpc_agent_sdk.dsl.graph._event_writer import EventWriter
 from trpc_agent_sdk.dsl.graph._events import EventUtils

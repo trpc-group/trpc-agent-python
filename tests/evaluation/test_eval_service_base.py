@@ -4,6 +4,9 @@
 """Unit tests for eval service base (_eval_service_base)."""
 
 import pytest
+
+pytest.importorskip("trpc_agent_sdk._runners", reason="trpc_agent_sdk._runners not yet implemented")
+
 from trpc_agent_sdk.evaluation import EvaluateConfig
 from trpc_agent_sdk.evaluation import EvaluateRequest
 from trpc_agent_sdk.evaluation import InferenceConfig

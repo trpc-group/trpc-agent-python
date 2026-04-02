@@ -12,21 +12,21 @@ from google.genai.types import Content
 from google.genai.types import FunctionCall
 from google.genai.types import FunctionResponse
 from google.genai.types import Part
-from trpc_agent_sdk.dsl.graph._define import ROLE_USER
-from trpc_agent_sdk.dsl.graph._define import STATE_KEY_LAST_RESPONSE
-from trpc_agent_sdk.dsl.graph._define import STATE_KEY_LAST_RESPONSE_ID
-from trpc_agent_sdk.dsl.graph._define import STATE_KEY_LAST_TOOL_RESPONSE
-from trpc_agent_sdk.dsl.graph._define import STATE_KEY_MESSAGES
-from trpc_agent_sdk.dsl.graph._define import STATE_KEY_NODE_RESPONSES
-from trpc_agent_sdk.dsl.graph._define import STATE_KEY_ONE_SHOT_MESSAGES
-from trpc_agent_sdk.dsl.graph._define import STATE_KEY_ONE_SHOT_MESSAGES_BY_NODE
-from trpc_agent_sdk.dsl.graph._define import STATE_KEY_USER_INPUT
-from trpc_agent_sdk.dsl.graph._define import STREAM_KEY_ACK
-from trpc_agent_sdk.dsl.graph._define import STREAM_KEY_EVENT
+from trpc_agent_sdk.dsl.graph._constants import ROLE_USER
+from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_LAST_RESPONSE
+from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_LAST_RESPONSE_ID
+from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_LAST_TOOL_RESPONSE
+from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_MESSAGES
+from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_NODE_RESPONSES
+from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_ONE_SHOT_MESSAGES
+from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_ONE_SHOT_MESSAGES_BY_NODE
+from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_USER_INPUT
+from trpc_agent_sdk.dsl.graph._constants import STREAM_KEY_ACK
+from trpc_agent_sdk.dsl.graph._constants import STREAM_KEY_EVENT
 from trpc_agent_sdk.dsl.graph._event_writer import AsyncEventWriter
 from trpc_agent_sdk.dsl.graph._event_writer import EventWriter
 from trpc_agent_sdk.dsl.graph._node_action._llm import LLMNodeAction
-from trpc_agent_sdk.models.llm_response import LlmResponse
+from trpc_agent_sdk.models import LlmResponse
 from trpc_agent_sdk.tools import FunctionTool
 from trpc_agent_sdk.types import GenerateContentConfig
 
@@ -260,7 +260,7 @@ class TestLLMNodeActionExecute:
         )
         messages = [foreign_call, foreign_response, known_call]
 
-        with patch("trpc_agent_dsl.graph._node_action._llm.LlmRequest.append_tools"):
+        with patch("trpc_agent_sdk.dsl.graph._node_action._llm.LlmRequest.append_tools"):
             await action.execute({STATE_KEY_MESSAGES: messages})
         request = model.requests[0][0]
 
@@ -286,7 +286,7 @@ class TestLLMNodeActionExecute:
             )
         ]
 
-        with patch("trpc_agent_dsl.graph._node_action._llm.LlmRequest.append_tools"):
+        with patch("trpc_agent_sdk.dsl.graph._node_action._llm.LlmRequest.append_tools"):
             await action.execute({STATE_KEY_MESSAGES: messages})
         request = model.requests[0][0]
 
@@ -408,7 +408,7 @@ class TestLLMNodeActionExecute:
         tools = {"tool-a": object()}
         action, _ = _build_execute_action(model, generation_config=generation_config, tools=tools)
 
-        with patch("trpc_agent_dsl.graph._node_action._llm.LlmRequest.append_tools") as append_tools:
+        with patch("trpc_agent_sdk.dsl.graph._node_action._llm.LlmRequest.append_tools") as append_tools:
             await action.execute({STATE_KEY_MESSAGES: []})
 
         append_tools.assert_called_once()

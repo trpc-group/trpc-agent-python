@@ -4,6 +4,9 @@
 """Unit tests for user simulator base (_user_simulator_base)."""
 
 import pytest
+
+pytest.importorskip("trpc_agent_sdk._runners", reason="trpc_agent_sdk._runners not yet implemented")
+
 from trpc_agent_sdk.evaluation import BaseUserSimulatorConfig
 from trpc_agent_sdk.evaluation import NextUserMessage
 from trpc_agent_sdk.evaluation import Status

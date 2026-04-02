@@ -23,7 +23,7 @@ class TestContainerCodeExecutor:
         """Set up test fixtures before each test."""
         self.mock_ctx = Mock(spec=InvocationContext)
 
-    @patch('trpc_agent_sdk.code_executors.container.ContainerClient')
+    @patch('trpc_agent_sdk.code_executors.container._container_code_executor.ContainerClient')
     def test_init_with_image(self, mock_container_client_class):
         """Test initialization with image."""
         mock_container_client = Mock()
@@ -37,7 +37,7 @@ class TestContainerCodeExecutor:
         assert executor.optimize_data_file is False
         mock_container_client_class.assert_called_once()
 
-    @patch('trpc_agent_sdk.code_executors.container.ContainerClient')
+    @patch('trpc_agent_sdk.code_executors.container._container_code_executor.ContainerClient')
     def test_init_with_docker_path(self, mock_container_client_class):
         """Test initialization with docker_path."""
         mock_container_client = Mock()
@@ -49,13 +49,13 @@ class TestContainerCodeExecutor:
         assert executor.image is None
         mock_container_client_class.assert_called_once()
 
-    @patch('trpc_agent_sdk.code_executors.container.ContainerClient')
+    @patch('trpc_agent_sdk.code_executors.container._container_code_executor.ContainerClient')
     def test_init_neither_image_nor_docker_path(self, mock_container_client_class):
         """Test initialization fails when neither image nor docker_path is set."""
         with pytest.raises(ValueError, match="Either image or docker_path must be set"):
             ContainerCodeExecutor()
 
-    @patch('trpc_agent_sdk.code_executors.container.ContainerClient')
+    @patch('trpc_agent_sdk.code_executors.container._container_code_executor.ContainerClient')
     def test_init_cannot_set_stateful(self, mock_container_client_class):
         """Test initialization fails when stateful is set to True."""
         mock_container_client = Mock()
@@ -64,7 +64,7 @@ class TestContainerCodeExecutor:
         with pytest.raises(ValueError, match="Cannot set `stateful=True`"):
             ContainerCodeExecutor(image="python:3-slim", stateful=True)
 
-    @patch('trpc_agent_sdk.code_executors.container.ContainerClient')
+    @patch('trpc_agent_sdk.code_executors.container._container_code_executor.ContainerClient')
     def test_init_cannot_set_optimize_data_file(self, mock_container_client_class):
         """Test initialization fails when optimize_data_file is set to True."""
         mock_container_client = Mock()
@@ -73,7 +73,7 @@ class TestContainerCodeExecutor:
         with pytest.raises(ValueError, match="Cannot set `optimize_data_file=True`"):
             ContainerCodeExecutor(image="python:3-slim", optimize_data_file=True)
 
-    @patch('trpc_agent_sdk.code_executors.container.ContainerClient')
+    @patch('trpc_agent_sdk.code_executors.container._container_code_executor.ContainerClient')
     async def test_execute_code_python(self, mock_container_client_class):
         """Test executing Python code."""
         mock_container_client = Mock()
@@ -95,7 +95,7 @@ class TestContainerCodeExecutor:
         assert result.outcome == Outcome.OUTCOME_OK
         mock_container_client.exec_run.assert_called_once()
 
-    @patch('trpc_agent_sdk.code_executors.container.ContainerClient')
+    @patch('trpc_agent_sdk.code_executors.container._container_code_executor.ContainerClient')
     async def test_execute_code_bash(self, mock_container_client_class):
         """Test executing Bash code."""
         mock_container_client = Mock()
@@ -115,7 +115,7 @@ class TestContainerCodeExecutor:
         assert result.outcome == Outcome.OUTCOME_OK
         mock_container_client.exec_run.assert_called_once()
 
-    @patch('trpc_agent_sdk.code_executors.container.ContainerClient')
+    @patch('trpc_agent_sdk.code_executors.container._container_code_executor.ContainerClient')
     async def test_execute_code_multiple_blocks(self, mock_container_client_class):
         """Test executing multiple code blocks."""
         mock_container_client = Mock()
@@ -140,7 +140,7 @@ class TestContainerCodeExecutor:
         assert result.outcome == Outcome.OUTCOME_OK
         assert mock_container_client.exec_run.call_count == 2
 
-    @patch('trpc_agent_sdk.code_executors.container.ContainerClient')
+    @patch('trpc_agent_sdk.code_executors.container._container_code_executor.ContainerClient')
     async def test_execute_code_with_stderr(self, mock_container_client_class):
         """Test executing code that produces stderr."""
         mock_container_client = Mock()
@@ -159,7 +159,7 @@ class TestContainerCodeExecutor:
         assert "error" in result.output
         assert result.outcome == Outcome.OUTCOME_FAILED
 
-    @patch('trpc_agent_sdk.code_executors.container.ContainerClient')
+    @patch('trpc_agent_sdk.code_executors.container._container_code_executor.ContainerClient')
     async def test_execute_code_unsupported_language(self, mock_container_client_class):
         """Test executing code with unsupported language."""
         mock_container_client = Mock()
@@ -175,7 +175,7 @@ class TestContainerCodeExecutor:
         # exec_run should not be called for unsupported languages
         mock_container_client.exec_run.assert_not_called()
 
-    @patch('trpc_agent_sdk.code_executors.container.ContainerClient')
+    @patch('trpc_agent_sdk.code_executors.container._container_code_executor.ContainerClient')
     async def test_execute_code_exception_handling(self, mock_container_client_class):
         """Test handling exceptions during code execution."""
         mock_container_client = Mock()
@@ -190,7 +190,7 @@ class TestContainerCodeExecutor:
         with pytest.raises(Exception, match="Container error"):
             await executor.execute_code(self.mock_ctx, code_input)
 
-    @patch('trpc_agent_sdk.code_executors.container.ContainerClient')
+    @patch('trpc_agent_sdk.code_executors.container._container_code_executor.ContainerClient')
     def test_code_block_delimiter(self, mock_container_client_class):
         """Test code_block_delimiter method."""
         mock_container_client = Mock()
@@ -202,7 +202,7 @@ class TestContainerCodeExecutor:
         assert delimiter.start == "```tool_code\n"
         assert delimiter.end == "\n```"
 
-    @patch('trpc_agent_sdk.code_executors.container.ContainerClient')
+    @patch('trpc_agent_sdk.code_executors.container._container_code_executor.ContainerClient')
     async def test_execute_code_empty_language_defaults_to_python(self, mock_container_client_class):
         """Test executing code with empty language defaults to Python."""
         mock_container_client = Mock()
