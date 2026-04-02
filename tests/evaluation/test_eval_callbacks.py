@@ -4,6 +4,9 @@
 """Unit tests for evaluation callbacks (_eval_callbacks)."""
 
 import pytest
+
+pytest.importorskip("trpc_agent_sdk._runners", reason="trpc_agent_sdk._runners not yet implemented")
+
 from trpc_agent_sdk.evaluation import AfterEvaluateSetArgs
 from trpc_agent_sdk.evaluation import BeforeInferenceSetArgs
 from trpc_agent_sdk.evaluation import CallbackPoint

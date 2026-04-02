@@ -16,11 +16,12 @@ from trpc_agent_sdk.code_executors import WorkspaceInfo
 from trpc_agent_sdk.code_executors import WorkspaceRunResult
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.skills import BaseSkillRepository
-from trpc_agent_sdk.skills import ArtifactInfo
-from trpc_agent_sdk.skills import SkillRunInput
-from trpc_agent_sdk.skills import SkillRunOutput
-from trpc_agent_sdk.skills import SkillRunTool
-from trpc_agent_sdk.skills._run_tool import _inline_json_schema_refs
+from trpc_agent_sdk.skills.tools import ArtifactInfo
+from trpc_agent_sdk.skills.tools import SkillRunFile
+from trpc_agent_sdk.skills.tools import SkillRunInput
+from trpc_agent_sdk.skills.tools import SkillRunOutput
+from trpc_agent_sdk.skills.tools import SkillRunTool
+from trpc_agent_sdk.skills.tools._skill_run import _inline_json_schema_refs
 
 
 class TestInlineJsonSchemaRefs:
@@ -129,7 +130,7 @@ class TestSkillRunOutput:
 
     def test_create_skill_run_output(self):
         """Test creating skill run output."""
-        output_files = [CodeFile(name="output.txt", content="content", mime_type="text/plain")]
+        output_files = [SkillRunFile(name="output.txt", content="content", mime_type="text/plain")]
         artifact_files = [ArtifactInfo(name="artifact.txt", version=1)]
 
         output = SkillRunOutput(
@@ -239,79 +240,17 @@ class TestSkillRunTool:
         assert result == self.mock_repository
 
     @pytest.mark.asyncio
-    async def test_link_workspace_dirs(self):
-        """Test linking workspace directories."""
-        tool = SkillRunTool(repository=self.mock_repository)
-        workspace = WorkspaceInfo(id="ws-123", path="/tmp/workspace")
-
-        mock_result = WorkspaceRunResult(stdout="", stderr="", exit_code=0)
-        self.mock_runner.run_program = AsyncMock(return_value=mock_result)
-
-        await tool._link_workspace_dirs(self.mock_ctx, workspace, "test-skill")
-
-        self.mock_runner.run_program.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_read_only_except_symlinks(self):
-        """Test making files read-only except symlinks."""
-        tool = SkillRunTool(repository=self.mock_repository)
-        workspace = WorkspaceInfo(id="ws-123", path="/tmp/workspace")
-
-        mock_result = WorkspaceRunResult(stdout="", stderr="", exit_code=0)
-        self.mock_runner.run_program = AsyncMock(return_value=mock_result)
-
-        await tool._read_only_except_symlinks(self.mock_ctx, workspace, "/tmp/dest")
-
-        self.mock_runner.run_program.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_stage_skill(self):
-        """Test staging a skill."""
-        tool = SkillRunTool(repository=self.mock_repository)
-        workspace = WorkspaceInfo(id="ws-123", path="/tmp/workspace")
-
-        self.mock_repository.path = Mock(return_value="/path/to/skill")
-        self.mock_manager.create_workspace = AsyncMock(return_value=workspace)
-        self.mock_fs.stage_directory = AsyncMock()
-        self.mock_runner.run_program = AsyncMock(return_value=WorkspaceRunResult(exit_code=0))
-
-        with patch('trpc_agent_sdk.skills._run_tool.compute_dir_digest', return_value="digest123"):
-            with patch('trpc_agent_sdk.skills._run_tool.ensure_layout'):
-                with patch('trpc_agent_sdk.skills._run_tool.load_metadata') as mock_load:
-                    with patch('trpc_agent_sdk.skills._run_tool.save_metadata'):
-                        from trpc_agent_sdk.skills._types import SkillWorkspaceMetadata
-                        mock_load.return_value = SkillWorkspaceMetadata()
-
-                        await tool._stage_skill(self.mock_ctx, workspace, "/path/to/skill", "test-skill")
-
-                        self.mock_fs.stage_directory.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_stage_skill_already_staged(self):
-        """Test staging skill that's already staged with same digest."""
-        tool = SkillRunTool(repository=self.mock_repository)
-        workspace = WorkspaceInfo(id="ws-123", path="/tmp/workspace")
-
-        with patch('trpc_agent_sdk.skills._run_tool.compute_dir_digest', return_value="digest123"):
-            with patch('trpc_agent_sdk.skills._run_tool.ensure_layout'):
-                with patch('trpc_agent_sdk.skills._run_tool.load_metadata') as mock_load:
-                    from trpc_agent_sdk.skills._types import SkillWorkspaceMetadata, SkillMetadata
-                    metadata = SkillWorkspaceMetadata()
-                    metadata.skills["test-skill"] = SkillMetadata(name="test-skill", digest="digest123")
-                    mock_load.return_value = metadata
-
-                    await tool._stage_skill(self.mock_ctx, workspace, "/path/to/skill", "test-skill")
-
-                    # Should not stage again
-                    self.mock_fs.stage_directory.assert_not_called()
-
-    @pytest.mark.asyncio
     async def test_run_async_impl_success(self):
         """Test running skill_run tool successfully."""
-        tool = SkillRunTool(repository=self.mock_repository)
+        from trpc_agent_sdk.skills.stager import SkillStageResult
+
+        mock_stager = AsyncMock()
+        mock_stager.stage_skill = AsyncMock(return_value=SkillStageResult(workspace_skill_dir="skills/test-skill"))
+        tool = SkillRunTool(repository=self.mock_repository, skill_stager=mock_stager)
 
         workspace = WorkspaceInfo(id="ws-123", path="/tmp/workspace")
         self.mock_repository.path = Mock(return_value="/path/to/skill")
+        self.mock_repository.skill_run_env = Mock(return_value={})
         self.mock_manager.create_workspace = AsyncMock(return_value=workspace)
         self.mock_fs.stage_directory = AsyncMock()
         self.mock_fs.stage_inputs = AsyncMock()
@@ -324,38 +263,38 @@ class TestSkillRunTool:
             timed_out=False
         ))
 
-        with patch('trpc_agent_sdk.skills._run_tool.compute_dir_digest', return_value="digest123"):
-            with patch('trpc_agent_sdk.skills._run_tool.ensure_layout'):
-                with patch('trpc_agent_sdk.skills._run_tool.load_metadata') as mock_load:
-                    with patch('trpc_agent_sdk.skills._run_tool.save_metadata'):
-                        from trpc_agent_sdk.skills._types import SkillWorkspaceMetadata
-                        mock_load.return_value = SkillWorkspaceMetadata()
+        args = {
+            "skill": "test-skill",
+            "command": "echo hello"
+        }
+        result = await tool._run_async_impl(tool_context=self.mock_ctx, args=args)
 
-                        args = {
-                            "skill": "test-skill",
-                            "command": "echo hello"
-                        }
-                        result = await tool._run_async_impl(tool_context=self.mock_ctx, args=args)
-
-                        assert isinstance(result, dict)
-                        assert result["stdout"] == "output"
-                        assert result["exit_code"] == 0
+        assert isinstance(result, dict)
+        assert result["stdout"] == "output"
+        assert result["exit_code"] == 0
 
     @pytest.mark.asyncio
     async def test_run_async_impl_with_output_files(self):
         """Test running skill_run tool with output files."""
-        tool = SkillRunTool(repository=self.mock_repository)
+        from trpc_agent_sdk.skills.stager import SkillStageResult
+
+        mock_stager = AsyncMock()
+        mock_stager.stage_skill = AsyncMock(return_value=SkillStageResult(workspace_skill_dir="skills/test-skill"))
+        tool = SkillRunTool(repository=self.mock_repository, skill_stager=mock_stager)
 
         workspace = WorkspaceInfo(id="ws-123", path="/tmp/workspace")
         self.mock_repository.path = Mock(return_value="/path/to/skill")
+        self.mock_repository.skill_run_env = Mock(return_value={})
         self.mock_manager.create_workspace = AsyncMock(return_value=workspace)
         self.mock_fs.stage_directory = AsyncMock()
         self.mock_fs.stage_inputs = AsyncMock()
         self.mock_fs.collect = AsyncMock(return_value=[CodeFile(name="output.txt", content="content", mime_type="text/plain")])
         self.mock_runner.run_program = AsyncMock(return_value=WorkspaceRunResult(
             stdout="output",
+            stderr="",
             exit_code=0,
-            duration=1.0
+            duration=1.0,
+            timed_out=False
         ))
 
         from trpc_agent_sdk.code_executors._types import ManifestOutput, ManifestFileRef
@@ -364,21 +303,14 @@ class TestSkillRunTool:
         ])
         self.mock_fs.collect_outputs = AsyncMock(return_value=mock_output)
 
-        with patch('trpc_agent_sdk.skills._run_tool.compute_dir_digest', return_value="digest123"):
-            with patch('trpc_agent_sdk.skills._run_tool.ensure_layout'):
-                with patch('trpc_agent_sdk.skills._run_tool.load_metadata') as mock_load:
-                    with patch('trpc_agent_sdk.skills._run_tool.save_metadata'):
-                        from trpc_agent_sdk.skills._types import SkillWorkspaceMetadata
-                        mock_load.return_value = SkillWorkspaceMetadata()
+        args = {
+            "skill": "test-skill",
+            "command": "echo hello",
+            "output_files": ["out/*.txt"]
+        }
+        result = await tool._run_async_impl(tool_context=self.mock_ctx, args=args)
 
-                        args = {
-                            "skill": "test-skill",
-                            "command": "echo hello",
-                            "output_files": ["out/*.txt"]
-                        }
-                        result = await tool._run_async_impl(tool_context=self.mock_ctx, args=args)
-
-                        assert len(result["output_files"]) == 1
+        assert len(result["output_files"]) == 1
 
     @pytest.mark.asyncio
     async def test_run_async_impl_invalid_args(self):
@@ -396,35 +328,35 @@ class TestSkillRunTool:
     @pytest.mark.asyncio
     async def test_run_async_impl_with_kwargs(self):
         """Test running skill_run tool with kwargs."""
-        tool = SkillRunTool(repository=self.mock_repository, timeout=30)
+        from trpc_agent_sdk.skills.stager import SkillStageResult
+
+        mock_stager = AsyncMock()
+        mock_stager.stage_skill = AsyncMock(return_value=SkillStageResult(workspace_skill_dir="skills/test-skill"))
+        tool = SkillRunTool(repository=self.mock_repository, timeout=30, skill_stager=mock_stager)
 
         workspace = WorkspaceInfo(id="ws-123", path="/tmp/workspace")
         self.mock_repository.path = Mock(return_value="/path/to/skill")
+        self.mock_repository.skill_run_env = Mock(return_value={})
         self.mock_manager.create_workspace = AsyncMock(return_value=workspace)
         self.mock_fs.stage_directory = AsyncMock()
         self.mock_fs.stage_inputs = AsyncMock()
         self.mock_fs.collect_outputs = AsyncMock(return_value=Mock(files=[]))
         self.mock_runner.run_program = AsyncMock(return_value=WorkspaceRunResult(
             stdout="output",
+            stderr="",
             exit_code=0,
-            duration=1.0
+            duration=1.0,
+            timed_out=False
         ))
 
-        with patch('trpc_agent_sdk.skills._run_tool.compute_dir_digest', return_value="digest123"):
-            with patch('trpc_agent_sdk.skills._run_tool.ensure_layout'):
-                with patch('trpc_agent_sdk.skills._run_tool.load_metadata') as mock_load:
-                    with patch('trpc_agent_sdk.skills._run_tool.save_metadata'):
-                        from trpc_agent_sdk.skills._types import SkillWorkspaceMetadata
-                        mock_load.return_value = SkillWorkspaceMetadata()
+        args = {
+            "skill": "test-skill",
+            "command": "echo hello"
+        }
 
-                        args = {
-                            "skill": "test-skill",
-                            "command": "echo hello"
-                        }
+        result = await tool._run_async_impl(tool_context=self.mock_ctx, args=args)
 
-                        result = await tool._run_async_impl(tool_context=self.mock_ctx, args=args)
-
-                        assert isinstance(result, dict)
-                        assert result["stdout"] == "output"
-                        assert result["exit_code"] == 0
+        assert isinstance(result, dict)
+        assert result["stdout"] == "output"
+        assert result["exit_code"] == 0
 

@@ -17,7 +17,7 @@ from trpc_agent_sdk.models import CONTENT
 from trpc_agent_sdk.models import FINISH_REASON
 from trpc_agent_sdk.models import MESSAGE
 from trpc_agent_sdk.models import TOOL_CALLS
-from trpc_agent_sdk.models import _build_response_format_for_litellm
+from trpc_agent_sdk.models._litellm_model import _build_response_format_for_litellm
 from trpc_agent_sdk.models._litellm_model import _is_litellm_gemini_model
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import GenerateContentConfig

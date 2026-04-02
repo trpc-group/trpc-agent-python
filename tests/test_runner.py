@@ -492,7 +492,7 @@ class TestIsTransferableAcrossAgentTree:
 
     def test_llm_agent_is_transferable(self, runner):
         """Test that LlmAgent is considered transferable."""
-        from trpc_agent_sdk.agents.llm_agent import LlmAgent
+        from trpc_agent_sdk.agents._llm_agent import LlmAgent
 
         llm_agent = Mock(spec=LlmAgent)
         llm_agent.disallow_transfer_to_parent = False
@@ -508,7 +508,7 @@ class TestIsTransferableAcrossAgentTree:
 
     def test_agent_with_disallow_transfer_not_transferable(self, runner):
         """Test that agent with disallow_transfer_to_parent is not transferable."""
-        from trpc_agent_sdk.agents.llm_agent import LlmAgent
+        from trpc_agent_sdk.agents._llm_agent import LlmAgent
 
         llm_agent = Mock(spec=LlmAgent)
         llm_agent.disallow_transfer_to_parent = True

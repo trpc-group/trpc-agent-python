@@ -41,6 +41,8 @@ class TestSqlStorage:
     @pytest.fixture
     def async_db_url(self):
         """Async database URL fixture."""
+        pytest.importorskip("aiosqlite")
+        pytest.importorskip("greenlet")
         return "sqlite+aiosqlite:///:memory:"
 
     @pytest.fixture

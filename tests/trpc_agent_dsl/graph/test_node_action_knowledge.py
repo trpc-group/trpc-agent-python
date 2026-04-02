@@ -8,8 +8,8 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from trpc_agent_sdk.dsl.graph._define import STATE_KEY_LAST_RESPONSE
-from trpc_agent_sdk.dsl.graph._define import STATE_KEY_NODE_RESPONSES
+from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_LAST_RESPONSE
+from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_NODE_RESPONSES
 from trpc_agent_sdk.dsl.graph._event_writer import AsyncEventWriter
 from trpc_agent_sdk.dsl.graph._event_writer import EventWriter
 from trpc_agent_sdk.dsl.graph._node_action._knowledge import KnowledgeNodeAction

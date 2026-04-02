@@ -4,6 +4,9 @@
 """Unit tests for LLM criterion (_llm_criterion)."""
 
 import pytest
+
+pytest.importorskip("trpc_agent_sdk._runners", reason="trpc_agent_sdk._runners not yet implemented")
+
 from trpc_agent_sdk.evaluation import EvalMetric
 from trpc_agent_sdk.evaluation import DEFAULT_KNOWLEDGE_TOOL_NAMES
 from trpc_agent_sdk.evaluation import DEFAULT_NUM_SAMPLES

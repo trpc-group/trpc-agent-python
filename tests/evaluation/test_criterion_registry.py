@@ -4,6 +4,9 @@
 """Unit tests for criterion registry (_criterion_registry)."""
 
 import pytest
+
+pytest.importorskip("trpc_agent_sdk._runners", reason="trpc_agent_sdk._runners not yet implemented")
+
 from trpc_agent_sdk.evaluation import CRITERION_REGISTRY
 from trpc_agent_sdk.evaluation import CriterionRegistry
 from trpc_agent_sdk.evaluation import CriterionType

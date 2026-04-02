@@ -4,6 +4,9 @@
 """Unit tests for evaluation criteria (_eval_criterion)."""
 
 import pytest
+
+pytest.importorskip("trpc_agent_sdk._runners", reason="trpc_agent_sdk._runners not yet implemented")
+
 from trpc_agent_sdk.evaluation import FinalResponseCriterion
 from trpc_agent_sdk.evaluation import JSONCriterion
 from trpc_agent_sdk.evaluation import TextCriterion

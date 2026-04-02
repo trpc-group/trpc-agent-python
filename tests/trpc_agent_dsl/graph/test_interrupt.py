@@ -15,7 +15,7 @@ class TestInterrupt:
         """Wrapper should call langgraph interrupt function with original payload."""
         payload = {"need": "approval"}
 
-        with patch("trpc_agent_dsl.graph._interrupt._langgraph_interrupt", return_value={"resume": True}) as mock_fn:
+        with patch("trpc_agent_sdk.dsl.graph._interrupt._langgraph_interrupt", return_value={"resume": True}) as mock_fn:
             result = interrupt(payload)
 
         mock_fn.assert_called_once_with(payload)

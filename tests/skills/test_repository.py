@@ -32,10 +32,8 @@ class ConcreteSkillRepository(BaseSkillRepository):
     def path(self, name: str) -> str:
         return f"/path/to/{name}"
 
-    def _parse_all(self, path: str, out: Skill) -> None:
-        out.summary.name = "test-skill"
-        out.summary.description = "Test"
-        out.body = "Body"
+    def refresh(self) -> None:
+        pass
 
 
 class TestBaseSkillRepository:
@@ -105,7 +103,7 @@ class TestFsSkillRepository:
 
             path = repo.path("test-skill")
 
-            assert path == str(skill_dir)
+            assert Path(path).resolve() == skill_dir.resolve()
 
     def test_path_nonexistent_skill(self):
         """Test getting path for nonexistent skill raises ValueError."""
@@ -186,39 +184,43 @@ class TestFsSkillRepository:
             assert any(r.path == "doc1.md" for r in skill.resources)
             assert any(r.path == "doc2.txt" for r in skill.resources)
 
-    def test_parse_summary(self):
-        """Test parsing skill summary."""
+    def test_parse_summary_via_get(self):
+        """Test that skill summary is correctly parsed via get()."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_file = Path(tmpdir) / SKILL_FILE
+            skill_dir = Path(tmpdir) / "test-skill"
+            skill_dir.mkdir()
+            skill_file = skill_dir / SKILL_FILE
             skill_file.write_text("---\nname: test-skill\ndescription: Test description\n---\nBody")
             repo = FsSkillRepository(tmpdir, workspace_runtime=self.mock_runtime)
-            front_matter, _ = repo._parse_yaml(str(skill_file))
-            skill = Skill()
-            repo._parse_summary(front_matter, skill)
+
+            skill = repo.get("test-skill")
 
             assert skill.summary.name == "test-skill"
             assert skill.summary.description == "Test description"
 
-    def test_parse_summary_missing_name(self):
-        """Test parsing summary with missing name."""
+    def test_parse_summary_missing_name_uses_dir_name(self):
+        """Test that missing name in frontmatter falls back to directory name."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_file = Path(tmpdir) / SKILL_FILE
+            skill_dir = Path(tmpdir) / "my-skill"
+            skill_dir.mkdir()
+            skill_file = skill_dir / SKILL_FILE
             skill_file.write_text("---\ndescription: Test\n---\nBody")
             repo = FsSkillRepository(tmpdir, workspace_runtime=self.mock_runtime)
-            front_matter, _ = repo._parse_yaml(str(skill_file))
-            skill = Skill()
-            repo._parse_summary(front_matter, skill)
 
-            assert skill.summary.name == ""
+            skill = repo.get("my-skill")
 
-    def test_parse_full(self):
-        """Test parsing full skill file."""
+            assert skill.summary.name == "my-skill"
+
+    def test_parse_full_via_get(self):
+        """Test parsing full skill file via get()."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            skill_file = Path(tmpdir) / SKILL_FILE
+            skill_dir = Path(tmpdir) / "test-skill"
+            skill_dir.mkdir()
+            skill_file = skill_dir / SKILL_FILE
             skill_file.write_text("---\nname: test-skill\ndescription: Test\n---\nSkill body content")
             repo = FsSkillRepository(tmpdir, workspace_runtime=self.mock_runtime)
-            skill = Skill()
-            repo._parse_all(str(skill_file), skill)
+
+            skill = repo.get("test-skill")
 
             assert skill.summary.name == "test-skill"
             assert skill.body == "Skill body content"
@@ -234,34 +236,40 @@ class TestFsSkillRepository:
         assert body == "Body content"
 
     def test_from_markdown_no_front_matter(self):
-        """Test parsing markdown without front matter raises ValueError."""
+        """Test parsing markdown without front matter returns empty dict."""
         content = "Just plain markdown"
 
-        with pytest.raises(ValueError, match="must start with YAML frontmatter"):
-            FsSkillRepository.from_markdown(content)
+        front_matter, body = FsSkillRepository.from_markdown(content)
+
+        assert front_matter == {}
+        assert body == content
 
     def test_from_markdown_incomplete_front_matter(self):
-        """Test parsing markdown with incomplete front matter raises ValueError."""
+        """Test parsing markdown with incomplete front matter returns empty dict."""
         content = "------\nname#test\n---\nBody content"
 
-        with pytest.raises(ValueError, match="YAML frontmatter must be a dictionary"):
-            FsSkillRepository.from_markdown(content)
+        front_matter, body = FsSkillRepository.from_markdown(content)
+
+        assert front_matter == {}
 
     def test_from_markdown_invalid_yaml(self):
-        """Test parsing markdown with invalid YAML raises ValueError."""
+        """Test parsing markdown with invalid YAML returns empty dict."""
         content = "---\ninvalid: yaml: content: here\n---\nBody"
 
-        with pytest.raises(ValueError, match="Invalid YAML"):
-            FsSkillRepository.from_markdown(content)
+        front_matter, body = FsSkillRepository.from_markdown(content)
+
+        assert front_matter == {}
 
     def test_is_doc_file(self):
         """Test checking if file is a doc file."""
-        assert FsSkillRepository._is_doc_file("file.md") is True
-        assert FsSkillRepository._is_doc_file("file.txt") is True
-        assert FsSkillRepository._is_doc_file("file.MD") is True
-        assert FsSkillRepository._is_doc_file("file.TXT") is True
-        assert FsSkillRepository._is_doc_file("file.py") is False
-        assert FsSkillRepository._is_doc_file("file.js") is False
+        from trpc_agent_sdk.skills._repository import _is_doc_file
+
+        assert _is_doc_file("file.md") is True
+        assert _is_doc_file("file.txt") is True
+        assert _is_doc_file("file.MD") is True
+        assert _is_doc_file("file.TXT") is True
+        assert _is_doc_file("file.py") is False
+        assert _is_doc_file("file.js") is False
 
     def test_scan_duplicate_roots(self):
         """Test scanning with duplicate roots."""

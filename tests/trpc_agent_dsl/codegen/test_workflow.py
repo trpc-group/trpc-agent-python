@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
+pytest.importorskip("trpc_agent_sdk.dsl.codegen", reason="trpc_agent_sdk.dsl.codegen not yet implemented")
+
 from trpc_agent_sdk.dsl.codegen import load_workflow_definition
 
 

@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 from langgraph.checkpoint.base import empty_checkpoint
-from trpc_agent_sdk.dsl.graph._define import STATE_KEY_CHECKPOINTS
-from trpc_agent_sdk.dsl.graph._define import STATE_KEY_CHECKPOINT_BLOBS
-from trpc_agent_sdk.dsl.graph._define import STATE_KEY_CHECKPOINT_WRITES
+from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_CHECKPOINTS
+from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_CHECKPOINT_BLOBS
+from trpc_agent_sdk.dsl.graph._constants import STATE_KEY_CHECKPOINT_WRITES
 from trpc_agent_sdk.dsl.graph._memory_saver import MemorySaver
 from trpc_agent_sdk.dsl.graph._memory_saver import has_graph_internal_checkpoint_state
 from trpc_agent_sdk.dsl.graph._memory_saver import strip_graph_internal_checkpoint_state

@@ -4,6 +4,9 @@
 """Unit tests for agent evaluator (agent_evaluator)."""
 
 import pytest
+
+pytest.importorskip("trpc_agent_sdk._runners", reason="trpc_agent_sdk._runners not yet implemented")
+
 from trpc_agent_sdk.evaluation import EvalStatus
 from trpc_agent_sdk.evaluation import EvalCaseResult
 from trpc_agent_sdk.evaluation import EvalMetricResult

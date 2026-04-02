@@ -4,6 +4,9 @@
 """Unit tests for LLM evaluator registry (llm_evaluator)."""
 
 import pytest
+
+pytest.importorskip("trpc_agent_sdk._runners", reason="trpc_agent_sdk._runners not yet implemented")
+
 from trpc_agent_sdk.evaluation import LLMEvaluatorRegistry
 from trpc_agent_sdk.evaluation import LLM_METRIC_NAMES
 

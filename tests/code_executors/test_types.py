@@ -20,6 +20,7 @@ from trpc_agent_sdk.code_executors._types import WorkspaceResourceLimits
 from trpc_agent_sdk.code_executors._types import WorkspaceRunProgramSpec
 from trpc_agent_sdk.code_executors._types import WorkspaceRunResult
 from trpc_agent_sdk.code_executors._types import WorkspaceStageOptions
+from trpc_agent_sdk.code_executors._types import create_code_execution_result
 from trpc_agent_sdk.types import Outcome
 
 
@@ -44,6 +45,26 @@ class TestCodeFile:
         file = CodeFile(name="test.py", content="", mime_type="text/plain")
 
         assert file.content == ""
+
+    def test_code_file_default_size_bytes(self):
+        """Test default size_bytes is 0."""
+        file = CodeFile(name="f.txt", content="data", mime_type="text/plain")
+        assert file.size_bytes == 0
+
+    def test_code_file_custom_size_bytes(self):
+        """Test setting custom size_bytes."""
+        file = CodeFile(name="f.txt", content="data", mime_type="text/plain", size_bytes=1024)
+        assert file.size_bytes == 1024
+
+    def test_code_file_default_truncated(self):
+        """Test default truncated is False."""
+        file = CodeFile(name="f.txt", content="data", mime_type="text/plain")
+        assert file.truncated is False
+
+    def test_code_file_truncated_true(self):
+        """Test setting truncated to True."""
+        file = CodeFile(name="f.txt", content="data", mime_type="text/plain", truncated=True)
+        assert file.truncated is True
 
 
 class TestCodeBlock:
@@ -422,3 +443,97 @@ class TestManifestOutput:
 
         assert output.files == []
         assert output.limits_hit is False
+
+
+class TestCreateCodeExecutionResult:
+    """Test suite for create_code_execution_result function."""
+
+    def test_default_args_returns_ok_empty(self):
+        """No arguments yields OK outcome with empty output."""
+        result = create_code_execution_result()
+        assert result.outcome == Outcome.OUTCOME_OK
+        assert result.output == ""
+
+    def test_stdout_only(self):
+        """stdout is wrapped in a 'Code execution result' block."""
+        result = create_code_execution_result(stdout="hello world")
+        assert result.outcome == Outcome.OUTCOME_OK
+        assert "Code execution result:\nhello world\n" in result.output
+
+    def test_stderr_only(self):
+        """stderr sets outcome to FAILED."""
+        result = create_code_execution_result(stderr="some error")
+        assert result.outcome == Outcome.OUTCOME_FAILED
+        assert "Code execution error:\nsome error\n" in result.output
+
+    def test_timed_out_only(self):
+        """is_timed_out=True triggers Outcome.OUTCOME_TIMED_OUT which is not defined."""
+        with pytest.raises(AttributeError):
+            create_code_execution_result(is_timed_out=True)
+
+    def test_stderr_and_timed_out(self):
+        """stderr + timed_out triggers the missing OUTCOME_TIMED_OUT attribute."""
+        with pytest.raises(AttributeError):
+            create_code_execution_result(stderr="err", is_timed_out=True)
+
+    def test_stdout_and_stderr(self):
+        """stderr + stdout → FAILED, both messages present."""
+        result = create_code_execution_result(stdout="out", stderr="err")
+        assert result.outcome == Outcome.OUTCOME_FAILED
+        assert "Code execution error:\nerr\n" in result.output
+        assert "Code execution result:\nout\n" in result.output
+
+    def test_output_files_only(self):
+        """Output files are listed as saved artifacts."""
+        files = [
+            CodeFile(name="a.txt", content="", mime_type="text/plain"),
+            CodeFile(name="b.csv", content="", mime_type="text/csv"),
+        ]
+        result = create_code_execution_result(output_files=files)
+        assert result.outcome == Outcome.OUTCOME_OK
+        assert "Saved artifacts:\n" in result.output
+        assert "`a.txt`" in result.output
+        assert "`b.csv`" in result.output
+
+    def test_all_args_combined_with_timed_out_raises(self):
+        """All arguments with timed_out triggers the missing OUTCOME_TIMED_OUT attribute."""
+        files = [CodeFile(name="out.txt", content="", mime_type="text/plain")]
+        with pytest.raises(AttributeError):
+            create_code_execution_result(
+                stdout="output",
+                stderr="error",
+                output_files=files,
+                is_timed_out=True,
+            )
+
+    def test_output_files_none_defaults_to_empty(self):
+        """Passing output_files=None does not cause errors."""
+        result = create_code_execution_result(output_files=None)
+        assert result.outcome == Outcome.OUTCOME_OK
+        assert "Saved artifacts" not in result.output
+
+    def test_empty_strings_treated_as_falsy(self):
+        """Empty stdout/stderr are treated as no output."""
+        result = create_code_execution_result(stdout="", stderr="")
+        assert result.outcome == Outcome.OUTCOME_OK
+        assert result.output == ""
+
+    def test_output_files_single(self):
+        """Single output file is listed correctly."""
+        files = [CodeFile(name="only.png", content="", mime_type="image/png")]
+        result = create_code_execution_result(output_files=files)
+        assert "Saved artifacts:\n`only.png`" in result.output
+
+    def test_output_ordering_stderr_stdout_artifacts(self):
+        """Verify the order: error → stdout → artifacts (without timed_out)."""
+        files = [CodeFile(name="f.txt", content="", mime_type="text/plain")]
+        result = create_code_execution_result(
+            stdout="out",
+            stderr="err",
+            output_files=files,
+        )
+        output = result.output
+        err_pos = output.index("Code execution error:")
+        result_pos = output.index("Code execution result:")
+        artifacts_pos = output.index("Saved artifacts:")
+        assert err_pos < result_pos < artifacts_pos

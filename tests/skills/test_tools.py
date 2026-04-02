@@ -7,16 +7,16 @@ from unittest.mock import Mock
 
 import pytest
 from trpc_agent_sdk.context import InvocationContext
-from trpc_agent_sdk.skills import SkillSelectDocsResult
-from trpc_agent_sdk.skills import SkillSelectToolsResult
+from trpc_agent_sdk.skills.tools import SkillSelectDocsResult
+from trpc_agent_sdk.skills.tools import SkillSelectToolsResult
 from trpc_agent_sdk.skills import skill_list
 from trpc_agent_sdk.skills import skill_list_docs
 from trpc_agent_sdk.skills import skill_list_tools
 from trpc_agent_sdk.skills import skill_load
 from trpc_agent_sdk.skills import skill_select_docs
 from trpc_agent_sdk.skills import skill_select_tools
-from trpc_agent_sdk.skills._tools import _set_state_delta_for_skill_load
-from trpc_agent_sdk.skills._tools import _set_state_delta_for_skill_tools
+from trpc_agent_sdk.skills.tools._skill_load import _set_state_delta_for_skill_load
+from trpc_agent_sdk.skills.tools._skill_load import _set_state_delta_for_skill_tools
 from trpc_agent_sdk.skills import Skill
 from trpc_agent_sdk.skills import SkillResource
 
@@ -83,9 +83,9 @@ class TestSkillListDocs:
 
         result = skill_list_docs(mock_ctx, "test-skill")
 
-        assert len(result) == 2
-        assert "doc1.md" in result
-        assert "doc2.md" in result
+        assert len(result["docs"]) == 2
+        assert "doc1.md" in result["docs"]
+        assert "doc2.md" in result["docs"]
 
     def test_skill_list_docs_no_resources(self):
         """Test listing docs for skill with no resources."""
@@ -99,7 +99,7 @@ class TestSkillListDocs:
 
         result = skill_list_docs(mock_ctx, "test-skill")
 
-        assert result == []
+        assert result["docs"] == []
 
     def test_skill_list_docs_skill_not_found(self):
         """Test listing docs for nonexistent skill."""
@@ -112,7 +112,7 @@ class TestSkillListDocs:
 
         result = skill_list_docs(mock_ctx, "nonexistent-skill")
 
-        assert result == []
+        assert result["docs"] == []
 
     def test_skill_list_docs_repository_not_found(self):
         """Test listing docs when repository not found."""
@@ -139,10 +139,10 @@ class TestSkillListTools:
 
         result = skill_list_tools(mock_ctx, "test-skill")
 
-        assert len(result) == 3
-        assert "tool1" in result
-        assert "tool2" in result
-        assert "tool3" in result
+        assert len(result["tools"]) == 3
+        assert "tool1" in result["tools"]
+        assert "tool2" in result["tools"]
+        assert "tool3" in result["tools"]
 
     def test_skill_list_tools_no_tools(self):
         """Test listing tools for skill with no tools."""
@@ -156,7 +156,7 @@ class TestSkillListTools:
 
         result = skill_list_tools(mock_ctx, "test-skill")
 
-        assert result == []
+        assert result["tools"] == []
 
     def test_skill_list_tools_skill_not_found(self):
         """Test listing tools for nonexistent skill."""
@@ -169,7 +169,7 @@ class TestSkillListTools:
 
         result = skill_list_tools(mock_ctx, "nonexistent-skill")
 
-        assert result == []
+        assert result["tools"] == []
 
     def test_skill_list_tools_repository_not_found(self):
         """Test listing tools when repository not found."""

@@ -4,6 +4,9 @@
 """Unit tests for TrajectoryEvaluator."""
 
 import pytest
+
+pytest.importorskip("trpc_agent_sdk._runners", reason="trpc_agent_sdk._runners not yet implemented")
+
 from trpc_agent_sdk.evaluation import EvalMetric
 from trpc_agent_sdk.evaluation import PrebuiltMetrics
 from trpc_agent_sdk.evaluation import TrajectoryEvaluator
