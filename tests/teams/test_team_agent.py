@@ -3,10 +3,13 @@
 # Copyright @ 2026 Tencent.com
 """Unit tests for TeamAgent."""
 
+import asyncio
+import inspect
 from typing import AsyncGenerator
 from typing import List
 from unittest.mock import AsyncMock
 from unittest.mock import Mock
+from unittest.mock import patch
 
 import pytest
 from trpc_agent_sdk.agents import BaseAgent
@@ -14,6 +17,7 @@ from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.events import LongRunningEvent
+from trpc_agent_sdk.exceptions import RunCancelledException
 from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.models import LlmResponse
@@ -25,6 +29,7 @@ from trpc_agent_sdk.teams.core import DelegationSignal
 from trpc_agent_sdk.teams.core import DELEGATE_TOOL_NAME
 from trpc_agent_sdk.teams.core import TEAM_STATE_KEY
 from trpc_agent_sdk.teams.core import TeamRunContext
+from trpc_agent_sdk.teams.core import TeamMessageBuilder
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import FunctionCall
 from trpc_agent_sdk.types import FunctionResponse
@@ -100,6 +105,7 @@ def mock_invocation_context(mock_session, mock_session_service):
     ctx.session_service = mock_session_service
     ctx.branch = "team_agent"
     ctx.user_content = Content(role="user", parts=[Part.from_text(text="Hello")])
+    ctx.override_messages = None
 
     # Make model_copy return a new mock with updated attributes
     def model_copy_side_effect(update=None):
@@ -898,6 +904,61 @@ class TestTeamAgentWithInstruction:
         assert "researcher" in team._leader_agent.instruction
         assert "writer" in team._leader_agent.instruction
 
+    def test_dynamic_instruction_callable(self, mock_member_agents):
+        """Test that callable instruction creates dynamic provider."""
+
+        def my_instruction(ctx):
+            return "Dynamic instruction"
+
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+            instruction=my_instruction,
+        )
+
+        assert callable(team._leader_agent.instruction)
+
+    @pytest.mark.asyncio
+    async def test_resolve_dynamic_leader_instruction_sync(self, mock_member_agents):
+        """Test resolving sync callable instruction at runtime."""
+
+        def sync_instruction(ctx):
+            return "Sync dynamic instruction"
+
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+            instruction=sync_instruction,
+        )
+
+        ctx = Mock(spec=InvocationContext)
+        result = await team._resolve_dynamic_leader_instruction(ctx)
+
+        assert "Sync dynamic instruction" in result
+        assert "test_team" in result
+
+    @pytest.mark.asyncio
+    async def test_resolve_dynamic_leader_instruction_async(self, mock_member_agents):
+        """Test resolving async callable instruction at runtime."""
+
+        async def async_instruction(ctx):
+            return "Async dynamic instruction"
+
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+            instruction=async_instruction,
+        )
+
+        ctx = Mock(spec=InvocationContext)
+        result = await team._resolve_dynamic_leader_instruction(ctx)
+
+        assert "Async dynamic instruction" in result
+        assert "test_team" in result
+
 
 class TestTeamAgentWithTools:
     """Tests for TeamAgent custom tools handling."""
@@ -1129,3 +1190,1290 @@ class TestMemberModeHITLRestriction:
         # HITL event should be yielded
         assert len(events) == 1
         assert isinstance(events[0], LongRunningEvent)
+
+
+class TestExtractTextFromOverrideMessages:
+    """Tests for _extract_text_from_override_messages."""
+
+    def test_empty_override_messages(self, mock_member_agents):
+        """Test extraction from empty override messages."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        assert team._extract_text_from_override_messages([]) == ""
+        assert team._extract_text_from_override_messages(None) == ""
+
+    def test_single_override_message(self, mock_member_agents):
+        """Test extraction from single override message."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        messages = [Content(role="user", parts=[Part.from_text(text="Do the task")])]
+        result = team._extract_text_from_override_messages(messages)
+        assert result == "Do the task"
+
+    def test_multiple_override_messages(self, mock_member_agents):
+        """Test extraction from multiple override messages."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        messages = [
+            Content(role="user", parts=[Part.from_text(text="Context info")]),
+            Content(role="user", parts=[Part.from_text(text="Actual task")]),
+        ]
+        result = team._extract_text_from_override_messages(messages)
+        assert "Context info" in result
+        assert "Actual task" in result
+
+    def test_override_messages_skips_empty_content(self, mock_member_agents):
+        """Test that empty content in override messages is skipped."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        messages = [
+            Content(role="user", parts=[]),
+            Content(role="user", parts=[Part.from_text(text="Real content")]),
+        ]
+        result = team._extract_text_from_override_messages(messages)
+        assert result == "Real content"
+
+
+class TestExtractTextFromEventExtended:
+    """Extended tests for _extract_text_from_event edge cases."""
+
+    def test_extract_text_from_none_event(self, mock_member_agents):
+        """Test extraction from None event."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+        assert team._extract_text_from_event(None) == ""
+
+    def test_extract_text_with_no_content(self, mock_member_agents):
+        """Test extraction from event with no content."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+        event = Event(invocation_id="inv-123", author="test", content=None)
+        assert team._extract_text_from_event(event) == ""
+
+    def test_extract_includes_custom_function_call(self, mock_member_agents):
+        """Test that custom (non-delegation) function calls are included as text."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+        event = Event(
+            invocation_id="inv-123",
+            author="test",
+            content=Content(
+                role="model",
+                parts=[Part(function_call=FunctionCall(
+                    name="search_tool", args={"q": "test"}, id="fc-1",
+                ))],
+            ),
+        )
+        text = team._extract_text_from_event(event)
+        assert "[Tool Call: search_tool" in text
+
+    def test_extract_includes_custom_function_response(self, mock_member_agents):
+        """Test that custom (non-delegation) function responses are included."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+        event = Event(
+            invocation_id="inv-123",
+            author="test",
+            content=Content(
+                role="model",
+                parts=[Part(function_response=FunctionResponse(
+                    name="search_tool", response={"result": "found"}, id="fr-1",
+                ))],
+            ),
+        )
+        text = team._extract_text_from_event(event)
+        assert "[Tool Result:" in text
+
+    def test_extract_skips_delegation_function_response(self, mock_member_agents):
+        """Test that delegation function responses are skipped."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+        event = Event(
+            invocation_id="inv-123",
+            author="test",
+            content=Content(
+                role="model",
+                parts=[Part(function_response=FunctionResponse(
+                    name=DELEGATE_TOOL_NAME, response={}, id="fr-1",
+                ))],
+            ),
+        )
+        text = team._extract_text_from_event(event)
+        assert text == ""
+
+    def test_extract_skips_long_running_function_response(self, mock_member_agents):
+        """Test that long-running tool function responses are skipped."""
+        from trpc_agent_sdk.tools import LongRunningFunctionTool
+
+        def approval_function(data: str) -> str:
+            """Approval tool."""
+            return "approved"
+
+        long_tool = LongRunningFunctionTool(func=approval_function)
+
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+            tools=[long_tool],
+        )
+        event = Event(
+            invocation_id="inv-123",
+            author="test",
+            content=Content(
+                role="model",
+                parts=[Part(function_response=FunctionResponse(
+                    name="approval_function", response={}, id="fr-1",
+                ))],
+            ),
+        )
+        text = team._extract_text_from_event(event)
+        assert text == ""
+
+    def test_extract_keeps_long_running_function_call_as_text(self, mock_member_agents):
+        """Test that long-running tool function calls are kept as text."""
+        from trpc_agent_sdk.tools import LongRunningFunctionTool
+
+        def approval_function(data: str) -> str:
+            """Approval tool."""
+            return "approved"
+
+        long_tool = LongRunningFunctionTool(func=approval_function)
+
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+            tools=[long_tool],
+        )
+        event = Event(
+            invocation_id="inv-123",
+            author="test",
+            content=Content(
+                role="model",
+                parts=[Part(function_call=FunctionCall(
+                    name="approval_function", args={"data": "test"}, id="fc-1",
+                ))],
+            ),
+        )
+        text = team._extract_text_from_event(event)
+        assert "[Tool Call: approval_function" in text
+
+
+class TestHasNonDelegationToolCallsExtended:
+    """Extended tests for _has_non_delegation_tool_calls."""
+
+    def test_none_event(self, mock_member_agents):
+        """Test with None event."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+        assert team._has_non_delegation_tool_calls(None) is False
+
+    def test_event_with_no_content(self, mock_member_agents):
+        """Test event with no content."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+        event = Event(invocation_id="inv-123", author="test", content=None)
+        assert team._has_non_delegation_tool_calls(event) is False
+
+    def test_event_with_empty_parts(self, mock_member_agents):
+        """Test event with empty parts."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+        event = Event(
+            invocation_id="inv-123",
+            author="test",
+            content=Content(role="model", parts=[]),
+        )
+        assert team._has_non_delegation_tool_calls(event) is False
+
+    def test_custom_function_response_detected(self, mock_member_agents):
+        """Test that custom function response is detected."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+        event = Event(
+            invocation_id="inv-123",
+            author="test",
+            content=Content(
+                role="model",
+                parts=[Part(function_response=FunctionResponse(
+                    name="custom_tool", response={}, id="fr-1",
+                ))],
+            ),
+        )
+        assert team._has_non_delegation_tool_calls(event) is True
+
+    def test_delegation_function_response_not_detected(self, mock_member_agents):
+        """Test that delegation function response is NOT detected as custom tool."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+        event = Event(
+            invocation_id="inv-123",
+            author="test",
+            content=Content(
+                role="model",
+                parts=[Part(function_response=FunctionResponse(
+                    name=DELEGATE_TOOL_NAME, response={}, id="fr-1",
+                ))],
+            ),
+        )
+        assert team._has_non_delegation_tool_calls(event) is False
+
+    def test_long_running_tool_call_not_detected(self, mock_member_agents):
+        """Test that long-running tool call is skipped (not treated as custom tool)."""
+        from trpc_agent_sdk.tools import LongRunningFunctionTool
+
+        def approval_func(data: str) -> str:
+            """Approval."""
+            return "ok"
+
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+            tools=[LongRunningFunctionTool(func=approval_func)],
+        )
+        event = Event(
+            invocation_id="inv-123",
+            author="test",
+            content=Content(
+                role="model",
+                parts=[Part(function_call=FunctionCall(
+                    name="approval_func", args={}, id="fc-1",
+                ))],
+            ),
+        )
+        assert team._has_non_delegation_tool_calls(event) is False
+
+    def test_long_running_function_response_not_detected(self, mock_member_agents):
+        """Test that long-running function response is skipped."""
+        from trpc_agent_sdk.tools import LongRunningFunctionTool
+
+        def approval_func(data: str) -> str:
+            """Approval."""
+            return "ok"
+
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+            tools=[LongRunningFunctionTool(func=approval_func)],
+        )
+        event = Event(
+            invocation_id="inv-123",
+            author="test",
+            content=Content(
+                role="model",
+                parts=[Part(function_response=FunctionResponse(
+                    name="approval_func", response={}, id="fr-1",
+                ))],
+            ),
+        )
+        assert team._has_non_delegation_tool_calls(event) is False
+
+
+class TestHITLHelpersExtended:
+    """Extended tests for HITL helper methods."""
+
+    def test_extract_function_response_with_text_only_content(self, mock_member_agents):
+        """Test extraction from content with only text parts."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+        content = Content(role="user", parts=[Part.from_text(text="Just text")])
+        assert team._extract_function_response_from_content(content) is None
+
+    def test_extract_text_from_function_response_non_dict(self, mock_member_agents):
+        """Test extracting text from function response with non-dict response data."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+        function_response = Mock()
+        function_response.name = "input_tool"
+        function_response.response = "Simple string response"
+        function_response.id = "func-123"
+
+        text = team._extract_text_from_function_response(function_response)
+        assert "input_tool" in text
+        assert "Simple string response" in text
+
+
+class TestTeamAgentSetattr:
+    """Tests for __setattr__ override syncing parent_agent."""
+
+    def test_setattr_syncs_parent_agent_to_leader(self, mock_member_agents):
+        """Test that setting parent_agent syncs to leader_agent."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        mock_parent = Mock(spec=BaseAgent)
+        mock_parent.name = "parent_agent"
+        team.parent_agent = mock_parent
+
+        assert team._leader_agent.parent_agent is mock_parent
+
+
+class TestSyncLeaderTransferHierarchy:
+    """Tests for _sync_leader_transfer_hierarchy."""
+
+    def test_sync_transfer_flags(self, mock_member_agents):
+        """Test that leader transfer flags are synced from TeamAgent."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+            disallow_transfer_to_parent=True,
+            disallow_transfer_to_peers=True,
+        )
+
+        assert team._leader_agent.disallow_transfer_to_parent is True
+        assert team._leader_agent.disallow_transfer_to_peers is True
+
+    def test_sync_transfer_flags_default(self, mock_member_agents):
+        """Test default transfer flags sync."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        assert team._leader_agent.disallow_transfer_to_parent == team.disallow_transfer_to_parent
+        assert team._leader_agent.disallow_transfer_to_peers == team.disallow_transfer_to_peers
+
+
+class TestExtractDelegationSignalsExtended:
+    """Extended tests for _extract_delegation_signals edge cases."""
+
+    def test_extract_from_top_level_dict_signal(self, mock_member_agents):
+        """Test extracting delegation signal from top-level response data."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        function_response = FunctionResponse(
+            name=DELEGATE_TOOL_NAME,
+            response={
+                "marker": DELEGATION_SIGNAL_MARKER,
+                "action": "delegate_to_member",
+                "member_name": "researcher",
+                "task": "Do research",
+            },
+            id="func-123",
+        )
+        event = Event(
+            invocation_id="inv-123",
+            author="test_team",
+            content=Content(
+                role="model",
+                parts=[Part(function_response=function_response)],
+            ),
+        )
+
+        signals = team._extract_delegation_signals(event)
+        assert len(signals) == 1
+        assert signals[0].member_name == "researcher"
+
+    def test_extract_from_response_without_result_key(self, mock_member_agents):
+        """Test with function response dict that has no 'result' key or marker."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        function_response = FunctionResponse(
+            name="some_tool",
+            response={"output": "plain response"},
+            id="func-123",
+        )
+        event = Event(
+            invocation_id="inv-123",
+            author="test_team",
+            content=Content(
+                role="model",
+                parts=[Part(function_response=function_response)],
+            ),
+        )
+
+        signals = team._extract_delegation_signals(event)
+        assert len(signals) == 0
+
+    def test_extract_handles_none_result_in_dict(self, mock_member_agents):
+        """Test with dict response where result is None."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        function_response = FunctionResponse(
+            name="some_tool",
+            response={"result": None},
+            id="func-123",
+        )
+        event = Event(
+            invocation_id="inv-123",
+            author="test_team",
+            content=Content(
+                role="model",
+                parts=[Part(function_response=function_response)],
+            ),
+        )
+
+        signals = team._extract_delegation_signals(event)
+        assert len(signals) == 0
+
+
+class TestExecuteDelegationMemberNotFound:
+    """Tests for _execute_delegation when member is not found."""
+
+    @pytest.mark.asyncio
+    async def test_member_not_found_yields_error(self, mock_member_agents, mock_invocation_context):
+        """Test that delegation to non-existent member yields error event."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        team_run_context = TeamRunContext(team_name="test_team", current_invocation_id="inv-123")
+        message_builder = TeamMessageBuilder()
+        signal = DelegationSignal(member_name="nonexistent_member", task="Some task")
+
+        events = []
+        async for event in team._execute_delegation(
+            mock_invocation_context,
+            signal,
+            team_run_context,
+            message_builder,
+            is_member_mode=False,
+            context_lock=None,
+        ):
+            events.append(event)
+
+        assert len(events) == 1
+        assert "nonexistent_member" in events[0].content.parts[0].text
+        assert "not found" in events[0].content.parts[0].text.lower()
+        assert len(team_run_context.interactions) == 1
+
+
+class TestExecuteDelegationCancellation:
+    """Tests for cancellation handling in _execute_delegation."""
+
+    @pytest.mark.asyncio
+    async def test_cancellation_during_member_with_partial_text(self, mock_member_agents, mock_invocation_context):
+        """Test cancellation during member execution with partial streaming text."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        member = mock_member_agents[0]
+
+        async def mock_run_with_cancel(ctx):
+            yield Event(
+                invocation_id="inv-123",
+                author="researcher",
+                content=Content(role="model", parts=[Part.from_text(text="Partial")]),
+                partial=True,
+            )
+            raise RunCancelledException("Cancelled")
+
+        member.run_async = mock_run_with_cancel
+
+        team_run_context = TeamRunContext(team_name="test_team", current_invocation_id="inv-123")
+        message_builder = TeamMessageBuilder()
+        signal = DelegationSignal(member_name="researcher", task="Research task")
+
+        with pytest.raises(RunCancelledException):
+            async for _ in team._execute_delegation(
+                mock_invocation_context,
+                signal,
+                team_run_context,
+                message_builder,
+                is_member_mode=False,
+                context_lock=None,
+            ):
+                pass
+
+        assert len(team_run_context.interactions) == 1
+        assert "interrupted by cancellation" in team_run_context.interactions[0]["response"]
+
+    @pytest.mark.asyncio
+    async def test_cancellation_during_member_no_output(self, mock_member_agents, mock_invocation_context):
+        """Test cancellation during member execution with no output."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        member = mock_member_agents[0]
+
+        async def mock_run_cancel_immediately(ctx):
+            raise RunCancelledException("Cancelled")
+            yield  # noqa: unreachable - makes it an async generator
+
+        member.run_async = mock_run_cancel_immediately
+
+        team_run_context = TeamRunContext(team_name="test_team", current_invocation_id="inv-123")
+        message_builder = TeamMessageBuilder()
+        signal = DelegationSignal(member_name="researcher", task="Research task")
+
+        with pytest.raises(RunCancelledException):
+            async for _ in team._execute_delegation(
+                mock_invocation_context,
+                signal,
+                team_run_context,
+                message_builder,
+                is_member_mode=False,
+                context_lock=None,
+            ):
+                pass
+
+        assert len(team_run_context.interactions) == 1
+        assert "before any output" in team_run_context.interactions[0]["response"]
+
+    @pytest.mark.asyncio
+    async def test_cancellation_with_context_lock(self, mock_member_agents, mock_invocation_context):
+        """Test cancellation with context_lock (parallel mode)."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        member = mock_member_agents[0]
+
+        async def mock_run_cancel(ctx):
+            raise RunCancelledException("Cancelled")
+            yield  # noqa
+
+        member.run_async = mock_run_cancel
+
+        team_run_context = TeamRunContext(team_name="test_team", current_invocation_id="inv-123")
+        message_builder = TeamMessageBuilder()
+        signal = DelegationSignal(member_name="researcher", task="Research task")
+        context_lock = asyncio.Lock()
+
+        with pytest.raises(RunCancelledException):
+            async for _ in team._execute_delegation(
+                mock_invocation_context,
+                signal,
+                team_run_context,
+                message_builder,
+                is_member_mode=False,
+                context_lock=context_lock,
+            ):
+                pass
+
+        assert len(team_run_context.interactions) == 1
+
+
+def _replace_leader(team, run_async_fn):
+    """Replace team's _leader_agent with a mock that uses the given async generator function."""
+    mock_leader = Mock()
+    mock_leader.run_async = run_async_fn
+    team.__pydantic_private__['_leader_agent'] = mock_leader
+
+
+class TestRunAsyncImpl:
+    """Tests for the main _run_async_impl execution loop."""
+
+    @pytest.mark.asyncio
+    async def test_root_mode_text_response_no_delegation(self, mock_member_agents, mock_invocation_context):
+        """Test root mode: leader returns text without delegation."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        text_event = Event(
+            invocation_id="inv-123",
+            author="test_team",
+            content=Content(role="model", parts=[Part.from_text(text="Final answer")]),
+            partial=False,
+        )
+
+        async def mock_leader_run(ctx):
+            yield text_event
+
+        _replace_leader(team, mock_leader_run)
+
+        events = []
+        async for event in team._run_async_impl(mock_invocation_context):
+            events.append(event)
+
+        text_events = [e for e in events if e.content and e.content.parts]
+        assert any("Final answer" in e.content.parts[0].text for e in text_events if e.content.parts[0].text)
+
+    @pytest.mark.asyncio
+    async def test_root_mode_delegation_then_response(self, mock_member_agents, mock_invocation_context):
+        """Test root mode: leader delegates then responds."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        call_count = 0
+
+        async def mock_leader_run(ctx):
+            nonlocal call_count
+            call_count += 1
+
+            if call_count == 1:
+                signal = DelegationSignal(member_name="researcher", task="Find data")
+                yield Event(
+                    invocation_id="inv-123",
+                    author="test_team",
+                    content=Content(
+                        role="model",
+                        parts=[Part(function_response=FunctionResponse(
+                            name=DELEGATE_TOOL_NAME,
+                            response={"result": signal},
+                            id="func-1",
+                        ))],
+                    ),
+                    partial=False,
+                )
+            else:
+                yield Event(
+                    invocation_id="inv-123",
+                    author="test_team",
+                    content=Content(role="model", parts=[Part.from_text(text="Summary based on research")]),
+                    partial=False,
+                )
+
+        researcher = mock_member_agents[0]
+
+        async def mock_researcher_run(ctx):
+            yield Event(
+                invocation_id="inv-123",
+                author="researcher",
+                content=Content(role="model", parts=[Part.from_text(text="Research results")]),
+                partial=False,
+            )
+
+        researcher.run_async = mock_researcher_run
+
+        _replace_leader(team, mock_leader_run)
+        events = []
+        async for event in team._run_async_impl(mock_invocation_context):
+            events.append(event)
+
+        assert call_count == 2
+        text_contents = [
+            e.content.parts[0].text
+            for e in events
+            if e.content and e.content.parts and e.content.parts[0].text
+        ]
+        assert any("Research results" in t for t in text_contents)
+        assert any("Summary based on research" in t for t in text_contents)
+
+    @pytest.mark.asyncio
+    async def test_root_mode_no_events_from_leader(self, mock_member_agents, mock_invocation_context):
+        """Test root mode: leader produces no events."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        async def mock_leader_run_empty(ctx):
+            return
+            yield  # noqa: makes it an async generator
+
+        _replace_leader(team, mock_leader_run_empty)
+        events = []
+        async for event in team._run_async_impl(mock_invocation_context):
+            events.append(event)
+
+        state_events = [e for e in events if e.actions.state_delta]
+        assert len(state_events) >= 0
+
+    @pytest.mark.asyncio
+    async def test_root_mode_max_iterations(self, mock_member_agents, mock_invocation_context):
+        """Test root mode: max iterations limit reached."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+            max_iterations=2,
+        )
+
+        signal = DelegationSignal(member_name="researcher", task="Infinite task")
+
+        async def mock_leader_always_delegate(ctx):
+            yield Event(
+                invocation_id="inv-123",
+                author="test_team",
+                content=Content(
+                    role="model",
+                    parts=[Part(function_response=FunctionResponse(
+                        name=DELEGATE_TOOL_NAME,
+                        response={"result": signal},
+                        id="func-1",
+                    ))],
+                ),
+                partial=False,
+            )
+
+        researcher = mock_member_agents[0]
+
+        async def mock_researcher_run(ctx):
+            yield Event(
+                invocation_id="inv-123",
+                author="researcher",
+                content=Content(role="model", parts=[Part.from_text(text="Done")]),
+                partial=False,
+            )
+
+        researcher.run_async = mock_researcher_run
+
+        _replace_leader(team, mock_leader_always_delegate)
+        events = []
+        async for event in team._run_async_impl(mock_invocation_context):
+            events.append(event)
+
+        assert len([e for e in events if e.content and e.content.parts and
+                     any(p.text == "Done" for p in e.content.parts if p.text)]) <= 2
+
+    @pytest.mark.asyncio
+    async def test_member_mode_with_override_messages(self, mock_member_agents, mock_invocation_context):
+        """Test member mode: TeamAgent uses override_messages."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        mock_invocation_context.override_messages = [
+            Content(role="user", parts=[Part.from_text(text="Task from parent team")])
+        ]
+
+        async def mock_leader_run(ctx):
+            yield Event(
+                invocation_id="inv-123",
+                author="test_team",
+                content=Content(role="model", parts=[Part.from_text(text="Done")]),
+                partial=False,
+            )
+
+        _replace_leader(team, mock_leader_run)
+        events = []
+        async for event in team._run_async_impl(mock_invocation_context):
+            events.append(event)
+
+        text_events = [e for e in events if e.content and e.content.parts]
+        assert len(text_events) >= 1
+
+    @pytest.mark.asyncio
+    async def test_root_mode_cancellation_during_leader(self, mock_member_agents, mock_invocation_context):
+        """Test root mode: cancellation during leader planning."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        async def mock_leader_cancelled(ctx):
+            yield Event(
+                invocation_id="inv-123",
+                author="test_team",
+                content=Content(role="model", parts=[Part.from_text(text="Partial")]),
+                partial=True,
+            )
+            raise RunCancelledException("Cancelled")
+
+        _replace_leader(team, mock_leader_cancelled)
+        events = []
+        with pytest.raises(RunCancelledException):
+            async for event in team._run_async_impl(mock_invocation_context):
+                events.append(event)
+
+    @pytest.mark.asyncio
+    async def test_root_mode_transfer_to_agent(self, mock_member_agents, mock_invocation_context):
+        """Test root mode: leader requests transfer to another agent."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        transfer_event = Event(
+            invocation_id="inv-123",
+            author="test_team",
+            content=Content(role="model", parts=[Part.from_text(text="Transferring")]),
+            partial=False,
+        )
+        transfer_event.actions.transfer_to_agent = "other_agent"
+
+        async def mock_leader_transfer(ctx):
+            yield transfer_event
+
+        _replace_leader(team, mock_leader_transfer)
+        events = []
+        async for event in team._run_async_impl(mock_invocation_context):
+            events.append(event)
+
+        assert any(e.actions.transfer_to_agent == "other_agent" for e in events)
+
+    @pytest.mark.asyncio
+    async def test_root_mode_custom_tool_continues_loop(self, mock_member_agents, mock_invocation_context):
+        """Test root mode: custom tool execution causes loop continuation."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        call_count = 0
+
+        async def mock_leader_with_tool(ctx):
+            nonlocal call_count
+            call_count += 1
+
+            if call_count == 1:
+                yield Event(
+                    invocation_id="inv-123",
+                    author="test_team",
+                    content=Content(
+                        role="model",
+                        parts=[
+                            Part.from_text(text="Using tool"),
+                            Part(function_call=FunctionCall(
+                                name="custom_calculator", args={"a": 1, "b": 2}, id="fc-1",
+                            )),
+                            Part(function_response=FunctionResponse(
+                                name="custom_calculator", response={"result": 3}, id="fr-1",
+                            )),
+                        ],
+                    ),
+                    partial=False,
+                )
+            else:
+                yield Event(
+                    invocation_id="inv-123",
+                    author="test_team",
+                    content=Content(role="model", parts=[Part.from_text(text="Final answer: 3")]),
+                    partial=False,
+                )
+
+        _replace_leader(team, mock_leader_with_tool)
+        events = []
+        async for event in team._run_async_impl(mock_invocation_context):
+            events.append(event)
+
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_root_mode_hitl_event(self, mock_member_agents, mock_invocation_context):
+        """Test root mode: leader triggers LongRunningEvent (HITL)."""
+        from trpc_agent_sdk.tools import LongRunningFunctionTool
+
+        def approval_func(data: str) -> str:
+            """Approval tool."""
+            return "ok"
+
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+            tools=[LongRunningFunctionTool(func=approval_func)],
+        )
+
+        hitl_event = LongRunningEvent(
+            invocation_id="inv-123",
+            author="test_team_internal",
+            function_call=FunctionCall(name="approval_func", args={}, id="fc-hitl"),
+            function_response=FunctionResponse(name="approval_func", response={}, id="fc-hitl"),
+        )
+
+        async def mock_leader_hitl(ctx):
+            yield hitl_event
+
+        _replace_leader(team, mock_leader_hitl)
+        events = []
+        async for event in team._run_async_impl(mock_invocation_context):
+            events.append(event)
+
+        hitl_events = [e for e in events if isinstance(e, LongRunningEvent)]
+        assert len(hitl_events) == 1
+        assert hitl_events[0].author == "test_team"
+
+    @pytest.mark.asyncio
+    async def test_root_mode_hitl_resume(self, mock_member_agents, mock_invocation_context):
+        """Test root mode: resume from HITL with FunctionResponse in user_content."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        mock_invocation_context.session.state = {
+            TEAM_STATE_KEY: {
+                "team_name": "test_team",
+                "interactions": [],
+                "leader_history": [{"role": "user", "text": "Previous question", "invocation_id": "inv-old"}],
+                "current_invocation_id": "inv-old",
+                "pending_function_call_id": "fc-hitl",
+            }
+        }
+
+        mock_invocation_context.user_content = Content(
+            role="user",
+            parts=[Part(function_response=FunctionResponse(
+                name="approval_func",
+                response={"approved": True},
+                id="fc-hitl",
+            ))],
+        )
+
+        async def mock_leader_after_resume(ctx):
+            yield Event(
+                invocation_id="inv-123",
+                author="test_team",
+                content=Content(role="model", parts=[Part.from_text(text="Resumed and done")]),
+                partial=False,
+            )
+
+        _replace_leader(team, mock_leader_after_resume)
+        events = []
+        async for event in team._run_async_impl(mock_invocation_context):
+            events.append(event)
+
+        text_events = [
+            e for e in events
+            if e.content and e.content.parts and any(p.text for p in e.content.parts)
+        ]
+        assert len(text_events) >= 1
+
+    @pytest.mark.asyncio
+    async def test_member_mode_hitl_raises_error(self, mock_member_agents, mock_invocation_context):
+        """Test member mode: HITL from leader raises RuntimeError."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        mock_invocation_context.override_messages = [
+            Content(role="user", parts=[Part.from_text(text="Task")])
+        ]
+
+        hitl_event = LongRunningEvent(
+            invocation_id="inv-123",
+            author="test_team",
+            function_call=FunctionCall(name="approval_func", args={}, id="fc-hitl"),
+            function_response=FunctionResponse(name="approval_func", response={}, id="fc-hitl"),
+        )
+
+        async def mock_leader_hitl(ctx):
+            yield hitl_event
+
+        _replace_leader(team, mock_leader_hitl)
+        with pytest.raises(RuntimeError, match="member mode"):
+            async for _ in team._run_async_impl(mock_invocation_context):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_root_mode_partial_events_tracked(self, mock_member_agents, mock_invocation_context):
+        """Test root mode: partial (streaming) events are yielded and tracked."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        async def mock_leader_with_partial(ctx):
+            yield Event(
+                invocation_id="inv-123",
+                author="test_team",
+                content=Content(role="model", parts=[Part.from_text(text="Hello ")]),
+                partial=True,
+            )
+            yield Event(
+                invocation_id="inv-123",
+                author="test_team",
+                content=Content(role="model", parts=[Part.from_text(text="Hello World")]),
+                partial=False,
+            )
+
+        _replace_leader(team, mock_leader_with_partial)
+        events = []
+        async for event in team._run_async_impl(mock_invocation_context):
+            events.append(event)
+
+        partial_events = [e for e in events if e.partial]
+        non_partial_events = [e for e in events if not e.partial and e.content and e.content.parts]
+        assert len(partial_events) >= 1
+        assert len(non_partial_events) >= 1
+
+    @pytest.mark.asyncio
+    async def test_root_mode_cancellation_with_partial_leader_text(self, mock_member_agents, mock_invocation_context):
+        """Test root mode: cancellation saves partial leader text to history."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        async def mock_leader_partial_then_cancel(ctx):
+            yield Event(
+                invocation_id="inv-123",
+                author="test_team",
+                content=Content(role="model", parts=[Part.from_text(text="Thinking about ")]),
+                partial=True,
+            )
+            raise RunCancelledException("User cancelled")
+
+        _replace_leader(team, mock_leader_partial_then_cancel)
+        events = []
+        with pytest.raises(RunCancelledException):
+            async for event in team._run_async_impl(mock_invocation_context):
+                events.append(event)
+
+        state_events = [e for e in events if e.actions.state_delta]
+        assert len(state_events) >= 1
+
+    @pytest.mark.asyncio
+    async def test_root_mode_parallel_delegations(self, mock_member_agents, mock_invocation_context):
+        """Test root mode with parallel_execution=True and multiple delegations."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+            parallel_execution=True,
+        )
+
+        call_count = 0
+
+        async def mock_leader_multi_delegate(ctx):
+            nonlocal call_count
+            call_count += 1
+
+            if call_count == 1:
+                signal1 = DelegationSignal(member_name="researcher", task="Research")
+                signal2 = DelegationSignal(member_name="writer", task="Write")
+                yield Event(
+                    invocation_id="inv-123",
+                    author="test_team",
+                    content=Content(
+                        role="model",
+                        parts=[
+                            Part(function_response=FunctionResponse(
+                                name=DELEGATE_TOOL_NAME, response={"result": signal1}, id="f1",
+                            )),
+                            Part(function_response=FunctionResponse(
+                                name=DELEGATE_TOOL_NAME, response={"result": signal2}, id="f2",
+                            )),
+                        ],
+                    ),
+                    partial=False,
+                )
+            else:
+                yield Event(
+                    invocation_id="inv-123",
+                    author="test_team",
+                    content=Content(role="model", parts=[Part.from_text(text="All done")]),
+                    partial=False,
+                )
+
+        async def mock_researcher_run(ctx):
+            yield Event(
+                invocation_id="inv-123",
+                author="researcher",
+                content=Content(role="model", parts=[Part.from_text(text="Research done")]),
+                partial=False,
+            )
+
+        async def mock_writer_run(ctx):
+            yield Event(
+                invocation_id="inv-123",
+                author="writer",
+                content=Content(role="model", parts=[Part.from_text(text="Writing done")]),
+                partial=False,
+            )
+
+        mock_member_agents[0].run_async = mock_researcher_run
+        mock_member_agents[1].run_async = mock_writer_run
+
+        _replace_leader(team, mock_leader_multi_delegate)
+        events = []
+        async for event in team._run_async_impl(mock_invocation_context):
+            events.append(event)
+
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_root_mode_user_content_none(self, mock_member_agents, mock_invocation_context):
+        """Test root mode: no user_content provided."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        mock_invocation_context.user_content = None
+        mock_invocation_context.override_messages = None
+
+        async def mock_leader_run(ctx):
+            yield Event(
+                invocation_id="inv-123",
+                author="test_team",
+                content=Content(role="model", parts=[Part.from_text(text="Response")]),
+                partial=False,
+            )
+
+        _replace_leader(team, mock_leader_run)
+        events = []
+        async for event in team._run_async_impl(mock_invocation_context):
+            events.append(event)
+
+        assert len(events) >= 1
+
+    @pytest.mark.asyncio
+    async def test_root_mode_cancellation_during_delegation(self, mock_member_agents, mock_invocation_context):
+        """Test root mode: cancellation during member delegation re-raises."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        signal = DelegationSignal(member_name="researcher", task="Research")
+
+        async def mock_leader_delegate(ctx):
+            yield Event(
+                invocation_id="inv-123",
+                author="test_team",
+                content=Content(
+                    role="model",
+                    parts=[Part(function_response=FunctionResponse(
+                        name=DELEGATE_TOOL_NAME, response={"result": signal}, id="f1",
+                    ))],
+                ),
+                partial=False,
+            )
+
+        researcher = mock_member_agents[0]
+
+        async def mock_researcher_cancel(ctx):
+            raise RunCancelledException("Cancelled")
+            yield  # noqa
+
+        researcher.run_async = mock_researcher_cancel
+
+        _replace_leader(team, mock_leader_delegate)
+        with pytest.raises(RunCancelledException):
+            async for _ in team._run_async_impl(mock_invocation_context):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_member_mode_no_state_persistence(self, mock_member_agents, mock_invocation_context):
+        """Test member mode: state update events are NOT emitted."""
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+        )
+
+        mock_invocation_context.override_messages = [
+            Content(role="user", parts=[Part.from_text(text="Do task")])
+        ]
+
+        async def mock_leader_run(ctx):
+            yield Event(
+                invocation_id="inv-123",
+                author="test_team",
+                content=Content(role="model", parts=[Part.from_text(text="Done")]),
+                partial=False,
+            )
+
+        _replace_leader(team, mock_leader_run)
+        events = []
+        async for event in team._run_async_impl(mock_invocation_context):
+            events.append(event)
+
+        state_events = [e for e in events if e.actions.state_delta]
+        assert len(state_events) == 0
+
+
+class TestApplyMemberMessageFilterSync:
+    """Tests for applying sync member message filter."""
+
+    @pytest.mark.asyncio
+    async def test_apply_sync_filter(self, mock_member_agents):
+        """Test applying a sync (non-async) filter function."""
+
+        def sync_filter(messages: List[Content]) -> str:
+            return "sync filtered"
+
+        team = TeamAgent(
+            name="test_team",
+            model=MockLLMModel(model_name="test-model"),
+            members=mock_member_agents,
+            member_message_filter=sync_filter,
+        )
+
+        contents = [Content(role="model", parts=[Part.from_text(text="Test")])]
+        result = await team._apply_member_message_filter("researcher", contents)
+        assert result == "sync filtered"

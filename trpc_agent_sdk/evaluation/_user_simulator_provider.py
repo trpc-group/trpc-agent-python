@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from . import StaticUserSimulator
+from ._static_user_simulator import StaticUserSimulator
 from ._eval_case import EvalCase
 from ._user_simulator_base import BaseUserSimulatorConfig
 from ._user_simulator_base import UserSimulator

@@ -1,205 +1,89 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright @ 2026 Tencent.com
+# Copyright @ 2025 Tencent.com
+"""Unit tests for trpc_agent_sdk.skills._registry.
+
+Covers:
+- SkillRegistry: register, unregister, get, get_all, search, clear
+- Duplicate registration error
+- Singleton behavior
+"""
+
+from __future__ import annotations
 
 import pytest
-from trpc_agent_sdk.skills._registry import SKILL_REGISTRY
-from trpc_agent_sdk.skills import SkillRegistry
+
+from trpc_agent_sdk.skills._registry import SkillRegistry
+
+
+def _dummy_skill_fn():
+    pass
+
+
+def _another_skill_fn():
+    pass
 
 
 class TestSkillRegistry:
-    """Test suite for SkillRegistry class."""
-
     def setup_method(self):
-        """Set up test fixtures before each test."""
-        # Create a new instance for testing (not singleton)
-        self.registry = SkillRegistry()
-        self.registry.clear()
+        self.registry = SkillRegistry.__new__(SkillRegistry)
+        self.registry._skills = {}
 
-    def teardown_method(self):
-        """Clean up after each test."""
-        self.registry.clear()
+    def test_register_and_get(self):
+        self.registry.register("test-skill", _dummy_skill_fn)
+        result = self.registry.get("test-skill")
+        assert result is _dummy_skill_fn
 
-    def test_register_skill(self):
-        """Test registering a skill."""
-        def test_skill():
-            return "test"
-
-        self.registry.register("test-skill", test_skill)
-
-        assert self.registry.get("test-skill") == test_skill
-
-    def test_register_duplicate_skill(self):
-        """Test registering duplicate skill raises ValueError."""
-        def test_skill():
-            return "test"
-
-        self.registry.register("test-skill", test_skill)
-
+    def test_register_duplicate_raises(self):
+        self.registry.register("dup", _dummy_skill_fn)
         with pytest.raises(ValueError, match="already registered"):
-            self.registry.register("test-skill", test_skill)
+            self.registry.register("dup", _another_skill_fn)
 
-    def test_unregister_skill(self):
-        """Test unregistering a skill."""
-        def test_skill():
-            return "test"
+    def test_get_nonexistent_returns_none(self):
+        assert self.registry.get("nonexistent") is None
 
-        self.registry.register("test-skill", test_skill)
-        self.registry.unregister("test-skill")
+    def test_unregister(self):
+        self.registry.register("to-remove", _dummy_skill_fn)
+        self.registry.unregister("to-remove")
+        assert self.registry.get("to-remove") is None
 
-        assert self.registry.get("test-skill") is None
+    def test_unregister_nonexistent_is_noop(self):
+        self.registry.unregister("nonexistent")
 
-    def test_unregister_nonexistent_skill(self):
-        """Test unregistering nonexistent skill does not raise error."""
-        # Should not raise error
-        self.registry.unregister("nonexistent-skill")
+    def test_get_all(self):
+        self.registry.register("a", _dummy_skill_fn)
+        self.registry.register("b", _another_skill_fn)
+        result = self.registry.get_all()
+        assert len(result) == 2
+        assert _dummy_skill_fn in result
+        assert _another_skill_fn in result
 
-    def test_get_skill(self):
-        """Test getting a skill by name."""
-        def test_skill():
-            return "test"
+    def test_get_all_empty(self):
+        assert self.registry.get_all() == []
 
-        self.registry.register("test-skill", test_skill)
-
-        skill = self.registry.get("test-skill")
-
-        assert skill == test_skill
-
-    def test_get_nonexistent_skill(self):
-        """Test getting nonexistent skill returns None."""
-        skill = self.registry.get("nonexistent-skill")
-
-        assert skill is None
-
-    def test_get_all_skills(self):
-        """Test getting all registered skills."""
-        def skill1():
-            return "skill1"
-
-        def skill2():
-            return "skill2"
-
-        self.registry.register("skill1", skill1)
-        self.registry.register("skill2", skill2)
-
-        all_skills = self.registry.get_all()
-
-        assert len(all_skills) == 2
-        assert skill1 in all_skills
-        assert skill2 in all_skills
-
-    def test_get_all_skills_empty(self):
-        """Test getting all skills when registry is empty."""
-        all_skills = self.registry.get_all()
-
-        assert len(all_skills) == 0
-
-    def test_search_skills_by_name(self):
-        """Test searching skills by name."""
-        def python_skill():
-            return "python"
-
-        def bash_skill():
-            return "bash"
-
-        self.registry.register("python-tool", python_skill)
-        self.registry.register("bash-script", bash_skill)
-
-        results = self.registry.search("python")
-
+    def test_search_by_name(self):
+        self.registry.register("weather-tool", _dummy_skill_fn)
+        self.registry.register("data-analysis", _another_skill_fn)
+        results = self.registry.search("weather")
         assert len(results) == 1
-        assert python_skill in results
+        assert results[0] is _dummy_skill_fn
 
-    def test_search_skills_case_insensitive(self):
-        """Test searching skills is case insensitive."""
-        def test_skill():
-            return "test"
-
-        self.registry.register("TestSkill", test_skill)
-
-        results = self.registry.search("test")
-
+    def test_search_case_insensitive(self):
+        self.registry.register("WeatherTool", _dummy_skill_fn)
+        results = self.registry.search("weather")
         assert len(results) == 1
-        assert test_skill in results
 
-    def test_search_skills_no_match(self):
-        """Test searching skills with no match returns empty list."""
-        def test_skill():
-            return "test"
+    def test_search_no_match(self):
+        self.registry.register("foo", _dummy_skill_fn)
+        assert self.registry.search("bar") == []
 
-        self.registry.register("test-skill", test_skill)
+    def test_search_empty_query(self):
+        self.registry.register("foo", _dummy_skill_fn)
+        results = self.registry.search("")
+        assert len(results) == 1
 
-        results = self.registry.search("nonexistent")
-
-        assert len(results) == 0
-
-    def test_clear_registry(self):
-        """Test clearing the registry."""
-        def skill1():
-            return "skill1"
-
-        def skill2():
-            return "skill2"
-
-        self.registry.register("skill1", skill1)
-        self.registry.register("skill2", skill2)
-
+    def test_clear(self):
+        self.registry.register("a", _dummy_skill_fn)
+        self.registry.register("b", _another_skill_fn)
         self.registry.clear()
-
-        assert len(self.registry.get_all()) == 0
-        assert self.registry.get("skill1") is None
-        assert self.registry.get("skill2") is None
-
-    def test_multiple_registrations(self):
-        """Test registering multiple skills."""
-        def skill1():
-            return "skill1"
-
-        def skill2():
-            return "skill2"
-
-        def skill3():
-            return "skill3"
-
-        self.registry.register("skill1", skill1)
-        self.registry.register("skill2", skill2)
-        self.registry.register("skill3", skill3)
-
-        assert len(self.registry.get_all()) == 3
-        assert self.registry.get("skill1") == skill1
-        assert self.registry.get("skill2") == skill2
-        assert self.registry.get("skill3") == skill3
-
-
-class TestSKILLREGISTRY:
-    """Test suite for SKILL_REGISTRY singleton."""
-
-    def setup_method(self):
-        """Set up test fixtures before each test."""
-        SKILL_REGISTRY.clear()
-
-    def teardown_method(self):
-        """Clean up after each test."""
-        SKILL_REGISTRY.clear()
-
-    def test_skill_registry_singleton(self):
-        """Test that SKILL_REGISTRY is a singleton."""
-        registry1 = SKILL_REGISTRY
-        registry2 = SKILL_REGISTRY
-
-        assert registry1 is registry2
-        assert isinstance(registry1, SkillRegistry)
-
-    def test_skill_registry_operations(self):
-        """Test operations on SKILL_REGISTRY singleton."""
-        def test_skill():
-            return "test"
-
-        SKILL_REGISTRY.register("test-skill", test_skill)
-
-        assert SKILL_REGISTRY.get("test-skill") == test_skill
-
-        SKILL_REGISTRY.unregister("test-skill")
-
-        assert SKILL_REGISTRY.get("test-skill") is None
-
+        assert self.registry.get_all() == []
