@@ -1,22 +1,68 @@
 # LangGraphAgent 取消功能示例
 
-本示例演示 LangGraphAgent 的取消功能，展示如何协作式地取消正在运行的 LangGraph 智能体执行。
+本示例演示如何基于 `LangGraphAgent` 构建一个支持协作式取消的计算与数据分析助手，并验证 `LLM 流式响应取消 + 工具执行取消 + 会话状态恢复` 的核心链路是否正常工作。
 
-## 功能说明
+## 关键特性
 
-本示例展示了 LangGraphAgent 的取消机制，包含两个真实场景:
-- **LLM 流式响应期间取消**: 在模型流式输出响应时触发取消
-- **工具执行期间取消**: 在工具执行过程中触发取消
+- **协作式取消机制**：通过 `runner.cancel_run_async(...)` 在任意检查点触发取消，Agent 会在下一个检查点安全停止
+- **LLM 流式响应取消**：在模型流式输出过程中触发取消，保存已生成的部分响应与取消事件到会话历史
+- **工具执行期间取消**：在工具执行过程中触发取消，清理未完成的函数调用，保存取消记录
+- **会话状态保持**：取消后会话上下文完整保留，后续查询可感知前次取消并正常回复
+- **事件驱动同步**：使用 `asyncio.Event` 精确控制取消时机，分别在事件计数阈值和工具调用检测时触发
 
-取消是协作式的，智能体会在下一个检查点停止，并保存部分进度和取消事件到会话历史中。
+## Agent 层级结构说明
 
-## 环境要求
+本例是单 Agent 示例，使用 LangGraph 构建带工具调用的计算图，不涉及多 Agent 分层路由：
 
-Python版本: 3.10+(强烈建议使用3.12)
+```text
+calculator_agent_with_cancel (LangGraphAgent)
+├── graph: StateGraph
+│   ├── node: chatbot (LLM + tools_condition)
+│   └── node: tools (ToolNode)
+│       ├── calculate(operation, a, b)
+│       └── analyze_data(data_type, sample_size)
+├── cancel: runner.cancel_run_async()
+└── session: InMemorySessionService
+```
 
-## 运行方法
+关键文件：
 
-1. 下载并安装 trpc-agent-python
+- [examples/langgraph_agent_with_cancel/agent/agent.py](./agent/agent.py)：构建 `StateGraph`，定义 chatbot 节点与 ToolNode，编译为 `LangGraphAgent`
+- [examples/langgraph_agent_with_cancel/agent/tools.py](./agent/tools.py)：`calculate` 与 `analyze_data` 工具实现，使用 `@langgraph_tool_node` 装饰器
+- [examples/langgraph_agent_with_cancel/agent/config.py](./agent/config.py)：环境变量读取
+- [examples/langgraph_agent_with_cancel/run_agent.py](./run_agent.py)：测试入口，执行 2 个取消场景各 2 轮对话
+
+## 关键代码解释
+
+这一节用于快速定位"图构建、取消触发、事件处理"三条核心链路。
+
+### 1) LangGraph 图构建与 Agent 组装（`agent/agent.py`）
+
+- 使用 `StateGraph(State)` 定义消息流图，`State` 中通过 `add_messages` 管理对话消息列表
+- 使用 `@langgraph_llm_node` 装饰 chatbot 节点，使其支持取消检查点
+- 通过 `tools_condition` 实现条件分支：有工具调用时进入 `ToolNode`，否则结束
+- 最终通过 `LangGraphAgent` 封装编译后的图，配置 `instruction` 系统提示
+
+### 2) 工具定义与取消支持（`agent/tools.py`）
+
+- 使用 `@tool` + `@langgraph_tool_node` 双装饰器定义工具，使工具执行过程支持取消检查点
+- `calculate`：支持加减乘除四则运算，模拟慢操作以便测试取消
+- `analyze_data`：生成统计报告（均值、中位数、标准差），模拟长时间数据分析
+
+### 3) 取消场景与事件同步（`run_agent.py`）
+
+- **场景 1（流式取消）**：使用 `event_count_callback` 计数流式事件，达到 10 个事件后通过 `asyncio.Event` 通知主协程调用 `cancel_run_async`
+- **场景 2（工具取消）**：使用 `tool_call_callback` 检测到工具调用事件后立即触发取消
+- 每个场景包含 2 轮查询：第 1 轮触发取消，第 2 轮询问 "what happened?" 验证会话状态完整性
+- 通过 `AgentCancelledEvent` 识别取消事件，区分正常结束与取消退出
+
+## 环境与运行
+
+### 环境要求
+
+- Python 3.10+（强烈建议 3.12）
+
+### 安装步骤
 
 ```bash
 git clone https://github.com/trpc-group/trpc-agent-python.git
@@ -26,72 +72,60 @@ source .venv/bin/activate
 pip3 install -e .
 ```
 
-2. 在 `.env` 文件中设置环境变量(也可以通过export设置):
-   - TRPC_AGENT_API_KEY
-   - TRPC_AGENT_BASE_URL
-   - TRPC_AGENT_MODEL_NAME
+### 环境变量要求
 
-3. 运行示例:
+在 [examples/langgraph_agent_with_cancel/.env](./.env) 中配置（或通过 `export`）：
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
+
+### 运行命令
 
 ```bash
-cd examples/langgraph_agent_with_cancel/
+cd examples/langgraph_agent_with_cancel
 python3 run_agent.py
 ```
 
-## 预期行为
+## 运行结果（实测）
 
-本示例演示两个场景:
-
-1. 场景1:在 LLM 流式响应时取消 → 保存部分响应和取消消息
-2. 场景2:在工具执行时取消 → 清理未完成的函数调用，保存取消记录
-
-输出如下所示:
-
-```bash
+```text
 ================================================================================
 🎯 LangGraph Agent Cancellation Demo
 ================================================================================
 
 📋 Scenario 1: Cancel During LLM Streaming (LangGraph)
 --------------------------------------------------------------------------------
-🆔 Session ID: 4fab25f6...
+🆔 Session ID: df05faed...
 📝 User Query 1: Please introduce yourself and explain what you can do in detail.
 
 ⏳ Waiting for first 10 events...
-🤖 Assistant: Hello! I am your AI Assistant, designed to help you with a variety of tasks efficiently
+🤖 Assistant: Hello! I'm your Assistant, here to help you with a variety of tasks. Here's a detailed
 ⏳ [Received 10 events, triggering cancellation...]
- and professionally
+ overview
 ⏸️  Requesting cancellation after 10 events...
-[2026-01-13 14:23:19][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:98][1382035] Run marked for cancellation (app_name: langgraph_calculator_cancel_demo)(user: demo_user)(session: 4fab25f6-1fc2-43de-81a8-4b61b9a375b8)
+ of what I
+❌ Run was cancelled: Run for session df05faed-e321-486c-8356-24c5e42354eb was cancelled
 
-⏳ [Received 11 events, triggering cancellation...]
-. Here[2026-01-13 14:23:19][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:215][1382035] Cancelling run for session 4fab25f6-1fc2-43de-81a8-4b61b9a375b8
-[2026-01-13 14:23:19][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:351][1382035] Run for session 4fab25f6-1fc2-43de-81a8-4b61b9a375b8 was cancelled
-
-⏳ [Received 12 events, triggering cancellation...]
-
-❌ Run was cancelled: Run for session 4fab25f6-1fc2-43de-81a8-4b61b9a375b8 was cancelled
-
-[2026-01-13 14:23:19][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:147][1382035] Cancel completed for user_id demo_user, session 4fab25f6-1fc2-43de-81a8-4b61b9a375b8
 ✓ Cancellation requested: True
 
 💡 Result: The partial response was saved to session with cancellation message
 
 📝 User Query 2: what happened?
 
-🤖 Assistant: It seems like your previous request was interrupted or cancelled before I could complete it. This can happen if you manually stopped the response or if there was a technical issue. 
+🤖 Assistant: It seems like your previous request was interrupted or cancelled before I could complete my response. This can happen if you manually cancelled the action or if there was a technical issue.
 
-Would you like me to reintroduce myself and explain what I can do, or is there something else you'd like assistance with? I'm here to help!
+If you'd like, I can still provide the introduction and explanation of what I can do. Just let me know!
 💡 Result: Agent can still respond with session context maintained
 --------------------------------------------------------------------------------
 
 📋 Scenario 2: Cancel During Tool Execution (LangGraph)
 --------------------------------------------------------------------------------
-🆔 Session ID: 1b20b6d1...
+🆔 Session ID: f84edbc9...
 📝 User Query 1: Please calculate 123 multiply 456 and then analyze sales data with sample size 1000.
 
 ⏳ Waiting for tool call to be detected...
-🤖 Assistant: 
+🤖 Assistant:
 🔧 [Invoke Tool: calculate({'operation': 'multiply', 'a': 123, 'b': 456})]
 ⏳ [Tool call detected...]
 
@@ -99,39 +133,35 @@ Would you like me to reintroduce myself and explain what I can do, or is there s
 ⏳ [Tool call detected...]
 
 ⏸️  Tool call detected! Requesting cancellation during tool execution...
-[2026-01-13 14:23:21][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:98][1382035] Run marked for cancellation (app_name: langgraph_calculator_cancel_demo)(user: demo_user)(session: 1b20b6d1-b21a-47ce-9598-1f06be96b835)
 [Tool executing: calculating 123.0 multiply 456.0...]
 [Tool completed: result = 56088.0]
 [Tool executing: analyzing 1000 sales data points...]
 [Tool completed: analysis done]
 📊 [Tool Result: {'result': 'Calculation result: 123.0 multiply 456.0 = 56088.0'}]
 📊 [Tool Result: {'result': 'Data Analysis Report:\n- Data Type: sales\n- Sample Size: 1000\n- Mean: 42.5\n- Median: 40.0\n- Std Dev: 15.3\n- Key Insight: Data shows positive trend'}]
-[2026-01-13 14:23:21][INFO][trpc_agent_sdk][trpc_agent_sdk/cancel/_cancel.py:215][1382035] Cancelling run for session 1b20b6d1-b21a-47ce-9598-1f06be96b835
-[2026-01-13 14:23:21][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:351][1382035] Run for session 1b20b6d1-b21a-47ce-9598-1f06be96b835 was cancelled
 
-❌ Run was cancelled: Run for session 1b20b6d1-b21a-47ce-9598-1f06be96b835 was cancelled
+❌ Run was cancelled: Run for session f84edbc9-964d-4dc0-b63a-c8f6501f76a5 was cancelled
 
-[2026-01-13 14:23:21][INFO][trpc_agent_sdk][trpc_agent_sdk/runners.py:147][1382035] Cancel completed for user_id demo_user, session 1b20b6d1-b21a-47ce-9598-1f06be96b835
 ✓ Cancellation requested: True
 
 💡 Result: Incomplete function calls were cleaned up from session
 
 📝 User Query 2: what happened?
 
-🤖 Assistant: It seems like there was a cancellation during the execution of your request. Here's what was completed before the cancellation:
+🤖 Assistant: It seems like the execution was cancelled by the user. Here's what was completed before the cancellation:
 
-1. **Calculation**:  
-   - \( 123 \times 456 = 56,088 \)
+1. **Calculation**:
+   - 123 × 456 = 56,088
 
-2. **Sales Data Analysis**:  
-   - **Data Type**: Sales  
-   - **Sample Size**: 1,000  
-   - **Mean**: 42.5  
-   - **Median**: 40.0  
-   - **Standard Deviation**: 15.3  
+2. **Data Analysis**:
+   - **Data Type**: Sales
+   - **Sample Size**: 1,000
+   - **Mean**: 42.5
+   - **Median**: 40.0
+   - **Standard Deviation**: 15.3
    - **Key Insight**: The data shows a positive trend.
 
-If you'd like to proceed with anything else or need further clarification, feel free to let me know!
+Let me know if you'd like to proceed with anything else!
 💡 Result: Agent can still respond with session context maintained
 --------------------------------------------------------------------------------
 
@@ -140,3 +170,21 @@ If you'd like to proceed with anything else or need further clarification, feel 
 ✅ Demo completed!
 ================================================================================
 ```
+
+## 结果分析（是否符合要求）
+
+结论：**符合本示例测试要求**。
+
+- **流式取消生效**：场景 1 中在接收到 10 个流式事件后成功触发取消，Agent 停止输出并记录取消事件
+- **工具执行取消生效**：场景 2 中在工具调用检测后触发取消，已执行的工具结果被保存，未完成的调用被清理
+- **会话状态完整**：两个场景中第 2 轮查询均能感知前次取消，Agent 正确描述了取消经过并可继续服务
+- **取消协作正确**：`cancel_run_async` 返回 `True`，`AgentCancelledEvent` 正确触发，日志记录完整
+
+说明：每个场景使用独立的 `session_id`，主要验证的是取消机制的正确性与会话状态的恢复能力。
+
+## 适用场景建议
+
+- 验证 LangGraphAgent 的协作式取消机制：适合使用本示例
+- 验证取消后会话状态保持与恢复：适合使用本示例
+- 需要测试普通 LlmAgent 的取消功能：建议使用 `examples/langgraph_agent`
+- 需要测试 A2A 协议下的取消：建议使用 `examples/a2a_with_cancel`

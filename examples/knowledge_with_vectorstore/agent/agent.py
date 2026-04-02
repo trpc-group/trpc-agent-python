@@ -3,10 +3,10 @@
 # Copyright @ 2025 Tencent.com
 """ Agent module"""
 
-from trpc_agent.agents import LlmAgent
-from trpc_agent.models import LLMModel
-from trpc_agent.models import OpenAIModel
-from trpc_agent.tools import FunctionTool
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import LLMModel
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.tools import FunctionTool
 
 from .config import get_model_config
 from .prompts import INSTRUCTION

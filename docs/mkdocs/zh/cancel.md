@@ -469,47 +469,310 @@ await runner.cancel_run_async(user_id, session_id)
 
 **服务端配置：**
 
+run_server.py:
+
 ```python
+import uvicorn
+from dotenv import load_dotenv
+
+from a2a.server.apps import A2AStarletteApplication
+from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.tasks import InMemoryTaskStore
+
+from trpc_agent_sdk.server.a2a import TrpcA2aAgentExecutorConfig
 from trpc_agent_sdk.server.a2a import TrpcA2aAgentService
-from trpc_agent_sdk.server.a2a._core.executor import A2aAgentExecutorConfig
 
-# 配置 Cancel 等待超时
-executor_config = A2aAgentExecutorConfig(
-    cancel_wait_timeout=3.0,  # 默认 1.0 秒
-)
+load_dotenv()
 
-a2a_service = TrpcA2aAgentService(
-    service_name="trpc.a2a.agent.weather_with_cancel",
-    agent=agent,
-    executor_config=executor_config,
-)
+HOST = "127.0.0.1"
+PORT = 18082
+# 等待 Agent 取消完成的超时时间（秒），建议与客户端 timeout 保持一致
+CANCEL_WAIT_TIMEOUT = 3.0
+
+
+def create_a2a_service() -> TrpcA2aAgentService:
+    """创建带有 Cancel 支持的 A2A 服务"""
+    from agent.agent import root_agent
+
+    # 关键配置：cancel_wait_timeout 控制服务端收到 cancel_task 后，
+    # 等待后端 Agent 完成取消操作的最大时间
+    executor_config = TrpcA2aAgentExecutorConfig(
+        cancel_wait_timeout=CANCEL_WAIT_TIMEOUT,
+    )
+
+    a2a_svc = TrpcA2aAgentService(
+        service_name="weather_agent_cancel_service",
+        agent=root_agent,
+        executor_config=executor_config,
+    )
+    a2a_svc.initialize()
+
+    return a2a_svc
+
+
+def serve():
+    """启动 A2A 服务"""
+    a2a_svc = create_a2a_service()
+
+    # 使用 a2a-sdk 标准组件组装服务
+    request_handler = DefaultRequestHandler(
+        agent_executor=a2a_svc,
+        task_store=InMemoryTaskStore(),
+    )
+
+    server = A2AStarletteApplication(
+        agent_card=a2a_svc.agent_card,
+        http_handler=request_handler,
+    )
+
+    uvicorn.run(server.build(), host=HOST, port=PORT)
+
+
+if __name__ == "__main__":
+    serve()
 ```
 
 **客户端使用：**
 
+test_a2a_cancel.py:
+
 ```python
-from trpc_agent_sdk.server.a2a.agent import TrpcRemoteA2aAgent
+import asyncio
+import uuid
+from typing import Awaitable
+from typing import Callable
+from typing import Optional
 
-# 创建远程 Agent
-remote_agent = TrpcRemoteA2aAgent(
-    name="weather_agent",
-    service_name="trpc.a2a.agent.weather_with_cancel",
-    description="远程天气查询服务",
-)
-await remote_agent.initialize()
+from dotenv import load_dotenv
+from trpc_agent_sdk.configs import RunConfig
+from trpc_agent_sdk.events import AgentCancelledEvent
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.server.a2a import TrpcRemoteA2aAgent
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.types import Content
+from trpc_agent_sdk.types import Part
 
-runner = Runner(
-    app_name="client_app",
-    agent=remote_agent,
-    session_service=InMemorySessionService(),
-)
+load_dotenv()
 
-# Cancel 会向远程服务发送取消请求
-success = await runner.cancel_run_async(
-    user_id=user_id,
-    session_id=session_id,
-    timeout=3.0,
-)
+# A2A 服务端地址，需与 run_server.py 中配置一致
+AGENT_BASE_URL = "http://127.0.0.1:18082"
+# 客户端等待取消完成的超时时间（秒），建议与服务端 cancel_wait_timeout 一致
+CANCEL_TIMEOUT = 3.0
+
+
+async def run_remote_agent(
+    runner: Runner,
+    user_id: str,
+    session_id: str,
+    query: str,
+    tool_call_callback: Optional[Callable[[], Awaitable[None]]] = None,
+    event_count_callback: Optional[Callable[[int], Awaitable[None]]] = None,
+) -> None:
+    """运行远程 Agent 并处理事件流"""
+    user_content = Content(parts=[Part.from_text(text=query)])
+
+    run_config = RunConfig(agent_run_config={
+        "metadata": {
+            "user_id": user_id,
+        },
+    })
+
+    print("🤖 Remote Agent: ", end="", flush=True)
+    event_count = 0
+    try:
+        async for event in runner.run_async(
+                user_id=user_id,
+                session_id=session_id,
+                new_message=user_content,
+                run_config=run_config,
+        ):
+            event_count += 1
+            if event_count_callback:
+                await event_count_callback(event_count)
+
+            # 收到取消事件，说明 Agent 已成功被取消
+            if isinstance(event, AgentCancelledEvent):
+                print(f"\n❌ Run was cancelled: {event.error_message}")
+                break
+
+            if not event.content or not event.content.parts:
+                continue
+
+            # 处理流式输出（partial=True 表示流式 chunk）
+            if event.partial:
+                for part in event.content.parts:
+                    if part.text:
+                        print(part.text, end="", flush=True)
+                continue
+
+            # 处理完整事件（工具调用、工具结果等）
+            for part in event.content.parts:
+                if part.thought:
+                    continue
+                if part.function_call:
+                    print(f"\n🔧 [Invoke Tool: {part.function_call.name}({part.function_call.args})]")
+                    # 检测到工具调用时触发回调，用于在工具执行期间发起取消
+                    if tool_call_callback:
+                        await tool_call_callback()
+                elif part.function_response:
+                    print(f"📊 [Tool Result: {part.function_response.response}]")
+
+    except Exception as e:
+        print(f"\n⚠️ Error: {e}")
+
+    print()
+
+
+def create_runner(
+    app_name: str,
+    session_service: InMemorySessionService,
+    remote_agent: TrpcRemoteA2aAgent,
+) -> Runner:
+    """创建 Runner 实例，绑定远程 A2A Agent"""
+    return Runner(app_name=app_name, agent=remote_agent, session_service=session_service)
+
+
+# ============================================================
+# 场景 1：LLM 流式输出阶段取消
+# 收到 10 个流式事件后，通过 cancel_run_async 向远程服务发送取消请求
+# ============================================================
+async def scenario_1_cancel_during_streaming(remote_agent: TrpcRemoteA2aAgent) -> None:
+    print("📋 Scenario 1: Cancel During LLM Streaming (Remote A2A)")
+    print("-" * 80)
+
+    app_name = "a2a_cancel_demo"
+    user_id = "demo_user"
+    session_id = str(uuid.uuid4())
+    session_service = InMemorySessionService()
+
+    query1 = "Introduce yourself in detail, what can you do as a weather assistant."
+    print(f"🆔 Session ID: {session_id[:8]}...")
+    print(f"📝 User Query 1: {query1}")
+    print()
+
+    event_threshold_reached = asyncio.Event()
+
+    async def on_event_count(count: int) -> None:
+        # 收到第 10 个事件时，触发取消信号
+        if count == 10:
+            print(f"\n⏳ [Received {count} events, triggering cancellation...]")
+            event_threshold_reached.set()
+
+    # 用于运行 Agent 的 Runner
+    runner1 = create_runner(app_name, session_service, remote_agent)
+
+    async def run_query1() -> None:
+        await run_remote_agent(runner1, user_id, session_id, query1, event_count_callback=on_event_count)
+
+    # 在后台 task 中运行 Agent
+    task = asyncio.create_task(run_query1())
+
+    print("⏳ Waiting for first 10 events...")
+    await event_threshold_reached.wait()
+
+    # 用另一个 Runner 发起取消请求（模拟独立的取消调用方）
+    runner2 = create_runner(app_name, session_service, remote_agent)
+    print("\n⏸️  Requesting cancellation after 10 events...")
+    # cancel_run_async 会向远程 A2A 服务发送 cancel_task 请求
+    success = await runner2.cancel_run_async(user_id=user_id, session_id=session_id, timeout=CANCEL_TIMEOUT)
+    print(f"✓ Cancellation requested: {success}")
+
+    await task
+
+    print()
+    print("💡 Result: The partial response was saved to session with cancellation message")
+    print()
+
+    # 取消后在同一 session 继续对话，验证会话上下文保持
+    query2 = "what happens?"
+    print(f"📝 User Query 2: {query2}")
+    print()
+
+    runner3 = create_runner(app_name, session_service, remote_agent)
+    await run_remote_agent(runner3, user_id, session_id, query2)
+
+    print("💡 Result: Agent can still respond with session context maintained")
+    print("-" * 80)
+    print()
+
+
+# ============================================================
+# 场景 2：工具执行阶段取消
+# 检测到 function_call 事件后发起取消，此时工具仍在服务端执行中
+# ============================================================
+async def scenario_2_cancel_during_tool_execution(remote_agent: TrpcRemoteA2aAgent) -> None:
+    print("📋 Scenario 2: Cancel During Tool Execution (Remote A2A)")
+    print("-" * 80)
+
+    app_name = "a2a_cancel_demo"
+    user_id = "demo_user"
+    session_id = str(uuid.uuid4())
+    session_service = InMemorySessionService()
+
+    query1 = "What's the current weather in Shanghai and Beijing?"
+    print(f"🆔 Session ID: {session_id[:8]}...")
+    print(f"📝 User Query 1: {query1}")
+    print()
+
+    tool_call_detected = asyncio.Event()
+
+    async def on_tool_call() -> None:
+        # 检测到工具调用时设置信号，触发取消
+        print("⏳ [Tool call detected...]")
+        tool_call_detected.set()
+
+    runner1 = create_runner(app_name, session_service, remote_agent)
+
+    async def run_query1() -> None:
+        await run_remote_agent(runner1, user_id, session_id, query1, tool_call_callback=on_tool_call)
+
+    task = asyncio.create_task(run_query1())
+
+    print("⏳ Waiting for tool call to be detected...")
+    await tool_call_detected.wait()
+
+    # 工具执行中发起取消，已完成的工具结果会保留，未完成的调用会被清理
+    runner2 = create_runner(app_name, session_service, remote_agent)
+    print("\n⏸️  Tool call detected! Requesting cancellation during tool execution...")
+    success = await runner2.cancel_run_async(user_id=user_id, session_id=session_id, timeout=CANCEL_TIMEOUT)
+    print(f"✓ Cancellation requested: {success}")
+
+    await task
+
+    print()
+    print("💡 Result: Incomplete function calls were cleaned up from session")
+    print()
+
+    # 取消后继续对话，验证会话可恢复
+    query2 = "what happens?"
+    print(f"📝 User Query 2: {query2}")
+    print()
+
+    runner3 = create_runner(app_name, session_service, remote_agent)
+    await run_remote_agent(runner3, user_id, session_id, query2)
+
+    print("💡 Result: Agent can still respond with session context maintained")
+    print("-" * 80)
+    print()
+
+
+async def main():
+    # 创建远程 A2A Agent，连接到 run_server.py 启动的服务
+    remote_agent = TrpcRemoteA2aAgent(
+        name="weather_agent",
+        agent_base_url=AGENT_BASE_URL,
+        description="Professional weather query assistant with cancel support",
+    )
+    await remote_agent.initialize()
+
+    # 依次运行两个取消场景
+    await scenario_1_cancel_during_streaming(remote_agent)
+
+    await scenario_2_cancel_during_tool_execution(remote_agent)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 **配置说明：**
@@ -522,7 +785,7 @@ success = await runner.cancel_run_async(
 建议两者配置相同的超时时间。
 
 **完整示例：**
-- examples/trpc_a2a_with_cancel（示例待补充）
+- [examples/a2a_with_cancel](../../../examples/a2a_with_cancel/README.md)
 
 ### AG-UI
 
@@ -559,46 +822,198 @@ success = await runner.cancel_run_async(
 
 **服务端配置：**
 
+run_server.py:
+
 ```python
-from trpc_agent_sdk.server.ag_ui import AgUiAgent, AgUiService
+from dotenv import load_dotenv
 
-# 创建 AG-UI Agent
-agui_agent = AgUiAgent(
-    trpc_agent=agent,
-    app_name="weather_app",
-    cancel_wait_timeout=3.0,  # Cancel 等待超时，默认 3.0 秒
-)
+from trpc_agent_sdk.sessions import InMemorySessionService
 
-# 创建服务
-agui_service = AgUiService(agents=[agui_agent])
+from _agui_runner import create_agui_runner
 
-# 启动服务
-await agui_service.start(host="0.0.0.0", port=18080)
+load_dotenv()
+
+HOST = "127.0.0.1"
+PORT = 18080
+
+app_name = "agui_cancel_demo"
+
+
+def serve():
+    """启动 AG-UI 服务，注册 Agent 并绑定路由"""
+    service_name = "weather_agent_cancel_service"
+    uri = "/weather_agent"  # AG-UI 端点路径，客户端通过此路径连接
+    from agent.agent import root_agent
+    session_service = InMemorySessionService()
+    agui_runner = create_agui_runner(app_name,
+                                     service_name,
+                                     uri,
+                                     root_agent=root_agent,
+                                     session_service=session_service)
+    agui_runner.run(HOST, PORT)
+
+
+if __name__ == "__main__":
+    serve()
+```
+
+_agui_runner.py:
+
+```python
+from contextlib import asynccontextmanager
+from typing import Any
+
+from ag_ui.core import RunAgentInput
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+from trpc_agent_sdk.agents import BaseAgent
+from trpc_agent_sdk.log import logger
+from trpc_agent_sdk.server.ag_ui import AgUiAgent
+from trpc_agent_sdk.server.ag_ui import AgUiManager
+from trpc_agent_sdk.server.ag_ui import AgUiService
+
+
+class HealthResponse(BaseModel):
+    status: str = "ok"
+    app_name: str
+    version: str = "1.0.0"
+
+
+class AguiRunner:
+    """AG-UI Runner：管理 AgUiManager、FastAPI 应用和服务注册"""
+
+    def __init__(
+        self,
+        app_name: str,
+    ) -> None:
+        self._app_name = app_name
+        self._agui_manager = AgUiManager()
+        self._app = self._create_app()
+
+    @property
+    def app(self) -> FastAPI:
+        return self._app
+
+    def register_service(self, service_name: str, service: AgUiService) -> None:
+        self._agui_manager.register_service(service_name, service)
+
+    def run(self, host: str, port: int, **kwargs: Any) -> None:
+        self._app.get("/health", response_model=HealthResponse, tags=["meta"])(self.health)
+        self._agui_manager.set_app(self._app)
+        self._agui_manager.run(host, port, **kwargs)
+
+    @asynccontextmanager
+    async def _lifespan(self, app: FastAPI):
+        logger.info("TRPC AG-UI Server (with cancel) starting up.")
+        yield
+        logger.info("TRPC AG-UI Server (with cancel) shutting down.")
+        await self._agui_manager.close()
+
+    def _create_app(self) -> FastAPI:
+        app = FastAPI(
+            title="TRPC AG-UI Server (Cancel Demo)",
+            description="HTTP API for TRPC AG-UI Server with Cancel support",
+            version="1.0.0",
+            lifespan=self._lifespan,
+        )
+        return app
+
+    async def health(self) -> HealthResponse:
+        return HealthResponse(app_name=self._app_name)
+
+
+def _create_agui_agent(name: str, root_agent: BaseAgent, **kwargs) -> AgUiAgent:
+    """创建 AgUiAgent，配置 cancel_wait_timeout"""
+    agui_agent = AgUiAgent(
+        trpc_agent=root_agent,
+        app_name=name,
+        # 关键配置：SSE 连接断开后，等待 Agent 完成取消的超时时间
+        # 如果配置过短，Cancel 可能未完成，流式文本无法保存到会话
+        cancel_wait_timeout=3.0,
+        **kwargs,
+    )
+    return agui_agent
+
+
+def create_agui_runner(app_name: str, service_name: str, uri: str, **kwargs: Any) -> AguiRunner:
+    """组装 AG-UI 服务：创建 Runner → 创建 Service → 注册 Agent 路由"""
+    ag_ui_runner: AguiRunner = AguiRunner(app_name)
+    agui_service = AgUiService(service_name, app=ag_ui_runner.app)
+    agui_agent = _create_agui_agent(app_name, **kwargs)
+    # 将 Agent 注册到指定的 URI 路径，客户端通过该路径连接
+    agui_service.add_agent(uri, agui_agent)
+    ag_ui_runner.register_service(service_name, agui_service)
+    return ag_ui_runner
 ```
 
 **客户端使用（JavaScript）：**
 
+client_js/main.js:
+
 ```javascript
-import { AgentClient } from '@anthropic-ai/agent-ui-client';
+import { HttpAgent } from '@ag-ui/client';
 
-const agent = new AgentClient({
-  url: 'http://localhost:18080',
+// 连接 AG-UI 服务端，路径需与 run_server.py 中注册的 uri 一致
+const agent = new HttpAgent({
+  url: 'http://127.0.0.1:18080/weather_agent',
+  debug: false
 });
 
-// 开始运行
-const runId = await agent.startRun({
-  userId: 'user1',
-  sessionId: 'session1',
-  message: 'What is the weather?',
+let chunkCount = 0;
+const ABORT_AFTER_CHUNKS = 5;  // 收到 5 个文本 chunk 后触发取消
+
+// 订阅 AG-UI 事件流
+const subscription = agent.subscribe({
+  onTextMessageStartEvent: ({ event }) => {
+    process.stdout.write('\n🤖 Assistant: ');
+  },
+  onTextMessageContentEvent: ({ event }) => {
+    process.stdout.write(event.delta ?? '');
+    chunkCount++;
+    // 达到阈值后调用 abortRun() 关闭 SSE 连接，触发服务端 Cancel
+    if (chunkCount === ABORT_AFTER_CHUNKS) {
+      process.stdout.write('\n\n⏸️  Aborting run after receiving ' + ABORT_AFTER_CHUNKS + ' text chunks...\n');
+      agent.abortRun();
+    }
+  },
+  onTextMessageEndEvent: ({ event }) => {
+    process.stdout.write('\n');
+  },
+  onToolCallStartEvent: ({ event }) => {
+    process.stdout.write(`\n🔧 Call Tool ${event.toolCallName}: `);
+  },
+  onToolCallArgsEvent: ({ event }) => {
+    process.stdout.write(event.delta ?? '');
+  },
+  onToolCallResultEvent: ({ event }) => {
+    process.stdout.write(`\n✅ Tool result: ${event.content}`);
+  },
+  onRunStartedEvent: ({ event }) => {
+    process.stdout.write(`\n⚙️  Run started: ${event.runId}`);
+  },
+  onRunFinishedEvent: ({ result }) => {
+    if (result !== undefined) {
+      process.stdout.write(`⚙️  Run finished, result: ${result}\n`);
+    } else {
+      process.stdout.write('⚙️  Run finished\n');
+    }
+  },
+  onRunFailedEvent: ({ error }) => {
+    process.stdout.write(`❌ Run failed: ${error}\n`);
+  }
 });
 
-// 订阅事件
-agent.onEvent((event) => {
-  console.log('Event:', event);
+// 发送用户消息并启动 Agent
+await agent.addMessage({
+  role: 'user',
+  content: 'Please introduce yourself in detail and tell me what you can do.',
+  id: 'user_123'
 });
 
-// 取消运行（关闭 SSE 连接）
-agent.abortRun();
+await agent.runAgent();
+
+subscription.unsubscribe?.();
 ```
 
 **Cancel 触发机制：**
@@ -615,4 +1030,4 @@ agent.abortRun();
 | `cancel_wait_timeout` | 3.0 | 等待 Cancel 操作完成的超时时间（秒）。如果此值配置不当，Cancel 操作可能无法成功执行，导致流式文本无法保存到会话中。 |
 
 **完整示例：**
-- examples/trpc_agui_with_cancel（示例待补充）
+- [examples/agui_with_cancel](../../../examples/agui_with_cancel/README.md)

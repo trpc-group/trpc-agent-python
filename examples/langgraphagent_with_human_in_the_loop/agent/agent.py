@@ -18,8 +18,8 @@ from langgraph.prebuilt import tools_condition
 from langgraph.types import Command
 from langgraph.types import Interrupt
 from langgraph.types import interrupt
-from trpc_agent.agents import LangGraphAgent
-from trpc_agent.agents import langgraph_llm_node
+from trpc_agent_sdk.agents import LangGraphAgent
+from trpc_agent_sdk.agents import langgraph_llm_node
 
 from .config import get_model_config
 from .prompts import INSTRUCTION

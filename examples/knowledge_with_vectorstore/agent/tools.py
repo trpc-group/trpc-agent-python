@@ -12,10 +12,10 @@ except ImportError:
     from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import TextLoader
 
-from trpc_agent.context import new_agent_context
-from trpc_agent.knowledge import SearchRequest, SearchResult
-from trpc_agent.types import Part
-from trpc_agent_ecosystem.knowledge.langchain_knowledge import LangchainKnowledge
+from trpc_agent_sdk.context import new_agent_context
+from trpc_agent_sdk.knowledge import SearchRequest, SearchResult
+from trpc_agent_sdk.types import Part
+from trpc_agent_sdk.server.knowledge.langchain_knowledge import LangchainKnowledge
 
 from .config import (
     get_elasticsearch_config,

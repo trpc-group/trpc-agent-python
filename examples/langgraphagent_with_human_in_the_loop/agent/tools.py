@@ -4,7 +4,7 @@
 """ Tools for the agent. """
 
 from langchain_core.tools import tool
-from trpc_agent.agents import langgraph_tool_node
+from trpc_agent_sdk.agents import langgraph_tool_node
 
 
 @tool
