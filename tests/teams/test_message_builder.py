@@ -376,6 +376,110 @@ class TestHistoryLimiting:
         assert "New question" in content
 
 
+class TestMemberInteractionsExclusion:
+    """Tests for member interaction exclusion logic."""
+
+    def test_exclude_member_removes_self_from_interactions(self):
+        """Test that excluding a member removes only their entries when self-history is enabled."""
+        builder = TeamMessageBuilder(
+            share_member_interactions=True,
+            num_member_history_runs=1,
+        )
+        ctx = TeamRunContext(current_invocation_id="inv-1")
+        ctx.add_interaction("researcher", "Task A", "Response A")
+        ctx.add_interaction("writer", "Task B", "Response B")
+
+        messages = builder.build_member_messages(
+            task="Task",
+            team_run_context=ctx,
+            member_name="researcher",
+        )
+
+        content = messages[0].parts[0].text
+        assert "Member: writer" in content
+        assert "Member: researcher" not in content
+
+    def test_exclude_member_all_interactions_filtered(self):
+        """Test when all current-run interactions belong to excluded member."""
+        builder = TeamMessageBuilder(
+            share_member_interactions=True,
+            num_member_history_runs=1,
+        )
+        ctx = TeamRunContext(current_invocation_id="inv-1")
+        ctx.add_interaction("researcher", "Task A", "Response A")
+
+        messages = builder.build_member_messages(
+            task="Do work",
+            team_run_context=ctx,
+            member_name="researcher",
+        )
+
+        content = messages[0].parts[0].text
+        assert "<member_interaction_context>" not in content
+        assert "Do work" in content
+
+    def test_no_member_interactions_returns_empty(self):
+        """Test member interactions when there are no interactions."""
+        builder = TeamMessageBuilder(share_member_interactions=True)
+        ctx = TeamRunContext(current_invocation_id="inv-1")
+
+        messages = builder.build_member_messages(task="Task", team_run_context=ctx)
+
+        content = messages[0].parts[0].text
+        assert "<member_interaction_context>" not in content
+
+
+class TestMemberSelfHistoryDirect:
+    """Tests for member self history edge cases."""
+
+    def test_member_self_history_no_history(self):
+        """Test member self history when member has no history."""
+        builder = TeamMessageBuilder(num_member_history_runs=3)
+        ctx = TeamRunContext(current_invocation_id="inv-1")
+        ctx.add_interaction("writer", "Task", "Response")
+
+        messages = builder.build_member_messages(
+            task="Do work",
+            team_run_context=ctx,
+            member_name="researcher",
+        )
+
+        content = messages[0].parts[0].text
+        assert "<member_self_history_context>" not in content
+
+    def test_member_self_history_without_member_name(self):
+        """Test member self history is not added when no member_name."""
+        builder = TeamMessageBuilder(num_member_history_runs=3)
+        ctx = TeamRunContext(current_invocation_id="inv-1")
+        ctx.add_interaction("researcher", "Task", "Response")
+
+        messages = builder.build_member_messages(
+            task="Do work",
+            team_run_context=ctx,
+        )
+
+        content = messages[0].parts[0].text
+        assert "<member_self_history_context>" not in content
+
+
+class TestTeamHistoryWhitespace:
+    """Tests for team history with edge-case text content."""
+
+    def test_whitespace_only_entries_skipped(self):
+        """Test that whitespace-only history entries are skipped."""
+        builder = TeamMessageBuilder(share_team_history=True)
+        ctx = TeamRunContext(current_invocation_id="inv-1")
+        ctx.leader_history = [
+            {"role": "user", "text": "   ", "invocation_id": "inv-1"},
+            {"role": "model", "text": "Real response", "invocation_id": "inv-1"},
+        ]
+
+        messages = builder.build_member_messages(task="Task", team_run_context=ctx)
+
+        content = messages[0].parts[0].text
+        assert "Real response" in content
+
+
 class TestMessageCombination:
     """Tests for combining different message parts."""
 
