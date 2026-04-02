@@ -160,6 +160,25 @@ class TestDelegateToMemberToolSignalDetection:
         assert restored.action == original.action
 
 
+class TestDelegateToMemberToolEdgeCases:
+    """Tests for edge cases in delegation tool creation."""
+
+    def test_empty_member_list(self):
+        """Test creating tool with empty member list."""
+        tool = create_delegate_to_member_tool([])
+        assert isinstance(tool, FunctionTool)
+        result = tool.func("any_member", "Task")
+        assert isinstance(result, DelegationSignal)
+        assert result.member_name == "any_member"
+
+    def test_single_member_list(self):
+        """Test creating tool with single member."""
+        tool = create_delegate_to_member_tool(["only_one"])
+        assert "only_one" in tool.func.__doc__
+        result = tool.func("only_one", "Solo task")
+        assert result.member_name == "only_one"
+
+
 class TestCreateMultipleTools:
     """Tests for creating multiple delegation tools."""
 

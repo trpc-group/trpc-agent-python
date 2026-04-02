@@ -3,9 +3,7 @@
 # Copyright @ 2026 Tencent.com
 """Unit tests for eval service base (_eval_service_base)."""
 
-import pytest
-
-pytest.importorskip("trpc_agent_sdk._runners", reason="trpc_agent_sdk._runners not yet implemented")
+import trpc_agent_sdk.runners  # noqa: F401
 
 from trpc_agent_sdk.evaluation import EvaluateConfig
 from trpc_agent_sdk.evaluation import EvaluateRequest

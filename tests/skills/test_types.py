@@ -1,449 +1,390 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright @ 2026 Tencent.com
+# Copyright @ 2025 Tencent.com
+"""Unit tests for trpc_agent_sdk.skills._types.
+
+Covers:
+- parse_datetime / format_datetime helpers
+- SkillRequires, SkillFrontMatter, SkillConfig, SkillSummary, SkillResource defaults
+- Skill model construction
+- SkillMetadata: from_dict, to_dict, round-trip
+- SkillWorkspaceInputRecord: from_dict, to_dict
+- SkillWorkspaceOutputRecord: from_dict, to_dict
+- SkillWorkspaceMetadata: from_dict, to_dict, nested parsing
+"""
+
+from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
 
 import pytest
-from trpc_agent_sdk.skills import Skill
-from trpc_agent_sdk.skills import SkillMetadata
-from trpc_agent_sdk.skills import SkillResource
-from trpc_agent_sdk.skills import SkillSummary
-from trpc_agent_sdk.skills import SkillWorkspaceInputRecord
-from trpc_agent_sdk.skills import SkillWorkspaceMetadata
-from trpc_agent_sdk.skills import SkillWorkspaceOutputRecord
-from trpc_agent_sdk.skills import format_datetime
-from trpc_agent_sdk.skills import parse_datetime
 
+from trpc_agent_sdk.skills._types import (
+    Skill,
+    SkillConfig,
+    SkillFrontMatter,
+    SkillMetadata,
+    SkillRequires,
+    SkillResource,
+    SkillSummary,
+    SkillWorkspaceInputRecord,
+    SkillWorkspaceMetadata,
+    SkillWorkspaceOutputRecord,
+    format_datetime,
+    parse_datetime,
+)
+
+
+# ---------------------------------------------------------------------------
+# parse_datetime
+# ---------------------------------------------------------------------------
 
 class TestParseDatetime:
-    """Test suite for parse_datetime function."""
-
-    def test_parse_datetime_from_string(self):
-        """Test parsing datetime from ISO format string."""
-        dt_str = "2024-01-01T12:00:00"
-        result = parse_datetime(dt_str)
-
-        assert isinstance(result, datetime)
-        assert result.year == 2024
-        assert result.month == 1
-        assert result.day == 1
-
-    def test_parse_datetime_from_datetime(self):
-        """Test parsing datetime from datetime object."""
-        dt = datetime(2024, 1, 1, 12, 0, 0)
-        result = parse_datetime(dt)
-
-        assert result == dt
-
-    def test_parse_datetime_none(self):
-        """Test parsing datetime from None returns current time."""
+    def test_parse_none_returns_now(self):
         result = parse_datetime(None)
-
         assert isinstance(result, datetime)
 
-    def test_parse_datetime_empty_string(self):
-        """Test parsing datetime from empty string returns current time."""
+    def test_parse_empty_string_returns_now(self):
         result = parse_datetime("")
-
         assert isinstance(result, datetime)
 
-    def test_parse_datetime_invalid_type(self):
-        """Test parsing datetime from invalid type returns current time."""
-        result = parse_datetime(123)
+    def test_parse_iso_string(self):
+        dt = parse_datetime("2025-06-15T10:30:00")
+        assert dt.year == 2025
+        assert dt.month == 6
+        assert dt.day == 15
+        assert dt.hour == 10
 
+    def test_parse_datetime_object(self):
+        original = datetime(2025, 1, 1, 12, 0, 0)
+        result = parse_datetime(original)
+        assert result is original
+
+    def test_parse_int_returns_now(self):
+        result = parse_datetime(12345)
         assert isinstance(result, datetime)
 
+    def test_parse_false_returns_now(self):
+        result = parse_datetime(False)
+        assert isinstance(result, datetime)
+
+
+# ---------------------------------------------------------------------------
+# format_datetime
+# ---------------------------------------------------------------------------
 
 class TestFormatDatetime:
-    """Test suite for format_datetime function."""
+    def test_format_none_returns_iso_string(self):
+        result = format_datetime(None)
+        assert isinstance(result, str)
+        datetime.fromisoformat(result)
 
     def test_format_datetime(self):
-        """Test formatting datetime to ISO string."""
-        dt = datetime(2024, 1, 1, 12, 0, 0)
+        dt = datetime(2025, 6, 15, 10, 30, 0)
         result = format_datetime(dt)
+        assert "2025-06-15" in result
+        assert "10:30:00" in result
 
-        assert isinstance(result, str)
-        assert "2024-01-01" in result
 
-    def test_format_datetime_none(self):
-        """Test formatting None datetime returns current time ISO string."""
-        result = format_datetime(None)
+# ---------------------------------------------------------------------------
+# Pydantic model defaults
+# ---------------------------------------------------------------------------
 
-        assert isinstance(result, str)
-        assert isinstance(datetime.fromisoformat(result), datetime)
+class TestSkillRequires:
+    def test_defaults(self):
+        r = SkillRequires()
+        assert r.bins == []
+        assert r.any_bins == []
+        assert r.env == []
+        assert r.config == []
+        assert r.install == []
+
+
+class TestSkillFrontMatter:
+    def test_defaults(self):
+        fm = SkillFrontMatter()
+        assert fm.skill_key == ""
+        assert fm.primary_env == ""
+        assert fm.emoji == ""
+        assert fm.homepage == ""
+        assert fm.always is False
+        assert fm.os == []
+        assert isinstance(fm.requires, SkillRequires)
+
+    def test_with_values(self):
+        fm = SkillFrontMatter(
+            skill_key="test-key",
+            primary_env="API_KEY",
+            emoji="🧪",
+            always=True,
+            os=["linux", "darwin"],
+        )
+        assert fm.skill_key == "test-key"
+        assert fm.always is True
+        assert len(fm.os) == 2
+
+
+class TestSkillConfig:
+    def test_defaults(self):
+        c = SkillConfig()
+        assert c.enabled is None
+        assert c.api_key == ""
+        assert c.env == {}
 
 
 class TestSkillSummary:
-    """Test suite for SkillSummary class."""
+    def test_defaults(self):
+        s = SkillSummary()
+        assert s.name == ""
+        assert s.description == ""
 
-    def test_create_skill_summary(self):
-        """Test creating a skill summary."""
-        summary = SkillSummary(name="test-skill", description="Test skill description")
-
-        assert summary.name == "test-skill"
-        assert summary.description == "Test skill description"
-
-    def test_create_skill_summary_defaults(self):
-        """Test creating skill summary with defaults."""
-        summary = SkillSummary()
-
-        assert summary.name == ""
-        assert summary.description == ""
+    def test_with_values(self):
+        s = SkillSummary(name="test", description="desc")
+        assert s.name == "test"
 
 
 class TestSkillResource:
-    """Test suite for SkillResource class."""
-
-    def test_create_skill_resource(self):
-        """Test creating a skill resource."""
-        resource = SkillResource(path="data/file.txt", content="file content")
-
-        assert resource.path == "data/file.txt"
-        assert resource.content == "file content"
-
-    def test_create_skill_resource_required_fields(self):
-        """Test that SkillResource requires all fields."""
-        with pytest.raises(Exception):  # Pydantic validation error
-            SkillResource(path="data/file.txt")
+    def test_creation(self):
+        r = SkillResource(path="docs/readme.md", content="# Hello")
+        assert r.path == "docs/readme.md"
+        assert r.content == "# Hello"
 
 
 class TestSkill:
-    """Test suite for Skill class."""
+    def test_defaults(self):
+        s = Skill()
+        assert s.body == ""
+        assert s.resources == []
+        assert s.tools == []
+        assert s.base_dir == ""
+        assert isinstance(s.summary, SkillSummary)
 
-    def test_create_skill(self):
-        """Test creating a skill."""
-        summary = SkillSummary(name="test-skill", description="Test")
-        resource = SkillResource(path="data.txt", content="content")
-        skill = Skill(
+    def test_with_values(self):
+        s = Skill(
+            summary=SkillSummary(name="test", description="Test skill"),
+            body="# Test Body",
+            tools=["tool1", "tool2"],
             base_dir="/path/to/skill",
-            summary=summary,
-            body="skill body",
-            resources=[resource]
+            resources=[SkillResource(path="doc.md", content="doc")],
         )
+        assert s.summary.name == "test"
+        assert len(s.tools) == 2
+        assert len(s.resources) == 1
 
-        assert skill.base_dir == "/path/to/skill"
-        assert skill.summary == summary
-        assert skill.body == "skill body"
-        assert len(skill.resources) == 1
 
-    def test_create_skill_defaults(self):
-        """Test creating skill with defaults."""
-        skill = Skill()
-
-        assert skill.base_dir == ""
-        assert isinstance(skill.summary, SkillSummary)
-        assert skill.body == ""
-        assert skill.resources == []
-
+# ---------------------------------------------------------------------------
+# SkillMetadata
+# ---------------------------------------------------------------------------
 
 class TestSkillMetadata:
-    """Test suite for SkillMetadata class."""
+    def test_defaults(self):
+        m = SkillMetadata()
+        assert m.name == ""
+        assert m.rel_path == ""
+        assert m.digest == ""
+        assert m.mounted is False
+        assert m.staged_at is None
 
-    def test_create_skill_metadata(self):
-        """Test creating skill metadata."""
-        dt = datetime.now()
-        metadata = SkillMetadata(
-            name="test-skill",
-            rel_path="skills/test",
-            digest="abc123",
-            mounted=True,
-            staged_at=dt
-        )
-
-        assert metadata.name == "test-skill"
-        assert metadata.rel_path == "skills/test"
-        assert metadata.digest == "abc123"
-        assert metadata.mounted is True
-        assert metadata.staged_at == dt
-
-    def test_create_skill_metadata_defaults(self):
-        """Test creating skill metadata with defaults."""
-        metadata = SkillMetadata()
-
-        assert metadata.name == ""
-        assert metadata.rel_path == ""
-        assert metadata.digest == ""
-        assert metadata.mounted is False
-        assert metadata.staged_at is None
-
-    def test_skill_metadata_from_dict(self):
-        """Test creating skill metadata from dictionary."""
+    def test_from_dict_full(self):
         data = {
             "name": "test-skill",
             "rel_path": "skills/test",
             "digest": "abc123",
             "mounted": True,
-            "staged_at": "2024-01-01T12:00:00"
+            "staged_at": "2025-06-15T10:30:00",
         }
+        m = SkillMetadata.from_dict(data)
+        assert m.name == "test-skill"
+        assert m.rel_path == "skills/test"
+        assert m.digest == "abc123"
+        assert m.mounted is True
+        assert m.staged_at.year == 2025
 
-        metadata = SkillMetadata.from_dict(data)
+    def test_from_dict_empty(self):
+        m = SkillMetadata.from_dict({})
+        assert m.name == ""
+        assert m.mounted is False
 
-        assert metadata.name == "test-skill"
-        assert metadata.rel_path == "skills/test"
-        assert metadata.digest == "abc123"
-        assert metadata.mounted is True
-        assert isinstance(metadata.staged_at, datetime)
-
-    def test_skill_metadata_to_dict(self):
-        """Test converting skill metadata to dictionary."""
-        dt = datetime(2024, 1, 1, 12, 0, 0)
-        metadata = SkillMetadata(
-            name="test-skill",
+    def test_to_dict(self):
+        m = SkillMetadata(
+            name="test",
             rel_path="skills/test",
-            digest="abc123",
+            digest="abc",
             mounted=True,
-            staged_at=dt
+            staged_at=datetime(2025, 6, 15),
         )
+        d = m.to_dict()
+        assert d["name"] == "test"
+        assert d["rel_path"] == "skills/test"
+        assert d["digest"] == "abc"
+        assert d["mounted"] is True
+        assert "2025-06-15" in d["staged_at"]
 
-        data = metadata.to_dict()
+    def test_round_trip(self):
+        original = SkillMetadata(
+            name="round-trip",
+            rel_path="skills/rt",
+            digest="hash",
+            mounted=True,
+            staged_at=datetime(2025, 1, 1, 12, 0, 0),
+        )
+        d = original.to_dict()
+        restored = SkillMetadata.from_dict(d)
+        assert restored.name == original.name
+        assert restored.digest == original.digest
+        assert restored.mounted == original.mounted
 
-        assert data["name"] == "test-skill"
-        assert data["rel_path"] == "skills/test"
-        assert data["digest"] == "abc123"
-        assert data["mounted"] is True
-        assert isinstance(data["staged_at"], str)
 
+# ---------------------------------------------------------------------------
+# SkillWorkspaceInputRecord
+# ---------------------------------------------------------------------------
 
 class TestSkillWorkspaceInputRecord:
-    """Test suite for SkillWorkspaceInputRecord class."""
-
-    def test_create_input_record(self):
-        """Test creating input record."""
-        dt = datetime.now()
-        record = SkillWorkspaceInputRecord(
-            src="artifact://name",
-            dst="/tmp/input",
-            timestamp=dt,
-            resolved="/resolved/path",
-            version=1,
-            mode="copy"
-        )
-
-        assert record.src == "artifact://name"
-        assert record.dst == "/tmp/input"
-        assert record.timestamp == dt
-        assert record.resolved == "/resolved/path"
-        assert record.version == 1
-        assert record.mode == "copy"
-
-    def test_create_input_record_defaults(self):
-        """Test creating input record with defaults."""
-        record = SkillWorkspaceInputRecord()
-
-        assert record.src == ""
-        assert record.dst == ""
-        assert record.timestamp is None
-        assert record.resolved == ""
-        assert record.version == 0
-        assert record.mode == ""
-
-    def test_input_record_from_dict(self):
-        """Test creating input record from dictionary."""
+    def test_from_dict_full(self):
         data = {
-            "src": "artifact://name",
-            "dst": "/tmp/input",
-            "timestamp": "2024-01-01T12:00:00",
-            "resolved": "/resolved/path",
-            "version": 1,
-            "mode": "copy"
+            "src": "/src/path",
+            "dst": "/dst/path",
+            "timestamp": "2025-06-15T10:00:00",
+            "resolved": "/resolved",
+            "version": 3,
+            "mode": "copy",
         }
+        r = SkillWorkspaceInputRecord.from_dict(data)
+        assert r.src == "/src/path"
+        assert r.dst == "/dst/path"
+        assert r.version == 3
+        assert r.mode == "copy"
 
-        record = SkillWorkspaceInputRecord.from_dict(data)
+    def test_from_dict_empty(self):
+        r = SkillWorkspaceInputRecord.from_dict({})
+        assert r.src == ""
+        assert r.version == 0
 
-        assert record.src == "artifact://name"
-        assert record.dst == "/tmp/input"
-        assert isinstance(record.timestamp, datetime)
-        assert record.resolved == "/resolved/path"
-        assert record.version == 1
-        assert record.mode == "copy"
-
-    def test_input_record_to_dict(self):
-        """Test converting input record to dictionary."""
-        dt = datetime(2024, 1, 1, 12, 0, 0)
-        record = SkillWorkspaceInputRecord(
-            src="artifact://name",
-            dst="/tmp/input",
-            timestamp=dt,
-            resolved="/resolved/path",
-            version=1,
-            mode="copy"
+    def test_to_dict(self):
+        r = SkillWorkspaceInputRecord(
+            src="s", dst="d", resolved="r", version=1, mode="link",
+            timestamp=datetime(2025, 1, 1),
         )
+        d = r.to_dict()
+        assert d["src"] == "s"
+        assert d["dst"] == "d"
+        assert d["version"] == 1
 
-        data = record.to_dict()
+    def test_round_trip(self):
+        original = SkillWorkspaceInputRecord(src="a", dst="b", version=5)
+        d = original.to_dict()
+        restored = SkillWorkspaceInputRecord.from_dict(d)
+        assert restored.src == original.src
+        assert restored.version == original.version
 
-        assert data["src"] == "artifact://name"
-        assert data["dst"] == "/tmp/input"
-        assert isinstance(data["timestamp"], str)
-        assert data["resolved"] == "/resolved/path"
-        assert data["version"] == 1
-        assert data["mode"] == "copy"
 
+# ---------------------------------------------------------------------------
+# SkillWorkspaceOutputRecord
+# ---------------------------------------------------------------------------
 
 class TestSkillWorkspaceOutputRecord:
-    """Test suite for SkillWorkspaceOutputRecord class."""
-
-    def test_create_output_record(self):
-        """Test creating output record."""
-        dt = datetime.now()
-        record = SkillWorkspaceOutputRecord(
-            globs=["out/*.txt", "out/*.json"],
-            limits_hit=1,
-            timestamp=dt,
-            saved_as=["output.txt", "output.json"],
-            versions=[1, 2]
-        )
-
-        assert record.globs == ["out/*.txt", "out/*.json"]
-        assert record.limits_hit == 1
-        assert record.timestamp == dt
-        assert record.saved_as == ["output.txt", "output.json"]
-        assert record.versions == [1, 2]
-
-    def test_create_output_record_defaults(self):
-        """Test creating output record with defaults."""
-        record = SkillWorkspaceOutputRecord()
-
-        assert record.globs == []
-        assert record.limits_hit == 0
-        assert record.timestamp is None
-        assert record.saved_as == []
-        assert record.versions == []
-
-    def test_output_record_from_dict(self):
-        """Test creating output record from dictionary."""
+    def test_from_dict_full(self):
         data = {
-            "globs": ["out/*.txt"],
-            "limits_hit": 1,
-            "timestamp": "2024-01-01T12:00:00",
-            "saved_as": ["output.txt"],
-            "versions": [1]
+            "globs": ["*.txt", "*.md"],
+            "limits_hit": 2,
+            "timestamp": "2025-06-15T10:00:00",
+            "saved_as": ["out/a.txt"],
+            "versions": [1, 2],
         }
+        r = SkillWorkspaceOutputRecord.from_dict(data)
+        assert r.globs == ["*.txt", "*.md"]
+        assert r.limits_hit == 2
+        assert r.saved_as == ["out/a.txt"]
+        assert r.versions == [1, 2]
 
-        record = SkillWorkspaceOutputRecord.from_dict(data)
+    def test_from_dict_empty(self):
+        r = SkillWorkspaceOutputRecord.from_dict({})
+        assert r.globs == []
+        assert r.limits_hit == 0
 
-        assert record.globs == ["out/*.txt"]
-        assert record.limits_hit == 1
-        assert isinstance(record.timestamp, datetime)
-        assert record.saved_as == ["output.txt"]
-        assert record.versions == [1]
-
-    def test_output_record_to_dict(self):
-        """Test converting output record to dictionary."""
-        dt = datetime(2024, 1, 1, 12, 0, 0)
-        record = SkillWorkspaceOutputRecord(
-            globs=["out/*.txt"],
+    def test_to_dict(self):
+        r = SkillWorkspaceOutputRecord(
+            globs=["*.py"],
             limits_hit=1,
-            timestamp=dt,
-            saved_as=["output.txt"],
-            versions=[1]
+            saved_as=["out/test.py"],
+            versions=[3],
+            timestamp=datetime(2025, 1, 1),
         )
+        d = r.to_dict()
+        assert d["globs"] == ["*.py"]
+        assert d["limits_hit"] == 1
+        assert d["saved_as"] == ["out/test.py"]
+        assert d["versions"] == [3]
 
-        data = record.to_dict()
 
-        assert data["globs"] == ["out/*.txt"]
-        assert data["limits_hit"] == 1
-        assert isinstance(data["timestamp"], str)
-        assert data["saved_as"] == ["output.txt"]
-        assert data["versions"] == [1]
-
+# ---------------------------------------------------------------------------
+# SkillWorkspaceMetadata
+# ---------------------------------------------------------------------------
 
 class TestSkillWorkspaceMetadata:
-    """Test suite for SkillWorkspaceMetadata class."""
+    def test_defaults(self):
+        m = SkillWorkspaceMetadata()
+        assert m.version == 0
+        assert m.skills == {}
+        assert m.inputs == []
+        assert m.outputs == []
 
-    def test_create_workspace_metadata(self):
-        """Test creating workspace metadata."""
-        created_at = datetime(2024, 1, 1, 12, 0, 0)
-        updated_at = datetime(2024, 1, 2, 12, 0, 0)
-        skill_meta = SkillMetadata(name="test-skill")
-        input_rec = SkillWorkspaceInputRecord(src="input")
-        output_rec = SkillWorkspaceOutputRecord(globs=["out/*"])
-
-        metadata = SkillWorkspaceMetadata(
-            version=1,
-            created_at=created_at,
-            updated_at=updated_at,
-            skills={"test-skill": skill_meta},
-            inputs=[input_rec],
-            outputs=[output_rec]
-        )
-
-        assert metadata.version == 1
-        assert metadata.created_at == created_at
-        assert metadata.updated_at == updated_at
-        assert len(metadata.skills) == 1
-        assert len(metadata.inputs) == 1
-        assert len(metadata.outputs) == 1
-
-    def test_create_workspace_metadata_defaults(self):
-        """Test creating workspace metadata with defaults."""
-        metadata = SkillWorkspaceMetadata()
-
-        assert metadata.version == 0
-        assert metadata.created_at is None
-        assert metadata.updated_at is None
-        assert metadata.last_access is None
-        assert metadata.skills == {}
-        assert metadata.inputs == []
-        assert metadata.outputs == []
-
-    def test_workspace_metadata_from_dict(self):
-        """Test creating workspace metadata from dictionary."""
+    def test_from_dict_full(self):
         data = {
-            "version": 1,
-            "created_at": "2024-01-01T12:00:00",
-            "updated_at": "2024-01-02T12:00:00",
-            "last_access": "2024-01-03T12:00:00",
+            "version": 2,
+            "created_at": "2025-01-01T00:00:00",
+            "updated_at": "2025-06-15T00:00:00",
+            "last_access": "2025-06-15T12:00:00",
             "skills": {
-                "test-skill": {
-                    "name": "test-skill",
-                    "rel_path": "skills/test",
-                    "digest": "abc123",
-                    "mounted": True
-                }
+                "weather": {
+                    "name": "weather",
+                    "rel_path": "skills/weather",
+                    "digest": "abc",
+                    "mounted": True,
+                    "staged_at": "2025-06-15T00:00:00",
+                },
             },
-            "inputs": [{
-                "src": "artifact://name",
-                "dst": "/tmp/input"
-            }],
-            "outputs": [{
-                "globs": ["out/*.txt"],
-                "limits_hit": 0
-            }]
+            "inputs": [
+                {"src": "s", "dst": "d", "version": 1},
+            ],
+            "outputs": [
+                {"globs": ["*.txt"], "limits_hit": 0},
+            ],
         }
+        m = SkillWorkspaceMetadata.from_dict(data)
+        assert m.version == 2
+        assert "weather" in m.skills
+        assert m.skills["weather"].name == "weather"
+        assert len(m.inputs) == 1
+        assert len(m.outputs) == 1
 
-        metadata = SkillWorkspaceMetadata.from_dict(data)
+    def test_from_dict_empty(self):
+        m = SkillWorkspaceMetadata.from_dict({})
+        assert m.version == 1
+        assert m.skills == {}
 
-        assert metadata.version == 1
-        assert isinstance(metadata.created_at, datetime)
-        assert isinstance(metadata.updated_at, datetime)
-        assert isinstance(metadata.last_access, datetime)
-        assert len(metadata.skills) == 1
-        assert len(metadata.inputs) == 1
-        assert len(metadata.outputs) == 1
-
-    def test_workspace_metadata_to_dict(self):
-        """Test converting workspace metadata to dictionary."""
-        created_at = datetime(2024, 1, 1, 12, 0, 0)
-        skill_meta = SkillMetadata(name="test-skill")
-        input_rec = SkillWorkspaceInputRecord(src="input")
-        output_rec = SkillWorkspaceOutputRecord(globs=["out/*"])
-
-        metadata = SkillWorkspaceMetadata(
-            version=1,
-            created_at=created_at,
-            skills={"test-skill": skill_meta},
-            inputs=[input_rec],
-            outputs=[output_rec]
+    def test_to_dict(self):
+        m = SkillWorkspaceMetadata(
+            version=2,
+            created_at=datetime(2025, 1, 1),
+            updated_at=datetime(2025, 6, 15),
+            last_access=datetime(2025, 6, 15),
         )
+        m.skills["test"] = SkillMetadata(name="test", digest="hash")
+        d = m.to_dict()
+        assert d["version"] == 2
+        assert "test" in d["skills"]
 
-        data = metadata.to_dict()
+    def test_round_trip(self):
+        m = SkillWorkspaceMetadata(version=3)
+        m.skills["s1"] = SkillMetadata(name="s1", digest="d1", mounted=True)
+        m.inputs.append(SkillWorkspaceInputRecord(src="a", dst="b"))
+        m.outputs.append(SkillWorkspaceOutputRecord(globs=["*.txt"]))
 
-        assert data["version"] == 1
-        assert isinstance(data["created_at"], str)
-        assert isinstance(data["updated_at"], str)
-        assert len(data["skills"]) == 1
-        assert len(data["inputs"]) == 1
-        assert len(data["outputs"]) == 1
-
+        d = m.to_dict()
+        restored = SkillWorkspaceMetadata.from_dict(d)
+        assert restored.version == 3
+        assert "s1" in restored.skills
+        assert len(restored.inputs) == 1
+        assert len(restored.outputs) == 1

@@ -3,9 +3,7 @@
 # Copyright @ 2026 Tencent.com
 """Unit tests for eval set results manager utils (_eval_set_results_manager_utils)."""
 
-import pytest
-
-pytest.importorskip("trpc_agent_sdk._runners", reason="trpc_agent_sdk._runners not yet implemented")
+import trpc_agent_sdk.runners  # noqa: F401
 
 from trpc_agent_sdk.evaluation import EvalStatus
 from trpc_agent_sdk.evaluation import EvalStatusCounts

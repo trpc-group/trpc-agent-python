@@ -25,12 +25,12 @@ from __future__ import annotations
 from typing import Callable
 from typing import Type
 
-from . import FinalResponseEvaluator
-from . import LLMFinalResponseEvaluator
-from . import LLMRubricKnowledgeRecallEvaluator
-from . import LLMRubricResponseEvaluator
-from . import RougeEvaluator
-from . import TrajectoryEvaluator
+from ._final_response_evaluator import FinalResponseEvaluator
+from ._llm_evaluator import LLMFinalResponseEvaluator
+from ._llm_evaluator import LLMRubricKnowledgeRecallEvaluator
+from ._llm_evaluator import LLMRubricResponseEvaluator
+from ._rouge_evaluator import RougeEvaluator
+from ._trajectory_evaluator import TrajectoryEvaluator
 from ._eval_metrics import EvalMetric
 from ._eval_metrics import PrebuiltMetrics
 from ._evaluator_base import Evaluator

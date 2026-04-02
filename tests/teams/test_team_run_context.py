@@ -341,6 +341,129 @@ class TestTeamRunContextStateSerialization:
             assert restored.leader_history[i]["text"] == h["text"]
 
 
+class TestTeamRunContextCancellation:
+    """Tests for cancellation record functionality."""
+
+    def test_add_cancellation_record_without_context(self):
+        """Test adding cancellation record without cancelled_during info."""
+        ctx = TeamRunContext(current_invocation_id="inv-123")
+        ctx.add_cancellation_record()
+
+        assert len(ctx.leader_history) == 1
+        assert ctx.leader_history[0]["role"] == "model"
+        assert "cancelled" in ctx.leader_history[0]["text"].lower()
+        assert ctx.leader_history[0]["invocation_id"] == "inv-123"
+
+    def test_add_cancellation_record_with_context(self):
+        """Test adding cancellation record with cancelled_during description."""
+        ctx = TeamRunContext(current_invocation_id="inv-123")
+        ctx.add_cancellation_record(cancelled_during="delegation to researcher")
+
+        assert len(ctx.leader_history) == 1
+        text = ctx.leader_history[0]["text"]
+        assert "cancelled" in text.lower()
+        assert "delegation to researcher" in text
+
+    def test_add_cancellation_record_empty_string(self):
+        """Test adding cancellation record with empty cancelled_during."""
+        ctx = TeamRunContext(current_invocation_id="inv-123")
+        ctx.add_cancellation_record(cancelled_during="")
+
+        assert len(ctx.leader_history) == 1
+        assert "during" not in ctx.leader_history[0]["text"]
+
+
+class TestTeamRunContextLegacyEntries:
+    """Tests for legacy entries without invocation IDs."""
+
+    def test_get_leader_history_for_runs_legacy_entries(self):
+        """Test leader history returns all entries when no invocation IDs found."""
+        ctx = TeamRunContext()
+        ctx.leader_history = [
+            {"role": "user", "text": "Question 1"},
+            {"role": "model", "text": "Answer 1"},
+            {"role": "user", "text": "Question 2"},
+        ]
+
+        history = ctx.get_leader_history_for_runs(1)
+
+        assert len(history) == 3
+
+    def test_get_leader_history_for_runs_mixed_legacy_and_new(self):
+        """Test leader history with mixed legacy and invocation-tagged entries."""
+        ctx = TeamRunContext()
+        ctx.leader_history = [
+            {"role": "user", "text": "Legacy question"},
+            {"role": "user", "text": "New question", "invocation_id": "inv-1"},
+            {"role": "model", "text": "New answer", "invocation_id": "inv-1"},
+        ]
+
+        history = ctx.get_leader_history_for_runs(1)
+        assert len(history) == 3
+
+    def test_get_member_interactions_for_runs_empty_member_name(self):
+        """Test member interactions with empty member name returns empty."""
+        ctx = TeamRunContext(current_invocation_id="inv-1")
+        ctx.add_interaction("researcher", "Task", "Response")
+
+        assert ctx.get_member_interactions_for_runs("", 1) == []
+
+    def test_get_member_interactions_for_runs_empty_interactions(self):
+        """Test member interactions with no interactions returns empty."""
+        ctx = TeamRunContext()
+
+        assert ctx.get_member_interactions_for_runs("researcher", 1) == []
+
+    def test_get_leader_history_for_runs_empty_history(self):
+        """Test leader history with empty history returns empty."""
+        ctx = TeamRunContext()
+
+        assert ctx.get_leader_history_for_runs(5) == []
+
+
+class TestTeamRunContextFromStateEdgeCases:
+    """Tests for from_state edge cases."""
+
+    def test_from_state_partial_data(self):
+        """Test restoring from state with partial data (missing keys)."""
+        state = {
+            TEAM_STATE_KEY: {
+                "team_name": "test_team",
+            }
+        }
+
+        ctx = TeamRunContext.from_state(state)
+
+        assert ctx.team_name == "test_team"
+        assert ctx.interactions == []
+        assert ctx.leader_history == []
+        assert ctx.current_invocation_id == ""
+        assert ctx.pending_function_call_id == ""
+
+    def test_from_state_none_state_key(self):
+        """Test restoring from state where TEAM_STATE_KEY is None."""
+        state = {TEAM_STATE_KEY: None}
+
+        ctx = TeamRunContext.from_state(state, team_name="fallback_name")
+
+        assert ctx.team_name == "fallback_name"
+        assert ctx.interactions == []
+
+    def test_to_state_dict_produces_copies(self):
+        """Test that to_state_dict produces independent copies."""
+        ctx = TeamRunContext(team_name="test")
+        ctx.add_interaction("member", "task", "response")
+        ctx.add_leader_message("user", "hello")
+
+        state_dict = ctx.to_state_dict()
+
+        ctx.interactions.append({"member": "extra", "task": "t", "response": "r"})
+        ctx.leader_history.append({"role": "user", "text": "extra"})
+
+        assert len(state_dict["interactions"]) == 1
+        assert len(state_dict["leader_history"]) == 1
+
+
 class TestTeamRunContextClear:
     """Tests for clearing context."""
 

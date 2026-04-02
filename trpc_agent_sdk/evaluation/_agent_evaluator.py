@@ -46,7 +46,7 @@ from typing import Optional
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.agents import BaseAgent
 
-from . import LocalEvalService
+from ._local_eval_service import LocalEvalService
 from . import _utils
 from ._eval_callbacks import Callbacks
 from ._eval_config import EvalConfig

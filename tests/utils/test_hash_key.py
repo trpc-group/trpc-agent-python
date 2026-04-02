@@ -1,43 +1,51 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright @ 2026 Tencent.com
+"""Unit tests for trpc_agent_sdk.utils._hash_key.
 
-import pytest
+Covers:
+- user_key: basic generation, edge cases, special characters, uniqueness
+"""
+
 from trpc_agent_sdk.utils import user_key
 
 
 class TestUserKey:
     """Test suite for user_key function."""
 
-    def test_user_key_basic(self):
-        """Test basic user key generation."""
-        result = user_key("app1", "user1")
-        assert result == "app1/user1"
+    def test_basic(self):
+        assert user_key("app1", "user1") == "app1/user1"
 
-    def test_user_key_different_apps(self):
-        """Test user key with different app names."""
-        result1 = user_key("app1", "user1")
-        result2 = user_key("app2", "user1")
+    def test_different_apps(self):
+        r1 = user_key("app1", "user1")
+        r2 = user_key("app2", "user1")
+        assert r1 != r2
+        assert r1 == "app1/user1"
+        assert r2 == "app2/user1"
 
-        assert result1 == "app1/user1"
-        assert result2 == "app2/user1"
-        assert result1 != result2
+    def test_different_users(self):
+        r1 = user_key("app1", "user1")
+        r2 = user_key("app1", "user2")
+        assert r1 != r2
 
-    def test_user_key_different_users(self):
-        """Test user key with different user IDs."""
-        result1 = user_key("app1", "user1")
-        result2 = user_key("app1", "user2")
+    def test_empty_strings(self):
+        assert user_key("", "") == "/"
 
-        assert result1 == "app1/user1"
-        assert result2 == "app1/user2"
-        assert result1 != result2
+    def test_special_chars(self):
+        assert user_key("app-name", "user_id-123") == "app-name/user_id-123"
 
-    def test_user_key_empty_strings(self):
-        """Test user key with empty strings."""
-        result = user_key("", "")
-        assert result == "/"
+    def test_unicode(self):
+        assert user_key("应用", "用户") == "应用/用户"
 
-    def test_user_key_special_chars(self):
-        """Test user key with special characters."""
-        result = user_key("app-name", "user_id-123")
-        assert result == "app-name/user_id-123"
+    def test_with_spaces(self):
+        assert user_key("my app", "my user") == "my app/my user"
+
+    def test_return_type(self):
+        assert isinstance(user_key("a", "b"), str)
+
+    def test_format_consistency(self):
+        result = user_key("x", "y")
+        parts = result.split("/")
+        assert len(parts) == 2
+        assert parts[0] == "x"
+        assert parts[1] == "y"

@@ -3,9 +3,7 @@
 # Copyright @ 2026 Tencent.com
 """Unit tests for evaluation config (_eval_config)."""
 
-import pytest
-
-pytest.importorskip("trpc_agent_sdk._runners", reason="trpc_agent_sdk._runners not yet implemented")
+import trpc_agent_sdk.runners  # noqa: F401
 
 from trpc_agent_sdk.evaluation import EvalConfig
 from trpc_agent_sdk.evaluation._eval_config import _normalize_criterion_for_metric

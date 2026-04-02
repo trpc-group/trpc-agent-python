@@ -7,7 +7,7 @@ from unittest.mock import Mock
 
 import pytest
 
-pytest.importorskip("trpc_agent_sdk._runners", reason="trpc_agent_sdk._runners not yet implemented")
+import trpc_agent_sdk.runners  # noqa: F401
 
 from trpc_agent_sdk.evaluation._eval_case import EvalCase
 from trpc_agent_sdk.evaluation._eval_case import SessionInput
