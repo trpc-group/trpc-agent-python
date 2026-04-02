@@ -1,144 +1,55 @@
-# TeamAgent 并行执行示例
+# TeamAgent 并行委派示例
 
-本示例演示 TeamAgent 的 `parallel_execution=True` 功能，该功能支持多个成员委派的并发执行。
+本示例演示 `TeamAgent` 设置 `parallel_execution=True` 时，Leader 在同一轮内向多名成员下发 `delegate_to_member`，底层以并发方式执行并再综合结果。
 
-## 功能说明
+## 关键特性
 
-当 TeamAgent 设置 `parallel_execution=True` 时：
-- 单次领导者回合中的多个委派信号将并发执行
-- 使用 `asyncio.gather` 实现并行执行
-- 显著减少委派多个成员时的总执行时间
+- `parallel_execution=True`：多成员任务 `asyncio.gather` 式并发（日志中带时间戳可观察重叠）
+- 三名分析师：`market_analyst`、`competitor_analyst`、`risk_analyst`
+- `share_member_interactions=True` 与 `get_current_date` 辅助 Leader 规划
 
-### 顺序执行 vs 并行执行
+## Agent 层级结构说明
 
-```
-顺序执行 (parallel_execution=False):
-  Leader -> analyst1 (1s) -> analyst2 (1s) -> analyst3 (1s)
-  总时间: 3 秒
+- 根节点：`TeamAgent`（`analysis_team`）
+  - 成员：`market_analyst`、`competitor_analyst`、`risk_analyst`（均为 `LlmAgent`）
 
-并行执行 (parallel_execution=True):
-  Leader -> [analyst1 | analyst2 | analyst3] (同时运行)
-  总时间: ~1 秒 (取决于最长的单个执行时间)
-```
+## 关键代码解释
 
-## 团队结构
+- `agent/agent.py`：`TeamAgent(..., parallel_execution=True, ...)`
+- `run_agent.py`：单用户长查询，打印带 `[秒]` 前缀的时间线
+- `agent/tools.py`：`analyze_market_trends`、`analyze_competitor`、`analyze_risks`
 
-- **analysis_team** (设置 `parallel_execution=True` 的 TeamAgent)
-  - **market_analyst**: 使用 `analyze_market_trends` 工具分析市场趋势
-  - **competitor_analyst**: 使用 `analyze_competitor` 工具分析竞争对手
-  - **risk_analyst**: 使用 `analyze_risks` 工具评估风险
+## 环境与运行
 
-## 环境要求
-
-Python 版本: 3.10+（强烈建议使用 3.12）
-
-## 运行方法
-
-1. 下载并安装 trpc-agent-python
+- Python 3.10+；仓库根目录 `pip install -e .`
+- 配置 `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL`、`TRPC_AGENT_MODEL_NAME`
 
 ```bash
-git clone https://github.com/trpc-group/trpc-agent-python.git
-cd trpc-agent-python
-python3 -m venv .venv
-source .venv/bin/activate
-pip3 install -e .
-```
-
-2. 在 `.env` 文件中设置环境变量（也可以通过 export 设置）:
-   - TRPC_AGENT_API_KEY
-   - TRPC_AGENT_BASE_URL
-   - TRPC_AGENT_MODEL_NAME
-
-3. 运行示例:
-
-```bash
-cd examples/team_parallel_execution/
+cd examples/team_parallel_execution
 python3 run_agent.py
 ```
 
-## 预期行为
+## 运行结果（实测）
 
-本示例发送一个查询，触发领导者同时委派给所有三个分析师：
-
-```
-用户: Please provide a comprehensive analysis of the technology sector, 
-      including Google as a key competitor, and assess regulatory risks.
-
-预期流程:
-1. Leader 调用 delegate_to_member 委派给 market_analyst
-2. Leader 调用 delegate_to_member 委派给 competitor_analyst  
-3. Leader 调用 delegate_to_member 委派给 risk_analyst
-4. 三个分析师并行执行
-5. Leader 综合所有结果
-```
-
-## 示例输出
 
 ```
-Parallel Execution Team Example
-Demonstrates parallel_execution=True: Leader -> [analyst1 | analyst2 | analyst3]
-
-======================================================================
-Parallel Execution Team Demo
-======================================================================
-
-Session ID: abc12345...
-
-This demo shows how TeamAgent executes multiple delegations in PARALLEL.
-The leader will delegate to 3 analysts simultaneously, and they will
-execute concurrently using asyncio.gather.
-
-----------------------------------------------------------------------
-
-User: Please provide a comprehensive analysis of the technology sector...
---------------------------------------------------
-
-[0.50s] [analysis_team] Tool: delegate_to_member
-         Args: {'member_name': 'market_analyst', 'task': '...'}
-
-[0.51s] [analysis_team] Tool: delegate_to_member
-         Args: {'member_name': 'competitor_analyst', 'task': '...'}
-
-[0.52s] [analysis_team] Tool: delegate_to_member
-         Args: {'member_name': 'risk_analyst', 'task': '...'}
-
-[1.20s] [market_analyst] Tool: analyze_market_trends
-[1.21s] [competitor_analyst] Tool: analyze_competitor
-[1.22s] [risk_analyst] Tool: analyze_risks
-
-... (由于并行执行，三个分析师几乎同时完成)
-
-[2.50s] [analysis_team] Based on the comprehensive analysis from all three...
-
-======================================================================
-Demo completed in 2.50 seconds!
-======================================================================
-
+[START] team_parallel_execution
+...
+[3.97s] [analysis_team] Tool: delegate_to_member
+...
+[3.97s] [analysis_team] Tool: delegate_to_member
+...
+Demo completed in 42.60 seconds!
 Note: With parallel_execution=True, the three analyst delegations
-execute concurrently. If this were sequential, total time would be
-significantly longer (sum of all analyst execution times).
+execute concurrently.
+[END] team_parallel_execution (exit_code=0)
 ```
 
-## 关键代码
+## 结果分析（是否符合要求）
 
-关键设置在 `agent/agent.py` 中：
+符合本示例测试要求：`exit_code=0`；同一时间戳上多条委派与文末耗时说明与并行模式相符，最终合成报告覆盖市场、竞品与监管风险。
 
-```python
-analysis_team = TeamAgent(
-    name="analysis_team",
-    model=model,
-    members=[market_analyst, competitor_analyst, risk_analyst],
-    instruction=LEADER_INSTRUCTION,
-    parallel_execution=True,  # 启用并行执行！
-    share_member_interactions=True,
-)
-```
+## 适用场景建议
 
-## 实现细节
-
-当 `parallel_execution=True` 且存在多个委派信号时：
-
-1. TeamAgent 从领导者的响应中检测到多个 `DelegationSignal` 对象
-2. 不再使用 for 循环顺序执行，而是调用 `_execute_delegations_parallel` 方法
-3. `asyncio.gather` 并发运行所有成员执行
-4. 收集所有结果并提供给领导者进行综合分析
+- 多源独立分析（可并行）且最后需 Leader 汇总时使用 `parallel_execution=True`
+- 若成员之间有严格顺序依赖，应关闭并行或拆成多轮委派

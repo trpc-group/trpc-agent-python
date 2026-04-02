@@ -1,91 +1,58 @@
-# TeamAgent 人机协作示例
+# TeamAgent 人机协同（HITL）示例
 
-本示例演示 TeamAgent 的 Human-in-the-Loop (HITL) 功能，团队领导可以触发需要人工输入的审批请求。
+本示例演示 `TeamAgent` 在 Leader 侧挂载 `LongRunningFunctionTool(request_approval)`：当用户意图涉及「发布」等敏感动作时触发审批挂起，模拟人工通过后再继续执行。
 
-## 功能说明
+## 关键特性
 
-Human-in-the-Loop 是一种需要人工干预的工作流模式：
-- 用户请求需要审批的内容
-- 领导通过 LongRunningFunctionTool 触发 HITL
-- 系统暂停并产生 LongRunningEvent
-- 用户提供审批（模拟）
-- 团队恢复并完成任务
+- `assistant` 成员负责 `search_info` 等信息类工具调用
+- Leader 使用 `LongRunningFunctionTool` 包装审批函数，运行时可进入 pending 状态
+- `run_agent.py` 模拟人工写入 `approved` 结果后恢复会话
 
-## 环境要求
+## Agent 层级结构说明
 
-Python版本: 3.10+（强烈建议使用3.12）
+- 根节点：`TeamAgent`（`hitl_team`）
+  - 成员：`assistant`（`LlmAgent`）
 
-## 运行方法
+## 关键代码解释
 
-1. 下载并安装 trpc-agent-python
+- `agent/agent.py`：`approval_tool = LongRunningFunctionTool(request_approval)` 放入 Team 的 `tools`
+- `agent/tools.py`：`request_approval`、`search_info` 的实现与 HITL 演示配合
+- `run_agent.py`：捕获 pending、打印 `HITL TRIGGERED!` 后注入批准结果并继续 `run_async`
 
-```bash
-git clone https://github.com/trpc-group/trpc-agent-python.git
-cd trpc-agent-python
-python3 -m venv .venv
-source .venv/bin/activate
-pip3 install -e .
-```
+## 环境与运行
 
-2. 在 `.env` 文件中设置环境变量（也可以通过export设置）:
-   - TRPC_AGENT_API_KEY
-   - TRPC_AGENT_BASE_URL
-   - TRPC_AGENT_MODEL_NAME
-
-3. 运行示例:
+- Python 3.10+；仓库根目录 `pip install -e .`
+- 配置 `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL`、`TRPC_AGENT_MODEL_NAME`
 
 ```bash
-cd examples/team_human_in_the_loop/
+cd examples/team_human_in_the_loop
 python3 run_agent.py
 ```
 
-## 预期行为
+## 运行结果（实测）
 
-本示例演示 HITL 审批流程：
-
-1. 用户请求 "Please help me search for AI-related information, then 'publish' a report"
-2. 助手搜索信息后，触发发布审批请求
-3. 系统暂停，等待人工审批
-4. 人工提供审批后，系统恢复执行
-5. 团队完成任务并返回结果
-
-输出如下所示：
 
 ```
-HITL Team Example
-Demonstrates Human-in-the-Loop with TeamAgent
-
-============================================================
-HITL Team Demo - Human-in-the-Loop
-============================================================
-
-[User] Please help me search for AI-related information, then 'publish' a report
-----------------------------------------
-Assistant: 
-[hitl_team] Tool: call_member
-[hitl_team] Tool Result: ...
-
-[assistant] Tool: search_info
-[assistant] Tool Result: Information about 'AI': This is an important research...
-
-[assistant] I have found information about AI...
-
-========================================
+[START] team_human_in_the_loop
+...
+[hitl_team] Tool: request_approval
+...
 HITL TRIGGERED!
 Function: request_approval
-Args: {'content': 'AI report content...', 'reason': 'Need to publish report'}
-Response: {'status': 'pending', 'approval_id': '...'}
-========================================
+...
 Waiting for human intervention...
-----------------------------------------
-Human intervention simulation...
-Human provides approval: {'status': 'approved', 'approved_by': 'admin', ...}
-----------------------------------------
+Human provides approval: {'status': 'approved', ...
 Resuming team execution...
-Assistant: 
-[hitl_team] The report has been approved and published successfully...
-
-============================================================
+...
 HITL Flow Completed!
-============================================================
+[END] team_human_in_the_loop (exit_code=0)
 ```
+
+## 结果分析（是否符合要求）
+
+符合本示例测试要求：`exit_code=0`；审批从 pending 到 approved、恢复执行与最终「发布」说明完整，与 HITL 设计一致。
+
+## 适用场景建议
+
+- 发布、扣款、对外发送等需人工确认的流程，可用 `LongRunningFunctionTool` 与外部审批系统对接
+- 可与真实队列/工单系统集成，替换示例中的模拟批准

@@ -11,15 +11,16 @@ from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
+
 # Load environment variables from the .env file
 load_dotenv()
 
 
 async def run_user_history_demo():
-    """运行用户历史记录注入演示。
+    """ run user history injection demo.
 
-    演示如何通过 HistoryRecord 将用户历史对话注入到 Agent 上下文中，
-    使 Agent 能够基于历史信息回答问题，而无需额外调用工具。
+    Demonstrate how to inject user history into the Agent's context through HistoryRecord,
+    so that the Agent can answer questions based on historical information without calling tools.
     """
 
     app_name = "user_history_demo"
@@ -31,7 +32,7 @@ async def run_user_history_demo():
     runner = Runner(app_name=app_name, agent=root_agent, session_service=session_service)
 
     user_id = "demo_user"
-    # 多轮对话共用同一个 session_id，使 Agent 能看到本次会话的历史消息
+    # multiple turns of conversation share the same session_id, so that the Agent can see the historical messages of this session
     session_id = str(uuid.uuid4())
 
     demo_queries = [
@@ -41,42 +42,42 @@ async def run_user_history_demo():
     ]
 
     for query in demo_queries:
-        print(f"📝 用户: {query}")
+        print(f"📝 User: {query}")
 
-        # 构造用户历史记录，并根据当前 query 构建上下文内容
-        # history_content 会包含与 query 相关的历史问答对，供 Agent 参考
+        # construct user history record, and build context content based on the current query
+        # history_content will contain historical question-answer pairs related to the query, for Agent reference
         history_record = make_user_history_record()
         history_content = history_record.build_content(query)
         user_content = Content(parts=[Part.from_text(text=query)])
 
-        print("🤖 助手: ", end="", flush=True)
-        # 开启会话历史保存，后续轮次可以累积上下文
+        print("🤖 Assistant: ", end="", flush=True)
+        # enable session history saving, so that subsequent turns can accumulate context
         run_config = RunConfig(save_history_enabled=True)
-        # new_message 传入列表 [history_content, user_content]，
-        # 将历史记录和用户当前提问一起注入到 Agent 的输入中
+        # new_message is passed in as a list [history_content, user_content],
+        # so that the historical record and the user's current question are injected into the Agent's input
         async for event in runner.run_async(
             user_id=user_id,
             session_id=session_id,
             new_message=[history_content, user_content],
             run_config=run_config,
         ):
-            # 跳过空内容事件
+            # skip empty content event
             if not event.content or not event.content.parts:
                 continue
 
-            # partial=True 表示流式输出的中间片段，实时打印文本
+            # partial=True means the intermediate fragment of streaming output, print text in real time
             if event.partial:
                 for part in event.content.parts:
                     if part.text:
                         print(part.text, end="", flush=True)
                 continue
 
-            # 完整事件：打印工具调用和工具返回结果，跳过思考过程
+            # complete event: print tool call and tool return result, skip thinking process
             for part in event.content.parts:
                 if part.thought:
                     continue
                 if part.function_call:
-                    print(f"\n🔧 [Invoke Tool: {part.function_call.name}({part.function_call.args})]")
+                    print(f"\n🔧 [Invoke Tool: {part.function_call.name}({part.function_call.args})")
                 elif part.function_response:
                     print(f"📊 [Tool Result: {part.function_response.response}]")
 

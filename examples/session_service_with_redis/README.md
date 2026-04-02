@@ -1,18 +1,72 @@
 # Session Service Redis 存储示例
 
-## 示例简介
+本示例演示如何使用 `RedisSessionService` 实现会话持久化与状态管理，并通过短 TTL 观察“会话恢复 -> 续期 -> 过期重建”的完整生命周期。
 
-本示例演示如何使用 **RedisSessionService** 实现会话管理和状态持久化，并展示 **TTL（Time-To-Live）过期机制** 的效果。
+## 关键特性
 
-### 核心特性
+- **Redis 持久化会话**：会话事件与状态存储在 Redis，支持跨进程/跨实例访问
+- **TTL 过期机制**：通过 5 秒 TTL 演示会话自动过期删除
+- **状态分层管理**：支持 `session_state`、`user_state`、`app_state`
+- **续期机制可观测**：读取会话时可刷新 TTL，延长热数据存活时间
+- **排障信息完整**：内含 Redis 命令观测、三次运行对比、命令序列分析
 
-- ✅ **Redis 持久化**: 使用 `RedisSessionService` 在 Redis 中持久化会话状态
-- ✅ **TTL 过期**: 配置会话 5 秒 TTL，演示过期自动清理
-- ✅ **状态持久化**: 在 TTL 有效期内，会话状态跨多次运行保持
-- ✅ **多层状态**: 支持 `session_state`（会话级）、`user_state`（用户级）、`app_state`（应用级）
-- ✅ **分布式支持**: Redis 存储支持跨进程、跨服务器共享会话
+## Agent 层级结构说明
+
+```text
+weather_agent (LlmAgent)
+└── session service: RedisSessionService
+    ├── session key: session:<app>:<user>:<session>
+    ├── user key: user_state:<app>:<user>
+    └── app key: app_state:<app>
+```
+
+关键文件：
+
+- [examples/session_service_with_redis/run_agent.py](./run_agent.py)
+- [examples/session_service_with_redis/agent/agent.py](./agent/agent.py)
+- [examples/session_service_with_redis/agent/config.py](./agent/config.py)
+
+## 关键代码解释
+
+- `RedisSessionService.get_session()`：读取会话并刷新 TTL（续期）
+- `RedisSessionService.save_session()`：持久化事件和状态并设置过期时间
+- `run_agent.py`：通过三次运行（间隔控制）验证 TTL 与状态恢复行为
+
+## 环境与运行
+
+### 环境要求
+
+- Python 3.10+（推荐 3.12）
+- 可用 Redis 服务
+
+### 运行命令
+
+```bash
+cd examples/session_service_with_redis
+python3 run_agent.py
+```
+
+## 运行结果（实测）
+
+本示例完整实测和 Redis 观测命令已经在后文 `运行结果分析` 中给出（含三次运行行为差异、键状态和 TTL 变化）。
+
+## 结果分析（是否符合要求）
+
+结论：**符合本示例测试目标**。
+
+- First Run：新建并写入会话与用户状态
+- Second Run（TTL 内）：成功恢复历史会话并续期
+- Third Run（TTL 后）：会话和状态均过期，重新创建新会话
+
+## 适用场景建议
+
+- 需要分布式共享会话状态的多实例服务
+- 需要用 TTL 控制会话生命周期和存储成本的系统
+- 需要验证 Redis 会话恢复与续期机制的工程场景
 
 ---
+
+## 特有说明
 
 ## 🏗️ 项目结构
 

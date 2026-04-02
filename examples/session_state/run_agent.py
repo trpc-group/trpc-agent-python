@@ -28,10 +28,10 @@ async def run_agent(
     session_id: str,
     user_input: str,
 ) -> None:
-    """运行Agent，并打印结果"""
+    """Run the agent and print results."""
     user_content = Content(parts=[Part.from_text(text=user_input)])
 
-    print(f"👤 用户: {user_input}")
+    print(f"👤 User: {user_input}")
     print("🤖 Agent: ", end="", flush=True)
 
     author_print = False
@@ -55,7 +55,7 @@ async def run_agent(
     print()
 
 
-# ===== 示例1：模板引用 - 在 Instruction 中使用 State =====
+# ===== Example 1: Template substitution - use State in Instruction =====
 async def use_state_in_instruction():
     """Example 1: Demonstrate template reference functionality"""
     print("=" * 60)
@@ -72,7 +72,7 @@ async def use_state_in_instruction():
     user_id = "Alice"
     session_id = str(uuid.uuid4())
 
-    # 设置初始状态
+    # Set initial state
     await session_service.create_session(
         app_name="personalized_app",
         user_id=user_id,
@@ -87,7 +87,7 @@ async def use_state_in_instruction():
     print("\n")
 
 
-# ===== 示例2：工具中修改 State =====
+# ===== Example 2: Modify State in tools =====
 async def use_state_in_tool():
     """Example 2: Demonstrate modifying State in tools"""
     print("=" * 60)
@@ -107,17 +107,17 @@ async def use_state_in_tool():
     user_id = "bob"
     session_id = str(uuid.uuid4())
 
-    # 测试设置偏好
+    # Test setting preferences
     user_input = "Please help me set the theme preference to dark mode"
     await run_agent(runner=runner, user_id=user_id, session_id=session_id, user_input=user_input)
 
-    # 查看当前偏好
+    # View current preferences
     user_input = "Please show me all my current preference settings"
     await run_agent(runner=runner, user_id=user_id, session_id=session_id, user_input=user_input)
     print("\n")
 
 
-# ===== 示例3：多Agent协作 - 使用 output_key =====
+# ===== Example 3: Multi-agent collaboration - output_key =====
 async def use_state_in_multi_agent():
     """Example 3: Demonstrate multi-Agent collaboration - using output_key"""
     print("=" * 60)
@@ -134,10 +134,10 @@ async def use_state_in_multi_agent():
     user_id = "charlie"
     session_id = str(uuid.uuid4())
 
-    user_input = "我想学习编程，但不知道从哪里开始，也担心太难坚持不下去"
+    user_input = "I want to learn programming but don't know where to start, and I'm worried it will be too hard to stick with"
     await run_agent(runner=runner, user_id=user_id, session_id=session_id, user_input=user_input)
 
-    # 显示保存的状态
+    # Show persisted state
     session = await session_service.get_session(app_name=app_name, user_id=user_id, session_id=session_id)
     if session and session.state:
         print("\n📊 Collaboration results saved in state:")
@@ -148,7 +148,7 @@ async def use_state_in_multi_agent():
     print("\n")
 
 
-# ===== 示例4：不同的State作用域 =====
+# ===== Example 4: Different State scopes =====
 async def use_state_in_different_scopes():
     """Example 4: Demonstrate different State scopes"""
     print("=" * 60)
@@ -167,12 +167,12 @@ async def use_state_in_different_scopes():
     app_name = "scope_demo_app"
     runner = Runner(app_name=app_name, agent=agent, session_service=session_service)
 
-    # 步骤1: 设置初始状态 (user1, session1)
-    print("\n🔹 步骤1: 设置初始状态 (user1, session1)")
+    # Step 1: Set initial state (user1, session1)
+    print("\n🔹 Step 1: Set initial state (user1, session1)")
     user1_id = "user1"
     session1_id = str(uuid.uuid4())
 
-    # 预设一些应用级状态
+    # Pre-set some app-level state
     await session_service.create_session(
         app_name=app_name,
         user_id=user1_id,
@@ -182,12 +182,12 @@ async def use_state_in_different_scopes():
         },
     )
 
-    # 使用agent设置各级别状态
+    # Use the agent to set state at each level
     user_input = "Please help me set the state at each level: session level state is 'session1 data', user level state is 'user1 preference', application level state remains unchanged"
     await run_agent(runner=runner, user_id=user1_id, session_id=session1_id, user_input=user_input)
     await print_session_state(session_service, app_name, user1_id, session1_id, "user1 session1 state")
 
-    # 步骤2: 同一用户，新会话 - 用户级状态应该保持，会话级状态应该丢失
+    # Step 2: Same user, new session — user-level state should persist, session-level should reset
     print("\n🔹 Step 2: Same user, new session (user1, session2)")
     session2_id = str(uuid.uuid4())
 
@@ -195,7 +195,7 @@ async def use_state_in_different_scopes():
     await run_agent(runner=runner, user_id=user1_id, session_id=session2_id, user_input=user_input)
     await print_session_state(session_service, app_name, user1_id, session2_id, "user1 session2 state")
 
-    # 步骤3: 新用户，新会话 - 只有应用级状态应该保持
+    # Step 3: New user, new session — only app-level state should persist
     print("\n🔹 Step 3: New user, new session (user2, session3)")
     user2_id = "user2"
     session3_id = str(uuid.uuid4())

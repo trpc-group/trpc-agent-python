@@ -11,6 +11,7 @@ from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
+
 # Load environment variables from the .env file
 load_dotenv()
 

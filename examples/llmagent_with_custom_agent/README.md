@@ -27,10 +27,10 @@ smart_document_processor (Custom BaseAgent)
 
 关键文件：
 
-- `examples/llmagent_with_custom_agent/agent/agent.py`：自定义编排逻辑（条件分支 + 动态决策）
-- `examples/llmagent_with_custom_agent/agent/prompts.py`：各子 Agent 的提示词
-- `examples/llmagent_with_custom_agent/agent/config.py`：环境变量读取
-- `examples/llmagent_with_custom_agent/run_agent.py`：3 类文档测试入口
+- [examples/llmagent_with_custom_agent/agent/agent.py](./agent/agent.py)：自定义编排逻辑（条件分支 + 动态决策）
+- [examples/llmagent_with_custom_agent/agent/prompts.py](./agent/prompts.py)：各子 Agent 的提示词
+- [examples/llmagent_with_custom_agent/agent/config.py](./agent/config.py)：环境变量读取
+- [examples/llmagent_with_custom_agent/run_agent.py](./run_agent.py)：3 类文档测试入口
 
 ## 关键代码解释
 
@@ -74,7 +74,7 @@ pip3 install -e .
 
 ### 环境变量要求
 
-在 `examples/llmagent_with_custom_agent/.env` 中配置（或通过 `export`）：
+在 [examples/llmagent_with_custom_agent/.env](./.env) 中配置（或通过 `export`）：
 
 - `TRPC_AGENT_API_KEY`
 - `TRPC_AGENT_BASE_URL`

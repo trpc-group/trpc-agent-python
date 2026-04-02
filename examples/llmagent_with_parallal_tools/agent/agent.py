@@ -10,12 +10,8 @@ from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.models import OpenAIModel
 
-
-from .tools import HobbyToolSet
 from .prompts import INSTRUCTION
-
-
-
+from .tools import HobbyToolSet
 
 # =============================================================================
 # 2. Create Agent

@@ -8,18 +8,14 @@ import asyncio
 import json
 import uuid
 
+from agent.agent import UserProfileOutput
 from dotenv import load_dotenv
-from trpc_agent_sdk.agents import LlmAgent
-from trpc_agent_sdk.models import OpenAIModel
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
 
 load_dotenv()
-
-from agent.agent import create_model, create_agent, create_agent_without_tools
-from agent.agent import UserProfileOutput
 
 
 async def run_agent_with_schema():
@@ -28,6 +24,7 @@ async def run_agent_with_schema():
     app_name = "profile_analysis_demo"
     user_id = "demo_user"
 
+    from agent.agent import create_agent
     agent = create_agent()
     session_service = InMemorySessionService()
     runner = Runner(app_name=app_name, agent=agent, session_service=session_service)
@@ -104,6 +101,7 @@ async def run_agent_without_tools():
     app_name = "direct_profile_analysis_demo"
     user_id = "demo_user"
 
+    from agent.agent import create_agent_without_tools
     agent = create_agent_without_tools()
     session_service = InMemorySessionService()
     runner = Runner(app_name=app_name, agent=agent, session_service=session_service)
@@ -175,43 +173,9 @@ async def run_agent_tool_with_schema():
     print("\n🔧 AgentTool with Schema example")
     print("=" * 60)
 
-    profile_agent = create_agent()
-
-    # import AgentTool
-    from trpc_agent_sdk.tools import AgentTool
-
-    # Wrap the agent as a tool
-    profile_tool = AgentTool(agent=profile_agent)
-
     # Create a main agent to use this tool
-    main_agent = LlmAgent(
-        name="main_processor",
-        description="Main processing Agent, can call the user profile analysis tool",
-        model=create_model(),
-        instruction="""You are the main processing Agent, can call the user profile analysis tool.
-
-When the user provides personal information, you need to:
-1. Extract user information from the user input
-2. Construct UserProfileInput object, include the following fields:
-   - name: user name
-   - age: user age
-   - email: user email
-   - interests: user interest list
-   - location: user location (optional)
-3. Use profile_analyzer tool to analyze
-4. Return structured analysis result
-
-**UserProfileInput structure:**
-{
-    "name": "Li Si",
-    "age": 32,
-    "email": "lisi@example.com",
-    "interests": ["reading", "traveling", "photography"],
-    "location": "Shanghai" // optional
-}
-""",
-        tools=[profile_tool],
-    )
+    from agent.agent import create_agent_tool_with_schema
+    main_agent = create_agent_tool_with_schema()
 
     session_service = InMemorySessionService()
     runner = Runner(app_name="agent_tool_demo", agent=main_agent, session_service=session_service)

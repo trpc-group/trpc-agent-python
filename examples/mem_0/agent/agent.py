@@ -45,4 +45,4 @@ def create_agent(use_mem0_platform: bool = False) -> LlmAgent:
     )
 
 
-root_agent = create_agent(use_mem0_platform=True)
+root_agent = create_agent(use_mem0_platform=False)

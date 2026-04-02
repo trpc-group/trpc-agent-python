@@ -6,6 +6,7 @@
 from typing import Any
 from typing import Dict
 
+
 def get_weather(city: str) -> Dict[str, Any]:
     """Query the current weather of a specified city."""
     weather_data = {

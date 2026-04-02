@@ -8,10 +8,16 @@ from typing import Dict
 from typing import Optional
 from typing import Union
 
+from ag_ui.core import RunAgentInput
+from ag_ui.encoder import EventEncoder
 from fastapi import FastAPI
+from fastapi import HTTPException
+from fastapi import Request
+from fastapi.responses import StreamingResponse
+from trpc_agent_sdk.log import logger
 
 from .._core import AgUiAgent
-from ._ag_ui_handler import ag_ui_agent_endpoint
+from ._utils import event_generator
 
 
 class AgUiService:
@@ -95,7 +101,7 @@ class AgUiService:
             self._agui_agent_factories[uri] = agui_agent
         else:
             self._agents[uri] = agui_agent
-        self._app.add_api_route(uri, ag_ui_agent_endpoint, methods=["POST"], response_model=None)
+        self._app.add_api_route(uri, self._ag_ui_agent_endpoint, methods=["POST"], response_model=None)
 
     def set_fastapi(self, app: FastAPI):
         """Set the FastAPI app for the service.
@@ -123,3 +129,18 @@ class AgUiService:
             ```
         """
         self._app = app
+
+    async def _ag_ui_agent_endpoint(self, input_data: RunAgentInput, request: Request):
+        """AG-UI agent endpoint with tRPC context and filters."""
+        # Get the accept header from the request
+        accept_header = request.headers.get("accept")
+        logger.info("accept_header: %s", request.url.path)
+
+        # Create an event encoder to properly format SSE events
+        encoder = EventEncoder(accept=accept_header)
+        if request.url.path not in self._agents:
+            raise HTTPException(status_code=404, detail=f"Agent not found for path: {request.url.path}")
+        agui_agent: AgUiAgent = self._agents[request.url.path]
+
+        return StreamingResponse(event_generator(request, agui_agent, input_data, encoder),
+                                 media_type=encoder.get_content_type())

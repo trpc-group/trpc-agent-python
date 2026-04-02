@@ -6,15 +6,17 @@
 from ._langgraph_event_translator import AgUiLangGraphEventTranslator
 from ._langgraph_event_translator import AgUiTranslationContext
 from ._manager import AgUiManager
+from ._registry import AgUiServiceRegistry
 from ._registry import get_agui_service_registry
 from ._service import AgUiService
-from ._utils import get_current_process_var
+from ._utils import event_generator
 
 __all__ = [
     "AgUiLangGraphEventTranslator",
     "AgUiTranslationContext",
     "AgUiManager",
+    "AgUiServiceRegistry",
     "get_agui_service_registry",
     "AgUiService",
-    "get_current_process_var",
+    "event_generator",
 ]

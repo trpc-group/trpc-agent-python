@@ -29,7 +29,7 @@ async def run_transfer_agent():
     user_id = "demo_user"
 
     demo_queries = [
-        "查询今天深圳的天气",
+        "What is the weather in Shenzhen today?",
     ]
 
     for query in demo_queries:

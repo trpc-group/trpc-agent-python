@@ -14,14 +14,13 @@ and unprefixed metadata keys.
 import asyncio
 import uuid
 
+from dotenv import load_dotenv
 from trpc_agent_sdk.configs import RunConfig
 from trpc_agent_sdk.runners import Runner
-from trpc_agent_sdk.sessions import InMemorySessionService
-from trpc_agent_sdk.types import Content, Part
-
 from trpc_agent_sdk.server.a2a import TrpcRemoteA2aAgent
-
-from dotenv import load_dotenv
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.types import Content
+from trpc_agent_sdk.types import Part
 
 load_dotenv()
 

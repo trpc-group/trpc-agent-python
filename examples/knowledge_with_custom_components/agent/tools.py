@@ -4,11 +4,17 @@
 """ Custom components for LangchainKnowledge. """
 
 import asyncio
-from typing import Any, AsyncIterator, Iterable, Iterator, List, Sequence
+from typing import Any
+from typing import AsyncIterator
+from typing import Iterable
+from typing import Iterator
+from typing import List
+from typing import Sequence
 
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.document_loaders import BaseLoader
-from langchain_core.documents import BaseDocumentTransformer, Document
+from langchain_core.documents import BaseDocumentTransformer
+from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 
 

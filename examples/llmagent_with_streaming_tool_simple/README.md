@@ -1,122 +1,83 @@
-# 流式工具调用示例 (Streaming Tool Call Demo)
+# 流式工具参数演示示例
 
-本示例演示了如何使用 `StreamingFunctionTool` 实现流式工具调用参数的实时接收和展示。
+本示例演示单次对话中工具调用参数如何以流式方式逐步到达，并完成写文件类工具执行。
 
-## 功能特点
+## 关键特性
 
-- **实时参数流式传输**：LLM 生成工具参数时，可以实时接收部分参数
-- **统一事件处理**：通过 Runner 层消费 streaming 事件
-- **进度展示**：实时显示工具参数的生成进度
+- 单会话下单次用户请求触发流式工具参数
+- 控制台可观察参数 JSON 分片与工具完成事件
+- 工具执行结果以结构化字段回显（如写入字节数）
 
-## 核心概念
+## Agent 层级结构说明
 
-### StreamingFunctionTool
-
-`StreamingFunctionTool` 是 `FunctionTool` 的标记类扩展，用于告诉框架为该工具启用流式参数：
-
-```python
-from trpc_agent_sdk.tools import StreamingFunctionTool
-
-# 创建流式工具 - 无需回调，通过 Runner 层消费事件
-write_file_tool = StreamingFunctionTool(write_file)
+```text
+root_agent (LlmAgent)
+└── tools: write_file（StreamingFunctionTool）
 ```
 
-### LlmAgent 配置
+关键文件：
 
-当 `tools` 列表中包含 `StreamingFunctionTool` 时，框架会**自动启用**流式工具调用参数功能：
+- [examples/llmagent_with_streaming_tool_simple/run_agent.py](./run_agent.py)
+- [examples/llmagent_with_streaming_tool_simple/.env](./.env)
 
-```python
-agent = LlmAgent(
-    name="streaming_agent",
-    model=model,
-    tools=[write_file_tool],  # 包含 StreamingFunctionTool，自动启用 stream_tool_call_args
-)
-```
+## 关键代码解释
 
-如需显式控制，可手动设置 `stream_tool_call_args=True` 或 `stream_tool_call_args=False`。
+- 使用 `Runner` 驱动 Agent，用户消息请求创建 HTML 文件
+- 模型生成工具参数时触发流式事件，最终合并执行模拟写文件
 
-### 事件处理
+## 环境与运行
 
-流式工具调用事件通过 Runner.run_async() 消费：
-
-```python
-from trpc_agent_sdk.models import constants as const
-
-async for event in runner.run_async(...):
-    if event.is_streaming_tool_call():
-        # 处理流式工具调用事件（delta 模式）
-        for part in event.content.parts:
-            if part.function_call:
-                delta = part.function_call.args.get(const.TOOL_STREAMING_ARGS, "")
-                if delta:
-                    print(f"流式增量: {delta}")
-```
-
-## 环境要求
+### 环境要求
 
 - Python 3.10+（推荐 3.12）
-- trpc-agent 框架
 
-## 运行示例
-
-1. 设置环境变量（在 `.env` 文件中或通过 export）：
+### 安装步骤
 
 ```bash
-TRPC_AGENT_API_KEY=your-api-key
-TRPC_AGENT_BASE_URL=https://your-api-endpoint
-TRPC_AGENT_MODEL_NAME=your-model-name
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+python3 -m venv .venv
+source .venv/bin/activate
+pip3 install -e .
 ```
 
-2. 运行示例：
+### 环境变量要求
+
+在 [examples/llmagent_with_streaming_tool_simple/.env](./.env) 中配置（或通过 `export` 设置）：
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
+
+### 运行命令
 
 ```bash
-cd examples/llmagent_with_streaming_tool/
+cd examples/llmagent_with_streaming_tool_simple
 python3 run_agent.py
 ```
 
-## 预期输出
+## 运行结果（实测）
 
-```
-╔══════════════════════════════════════════════════════════════╗
-║           Streaming Tool Call Arguments Demo                  ║
-╚══════════════════════════════════════════════════════════════╝
 
-============================================================
-🆔 Session ID: abc12345...
-📝 User: 请帮我创建一个简单的 HTML 页面...
-============================================================
-
-🤖 Processing...
-
-⏳ [Streaming] write_file: {"path": "index.html", "content": "<!DOCTYPE html>...
-⏳ [Streaming] write_file: <html>...
-⏳ [Streaming] write_file: <head>...
-
-✅ [Tool Call Complete] write_file
-   Arguments: {'path': 'index.html', 'content': '...'}
-
-📄 [Simulated File Write]
-   Path: index.html
-   Content (xxx chars):
-----------------------------------------
-<!DOCTYPE html>
-<html>
+```text
+Streaming Tool Call Arguments Demo
+📝 User: 请帮我创建一个简单的 HTML 页面，文件名为 index.html...
+⏳ [Streaming] ...-write_file: {"
+⏳ [Streaming] ...-write_file: path":"index
 ...
-</html>
-----------------------------------------
-
-📊 [Tool Result] {'success': True, 'path': 'index.html', ...}
-
-💬 我已经帮您创建了一个简单的 HTML 页面...
+✅ [Tool Call Complete] write_file
+📊 [Tool Result] {'success': True, 'path': 'index.html', 'bytes_written': 360, ...}
+[END] llmagent_with_streaming_tool_simple (exit_code=0)
 ```
 
-## 应用场景
+## 结果分析（是否符合要求）
 
-1. **代码生成**：实时预览 LLM 正在生成的代码
-2. **文档写作**：显示文档内容的生成进度
-3. **长文本处理**：减少用户等待焦虑
-4. **错误提前发现**：用户可以在生成过程中发现问题并取消
+结论：**符合本示例测试要求**。
 
-## 相关文档
+- 出现流式参数片段、`Tool Call Complete` 与 `Tool Result` 成功字段
+- `exit_code=0`，`error.txt` 为空
 
-- [流式工具调用文档](../../docs/tools/stream_tools.md)
+## 适用场景建议
+
+- 需要在 UI 或日志中实时展示“模型正在填写工具参数”的产品原型
+- 调试大参数工具（长文本、代码）时的流式消费验证

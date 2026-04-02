@@ -1,0 +1,16 @@
+{
+  "type": "module",
+  "name": "agui-client",
+  "version": "1.0.0",
+  "description": "A minimal client built with @ag-ui/client. It shows how to talk to an AG-UI HTTP endpoint and stream back Server-Sent Events (SSE) in real time.",
+  "main": "main.js",
+  "scripts": {
+    "test": "node main.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@ag-ui/client": "0.0.42"
+  }
+}

@@ -9,16 +9,16 @@ from trpc_agent_sdk.tools import FunctionTool
 
 from .config import get_model_config
 from .prompts import INSTRUCTION
-from .tools import get_weather, get_weather_forecast, get_air_quality, get_uv_index
+from .tools import get_air_quality
+from .tools import get_uv_index
+from .tools import get_weather
+from .tools import get_weather_forecast
 
 
 def _create_model() -> OpenAIModel:
     """Create the model"""
     api_key, url, model_name = get_model_config()
     return OpenAIModel(model_name=model_name, api_key=api_key, base_url=url)
-
-
-
 
 
 def create_agent() -> LlmAgent:

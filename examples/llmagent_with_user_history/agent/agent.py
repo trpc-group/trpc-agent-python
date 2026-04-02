@@ -22,7 +22,7 @@ def create_agent() -> LlmAgent:
     """ Create an agent"""
     agent = LlmAgent(
         name="assistant_agent",
-        description="普通的问答助手",
+        description="A general Q&A assistant",
         model=_create_model(),
         instruction=INSTRUCTION,
     )

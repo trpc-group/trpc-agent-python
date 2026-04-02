@@ -1,92 +1,189 @@
-# Mem0 与 tRPC-Agent 集成
+# Mem0 记忆集成示例
 
-## 概述
+本示例演示如何将 `Mem0` 接入 `trpc-agent`，让 Agent 具备“检索历史记忆 + 写入新记忆”的长期记忆能力，并支持自托管与平台两种模式。
 
-Mem0 是为 LLM 提供的智能、自我改进的记忆层，能够在各种应用中实现更加个性化和连贯一致的用户体验。本示例演示如何将 Mem0 与 tRPC-Agent 集成，构建具有长期记忆能力的智能代理。
+## 关键特性
 
-- **官方文档**：[https://docs.mem0.ai/introduction](https://docs.mem0.ai/introduction)
-- **工具源码**：[mem0_tool.py](../../trpc_agent_ecosystem/tools/mem0_tool.py)
+- **双记忆模式**：同一套 Agent 代码支持 `AsyncMemory`（自托管）和 `AsyncMemoryClient`（平台）
+- **工具化记忆能力**：通过 `SearchMemoryTool` 与 `SaveMemoryTool` 在对话中自动查找/保存用户信息
+- **低侵入切换**：通过 `create_agent(use_mem0_platform=...)` 一处开关切换模式
+- **可观察记忆链路**：运行日志可看到 `search_memory` / `save_memory` 的调用与返回
+- **面向实战排障**：覆盖向量维度不匹配、平台 key 缺失、Qdrant 连通性等常见问题
 
----
+## Agent 层级结构说明
 
-## 快速开始
+```text
+personal_assistant (LlmAgent)
+├── model: OpenAIModel (config from .env)
+└── tools:
+    ├── SearchMemoryTool (search_memory)
+    └── SaveMemoryTool (save_memory)
+        └── backend:
+            ├── AsyncMemory (self-hosted)
+            └── AsyncMemoryClient (Mem0 platform)
+```
 
-### 前置要求
+关键文件：
 
-| 组件 | 版本 | 用途 |
-|------|------|------|
-| Python | >=3.10 | 运行环境 |
-| mem0ai | latest | Mem0 SDK |
-| sentence-transformers | latest | 本地嵌入模型（**自托管模式**） |
-| qdrant-client | latest | 向量数据库客户端（**自托管模式**） |
+- [examples/mem_0/agent/agent.py](./agent/agent.py)
+- [examples/mem_0/agent/config.py](./agent/config.py)
+- [examples/mem_0/run_agent.py](./run_agent.py)
+- `trpc_agent_sdk/tools/mem0_tool.py`
 
-### 安装依赖
+## 关键代码解释
+
+### 1) 模式切换入口（`agent/agent.py`）
+
+- `create_agent(use_mem0_platform=False)`：
+  - `False` -> `AsyncMemory(config=...)`（自托管）
+  - `True` -> `AsyncMemoryClient(api_key, host)`（平台）
+- 两种模式最终都注入同一组记忆工具，保证调用方式一致
+
+### 2) 记忆配置（`agent/config.py`）
+
+- 自托管默认使用：
+  - `vector_store = qdrant`
+  - `llm = deepseek`（读取 `TRPC_AGENT_*`）
+  - `embedder = huggingface`（`multi-qa-MiniLM-L6-cos-v1`）
+- 平台模式读取：
+  - `MEM0_API_KEY`
+  - `MEM0_BASE_URL`
+
+### 3) 运行逻辑（`run_agent.py`）
+
+- 使用同一 `user_id`，配合多轮 query 验证“先查不到 -> 再写入 -> 再查到”
+- 日志中打印工具调用和工具返回，便于检查记忆链路
+
+## 环境与运行
+
+### 环境要求
+
+- Python 3.10+（推荐 3.12）
+- `mem0ai`
+- 自托管模式额外需要：`sentence-transformers`、`qdrant-client`
+
+### 安装步骤
 
 ```bash
-# 安装必需的包
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip3 install -e .[mem0]
 pip3 install mem0ai
 
-# 仅 自托管模式 需要
-pip3 sentence-transformers qdrant-client
-
-# 使用 trpc-agent 的开发依赖安装
-pip install trpc-agent-py[mem0]
+# Self-hosted mode only
+pip3 install sentence-transformers qdrant-client
 ```
 
-### 环境配置
+### 环境变量要求
 
-复制 `.env` 文件并配置：
+在 [examples/mem_0/.env](./.env) 中配置（或通过 `export`）：
 
-```bash
-# 模型配置（必需）
-TRPC_AGENT_API_KEY=your-api-key
-TRPC_AGENT_BASE_URL=your-llm-base-url
-TRPC_AGENT_MODEL_NAME=your-model-name
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
+- `MEM0_API_KEY=your-mem0-api-key`  # Optional: Mem0 platform mode
+- `MEM0_BASE_URL=https://api.mem0.ai` # Optional: Mem0 platform mode
 
-# Mem0 平台配置（可选，用于远程模式）
-MEM0_API_KEY=your-mem0-api-key
-MEM0_BASE_URL=https://api.mem0.ai
-```
 
-### 运行示例
+### 运行命令
 
 ```bash
 cd examples/mem_0
-python run_agent.py
+python3 run_agent.py
 ```
 
----
+## 运行结果（实测）
 
-## 架构说明
+示例典型输出（节选）：
 
-本示例提供 **两种部署模式**：
+```text
+📝 User: Do you remember my name?
+🔧 [Invoke Tool: search_memory({'query': "user's name"})]
+📊 [Tool Result: {'status': 'no_memories', 'message': 'No relevant memories found'}]
 
-| 模式 | 记忆存储 | 适用场景 |
-|------|---------|---------|
-| **自托管模式** | 本地 Qdrant + 嵌入模型 | 完全控制、无外部依赖、本地测试 |
-| **平台模式** | Mem0 云端 API | 生产环境、快速部署、跨实例共享 |
+📝 User: My name is Alice
+🔧 [Invoke Tool: save_memory({'content': "The user's name is Alice."})]
+📊 [Tool Result: {'status': 'success', 'message': 'Information saved to memory', ...}]
 
-
----
-
-### 项目结构
-
-```
-examples/mem_0/
-├── agent/
-│   ├── agent.py          # Agent 定义及 mem0 工具集成
-│   ├── config.py         # 两种模式的配置
-│   ├── prompts.py        # Agent 指令提示词
-│   └── tools.py          # （预留扩展工具）
-├── images/               # 文档图片
-├── .env                  # 环境变量配置
-├── run_agent.py          # 演示运行脚本
-└── README.md             # 本文档
+📝 User: Do you remember my name?
+🔧 [Invoke Tool: search_memory({'query': "user's name"})]
+📊 [Tool Result: {'status': 'success', 'memories': '- Name is Alice ...'}]
 ```
 
----
+存储结果可在：
 
-## 模式一：自托管 Mem0
+- 自托管 Qdrant：![Mem0 Result](./images/mem0_result.png)
+- Mem0 平台：![Mem0 Platform Result](./images/mem0_plat.png)
+
+## 结果分析（是否符合要求）
+
+结论：**符合本示例测试目标**（记忆读写链路可用）。
+
+- **记忆查询生效**：初次查询返回 `no_memories`
+- **记忆写入生效**：写入后返回 `success`
+- **记忆回读生效**：后续查询可以检索到已写入用户信息
+- **模式设计合理**：同一 Agent 逻辑兼容自托管与平台模式
+
+## 特有说明
+
+### 1) 自托管模式的重要前置：Qdrant 向量维度
+
+当嵌入模型为 `multi-qa-MiniLM-L6-cos-v1` 时，向量维度是 **384**。  
+若 Qdrant 集合按 1536 初始化，会出现维度错误。
+
+```python
+from qdrant_client import QdrantClient
+from qdrant_client.models import VectorParams, Distance
+
+client = QdrantClient(host="localhost", port=6333)
+client.create_collection(
+    collection_name="mem0",
+    vectors_config=VectorParams(size=384, distance=Distance.COSINE),
+)
+```
+
+### 2) 两种模式对比（简版）
+
+| 维度 | 自托管 | 平台模式 |
+|---|---|---|
+| 部署 | 需本地组件（如 Qdrant） | 云端托管 |
+| 控制力 | 高 | 中 |
+| 运维成本 | 较高 | 较低 |
+| 适用场景 | 本地调试、定制化 | 快速上线、托管场景 |
+
+### 3) 常见问题速查
+
+- **Mem0 API Key 缺失**
+  - 报错：`ValueError: Mem0 API Key not provided`
+  - 处理：设置 `MEM0_API_KEY`
+
+- **Qdrant 无法连接**
+  - 报错：`Cannot connect to Qdrant at localhost:6333`
+  - 处理：检查容器/服务状态
+
+- **维度不匹配**
+  - 报错：`expected dim: 1536, got 384`
+  - 处理：重建集合或切换匹配维度的 embedding 模型
+
+- **依赖安装异常**
+  - 可按需补装：
+    ```bash
+    pip3 install "langchain_huggingface>=0.1.0"
+    pip3 install "huggingface-hub>=0.33.4,<1.0.0"
+    pip3 install sentence_transformers nvidia-ml-py pynvml
+    ```
+
+## 适用场景建议
+
+- 需要跨会话保留用户偏好、历史事实的个人助理场景
+- 需要可控数据链路（自托管）或快速集成（平台）两类落地场景
+- 需要评估“记忆增强”对回答个性化和连续性的提升效果
+
+## Mem0 服务搭建
+### 模式一：自托管 Mem0
 
 mem0 官方提供 `AsyncMemory` 和 `Memory` 两种 sdk 类，后续都是以 `AsyncMemory` 为基础介绍
 
@@ -110,15 +207,7 @@ mem0 支持的提供商
 | **LLM** | OpenAI, DeepSeek, Anthropic, Gemini, Groq, Azure OpenAI |
 | **嵌入模型** | OpenAI, HuggingFace, Ollama, Azure OpenAI |
 
-#### 基本用法
 
-如果用户拥有 `OPENAI_API_KEY`，那么实例化方式如下：
-
-```python
-import os
-os.environ["OPENAI_API_KEY"] = "sk-xxx"
-mem = AsyncMemory()
-```
 
 #### 高级用法
 
@@ -225,20 +314,20 @@ def get_memory_config() -> MemoryConfig:
 
 ---
 
-## 模式二：Mem0 平台（云端 API）
+### 模式二：Mem0 平台（云端 API）
 
-### 注册 Mem0 平台
+#### 注册 Mem0 平台
 
 访问 [https://app.mem0.ai/dashboard](https://app.mem0.ai/dashboard) 创建账号。
 
-### 获取 API 凭证
+#### 获取 API 凭证
 
 注册后，从控制台获取 API Key 和组织/项目 ID。
 ![Mem0 Platform](./images/mem0_ai.png)
 
-### 初始化平台客户端
+#### 初始化平台客户端
 
-#### 更新 `.env` 文件，添加 Mem0 凭证：
+##### 更新 `.env` 文件，添加 Mem0 凭证：
 
 ```bash
 MEM0_API_KEY=m0-your-api-key
@@ -276,222 +365,8 @@ AsyncMemoryClient 平台客户端参数
 
 ---
 
-## Agent 实现细节
-
-### Agent 指令
-
-```python
-# agent/prompts.py
-INSTRUCTION = """
-You are a helpful personal assistant with memory capabilities.
-- Use the search_memory function to recall past conversations and user preferences.
-- Use the save_memory function to store important information about the user.
-- Always personalize your responses based on available memory.
-"""
-```
-
-### 可用工具
-
-| 工具类 | 工具名 | Agent 参数 | 描述 |
-|--------|--------|-----------|------|
-| `SearchMemoryTool` | `search_memory` | `query: str` | 搜索过去的对话和记忆 |
-| `SaveMemoryTool` | `save_memory` | `content: str` | 保存重要信息到记忆 |
-
-> `user_id` 由框架从 `InvocationContext` 自动注入，**无需**在工具调用参数中传递。
-
-完整源码参考：[trpc_agent_ecosystem/tools/mem0_tool.py](../../trpc_agent_ecosystem/tools/mem0_tool.py)
-
-
-### 完整 Agent 设置
-
-```python
-# agent/agent.py
-from mem0 import AsyncMemory, AsyncMemoryClient
-from trpc_agent_sdk.agents import LlmAgent
-from trpc_agent_sdk.server.tools.mem0_tool import SearchMemoryTool, SaveMemoryTool
-
-from .config import get_memory_config, get_mem0_platform_config
-
-def create_agent(use_mem0_platform: bool = False) -> LlmAgent:
-    """创建具有 mem0 记忆能力的 Agent
-
-    Args:
-        use_mem0_platform: 若为 True，使用 Mem0 平台（云端）。
-                          若为 False，使用自托管模式。
-    """
-    if use_mem0_platform:
-        # 平台模式：AsyncMemoryClient
-        mem0_platform_config = get_mem0_platform_config()
-        mem0_client = AsyncMemoryClient(
-            api_key=mem0_platform_config['api_key'],
-            host=mem0_platform_config['host']
-        )
-    else:
-        # 自托管模式：AsyncMemory
-        memory_config = get_memory_config()
-        mem0_client = AsyncMemory(config=memory_config)
-
-    # 用同一个 client 实例化工具
-    search_memory_tool = SearchMemoryTool(client=mem0_client)
-    save_memory_tool   = SaveMemoryTool(client=mem0_client)
-
-    return LlmAgent(
-        name="personal_assistant",
-        description="能够记住用户偏好的个人助理",
-        model=_create_model(),
-        instruction=INSTRUCTION,
-        tools=[search_memory_tool, save_memory_tool],
-    )
-
-# 通过修改此参数切换模式
-root_agent = create_agent(use_mem0_platform=False)  # 自托管
-# root_agent = create_agent(use_mem0_platform=True)   # 平台
-```
-完整源码参考：[agent/agent.py](./agent/agent.py)
-
----
-
-## 运行演示
-
-### 运行脚本
-
-```sh
-python3 examples/mem_0/run_agent.py
-```
-
-### 完整演示输出
-
-```
-🆔 Session ID: 84edae79...
-📝 User: Do you remember my name?
-🤖 Assistant:
-🔧 [Invoke Tool: search_memory({'query': "user's name"})]
-📊 [Tool Result: {'status': 'no_memories', 'message': 'No relevant memories found'}]
-It seems I don't have your name stored in my memory. Could you remind me?
-----------------------------------------
-🆔 Session ID: d76b4ee6...
-📝 User: My name is Alice
-🤖 Assistant:
-🔧 [Invoke Tool: save_memory({'content': "The user's name is Alice."})]
-📊 [Tool Result: {'status': 'success', 'message': 'Information saved to memory', 'result': {'results': [{'id': 'ceddf373-...', 'memory': 'Name is Alice', 'event': 'ADD'}]}}]
-Thank you, Alice! I've saved your name to memory.
-----------------------------------------
-🆔 Session ID: ac740b05...
-📝 User: Do you remember my name?
-🤖 Assistant:
-🔧 [Invoke Tool: search_memory({'query': "user's name"})]
-📊 [Tool Result: {'status': 'success', 'memories': '- Name is Alice\n- Favorite food is Italian food'}]
-Yes, your name is Alice! How can I assist you today?
-----------------------------------------
-```
-运行后的存储的结果如下：
-
-- 自托管 **Qdrant 中的记忆存储：**
-![Memory Result](./images/mem0_result.png)
-- mem0 平台 **Mem0 平台中的记忆存储：**
-![Mem0 Platform Result](./images/mem0_plat.png)
-
-
----
-
-
-## 常见问题
-
-### 错误：向量维度不匹配
-
-**症状：**
-```
-qdrant_client.http.exceptions.UnexpectedResponse: 400 (Bad Request)
-{"status":{"error":"Wrong input: Vector dimension error: expected dim: 1536, got 384"}}
-```
-
-**原因：**
-Qdrant 集合是用 1536 维（OpenAI 嵌入）创建的，但您的嵌入模型输出 384 维。
-
-**解决方案：**
-
-| 选项 | 步骤 | 适用场景 |
-|------|------|---------|
-| **A. 重建集合** | 删除并用正确维度重建集合（见步骤 2） | 全新开始、测试环境 |
-| **B. 更换嵌入模型** | 使用与现有集合维度匹配的嵌入模型 | 生产环境、有现存数据 |
-| **C. 使用不同集合** | 在配置中设置 `collection_name: "mem0_384"` | 保留两个集合 |
-
-**常用嵌入模型维度：**
-
-| 嵌入模型 | 维度 | 需要 API Key |
-|---------|------|-------------|
-| `multi-qa-MiniLM-L6-cos-v1` | **384** | ❌ 否 |
-| `text-embedding-3-small` | **1536** | ✅ 是（OpenAI） |
-| `text-embedding-3-large` | **3072** | ✅ 是（OpenAI） |
-| `all-MiniLM-L6-v2` | **384** | ❌ 否 |
-
-### 错误：未提供 Mem0 API Key
-
-**症状：**
-```
-ValueError: Mem0 API Key not provided. Please provide an API Key.
-```
-
-**解决方案：**
-```bash
-# 平台模式
-export MEM0_API_KEY=your-mem0-api-key
-
-# 自托管模式（如使用 OpenAI 组件）
-export OPENAI_API_KEY=your-openai-key
-```
-
-### 错误：无法连接 Qdrant
-
-**症状：**
-```
-ConnectionError: Cannot connect to Qdrant at localhost:6333
-```
-
-**解决方案：**
-```bash
-# 检查 Qdrant 是否运行
-docker ps | grep qdrant_server
-
-# 如未运行，启动它
-docker start qdrant_server
-
-# 或重新创建
-docker run -d --name qdrant_server \
-  -v /tmp/qdrant_storage:/qdrant/storage \
-  -p 6333:6333 qdrant/qdrant
-```
-
-### 错误，安装需要的依赖失败，可以按照以下方式安装必须的依赖
-```bash
-pip3 install langchain_huggingface>=0.1.0
-pip3 install huggingface-hub<1.0.0,>=0.33.4
-pip3 install sentence_transformers
-pip3 install nvidia-ml-py
-pip3 install pynvml
-```
-
-
----
-
-## 对比：自托管 vs 平台
-
-| 特性 | 自托管模式 | 平台模式 |
-|------|-----------|---------|
-| **部署** | 需要本地服务 | 完全托管 |
-| **控制** | 完全配置控制 | 受限于平台选项 |
-| **可扩展性** | 手动扩展 | 自动扩展 |
-| **持久化** | 您的基础设施 | Mem0 云存储 |
-| **延迟** | 本地网络 | 互联网延迟 |
-| **成本** | 基础设施成本 | API 使用成本 |
-| **数据隐私** | 完全控制 | 与 Mem0 共享 |
-| **最适合** | 开发、测试、本地部署 | 生产环境、快速部署 |
-
----
-
 ## 参考资料
 
-- **Mem0 文档**：[https://docs.mem0.ai/introduction](https://docs.mem0.ai/introduction)
-- **Mem0 GitHub 示例**：[https://github.com/mem0ai/mem0/tree/main/examples](https://github.com/mem0ai/mem0/tree/main/examples)
-- **Google AI ADK 集成**：[https://docs.mem0.ai/integrations/google-ai-adk](https://docs.mem0.ai/integrations/google-ai-adk)
-- **tRPC-Agent Mem0 工具**：[mem0_tool.py](../../trpc_agent_ecosystem/tools/mem0_tool.py)
+- [Mem0 Docs](https://docs.mem0.ai/introduction)
+- [Mem0 Examples](https://github.com/mem0ai/mem0/tree/main/examples)
+- [tRPC-Agent Mem0 Tool](../../trpc_agent_ecosystem/tools/mem0_tool.py)

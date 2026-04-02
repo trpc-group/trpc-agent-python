@@ -9,14 +9,14 @@ a trpc-agent as an A2A service over plain HTTP, with the standard protocol
 """
 
 import uvicorn
+from dotenv import load_dotenv
 
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
 
-from trpc_agent_sdk.server.a2a import TrpcA2aAgentService
 from trpc_agent_sdk.server.a2a import TrpcA2aAgentExecutorConfig
-from dotenv import load_dotenv
+from trpc_agent_sdk.server.a2a import TrpcA2aAgentService
 
 load_dotenv()
 

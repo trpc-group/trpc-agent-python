@@ -5,10 +5,10 @@ import asyncio
 import uuid
 
 from dotenv import load_dotenv
-
 from trpc_agent.runners import Runner
 from trpc_agent.sessions import InMemorySessionService
-from trpc_agent.types import Content, Part
+from trpc_agent.types import Content
+from trpc_agent.types import Part
 
 # Load environment variables from the .env file
 load_dotenv()

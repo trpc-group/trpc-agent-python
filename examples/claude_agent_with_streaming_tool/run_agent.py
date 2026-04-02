@@ -21,7 +21,7 @@ import asyncio
 import uuid
 
 from dotenv import load_dotenv
-from trpc_agent_sdk.models import _constants as const
+from trpc_agent_sdk.models import TOOL_STREAMING_ARGS
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.server.agents.claude import destroy_claude_env
 from trpc_agent_sdk.server.agents.claude import setup_claude_env
@@ -99,7 +99,7 @@ async def run_streaming_tool_demo():
                     for part in event.content.parts:
                         if part.function_call:
                             args = part.function_call.args or {}
-                            delta = args.get(const.TOOL_STREAMING_ARGS, "")
+                            delta = args.get(TOOL_STREAMING_ARGS, "")
                             if delta:
                                 preview = delta[:60] + "..." if len(delta) > 60 else delta
                                 print(f"⏳ [Streaming] {part.function_call.name}: {preview}")

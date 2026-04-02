@@ -9,7 +9,6 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import PrivateAttr
-
 from trpc_agent_sdk.sessions import Session
 
 

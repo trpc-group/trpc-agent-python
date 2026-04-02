@@ -8,11 +8,11 @@ from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.models import OpenAIModel
 from trpc_agent_sdk.tools import LongRunningFunctionTool
 
+from .config import get_model_config
 from .prompts import MAIN_AGENT_INSTRUCTION
 from .prompts import SUB_AGENT_INSTRUCTION
 from .tools import check_system_critical_operation
 from .tools import human_approval_required
-from .config import get_model_config
 
 
 def _create_model() -> LLMModel:

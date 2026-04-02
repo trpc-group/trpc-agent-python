@@ -35,12 +35,12 @@ from typing import Callable
 from typing import Optional
 from typing_extensions import override
 
-from trpc_agent_sdk._runners import Runner
 from trpc_agent_sdk.agents import BaseAgent
 from trpc_agent_sdk.artifacts import BaseArtifactService
 from trpc_agent_sdk.context import new_agent_context
 from trpc_agent_sdk.log import error as log_error
 from trpc_agent_sdk.memory import BaseMemoryService
+from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import BaseSessionService
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content

@@ -4,7 +4,6 @@
 """Utilities for AG-UI HTTP request access in InvocationContext."""
 
 from starlette.requests import Request
-
 from trpc_agent_sdk.configs import RunConfig
 from trpc_agent_sdk.context import InvocationContext
 

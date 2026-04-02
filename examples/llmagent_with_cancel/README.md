@@ -24,10 +24,10 @@ weather_agent (LlmAgent)
 
 关键文件：
 
-- `examples/llmagent_with_cancel/agent/agent.py`：构建带天气工具的 `LlmAgent`
-- `examples/llmagent_with_cancel/agent/tools.py`：天气工具实现（含延时与执行日志）
-- `examples/llmagent_with_cancel/run_agent.py`：取消测试主流程（两个场景）
-- `examples/llmagent_with_cancel/agent/config.py`：环境变量读取
+- [examples/llmagent_with_cancel/agent/agent.py](./agent/agent.py)：构建带天气工具的 `LlmAgent`
+- [examples/llmagent_with_cancel/agent/tools.py](./agent/tools.py)：天气工具实现（含延时与执行日志）
+- [examples/llmagent_with_cancel/run_agent.py](./run_agent.py)：取消测试主流程（两个场景）
+- [examples/llmagent_with_cancel/agent/config.py](./agent/config.py)：环境变量读取
 
 ## 关键代码解释
 
@@ -69,7 +69,7 @@ pip3 install -e .
 
 ### 环境变量要求
 
-在 `examples/llmagent_with_cancel/.env` 中配置（或通过 `export`）：
+在 [examples/llmagent_with_cancel/.env](./.env) 中配置（或通过 `export`）：
 
 - `TRPC_AGENT_API_KEY`
 - `TRPC_AGENT_BASE_URL`

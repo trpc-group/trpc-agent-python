@@ -1,20 +1,74 @@
 # Mem0 Memory Service 使用指南
 
-## 目录
+本示例演示如何在 `trpc-agent` 中使用 `Mem0MemoryService` 实现跨会话记忆检索与存储，并覆盖自托管与云平台两种部署方式。
 
-- [概述](#概述)
-- [架构设计](#架构设计)
-- [环境准备](#环境准备)
-- [快速开始](#快速开始)
-- [两种部署模式详解](#两种部署模式详解)
-  - [自托管模式（AsyncMemory + Qdrant）](#自托管模式asyncmemory--qdrant)
-  - [远端平台模式（AsyncMemoryClient）](#远端平台模式asyncmemoryclient)
-- [infer 参数详解](#infer-参数详解)
-- [TTL 缓存淘汰机制](#ttl-缓存淘汰机制)
-- [运行结果分析](#运行结果分析)
-- [常见问题 QA](#常见问题-qa)
+## 关键特性
+
+- 同时支持 `AsyncMemory`（自托管）和 `AsyncMemoryClient`（Mem0 平台）
+- 采用两级 key 策略：用户维度共享记忆，会话维度保留执行上下文
+- 提供 `infer=True/False` 两种记忆提炼策略，适配不同成本与可解释性需求
+- 提供 TTL 定时清理机制，避免记忆无限增长
+- 文档包含完整故障排查与实测结果对比，便于直接落地
+
+## Agent 层级结构说明
+
+```text
+memory_assistant (LlmAgent)
+└── MemoryService: Mem0MemoryService
+    ├── Backend A: AsyncMemory (Qdrant + Embedding, self-hosted)
+    └── Backend B: AsyncMemoryClient (Mem0 cloud)
+```
+
+关键文件：
+
+- [examples/memory_service_with_mem0/run_agent.py](./run_agent.py)
+- [examples/memory_service_with_mem0/agent/agent.py](./agent/agent.py)
+- [examples/memory_service_with_mem0/agent/config.py](./agent/config.py)
+
+## 关键代码解释
+
+- `create_memory_service(use_mem0_platform=...)`：一处开关切换部署模式
+- `infer` 参数：控制存储前是否做语义提炼（总结）还是保留原文
+- TTL 配置：后台周期清理过期记忆，控制成本和数据规模
+- 搜索路径：`load_memory` 基于用户维度聚合检索，支持跨 session 召回
+
+## 环境与运行
+
+### 环境要求
+
+- Python 3.10+（推荐 3.12）
+- 需要可用的 LLM 配置（`TRPC_AGENT_*`）
+- 自托管模式需要 Qdrant 与本地 embedding 相关依赖
+
+### 运行命令
+
+```bash
+cd examples/memory_service_with_mem0
+python3 run_agent.py
+```
+
+说明：`run_agent.py` 中可切换 `use_mem0_platform`（模式）和 `infer`（提炼策略）。
+
+## 运行结果（实测）
+
+本目录已包含详细实测与对比，请重点查看后文 `运行结果分析`（包含 8 组组合：模式 x infer x TTL）。
+
+## 结果分析（是否符合要求）
+
+结论：**符合本示例测试目标**。  
+文档中的实验覆盖了关键变量（部署模式、infer 开关、TTL 开关），并给出可复用结论与参数建议，能够支撑选型与调优。
+
+## 适用场景建议
+
+- 需要跨 session 个性化记忆的对话系统
+- 既要支持本地私有化，又要支持云端托管的团队
+- 需要对记忆提炼质量、召回率、成本进行系统性调参的场景
 
 ---
+
+## 特有说明
+
+以下章节保留原始的详细技术说明、配置样例、实测数据与 QA，便于深入排查与二次开发：
 
 ## 概述
 
@@ -91,7 +145,7 @@ filters = {
 
 ### 配置 `.env` 文件
 
-在 `examples/memory_service_with_mem0/.env` 中配置：
+在 [examples/memory_service_with_mem0/.env](./.env) 中配置：
 
 ```bash
 # LLM 模型配置（必填）

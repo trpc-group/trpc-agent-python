@@ -31,7 +31,7 @@ def get_weather(city: str) -> Dict[str, Any]:
         },
         "Shenzhen": {
             "temperature": 25,
-            "condition":"Sunny"
+            "condition": "Sunny"
         },
     }
     result = weather_data.get(city, {"temperature": 20, "condition": "Unknown"})

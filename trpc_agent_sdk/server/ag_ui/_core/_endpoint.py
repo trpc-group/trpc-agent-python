@@ -22,7 +22,6 @@ from ag_ui.encoder import EventEncoder
 from fastapi import FastAPI
 from fastapi import Request
 from fastapi.responses import StreamingResponse
-
 from trpc_agent_sdk.log import logger
 
 from ._agui_agent import AgUiAgent

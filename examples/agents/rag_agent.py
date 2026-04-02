@@ -11,6 +11,7 @@ from langchain_community.document_loaders import TextLoader
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
+
 try:
     # langchain v0.3.x版本导入方式
     from langchain.text_splitter import RecursiveCharacterTextSplitter

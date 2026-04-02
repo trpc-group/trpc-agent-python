@@ -23,10 +23,10 @@ assistant (LlmAgent)
 
 关键文件：
 
-- `examples/llmagent_with_max_history_messages/agent/agent.py`：Agent 创建与 `max_history_messages` 配置
-- `examples/llmagent_with_max_history_messages/agent/prompts.py`：强调“可见上下文”行为的提示词
-- `examples/llmagent_with_max_history_messages/agent/config.py`：模型环境变量读取
-- `examples/llmagent_with_max_history_messages/run_agent.py`：两种场景对比运行
+- [examples/llmagent_with_max_history_messages/agent/agent.py](./agent/agent.py)：Agent 创建与 `max_history_messages` 配置
+- [examples/llmagent_with_max_history_messages/agent/prompts.py](./agent/prompts.py)：强调“可见上下文”行为的提示词
+- [examples/llmagent_with_max_history_messages/agent/config.py](./agent/config.py)：模型环境变量读取
+- [examples/llmagent_with_max_history_messages/run_agent.py](./run_agent.py)：两种场景对比运行
 
 ## 关键代码解释
 
@@ -71,7 +71,7 @@ pip3 install -e .
 
 ### 环境变量要求
 
-在 `examples/llmagent_with_max_history_messages/.env` 中配置（或通过 `export`）：
+在 [examples/llmagent_with_max_history_messages/.env](./.env) 中配置（或通过 `export`）：
 
 - `TRPC_AGENT_API_KEY`
 - `TRPC_AGENT_BASE_URL`

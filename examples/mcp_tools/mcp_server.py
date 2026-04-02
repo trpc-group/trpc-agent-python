@@ -5,6 +5,8 @@
 # Copyright @ 2026 Tencent.com
 """ MCP server providing weather and calculation tools. """
 
+import logging
+
 from mcp.server import FastMCP
 
 app = FastMCP("simple-tools")
@@ -54,6 +56,11 @@ async def calculate(operation: str, a: float, b: float) -> float:
 
 
 if __name__ == "__main__":
+    # Reduce MCP framework logs to error-only to keep demo output clean.
+    logging.basicConfig(level=logging.ERROR)
+    logging.getLogger("mcp").setLevel(logging.ERROR)
+    logging.getLogger("mcp.server").setLevel(logging.ERROR)
+
     # Uncomment ONE of the following lines to select the transport mode:
     app.run(transport="stdio")
     # app.run(transport="sse")

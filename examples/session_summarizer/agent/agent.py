@@ -22,10 +22,10 @@ def create_agent() -> LlmAgent:
     """ Create an agent"""
     agent = LlmAgent(
         name="python_tutor",
-        description="Python编程导师，帮助用户学习Python编程",
+        description="Python programming tutor that helps users learn Python",
         model=_create_model(),  # You can change this to your preferred model
         instruction=INSTRUCTION,
-        # 如果期望在 agent 中使用 session summarizer，可以在这里绑定 filter
+        # To use session summarizer in the agent, bind the filter here:
         # filters=[AgentSessionSummarizerFilter(_create_model())],
     )
     return agent

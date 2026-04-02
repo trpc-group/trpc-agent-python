@@ -43,8 +43,8 @@ def get_memory_config() -> MemoryConfig:
         "embedder": {
             "provider": "huggingface",
             "config": {
-                "model": "multi-qa-MiniLM-L6-cos-v1"  # 本地运行，无需 API key
-                # "model": "text-embedding-3-small"  # 本地运行，无需 API key
+                "model": "multi-qa-MiniLM-L6-cos-v1"  # local running, no API key needed
+                # "model": "text-embedding-3-small"  # local running, no API key needed
             }
         }
     }

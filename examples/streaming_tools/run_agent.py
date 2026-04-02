@@ -6,7 +6,7 @@ import asyncio
 import uuid
 
 from dotenv import load_dotenv
-from trpc_agent_sdk.models import constants as const
+from trpc_agent_sdk.models import TOOL_STREAMING_ARGS
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content
@@ -28,7 +28,7 @@ async def run_streaming_tool_agent():
     user_id = "demo_user"
 
     demo_queries = [
-        "请帮我创建一个 Python 脚本 hello.py，实现简单的计算器功能",
+        "Please help me create a Python script hello.py with simple calculator functionality",
     ]
 
     for query in demo_queries:
@@ -59,7 +59,7 @@ async def run_streaming_tool_agent():
             if event.is_streaming_tool_call():
                 for part in event.content.parts:
                     if part.function_call:
-                        delta = part.function_call.args.get(const.TOOL_STREAMING_ARGS, "")
+                        delta = part.function_call.args.get(TOOL_STREAMING_ARGS, "")
                         accumulated_content += delta
                         print(f"⏳ Generated {len(accumulated_content)} chars...", end="\r")
                 continue

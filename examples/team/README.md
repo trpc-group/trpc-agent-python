@@ -1,86 +1,55 @@
-# TeamAgent 内容团队示例
+# TeamAgent 内容团队（Coordinate）示例
 
-本示例演示 TeamAgent 的 Coordinate 模式，其中团队领导将任务委派给特定成员，并综合他们的响应。
+本示例演示 `TeamAgent` 在 Coordinate 模式下由 Leader 依次委派研究员与写手，在同一会话中完成多轮「撰稿 + 补充」类任务。
 
-## 功能说明
+## 关键特性
 
-TeamAgent 是一种团队协作模式，包含：
-- **Leader（领导）**: 协调研究和写作任务
-- **Researcher（研究员）**: 擅长查找信息（使用 search_web 工具）
-- **Writer（写手）**: 擅长撰写清晰、引人入胜的内容（使用 check_grammar 工具）
+- `share_member_interactions=True`，Leader 可综合成员工具调用与回复
+- Leader 持有 `get_current_date`；成员分别持有 `search_web`、`check_grammar`
+- 两轮用户消息共享同一 `session_id`，展示多轮对话
 
-本示例展示了 2 轮对话，演示多轮对话支持。
+## Agent 层级结构说明
 
-## 环境要求
+- 根节点：`TeamAgent`（`content_team`）
+  - 成员：`researcher`（`LlmAgent`）、`writer`（`LlmAgent`）
 
-Python版本: 3.10+（强烈建议使用3.12）
+## 关键代码解释
 
-## 运行方法
+- `agent/agent.py`：构造 `researcher`、`writer` 与 `TeamAgent`，传入 `LEADER_INSTRUCTION` 等
+- `run_agent.py`：创建单次会话，循环发送两条 `demo_queries` 并打印事件
+- `agent/tools.py`：模拟 `search_web`、`check_grammar`、`get_current_date`
 
-1. 下载并安装 trpc-agent-python
+## 环境与运行
 
-```bash
-git clone https://github.com/trpc-group/trpc-agent-python.git
-cd trpc-agent-python
-python3 -m venv .venv
-source .venv/bin/activate
-pip3 install -e .
-```
-
-2. 在 `.env` 文件中设置环境变量（也可以通过export设置）:
-   - TRPC_AGENT_API_KEY
-   - TRPC_AGENT_BASE_URL
-   - TRPC_AGENT_MODEL_NAME
-
-3. 运行示例:
+- Python 3.10+；仓库根目录 `pip install -e .`
+- 配置 `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL`、`TRPC_AGENT_MODEL_NAME`
 
 ```bash
-cd examples/team/
+cd examples/team
 python3 run_agent.py
 ```
 
-## 预期行为
+## 运行结果（实测）
 
-本示例在同一个会话中发送2条消息：
-
-1. "Please write a short article about renewable energy" → Leader 先委派给 Researcher 搜索信息，再委派给 Writer 撰写内容
-2. "Please help me add some content about AI" → Leader 继续协调 Researcher 和 Writer 完成任务
-
-输出如下所示：
 
 ```
-Content Team Example
-Demonstrates coordinate mode: Leader -> Researcher -> Writer
-
-============================================================
+[START] team
 Content Team Demo - Coordinate Mode
-============================================================
-
-[Turn 1] User: Please write a short article about renewable energy
-----------------------------------------
-[content_team] Tool: get_current_date, Args: {}
-
-[content_team] Tool Response: FunctionResponse(name='get_current_date'...
-
-[content_team] Tool: call_member({'member_name': 'researcher', 'task_instruction': 'Search for the latest information about renewable energy'})
-
-[researcher] Tool: search_web, Args: {'query': 'renewable energy'}
-
-[researcher] Tool Response: FunctionResponse(name='search_web'...
-
-[researcher] Research findings: In 2024, global renewable energy share reached 30%, solar costs dropped 89%...
-
-[content_team] Tool: call_member({'member_name': 'writer', 'task_instruction': 'Write a short article about renewable energy based on the research results'})
-
-[writer] Tool: check_grammar, Args: {'text': '...'}
-
-[writer] Renewable energy is transforming the global energy landscape...
-
-[content_team] Here is the short article about renewable energy...
-
-[Turn 2] User: Please help me add some content about AI
-----------------------------------------
 ...
-
-============================================================
+[content_team] Tool: delegate_to_member, Args: {'member_name': 'researcher', ...
+[researcher] Tool: search_web, Args: {'query': 'renewable energy trends and statistics 2026'}
+...
+[content_team] Tool: delegate_to_member, Args: {'member_name': 'writer', ...
+...
+Demo completed!
+[END] team (exit_code=0)
 ```
+
+## 结果分析（是否符合要求）
+
+符合本示例测试要求：`exit_code=0`；两轮对话均出现 Leader 委派、成员工具调用与最终成文输出，流程与 Coordinate 模式设计一致。
+
+## 适用场景建议
+
+- 需要「检索 / 草稿 / 审核」等多角色流水线且由单一团队入口编排时使用 `TeamAgent`
+- 可在此结构上替换工具实现或增加成员

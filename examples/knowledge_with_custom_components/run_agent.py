@@ -1,10 +1,15 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright @ 2026 Tencent.com
+
 import asyncio
 
+from dotenv import load_dotenv
 from trpc_agent.context import new_agent_context
-from trpc_agent.knowledge import SearchRequest, SearchResult
+from trpc_agent.knowledge import SearchRequest
+from trpc_agent.knowledge import SearchResult
 from trpc_agent.types import Part
 
-from dotenv import load_dotenv
 # Load environment variables from the .env file
 load_dotenv()
 
