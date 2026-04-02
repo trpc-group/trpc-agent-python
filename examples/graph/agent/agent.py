@@ -252,7 +252,7 @@ def _create_document_workflow_graph(
     return graph
 
 
-def create_agent() -> GraphAgent:
+def create_agent(enable_knowledge: bool = False) -> GraphAgent:
     delegate_agent = _create_delegate_agent()
     llm_agent = _create_llm_agent()
 

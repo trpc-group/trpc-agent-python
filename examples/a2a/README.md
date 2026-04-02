@@ -23,7 +23,7 @@ git clone https://github.com/trpc-group/trpc-agent-python.git
 cd trpc-agent-python
 python3 -m venv .venv
 source .venv/bin/activate
-pip3 install -e .[a2a]
+pip3 install -e '.[a2a]'
 pip3 install a2a-sdk python-dotenv
 ```
 

@@ -8,13 +8,13 @@ from dataclasses import dataclass
 from typing import Optional
 
 from dotenv import load_dotenv
-from trpc_agent.agents import LangGraphAgent
-from trpc_agent.events import LongRunningEvent
-from trpc_agent.runners import Runner
-from trpc_agent.sessions import InMemorySessionService
-from trpc_agent.types import Content
-from trpc_agent.types import FunctionResponse
-from trpc_agent.types import Part
+from trpc_agent_sdk.agents import LangGraphAgent
+from trpc_agent_sdk.events import LongRunningEvent
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.types import Content
+from trpc_agent_sdk.types import FunctionResponse
+from trpc_agent_sdk.types import Part
 
 # Load environment variables from the .env file
 load_dotenv()
