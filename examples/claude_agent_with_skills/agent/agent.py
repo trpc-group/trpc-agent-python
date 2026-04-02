@@ -2,6 +2,8 @@
 #
 # Copyright @ 2026 Tencent.com
 
+import os
+
 from claude_agent_sdk.types import ClaudeAgentOptions
 from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.models import OpenAIModel
@@ -13,6 +15,8 @@ from trpc_agent_sdk.types import GenerateContentConfig
 from .config import get_model_config
 from .prompts import INSTRUCTION
 from .tools import get_current_date
+
+_EXAMPLE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _create_model() -> LLMModel:
@@ -45,8 +49,7 @@ def create_agent():
             max_output_tokens=1500,
         ),
         claude_agent_options=ClaudeAgentOptions(
-            # cwd is where the project directory is. eg. /data/workspace/trpc-agent/examples/claude_agent_with_skills
-            cwd="your project path",
+            cwd=_EXAMPLE_DIR,
             # setting_sources is the way of claude agent to get the skills from the user and the project
             # user is the way of claude agent to get the skills from path: ~/.claude/skills
             # project is the way of claude agent to get the skills from path: cwd/.claude/skills

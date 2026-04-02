@@ -1,10 +1,19 @@
 # TRPC Agent FastAPI Server
 
-将 TRPC Agent 以 HTTP 服务的形式对外提供，支持同步和 SSE 流式两种接口。
+本示例演示如何将 TRPC Agent 以 HTTP 服务的形式对外提供，支持同步和 SSE 流式两种接口，并提供 Python 交互式客户端进行快速验证。
 
-## 目录结构
+## 关键特性
 
-```
+- **同步与流式双模式**：提供 `/v1/chat`（同步）和 `/v1/chat/stream`（SSE 流式）两种接口，满足不同场景需求
+- **工具调用透传**：流式和同步响应均包含 `tool_call` / `tool_result` 事件，方便前端展示工具调用过程
+- **会话上下文管理**：通过 `session_id` 延续历史对话，使用 `InMemorySessionService` 保存会话状态
+- **自定义 Agent 加载**：支持通过 `--agent_module` 参数加载任意 Python 模块导出的 Agent，无需修改服务代码
+- **CLI 与环境变量双入口**：模型凭据、服务器选项均支持命令行参数与环境变量两种配置方式
+- **交互式客户端**：内置 Python 客户端，支持流式/同步模式切换、新会话创建等命令
+
+## 目录结构与关键文件
+
+```text
 examples/fastapi_server/
 ├── run_server.py        # 独立启动脚本（直接 python3 运行）
 ├── __init__.py          # 包导出
@@ -20,92 +29,57 @@ examples/fastapi_server/
     └── client.py        # 交互式 Python 客户端
 ```
 
----
+关键文件：
 
-## 快速开始
+- [examples/fastapi_server/_app.py](./_app.py)：FastAPI 路由定义、SSE 流式处理、服务启动入口
+- [examples/fastapi_server/_runner_manager.py](./_runner_manager.py)：Agent / Runner 生命周期管理，负责创建与缓存 Runner 实例
+- [examples/fastapi_server/_schemas.py](./_schemas.py)：Pydantic 请求/响应模型定义
+- [examples/fastapi_server/run_server.py](./run_server.py)：CLI 入口，解析命令行参数并启动服务
+- [examples/fastapi_server/agent/agent.py](./agent/agent.py)：示例天气 Agent，挂载天气查询工具
+- [examples/fastapi_server/test/client.py](./test/client.py)：交互式 Python 客户端
 
-### 1. 安装依赖
+## 关键代码解释
 
-```bash
-pip3 install trpc_agent_sdk
+这一节用于快速定位"路由、Runner 管理、自定义 Agent 加载"三条核心链路。
+
+### 1) 路由工厂与服务启动（`_app.py`）
+
+- 使用 FastAPI 定义 `/health`、`/v1/chat`、`/v1/chat/stream` 三个端点
+- 同步接口等待 Agent 完整回复后返回 JSON；流式接口通过 SSE 逐步推送 `text_delta`、`tool_call`、`tool_result`、`done` 事件
+- 服务启动函数 `run_server()` 封装 Uvicorn 配置，支持 IP / 端口等参数
+
+### 2) Agent / Runner 生命周期管理（`_runner_manager.py`）
+
+- `RunnerManager` 负责创建并缓存 Agent 与 Runner 实例
+- 支持两种模式：自动创建默认 Assistant Agent，或通过 `--agent_module` 加载外部模块
+- 使用 `InMemorySessionService` 管理会话状态
+
+### 3) 请求/响应模型（`_schemas.py`）
+
+- 定义 `ChatRequest`（message / session_id / user_id）和 `ChatResponse`（session_id / user_id / reply / tool_events）
+- 统一同步和流式接口的输入格式
+
+### 4) 自定义 Agent 加载
+
+- 自定义模块需导出 `root_agent`（实例）或 `create_agent()`（工厂函数）
+- 启动时通过 `--agent_module` 指定点分 Python 模块路径即可加载
+
+```python
+# 方式一：导出 root_agent 实例
+root_agent = LlmAgent(name="my-agent", ...)
+
+# 方式二：导出工厂函数
+def create_agent() -> LlmAgent:
+    return LlmAgent(name="my-agent", ...)
 ```
 
-### 2. 启动服务
+## API 端点与数据格式
 
-在 `examples/fastapi_server` 目录下直接运行 `run_server.py`：
+### 端点列表
 
-```bash
-cd examples/fastapi_server
-
-# 使用环境变量提供凭据
-export TRPC_AGENT_API_KEY=your-api-key
-export TRPC_AGENT_BASE_URL=http://v2.open.venus.woa.com/llmproxy
-export TRPC_AGENT_MODEL_NAME=deepseek-v3-local-II
-python3 run_server.py
-
-# 或通过命令行参数直接传入
-python3 run_server.py \
-    --model_key   your-api-key \
-    --model_url   http://v2.open.venus.woa.com/llmproxy \
-    --model_name  deepseek-v3-local-II \
-    --ip          0.0.0.0 \
-    --port        8080
-```
-
-启动成功后终端输出：
-
-```
-INFO:     Started server process [12345]
-INFO:     Waiting for application startup.
-INFO:     TRPC Agent FastAPI server starting up.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
-```
-
----
-
-## 启动参数说明
-
-`run_server.py` 支持以下选项：
-
-```
-python3 run_server.py [OPTIONS]
-```
-
-### 模型凭据
-
-| 参数 | 环境变量回退 | 默认值 | 说明 |
-|---|---|---|---|
-| `--model_key KEY` | `TRPC_AGENT_API_KEY` | —（必填） | LLM 提供商 API Key |
-| `--model_url URL` | `TRPC_AGENT_BASE_URL` | — | LLM API Base URL，如 `https://api.openai.com/v1` |
-| `--model_name NAME` | `TRPC_AGENT_MODEL_NAME` | `gpt-4o-mini` | 模型名称 |
-
-> CLI 参数优先级高于环境变量；使用 `--agent_module` 时模型参数由被加载的模块自行管理。
-
-### 服务器选项
-
-| 参数 | 环境变量回退 | 默认值 | 说明 |
-|---|---|---|---|
-| `--ip IP` | `TRPC_AGENT_HOST` | `0.0.0.0` | 监听网卡地址 |
-| `--port PORT` | `TRPC_AGENT_PORT` | `8080` | 监听端口 |
-| `--app_name NAME` | `TRPC_AGENT_APP_NAME` | `trpc_agent_server` | 应用名称（出现在日志中） |
-
-### Agent 配置
-
-| 参数 | 环境变量回退 | 默认值 | 说明 |
-|---|---|---|---|
-| `--agent_module MODULE` | `TRPC_AGENT_MODULE` | 无 | 点分 Python 模块路径，需导出 `root_agent`（实例）或 `create_agent()`（工厂函数）；不设置则自动创建默认 Assistant Agent |
-| `--instruction TEXT` | `TRPC_AGENT_INSTRUCTION` | 无 | 覆盖默认 Agent 的系统指令；`--agent_module` 存在时忽略 |
-
----
-
-## API 端点
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| `GET` | `/health` | 存活检测 |
-| `POST` | `/v1/chat` | 同步聊天，等待完整回复后返回 |
-| `POST` | `/v1/chat/stream` | SSE 流式聊天，实时推送文本块 |
+- **GET `/health`**：存活检测
+- **POST `/v1/chat`**：同步聊天，等待完整回复后返回
+- **POST `/v1/chat/stream`**：SSE 流式聊天，实时推送文本块
 
 ### 请求体（`/v1/chat` 与 `/v1/chat/stream` 共用）
 
@@ -117,39 +91,122 @@ python3 run_server.py [OPTIONS]
 }
 ```
 
-| 字段 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `message` | string | ✅ | 用户发送的消息 |
-| `session_id` | string | ❌ | 会话 ID，传入则延续历史上下文 |
-| `user_id` | string | ❌ | 用户标识，默认 `"default"` |
+- **`message`**（string，必填）：用户发送的消息
+- **`session_id`**（string，可选）：会话 ID，传入则延续历史上下文
+- **`user_id`**（string，可选）：用户标识，默认 `"default"`
 
----
+### SSE 事件格式
 
-## 测试
+流式端点 `/v1/chat/stream` 的每条事件为 `data: <JSON>\n\n`：
 
-### 1. 健康检查
+- **`text_delta`**：Agent 回复的增量文本（data 为字符串）
+- **`tool_call`**：Agent 调用工具（data 为 `{"name": "...", "args": {...}}`）
+- **`tool_result`**：工具返回结果（data 为 `{"name": "...", "response": ...}`）
+- **`done`**：流结束，正常退出（data 为 `null`）
+- **`error`**：流中发生异常（data 为错误信息字符串）
+
+## 环境与运行
+
+### 环境要求
+
+- Python 3.10+（强烈建议 3.12）
+
+### 安装步骤
+
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+python3 -m venv .venv
+source .venv/bin/activate
+pip3 install -e .
+```
+
+### 环境变量要求
+
+在 [examples/fastapi_server/.env](./.env) 中配置（或通过 `export`）：
+
+- `TRPC_AGENT_API_KEY`
+- `TRPC_AGENT_BASE_URL`
+- `TRPC_AGENT_MODEL_NAME`
+
+### 启动参数说明
+
+`run_server.py` 支持以下选项：
+
+**模型凭据**
+
+- **`--model_key KEY`**（环境变量 `TRPC_AGENT_API_KEY`，必填）：LLM 提供商 API Key
+- **`--model_url URL`**（环境变量 `TRPC_AGENT_BASE_URL`）：LLM API Base URL，如 `https://api.openai.com/v1`
+- **`--model_name NAME`**（环境变量 `TRPC_AGENT_MODEL_NAME`，默认 `gpt-4o-mini`）：模型名称
+
+> CLI 参数优先级高于环境变量；使用 `--agent_module` 时模型参数由被加载的模块自行管理。
+
+**服务器选项**
+
+- **`--ip IP`**（环境变量 `TRPC_AGENT_HOST`，默认 `0.0.0.0`）：监听网卡地址
+- **`--port PORT`**（环境变量 `TRPC_AGENT_PORT`，默认 `8080`）：监听端口
+- **`--app_name NAME`**（环境变量 `TRPC_AGENT_APP_NAME`，默认 `trpc_agent_server`）：应用名称（出现在日志中）
+
+**Agent 配置**
+
+- **`--agent_module MODULE`**（环境变量 `TRPC_AGENT_MODULE`）：点分 Python 模块路径，需导出 `root_agent`（实例）或 `create_agent()`（工厂函数）；不设置则自动创建默认 Assistant Agent
+- **`--instruction TEXT`**（环境变量 `TRPC_AGENT_INSTRUCTION`）：覆盖默认 Agent 的系统指令；`--agent_module` 存在时忽略
+
+### 运行命令
+
+```bash
+cd examples/fastapi_server
+
+# 使用环境变量提供凭据
+export TRPC_AGENT_API_KEY=your-api-key
+export TRPC_AGENT_BASE_URL=your-base-url
+export TRPC_AGENT_MODEL_NAME=your-model-name
+python3 run_server.py
+
+# 或通过命令行参数直接传入
+python3 run_server.py \
+    --model_key   your-api-key \
+    --model_url   your-base-url \
+    --model_name  your-model-name \
+    --ip          0.0.0.0 \
+    --port        8080
+
+# 加载自定义 Agent
+python3 run_server.py --agent_module agent.agent --port 8080
+```
+
+## 运行结果（实测）
+
+### 服务启动
+
+```text
+[2026-04-02 12:58:04][INFO][trpc_agent_sdk][examples/fastapi_server/_runner_manager.py:159][64629] Built default agent: model=your-model-name
+[2026-04-02 12:58:04][INFO][trpc_agent_sdk][examples/fastapi_server/_runner_manager.py:59][64629] RunnerManager started: app=trpc_agent_server agent=assistant
+[2026-04-02 12:58:04][INFO][trpc_agent_sdk][examples/fastapi_server/_app.py:279][64629] Starting TRPC Agent FastAPI server on 0.0.0.0:8080
+INFO:     Started server process [64629]
+INFO:     Waiting for application startup.
+[2026-04-02 12:58:04][INFO][trpc_agent_sdk][examples/fastapi_server/_app.py:64][64629] TRPC Agent FastAPI server starting up.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+```
+
+### 健康检查
 
 ```bash
 curl http://127.0.0.1:8080/health
 ```
 
-**返回结果**：
-
 ```json
 {"status":"ok","app_name":"trpc_agent_server","version":"1.0.0"}
 ```
 
----
-
-### 2. 同步聊天
+### 同步聊天
 
 ```bash
 curl -X POST http://127.0.0.1:8080/v1/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "你好，介绍一下你自己", "user_id": "user_001"}'
 ```
-
-**返回结果**：
 
 ```json
 {
@@ -172,9 +229,7 @@ curl -X POST http://127.0.0.1:8080/v1/chat \
   }'
 ```
 
----
-
-### 3. SSE 流式聊天（原始输出）
+### SSE 流式聊天
 
 ```bash
 curl -X POST http://127.0.0.1:8080/v1/chat/stream \
@@ -183,9 +238,7 @@ curl -X POST http://127.0.0.1:8080/v1/chat/stream \
   -d '{"message": "请用中文写一首关于春天的短诗", "user_id": "user_001"}'
 ```
 
-**原始 SSE 输出**：
-
-```
+```text
 data: {"type":"text_delta","data":"春风","session_id":"f490d6f3-..."}
 
 data: {"type":"text_delta","data":"轻抚","session_id":"f490d6f3-..."}
@@ -197,14 +250,11 @@ data: {"type":"text_delta","data":"\n细雨","session_id":"f490d6f3-..."}
 data: {"type":"done","data":null,"session_id":"f490d6f3-..."}
 ```
 
----
-
-### 4. 工具调用（启动天气 Agent）
+### 工具调用（天气 Agent）
 
 先以天气 Agent 启动服务：
 
 ```bash
-# 在 examples/fastapi_server 目录下执行
 python3 run_server.py --agent_module agent.agent --port 8080
 ```
 
@@ -215,8 +265,6 @@ curl -X POST http://127.0.0.1:8080/v1/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "北京现在天气怎么样？", "user_id": "user_001"}'
 ```
-
-**返回结果**：
 
 ```json
 {
@@ -238,11 +286,7 @@ curl -X POST http://127.0.0.1:8080/v1/chat \
 }
 ```
 
----
-
-## Python 交互式客户端
-
-### 启动
+### Python 交互式客户端
 
 ```bash
 # 默认：流式模式，连接 127.0.0.1:8080
@@ -252,26 +296,20 @@ python3 test/client.py --url http://127.0.0.1:8080 --user alice
 python3 test/client.py --url http://127.0.0.1:8080 --user alice --sync
 ```
 
-### 客户端参数
+客户端参数：
 
-| 参数 | 默认值 | 说明 |
-|---|---|---|
-| `--url URL` | `http://127.0.0.1:8080` | 服务器地址 |
-| `--user USER` | `user_001` | 用户 ID |
-| `--sync` | 流式 | 切换为同步模式 |
+- **`--url URL`**（默认 `http://127.0.0.1:8080`）：服务器地址
+- **`--user USER`**（默认 `user_001`）：用户 ID
+- **`--sync`**（默认流式）：切换为同步模式
 
-### 内置命令
+内置命令：
 
-| 命令 | 说明 |
-|---|---|
-| `/new` | 开启新会话，清除上下文 |
-| `/sync` | 在流式 ↔ 同步模式间切换 |
-| `/help` | 显示帮助 |
-| `/quit` | 退出 |
+- **`/new`**：开启新会话，清除上下文
+- **`/sync`**：在流式 ↔ 同步模式间切换
+- **`/help`**：显示帮助
+- **`/quit`**：退出
 
-### 测试结果
-
-```
+```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  TRPC Agent Chat Client
  server  : http://127.0.0.1:8080
@@ -299,43 +337,23 @@ You: /quit
 Goodbye!
 ```
 
-> **说明**：工具调用结果需使用天气 Agent（`--agent_module trpc_agent_sdk.server.fastapi.agent.agent`）启动服务才能触发；默认 Assistant Agent 不含工具。
+> **说明**：工具调用结果需使用天气 Agent（`--agent_module agent.agent`）启动服务才能触发；默认 Assistant Agent 不含工具。
 
----
+## 结果分析（是否符合要求）
 
-## SSE 事件格式参考
+结论：**符合本示例测试要求**。
 
-流式端点 `/v1/chat/stream` 的每条事件为 `data: <JSON>\n\n`：
+- **健康检查正常**：`/health` 返回 `{"status":"ok"}`，服务启动成功
+- **同步聊天正常**：`/v1/chat` 返回完整 JSON 响应，reply 内容合理
+- **流式聊天正常**：`/v1/chat/stream` 按 SSE 格式推送 `text_delta` 与 `done` 事件
+- **工具调用正确**：天气 Agent 能正确路由到 `get_weather_report`，返回结果与工具输出一致
+- **会话延续正常**：传入 `session_id` 后能延续上下文对话
+- **客户端功能完整**：流式/同步模式切换、新会话创建、工具调用展示均正常
 
-| `type` | `data` 内容 | 说明 |
-|---|---|---|
-| `text_delta` | 字符串 | Agent 回复的增量文本 |
-| `tool_call` | `{"name": "...", "args": {...}}` | Agent 调用工具 |
-| `tool_result` | `{"name": "...", "response": ...}` | 工具返回结果 |
-| `done` | `null` | 流结束，正常退出 |
-| `error` | 错误信息字符串 | 流中发生异常 |
+## 适用场景建议
 
----
-
-## 加载自定义 Agent
-
-自定义模块只需满足以下任意一种导出方式：
-
-```python
-# 方式一：导出 root_agent 实例
-root_agent = LlmAgent(name="my-agent", ...)
-
-# 方式二：导出工厂函数
-def create_agent() -> LlmAgent:
-    return LlmAgent(name="my-agent", ...)
-```
-
-启动时指定模块路径：
-
-```bash
-# 在 examples/fastapi_server 目录下执行, 这里的  my_package.agents 可以是 agent.agent，因为在这里的agent文件包含 root_agent，最终的文件包含 root_agent 即可 
-python3 run_server.py --agent_module my_package.agents --port 8080
-
-# 以内置天气 Agent 为例
-python3 run_server.py --agent_module agent.agent --port 8080
-```
+- 快速将 Agent 部署为 HTTP 服务：适合使用本示例
+- 验证同步/SSE 流式接口与工具调用透传：适合使用本示例
+- 需要交互式客户端进行手动测试：适合使用本示例内置客户端
+- 需要加载自定义 Agent 模块：通过 `--agent_module` 参数即可扩展
+- 需要测试单 Agent + Tool Calling 主链路（无 HTTP）：建议使用 `examples/llmagent`

@@ -67,6 +67,7 @@ langfuse=[
 
 knowledge = [
     "numpy>=2.2.5",
+    "langchain-text-splitters>=0.3.8",
     "langchain_community>=0.3.27",
     "langchain_huggingface>=0.1.0"
 ]
@@ -175,6 +176,14 @@ based_on_style = "pep8"
 column_limit = 120
 indent_width = 4
 split_before_logical_operator = true
+
+[tool.coverage.run]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+exclude_also = [
+    "if __name__ == .__main__.",
+]
 
 [tool.pytest.ini_options]
 minversion = "6.0"

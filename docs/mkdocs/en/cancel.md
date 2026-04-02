@@ -469,47 +469,310 @@ Agent services deployed via the A2A protocol support remote Cancel.
 
 **Server configuration:**
 
+run_server.py:
+
 ```python
+import uvicorn
+from dotenv import load_dotenv
+
+from a2a.server.apps import A2AStarletteApplication
+from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.tasks import InMemoryTaskStore
+
+from trpc_agent_sdk.server.a2a import TrpcA2aAgentExecutorConfig
 from trpc_agent_sdk.server.a2a import TrpcA2aAgentService
-from trpc_agent_sdk.server.a2a._core.executor import A2aAgentExecutorConfig
 
-# Configure cancel wait timeout
-executor_config = A2aAgentExecutorConfig(
-    cancel_wait_timeout=3.0,  # Default: 1.0 seconds
-)
+load_dotenv()
 
-a2a_service = TrpcA2aAgentService(
-    service_name="trpc.a2a.agent.weather_with_cancel",
-    agent=agent,
-    executor_config=executor_config,
-)
+HOST = "127.0.0.1"
+PORT = 18082
+# Timeout (seconds) for waiting the Agent to complete cancellation, recommended to keep consistent with client timeout
+CANCEL_WAIT_TIMEOUT = 3.0
+
+
+def create_a2a_service() -> TrpcA2aAgentService:
+    """Create an A2A service with Cancel support"""
+    from agent.agent import root_agent
+
+    # Key configuration: cancel_wait_timeout controls how long the server waits
+    # for the backend Agent to complete the cancellation after receiving cancel_task
+    executor_config = TrpcA2aAgentExecutorConfig(
+        cancel_wait_timeout=CANCEL_WAIT_TIMEOUT,
+    )
+
+    a2a_svc = TrpcA2aAgentService(
+        service_name="weather_agent_cancel_service",
+        agent=root_agent,
+        executor_config=executor_config,
+    )
+    a2a_svc.initialize()
+
+    return a2a_svc
+
+
+def serve():
+    """Start the A2A service"""
+    a2a_svc = create_a2a_service()
+
+    # Assemble the service using a2a-sdk standard components
+    request_handler = DefaultRequestHandler(
+        agent_executor=a2a_svc,
+        task_store=InMemoryTaskStore(),
+    )
+
+    server = A2AStarletteApplication(
+        agent_card=a2a_svc.agent_card,
+        http_handler=request_handler,
+    )
+
+    uvicorn.run(server.build(), host=HOST, port=PORT)
+
+
+if __name__ == "__main__":
+    serve()
 ```
 
 **Client usage:**
 
+test_a2a_cancel.py:
+
 ```python
-from trpc_agent_sdk.server.a2a.agent import TrpcRemoteA2aAgent
+import asyncio
+import uuid
+from typing import Awaitable
+from typing import Callable
+from typing import Optional
 
-# Create remote Agent
-remote_agent = TrpcRemoteA2aAgent(
-    name="weather_agent",
-    service_name="trpc.a2a.agent.weather_with_cancel",
-    description="Remote weather query service",
-)
-await remote_agent.initialize()
+from dotenv import load_dotenv
+from trpc_agent_sdk.configs import RunConfig
+from trpc_agent_sdk.events import AgentCancelledEvent
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.server.a2a import TrpcRemoteA2aAgent
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.types import Content
+from trpc_agent_sdk.types import Part
 
-runner = Runner(
-    app_name="client_app",
-    agent=remote_agent,
-    session_service=InMemorySessionService(),
-)
+load_dotenv()
 
-# Cancel will send a cancellation request to the remote service
-success = await runner.cancel_run_async(
-    user_id=user_id,
-    session_id=session_id,
-    timeout=3.0,
-)
+# A2A server address, must match the configuration in run_server.py
+AGENT_BASE_URL = "http://127.0.0.1:18082"
+# Client timeout (seconds) for waiting cancellation to complete, recommended to keep consistent with server cancel_wait_timeout
+CANCEL_TIMEOUT = 3.0
+
+
+async def run_remote_agent(
+    runner: Runner,
+    user_id: str,
+    session_id: str,
+    query: str,
+    tool_call_callback: Optional[Callable[[], Awaitable[None]]] = None,
+    event_count_callback: Optional[Callable[[int], Awaitable[None]]] = None,
+) -> None:
+    """Run remote Agent and process the event stream"""
+    user_content = Content(parts=[Part.from_text(text=query)])
+
+    run_config = RunConfig(agent_run_config={
+        "metadata": {
+            "user_id": user_id,
+        },
+    })
+
+    print("🤖 Remote Agent: ", end="", flush=True)
+    event_count = 0
+    try:
+        async for event in runner.run_async(
+                user_id=user_id,
+                session_id=session_id,
+                new_message=user_content,
+                run_config=run_config,
+        ):
+            event_count += 1
+            if event_count_callback:
+                await event_count_callback(event_count)
+
+            # Received cancel event, indicating the Agent was successfully cancelled
+            if isinstance(event, AgentCancelledEvent):
+                print(f"\n❌ Run was cancelled: {event.error_message}")
+                break
+
+            if not event.content or not event.content.parts:
+                continue
+
+            # Process streaming output (partial=True indicates a streaming chunk)
+            if event.partial:
+                for part in event.content.parts:
+                    if part.text:
+                        print(part.text, end="", flush=True)
+                continue
+
+            # Process complete events (tool calls, tool results, etc.)
+            for part in event.content.parts:
+                if part.thought:
+                    continue
+                if part.function_call:
+                    print(f"\n🔧 [Invoke Tool: {part.function_call.name}({part.function_call.args})]")
+                    # Trigger callback when tool call is detected, used to initiate cancellation during tool execution
+                    if tool_call_callback:
+                        await tool_call_callback()
+                elif part.function_response:
+                    print(f"📊 [Tool Result: {part.function_response.response}]")
+
+    except Exception as e:
+        print(f"\n⚠️ Error: {e}")
+
+    print()
+
+
+def create_runner(
+    app_name: str,
+    session_service: InMemorySessionService,
+    remote_agent: TrpcRemoteA2aAgent,
+) -> Runner:
+    """Create a Runner instance bound to the remote A2A Agent"""
+    return Runner(app_name=app_name, agent=remote_agent, session_service=session_service)
+
+
+# ============================================================
+# Scenario 1: Cancel during LLM streaming output
+# After receiving 10 streaming events, send a cancel request to the remote service via cancel_run_async
+# ============================================================
+async def scenario_1_cancel_during_streaming(remote_agent: TrpcRemoteA2aAgent) -> None:
+    print("📋 Scenario 1: Cancel During LLM Streaming (Remote A2A)")
+    print("-" * 80)
+
+    app_name = "a2a_cancel_demo"
+    user_id = "demo_user"
+    session_id = str(uuid.uuid4())
+    session_service = InMemorySessionService()
+
+    query1 = "Introduce yourself in detail, what can you do as a weather assistant."
+    print(f"🆔 Session ID: {session_id[:8]}...")
+    print(f"📝 User Query 1: {query1}")
+    print()
+
+    event_threshold_reached = asyncio.Event()
+
+    async def on_event_count(count: int) -> None:
+        # Trigger cancel signal when the 10th event is received
+        if count == 10:
+            print(f"\n⏳ [Received {count} events, triggering cancellation...]")
+            event_threshold_reached.set()
+
+    # Runner for running the Agent
+    runner1 = create_runner(app_name, session_service, remote_agent)
+
+    async def run_query1() -> None:
+        await run_remote_agent(runner1, user_id, session_id, query1, event_count_callback=on_event_count)
+
+    # Run Agent in a background task
+    task = asyncio.create_task(run_query1())
+
+    print("⏳ Waiting for first 10 events...")
+    await event_threshold_reached.wait()
+
+    # Use another Runner to send the cancel request (simulating an independent cancel caller)
+    runner2 = create_runner(app_name, session_service, remote_agent)
+    print("\n⏸️  Requesting cancellation after 10 events...")
+    # cancel_run_async sends a cancel_task request to the remote A2A service
+    success = await runner2.cancel_run_async(user_id=user_id, session_id=session_id, timeout=CANCEL_TIMEOUT)
+    print(f"✓ Cancellation requested: {success}")
+
+    await task
+
+    print()
+    print("💡 Result: The partial response was saved to session with cancellation message")
+    print()
+
+    # Continue conversation in the same session after cancellation to verify session context is maintained
+    query2 = "what happens?"
+    print(f"📝 User Query 2: {query2}")
+    print()
+
+    runner3 = create_runner(app_name, session_service, remote_agent)
+    await run_remote_agent(runner3, user_id, session_id, query2)
+
+    print("💡 Result: Agent can still respond with session context maintained")
+    print("-" * 80)
+    print()
+
+
+# ============================================================
+# Scenario 2: Cancel during tool execution
+# Initiate cancellation after detecting a function_call event, while the tool is still executing on the server
+# ============================================================
+async def scenario_2_cancel_during_tool_execution(remote_agent: TrpcRemoteA2aAgent) -> None:
+    print("📋 Scenario 2: Cancel During Tool Execution (Remote A2A)")
+    print("-" * 80)
+
+    app_name = "a2a_cancel_demo"
+    user_id = "demo_user"
+    session_id = str(uuid.uuid4())
+    session_service = InMemorySessionService()
+
+    query1 = "What's the current weather in Shanghai and Beijing?"
+    print(f"🆔 Session ID: {session_id[:8]}...")
+    print(f"📝 User Query 1: {query1}")
+    print()
+
+    tool_call_detected = asyncio.Event()
+
+    async def on_tool_call() -> None:
+        # Set signal when tool call is detected to trigger cancellation
+        print("⏳ [Tool call detected...]")
+        tool_call_detected.set()
+
+    runner1 = create_runner(app_name, session_service, remote_agent)
+
+    async def run_query1() -> None:
+        await run_remote_agent(runner1, user_id, session_id, query1, tool_call_callback=on_tool_call)
+
+    task = asyncio.create_task(run_query1())
+
+    print("⏳ Waiting for tool call to be detected...")
+    await tool_call_detected.wait()
+
+    # Initiate cancellation during tool execution; completed tool results are preserved, incomplete calls are cleaned up
+    runner2 = create_runner(app_name, session_service, remote_agent)
+    print("\n⏸️  Tool call detected! Requesting cancellation during tool execution...")
+    success = await runner2.cancel_run_async(user_id=user_id, session_id=session_id, timeout=CANCEL_TIMEOUT)
+    print(f"✓ Cancellation requested: {success}")
+
+    await task
+
+    print()
+    print("💡 Result: Incomplete function calls were cleaned up from session")
+    print()
+
+    # Continue conversation after cancellation to verify session recovery
+    query2 = "what happens?"
+    print(f"📝 User Query 2: {query2}")
+    print()
+
+    runner3 = create_runner(app_name, session_service, remote_agent)
+    await run_remote_agent(runner3, user_id, session_id, query2)
+
+    print("💡 Result: Agent can still respond with session context maintained")
+    print("-" * 80)
+    print()
+
+
+async def main():
+    # Create a remote A2A Agent connected to the service started by run_server.py
+    remote_agent = TrpcRemoteA2aAgent(
+        name="weather_agent",
+        agent_base_url=AGENT_BASE_URL,
+        description="Professional weather query assistant with cancel support",
+    )
+    await remote_agent.initialize()
+
+    # Run the two cancel scenarios in sequence
+    await scenario_1_cancel_during_streaming(remote_agent)
+
+    await scenario_2_cancel_during_tool_execution(remote_agent)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 **Configuration reference:**
@@ -522,7 +785,7 @@ success = await runner.cancel_run_async(
 It is recommended to configure the same timeout value for both.
 
 **Full example:**
-- examples/trpc_a2a_with_cancel (example to be added)
+- [examples/a2a_with_cancel](../../../examples/a2a_with_cancel/README.md)
 
 ### AG-UI
 
@@ -560,46 +823,198 @@ Agent services deployed via the AG-UI protocol automatically trigger Cancel when
 
 **Server configuration:**
 
+run_server.py:
+
 ```python
-from trpc_agent_sdk.server.ag_ui import AgUiAgent, AgUiService
+from dotenv import load_dotenv
 
-# Create AG-UI Agent
-agui_agent = AgUiAgent(
-    trpc_agent=agent,
-    app_name="weather_app",
-    cancel_wait_timeout=3.0,  # Cancel wait timeout, default: 3.0 seconds
-)
+from trpc_agent_sdk.sessions import InMemorySessionService
 
-# Create service
-agui_service = AgUiService(agents=[agui_agent])
+from _agui_runner import create_agui_runner
 
-# Start service
-await agui_service.start(host="0.0.0.0", port=18080)
+load_dotenv()
+
+HOST = "127.0.0.1"
+PORT = 18080
+
+app_name = "agui_cancel_demo"
+
+
+def serve():
+    """Start the AG-UI service, register Agent and bindroutes"""
+    service_name = "weather_agent_cancel_service"
+    uri = "/weather_agent"  # AG-UI endpoint path, clients connect via this path
+    from agent.agent import root_agent
+    session_service = InMemorySessionService()
+    agui_runner = create_agui_runner(app_name,
+                                     service_name,
+                                     uri,
+                                     root_agent=root_agent,
+                                     session_service=session_service)
+    agui_runner.run(HOST, PORT)
+
+
+if __name__ == "__main__":
+    serve()
+```
+
+_agui_runner.py:
+
+```python
+from contextlib import asynccontextmanager
+from typing import Any
+
+from ag_ui.core import RunAgentInput
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+from trpc_agent_sdk.agents import BaseAgent
+from trpc_agent_sdk.log import logger
+from trpc_agent_sdk.server.ag_ui import AgUiAgent
+from trpc_agent_sdk.server.ag_ui import AgUiManager
+from trpc_agent_sdk.server.ag_ui import AgUiService
+
+
+class HealthResponse(BaseModel):
+    status: str = "ok"
+    app_name: str
+    version: str = "1.0.0"
+
+
+class AguiRunner:
+    """AG-UI Runner: manages AgUiManager, FastAPI app, and service registration"""
+
+    def __init__(
+        self,
+        app_name: str,
+    ) -> None:
+        self._app_name = app_name
+        self._agui_manager = AgUiManager()
+        self._app = self._create_app()
+
+    @property
+    def app(self) -> FastAPI:
+        return self._app
+
+    def register_service(self, service_name: str, service: AgUiService) -> None:
+        self._agui_manager.register_service(service_name, service)
+
+    def run(self, host: str, port: int, **kwargs: Any) -> None:
+        self._app.get("/health", response_model=HealthResponse, tags=["meta"])(self.health)
+        self._agui_manager.set_app(self._app)
+        self._agui_manager.run(host, port, **kwargs)
+
+    @asynccontextmanager
+    async def _lifespan(self, app: FastAPI):
+        logger.info("TRPC AG-UI Server (with cancel) starting up.")
+        yield
+        logger.info("TRPC AG-UI Server (with cancel) shutting down.")
+        await self._agui_manager.close()
+
+    def _create_app(self) -> FastAPI:
+        app = FastAPI(
+            title="TRPC AG-UI Server (Cancel Demo)",
+            description="HTTP API for TRPC AG-UI Server with Cancel support",
+            version="1.0.0",
+            lifespan=self._lifespan,
+        )
+        return app
+
+    async def health(self) -> HealthResponse:
+        return HealthResponse(app_name=self._app_name)
+
+
+def _create_agui_agent(name: str, root_agent: BaseAgent, **kwargs) -> AgUiAgent:
+    """Create AgUiAgent with cancel_wait_timeout configuration"""
+    agui_agent = AgUiAgent(
+        trpc_agent=root_agent,
+        app_name=name,
+        # Key configuration: timeout for waiting the Agent to complete cancellation after SSE disconnect
+        # If configured too short, Cancel may not complete and streamed text cannot be saved to the session
+        cancel_wait_timeout=3.0,
+        **kwargs,
+    )
+    return agui_agent
+
+
+def create_agui_runner(app_name: str, service_name: str, uri: str, **kwargs: Any) -> AguiRunner:
+    """Assemble AG-UI service: create Runner -> create Service -> register Agent route"""
+    ag_ui_runner: AguiRunner = AguiRunner(app_name)
+    agui_service = AgUiService(service_name, app=ag_ui_runner.app)
+    agui_agent = _create_agui_agent(app_name, **kwargs)
+    # Register the Agent to the specified URI path, clients connect via this path
+    agui_service.add_agent(uri, agui_agent)
+    ag_ui_runner.register_service(service_name, agui_service)
+    return ag_ui_runner
 ```
 
 **Client usage (JavaScript):**
 
+client_js/main.js:
+
 ```javascript
-import { AgentClient } from '@anthropic-ai/agent-ui-client';
+import { HttpAgent } from '@ag-ui/client';
 
-const agent = new AgentClient({
-  url: 'http://localhost:18080',
+// Connect to the AG-UI server, path must match the uri registered in run_server.py
+const agent = new HttpAgent({
+  url: 'http://127.0.0.1:18080/weather_agent',
+  debug: false
 });
 
-// Start run
-const runId = await agent.startRun({
-  userId: 'user1',
-  sessionId: 'session1',
-  message: 'What is the weather?',
+let chunkCount = 0;
+const ABORT_AFTER_CHUNKS = 5;  // Trigger cancellation after receiving 5 text chunks
+
+// Subscribe to AG-UI event stream
+const subscription = agent.subscribe({
+  onTextMessageStartEvent: ({ event }) => {
+    process.stdout.write('\n🤖 Assistant: ');
+  },
+  onTextMessageContentEvent: ({ event }) => {
+    process.stdout.write(event.delta ?? '');
+    chunkCount++;
+    // After reaching threshold, call abortRun() to close SSE connection, triggering server-side Cancel
+    if (chunkCount === ABORT_AFTER_CHUNKS) {
+      process.stdout.write('\n\n⏸️  Aborting run after receiving ' + ABORT_AFTER_CHUNKS + ' text chunks...\n');
+      agent.abortRun();
+    }
+  },
+  onTextMessageEndEvent: ({ event }) => {
+    process.stdout.write('\n');
+  },
+  onToolCallStartEvent: ({ event }) => {
+    process.stdout.write(`\n🔧 Call Tool ${event.toolCallName}: `);
+  },
+  onToolCallArgsEvent: ({ event }) => {
+    process.stdout.write(event.delta ?? '');
+  },
+  onToolCallResultEvent: ({ event }) => {
+    process.stdout.write(`\n✅ Tool result: ${event.content}`);
+  },
+  onRunStartedEvent: ({ event }) => {
+    process.stdout.write(`\n⚙️  Run started: ${event.runId}`);
+  },
+  onRunFinishedEvent: ({ result }) => {
+    if (result !== undefined) {
+      process.stdout.write(`⚙️  Run finished, result: ${result}\n`);
+    } else {
+      process.stdout.write('⚙️  Run finished\n');
+    }
+  },
+  onRunFailedEvent: ({ error }) => {
+    process.stdout.write(`❌ Run failed: ${error}\n`);
+  }
 });
 
-// Subscribe to events
-agent.onEvent((event) => {
-  console.log('Event:', event);
+// Send user message and start the Agent
+await agent.addMessage({
+  role: 'user',
+  content: 'Please introduce yourself in detail and tell me what you can do.',
+  id: 'user_123'
 });
 
-// Cancel run (closes SSE connection)
-agent.abortRun();
+await agent.runAgent();
+
+subscription.unsubscribe?.();
 ```
 
 **Cancel trigger mechanism:**
@@ -616,4 +1031,4 @@ agent.abortRun();
 | `cancel_wait_timeout` | 3.0 | Timeout (in seconds) for waiting the Cancel operation to complete. If this value is not properly configured, the Cancel operation may fail to execute successfully, causing streamed text to not be saved to the session. |
 
 **Full example:**
-- examples/trpc_agui_with_cancel (example to be added)
+- [examples/agui_with_cancel](../../../examples/agui_with_cancel/README.md)

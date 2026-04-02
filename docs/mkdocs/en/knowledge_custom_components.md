@@ -76,7 +76,7 @@ rag = LangchainKnowledge(
 
 Since the LangchainKnowledge class invokes the `atransform_documents` method of the `BaseDocumentTransformer` class to process documents, when customizing a Text Splitter, you need to inherit from `BaseDocumentTransformer` or its subclass and override the `atransform_documents` method (since the default implementation of `atransform_documents` in the `BaseDocumentTransformer` class calls `transform_documents`, you can just implement `transform_documents`).
 
-The following is an example of splitting text by a separator. For the complete example, see [custom_document_loader](../../../examples/ecosystem/langchain_knowledge/custom_text_splitter.py):
+The following is an example of splitting text by a separator. For the complete example, see [knowledge_with_custom_components](../../../examples/knowledge_with_custom_components/):
 
 ```python
 from typing import Any, Sequence
@@ -226,7 +226,7 @@ The approach to customizing a Retriever is the same as [LangChain | How to creat
 | _get_relevant_documents | Get documents relevant to a query. | Required |
 | _aget_relevant_documents | Implement to provide async native support. | Optional |
 
-The following is an example of a retriever that "returns all documents whose text contains the text from the user query". For the complete example, see [custom_document_loader](../../../examples/ecosystem/langchain_knowledge/custom_retriever.py):
+The following is an example of a retriever that "returns all documents whose text contains the text from the user query". For the complete example, see [knowledge_with_custom_components](../../../examples/knowledge_with_custom_components/):
 
 ```python
 from typing import List

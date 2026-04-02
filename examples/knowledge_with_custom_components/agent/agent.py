@@ -16,7 +16,7 @@ from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
-from trpc_agent_ecosystem.knowledge.langchain_knowledge import LangchainKnowledge
+from trpc_agent_sdk.server.knowledge.langchain_knowledge import LangchainKnowledge
 
 from .config import EMBEDDER_MODEL_NAME, TEST_DATA_FILE
 from .prompts import DOCUMENT_LOADER_PROMPT, TEXT_SPLITTER_PROMPT, RETRIEVER_PROMPT

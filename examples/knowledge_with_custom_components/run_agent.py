@@ -5,10 +5,10 @@
 import asyncio
 
 from dotenv import load_dotenv
-from trpc_agent.context import new_agent_context
-from trpc_agent.knowledge import SearchRequest
-from trpc_agent.knowledge import SearchResult
-from trpc_agent.types import Part
+from trpc_agent_sdk.context import new_agent_context
+from trpc_agent_sdk.knowledge import SearchRequest
+from trpc_agent_sdk.knowledge import SearchResult
+from trpc_agent_sdk.types import Part
 
 # Load environment variables from the .env file
 load_dotenv()
