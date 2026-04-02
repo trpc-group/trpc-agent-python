@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 import pytest
 from trpc_agent_sdk.context import InvocationContext
-from trpc_agent_sdk.skills import SKILL_REGISTRY
+from trpc_agent_sdk.skills._registry import SKILL_REGISTRY
 from trpc_agent_sdk.skills import SkillToolSet
 
 

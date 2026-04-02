@@ -324,8 +324,8 @@ class TestDetectContentType:
 
         assert "text" in mime_type.lower() or mime_type == "application/octet-stream"
 
-    @patch('trpc_agent_sdk.code_executors.utils.HAS_MAGIC', True)
-    @patch('trpc_agent_sdk.code_executors.utils.magic')
+    @patch('trpc_agent_sdk.code_executors.utils._files.HAS_MAGIC', True)
+    @patch('trpc_agent_sdk.code_executors.utils._files.magic', create=True)
     def test_detect_content_type_with_magic(self, mock_magic):
         """Test detecting content type using magic library."""
         filename = Path("test.unknown")

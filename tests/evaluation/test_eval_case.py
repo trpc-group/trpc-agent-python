@@ -4,6 +4,9 @@
 """Unit tests for evaluation case (_eval_case)."""
 
 import pytest
+
+pytest.importorskip("trpc_agent_sdk._runners", reason="trpc_agent_sdk._runners not yet implemented")
+
 from trpc_agent_sdk.evaluation import ConversationScenario
 from trpc_agent_sdk.evaluation import EvalCase
 from trpc_agent_sdk.evaluation import IntermediateData

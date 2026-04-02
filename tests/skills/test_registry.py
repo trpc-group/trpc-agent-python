@@ -3,7 +3,7 @@
 # Copyright @ 2026 Tencent.com
 
 import pytest
-from trpc_agent_sdk.skills import SKILL_REGISTRY
+from trpc_agent_sdk.skills._registry import SKILL_REGISTRY
 from trpc_agent_sdk.skills import SkillRegistry
 
 

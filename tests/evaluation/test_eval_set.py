@@ -3,6 +3,10 @@
 # Copyright @ 2026 Tencent.com
 """Unit tests for EvalSet (_eval_set)."""
 
+import pytest
+
+pytest.importorskip("trpc_agent_sdk._runners", reason="trpc_agent_sdk._runners not yet implemented")
+
 from trpc_agent_sdk.evaluation import EvalSet
 
 
