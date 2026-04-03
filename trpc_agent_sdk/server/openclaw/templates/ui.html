@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>trpc-claw UI</title>
+  <style>
+    :root {
+      --bg: #f2f4f8;
+      --panel: #ffffff;
+      --panel-border: #e5e7eb;
+      --primary: #2563eb;
+      --primary-soft: #eff6ff;
+      --text: #111827;
+      --text-muted: #6b7280;
+      --chat-bg: #f8fafc;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 14px;
+      height: 100vh;
+      padding: 14px;
+    }
+    .sidebar, .main {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      padding: 14px;
+      gap: 12px;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    .brand {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .meta {
+      color: var(--text-muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    #meta {
+      white-space: pre-line;
+    }
+    .section-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .button-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    button {
+      border: 1px solid #dbe1ea;
+      background: #fff;
+      border-radius: 10px;
+      padding: 9px 12px;
+      text-align: left;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all .15s ease;
+      color: var(--text);
+    }
+    button:hover {
+      border-color: #bfd3ff;
+      background: var(--primary-soft);
+    }
+    button.primary {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #fff;
+      text-align: center;
+      font-weight: 600;
+    }
+    .details {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .config-editor {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    #configPath, #detailPath {
+      font-size: 11px;
+      color: var(--text-muted);
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 6px 8px;
+      word-break: break-all;
+    }
+    #configEditor, #detailEditor {
+      width: 100%;
+      min-height: 210px;
+      resize: vertical;
+      border: 1px solid #dbe1ea;
+      border-radius: 10px;
+      padding: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      background: #fff;
+      color: var(--text);
+    }
+    #configHint, #detailHint {
+      font-size: 12px;
+      line-height: 1.4;
+      padding: 6px 8px;
+      border-radius: 8px;
+      display: none;
+    }
+    .hint-ok {
+      display: block;
+      background: #ecfdf3;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+    }
+    .hint-err {
+      display: block;
+      background: #fef2f2;
+      color: #991b1b;
+      border: 1px solid #fecaca;
+    }
+    select {
+      border: 1px solid #dbe1ea;
+      border-radius: 10px;
+      padding: 9px 10px;
+      font-size: 13px;
+      background: #fff;
+      color: var(--text);
+    }
+    .inline-result {
+      display: none;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #334155;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .inline-result.code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .inline-result.error {
+      border-color: #fecaca;
+      background: #fef2f2;
+      color: #991b1b;
+    }
+    .main {
+      display: flex;
+      flex-direction: column;
+      padding: 14px;
+      gap: 10px;
+    }
+    .chat-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      background: var(--chat-bg);
+      border-radius: 12px;
+      border: 1px solid #e6ebf2;
+    }
+    .msg {
+      margin: 10px 0;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .bubble {
+      display: inline-block;
+      padding: 10px 12px;
+      border-radius: 12px;
+      max-width: 90%;
+      font-size: 14px;
+    }
+    .msg.user { text-align: right; }
+    .msg.user .bubble {
+      background: #dbeafe;
+      color: #1e3a8a;
+    }
+    .msg.assistant .bubble {
+      background: #fff;
+      color: #111827;
+      border: 1px solid #e5e7eb;
+    }
+    .input-row {
+      display: flex;
+      gap: 8px;
+    }
+    #message {
+      flex: 1;
+      border: 1px solid #dbe1ea;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      outline: none;
+    }
+    #message:focus {
+      border-color: #93c5fd;
+      box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+    }
+    #send {
+      min-width: 92px;
+      text-align: center;
+    }
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+      .sidebar {
+        order: 2;
+      }
+      .main {
+        min-height: 60vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div>
+        <div class="brand">trpc-claw</div>
+        <div class="meta" id="meta">加载中...</div>
+      </div>
+
+      <div>
+        <div class="section-title">模型与配置</div>
+        <div class="button-col">
+          <button id="btnConfig">查看完整配置</button>
+          <div class="config-editor" id="configEditorPanel">
+            <div id="configPath"></div>
+            <textarea id="configEditor" spellcheck="false"></textarea>
+            <div id="configHint"></div>
+            <button id="btnValidateConfig">保存前校验格式</button>
+            <button class="primary" id="btnSaveConfig">确认保存配置</button>
+          </div>
+          <button id="btnModelName">查看模型名称</button>
+          <div class="inline-result" id="panelModelName"></div>
+          <button id="btnModelUrl">查看模型 URL</button>
+          <div class="inline-result" id="panelModelUrl"></div>
+          <button id="btnModelKey">查看模型 Key</button>
+          <div class="inline-result" id="panelModelKey"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">运行详情</div>
+        <div class="button-col">
+          <button id="btnDetail">打开详情面板</button>
+          <div class="details" id="detailPanel">
+            <select id="detailSelect">
+              <option value="tool">tool</option>
+              <option value="skill">skill</option>
+              <option value="session">session</option>
+              <option value="memory">memory</option>
+              <option value="short_memory">short_memory</option>
+              <option value="history">history</option>
+              <option value="AGENTS.md">AGENTS.md</option>
+              <option value="SOUL.md">SOUL.md</option>
+              <option value="USER.md">USER.md</option>
+              <option value="TOOLS.md">TOOLS.md</option>
+            </select>
+            <button class="primary" id="btnLoadDetail">加载详情</button>
+            <div class="inline-result" id="detailResult"></div>
+            <div class="config-editor" id="detailEditorPanel">
+              <div id="detailPath"></div>
+              <textarea id="detailEditor" spellcheck="false"></textarea>
+              <div id="detailHint"></div>
+              <button class="primary" id="btnSaveDetail">保存详情文件</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="chat-title">对话</div>
+      <div id="chat"></div>
+      <div class="input-row">
+        <input id="message" placeholder="输入消息并回车..." />
+        <button class="primary" id="send">发送</button>
+      </div>
+    </main>
+  </div>
+  <script>
+    const chatEl = document.getElementById("chat");
+    const messageEl = document.getElementById("message");
+    const sendEl = document.getElementById("send");
+    const detailPanel = document.getElementById("detailPanel");
+    const detailSelect = document.getElementById("detailSelect");
+    const metaEl = document.getElementById("meta");
+    const configEditorPanel = document.getElementById("configEditorPanel");
+    const configPathEl = document.getElementById("configPath");
+    const configEditorEl = document.getElementById("configEditor");
+    const configHintEl = document.getElementById("configHint");
+    const btnValidateConfig = document.getElementById("btnValidateConfig");
+    const btnSaveConfig = document.getElementById("btnSaveConfig");
+    const panelModelName = document.getElementById("panelModelName");
+    const panelModelUrl = document.getElementById("panelModelUrl");
+    const panelModelKey = document.getElementById("panelModelKey");
+    const detailResult = document.getElementById("detailResult");
+    const detailEditorPanel = document.getElementById("detailEditorPanel");
+    const detailPathEl = document.getElementById("detailPath");
+    const detailEditorEl = document.getElementById("detailEditor");
+    const detailHintEl = document.getElementById("detailHint");
+    const btnSaveDetail = document.getElementById("btnSaveDetail");
+    let configEditorVisible = false;
+    let detailResultItem = "";
+    let detailEditorItem = "";
+
+    function appendMessage(role, text) {
+      const div = document.createElement("div");
+      div.className = `msg ${role}`;
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.textContent = text;
+      div.appendChild(bubble);
+      chatEl.appendChild(div);
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
+
+    async function apiGet(url) {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(await resp.text());
+      return resp.json();
+    }
+
+    async function apiPost(url, body) {
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      return resp.json();
+    }
+
+    let streamInFlight = false;
+
+    function setSending(busy) {
+      streamInFlight = busy;
+      sendEl.disabled = busy;
+      messageEl.disabled = busy;
+    }
+
+    function mergeStreamText(current, incoming) {
+      const a = current || "";
+      const b = incoming || "";
+      if (!b) return a;
+      if (!a) return b;
+      if (b.startsWith(a)) return b;
+      if (a.includes(b)) return a;
+      if (b.includes(a)) return b;
+
+      const max = Math.min(a.length, b.length);
+      for (let i = max; i > 0; i -= 1) {
+        if (a.slice(-i) === b.slice(0, i)) {
+          return a + b.slice(i);
+        }
+      }
+      return a + b;
+    }
+
+    async function sendMessage() {
+      if (streamInFlight) return;
+      const text = messageEl.value.trim();
+      if (!text) return;
+      messageEl.value = "";
+      appendMessage("user", text);
+      const assistantDiv = document.createElement("div");
+      assistantDiv.className = "msg assistant";
+      const assistantBubble = document.createElement("div");
+      assistantBubble.className = "bubble";
+      assistantBubble.textContent = "";
+      assistantDiv.appendChild(assistantBubble);
+      chatEl.appendChild(assistantDiv);
+      chatEl.scrollTop = chatEl.scrollHeight;
+      setSending(true);
+      try {
+        const resp = await fetch("/api/chat/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text }),
+        });
+        if (!resp.ok || !resp.body) {
+          throw new Error(await resp.text());
+        }
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let assistantText = "";
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            const textLine = line.trim();
+            if (!textLine) continue;
+            let item = null;
+            try { item = JSON.parse(textLine); } catch (_err) { continue; }
+            if (item.type === "delta") {
+              assistantText = mergeStreamText(assistantText, item.content || "");
+              assistantBubble.textContent = assistantText;
+              chatEl.scrollTop = chatEl.scrollHeight;
+            } else if (item.type === "error") {
+              assistantBubble.textContent += `\n[错误] ${item.message || "stream failed"}`;
+            }
+          }
+        }
+        const last = buffer.trim();
+        if (last) {
+          try {
+            const item = JSON.parse(last);
+            if (item.type === "delta") {
+              assistantText = mergeStreamText(assistantText, item.content || "");
+              assistantBubble.textContent = assistantText;
+            }
+            if (item.type === "error") assistantBubble.textContent += `\n[错误] ${item.message || "stream failed"}`;
+          } catch (_err) {}
+        }
+      } catch (err) {
+        assistantBubble.textContent = `请求失败: ${err.message}`;
+      } finally {
+        setSending(false);
+      }
+    }
+
+    function formatJsonlText(content) {
+      const lines = (content || "").split("\n").filter((line) => line.trim());
+      if (lines.length === 0) return "";
+      const blocks = [];
+      for (let i = 0; i < lines.length; i += 1) {
+        const line = lines[i];
+        try {
+          const parsed = JSON.parse(line);
+          blocks.push(`--- event ${i + 1} ---\n${JSON.stringify(parsed, null, 2)}`);
+        } catch (_err) {
+          return content;
+        }
+      }
+      return blocks.join("\n\n");
+    }
+
+    function formatPanelValue(item, value) {
+      if (item === "short_memory" && value && typeof value === "object") {
+        const path = value.path ? `path: ${value.path}\n\n` : "";
+        const content = typeof value.content === "string" ? value.content : "";
+        return `${path}${formatJsonlText(content)}`.trim();
+      }
+      if (typeof value === "string") return value;
+      return JSON.stringify(value, null, 2);
+    }
+
+    function renderPanel(panel, item, value, isError = false) {
+      if (!panel) return;
+      const text = formatPanelValue(item, value);
+      panel.textContent = text;
+      panel.style.display = "block";
+      panel.className = isError ? "inline-result error" : "inline-result code";
+    }
+
+    async function loadInfo(item, panel) {
+      try {
+        const data = await apiGet(`/api/info?item=${encodeURIComponent(item)}`);
+        renderPanel(panel, item, data.data, false);
+      } catch (err) {
+        renderPanel(panel, item, `读取失败: ${err.message}`, true);
+      }
+    }
+
+    function isEditableDetailItem(item) {
+      return ["AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md"].includes(item);
+    }
+
+    function showDetailHint(ok, text) {
+      detailHintEl.textContent = text || "";
+      detailHintEl.className = ok ? "hint-ok" : "hint-err";
+    }
+
+    async function loadDetailEditor(item) {
+      const data = await apiGet(`/api/detail/edit?item=${encodeURIComponent(item)}`);
+      detailPathEl.textContent = `文件: ${data.path}`;
+      detailEditorEl.value = data.content || "";
+      detailEditorPanel.style.display = "flex";
+      detailResult.style.display = "none";
+      detailEditorItem = item;
+      detailHintEl.className = "";
+      detailHintEl.style.display = "none";
+    }
+
+    async function saveDetailEditor() {
+      const content = detailEditorEl.value || "";
+      const item = detailEditorItem || detailSelect.value;
+      const data = await apiPost("/api/detail/save", { item, content });
+      showDetailHint(true, data.message || "文件已保存");
+    }
+
+    async function toggleInfo(item, panel) {
+      if (!panel) return;
+      const isVisible = panel.style.display === "block";
+      if (isVisible) {
+        panel.style.display = "none";
+        return;
+      }
+      await loadInfo(item, panel);
+    }
+
+    async function loadConfigEditor() {
+      const data = await apiGet("/api/config/edit");
+      configPathEl.textContent = `配置文件: ${data.path}`;
+      configEditorEl.value = data.content || "";
+      configHintEl.className = "";
+      configHintEl.style.display = "none";
+    }
+
+    async function saveConfigEditor() {
+      const content = configEditorEl.value || "";
+      const data = await apiPost("/api/config/save", { content });
+      return data.message || "配置已保存";
+    }
+
+    function showConfigHint(ok, text) {
+      configHintEl.textContent = text || "";
+      configHintEl.className = ok ? "hint-ok" : "hint-err";
+    }
+
+    function jumpToLine(line, column = 1) {
+      if (!line || line < 1) return;
+      const content = configEditorEl.value || "";
+      const lines = content.split("\n");
+      let pos = 0;
+      for (let i = 0; i < Math.min(line - 1, lines.length); i += 1) {
+        pos += lines[i].length + 1;
+      }
+      pos += Math.max(0, (column || 1) - 1);
+      configEditorEl.focus();
+      configEditorEl.setSelectionRange(pos, pos);
+    }
+
+    async function validateConfigEditor() {
+      const content = configEditorEl.value || "";
+      const data = await apiPost("/api/config/validate", { content });
+      if (data.valid) {
+        showConfigHint(true, data.message || "配置格式校验通过");
+        return { valid: true };
+      }
+      const message = data.message || "配置格式错误";
+      showConfigHint(false, message);
+      if (data.line) jumpToLine(data.line, data.column || 1);
+      return { valid: false, line: data.line, column: data.column };
+    }
+
+    document.getElementById("btnConfig").onclick = async () => {
+      configEditorVisible = !configEditorVisible;
+      configEditorPanel.style.display = configEditorVisible ? "flex" : "none";
+      if (configEditorVisible) {
+        try {
+          await loadConfigEditor();
+        } catch (err) {
+          showConfigHint(false, `读取配置失败: ${err.message}`);
+        }
+      }
+    };
+    document.getElementById("btnModelName").onclick = () => toggleInfo("model_name", panelModelName);
+    document.getElementById("btnModelUrl").onclick = () => toggleInfo("model_url", panelModelUrl);
+    document.getElementById("btnModelKey").onclick = () => toggleInfo("model_key", panelModelKey);
+    document.getElementById("btnDetail").onclick = () => {
+      detailPanel.style.display = detailPanel.style.display === "flex" ? "none" : "flex";
+      if (detailPanel.style.display !== "flex") {
+        detailResult.style.display = "none";
+        detailResultItem = "";
+        detailEditorPanel.style.display = "none";
+        detailEditorItem = "";
+      }
+    };
+    document.getElementById("btnLoadDetail").onclick = async () => {
+      const selected = detailSelect.value;
+      if (isEditableDetailItem(selected)) {
+        const isVisible = detailEditorPanel.style.display === "flex";
+        if (isVisible && detailEditorItem === selected) {
+          detailEditorPanel.style.display = "none";
+          detailEditorItem = "";
+          return;
+        }
+        try {
+          await loadDetailEditor(selected);
+        } catch (err) {
+          showDetailHint(false, `读取失败: ${err.message}`);
+        }
+        return;
+      }
+      const isVisible = detailResult.style.display === "block";
+      if (isVisible && detailResultItem === selected) {
+        detailResult.style.display = "none";
+        detailResultItem = "";
+        return;
+      }
+      detailEditorPanel.style.display = "none";
+      detailEditorItem = "";
+      await loadInfo(selected, detailResult);
+      detailResultItem = selected;
+    };
+    btnSaveDetail.onclick = async () => {
+      try {
+        btnSaveDetail.disabled = true;
+        await saveDetailEditor();
+      } catch (err) {
+        showDetailHint(false, `保存失败: ${err.message}`);
+      } finally {
+        btnSaveDetail.disabled = false;
+      }
+    };
+    btnSaveConfig.onclick = async () => {
+      try {
+        const check = await validateConfigEditor();
+        if (!check.valid) return;
+        btnSaveConfig.disabled = true;
+        const msg = await saveConfigEditor();
+        showConfigHint(true, msg || "配置已保存并重新加载");
+      } catch (err) {
+        showConfigHint(false, `保存失败: ${err.message}`);
+      } finally {
+        btnSaveConfig.disabled = false;
+      }
+    };
+    btnValidateConfig.onclick = async () => {
+      try {
+        btnValidateConfig.disabled = true;
+        await validateConfigEditor();
+      } catch (err) {
+        showConfigHint(false, `校验失败: ${err.message}`);
+      } finally {
+        btnValidateConfig.disabled = false;
+      }
+    };
+    sendEl.onclick = sendMessage;
+    messageEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") sendMessage();
+    });
+
+    (async () => {
+      const meta = await apiGet("/api/meta");
+      metaEl.textContent = `session_id=${meta.session_id}\nuser_id=${meta.user_id}`;
+    })().catch(() => {});
+  </script>
+</body>
+</html>
