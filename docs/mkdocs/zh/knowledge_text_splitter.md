@@ -93,4 +93,4 @@ rag = LangchainKnowledge(
 
 ## 完整示例
 
-请参考 [`examples/knowledge_with_rag_agent`](../../../examples/knowledge_with_rag_agent)。
+请参考 [examples/knowledge_with_rag_agent/README.md](../../../examples/knowledge_with_rag_agent/README.md)。

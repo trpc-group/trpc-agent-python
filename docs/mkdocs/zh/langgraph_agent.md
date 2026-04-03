@@ -272,7 +272,7 @@ def calculate(operation: str, a: float, b: float) -> str:
 
 ## Human-In-The-Loop能力
 
-见 [docs/agents/langgraph_agent.md](./human_in_the_loop.md)。
+详见 [Human-In-The-Loop](./human_in_the_loop.md)。
 
 ## 高级配置
 

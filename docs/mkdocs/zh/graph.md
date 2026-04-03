@@ -18,11 +18,6 @@
 - **Python 版本必须高于 3.11（建议 3.12+）**：*此项约束受限于图执行引擎LangGraph的要求，Graph引擎封装需要Node执行过程中流式返回各类信息，LangGraph在3.11及以上支持了这个能力*
 - **LangGraph 版本推荐使用 1.0.x 正式版**
 
-升级trpc-agent到 **v0.6.0** 以上，即可使用Graph能力：
-```bash
-pip install trpc-agent>=0.6.0 --extra-index-url https://mirrors.tencent.com/repository/pypi/tencent_pypi/simple/
-```
-
 ## 快速开始
 
 下面示例演示如何构建 Graph、如何运行 Graph：通过 **add_conditional_edges** 按条件路由到不同节点（add_node、add_llm_node、add_agent_node）。

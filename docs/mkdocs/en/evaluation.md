@@ -108,7 +108,7 @@ This section provides a minimal runnable example to help you complete your first
 **Install Dependencies** (includes pytest, pytest-asyncio, rouge-score, etc.):
 
 ```bash
-pip install trpc-agent[eval] --extra-index-url https://mirrors.tencent.com/repository/pypi/tencent_pypi/simple/
+pip install -e ".[eval]"
 ```
 
 **Configure Environment Variables**:
@@ -2172,7 +2172,7 @@ This document describes how to use the **WebUI** for Agent evaluation. The WebUI
 Using WebUI for Agent evaluation requires the following dependencies:
 
 ```bash
-pip install trpc-agent[eval] --extra-index-url https://mirrors.tencent.com/repository/pypi/tencent_pypi/simple/
+pip install -e ".[eval]"
 ```
 
 ### Starting the Services

@@ -55,7 +55,7 @@ skills/
     ...
 ```
 
-Repository and parsing: [trpc_agent/skills/_repository.py](../../../trpc_agent_sdk/skills/_repository.py)
+Repository and parsing: [trpc_agent_sdk/skills/_repository.py](../../../trpc_agent_sdk/skills/_repository.py)
 
 ## Quick Start
 
@@ -175,8 +175,8 @@ Key points:
 - **Intelligent prompt guidance**: Explicitly describe the workflow in the prompt to guide the LLM to call tools in the correct order
 - **Token optimization**: Use `skill_select_tools` to load only the needed tools, significantly reducing context size
 - **Code location**:
-  - Tool definitions: [trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
-  - Runner: [trpc_agent/skills/_run_tool.py](../../../trpc_agent_sdk/skills/_run_tool.py)
+  - Tool definitions: [trpc_agent_sdk/skills/tools/__init__.py](../../../trpc_agent_sdk/skills/tools/__init__.py)
+  - Runner: [trpc_agent_sdk/skills/tools/_skill_run.py](../../../trpc_agent_sdk/skills/tools/_skill_run.py)
 
 ### 3) Running the Example
 
@@ -361,7 +361,7 @@ Full example reference: [skills_with_dynamic_tools/run_agent.py](../../../exampl
 
 `SKILLS_ROOT` supports not only local directory paths but also URL formats. The framework automatically downloads remote archive packages, extracts and caches them locally. Subsequent calls hit the cache directly without re-downloading.
 
-Related implementation: [trpc_agent/skills/_url_root.py](../../../trpc_agent_sdk/skills/_url_root.py)
+Related implementation: [trpc_agent_sdk/skills/_url_root.py](../../../trpc_agent_sdk/skills/_url_root.py)
 
 #### Supported Input Formats
 
@@ -497,7 +497,7 @@ https://github.com/anthropics/skills
 
 ### `skill_list`
 
-**Declaration location**: [trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
+**Declaration location**: [trpc_agent_sdk/skills/tools/_skill_list.py](../../../trpc_agent_sdk/skills/tools/_skill_list.py)
 
 **Input parameters**: None
 
@@ -538,7 +538,7 @@ Assistant: Let me check what skills are available.
 
 ### `skill_list_tools`
 
-**Declaration location**: [trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
+**Declaration location**: [trpc_agent_sdk/skills/tools/_skill_list_tool.py](../../../trpc_agent_sdk/skills/tools/_skill_list_tool.py)
 
 **Input parameters**:
 - `skill_name` (required): Skill name
@@ -609,7 +609,7 @@ Overview
 
 ### `skill_select_tools`
 
-**Declaration location**: [trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
+**Declaration location**: [trpc_agent_sdk/skills/tools/_skill_select_tools.py](../../../trpc_agent_sdk/skills/tools/_skill_select_tools.py)
 
 **Input parameters**:
 - `skill_name` (required): Skill name
@@ -692,7 +692,7 @@ Assistant:
 
 ### `skill_load`
 
-**Declaration location**: [trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
+**Declaration location**: [trpc_agent_sdk/skills/tools/_skill_load.py](../../../trpc_agent_sdk/skills/tools/_skill_load.py)
 
 **Input parameters**:
 - `skill_name` (required): Skill name
@@ -770,7 +770,7 @@ Assistant:
 
 ### `skill_select_docs`
 
-**Declaration location**: [trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
+**Declaration location**: [trpc_agent_sdk/skills/tools/_skill_select_docs.py](../../../trpc_agent_sdk/skills/tools/_skill_select_docs.py)
 
 **Input parameters**:
 - `skill_name` (required): Skill name
@@ -844,7 +844,7 @@ Assistant: I need additional reference.
 
 ### `skill_list_docs`
 
-**Declaration location**: [trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
+**Declaration location**: [trpc_agent_sdk/skills/tools/_skill_list_docs.py](../../../trpc_agent_sdk/skills/tools/_skill_list_docs.py)
 
 **Input parameters**:
 - `skill_name` (required): Skill name
@@ -896,7 +896,7 @@ Assistant: Let me check what documentation is available.
 
 ### `skill_run`
 
-**Declaration location**: [trpc_agent/skills/_run_tool.py](../../../trpc_agent_sdk/skills/_run_tool.py)
+**Declaration location**: [trpc_agent_sdk/skills/tools/_skill_run.py](../../../trpc_agent_sdk/skills/tools/_skill_run.py)
 
 **Input parameters**:
 - `skill` (required): Skill name
@@ -1066,12 +1066,12 @@ LLM calls skill_run(skill="python-math", command="python3 scripts/fib.py 10")
 
 ## Runtime Environment
 
-**Interface definition**: [trpc_agent/code_executors/_base_workspace_runtime.py](../../../trpc_agent_sdk/code_executors/_base_workspace_runtime.py)
+**Interface definition**: [trpc_agent_sdk/code_executors/_base_workspace_runtime.py](../../../trpc_agent_sdk/code_executors/_base_workspace_runtime.py)
 
 **Implementations**:
-- **Local executor**: [trpc_agent/code_executors/local/_local_ws_runtime.py](../../../trpc_agent_sdk/code_executors/local/_local_ws_runtime.py)
+- **Local executor**: [trpc_agent_sdk/code_executors/local/_local_ws_runtime.py](../../../trpc_agent_sdk/code_executors/local/_local_ws_runtime.py)
   - Executes commands directly on the local system, suitable for development and testing
-- **Container executor** (Docker): [trpc_agent/code_executors/container/_container_ws_runtime.py](../../../trpc_agent_sdk/code_executors/container/_container_ws_runtime.py)
+- **Container executor** (Docker): [trpc_agent_sdk/code_executors/container/_container_ws_runtime.py](../../../trpc_agent_sdk/code_executors/container/_container_ws_runtime.py)
   - Executes in Docker containers, providing better isolation
 
 **Container executor notes**:
