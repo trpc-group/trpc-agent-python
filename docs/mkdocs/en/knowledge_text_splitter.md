@@ -93,4 +93,4 @@ rag = LangchainKnowledge(
 
 ## Complete Example
 
-Please refer to [`examples/knowledge_with_rag_agent`](../../../examples/knowledge_with_rag_agent).
+Please refer to [examples/knowledge_with_rag_agent/README.md](../../../examples/knowledge_with_rag_agent/README.md).

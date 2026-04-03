@@ -245,7 +245,7 @@ export TRPC_AGENT_BASE_URL="your-base-url"
 export TRPC_AGENT_MODEL_NAME="your-model-name"
 ```
 
-Run the Agent program. Example output is shown below. As you can see, ClaudeAgent automatically writes code and saves it to a file based on user instructions. You can replace the query text in `demo_queries` with examples suitable for your scenario. For more examples, refer to the [trpc-agent examples directory](../../../examples):
+Run the Agent program. Example output is shown below. As you can see, ClaudeAgent automatically writes code and saves it to a file based on user instructions. You can replace the query text in `demo_queries` with examples suitable for your scenario. For more examples, refer to the [trpc-agent examples directory](../../../examples/):
 ```text
 [2026-03-17 17:18:47][INFO][trpc_agent][_setup.py:222][68046] Proxy server proxy process started (PID: 68077)
 [2026-03-17 17:18:49][INFO][trpc_agent][_setup.py:239][68046] Proxy server is ready at http://0.0.0.0:8082

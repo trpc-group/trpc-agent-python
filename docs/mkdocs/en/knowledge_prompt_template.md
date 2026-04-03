@@ -4,7 +4,7 @@ Prompt Templates serve as the bridge between user input and Large Language Model
 
 Below is an introduction to some commonly used template components:
 
-- [PromptTemplate (StringPromptTemplate)](#prompttemplatestringprompttemplate)
+- [PromptTemplate (StringPromptTemplate)](#prompttemplate-stringprompttemplate)
 - [ChatPromptTemplate](#chatprompttemplate)
 - [MessagesPlaceholder](#messagesplaceholder)
 

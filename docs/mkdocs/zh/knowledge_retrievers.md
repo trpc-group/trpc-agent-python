@@ -86,7 +86,7 @@ rag = LangchainKnowledge(
 
 ## 完整示例
 
-请参考 [`examples/knowledge_with_rag_agent`](../../../examples/knowledge_with_rag_agent)。
+请参考 [examples/knowledge_with_rag_agent/README.md](../../../examples/knowledge_with_rag_agent/README.md)。
 
 ## 更多内容
 更多 Retriever 组件使用说明可以参考：[LangChain Retrievers](https://python.langchain.com/docs/integrations/retrievers/)。

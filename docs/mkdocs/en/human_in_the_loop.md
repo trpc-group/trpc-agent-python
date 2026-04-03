@@ -428,5 +428,5 @@ async def run_human_in_loop_agent():
 ## Complete Code Examples
 
 For complete example code, please refer to:
-- LlmAgent: [examples/llmagent_with_human_in_the_loop](../../../examples/llmagent_with_human_in_the_loop)
-- LangGraphAgent: [examples/langgraphagent_with_human_in_the_loop](../../../examples/langgraphagent_with_human_in_the_loop)
+- LlmAgent: [examples/llmagent_with_human_in_the_loop/README.md](../../../examples/llmagent_with_human_in_the_loop/README.md)
+- LangGraphAgent: [examples/langgraphagent_with_human_in_the_loop/README.md](../../../examples/langgraphagent_with_human_in_the_loop/README.md)

@@ -207,7 +207,7 @@ async def chat_endpoint(user_id: str, session_id: str, message: str, request: Re
     )
 ```
 
-This pattern is already implemented in the AG-UI service. See [trpc_agent_sdk/server/ag_ui/_plugin/_ag_ui_handler.py](../../../trpc_agent_sdk/server/ag_ui/_plugin/_ag_ui_handler.py) for reference.
+This pattern is already implemented in the AG-UI service. See [trpc_agent_sdk/server/ag_ui/_plugin/_utils.py](../../../trpc_agent_sdk/server/ag_ui/_plugin/_utils.py)
 
 #### Approach 2: Explicit cancel interface
 

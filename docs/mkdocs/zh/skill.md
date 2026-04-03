@@ -55,7 +55,7 @@ skills/
     ...
 ```
 
-仓库和解析：[trpc_agent/skills/_repository.py](../../../trpc_agent_sdk/skills/_repository.py)
+仓库和解析：[trpc_agent_sdk/skills/_repository.py](../../../trpc_agent_sdk/skills/_repository.py)
 
 ## 快速开始
 
@@ -175,9 +175,8 @@ Always use environment variables in commands:
 - **智能提示指导**：在提示词中明确说明工作流程，引导 LLM 按正确顺序调用工具
 - **Token 优化**：通过 `skill_select_tools` 仅加载需要的工具，显著减少上下文大小
 - **代码位置**：
-  - 工具定义：[trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
-  - 运行器：[trpc_agent/skills/_run_tool.py](../../../trpc_agent_sdk/skills/_run_tool.py)
-
+  - 工具包入口（聚合导出）：[trpc_agent_sdk/skills/tools/__init__.py](../../../trpc_agent_sdk/skills/tools/__init__.py)
+  - `skill_run` 实现：[trpc_agent_sdk/skills/tools/_skill_run.py](../../../trpc_agent_sdk/skills/tools/_skill_run.py)（其余工具见下文各节「声明位置」）
 ### 3) 运行示例
 
 完整示例交互式演示：[examples/skills/run_agent.py](../../../examples/skills/run_agent.py)
@@ -361,7 +360,7 @@ to use the custom output directory. Write all output files to $OUTPUT_DIR (which
 
 `SKILLS_ROOT` 不仅支持本地目录路径，还支持 URL 格式。框架会自动下载远端归档包、解压并缓存到本地，后续调用直接命中缓存无需重复下载。
 
-相关实现：[trpc_agent/skills/_url_root.py](../../../trpc_agent_sdk/skills/_url_root.py)
+相关实现：[trpc_agent_sdk/skills/_url_root.py](../../../trpc_agent_sdk/skills/_url_root.py)
 
 #### 支持的输入格式
 
@@ -497,7 +496,7 @@ https://github.com/anthropics/skills
 
 ### `skill_list`
 
-**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
+**声明位置**：[trpc_agent_sdk/skills/tools/_skill_list.py](../../../trpc_agent_sdk/skills/tools/_skill_list.py)
 
 **输入参数**：无
 
@@ -538,7 +537,7 @@ Assistant: Let me check what skills are available.
 
 ### `skill_list_tools`
 
-**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
+**声明位置**：[trpc_agent_sdk/skills/tools/_skill_list_tool.py](../../../trpc_agent_sdk/skills/tools/_skill_list_tool.py)
 
 **输入参数**：
 - `skill_name`（必需）：技能名称
@@ -609,7 +608,7 @@ Overview
 
 ### `skill_select_tools`
 
-**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
+**声明位置**：[trpc_agent_sdk/skills/tools/_skill_select_tools.py](../../../trpc_agent_sdk/skills/tools/_skill_select_tools.py)
 
 **输入参数**：
 - `skill_name`（必需）：技能名称
@@ -692,7 +691,7 @@ Assistant:
 
 ### `skill_load`
 
-**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
+**声明位置**：[trpc_agent_sdk/skills/tools/_skill_load.py](../../../trpc_agent_sdk/skills/tools/_skill_load.py)
 
 **输入参数**：
 - `skill_name`（必需）：技能名称
@@ -770,7 +769,7 @@ Assistant:
 
 ### `skill_select_docs`
 
-**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
+**声明位置**：[trpc_agent_sdk/skills/tools/_skill_select_docs.py](../../../trpc_agent_sdk/skills/tools/_skill_select_docs.py)
 
 **输入参数**：
 - `skill_name`（必需）：技能名称
@@ -844,7 +843,7 @@ Assistant: I need additional reference.
 
 ### `skill_list_docs`
 
-**声明位置**：[trpc_agent/skills/_tools.py](../../../trpc_agent_sdk/skills/_tools.py)
+**声明位置**：[trpc_agent_sdk/skills/tools/_skill_list_docs.py](../../../trpc_agent_sdk/skills/tools/_skill_list_docs.py)
 
 **输入参数**：
 - `skill_name`（必需）：技能名称
@@ -896,7 +895,7 @@ Assistant: Let me check what documentation is available.
 
 ### `skill_run`
 
-**声明位置**：[trpc_agent/skills/_run_tool.py](../../../trpc_agent_sdk/skills/_run_tool.py)
+**声明位置**：[trpc_agent_sdk/skills/tools/_skill_run.py](../../../trpc_agent_sdk/skills/tools/_skill_run.py)
 
 **输入参数**：
 - `skill`（必需）：技能名称
@@ -1066,12 +1065,12 @@ LLM 调用 skill_run(skill="python-math", command="python3 scripts/fib.py 10")
 
 ## 运行环境
 
-**接口定义**：[trpc_agent/code_executors/_base_workspace_runtime.py](../../../trpc_agent_sdk/code_executors/_base_workspace_runtime.py)
+**接口定义**：[trpc_agent_sdk/code_executors/_base_workspace_runtime.py](../../../trpc_agent_sdk/code_executors/_base_workspace_runtime.py)
 
 **实现方式**：
-- **本地执行器**：[trpc_agent/code_executors/local/_local_ws_runtime.py](../../../trpc_agent_sdk/code_executors/local/_local_ws_runtime.py)
+- **本地执行器**：[trpc_agent_sdk/code_executors/local/_local_ws_runtime.py](../../../trpc_agent_sdk/code_executors/local/_local_ws_runtime.py)
   - 直接在本地系统执行命令，适合开发和测试
-- **容器执行器**（Docker）：[trpc_agent/code_executors/container/_container_ws_runtime.py](../../../trpc_agent_sdk/code_executors/container/_container_ws_runtime.py)
+- **容器执行器**（Docker）：[trpc_agent_sdk/code_executors/container/_container_ws_runtime.py](../../../trpc_agent_sdk/code_executors/container/_container_ws_runtime.py)
   - 在 Docker 容器中执行，提供更好的隔离性
 
 **容器执行器注意事项**：

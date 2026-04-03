@@ -644,5 +644,5 @@ LlmAgent(
 - Sub Agents 示例：[examples/multi_agent_subagent/run_agent.py](../../../examples/multi_agent_subagent/run_agent.py)
 
 ### 辅助功能示例
-- AgentTool 示例：[examples/tools/agent_tools/agent_tool.py](../../../examples/tools/agent_tools/agent_tool.py)
+- AgentTool 示例：[examples/agent_tools/run_agent.py](../../../examples/agent_tools/run_agent.py)
 - TransferAgent 示例：[examples/transfer_agent/run_agent.py](../../../examples/transfer_agent/run_agent.py)

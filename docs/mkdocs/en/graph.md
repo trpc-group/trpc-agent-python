@@ -18,10 +18,6 @@ It is recommended to configure your environment with the following constraints:
 - **Python version must be higher than 3.11 (3.12+ recommended)**: *This constraint is imposed by the graph execution engine LangGraph. The Graph engine wrapper requires nodes to stream various information during execution, a capability LangGraph supports on Python 3.11 and above*
 - **LangGraph version 1.0.x stable release is recommended**
 
-Upgrade trpc-agent to **v0.6.0** or above to use Graph capabilities:
-```bash
-pip install trpc-agent>=0.6.0 --extra-index-url https://mirrors.tencent.com/repository/pypi/tencent_pypi/simple/
-```
 
 ## Quick Start
 
