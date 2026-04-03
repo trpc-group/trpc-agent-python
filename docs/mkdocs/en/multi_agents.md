@@ -644,5 +644,5 @@ For complete examples of various Multi Agents patterns, see:
 - Sub Agents Example: [examples/multi_agent_subagent/run_agent.py](../../../examples/multi_agent_subagent/run_agent.py)
 
 ### Auxiliary Feature Examples
-- AgentTool Example: [examples/tools/agent_tools/agent_tool.py](../../../examples/tools/agent_tools/agent_tool.py)
+- AgentTool Example: [examples/agent_tools/run_agent.py](../../../examples/agent_tools/run_agent.py)
 - TransferAgent Example: [examples/transfer_agent/run_agent.py](../../../examples/transfer_agent/run_agent.py)

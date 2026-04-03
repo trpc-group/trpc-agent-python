@@ -428,5 +428,5 @@ async def run_human_in_loop_agent():
 ## 完整代码示例
 
 完整的示例代码请参考：
-- LlmAgent: [examples/llmagent_with_human_in_the_loop](../../../examples/llmagent_with_human_in_the_loop)
-- LangGraphAgent: [examples/langgraphagent_with_human_in_the_loop](../../../examples/langgraphagent_with_human_in_the_loop)
+- LlmAgent：[examples/llmagent_with_human_in_the_loop/README.md](../../../examples/llmagent_with_human_in_the_loop/README.md)
+- LangGraphAgent：[examples/langgraphagent_with_human_in_the_loop/README.md](../../../examples/langgraphagent_with_human_in_the_loop/README.md)

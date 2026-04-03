@@ -207,7 +207,7 @@ async def chat_endpoint(user_id: str, session_id: str, message: str, request: Re
     )
 ```
 
-这种模式已在 AG-UI 服务中实现，可参考 [trpc_agent_sdk/server/ag_ui/_plugin/_ag_ui_handler.py](../../../trpc_agent_sdk/server/ag_ui/_plugin/_ag_ui_handler.py)
+这种模式已在 AG-UI 服务中实现，可参考 [trpc_agent_sdk/server/ag_ui/_plugin/_utils.py](../../../trpc_agent_sdk/server/ag_ui/_plugin/_utils.py)
 
 #### 方式二：显式取消接口
 
