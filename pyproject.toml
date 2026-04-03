@@ -64,10 +64,13 @@ langfuse=[
     "opentelemetry-sdk<2.0.0,>=1.28.0",
     "opentelemetry-exporter-otlp-proto-http<2.0.0,>=1.28.0",
 ]
-
+openclaw = [
+    "nanobot-ai>=0.1.4.post5",
+     "aiofiles",
+     "wecom-aibot-sdk-python>=0.1.5",
+]
 knowledge = [
     "numpy>=2.2.5",
-    "langchain-text-splitters>=0.3.8",
     "langchain_community>=0.3.27",
     "langchain_huggingface>=0.1.0"
 ]
@@ -88,25 +91,6 @@ eval = [
     "rouge-score",
     "pandas",
     "tabulate",
-]
-
-test = [
-    "pytest",
-    "pytest-mock",
-    "pytest-asyncio",
-    "pyparsing>=2.4.2",
-    "pytest-cov",
-    "unittest-xml-reporting",
-    "rouge-score",
-    "pandas",
-    "tabulate",
-    "greenlet",
-    "aiosqlite",
-    "a2a-sdk>=0.2.0",
-    "protobuf>=5.29.5",
-    "claude-agent-sdk>=0.1.3",
-    "cloudpickle>=2.0.0",
-    "ag-ui-protocol>=0.1.8",
 ]
 
 mem0 = [
@@ -153,6 +137,9 @@ all = [
     "anfs>=0.0.3",
     "mem0ai>=1.0.3",
     "typer>=0.9.0",
+    "nanobot-ai>=0.1.4.post6",
+    "aiofiles",
+    "wecom-aibot-sdk-python>=0.1.5",
 ]
 
 [project.scripts]
@@ -195,14 +182,6 @@ based_on_style = "pep8"
 column_limit = 120
 indent_width = 4
 split_before_logical_operator = true
-
-[tool.coverage.run]
-omit = ["tests/*"]
-
-[tool.coverage.report]
-exclude_also = [
-    "if __name__ == .__main__.",
-]
 
 [tool.pytest.ini_options]
 minversion = "6.0"

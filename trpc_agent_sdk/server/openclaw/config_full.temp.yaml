@@ -1,0 +1,169 @@
+# 完整配置模板（对应 trpc_claw/config/_config.py）
+
+runtime:
+  # 默认来自 DEFAULT_APP_NAME / DEFAULT_USER_ID
+  app_name: trpc_claw_py
+  user_id: trpc_claw_user
+  # 兼容历史 session 目录
+  legacy_sessions_dir: ~/.trpc_agent_claw/sessions
+
+agent:
+  # 默认工作目录（不填会自动使用 ~/.trpc_agent_claw/workspace）
+  workspace: ~/.trpc_agent_claw/workspace
+  model: ${TRPC_AGENT_MODEL_NAME}
+  provider: auto
+  max_tokens: 8192
+  context_window_tokens: 65536
+  temperature: 0.1
+  max_tool_iterations: 40
+  memory_window: 30
+  reasoning_effort: null
+  instruction: ""
+  system_prompt: ""
+  api_key: ${TRPC_AGENT_API_KEY}
+  api_base: ${TRPC_AGENT_BASE_URL}
+  extra_headers: {}
+
+channels:
+  send_progress: true
+  send_tool_hints: false
+
+  # 可选：WhatsApp bridge
+  whatsapp:
+    enabled: false
+    bridge_url: ws://localhost:3001
+    bridge_token: ""
+    allow_from: []
+
+  telegram:
+    enabled: false
+    token: ${TELEGRAM_BOT_TOKEN}
+    proxy: null
+    allow_from: ["*"]
+    reply_to_message: false
+
+  wecom:
+    enabled: true
+    bot_id: ${WECOM_BOT_ID}
+    secret: ${WECOM_BOT_SECRET}
+    allow_from: ["*"]
+    welcome_message: ""
+    stream_reply: true
+    restart_command: /restart
+
+gateway:
+  host: 0.0.0.0
+  port: 18790
+  heartbeat:
+    enabled: true
+    interval_s: 1800
+
+tools:
+  web:
+    proxy: null
+    search:
+      provider: brave
+      api_key: ""
+      base_url: ""
+      max_results: 5
+  exec:
+    timeout: 60
+    path_append: ""
+  restrict_to_workspace: false
+  mcp_servers: {}
+  # mcp_servers:
+  #   my_server:
+  #     type: stdio
+  #     command: npx
+  #     args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+  #     env: {}
+  #     url: ""
+  #     headers: {}
+  #     tool_timeout: 30
+  #     enabled_tools: ["*"]
+
+skills:
+  sandbox_type: container  # local | container | pcg123
+  # 支持多个 root：本地目录 / file:// / http(s):// 技能包
+  skill_roots: []
+  # 示例：
+  # skill_roots:
+  #   - /data/xxx/python_math
+  #   - file:///tmp/test_skill.zip
+  #   - http://127.0.0.1:8088/archive/test_skill.zip
+  #   - file:///data/xxx/skill_dir
+  builtin_skill_roots: []
+  # 用于满足 skill 元数据中的 requires.config 检查
+  config_keys:
+    # 示例1：允许一个逻辑开关（可被 SKILL.md 的 requires.config 命中）
+    - knot.enabled
+    # 示例2：允许某个命名空间（has_config_key 支持前缀匹配）
+    - knot
+  # 当仅允许部分内置 skill 暴露时可配置白名单（skill_key 或 name）
+  allow_bundled:
+    # 示例：knot-skill-finder 在 SKILL.md 中声明了 skill_key = knot.skill.finder
+    # 优先按 skill_key 命中，也可补充 name 作为兼容
+    - knot.skill.finder
+    - knot-skill-finder
+  # 按 skill_key 或 name 配置启停和专属环境变量
+  skill_configs:
+    knot-skill-finder:
+      enabled: true
+      env:
+        KNOT_API_TOKEN: "${KNOT_API_TOKEN}"
+        KNOT_USERNAME: "${KNOT_USERNAME}"
+  run_tool_kwargs: {}
+
+  local_config:
+    workspace: ""
+    read_only_staged_skill: false
+    auto_inputs: true
+    inputs_host_base: ""
+
+  container_config:
+    base_url: null
+    image: python:3-slim
+    docker_path: null
+    auto_inputs: false
+    inputs_host_base: ""
+
+logger:
+  name: trpc-claw
+  log_file: trpc_claw.log
+  log_level: INFO
+  log_format: "[%(asctime)s][%(levelname)s][%(name)s][%(pathname)s:%(lineno)d][%(process)d] %(message)s"
+
+# 指定个人文件路径（可选），用于替换默认提示词文件
+personal:
+  soul_file: ""  # 必须以 SOUL.md 结尾，用于设置用户人格相关的信息，作为提示词的一部分，可以修改
+  user_file: ""  # 必须以 USER.md 结尾，用于设置用户个人相关的信息，作为提示词的一部分，可以修改
+  tool_file: ""  # 必须以 TOOLS.md 结尾，用于设置工具相关的信息，作为提示词的一部分, 谨慎修改，如无必要，请勿修改
+  agent_file: ""  # 必须以 AGENTS.md 结尾，用于设置代理相关的信息，作为提示词的一部分, 谨慎修改，如无必要，请勿修改
+
+memory:
+  memory_service_config:
+    enabled: true
+    ttl:
+      enable: false
+      ttl_seconds: 0
+      cleanup_interval_seconds: 0.0
+      update_time: 0.0
+
+storage:
+  # file | redis | sql
+  type: file
+  file:
+    # 空字符串时运行时会自动回退到 workspace/memory
+    base_dir: ""
+    max_key_length: 255
+  redis:
+    url: ""
+    is_async: false
+    password: ""
+    db: 0
+    kwargs: {}
+  sql:
+    url: ""
+    is_async: false
+    kwargs: {}
+

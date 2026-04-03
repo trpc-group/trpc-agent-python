@@ -1,0 +1,27 @@
+runtime:
+  app_name: claw
+  user_id: user
+agent:
+  # workspace: ~/.trpc_agent_claw/workspace
+  memory_window: 30
+  api_key: ${TRPC_AGENT_API_KEY}
+  api_base: ${TRPC_AGENT_BASE_URL}
+  model: ${TRPC_AGENT_MODEL_NAME}
+channels:
+  wecom:
+    stream_reply: true
+    enabled: true
+    bot_id: ${WECOM_BOT_ID}
+    secret: ${WECOM_BOT_SECRET}
+    allow_from: ["*"]
+    welcome_message: ""
+
+gateway:
+  host: 0.0.0.0
+  port: 18790
+  heartbeat:
+    enabled: true
+    interval_s: 1800
+
+# skills:
+#   sandbox_type: container

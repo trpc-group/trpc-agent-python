@@ -766,8 +766,6 @@ class SkillRunTool(BaseTool):
                     continue
                 if k in env:  # don't override explicit tool-call env
                     continue
-                if os.environ.get(k, "").strip():  # don't override host env
-                    continue
                 if k.upper() in _BLOCKED_SKILL_ENV_KEYS:
                     continue
                 env[k] = v
