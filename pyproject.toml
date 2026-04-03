@@ -64,7 +64,11 @@ langfuse=[
     "opentelemetry-sdk<2.0.0,>=1.28.0",
     "opentelemetry-exporter-otlp-proto-http<2.0.0,>=1.28.0",
 ]
-
+openclaw = [
+    "nanobot-ai>=0.1.4.post5",
+     "aiofiles",
+     "wecom-aibot-sdk-python>=0.1.5",
+]
 knowledge = [
     "numpy>=2.2.5",
     "langchain_community>=0.3.27",
@@ -133,6 +137,9 @@ all = [
     "anfs>=0.0.3",
     "mem0ai>=1.0.3",
     "typer>=0.9.0",
+    "nanobot-ai>=0.1.4.post6",
+     "aiofiles",
+     "wecom-aibot-sdk-python>=0.1.5",
 ]
 
 [project.scripts]

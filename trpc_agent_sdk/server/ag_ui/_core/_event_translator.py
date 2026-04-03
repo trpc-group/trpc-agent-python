@@ -28,6 +28,7 @@ from typing import Optional
 from ag_ui.core import BaseEvent
 from ag_ui.core import CustomEvent
 from ag_ui.core import EventType
+from ag_ui.core import RunErrorEvent
 from ag_ui.core import StateDeltaEvent
 from ag_ui.core import StateSnapshotEvent
 from ag_ui.core import TextMessageContentEvent
@@ -193,6 +194,29 @@ class EventTranslator:
             # Handle state changes
             if trpc_event.actions and trpc_event.actions.state_delta:
                 yield self._create_state_delta_event(trpc_event.actions.state_delta, trpc_event.timestamp)
+
+
+            # Handle error events - distinguish recoverable tool errors from fatal system errors.
+            # Tool execution errors (with function_response) are recoverable: the error is already
+            # passed back to the LLM as a tool result, so the LLM can retry or adjust its approach.
+            # Only fatal errors (LLM failures, system errors) without function_response should
+            # emit RunErrorEvent to terminate the run.
+            if trpc_event.is_error() and not function_responses:
+                # Fatal system/LLM error - emit RunErrorEvent to terminate the run
+                logger.error("Fatal error (non-recoverable), error_code=%s, error_message=%s",
+                             trpc_event.error_code, trpc_event.error_message)
+                # Force close any streaming message before emitting error
+                async for close_event in self.force_close_streaming_message():
+                    yield close_event
+                error_msg = (trpc_event.error_message
+                             or (trpc_event.custom_metadata or {}).get("error")
+                             or "Unknown error")
+                yield RunErrorEvent(
+                    type=EventType.RUN_ERROR,
+                    message=error_msg,
+                    code=trpc_event.error_code or "MODEL_ERROR",
+                )
+                return
 
             # Handle custom events or metadata
             if trpc_event.custom_metadata:
