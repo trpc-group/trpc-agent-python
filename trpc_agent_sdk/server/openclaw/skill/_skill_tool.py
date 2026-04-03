@@ -3,7 +3,6 @@
 # Copyright @ 2025 Tencent.com
 """Tools for the OpenClaw agent."""
 
-from importlib.resources import files as pkg_files
 from pathlib import Path
 
 from trpc_agent_sdk.code_executors import BaseWorkspaceRuntime
@@ -108,11 +107,6 @@ def create_skill_tool_set(config: ClawConfig) -> SkillToolSet:
     Returns:
         SkillToolSet: The skill tool set.
     """
-    builtin_skills_dir = pkg_files("nanobot") / "skills"
-    config.skills.builtin_skill_roots.append(str(builtin_skills_dir))
-    current_skills_dir = pkg_files("trpc_agent_sdk") / "server" / "openclaw" / "skill" / "skills"
-    config.skills.builtin_skill_roots.append(str(current_skills_dir))
-
     repository = ClawSkillLoader(config=config)
     # there are some skills from network, so we need to create a workspace runtime after the repository is created
     workspace_runtime = _create_workspace_runtime(config=config, repository=repository)
