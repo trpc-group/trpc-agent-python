@@ -1,9 +1,8 @@
-#Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
 #
-#Copyright (C) 2026 Tencent. All rights reserved.
+# Copyright (C) 2026 Tencent. All rights reserved.
 #
-#tRPC-Agent-Python is licensed under Apache-2.0.
-
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Core runner implementations for TRPC Agent framework.
 
 This module provides the main entry point for agent execution, orchestrating

@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
 #
-# Copyright @ 2025 Tencent.com
-# -*- coding: utf-8 -*-
+# Copyright (C) 2026 Tencent. All rights reserved.
 #
-# Copyright @ 2025 Tencent.com
+# tRPC-Agent-Python is licensed under Apache-2.0.
 
 from ._agent_card_builder import AgentCardBuilder
 from ._agent_service import TrpcA2aAgentService

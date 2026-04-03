@@ -1,6 +1,8 @@
-# -*- coding: utf-8 -*-
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
 #
-# Copyright @ 2026 Tencent.com
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Unsafe local code executor for TRPC Agent framework.
 
 This module provides a code executor that unsafely executes code in the current local context.

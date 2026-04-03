@@ -1,6 +1,8 @@
-# -*- coding: utf-8 -*-
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
 #
-# Copyright @ 2026 Tencent.com
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Runner manager: owns the Agent + Runner lifecycle for the FastAPI server.
 
 A single ``RunnerManager`` instance is created at startup and shared across

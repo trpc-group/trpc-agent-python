@@ -1,6 +1,8 @@
-# -*- coding: utf-8 -*-
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
 #
-# Copyright @ 2026 Tencent.com
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Extended tests for _eval_set_results_manager_utils: build_eval_set_result_summary, create_eval_set_result."""
 
 import trpc_agent_sdk.runners  # noqa: F401

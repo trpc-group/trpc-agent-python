@@ -1,6 +1,8 @@
-# -*- coding: utf-8 -*-
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
 #
-# Copyright @ 2026 Tencent.com
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """ prompts for agent"""
 
 INSTRUCTION = """你是一个旅游规划助手，能够根据用户的需求进行旅游规划，请你综合考虑交通方式、住宿、饮食、景点、购物、娱乐等各方面因素，给出最合理的旅游规划。
