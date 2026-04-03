@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from typing import Optional
+from typing import Literal
 
 from trpc_agent_sdk.context import InvocationContext
 
@@ -14,7 +15,7 @@ from .._constants import SKILL_REPOSITORY_KEY
 from .._repository import BaseSkillRepository
 
 
-def skill_list(tool_context: InvocationContext, ) -> list[str]:
+def skill_list(tool_context: InvocationContext, mode: Literal["all", "enabled", "disabled"] = "all") -> list[str]:
     """List all discovered skills.
 
     Args:

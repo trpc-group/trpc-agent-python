@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 from typing import List
 from typing import Optional
+from typing import Literal
 from typing_extensions import override
 
 import yaml
@@ -129,8 +130,18 @@ class BaseSkillRepository(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def skill_list(self) -> list[str]:
-        """Return the names of all indexed skills."""
+    def skill_list(self, mode: Literal["all", "enabled", "disabled"] = "all") -> list[str]:
+        """Return the names of all indexed skills.
+
+        Args:
+            mode: The mode to list the skills.
+                - all: List all skills.
+                - enabled: List enabled skills.
+                - disabled: List disabled skills.
+
+        Returns:
+            A list of skill names.
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -325,7 +336,7 @@ class FsSkillRepository(BaseSkillRepository):
         return skill
 
     @override
-    def skill_list(self) -> list[str]:
+    def skill_list(self, mode: Literal["all", "enabled", "disabled"] = "all") -> list[str]:
         """Return the names of all indexed skills, sorted."""
         return sorted(self._skill_paths)
 
