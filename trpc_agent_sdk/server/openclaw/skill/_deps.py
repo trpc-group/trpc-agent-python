@@ -9,7 +9,6 @@ import json
 import os
 import shutil
 import subprocess
-from importlib.resources import files as pkg_files
 from pathlib import Path
 from typing import Any
 from typing import Optional
@@ -188,36 +187,11 @@ def _split_csv(raw: str) -> list[str]:
     return out
 
 
-def _resolve_builtin_skill_roots() -> list[str]:
-    """Resolve packaged builtin skill roots with repo fallback."""
-    roots: list[str] = []
-    try:
-        roots.append(str(pkg_files("nanobot") / "skills"))
-    except Exception:  # pylint: disable=broad-except
-        pass
-    try:
-        roots.append(str(pkg_files("trpc_agent_sdk") / "server" / "openclaw" / "skill" / "skills"))
-    except Exception:  # pylint: disable=broad-except
-        # Editable/local source fallback.
-        local = Path(__file__).resolve().parent / "skills"
-        roots.append(str(local))
-    # de-duplicate while preserving order
-    out: list[str] = []
-    seen: set[str] = set()
-    for root in roots:
-        item = str(root).strip()
-        if not item or item in seen:
-            continue
-        seen.add(item)
-        out.append(item)
-    return out
-
-
 def _ensure_workspace_layout(workspace: Path) -> None:
     """Create minimal workspace folders needed by load_config side effects."""
     root = workspace.expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
-    for sub in ("sessions", "soul", "user", "tool", "agent", "memory", "skills"):
+    for sub in ("memory", "skills", "sessions", "skills_ws"):
         (root / sub).mkdir(parents=True, exist_ok=True)
 
 
@@ -526,9 +500,6 @@ def inspect_skill_dependencies(
     if allow_override:
         cfg.skills.allow_bundled = allow_override
 
-    for root in _resolve_builtin_skill_roots():
-        if root not in cfg.skills.builtin_skill_roots:
-            cfg.skills.builtin_skill_roots.append(root)
 
     loader = ClawSkillLoader(config=cfg)
     selected = _normalize_skill_names(skills_raw)
