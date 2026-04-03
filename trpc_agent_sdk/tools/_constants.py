@@ -1,6 +1,8 @@
-# -*- coding: utf-8 -*-
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
 #
-# Copyright @ 2026 Tencent.com
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Module containing constants used across the model implementations.
 
 This module defines string constants that are used as:

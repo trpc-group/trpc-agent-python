@@ -1,6 +1,8 @@
-# -*- coding: utf-8 -*-
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
 #
-# Copyright @ 2025 Tencent.com
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Skill toolset for integrating skills into the agent tool system.
 
 This module provides the SkillToolSet class which makes skills available

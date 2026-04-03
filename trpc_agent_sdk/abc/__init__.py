@@ -1,6 +1,8 @@
-# -*- coding: utf-8 -*-
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
 #
-# Copyright @ 2026 Tencent.com
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """TRPC Agent Base Class Module.
 
 This module defines the AgentABC class which serves as the foundation for all
