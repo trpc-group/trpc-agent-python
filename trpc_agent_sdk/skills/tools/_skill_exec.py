@@ -1,6 +1,8 @@
-# -*- coding: utf-8 -*-
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
 #
-# Copyright @ 2025 Tencent.com
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Interactive skill execution tools.
 
 Provides four tools that mirror the Go :mod:`~trpc_agent_sdk.skills.tools.SkillExecTool` implementation:

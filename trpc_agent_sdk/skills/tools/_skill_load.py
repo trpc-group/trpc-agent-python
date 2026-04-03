@@ -1,6 +1,8 @@
-# -*- coding: utf-8 -*-
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
 #
-# Copyright @ 2025 Tencent.com
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """Load a skill body and optional docs. Safe to call multiple times to add or replace docs.
 Do not call this to list skills; names and descriptions are already in context.
 Use when a task needs a skill's SKILL.md body and selected docs in context.
