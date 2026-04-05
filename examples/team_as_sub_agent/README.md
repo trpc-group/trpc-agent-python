@@ -33,8 +33,7 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-
-```
+```txt
 [START] team_as_sub_agent
 ...
 [coordinator] Tool: transfer_to_agent

@@ -80,8 +80,6 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-以下输出来自 `terminals/1.txt:8-43`：
-
 ```text
 🆔 Session ID: a9bcbc17...
 📝 User: What is the weather in Shenzhen today?

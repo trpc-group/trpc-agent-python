@@ -31,8 +31,7 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-
-```
+```txt
 [START] team_parallel_execution
 ...
 [3.97s] [analysis_team] Tool: delegate_to_member

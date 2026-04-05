@@ -32,8 +32,7 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-
-```
+```txt
 [START] skills_with_container
 ...
 Docker client initialized successfully

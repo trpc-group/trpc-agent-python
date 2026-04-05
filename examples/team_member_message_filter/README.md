@@ -31,8 +31,7 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-
-```
+```txt
 [START] team_member_message_filter
 ...
 [analysis_team] Tool call: delegate_to_member
