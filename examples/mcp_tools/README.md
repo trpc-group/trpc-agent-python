@@ -80,8 +80,6 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-以下输出来自 `terminals/1.txt:74-101`：
-
 ```text
 🆔 Session ID: 04b4022f...
 📝 User: What's the weather like in Beijing?

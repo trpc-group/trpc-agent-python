@@ -83,8 +83,6 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-以下结果来自你提供的日志（`terminals/1.txt:376-381`）：
-
 ```text
 📝 User: What's the weather like in Beijing today?
 🤖 Assistant: 📦 Model creation function received custom_data: {'user_tier': 'premium'}

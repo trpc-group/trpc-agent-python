@@ -31,8 +31,7 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-
-```
+```txt
 [START] team_member_agent_langgraph
 ...
 [math_assistant_team] Tool: delegate_to_member, Args: {'member_name': 'calculator_expert', 'task': 'Calculate 15 multiplied by 23.'}

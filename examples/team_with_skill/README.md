@@ -32,8 +32,7 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-
-```
+```txt
 [START] team_with_skill
 ...
 [content_team_with_skill] Tool: skill_run, Args: {'skill': 'leader-research', 'command': 'bash scripts/gather_points.sh "renewable energy and AI trends in current year" out/leader_notes.txt', ...
