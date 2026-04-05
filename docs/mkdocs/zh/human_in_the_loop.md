@@ -1,28 +1,30 @@
 # Human-In-The-Loop
 
-Agent处理过程中，有部分场景需要引入人工参与判断或者调整，以提高任务完成的准确率，比如下面这些场景：
-- 风险操作审批：常用在Agent生成SQL或者Shell脚本时，是否执行往往需要人工审批，以Agent生成命令行为例，如果人工同意，那么会拉起terminal执行，再将执行结果传给Agent，如果不同意，则可能意味着命令行生成得有问题，需要Agent再尝试生成其他命令。
-- 执行计划批准：对于一个复杂的任务，Agent会先生成一个Plan，然后交给用户确认计划是否ok，如果用户同意，则按计划依次执行，如果用户不同意，可以输入一些调整的prompt，以再重新生成符合用户要求的Plan。
+在 Agent 处理请求的过程中，某些场景需要引入人工判断或调整，以提高任务完成的准确率。例如：
+- 风险操作审批：当 Agent 生成 SQL 或 Shell 脚本时，是否执行通常需要人工审批。以命令执行为例：如果人工同意，则拉起 terminal 执行并将结果回传给 Agent；如果不同意，则说明命令可能有问题，需要 Agent 重新生成替代命令。
+- 执行计划审批：对于复杂任务，Agent 通常会先生成 Plan，再交由用户确认。如果用户同意，则按计划逐步执行；如果不同意，用户可补充调整提示词，让 Agent 重新生成更符合要求的 Plan。
 
 ## 实现机制
 
-当前业界实现有两种：一种是提供一个UserAgent负责和用户的沟通（比如：autogen/agentscope），通过多Agent编排为Agent应用，这种方法简单易用，但多引入一个Agent会使应用变得复杂，且降低和用户交互的灵活度（因为用户交互的接口是固定的），无法覆盖所有场景；还有一种方法是将Tool作为人工参与的结合点（比如：langgraph/agno等），将人工操作作为Tool的过程，把人工产生的结果作为Tool的调用结果，这种方法很灵活，但引入了实现的复杂度。
+业界当前主要有两种实现方式：
+- 方式一：提供一个 UserAgent 专门负责与用户沟通（例如 autogen/agentscope），再通过多 Agent 编排形成应用。该方式简单易用，但额外引入 Agent 会增加系统复杂度，并且由于交互接口相对固定，灵活性受限，难以覆盖所有场景。
+- 方式二：将 Tool 作为人工参与的结合点（例如 langgraph/agno）。人工操作被纳入 Tool 执行过程，人工结果作为 Tool 调用结果返回。该方式更灵活，但实现复杂度更高。
 
-框架当前支持Tool作为人工参与结合点的方法，在 `LlmAgent` 上提供 `LongRunningFunctionTool` 和 `LongRunningEvent` 来实现这个机制。如下图所示，具体的，当用户使用 `LongRunningFunctionTool` 创建一个工具后，Agent在调用这个工具传递的参数，可以被视作Agent产生的需要人工确认的操作，用户可以在Tool的实现里，将这些的操作组织成dict结果作为Tool的返回。当 `LongRunningFunctionTool` 被执行之后，框架将会产生 `LongRunningEvent` 事件，用户在识别到这个事件时，可以执行相应的人工操作，然后将执行的操作提交给Agent继续执行。
+框架当前支持“以 Tool 作为人工参与结合点”的方式，并在 `LlmAgent` 上提供 `LongRunningFunctionTool` 与 `LongRunningEvent` 来实现该机制。如下图所示：当用户使用 `LongRunningFunctionTool` 创建工具后，Agent 调用该工具时传入的参数，可视为“待人工确认的操作”；用户可在 Tool 实现中将这些操作组织为 `dict` 结果并返回。`LongRunningFunctionTool` 执行后，框架会生成 `LongRunningEvent` 事件。识别到该事件后，用户可执行相应人工操作，并将结果提交给 Agent 继续执行。
 
 <img src="../assets/imgs/human_in_the_loop.png" width="600" />
 
 
 ### LongRunningEvent
 `LongRunningEvent` 是一个特殊的事件类型，表示 Agent 执行被暂停，等待人工参与。
-- `function_call`: 触发操作的Tool调用；
-- `function_response`: Tool的初始响应（通常包含等待状态信息），可以基于此对象（主要是id和name），将人工操作的结果提交给Agent，见下面的代码示例；
+- `function_call`: 触发操作的 Tool 调用；
+- `function_response`: Tool 的初始响应（通常包含等待状态信息）。可以基于此对象（主要是 `id` 和 `name`）将人工操作结果提交给 Agent，见下方代码示例；
 
-## LlmAgent用法
+## LlmAgent 用法
 
-### 1. 创建LongRunningFunctionTool
+### 1. 创建 LongRunningFunctionTool
 
-首先定义一个需要人工审批的Tool：
+首先定义一个需要人工审批的 Tool：
 
 ```python
 async def human_approval_required(task_description: str, details: dict) -> dict:
@@ -48,9 +50,9 @@ from trpc_agent_sdk.tools import LongRunningFunctionTool
 approval_tool = LongRunningFunctionTool(human_approval_required)
 ```
 
-### 2. 配置Agent
+### 2. 配置 Agent
 
-使用 `LongRunningFunctionTool` 包装工具并配置Agent：
+使用 `LongRunningFunctionTool` 包装工具并配置 Agent：
 
 ```python
 import os
@@ -77,12 +79,12 @@ When you encounter tasks that need approval, use the appropriate tool and wait f
     return agent
 ```
 
-### 3. 捕获LongRunningEvent
+### 3. 捕获 LongRunningEvent
 
 ```python
 @dataclass
 class InvocationParams:
-    """Parameters for running an invocation"""
+    """一次调用执行所需参数"""
     user_id: str
     session_id: str
     agent: LlmAgent
@@ -93,7 +95,7 @@ async def run_invocation(
     params: InvocationParams,
     content: Content,
 ) -> Optional[LongRunningEvent]:
-    """Run an invocation with a fresh runner instance."""
+    """使用新的 Runner 实例执行一次调用。"""
     runner = Runner(
         app_name=params.app_name,
         agent=params.agent,
@@ -125,11 +127,11 @@ async def run_invocation(
 
 ### 4. 执行人工操作
 
-注意到，只需要 `FunctionResponse` 的`id`、`name`、`response`，即可创建用于恢复Agent执行的Content，在Agent提供服务的场景，只需要返回这些信息给前端，前端在人工操作之后，下次Agent调用时候，带入这些信息即可。
+注意：只需要 `FunctionResponse` 的 `id`、`name`、`response`，就可以创建用于恢复 Agent 执行的 `Content`。在 Agent 作为服务对外提供能力的场景中，只需将这些信息返回给前端；前端在人工操作完成后，于下一次 Agent 调用时携带这些信息即可。
 
 ```python
 async def run_agent():
-    """Run the agent with support for long-running events"""
+    """运行 Agent（支持长运行事件）。"""
 
     # 创建Agent和Session Service
     agent = create_agent()
@@ -152,13 +154,13 @@ async def run_agent():
 
     # 模拟人工干预
     if long_running_event:
-        print("\n👤 Human intervention simulation...")
+        print("\n👤 [模拟人工干预]")
         await asyncio.sleep(2)  # 模拟人工思考时间
 
         # 获取Tool返回的初始响应
         response_data = long_running_event.function_response.response
         if response_data["status"] != "pending_approval":
-            print("   ❌ Invalid response status")
+            print("   ❌ 响应状态无效")
             return
 
         # 模拟人工提供审批输入
@@ -182,17 +184,17 @@ async def run_agent():
         await run_invocation(params, resume_content)
 ```
 
-## LangGraphAgent用法
+## LangGraphAgent 用法
 
-LangGraphAgent适配了LangGraph的interrupt与框架的LongRunningEvent交互机制，但与LlmAgent不同的是，他能在Node内部进行恢复原来的会话，而LlmAgent的Tool内部是无法继续执行的。
+LangGraphAgent 适配了 LangGraph 的 interrupt 与框架 `LongRunningEvent` 的交互机制。与 LlmAgent 不同的是，它可以在 Node 内恢复原有会话，而 LlmAgent 的 Tool 内部无法继续执行。
 
-为了使用LangGraphAgent的interrupt能力，请务必开启 `checkpoint`，因为该能力会暂停图的执行，需要存储图的状态信息，以恢复执行。
+为使用 LangGraphAgent 的 interrupt 能力，请务必开启 `checkpoint`。该能力会暂停图执行，因此需要保存图状态以便后续恢复。
 
-注意，LangGraph在恢复执行时，会再次从Node的开头，执行到interrupt的位置，也就是说，该段逻辑会被执行两次，存在耗时操作请注意优化。
+注意：LangGraph 在恢复执行时，会从 Node 开头重新执行到 interrupt 位置，也就是该段逻辑会执行两次。如包含耗时操作，请注意优化。
 
-### 1. 构建包含确认是否接收工具输出的Graph
+### 1. 构建包含工具输出审批确认的 Graph
 
-**请注意，一定要开启checkpoint**
+**请注意，一定要开启 checkpoint**
 
 ```python
 import os
@@ -244,7 +246,7 @@ def build_graph():
         """Chatbot node that can use tools"""
         return {"messages": [llm_with_tools.invoke(state["messages"])]}
 
-    # Human approval node using LangGraph interrupt
+    # 使用 LangGraph interrupt 的人工审批节点
     def human_approval(state: State) -> Command[Literal["approved_path", "rejected_path"]]:
         """Human approval node that interrupts execution for human input."""
         task_info = {
@@ -252,7 +254,7 @@ def build_graph():
             "question": "Do you approve this database operation?",
         }
 
-        # Interrupt execution and wait for human input
+        # 中断执行并等待人工输入
         decision = interrupt(task_info)
         approval_status = decision.get("status", "rejected")
 
@@ -261,7 +263,7 @@ def build_graph():
         else:
             return Command(goto="rejected_path", update={"approval_status": "rejected"})
 
-    # Approved and rejected path nodes
+    # 审批通过/拒绝分支节点
     def approved_node(state: State) -> State:
         """Handle approved operations"""
         return {"messages": [{"role": "assistant", "content": "Operation has been approved and will be executed."}]}
@@ -270,7 +272,7 @@ def build_graph():
         """Handle rejected operations"""
         return {"messages": [{"role": "assistant", "content": "Operation has been rejected and cancelled."}]}
 
-    # Build the graph
+    # 构建图
     graph_builder = StateGraph(State)
     graph_builder.add_node("chatbot", chatbot)
     graph_builder.add_node("human_approval", human_approval)
@@ -286,12 +288,12 @@ def build_graph():
     graph_builder.add_edge("approved_path", END)
     graph_builder.add_edge("rejected_path", END)
 
-    # MUST Use checkpointer for interrupt support
+    # 必须启用 checkpointer 才能支持 interrupt
     checkpointer = InMemorySaver()
     return graph_builder.compile(checkpointer=checkpointer)
 ```
 
-### 2. 创建LangGraphAgent
+### 2. 创建 LangGraphAgent
 
 ```python
 from trpc_agent_sdk.agents import LangGraphAgent
@@ -315,9 +317,9 @@ Always be clear about what operation you're about to perform and why it needs ap
     )
 ```
 
-### 3. 捕获和处理LongRunningEvent
+### 3. 捕获和处理 LongRunningEvent
 
-LangGraphAgent的Human-In-The-Loop处理方式与LlmAgent相同，都是通过捕获`LongRunningEvent`事件：
+LangGraphAgent 的 Human-In-The-Loop 处理方式与 LlmAgent 相同，均通过捕获 `LongRunningEvent` 事件实现：
 
 ```python
 from dataclasses import dataclass
@@ -332,7 +334,7 @@ from trpc_agent_sdk.types import Content, Part, FunctionResponse
 
 @dataclass
 class InvocationParams:
-    """Parameters for running an invocation"""
+    """一次调用执行所需参数"""
     user_id: str
     session_id: str
     agent: LangGraphAgent
@@ -344,7 +346,7 @@ async def run_invocation(
     params: InvocationParams,
     content: Content,
 ) -> Optional[LongRunningEvent]:
-    """Run an invocation with a fresh runner instance."""
+    """使用新的 Runner 实例执行一次调用。"""
     runner = Runner(
         app_name=params.app_name,
         agent=params.agent,
@@ -376,14 +378,14 @@ async def run_invocation(
 
 ### 4. 执行人工操作
 
-人工干预的处理方式与LlmAgent完全相同：
+人工干预处理方式与 LlmAgent 完全相同：
 
 ```python
 import asyncio
 import uuid
 
 async def run_human_in_loop_agent():
-    """Run the agent with support for long-running events"""
+    """运行 Agent（支持长运行事件）。"""
 
     # 创建Agent和Session Service
     agent = create_agent()
@@ -406,7 +408,7 @@ async def run_human_in_loop_agent():
 
     # 模拟人工干预
     if long_running_event:
-        print("\n👤 Human intervention simulation...")
+        print("\n👤 [模拟人工干预]")
         await asyncio.sleep(2)  # 模拟人工思考时间
 
         # 模拟人工决策

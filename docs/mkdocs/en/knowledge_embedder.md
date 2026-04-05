@@ -1,6 +1,6 @@
 # Embedder
 
-Embeddings are responsible for mapping unstructured data such as text and images into high-dimensional vector representations, enabling their semantics to be computed and compared. They are a core component for implementing semantic search in knowledge retrieval systems.
+Embedders map unstructured data such as text and images into high-dimensional vector representations, enabling semantic similarity computation and comparison. They are a core component of semantic search in knowledge retrieval systems.
 
 Below is an introduction to some commonly used components:
 
@@ -38,7 +38,7 @@ embedder = HuggingFaceEmbeddings(
 )
 ```
 
-2. Construct a `LangchainKnowledge` object using this embedder object
+2. Construct a `LangchainKnowledge` object using this `embedder` object
 
 ```python
 from trpc_agent_sdk.server.knowledge.langchain_knowledge import LangchainKnowledge
@@ -47,7 +47,7 @@ rag = LangchainKnowledge(
     prompt_template=rag_prompt,
     document_loader=text_loader,
     document_transformer=text_splitter,
-    embedder=embedder, # Pass in the constructed Embedder
+    embedder=embedder,  # Pass the constructed embedder
     vectorstore=vectorstore,
 )
 ```
@@ -76,11 +76,11 @@ from langchain_community.embeddings import HunyuanEmbeddings
 embedder = HunyuanEmbeddings(
     hunyuan_secret_id="xxx",   # Hunyuan Secret ID, or set via the HUNYUAN_SECRET_ID environment variable
     hunyuan_secret_key="xxx",  # Hunyuan Secret Key, or set via the HUNYUAN_SECRET_KEY environment variable
-    region="ap-guangzhou"      # The region of hunyuan service
+    region="ap-guangzhou"      # Region of the Hunyuan service
 )
 ```
 
-2. Construct a `LangchainKnowledge` object using this embedder object
+2. Construct a `LangchainKnowledge` object using this `embedder` object
 
 ```python
 rag = LangchainKnowledge(
