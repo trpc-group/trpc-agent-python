@@ -101,7 +101,7 @@ node main.js
 
 ## 运行结果（实测）
 
-### 服务端输出（`terminals/1.txt:8-40`）
+### 服务端输出
 
 ```text
 [INFO] Initialized SessionManager - timeout: 1200s, cleanup: 300s, max/user: unlimited, memory: enabled
@@ -117,7 +117,7 @@ INFO: 127.0.0.1 - "POST /weather_agent HTTP/1.1" 200 OK
 [INFO] TEXT_MESSAGE_END ...
 ```
 
-### 客户端输出（`terminals/3.txt:9-15`）
+### 客户端输出
 
 ```text
 Run started: 0564cde0-9a2b-4579-ae1f-36a081e3d9e7

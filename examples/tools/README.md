@@ -88,8 +88,6 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-以下结果来自 `terminals/1.txt:9-127`（节选）：
-
 ```text
 Test 1: 请将这段中文翻译成英文：人工智能正在改变我们的世界。
 🔧 [Tool call: translator]

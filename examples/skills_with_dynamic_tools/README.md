@@ -32,8 +32,7 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-
-```
+```txt
 [START] skills_with_dynamic_tools
 ...
 DynamicSkillToolSet initialized: 3 tools, 0 toolsets, only_active_skills=True

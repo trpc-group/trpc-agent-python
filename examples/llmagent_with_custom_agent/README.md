@@ -89,8 +89,6 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-以下内容来自你提供的日志中 `python3 examples/llmagent_with_custom_agent/run_agent.py` 对应片段（`terminals/1.txt:80-435`）。
-
 ```text
 ==================== Test case 1: Simple document example ====================
 Expected type: simple

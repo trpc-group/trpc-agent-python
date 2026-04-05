@@ -32,8 +32,7 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-
-```
+```txt
 [START] skills
 ...
 🔧 [Invoke Tool:: skill_load({'skill_name': 'user-file-ops'})]

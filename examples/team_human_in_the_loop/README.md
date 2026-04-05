@@ -31,8 +31,7 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-
-```
+```txt
 [START] team_human_in_the_loop
 ...
 [hitl_team] Tool: request_approval

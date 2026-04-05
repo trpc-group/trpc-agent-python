@@ -86,8 +86,6 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-以下结果来自你提供的日志（`terminals/1.txt:285-373`）提炼版：
-
 ```text
 Scenario 1: No History Limit (max_history_messages=0)
 - Turn 4 回答中包含：

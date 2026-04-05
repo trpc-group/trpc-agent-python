@@ -83,8 +83,6 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-以下结果来自你提供的日志（`terminals/1.txt:438-764`）提炼版：
-
 ```text
 Scenario 1: Default
 - Coordinator instruction 含自动名称注入：

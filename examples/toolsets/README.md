@@ -31,8 +31,7 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-
-```
+```txt
 [START] toolsets
 👤 User Type: BASIC
 📝 Test 1: What's the current weather in Beijing?

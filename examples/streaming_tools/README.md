@@ -31,8 +31,7 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-
-```
+```txt
 [START] streaming_tools
 📝 User: 请帮我创建一个 Python 脚本 hello.py，实现简单的计算器功能
 ⏳ Generated 2 chars...

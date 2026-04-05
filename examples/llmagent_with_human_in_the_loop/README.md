@@ -82,8 +82,6 @@ python3 run_agent.py
 
 ## 运行结果（实测）
 
-以下结果来自你提供的日志（`terminals/1.txt:158-268`）提炼版：
-
 ```text
 Scenario 1: Main Agent - Database Deletion Approval
 - 主 Agent 调用 human_approval_required，返回 pending_approval
