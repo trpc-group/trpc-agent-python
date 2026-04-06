@@ -1,6 +1,6 @@
-# Redis Storage 存储使用指南
+# RedisStorage 使用指南
 
-本文档详细介绍了如何使用 `RedisStorage` 类进行 Redis 数据库操作，包括字符串、哈希、列表、集合、有序集合等数据类型的支持。
+本文档详细介绍如何使用 `RedisStorage` 类进行 Redis 数据库操作，包括字符串、哈希、列表、集合、有序集合等数据类型。
 
 ## 概述
 
@@ -822,10 +822,11 @@ class CacheService:
             session_keys = await self.storage.query(conn, "session:*", condition)
 
             cleaned_count = 0
-            for key in session_keys:
-                # 检查键是否存在（可能已过期）
-                exists_command = RedisCommand(method="exists", args=(key,))
-                exists = await self.storage.get(conn, exists_command)
+            for key, _value in session_keys:
+                # 检查键是否仍存在（可能已过期或被删除）；exists 需用 execute_command，不能走 get（get 仅允许方法名含 get）
+                exists = await self.storage.execute_command(
+                    conn, RedisCommand(method="exists", args=(key,))
+                )
 
                 if not exists:
                     cleaned_count += 1
@@ -1119,21 +1120,21 @@ async def monitor_redis_performance(storage):
 
    async def cleanup_expired_data(storage):
        async with storage.create_db_session() as conn:
-           # 清理过期键
+           # 为没有 TTL 的键补充过期时间（非“删除已过期键”；已过期键通常已被 Redis 删除）
            condition = RedisCondition(limit=-1)
            all_keys = await storage.query(conn, "*", condition)
 
-           expired_count = 0
+           updated_count = 0
            for key, _value in all_keys:
                ttl_command = RedisCommand(method="ttl", args=(key,))
                ttl = await storage.execute_command(conn, ttl_command)
 
-               if ttl == -1:  # 没有过期时间的键
+               if ttl == -1:  # 永不过期（无过期时间）的键
                    expire_command = RedisCommand(method="expire", args=(key, 3600))
                    await storage.execute_command(conn, expire_command)
-                   expired_count += 1
+                   updated_count += 1
 
-           print(f"Set expiration for {expired_count} keys")
+           print(f"已为 {updated_count} 个无 TTL 的键设置过期时间")
    ```
 
 ### 性能问题诊断
@@ -1204,6 +1205,8 @@ connection_logger.setLevel(logging.DEBUG)  # 显示连接详情
 
 #### 命令执行跟踪
 ```python
+import time
+
 class DebugRedisStorage(RedisStorage):
     """带调试功能的 Redis 存储"""
 

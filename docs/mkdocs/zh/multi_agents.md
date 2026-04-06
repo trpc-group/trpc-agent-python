@@ -425,7 +425,7 @@ main_agent = LlmAgent(
 | `agent` | AgentABC | 必需 | 需要被包装的 Agent |
 | `skip_summarization` | bool | False | 是否需要跳过总结 |
 | `filters_name` | list[str] | None | 关联的 filter 名称 |
-| `filters` | list[BaseFilter] | 过滤器实例 | None |
+| `filters` | list[BaseFilter] | None | 过滤器实例列表 |
 
 
 #### AgentTool vs transfer_to_agent 对比
@@ -545,7 +545,7 @@ transfer_agent = TransferAgent(
 
 #### 使用场景
 
-- **场景 1（作为 sub_agent）**：不提供 `sub_agents`，TransferAgent 直接转移控制权到目标 Agent
+- **场景 1（作为 sub_agent）**：不提供 `sub_agents` 时，TransferAgent 使目标 Agent 可被其他 Agent 调用（例如作为 sub_agent）
 - **场景 2（转发给其他 sub_agent）**：提供 `sub_agents`，TransferAgent 会分析目标 Agent 的结果并决定是否转移到子 Agent。`transfer_instruction` 可选，不提供时使用默认规则
 
 #### Agent 名称
@@ -557,9 +557,9 @@ TransferAgent 的名称会自动生成，格式为 `transfer_{target_agent_name}
 #### 注意事项
 
 1. **模型要求**：`model` 是必填参数，用于执行转移决策（仅在提供 `sub_agents` 时使用）
-3. **默认规则**：如果提供 `sub_agents` 但未提供 `transfer_instruction`，会自动使用默认的通用转移规则
-4. **转移规则设计**：在场景 2 中，建议提供清晰的 `transfer_instruction`，帮助 LLM 准确判断何时转移到哪个子 Agent
-5. **目标 Agent 限制**：目标 Agent 不能是 TransferAgent 本身，也不能在 `sub_agents` 列表中（如果存在会被自动移除）
+2. **默认规则**：如果提供 `sub_agents` 但未提供 `transfer_instruction`，会自动使用默认的通用转移规则
+3. **转移规则设计**：在场景 2 中，建议提供清晰的 `transfer_instruction`，帮助 LLM 准确判断何时转移到哪个子 Agent
+4. **目标 Agent 限制**：目标 Agent 不能是 TransferAgent 本身，也不能在 `sub_agents` 列表中（如果存在会被自动移除）
 
 
 ## 状态传递与上下文管理
@@ -622,8 +622,8 @@ if session and session.state:
     security_review = session.state.get("security_review")
 ```
 
-### 移除前面Agent的消息
-在一次会话中，有些时候，前面Agent执行的消息，对当前Agent执行没有任何作用，可以通过设置 `include_previous_history` 参数来禁止前面Agent的消息，被拼接到当前Agent的上下文里，如下所示：
+### 移除前面 Agent 的消息
+在一次会话中，有时前面 Agent 产生的消息对当前 Agent 的执行没有帮助，可通过将 `include_previous_history` 设为 `False`，避免把这些消息拼进当前 Agent 的上下文，例如：
 
 ```python
 LlmAgent(
