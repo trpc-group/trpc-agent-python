@@ -99,7 +99,7 @@ a2a_svc = TrpcA2aAgentService(
 
 ### 环境要求
 
-- Python 3.10+（建议 3.12）
+- Python 3.12
 - 已安装项目依赖
 
 ### 安装步骤

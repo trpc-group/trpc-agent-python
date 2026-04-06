@@ -36,7 +36,7 @@ weather_agent (LlmAgent)
 
 ### 环境要求
 
-- Python 3.10+（推荐 3.12）
+- Python 3.12
 - Redis 服务可用（本地 / Docker / 远程）
 
 ### 运行命令

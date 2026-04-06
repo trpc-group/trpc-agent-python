@@ -21,7 +21,7 @@
 
 ## 环境与运行
 
-- Python 3.10+；安装本仓库与 LangGraph / LangChain 相关依赖；`pip install -e .`
+- Python 3.12；安装本仓库与 LangGraph / LangChain 相关依赖；`pip install -e .`
 - 配置 `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL`、`TRPC_AGENT_MODEL_NAME`（示例使用 `deepseek:` 前缀初始化 chat model）
 
 ```bash

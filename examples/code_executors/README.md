@@ -60,7 +60,7 @@ code_assistant (LlmAgent)
 
 ### 环境要求
 
-- Python 3.10+（强烈建议 3.12）
+- Python 3.12
 - 若使用 `ContainerCodeExecutor`，需安装 Docker 并确保 Docker daemon 正在运行
 
 ### 安装步骤
