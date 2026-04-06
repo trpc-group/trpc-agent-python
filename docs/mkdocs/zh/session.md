@@ -415,7 +415,7 @@ EXPIRE session:weather_app:user_001:session_123 86400  # 24 小时后过期
   - `events` 表：存储会话事件（外键关联）
 - **存储位置**：MySQL/PostgreSQL 数据库
 - **TTL 机制**：后台定期清理任务（批量 SQL DELETE）
-- **清理方式**：单条 SQL DELETE 批量删除过期会话和事件
+- **清理方式**：用单条 SQL `DELETE` 批量删除过期会话（关联事件由外键级联删除）
 
 **持久性**：✅ **有**。数据持久化到数据库，应用重启后可以恢复会话。
 
@@ -655,7 +655,7 @@ event.actions.state_delta = {
 
 #### 1. 自动创建 Session
 
-**在 `Runner.run_async` 前，如果没有 `create_session`，框架将会自动创建一个 Session**。
+**调用 `Runner.run_async` 时，若尚未通过 `create_session` 创建会话，框架会自动创建一个 Session**。
 
 ```python
 # 不需要手动创建，框架会自动创建
@@ -818,7 +818,7 @@ SessionService 提供了强大的会话管理能力：
 
 ## State（状态）
 
-在 trpc_agent 中，**State（状态）** 是每个会话（Session）的一个键值对集合，可以理解为会话的"记事本"，存储 Agent 在对话过程中需要记住和引用的动态信息，从而实现Agent对会话上下文关键信息的感知。
+在 trpc_agent 中，**State（状态）** 是每个会话（Session）的一个键值对集合，可以理解为会话的「记事本」，存储 Agent 在对话过程中需要记住和引用的动态信息，从而让 Agent 感知会话上下文中的关键信息。
 
 比如下面这些信息，是可以通过State来存储的：
 - 用户信息：记住用户偏好（如 `user_theme: 'dark'`）
@@ -830,7 +830,7 @@ SessionService 提供了强大的会话管理能力：
 
 #### 数据结构
 
-State以key-value形式存储在Session里，也就意味着下面的限制：
+State 以 key-value 形式存储在 Session 里，也就意味着下面的限制：
 - key需要是字符串
 - value需要能默认被序列化成字符串（因为将会被注入到Agent的Prompt里）
 - 持久化：
@@ -910,7 +910,7 @@ planner = LlmAgent(
 
 在工具函数中通过 `tool_context.state` 修改状态：
 
-**注意：必须使用`tool_context`作为参数，修改成名字将会出错**
+**注意：参数名必须为 `tool_context`；若改用其他名字将会出错**
 
 ```python
 async def update_user_preference(preference: str, value: str,
@@ -947,7 +947,7 @@ session = await session_service.create_session(
 
 # runner.run_async(...)
 
-# 因为session是只读的，因此需要重新获取session，才能获取state
+# 因为 session 对象是只读的，需要重新 get_session 才能拿到运行后的最新 state
 session = await session_service.get_session(app_name="my_app", user_id="user123", session_id="session456")
 print(session.state)
 # 在Agent运行后，可以修改状态，但注意要更新到session_service才能生效

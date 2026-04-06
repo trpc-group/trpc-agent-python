@@ -1,6 +1,6 @@
-# Redis Storage Usage Guide
+# RedisStorage Usage Guide
 
-This document provides a detailed introduction on how to use the `RedisStorage` class for Redis database operations, including support for data types such as strings, hashes, lists, sets, sorted sets, and more.
+This document explains in detail how to use the `RedisStorage` class for Redis database operations, including strings, hashes, lists, sets, sorted sets, and other common data types.
 
 ## Overview
 
@@ -822,10 +822,11 @@ class CacheService:
             session_keys = await self.storage.query(conn, "session:*", condition)
 
             cleaned_count = 0
-            for key in session_keys:
-                # Check if the key exists (may have already expired)
-                exists_command = RedisCommand(method="exists", args=(key,))
-                exists = await self.storage.get(conn, exists_command)
+            for key, _value in session_keys:
+                # Check if the key still exists (may have expired or been deleted); use execute_command for EXISTS—not get (get only allows methods whose names contain "get")
+                exists = await self.storage.execute_command(
+                    conn, RedisCommand(method="exists", args=(key,))
+                )
 
                 if not exists:
                     cleaned_count += 1
@@ -1119,21 +1120,21 @@ async def monitor_redis_performance(storage):
 
    async def cleanup_expired_data(storage):
        async with storage.create_db_session() as conn:
-           # Clean up expired keys
+           # Add TTL to keys that have none (not "delete expired keys"—expired keys are usually already removed by Redis)
            condition = RedisCondition(limit=-1)
            all_keys = await storage.query(conn, "*", condition)
 
-           expired_count = 0
+           updated_count = 0
            for key, _value in all_keys:
                ttl_command = RedisCommand(method="ttl", args=(key,))
                ttl = await storage.execute_command(conn, ttl_command)
 
-               if ttl == -1:  # Keys without expiration time
+               if ttl == -1:  # Key exists but has no expiration
                    expire_command = RedisCommand(method="expire", args=(key, 3600))
                    await storage.execute_command(conn, expire_command)
-                   expired_count += 1
+                   updated_count += 1
 
-           print(f"Set expiration for {expired_count} keys")
+           print(f"Set expiration on {updated_count} keys that had no TTL")
    ```
 
 ### Performance Issue Diagnosis
@@ -1204,6 +1205,8 @@ connection_logger.setLevel(logging.DEBUG)  # Show connection details
 
 #### Command Execution Tracing
 ```python
+import time
+
 class DebugRedisStorage(RedisStorage):
     """Redis storage with debugging capabilities"""
 

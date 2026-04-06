@@ -225,7 +225,7 @@ python3 run_agent.py
 
 #### 运行结果
 
-以 user-file-ops 为例子
+以 user-file-ops 为例
 ```txt
 🆔 Session ID: be355f8f...
 📝 User:
@@ -297,7 +297,7 @@ The summary has been saved to `out/user-notes-summary.txt`. Let me know if you'd
 ```python
 def create_skill_tool_set(workspace_runtime_type: str = "local") -> SkillToolSet:
     """Create a new skill tool set."""
-    tool_kwargs={
+    tool_kwargs = {
         "save_as_artifacts": True,
         "omit_inline_content": False,
     }

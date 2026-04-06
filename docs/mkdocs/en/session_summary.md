@@ -32,7 +32,7 @@ The session summary manager responsible for automatically triggering and managin
 ### 1. Creating a SessionSummarizer
 
 ```python
-from trpc_agent_sdk.sessions import SessionSummarizer
+from trpc_agent_sdk.sessions import SessionSummarizer, set_summarizer_conversation_threshold
 from trpc_agent_sdk.models import OpenAIModel
 
 # Create an LLM model
@@ -199,7 +199,7 @@ summarizer = SessionSummarizer(
 ```python
 summarizer = SessionSummarizer(
     model=model,
-    check_summarizer_functions=[set_summarizer_conversation_threshold(50)],  # Summarize after more events
+    check_summarizer_functions=[set_summarizer_conversation_threshold(50)],  # Summarize after more conversation turns
     keep_recent_count=15,      # Keep more context
     max_summary_length=1500,   # Longer summary
 )
@@ -374,7 +374,7 @@ The summarizer is triggered when **user-defined trigger conditions are met**. Th
 - **`set_summarizer_token_threshold(token_count)`**: Sets the session token threshold. Summarization is performed after the token count reaches `token_count`
 - **`set_summarizer_events_count_threshold(event_count)`**: Sets the event count threshold. Summarization is performed after the event count reaches `event_count`. Default `event_count` is 30
 - **`set_summarizer_time_interval_threshold(time_interval)`**: Sets the time interval threshold. Summarization is performed after the conversation interval reaches `time_interval`. Default `time_interval` is 300s (5 minutes)
-- **`set_summarizer_important_content_threshold(important_content_count)`**: Sets the important content count. Summarization is performed after the number of spaces in conversation content exceeds `important_content_count`. Default `important_content_count` is 10
+- **`set_summarizer_important_content_threshold(important_content_count)`**: Triggers summarization when any message part's stripped text length (after removing leading and trailing whitespace) exceeds `important_content_count` characters. Default `important_content_count` is 10
 - **`set_summarizer_check_functions_by_and(funcs: list[CheckSummarizerFunction])`**: Combined check function. Summarization is performed when all functions in `funcs` return True (AND logic)
 - **`set_summarizer_check_functions_by_or(funcs: list[CheckSummarizerFunction])`**: Combined check function. Summarization is performed when any function in `funcs` returns True (OR logic)
 
@@ -553,7 +553,7 @@ A: Solution: Refer to `4. Agent-Level Summarization (Filter Approach)` in the Ad
 
 ## Reference Implementation
 
-Session Summarizer is inspired by [Agno summarizer.py](https://github.com/agno-agi/agno/blob/main/libs/agno/agno/memory/v2/summarizer.py), with the following key differences:
+Session Summarizer references [Agno summarizer.py](https://github.com/agno-agi/agno/blob/main/libs/agno/agno/memory/v2/summarizer.py) as a starting point, with the following key differences:
 
 - **Data Structure**: TRPC Agent uses a more complex Event structure
 - **Model Invocation**: Uses LlmRequest and generate_async

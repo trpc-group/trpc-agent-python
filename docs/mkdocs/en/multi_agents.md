@@ -36,7 +36,7 @@ Multi Agents is built on the Sub Agent concept and supports the following orches
 ### Auxiliary Features
 
 - **AgentTool** — Wraps an Agent as a tool for other Agents to invoke via the `tools` parameter
-- **TransferAgent** — Enables custom Agents without transfer capability to participate in multi-Agent systems
+- **TransferAgent (transfer proxy)** — Enables custom Agents without native transfer support to join multi-Agent systems
 
 ### Deterministic Execution
 
@@ -311,7 +311,7 @@ Coordinator Agent (Main Entry Point)
 | `disallow_transfer_to_peers` | `False` | Set to `True` to prevent a child Agent from transferring control to peer Agents |
 | `default_transfer_message` | `None` | Custom transfer instruction that overrides the default transfer prompt |
 
-## Compose Patterns
+## Compose Patterns (Compose Agents)
 
 Different orchestration patterns can be flexibly combined, connecting results of different stages via `output_key` to create more complex workflows:
 
@@ -438,7 +438,7 @@ Content Processing Assistant (Main Agent)
 | Use case | When the main Agent needs to synthesize multiple results | When the child Agent needs to handle tasks independently |
 
 
-### TransferAgent
+### TransferAgent (Transfer Proxy)
 
 TransferAgent is a transfer proxy Agent designed to enable custom Agents without transfer capability (such as KnotAgent, RemoteAgent, etc.) to gain transfer capability, thereby integrating them into the tRPC-Agent framework's multi-Agent system.
 
@@ -545,7 +545,7 @@ The default rules automatically analyze the target Agent's results:
 
 #### Use Cases
 
-- **Scenario 1 (Acting as sub_agent)**: Without providing `sub_agents`, TransferAgent directly transfers control to the target Agent
+- **Scenario 1 (Acting as sub_agent)**: Without providing `sub_agents`, TransferAgent exposes the target Agent so other Agents can invoke it (e.g. as a sub_agent)
 - **Scenario 2 (Forwarding to other sub_agents)**: When `sub_agents` is provided, TransferAgent analyzes the target Agent's results and decides whether to transfer to a child Agent. `transfer_instruction` is optional — when not provided, default rules are used
 
 #### Agent Naming
@@ -557,14 +557,14 @@ TransferAgent's name is automatically generated in the format `transfer_{target_
 #### Notes
 
 1. **Model requirement**: `model` is a required parameter, used for transfer decisions (only used when `sub_agents` is provided)
-3. **Default rules**: If `sub_agents` is provided without `transfer_instruction`, a default general-purpose transfer rule is used automatically
-4. **Transfer rule design**: In Scenario 2, it is recommended to provide clear `transfer_instruction` to help the LLM accurately determine when and where to transfer
-5. **Target Agent restrictions**: The target Agent cannot be the TransferAgent itself, nor can it be in the `sub_agents` list (it will be automatically removed if present)
+2. **Default rules**: If `sub_agents` is provided without `transfer_instruction`, a default general-purpose transfer rule is used automatically
+3. **Transfer rule design**: In Scenario 2, it is recommended to provide clear `transfer_instruction` to help the LLM accurately determine when and where to transfer
+4. **Target Agent restrictions**: The target Agent cannot be the TransferAgent itself, nor can it be in the `sub_agents` list (it will be automatically removed if present)
 
 
 ## State Passing and Context Management
 
-Multi Agents passes information between Agents through the `output_key` mechanism. Each Agent can save its output to a state variable, and subsequent Agents reference it using the `{var}` syntax:
+Within Multi Agents, information is passed between Agents through the `output_key` mechanism. Each Agent can save its output to a state variable, and subsequent Agents reference it using the `{var}` syntax:
 
 ### How State Variables Work
 

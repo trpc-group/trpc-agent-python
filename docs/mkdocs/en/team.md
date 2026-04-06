@@ -410,7 +410,7 @@ async for event in runner.run_async(...):
             parts=[Part(function_response=resume_response)]
         )
 
-        # Resume execution with a new runner
+        # Resume by calling runner.run_async again with the resume message
         async for resume_event in runner.run_async(
             user_id=USER_ID,
             session_id=session_id,
@@ -520,7 +520,7 @@ TeamAgent itself can also serve as a member of another TeamAgent, enabling hiera
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.teams import TeamAgent
 
-# === Layer 2: Development team members (LlmAgent) ===
+# === Bottom tier: Members inside the dev team (LlmAgent) ===
 backend_dev = LlmAgent(
     name="backend_dev",
     model=model,
@@ -537,7 +537,7 @@ frontend_dev = LlmAgent(
     tools=[FunctionTool(design_ui)],
 )
 
-# === Layer 1: Development team (nested TeamAgent) ===
+# === Middle tier: Nested development team (TeamAgent) ===
 dev_team = TeamAgent(
     name="dev_team",
     model=model,
@@ -550,7 +550,7 @@ Then integrate the technical deliverables.""",
     share_member_interactions=True,
 )
 
-# === Layer 1: Documentation writer (LlmAgent) ===
+# === Middle tier: Documentation writer (LlmAgent), peer of dev_team ===
 doc_writer = LlmAgent(
     name="doc_writer",
     model=model,
@@ -685,9 +685,9 @@ team = TeamAgent(
 
 ## Implementing Other Team Patterns
 
-trpc-agent's TeamAgent implements the Coordinate pattern from Agno. For other team patterns in the Agno framework, they can be implemented by combining trpc-agent's Multi Agents components.
+trpc-agent's TeamAgent implements the Coordinate pattern from Agno. Other team patterns from the Agno framework can be implemented by combining trpc-agent's Multi Agents components.
 
-For detailed descriptions of different patterns below, see [Agno Team Delegation Patterns](https://docs.agno.com/basics/teams/delegation).
+For detailed descriptions of each pattern below, see [Agno Team Delegation Patterns](https://docs.agno.com/basics/teams/delegation).
 
 ### Members Respond Directly
 

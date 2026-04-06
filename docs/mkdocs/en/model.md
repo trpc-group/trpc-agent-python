@@ -270,7 +270,7 @@ class LLMModel(FilterRunner):
         # Save the model name, e.g., deepseek-chat, gpt-4o, etc.
         self._model_name = model_name
         # Save remaining initialization parameters for concrete model implementations to read as needed
-        self.config = kxwargs
+        self.config = kwargs
         # Mark the current FilterRunner type as model
         self._type = FilterType.MODEL
         # Read the API Key from parameters

@@ -18,7 +18,7 @@
 
 ## MemoryService 的核心功能
 
-基于 `trpc_agent/memory/` 中的实现，MemoryService 提供以下核心功能：
+基于 `trpc_agent_sdk/memory/` 中的实现，MemoryService 提供以下核心功能：
 
 ### 1. 存储会话记忆
 
@@ -58,7 +58,7 @@ async def store_session(self, session: Session, agent_context: Optional[AgentCon
 
 **实现逻辑**（以 `InMemoryMemoryService` 为例）：
 ```python
-# 从 trpc_agent/memory/_in_memory_memory_service.py
+# 从 trpc_agent_sdk/memory/_in_memory_memory_service.py
 async def search_memory(self, key: str, query: str, limit: int = 10, ...) -> SearchMemoryResponse:
     # 1. 提取查询关键词（支持中英文）
     words_in_query = extract_words_lower(query)  # 提取英文单词和中文字符
@@ -583,7 +583,7 @@ python3 run_agent.py
 
 ---
 
-## 集成 Mem0 
+## 集成 Mem0
 
 ### 什么是 Mem0？
 
@@ -608,7 +608,7 @@ tRPC-Agent 提供两种集成 Mem0 的方式：
 | 方式 | 类 / 工具 | 适用场景 |
 |---|---|---|
 | **框架级记忆服务**（推荐） | `Mem0MemoryService` | 由框架自动完成跨会话记忆的存储与检索，Agent 无感知 |
-| **工具式记忆** | `search_memory_tool` / `save_memory_tool` | Agent 通过工具主动调用 Mem0，灵活控制存取时机 |
+| **工具式记忆** | `SearchMemoryTool` / `SaveMemoryTool` | Agent 通过工具主动调用 Mem0，灵活控制存取时机 |
 
 ---
 
@@ -629,7 +629,7 @@ tRPC-Agent 提供两种集成 Mem0 的方式：
 ```python
 from mem0 import AsyncMemory, AsyncMemoryClient
 from trpc_agent_sdk.memory import MemoryServiceConfig
-from trpc_agent_sdk.server.memory_service.mem0_memory_service import Mem0MemoryService
+from trpc_agent_sdk.memory.mem0_memory_service import Mem0MemoryService
 
 # 自托管模式（AsyncMemory + Qdrant）
 from mem0.configs.base import MemoryConfig
@@ -1200,8 +1200,8 @@ ConnectionError: Cannot connect to Qdrant at localhost:6333
 
 ### 2. 关键词搜索限制
 
-- 当前实现使用**关键词匹配**，而非语义搜索
-- 查询词必须与事件文本中的词完全匹配
+- 当前实现使用**关键词（词元）匹配**，而非语义搜索
+- 经 `extract_words_lower` 提取后（英文为整词、中文为单字），**任意一个**查询词元若出现在事件的词元集合中即可命中（不是整句语义相似度匹配）
 - 适合快速原型开发，不适合复杂的语义检索需求
 
 ### 3. TTL 配置

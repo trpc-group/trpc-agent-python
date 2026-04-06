@@ -1,6 +1,6 @@
 # Skill (Agent Skills)
 
-Agent Skills package reusable workflows into folders containing a `SKILL.md` specification file along with optional documentation and scripts. During a conversation, the agent first injects low-cost "overview" information, then loads the full body content and documentation only when truly needed, and safely runs scripts in an isolated workspace.
+Agent Skills let you package reusable workflows into folders containing a `SKILL.md` specification file along with optional documentation and scripts. During a conversation, the agent first injects low-cost "overview" information, then loads the full body content and documentation only when truly needed, and safely runs scripts in an isolated workspace.
 
 Background references:
 - Engineering blog:
@@ -175,8 +175,8 @@ Key points:
 - **Intelligent prompt guidance**: Explicitly describe the workflow in the prompt to guide the LLM to call tools in the correct order
 - **Token optimization**: Use `skill_select_tools` to load only the needed tools, significantly reducing context size
 - **Code location**:
-  - Tool definitions: [trpc_agent_sdk/skills/tools/__init__.py](../../../trpc_agent_sdk/skills/tools/__init__.py)
-  - Runner: [trpc_agent_sdk/skills/tools/_skill_run.py](../../../trpc_agent_sdk/skills/tools/_skill_run.py)
+  - Package entry (aggregated exports): [trpc_agent_sdk/skills/tools/__init__.py](../../../trpc_agent_sdk/skills/tools/__init__.py)
+  - `skill_run` implementation: [trpc_agent_sdk/skills/tools/_skill_run.py](../../../trpc_agent_sdk/skills/tools/_skill_run.py) (for other tools, see **Declaration location** in each section below)
 
 ### 3) Running the Example
 
@@ -224,7 +224,7 @@ Tips:
 - Describe the task you want to accomplish; the model will decide whether a skill is needed based on the overview.
 - When needed, the model will call `skill_load` to fetch the body/documentation, then call `skill_run` to execute and return output files.
 
-#### Running Results
+#### Example run output
 
 Using user-file-ops as an example:
 ```txt
@@ -298,7 +298,7 @@ By default, a workspace is created in a temporary directory (e.g., `/tmp/ws_<ses
 ```python
 def create_skill_tool_set(workspace_runtime_type: str = "local") -> SkillToolSet:
     """Create a new skill tool set."""
-    tool_kwargs={
+    tool_kwargs = {
         "save_as_artifacts": True,
         "omit_inline_content": False,
     }
@@ -493,7 +493,7 @@ Writing guidelines:
 For more examples, see:
 https://github.com/anthropics/skills
 
-## Skill Tool Reference
+## Skill Tools Explained
 
 ### `skill_list`
 

@@ -201,7 +201,7 @@ def create_agent():
 
 ## 会话管理
 
-当前 LLM Agent 可在需要时根据不同场景控制其对其他 Agent 生成的消息以及历史会话消息的可见性进行管理，可通过相关选项配置进行管理，在与 model 交互时仅将可见的内容输入给模型，下面介绍些会话管理策略：
+当前 LLM Agent 可在需要时根据不同场景控制其对其他 Agent 生成的消息以及历史会话消息的可见性，可通过相关选项进行配置；在与 model 交互时仅将可见的内容输入给模型。下面介绍一些会话管理策略：
 
 ### 使用预设会话管理策略
 
@@ -221,17 +221,17 @@ agent = LlmAgent(
     name="history_demo",
     description="Agent demonstrating history control",
     ...,
-    max_history_messages=max_history_messages, # 只保留最近max_history_messages轮对话
+    max_history_messages=max_history_messages, # 只保留最近 max_history_messages 条历史消息
 )
 ```
 
 **参数说明：**
 - `max_history_messages=0`（默认值）：不限制历史消息数量，包含所有经过过滤的消息
-- `max_history_messages=N`（N > 0）：只包含最近的N轮消息（在其他过滤之后应用）
+- `max_history_messages=N`（N > 0）：只包含最近的 N 条历史消息（在其他过滤之后应用）
 
 **使用场景：**
 - 长对话场景下控制token使用量
-- 需要Agent只关注最近对话内容的场景
+- 需要 Agent 只关注最近若干条历史消息的场景
 - 防止上下文过长导致的性能问题
 
 **注意事项：**
@@ -352,7 +352,7 @@ def make_user_history_record() -> HistoryRecord:
 INSTRUCTION = """你是一个问答助手
 **你的任务：**
 - 理解提问，并给出友好回答
-- 如果可以从历史会话中查询相关的数据，优先从历史会话中查找，减少大模型的工具地调用；如果历史会话中没有，那么就去工具中查询
+- 如果可以从历史会话中查询相关的数据，优先从历史会话中查找，减少大模型的工具调用；如果历史会话中没有，那么就去工具中查询
 """
 ```
 
@@ -479,7 +479,7 @@ class CustomToolPrompt(ToolPrompt):
 
 ### PlanReActPlanner
 
-Planner能定制Agent的规划过程，它本质上侵入了LLM输入与输出的内容，在输入里，Planner可以注入一些与规划有关的信息，在输出里，Planner可以对规划结果进行一些处理，比如将LLM输出文本中工具调用文本转成trpc_agent的工具结构体，以在不支持工具调用的模型上，也能使用工具调用。
+Planner 能定制 Agent 的规划过程，它本质上会介入 LLM 输入与输出的内容：在输入侧，Planner 可以注入与规划有关的信息；在输出侧，Planner 可以对规划结果进行处理，例如将 LLM 输出中的工具调用文本转换为 trpc_agent 的工具结构，从而在不支持原生工具调用的模型上也能使用工具调用。
 
 框架提供了PlanReActPlanner，为LLM输入注入Reasoning的指令，能让不支持Reasoning的模型也能具备此能力。
 
@@ -712,7 +712,7 @@ main_agent = LlmAgent(
 
 ```python
 def create_agent():
-    """创建配置了兴趣相关的的Agent"""
+    """创建配置了兴趣相关工具的 Agent"""
     # ...
     return LlmAgent(
         name="hobby_toolset_agent",
@@ -724,7 +724,7 @@ def create_agent():
 你是一个热爱生活的虚拟人，根据用户兴趣选择合适的工具来获取兴趣信息，并提供友好的回复。
 **你的任务：**
 - 如果对话中存在运行或者 sports 相关的内容，请必须调用 sports 工具，如果没有提供运动参数，默认是跑步
-- 如果对话中存电视或者 tv 相关的内容，请必须调用 watch_tv 工具，如果没有提供 tv 参数，默认是 cctv
+- 如果对话中存在电视或者 tv 相关的内容，请必须调用 watch_tv 工具，如果没有提供 tv 参数，默认是 cctv
 - 如果对话中存在音乐或者 music 相关的内容，请必须调用 listen_music 工具，如果没有提供 music 参数，默认是 QQ 音乐
 """,
     )

@@ -26,7 +26,7 @@ Based on the implementation in `trpc_agent/sessions/_session.py`, a `Session` co
 
 #### 1. Identity
 
-- **`id`**: Session ID, recommended to generate using UUID
+- **`id`**: Session ID; generating one with UUID is recommended
 - **`app_name`**: Identifies which App this conversation belongs to
 - **`user_id`**: Identifies which User this conversation belongs to
 - **`save_key`**: Format is `{app_name}/{user_id}`, used for storage and retrieval
@@ -415,7 +415,7 @@ EXPIRE session:weather_app:user_001:session_123 86400  # Expires after 24 hours
   - `events` table: Stores session events (foreign key association)
 - **Storage Location**: MySQL/PostgreSQL database
 - **TTL Mechanism**: Background periodic cleanup task (batch SQL DELETE)
-- **Cleanup Strategy**: Single SQL DELETE for batch deletion of expired sessions and events
+- **Cleanup Strategy**: One SQL `DELETE` statement batch-removes expired sessions (associated events are removed via foreign-key cascade)
 
 **Persistence**: ✅ **Yes**. Data is persisted to the database; sessions can be recovered after application restart.
 
@@ -655,7 +655,7 @@ event.actions.state_delta = {
 
 #### 1. Automatic Session Creation
 
-**Before `Runner.run_async`, if `create_session` has not been called, the framework will automatically create a Session**.
+**When you call `Runner.run_async`, if no session was created beforehand with `create_session`, the framework creates a Session automatically**.
 
 ```python
 # No manual creation needed; the framework creates one automatically
@@ -947,7 +947,7 @@ session = await session_service.create_session(
 
 # runner.run_async(...)
 
-# Since session is read-only, you need to re-fetch the session to get the updated state
+# Session objects are read-only; call get_session again to read the latest state after a run
 session = await session_service.get_session(app_name="my_app", user_id="user123", session_id="session456")
 print(session.state)
 # After Agent execution, you can modify the state, but it must be updated to session_service to take effect

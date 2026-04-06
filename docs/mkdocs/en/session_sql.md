@@ -1,6 +1,6 @@
 # SqlStorage Database Storage Usage Guide
 
-This document provides a detailed introduction on how to use the `SqlStorage` class for database operations, including support for MySQL, PostgreSQL, SQLite, and other databases.
+This document is a detailed guide to using the `SqlStorage` class for database operations, including support for MySQL, PostgreSQL, SQLite, and other databases.
 
 ## Overview
 
@@ -12,7 +12,7 @@ This document provides a detailed introduction on how to use the `SqlStorage` cl
 The primary storage class that provides database connection and operation interfaces.
 
 ### 2. Helper Classes
-- `SqlKey`: Used to identify database query keys
+- `SqlKey`: Specifies keys for database lookups and queries (for example, primary keys for `get`)
 - `SqlCondition`: Used to define query conditions
 - `StorageData`: Base class for data models
 
@@ -421,7 +421,7 @@ class UserData(StorageData):
     updated_at: datetime = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 ```
 
-### Relational Model
+### Related Models
 ```python
 @dataclass
 class PostData(StorageData):
@@ -665,7 +665,7 @@ storage = SqlStorage(
     max_overflow=30,       # Maximum overflow connections
     pool_timeout=30,       # Connection acquisition timeout
     pool_recycle=3600,     # Connection recycle time (seconds)
-    pool_pre_ping=True,    # Pre-connection test
+    pool_pre_ping=True,    # Ping connections before use from the pool
 )
 ```
 
@@ -739,7 +739,7 @@ condition = SqlCondition(
        await storage.add(session, user)
        await storage.commit(session)
    except IntegrityError:
-       print("Data already exists or violates constraint conditions")
+       print("Record already exists or violates a constraint")
    ```
 
 ### Debug Mode
@@ -792,7 +792,7 @@ python examples/storage/sql_example.py
   url: "postgresql+pg8000://username:password@localhost:5432/mydb"
   ```
 
-###  MySQL/MariaDB
+### MySQL/MariaDB
 - PyMySQL
   ```txt
   Required package: pip install PyMySQL

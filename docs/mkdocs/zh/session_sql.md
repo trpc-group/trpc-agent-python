@@ -792,7 +792,7 @@ python examples/storage/sql_example.py
   url: "postgresql+pg8000://username:password@localhost:5432/mydb"
   ```
 
-###  MySQL/MariaDB
+### MySQL/MariaDB
 - PyMySQL
   ```txt
   必须安装包：pip install PyMySQL
