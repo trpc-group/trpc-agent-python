@@ -15,7 +15,7 @@ MarkdownHeaderTextSplitter resides in different packages depending on the LangCh
 - **LangChain 1.x.x**: `langchain-text-splitters` package
 - **LangChain 0.3.x**: `langchain.text_splitter` module
 
-After installing the trpc-python-agent framework, the relevant dependencies are automatically installed, so no further installation is required.
+After installing tRPC-Agent-Python, the relevant dependencies are installed automatically, so no further installation is required.
 
 ## MarkdownHeaderTextSplitter
 
@@ -39,7 +39,7 @@ headers_to_split_on = [
 markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on)
 ```
 
-2. Construct a `LangchainKnowledge` object using this markdown_splitter object
+2. Construct a `LangchainKnowledge` object using this `markdown_splitter` object
 
 ```python
 rag = LangchainKnowledge(
@@ -74,7 +74,7 @@ except ImportError:
 text_splitter = RecursiveCharacterTextSplitter(separators=["\n"], chunk_size=10, chunk_overlap=0)
 ```
 
-2. Construct a `LangchainKnowledge` object using this text_splitter object
+2. Construct a `LangchainKnowledge` object using this `text_splitter` object
 
 ```python
 # examples/knowledge_with_rag_agent/agent/tools.py

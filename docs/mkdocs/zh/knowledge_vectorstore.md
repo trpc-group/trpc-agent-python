@@ -332,7 +332,7 @@ for res in results:
     print(f"* {res.page_content} [{res.metadata}]")
 ```
 
-3) 设置检索策略：使用`ElasticsearchStore`的成员方法`from_documents`，通过参数`strategy`设置检索策略
+3) 设置检索策略：使用`ElasticsearchStore`的类方法`from_documents`，通过参数`strategy`设置检索策略
 
 ```python
 from langchain_elasticsearch import DenseVectorStrategy
@@ -464,7 +464,7 @@ def _build_tencentvdb_knowledge() -> LangchainKnowledge:
 
 如果是知识库已在腾讯云向量数据库上构建好，则可跳过此部分，直接进行检索即可。否则，可以按如下步骤进行构建。我们支持如下方式：
 
-1) 使用`LangchainKnowledge`类方法`create_vectorstore_from_document`构建向量数据库
+1) 使用`LangchainKnowledge`成员方法`create_vectorstore_from_document`构建向量数据库
 
 ```python
 # examples/knowledge_with_vectorstore/run_agent.py
@@ -568,7 +568,7 @@ vector_db.add_texts(["Ankush went to Princeton"])
 
 ### 如何使用向量数据库进行检索
 
-1) 使用`LangchainKnowledge`类方法`search`
+1) 使用`LangchainKnowledge`成员方法`search`
 
 ```python
 # examples/knowledge_with_vectorstore/agent/tools.py
@@ -593,7 +593,7 @@ async def simple_search(query: str):
     return {"status": "success", "report": f"content: {best_doc.page_content}"}
 ```
 
-2) 使用`TencentVectorDB`的类方法`similarity_search`
+2) 使用`TencentVectorDB`的成员方法`similarity_search`
 
 ```python
 query = "What did the president say about Ketanji Brown Jackson"

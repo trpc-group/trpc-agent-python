@@ -24,7 +24,7 @@ pip install --upgrade --quiet langchain langchain-huggingface sentence_transform
 ```python
 from langchain_huggingface import HuggingFaceEmbeddings
 
-# 指定要使用的HuggingFace模型名称
+# 指定要使用的 HuggingFace 模型名称
 model_name = "BAAI/bge-small-en-v1.5"
 # 指定模型的加载参数，这里设置为在CPU上运行
 model_kwargs = {"device": "cpu"}
@@ -76,7 +76,7 @@ from langchain_community.embeddings import HunyuanEmbeddings
 embedder = HunyuanEmbeddings(
     hunyuan_secret_id="xxx",   # Hunyuan Secret ID, 或通过 HUNYUAN_SECRET_ID 环境变量设置
     hunyuan_secret_key="xxx",  # Hunyuan Secret Key，或通过 HUNYUAN_SECRET_KEY 环境变量设置
-    region="ap-guangzhou"      # The region of hunyuan service
+    region="ap-guangzhou"      # 混元服务所在地域
 )
 ```
 

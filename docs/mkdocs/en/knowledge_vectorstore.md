@@ -1,6 +1,6 @@
 # VectorStore
 
-The tRPC-Python-Agent framework supports multiple vector database backends through `LangchainKnowledge`. A VectorStore is used to store vectorized representations (embeddings) of text and perform efficient retrieval based on vector similarity. It is a core component for building RAG (Retrieval-Augmented Generation) applications. This document describes how to integrate and use the following vector databases within the framework:
+The tRPC-Agent-Python framework supports multiple vector store backends through `LangchainKnowledge`. A VectorStore stores vectorized representations (embeddings) of text and supports efficient similarity-based retrieval. It is a core component for building RAG (Retrieval-Augmented Generation) applications. This document explains how to integrate and use the following vector backends in the framework:
 
 - [PGVector](#pgvector)
 - [Elasticsearch](#elasticsearch)
@@ -54,7 +54,7 @@ Note: Ensure that a PostgreSQL database with the pgvector extension is running. 
 
 If the knowledge base has already been built on PGVector, you can skip this section and proceed directly to retrieval. Otherwise, follow the steps below to build it. The following methods are supported:
 
-1) Use the `LangchainKnowledge` instance method `create_vectorstore_from_document` to build the vector database
+1) Use the `LangchainKnowledge` instance method `create_vectorstore_from_document` to build the vector store
 
 ```python
 # examples/knowledge_with_vectorstore/run_agent.py
@@ -64,7 +64,7 @@ from agent.tools import rag
 await rag.create_vectorstore_from_document()
 ```
 
-2) Use the `PGVector` instance method `add_documents` to add data to the vector database
+2) Use the `PGVector` instance method `add_documents` to add data to the vector store
 
 Here is a simple example:
 
@@ -90,7 +90,7 @@ docs = [
 vectorstore.add_documents(docs, ids=[doc.metadata["id"] for doc in docs])
 ```
 
-3) Use the `PGVector` class method `from_documents` to build the vector database directly
+3) Use the `PGVector` class method `from_documents` to build the vector store directly
 
 ```python
 from langchain_community.document_loaders import TextLoader
@@ -220,7 +220,7 @@ Note: Connection parameters are configured via environment variables. See `get_e
 
 If the knowledge base has already been built on Elasticsearch, you can skip this section and proceed directly to retrieval. Otherwise, follow the steps below to build it. The following methods are supported:
 
-1) Use the `LangchainKnowledge` instance method `create_vectorstore_from_document` to build the vector database
+1) Use the `LangchainKnowledge` instance method `create_vectorstore_from_document` to build the vector store
 
 ```python
 # examples/knowledge_with_vectorstore/run_agent.py
@@ -246,7 +246,7 @@ def get_create_vectorstore_kwargs() -> dict:
         }
 ```
 
-2) Use the `ElasticsearchStore` instance method `add_documents` to build the vector database
+2) Use the `ElasticsearchStore` instance method `add_documents` to build the vector store
 
 ```python
 import uuid
@@ -264,7 +264,7 @@ async def create_vectorstore_from_document():
     return added_ids
 ```
 
-3) Use the `ElasticsearchStore` class method `from_documents` to build the vector database directly
+3) Use the `ElasticsearchStore` class method `from_documents` to build the vector store directly
 
 ```python
 from langchain_community.document_loaders import TextLoader
@@ -332,7 +332,7 @@ for res in results:
     print(f"* {res.page_content} [{res.metadata}]")
 ```
 
-3) Configure retrieval strategy: use the `ElasticsearchStore` instance method `from_documents` with the `strategy` parameter to set the retrieval strategy
+3) Configure retrieval strategy: use the `ElasticsearchStore` class method `from_documents` with the `strategy` parameter to set the retrieval strategy
 
 ```python
 from langchain_elasticsearch import DenseVectorStrategy
@@ -464,7 +464,7 @@ Note: Connection parameters are configured via environment variables. See `get_t
 
 If the knowledge base has already been built on Tencent Cloud VectorDB, you can skip this section and proceed directly to retrieval. Otherwise, follow the steps below to build it. The following methods are supported:
 
-1) Use the `LangchainKnowledge` class method `create_vectorstore_from_document` to build the vector database
+1) Use the `LangchainKnowledge` instance method `create_vectorstore_from_document` to build the vector store
 
 ```python
 # examples/knowledge_with_vectorstore/run_agent.py
@@ -503,7 +503,7 @@ def get_create_vectorstore_kwargs() -> dict:
         }
 ```
 
-2) Use the `TencentVectorDB` class method `from_documents` to build the vector database directly
+2) Use the `TencentVectorDB` class method `from_documents` to build the vector store directly
 
 ```python
 from langchain_community.document_loaders import TextLoader
@@ -559,7 +559,7 @@ Note: `from_documents` internally calls the `from_texts` interface, which suppor
     ) -> TencentVectorDB:
 ```
 
-3) Use the `TencentVectorDB` class method `add_texts` to insert data into the vector database
+3) Use the `TencentVectorDB` instance method `add_texts` to insert data into the vector store
 
 ```python
 # If document IDs are not specified, they will be randomly generated. You can specify them via the ids: Optional[List[str]] parameter
@@ -568,7 +568,7 @@ vector_db.add_texts(["Ankush went to Princeton"])
 
 ### How to Perform Retrieval Using the Vector Database
 
-1) Use the `LangchainKnowledge` class method `search`
+1) Use the `LangchainKnowledge` instance method `search`
 
 ```python
 # examples/knowledge_with_vectorstore/agent/tools.py
@@ -593,7 +593,7 @@ async def simple_search(query: str):
     return {"status": "success", "report": f"content: {best_doc.page_content}"}
 ```
 
-2) Use the `TencentVectorDB` class method `similarity_search`
+2) Use the `TencentVectorDB` instance method `similarity_search`
 
 ```python
 query = "What did the president say about Ketanji Brown Jackson"
@@ -641,4 +641,4 @@ cd examples/knowledge_with_vectorstore/
 python3 run_agent.py
 ```
 
-The program will automatically build the vector database from documents. The Agent then receives queries and invokes the `simple_search` tool to perform vector retrieval, generating answers based on the retrieved results.
+The program automatically builds the vector store from documents. The Agent then receives queries and invokes the `simple_search` tool for vector retrieval, generating answers from the retrieved results.

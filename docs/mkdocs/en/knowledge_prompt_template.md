@@ -1,6 +1,6 @@
 # Prompt Templates
 
-Prompt Templates serve as the bridge between user input and Large Language Models (LLMs). They organize raw user input and related parameters into model-understandable instructions according to predefined template structures, guiding the model to generate more accurate and coherent responses within specific contexts. In RAG scenarios, Prompt Templates are particularly important — through well-designed templates, retrieved knowledge fragments can be effectively integrated with user questions, significantly improving the quality of model responses.
+Prompt Templates bridge user input and Large Language Models (LLMs). They organize raw input and related parameters into structured instructions that models can reliably follow, improving response quality and consistency in specific contexts. In RAG scenarios, Prompt Templates are especially important: well-designed templates can effectively combine retrieved knowledge with user questions and significantly improve answer quality.
 
 Below is an introduction to some commonly used template components:
 
@@ -12,7 +12,7 @@ For more component usage details, see [Langchain Prompt Templates](https://pytho
 
 ## Installation
 
-The `Prompt Templates` related packages are located in the `langchain-core` package, which is a sub-dependency of `langchain`.
+The packages related to Prompt Templates are provided by `langchain-core`, which is a dependency of `langchain`.
 
 After installing the trpc-python-agent framework, the related dependencies are automatically installed, so no further installation is required.
 

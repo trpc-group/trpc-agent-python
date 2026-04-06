@@ -1,8 +1,8 @@
-# DocumentLoaders
+# Document Loaders
 
-DocumentLoaders are responsible for reading raw data from various data sources (text files, PDFs, Markdown, etc.) and converting them into the standard LangChain Document format for subsequent text splitting, vectorization, retrieval, and other downstream processes.
+Document Loaders read raw data from various sources (text files, PDFs, Markdown, etc.) and convert it into the standard LangChain `Document` format for downstream text splitting, vectorization, and retrieval.
 
-Each DocumentLoader has its own specific parameters, but they can all be invoked through a unified `.load` method.
+Each Document Loader has its own parameters, but they all expose a unified `.load` interface.
 
 Below is an introduction to some commonly used components:
 
@@ -16,7 +16,7 @@ For more components, refer to [Langchain Document loaders](https://python.langch
 
 ### Install Dependencies
 
-TextLoader is included in the langchain-community package. If langchain-community is not installed, use the following command to install it:
+`TextLoader` is included in the `langchain-community` package. If it is not installed, use the following command:
 
 ```shell
 pip install langchain-community
@@ -41,7 +41,7 @@ tmp_file.close()
 text_loader = TextLoader(tmp_file.name, encoding="utf-8")
 ```
 
-2. Construct a `LangchainKnowledge` object using this text_loader object
+2. Construct a `LangchainKnowledge` object using this `text_loader` object
 
 ```python
 rag = LangchainKnowledge(

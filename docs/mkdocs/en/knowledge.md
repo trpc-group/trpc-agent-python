@@ -1,17 +1,17 @@
-# Langchain Knowledge Documentation
+# LangchainKnowledge Documentation
 
 ## Overview
 
-Langchain Knowledge is the knowledge management system within the tRPC-Agent framework. It supports the Langchain ecosystem and provides Retrieval-Augmented Generation (RAG) capabilities for Agents. Users only need to declare the RAG component types — such as vector embedding models and vector databases — to implement a basic RAG pipeline.
+`LangchainKnowledge` is the knowledge management system in the tRPC-Agent framework. It supports the LangChain ecosystem and provides Retrieval-Augmented Generation (RAG) capabilities for Agents. Users only need to declare RAG component types (such as embedding models and vector stores) to build a basic RAG pipeline.
 
 ### Usage Pattern
 
 The Knowledge system follows this usage pattern:
 
-1. **Create Knowledge**: Select and configure RAG components (vector store, embedder, document loader, etc.)
-2. **Load Documents**: Call `create_vectorstore_from_document` to build a vector database from document sources
-4. **Integrate with Agent**: Add the search tool to the Agent's `tools` list
-5. **Agent Invocation**: The Agent automatically invokes the knowledge search tool to retrieve context during conversations
+1. **Create Knowledge**: Select and configure RAG components (vector store, embedder, document loader, etc.).
+2. **Load Documents**: Call `create_vectorstore_from_document` to build a vector store from document sources.
+3. **Integrate with Agent**: Add the search tool to the Agent's `tools` list.
+4. **Agent Invocation**: The Agent automatically invokes the knowledge search tool to retrieve context during conversations.
 
 This pattern provides:
 
@@ -25,8 +25,8 @@ This pattern provides:
 
 The Knowledge system supports two methods of integration with Agents:
 
-- **Search Tool Integration (Recommended)**: Use `LangchainKnowledgeSearchTool` to create a search tool and pass it directly to the Agent's `tools` parameter
-- **Agentic Filtered Search**: Use `AgenticLangchainKnowledgeSearchTool` to create a search tool with dynamic filtering capability, where the Agent can automatically construct filter conditions based on user queries
+- **Search Tool Integration (Recommended)**: Use `LangchainKnowledgeSearchTool` and pass it directly to the Agent's `tools` parameter.
+- **Agentic Filtered Search**: Use `AgenticLangchainKnowledgeSearchTool` for dynamic filtering, where the Agent can automatically construct filter conditions from user queries.
 
 ## Installation
 
@@ -46,16 +46,16 @@ dependencies = [
 
 ## Use Cases
 
-Langchain Knowledge supports four usage modes:
-- Full Langchain chain: Supports seamless migration from the Langchain framework, directly using a full chain to integrate with the trpc-agent framework
+`LangchainKnowledge` supports four usage modes:
+- Full LangChain chain: Supports seamless migration from LangChain by directly using a full chain in the `trpc_agent` framework.
 
-- Vector store retrieval: Supports building a vector database from documents and retrieving query-relevant documents using relevance-based methods
+- Vector store retrieval: Builds a vector store from documents and retrieves query-relevant documents using relevance-based methods.
 
-- Retriever-based retrieval: Supports building a retriever from documents and retrieving query-relevant documents using relevance-based methods
+- Retriever-based retrieval: Builds a retriever from documents and retrieves query-relevant documents using relevance-based methods.
 
-- Vector store retrieval with retriever reranking: Supports building a vector database from documents, retrieving relevant documents based on the query, and then reranking results using a retriever
+- Vector store retrieval with retriever reranking: Builds a vector store, retrieves documents for the query, and reranks results with a retriever.
 
-## Creating Langchain Knowledge
+## Creating LangchainKnowledge
 
 ### Component Initialization
 
@@ -77,13 +77,13 @@ For detailed usage of each component, see: [Document Loader](./knowledge_documen
 
 ### Core Method Details
 
-The `search` method is the core method of Langchain Knowledge. It implements:
+The `search` method is the core method of `LangchainKnowledge`. It performs:
 1. Retrieving conversation context, which can be injected into the query to enhance it
 2. Retrieving relevant documents based on the declared RAG component types
-3. Converting the retrieved documents into data types supported by the trpc_agent framework
+3. Converting retrieved documents into data types supported by the `trpc_agent` framework
 
 The `create_vectorstore_from_document` method provides the capability to create a vector database from documents, including:
-Document loading - Document chunking (optional) - Vectorization - Storage into the vector database
+Document loading -> document chunking (optional) -> vectorization -> storage into the vector store
 
 ### Search Type Description
 
@@ -99,7 +99,7 @@ Document loading - Document chunking (optional) - Vectorization - Storage into t
 
 ### Module Structure
 
-The Knowledge system uses a layered architecture, with core interfaces defined in `trpc_agent` and concrete implementations in `trpc_agent_ecosystem`:
+The Knowledge system uses a layered architecture, and both core interfaces and implementations are located in `trpc_agent_sdk`:
 
 ```
 trpc_agent_sdk/knowledge/                    # Core interface layer
@@ -336,7 +336,7 @@ from trpc_agent_sdk.server.knowledge.langchain_knowledge import (
 )
 from trpc_agent_sdk.server.knowledge.tools import LangchainKnowledgeSearchTool
 
-#  Prompt Template 
+# Prompt template
 INSTRUCTION = "You are a helpful assistant. Be conversational and remember our previous exchanges."
 
 RAG_PROMPT_TEMPLATE = """Answer the question gently:
@@ -344,14 +344,14 @@ RAG_PROMPT_TEMPLATE = """Answer the question gently:
     """
 rag_prompt = ChatPromptTemplate.from_template(RAG_PROMPT_TEMPLATE)
 
-#  Model Configuration (read from environment variables) 
+# Model configuration (read from environment variables)
 api_key = os.getenv('TRPC_AGENT_API_KEY', '')
 base_url = os.getenv('TRPC_AGENT_BASE_URL', '')
 model_name = os.getenv('TRPC_AGENT_MODEL_NAME', '')
 
 model = OpenAIModel(model_name=model_name, api_key=api_key, base_url=base_url)
 
-#  Build Knowledge
+# Build knowledge
 def build_knowledge():
     """Build RAG Knowledge"""
     # Embedder
@@ -381,7 +381,7 @@ def build_knowledge():
 
 rag = build_knowledge()
 
-#  Create LangchainKnowledgeSearchTool and pass it to the Agent
+# Create LangchainKnowledgeSearchTool and pass it to the Agent
 search_tool = LangchainKnowledgeSearchTool(rag, top_k=1, search_type=SearchType.SIMILARITY)
 # Or use the agentic filtered search tool
 # AgenticLangchainKnowledgeSearchTool(rag, top_k=5, min_score=0.5),

@@ -10,8 +10,8 @@ Knowledge 系统的使用遵循以下模式：
 
 1. **创建 Knowledge**：选择并配置 RAG 组件（向量存储、Embedder、文档加载器等）
 2. **加载文档**：调用 `create_vectorstore_from_document` 从文档源构建向量数据库
-4. **集成到 Agent**：将搜索工具添加到 Agent 的 `tools` 列表中
-5. **Agent 调用**：Agent 在对话过程中自动调用知识搜索工具获取上下文
+3. **集成到 Agent**：将搜索工具添加到 Agent 的 `tools` 列表中
+4. **Agent 调用**：Agent 在对话过程中自动调用知识搜索工具获取上下文
 
 这种模式提供了：
 
@@ -60,7 +60,7 @@ Langchain Knowledge 支持四种使用模式：
 ### 初始化组件说明
 - `chain`: 用户自定义完整的Langchain链实现RAG流程。若非空，则忽略其他组件，执行当前完整链；若为空，则忽略当前chain组件
 
-- `prompt_template`: Prompt模版，实现基于模版嵌入Query。若为空，则传递原始Query
+- `prompt_template`：Prompt 模板，实现基于模板嵌入 Query。若为空，则传递原始 Query
 
 - `document_loader`: 文档加载器，实现异步加载文档。若非空，需指定文件路径；若为空，则需在向量数据库或检索器初始化时指定文档
 
@@ -70,7 +70,7 @@ Langchain Knowledge 支持四种使用模式：
 
 - `vectorstore`: 向量数据库，实现根据文档构建数据库并支持检索文档。向量数据库和检索器不能同时为空，否则无法实现检索。
 
-- `retriever`: 检索器，实现根据文档构建数据库并支持检索文档，也可以支持重排序，例如：BM25Retrievr等。向量数据库和检索器不能同时为空，否则无法实现检索。当同时使用`vectorstore`和`retriever`时，`retriever`用于对`vectorstore`的检索结果进行重排序，这时要求`retriever`具备`from_documents`接口。
+- `retriever`：检索器，实现根据文档构建数据库并支持检索文档，也支持重排序，例如：BM25Retriever 等。向量数据库和检索器不能同时为空，否则无法实现检索。当同时使用 `vectorstore` 和 `retriever` 时，`retriever` 用于对 `vectorstore` 的检索结果进行重排序，这时要求 `retriever` 具备 `from_documents` 接口。
 
 各组件使用说明见：[Document Loader](./knowledge_document_loader.md)、[Text Splitter](./knowledge_text_splitter.md)、[Embedder](./knowledge_embedder.md)、[VectorStore](./knowledge_vectorstore.md)、[Retrievers](./knowledge_retrievers.md)、[Prompt Template](./knowledge_prompt_template.md)、[自定义组件](./knowledge_custom_components.md)
 
@@ -98,7 +98,7 @@ Langchain Knowledge 支持四种使用模式：
 
 ### 模块结构
 
-Knowledge 系统采用分层架构，核心接口定义在 `trpc_agent` 中，具体实现在 `trpc_agent_ecosystem` 中：
+Knowledge 系统采用分层架构，核心接口与实现均位于 `trpc_agent_sdk`：
 
 ```
 trpc_agent_sdk/knowledge/                    # 核心接口层

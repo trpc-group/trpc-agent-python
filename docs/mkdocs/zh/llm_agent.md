@@ -5,14 +5,14 @@ LlmAgent 封装了AI Agent的通用实现，它使用LLM作为大脑，通过工
 
 与按固定流程执行的Agent不同，LlmAgent根据LLM动态理解指令和上下文，自主决定执行步骤、工具调用或是否交由其他Agent处理，比如RAG里，一般会先召回文档，然后再基于文档生成回复，而LlmAgent可能识别到用户问题与知识库不相关，直接返回"问题不相关"等回复，而不会走RAG的流程。
 
-要创建一个LlmAgent，需要配置Agent的信息及其使用的工具。
+要创建一个 `LlmAgent`，需要配置 Agent 的基础信息及其使用的工具。
 
-## 配置Agent的基础信息
+## 配置 Agent 的基础信息
 
-如下所示，在trpc_agent里，一个Agent由下面这些信息标识：
-- `name`（必填）：Agent的名称，用于唯一标识一个Agent；
-- `description`（选填）：Agent的描述，在多Agent场景下，用于提供其身份信息给另外的Agent；
-- `model`（必填）：Agent的大脑，不同场景下（对话/代码生成/复杂问题处理等）需要使用不同类型的模型；
+如下所示，在 `trpc_agent` 中，一个 Agent 由以下信息标识：
+- `name`（必填）：Agent 名称，用于唯一标识一个 Agent；
+- `description`（选填）：Agent 描述，在多 Agent 场景下用于向其他 Agent 提供身份信息；
+- `model`（必填）：Agent 的“大脑”；不同场景（对话/代码生成/复杂问题处理等）需要不同类型的模型；
 
 ```python
 LlmAgent(
@@ -33,7 +33,7 @@ export TRPC_AGENT_MODEL_NAME="your-model-name"
 
 更多 tRPC-Agent 支持的模型配置及不同模型如何实例化、传参等，请参考[模型调用](./model.md)文档。
 
-## 配置Agent的指令（instruction）
+## 配置 Agent 的指令（instruction）
 
 `instruction` 参数是塑造 `LlmAgent` 行为最关键的配置项。它是一个字符串（或返回字符串的函数），用于告诉Agent：
 
@@ -100,7 +100,7 @@ LlmAgent(
     # tools 将在下一节添加
 ```
 
-LlmAgent也可以配置output_key，将Agent的输出保存到状态变量里，以供模板使用（一般用在跨Agent交互的场景），如下所示：
+`LlmAgent` 也可以配置 `output_key`，将 Agent 输出保存到状态变量中，以供模板使用（通常用于跨 Agent 交互场景），如下所示：
 
 ```python
 LlmAgent(
@@ -112,7 +112,7 @@ LlmAgent(
 )
 ```
 
-## 配置Agent的工具（tools）
+## 配置 Agent 的工具（tools）
 
 工具是Agent与外部世界交互的方式。它们可以是API调用、数据库查询、文件操作或任何可以用Python函数表示的操作。 目前支持多种工具包含：
 
@@ -407,9 +407,9 @@ weather_agent = LlmAgent(
 
 ### ToolPrompt
 
-有些时候，LLM模型服务不支持FunctionCall的能力，比如微调模型场景。为了让不支持FunctionCall的LLM也能具有该能力，框架支持通过 `ToolPrompt` 把工具的定义注入到system_prompt里，然后通过从LLM的输出中解析特定的文本以支持此能力。
+有些时候，LLM 模型服务不支持 FunctionCall（例如微调模型场景）。为了让不支持 FunctionCall 的 LLM 也具备该能力，框架支持通过 `ToolPrompt` 将工具定义注入到 `system_prompt` 中，再从 LLM 输出中解析特定文本来实现工具调用。
 
-使用方法很简单，如下所示，只需要为 `OpenAIModel` 新增 `add_tools_to_prompt` 选项即可启用次此功能。
+使用方法很简单：只需要为 `OpenAIModel` 增加 `add_tools_to_prompt` 选项即可启用此功能。
 
 ```python
 OpenAIModel(
@@ -627,7 +627,7 @@ async for event in runner.run_async(
 
 #### output_schema用法
 
-LLmAgent支持配置结构化输出(output_schema)，通过配置 `output_schema`，可以指定Agent的输出格式，一般需要在instruction里指出要输出的结构体格式。
+`LlmAgent` 支持配置结构化输出（`output_schema`）。通过配置 `output_schema`，可以指定 Agent 的输出格式；通常需要在 `instruction` 中说明目标结构。
 
 output_schema的实现机制根据是否使用tools有两种不同的方法：
 
@@ -766,7 +766,7 @@ coordinator = LlmAgent(
 
 #### default_transfer_message
 
-在多 Agent 场景下，当为Agent配置sub_agents时，框架会通过自动注入子Agent相关的提示词。通过设置 `default_transfer_message`，可以覆盖框架默认注入的prompt：
+在多 Agent 场景下，当为 Agent 配置 `sub_agents` 时，框架会自动注入与子 Agent 相关的提示词。通过设置 `default_transfer_message`，可以覆盖框架默认注入的 prompt：
 
 ```python
 CUSTOM_TRANSFER_MESSAGE = """When you need help from other agents:
@@ -786,7 +786,7 @@ coordinator = LlmAgent(
 )
 ```
 
-**注意：注意为了能顺利委派子Agent，请在提示词里提到 `transfer_to_agent` 工具，Agent只有调用这个工具（当配置sub_agents时，框架会自动注入这个工具）**
+**注意：为确保能够顺利委派子 Agent，请在提示词中明确提到 `transfer_to_agent` 工具。Agent 只有调用该工具（配置 `sub_agents` 时框架会自动注入）才能完成委派。**
 
 这个参数有如下配置：
 - None(默认)：框架将会启用自动注入
@@ -884,12 +884,12 @@ async for event in runner.run_async(...,run_config=run_config):
 - `run_async(parent_context)`：Agent 的底层异步执行入口
 
 对于业务代码，通常仍然推荐使用 `Runner.run_async()` 作为统一入口；`AgentABC.run_async()` 更适合高级封装、自定义 Agent 实现或测试场景。
-## 其他Agent类型
+## 其他 Agent 类型
 
-现在你已经了解了 trpc_agent 中提供的LLM Agent，点击下面链接了解其他Agent类型和如何使用它们：
+现在你已经了解了 `trpc_agent` 中提供的 LLM Agent。可通过下面链接了解其他 Agent 类型及其用法：
 
 - **[LangGraph Agent](./langgraph_agent.md)**：了解如何使用Graph来为Agent定制可控的工作流
 - **[Multi Agents](./multi_agents.md)**：掌握Chain、Parallel、Cycle和Sub Agents的使用方法和最佳实践  
 - **[Custom Agent](./custom_agent.md)**：了解如何实现完全自定义的Agent/Multi-Agent逻辑
 
-选择最适合你需求的Agent类型，开始构建强大的AI应用！
+选择最适合你需求的 Agent 类型，开始构建强大的 AI 应用！

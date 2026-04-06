@@ -1,6 +1,6 @@
 # Retrievers
 
-Retrievers are a generic interface in LangChain for returning relevant documents based on a query. Unlike vector stores, retrievers do not need to have document storage capabilities — they are only responsible for retrieving and returning documents. Retrievers can be built on top of vector stores, but also support more diverse retrieval backends, such as [Wikipedia search](https://python.langchain.com/docs/integrations/retrievers/wikipedia/) and [Amazon Kendra](https://python.langchain.com/docs/integrations/retrievers/amazon_kendra_retriever/).
+Retrievers are a generic LangChain interface for returning relevant documents for a query. Unlike vector stores, retrievers do not need document storage capabilities; they only retrieve and return documents. Retrievers can be built on top of vector stores and can also use other backends, such as [Wikipedia search](https://python.langchain.com/docs/integrations/retrievers/wikipedia/) and [Amazon Kendra](https://python.langchain.com/docs/integrations/retrievers/amazon_kendra_retriever/).
 
 Depending on the type of retriever used, there are several ways to create a retriever:
 
@@ -25,7 +25,7 @@ docs = retriever.invoke("your-question?")  # Perform retrieval
 
 You can also specify the search type and additional search parameters. For details, refer to [How to use a vectorstore as a retriever](https://python.langchain.com/docs/how_to/vectorstore_retriever/).
 
-2. Construct a `LangchainKnowledge` object based on this retriever object
+2. Construct a `LangchainKnowledge` object using this `retriever` object
 
 ```python
 rag = LangchainKnowledge(
@@ -70,7 +70,7 @@ retriever = BM25Retriever.from_texts(["foo", "bar"])
 # )
 ```
 
-2. Construct a `LangchainKnowledge` object based on this retriever object
+2. Construct a `LangchainKnowledge` object using this `retriever` object
 
 ```python
 rag = LangchainKnowledge(

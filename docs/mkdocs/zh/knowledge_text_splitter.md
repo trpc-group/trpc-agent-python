@@ -11,9 +11,9 @@ Text Splitters（文本分割器）负责将大型文档拆分为适合检索的
 
 ## 安装依赖
 
-MarkdownHeaderTextSplitter 在不同版本的 LangChain 中位于不同的包：
-- **LangChain 1.x.x**: `langchain-text-splitters` 包
-- **LangChain 0.3.x**: `langchain.text_splitter` 模块
+`MarkdownHeaderTextSplitter` 在不同版本的 LangChain 中位于不同的包：
+- **LangChain 1.x.x**：`langchain-text-splitters` 包
+- **LangChain 0.3.x**：`langchain.text_splitter` 模块
 
 在安装了 trpc-python-agent 框架后，相关依赖会自动安装，因此无需进一步安装依赖。
 
@@ -63,10 +63,10 @@ rag = LangchainKnowledge(
 ```python
 # 兼容 LangChain 0.3.x 和 1.x.x 的导入方式
 try:
-    # langchain v1.x.x版本导入方式
+    # LangChain v1.x.x 版本导入方式
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 except ImportError:
-    # langchain v0.3.x版本导入方式
+    # LangChain v0.3.x 版本导入方式
     from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 # 这里的 chunk_size 表示每个文本块的最大字符数，chunk_overlap 表示相邻文本块之间的重叠字符数。

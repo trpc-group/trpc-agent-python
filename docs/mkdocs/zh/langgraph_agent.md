@@ -1,6 +1,6 @@
 # LangGraph Agent
 
-LangGraphAgent 封装了基于LangGraph图编排的AI Agent实现，它使用有向图来定义复杂的工作流，支持多步骤处理、条件分支、并行执行等高级功能。
+LangGraphAgent 封装了基于 LangGraph 图编排的 AI Agent 实现。它使用有向图定义复杂工作流，支持多步骤处理、条件分支、并行执行等高级能力。
 
 ## 与LlmAgent的对比
 
@@ -28,7 +28,7 @@ LangGraphAgent 封装了基于LangGraph图编排的AI Agent实现，它使用有
 - 基础工具调用
 - 灵活性要求高于可预测性的场景
 
-## 安装 Langgraph
+## 安装 LangGraph
 
 建议先创建独立虚拟环境，再按项目仓库`requirements-pypi.txt`当前依赖版本安装
 
@@ -175,16 +175,16 @@ agent = LangGraphAgent(
 
 更多有关图的概念可以参考：[Graph](./graph.md)
 
-## 创建LangGraphAgent
+## 创建 LangGraphAgent
 
-提供LangGraph的Compiled Graph即可创建LangGraphAgent，如下图所示：
+提供 LangGraph 的 Compiled Graph 即可创建 LangGraphAgent，如下所示：
 
 相关参数遵循LlmAgent的参数说明。
 
 ```python
 from trpc_agent_sdk.agents.langgraph_agent import LangGraphAgent
 
-# 假设已经构建了LangGraph
+# 假设已经构建了 LangGraph
 graph = build_your_langgraph()
 
 agent = LangGraphAgent(
@@ -195,7 +195,7 @@ agent = LangGraphAgent(
 )
 ```
 
-## 构建LangGraph工作流
+## 构建 LangGraph 工作流
 
 ### 基础图结构
 
@@ -230,9 +230,9 @@ def build_graph():
     return graph_builder.compile()
 ```
 
-### 接入trpc_agent
+### 接入 trpc_agent
 
-框架提供了两个重要装饰器来将LangGraph的Node接入trpc_agent：
+框架提供了两个重要装饰器，用于将 LangGraph 的 Node 接入 `trpc_agent`：
 
 #### @langgraph_llm_node 装饰器
 
@@ -255,7 +255,7 @@ def custom_chatbot(state: CustomState):
 
 #### @tool_node 装饰器
 
-用于装饰工具执行节点，自动记录工具调用信息，注意@tool_node必须放在LangGraph的@tool装饰器之后：
+用于装饰工具执行节点，自动记录工具调用信息。注意：`@tool_node` 必须放在 LangGraph 的 `@tool` 装饰器之后：
 
 ```python
 from trpc_agent_sdk.agents.langgraph_agent import tool_node
@@ -270,19 +270,19 @@ def calculate(operation: str, a: float, b: float) -> str:
     # ... 其他操作
 ```
 
-## Human-In-The-Loop能力
+## Human-In-The-Loop 能力
 
 详见 [Human-In-The-Loop](./human_in_the_loop.md)。
 
 ## 高级配置
 
-### LangGraph配置
+### LangGraph 配置
 
-框架提供了RunConfig来配置LangGraph的一些运行时配置，如下所示：
-- `input`：用于传递用户自定义输入，会与Agent内的 `{"messages": [xxx]}` 合并作为 `langgraph.astream` 调用的输入；
-- [Stream Mode](https://langchain-ai.github.io/langgraph/how-tos/streaming/)用于控制LangGraph的输出，框架内置了`updates`、`custom`、`messages`三种流模式，用户可以增加更多；
-- [RunableConfig](https://python.langchain.com/api_reference/core/runnables/langchain_core.runnables.config.RunnableConfig.html)是LangGraph的运行配置，用户可以自行配置；
-- 其他配置如果需要，均可以通过RunConfig配置，目前只支持 `stream_mode` 和 `runnable_config` 两个配置项，如有需要，欢迎提issue。
+框架提供 `RunConfig` 用于配置 LangGraph 的运行时参数，如下所示：
+- `input`：用于传递用户自定义输入，会与 Agent 内部的 `{"messages": [xxx]}` 合并后，作为 `langgraph.astream` 的输入；
+- [Stream Mode](https://langchain-ai.github.io/langgraph/how-tos/streaming/)：用于控制 LangGraph 输出。框架内置 `updates`、`custom`、`messages` 三种流模式，用户可按需扩展；
+- [RunnableConfig](https://python.langchain.com/api_reference/core/runnables/langchain_core.runnables.config.RunnableConfig.html)：LangGraph 的运行配置，用户可按需设置；
+- 其他配置如有需要，也可通过 `RunConfig` 传入。当前框架只透传 `stream_mode` 和 `runnable_config` 两项，如需扩展欢迎提 issue。
 
 ```python
 from trpc_agent_sdk.agents.run_config import RunConfig
@@ -300,9 +300,9 @@ run_config = RunConfig(
 runner.run_async(..., run_config=run_config)
 ```
 
-### 获取LangGraph原始数据
+### 获取 LangGraph 原始数据
 
-在获取Event之后，可以获取LangGraph的原始响应数据，如下所示：
+获取 `Event` 后，可以进一步读取 LangGraph 的原始响应数据，如下所示：
 
 ```python
 from trpc_agent_sdk.agents.langgraph_agent import get_langgraph_payload
@@ -312,19 +312,19 @@ async for event in runner.run_async(...):
     if langgraph_payload:
         stream_mode = langgraph_payload["stream_mode"] 
         chunk = langgraph_payload["chunk"]
-        # 处理原始LangGraph数据
+        # 处理原始 LangGraph 数据
 ```
 
-### 在节点中访问Agent上下文
+### 在节点中访问 Agent 上下文
 
-在LangGraph节点中可以访问trpc_agent的上下文信息：
+在 LangGraph 节点中可以访问 `trpc_agent` 的上下文信息：
 
 ```python
 from trpc_agent_sdk.agents.langgraph_agent import get_langgraph_agent_context
 
 @langgraph_llm_node
 def context_aware_node(state: State, config: RunnableConfig):
-    """可访问Agent上下文的节点"""
+    """可访问 Agent 上下文的节点"""
     ctx = get_langgraph_agent_context(config)
     user_id = ctx.session.user_id
     session_state = ctx.session.state
@@ -336,15 +336,15 @@ def context_aware_node(state: State, config: RunnableConfig):
 
 ## 内存管理建议
 
-LangGraphAgent支持两种内存管理方式：
+LangGraphAgent 支持两种内存管理方式：
 
 1. **使用trpc_agent的SessionService**（推荐）：
    ```python
-   # 不使用checkpointer，trpc_agent将会托管会话信息
+   # 不使用 checkpointer，trpc_agent 将托管会话信息
    graph = graph_builder.compile()
    ```
 
-2. **使用LangGraph的checkpointer**：
+2. **使用 LangGraph 的 checkpointer**：
    ```python
    from langgraph.checkpoint.memory import MemorySaver
    
@@ -352,7 +352,7 @@ LangGraphAgent支持两种内存管理方式：
    graph = graph_builder.compile(checkpointer=memory)
    ```
 
-推荐使用第一种方式，因为它与trpc_agent的多Agent对话管理更好集成。
+推荐使用第一种方式，因为它与 `trpc_agent` 的多 Agent 对话管理集成得更好。
 
 ## 自定义事件发送
 

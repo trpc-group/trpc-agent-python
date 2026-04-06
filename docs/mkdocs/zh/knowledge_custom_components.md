@@ -1,12 +1,12 @@
 # 自定义 Langchain RAG 组件
 
-本文介绍如何自定义 LangchainKnowledge 中的 RAG 核心组件，包括 Document Loader、Text Splitter、Embeddings 和 Retriever，以满足不同场景下的定制化需求。
+本文介绍如何自定义 `LangchainKnowledge` 中的 RAG 核心组件，包括 `Document Loader`、`Text Splitter`、`Embeddings` 和 `Retriever`，以满足不同场景下的定制化需求。
 
 ## 自定义 Document Loader
 
 1. 实现自定义 Document Loader 类
 
-由于LangchainKnowledge类会调用`BaseLoader`类的`aload`方法来加载文档，故自定义Document Loader时，你需要继承`BaseLoader`或其子类并重写`aload`方法（由于`BaseLoader`类的`aload`默认实现方法会调用`alazy_load`或`lazy_load`方法，故只需要实现`lazy_load`或`alazy_load`接口即可）。
+由于 `LangchainKnowledge` 会调用 `BaseLoader` 的 `aload` 方法来加载文档，因此在自定义 `Document Loader` 时，你需要继承 `BaseLoader` 或其子类并重写 `aload`（`BaseLoader.aload` 的默认实现会调用 `alazy_load` 或 `lazy_load`，因此只实现 `lazy_load` 或 `alazy_load` 也可以）。
 
 ```python
 from typing import AsyncIterator, Iterator
@@ -60,7 +60,7 @@ class CustomDocumentLoader(BaseLoader):
                 line_number += 1
 ```
 
-2. 基于自定义的Document Loader构造`LangchainKnowledge`对象
+2. 基于自定义的 `Document Loader` 构造 `LangchainKnowledge` 对象
 
 ```python
 rag = LangchainKnowledge(
@@ -74,9 +74,9 @@ rag = LangchainKnowledge(
 
 1. 实现自定义 Text Splitter 类
 
-由于LangchainKnowledge类会调用`BaseDocumentTransformer`类的`atransform_documents`方法来加工文档，故自定义Text Splitter时，你需要继承`BaseDocumentTransformer`或其子类并重写`atransform_documents`方法（由于`BaseDocumentTransformer`类的`atransform_documents`方法默认实现会调用`transform_documents`，故可以只实现`transform_documents`）。
+由于 `LangchainKnowledge` 会调用 `BaseDocumentTransformer` 的 `atransform_documents` 方法来加工文档，因此在自定义 `Text Splitter` 时，你需要继承 `BaseDocumentTransformer` 或其子类并重写 `atransform_documents`（`BaseDocumentTransformer.atransform_documents` 的默认实现会调用 `transform_documents`，因此只实现 `transform_documents` 也可以）。
 
-一个按separator分割符分割文本的示例如下，完整示例见[knowledge_with_custom_components](../../../examples/knowledge_with_custom_components/)。：
+一个按 `separator` 分隔符切分文本的示例如下，完整示例见 [knowledge_with_custom_components](../../../examples/knowledge_with_custom_components/)：
 
 ```python
 from typing import Any, Sequence
@@ -144,7 +144,7 @@ class CustomTextSplitter(BaseDocumentTransformer):
         )
 ```
 
-2. 基于自定义的Text Splitter构造`LangchainKnowledge`对象
+2. 基于自定义的 `Text Splitter` 构造 `LangchainKnowledge` 对象
 
 ```python
 rag = LangchainKnowledge(
@@ -158,7 +158,7 @@ rag = LangchainKnowledge(
 
 1. 实现自定义 Embeddings 类
 
-自定义embedding的方式同[LangChain | Custom Embeddings](https://python.langchain.com/docs/how_to/custom_embeddings/), 必须实现以下方法：
+自定义 Embeddings 的方式与 [LangChain | Custom Embeddings](https://python.langchain.com/docs/how_to/custom_embeddings/) 一致，必须实现以下方法：
 
 | Method/Property | Description | Required/Optional |
 |---|---|---|
@@ -167,7 +167,7 @@ rag = LangchainKnowledge(
 | aembed_documents(texts) | Asynchronously generates embeddings for a list of strings. | Optional |
 | aembed_query(text) | Asynchronously generates an embedding for a single text query. | Optional |
 
-一个将文本转成固定向量的示例(仅用于说明意图)如下：
+一个“将文本转为固定向量”的示例（仅用于说明意图）如下：
 
 ```python
 from typing import List
@@ -203,7 +203,7 @@ class ParrotLinkEmbeddings(Embeddings):
     #     ...
 ```
 
-2. 基于自定义的Embeddings构造`LangchainKnowledge`对象
+2. 基于自定义的 `Embeddings` 构造 `LangchainKnowledge` 对象
 
 ```python
 rag = LangchainKnowledge(
@@ -217,9 +217,9 @@ rag = LangchainKnowledge(
 
 1. 实现自定义 Retriever 类
 
-LangchainKnowledge类会调用`BaseRetriever`类的`ainvoke`方法来进行检索，且当 retriever 和 vectorstore 同时使用时，会调用`BaseRetriever`类的`from_documents`方法从 vectorstore 的索引结果创建。
+`LangchainKnowledge` 会调用 `BaseRetriever` 的 `ainvoke` 方法进行检索；当 retriever 与 vectorstore 同时使用时，会调用 `BaseRetriever` 的 `from_documents` 方法，从 vectorstore 的索引结果构建 retriever。
 
-自定义Retriever的方式同[LangChain | How to create a custom Retriever](https://python.langchain.com/docs/how_to/custom_retriever/), 必须实现以下方法：
+自定义 `Retriever` 的方式与 [LangChain | How to create a custom Retriever](https://python.langchain.com/docs/how_to/custom_retriever/) 一致，必须实现以下方法：
 
 | Method/Property | Description | Required/Optional |
 |---|---|---|
@@ -282,7 +282,7 @@ class ToyRetriever(BaseRetriever):
     #     """
 ```
 
-另外，若此Retriever需和vectorstore一起使用的话，则要求其具备`from_documents`接口，示例如下：
+另外，若该 Retriever 需要与 vectorstore 一起使用，则要求实现 `from_documents` 接口，示例如下：
 
 ```python
     # Optional: If you want to use retriever with vectorstore together in LangChainKnowledge,
@@ -312,7 +312,7 @@ class ToyRetriever(BaseRetriever):
         return cls(documents=doc_list, k=k, **kwargs)
 ```
 
-2. 基于自定义的Embeddings构造`LangchainKnowledge`对象
+2. 基于自定义的 `Retriever` 构造 `LangchainKnowledge` 对象
 
 ```python
 test_documents = [
@@ -325,10 +325,10 @@ test_documents = [
         metadata={"source": "weather.txt"}
     )
 ]
-embedder=ToyRetriever(test_documents, k = 3)
+retriever = ToyRetriever(test_documents, k=3)
 rag = LangchainKnowledge(
     ...,
-    embedder=embedder,
+    retriever=retriever,
     ...,
 )
 ```
@@ -339,7 +339,7 @@ rag = LangchainKnowledge(
 
 ## 参考文档
 
-[How to create a custom Document Loader](https://python.langchain.com/docs/how_to/document_loader_custom/)
-[how_to/#custom](https://python.langchain.com/docs/how_to/#custom)
-[Custom Embeddings](https://python.langchain.com/docs/how_to/custom_embeddings/)
-[How to create a custom Retriever](https://python.langchain.com/docs/how_to/custom_retriever/)
+- [How to create a custom Document Loader](https://python.langchain.com/docs/how_to/document_loader_custom/)
+- [how_to/#custom](https://python.langchain.com/docs/how_to/#custom)
+- [Custom Embeddings](https://python.langchain.com/docs/how_to/custom_embeddings/)
+- [How to create a custom Retriever](https://python.langchain.com/docs/how_to/custom_retriever/)

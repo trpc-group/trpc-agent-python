@@ -30,7 +30,7 @@ LangGraphAgent wraps an AI Agent implementation based on LangGraph graph orchest
 
 ## Installing LangGraph
 
-It is recommended to create an isolated virtual environment first, then install dependencies according to the versions specified in the project repository's `requirements-pypi.txt`
+It is recommended to create an isolated virtual environment first, then install dependencies according to the versions specified in the project's `requirements-pypi.txt`.
 
 ### Standalone Installation
 ```bash
@@ -44,7 +44,7 @@ pip install "langgraph==0.6.0"
 
 ### Installation via requirements
 
-If you want to install dependencies consistent with the current development environment of the repository, it is recommended to use the `requirements.txt` and `requirements-pypi.txt` files in the root directory directly.
+If you want dependencies that match the repository's current development environment, use the root-level `requirements.txt` and `requirements-pypi.txt` directly.
 
 ```bash
 # Create a Python virtual environment
@@ -177,9 +177,9 @@ For more graph-related concepts, refer to: [Graph](./graph.md)
 
 ## Creating a LangGraphAgent
 
-A LangGraphAgent can be created by providing LangGraph's Compiled Graph, as shown below:
+A LangGraphAgent can be created by providing a compiled LangGraph graph, as shown below:
 
-The relevant parameters follow the parameter descriptions of LlmAgent.
+The other parameters follow the same definitions as in `LlmAgent`.
 
 ```python
 from trpc_agent_sdk.agents.langgraph_agent import LangGraphAgent
@@ -278,11 +278,11 @@ See [Human-In-The-Loop](./human_in_the_loop.md).
 
 ### LangGraph Configuration
 
-The framework provides RunConfig for configuring some LangGraph runtime settings, as shown below:
-- `input`: Used to pass user-defined input, which will be merged with the Agent's internal `{"messages": [xxx]}` as the input for the `langgraph.astream` call;
-- [Stream Mode](https://langchain-ai.github.io/langgraph/how-tos/streaming/) controls LangGraph's output. The framework has built-in support for `updates`, `custom`, and `messages` stream modes, and users can add more;
-- [RunnableConfig](https://python.langchain.com/api_reference/core/runnables/langchain_core.runnables.config.RunnableConfig.html) is LangGraph's runtime configuration, which users can configure as needed;
-- Other configurations can also be passed through RunConfig if needed. Currently, only `stream_mode` and `runnable_config` are supported. If additional configuration items are needed, feel free to open an issue.
+The framework provides `RunConfig` for LangGraph runtime settings, as shown below:
+- `input`: Passes user-defined input. It is merged with the Agent's internal `{"messages": [xxx]}` and then used as input to `langgraph.astream`;
+- [Stream Mode](https://langchain-ai.github.io/langgraph/how-tos/streaming/): Controls LangGraph output. The framework includes `updates`, `custom`, and `messages` by default, and you can add more;
+- [RunnableConfig](https://python.langchain.com/api_reference/core/runnables/langchain_core.runnables.config.RunnableConfig.html): LangGraph runtime configuration that you can customize as needed;
+- If additional options are needed, they can also be passed through `RunConfig`. At present, the framework only forwards `stream_mode` and `runnable_config`. Feel free to open an issue for more fields.
 
 ```python
 from trpc_agent_sdk.agents.run_config import RunConfig
@@ -302,7 +302,7 @@ runner.run_async(..., run_config=run_config)
 
 ### Retrieving Raw LangGraph Data
 
-After obtaining an Event, you can access the raw response data from LangGraph, as shown below:
+After receiving an `Event`, you can access the raw LangGraph payload as shown below:
 
 ```python
 from trpc_agent_sdk.agents.langgraph_agent import get_langgraph_payload
@@ -317,7 +317,7 @@ async for event in runner.run_async(...):
 
 ### Accessing Agent Context within Nodes
 
-In LangGraph nodes, you can access the trpc_agent context information:
+Within LangGraph nodes, you can access `trpc_agent` context information:
 
 ```python
 from trpc_agent_sdk.agents.langgraph_agent import get_langgraph_agent_context
@@ -352,7 +352,7 @@ LangGraphAgent supports two memory management approaches:
    graph = graph_builder.compile(checkpointer=memory)
    ```
 
-The first approach is recommended because it integrates better with trpc_agent's multi-Agent conversation management.
+The first approach is recommended because it integrates better with `trpc_agent` multi-agent conversation management.
 
 ## Custom Event Emission
 

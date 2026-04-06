@@ -2,7 +2,7 @@
 
 DocumentLoaders（文档加载器）负责从多种数据源（文本文件、PDF、Markdown 等）读取原始数据，并将其转换为标准的 LangChain Document 格式，以便后续的文本分割、向量化和检索等流程使用。
 
-每个 DocumentLoader 都有其特定的参数，但它们都可以通过统一的 `.load` 方法进行调用。
+每个 DocumentLoader 都有其特定参数，但都可以通过统一的 `.load` 方法调用。
 
 以下是一些常用组件的用法介绍：
 
@@ -16,7 +16,7 @@ DocumentLoaders（文档加载器）负责从多种数据源（文本文件、PD
 
 ### 安装依赖
 
-TextLoader 位于 langchain-community package 中，如未安装 langchain-community，可使用如下命令安装：
+TextLoader 位于 `langchain-community` 包中；如未安装，可使用如下命令安装：
 
 ```shell
 pip install langchain-community
