@@ -1,22 +1,22 @@
 # LLM Agent
 
-LlmAgent encapsulates a general-purpose AI Agent implementation that uses an LLM as its brain, interacts with external systems through tool calls, and can automate complex task processing.
+`LlmAgent` is a general-purpose AI Agent implementation that uses an LLM as its reasoning core, interacts with external systems through tool calls, and automates complex task workflows.
 
-Unlike Agents that follow a fixed workflow, LlmAgent dynamically understands instructions and context through the LLM, autonomously deciding execution steps, tool calls, or whether to delegate to other Agents. For example, in a RAG scenario, the typical flow is to first retrieve documents and then generate a response based on them, whereas LlmAgent may recognize that the user's question is unrelated to the knowledge base and directly return a reply like "question is not relevant" without going through the RAG pipeline.
+Unlike Agents that follow fixed workflows, `LlmAgent` dynamically interprets instructions and context through the LLM, then decides execution steps, tool calls, or delegation to other Agents. For example, in a RAG scenario, the typical flow is "retrieve first, then answer"; however, `LlmAgent` may determine that the question is unrelated to the knowledge base and respond directly without running the full RAG pipeline.
 
-To create an LlmAgent, you need to configure the Agent's information and the tools it uses.
+To create an `LlmAgent`, you need to configure the Agent's basic information and tools.
 
 ## Configuring Agent Basic Information
 
-As shown below, in trpc_agent, an Agent is identified by the following properties:
-- `name` (required): The name of the Agent, used to uniquely identify an Agent;
-- `description` (optional): The description of the Agent, used in multi-Agent scenarios to provide its identity information to other Agents;
-- `model` (required): The brain of the Agent; different scenarios (conversation/code generation/complex problem solving, etc.) require different types of models;
+In `trpc_agent`, an Agent is identified by the following properties:
+- `name` (required): Agent name used for unique identification;
+- `description` (optional): Agent description used in multi-Agent scenarios so other Agents can understand its role;
+- `model` (required): Agent reasoning core. Different scenarios (conversation, code generation, complex problem solving, etc.) may require different models;
 
 ```python
 LlmAgent(
     name="weather_agent",
-    description="A helpful assistant for query weather",
+    description="A helpful assistant for weather queries",
     model="deepseek-chat",
     instruction="...", # Will be introduced in the next section
 )
@@ -51,10 +51,10 @@ The `instruction` parameter is the most critical configuration for shaping the b
 
 **State variables (placeholder variables)**:
 
-State variables `{var}` can be used in `instruction` to inject session state
+State variables `{var}` can be used in `instruction` to inject session state.
 
 * The instruction string is a template where you can use `{var}` syntax to insert dynamic values, injecting session state
-* `{var}` inserts the value of the state variable named var from the session state; if the state variable does not exist, trpc_agent will ignore it
+* `{var}` inserts the value of the corresponding state variable from session state; if the variable does not exist, `trpc_agent` ignores it
 * `{var?}` is an optional placeholder; if not present, it is replaced with an empty string
 
 ```python
@@ -99,12 +99,12 @@ LlmAgent(
     # tools will be added in the next section
 ```
 
-LlmAgent can also be configured with output_key to save the Agent's output to a state variable for use in templates (typically used in cross-Agent interaction scenarios), as shown below:
+`LlmAgent` can also be configured with `output_key` to store the Agent's output in session state for template usage (typically in cross-Agent interaction scenarios), as shown below:
 
 ```python
 LlmAgent(
     name="weather_agent",
-    description="A helpful assistant for query weather",
+    description="A helpful assistant for weather queries",
     model="deepseek-chat",
     instruction="...",
     output_key="weather_info",
@@ -113,13 +113,13 @@ LlmAgent(
 
 ## Configuring Agent Tools (tools)
 
-Tools are how the Agent interacts with the external world. They can be API calls, database queries, file operations, or any operation that can be represented as a Python function. Currently, multiple tool types are supported:
+Tools are how an Agent interacts with the external world. They can be API calls, database queries, file operations, or any operation that can be represented as a Python function. The framework currently supports multiple tool types:
 
 - Function: Local function calls, supporting function parameters (string, integer, float, list, dict, boolean, pydantic.BaseModel)
 - AgentTool: Allows wrapping an Agent as a Tool, enabling the output of one Agent to be used as the input of another Agent
 - McpTool: A mechanism for integrating external MCP server tools. Through the MCP protocol, an Agent can invoke tools provided by other processes
 
-For more tools, see: [tools](./tool.md)
+For more tool types, see [Tools](./tool.md).
 
 ```python
 from trpc_agent_sdk.tools import FunctionTool

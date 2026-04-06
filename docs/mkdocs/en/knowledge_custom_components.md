@@ -1,12 +1,12 @@
 # Custom Langchain RAG Components
 
-This document describes how to customize the core RAG components in LangchainKnowledge, including Document Loader, Text Splitter, Embeddings, and Retriever, to meet customization requirements in different scenarios.
+This document describes how to customize core RAG components in `LangchainKnowledge`, including Document Loader, Text Splitter, Embeddings, and Retriever, for different scenarios.
 
 ## Custom Document Loader
 
 1. Implement a custom Document Loader class
 
-Since the LangchainKnowledge class invokes the `aload` method of the `BaseLoader` class to load documents, when customizing a Document Loader, you need to inherit from `BaseLoader` or its subclass and override the `aload` method (since the default implementation of `aload` in the `BaseLoader` class calls the `alazy_load` or `lazy_load` method, you only need to implement the `lazy_load` or `alazy_load` interface).
+Since `LangchainKnowledge` invokes `BaseLoader.aload()` to load documents, a custom Document Loader should inherit from `BaseLoader` (or its subclasses) and implement the required loading interfaces. In practice, because the default `aload()` implementation delegates to `alazy_load()` or `lazy_load()`, implementing either `lazy_load()` or `alazy_load()` is usually sufficient.
 
 ```python
 from typing import AsyncIterator, Iterator
@@ -74,7 +74,7 @@ rag = LangchainKnowledge(
 
 1. Implement a custom Text Splitter class
 
-Since the LangchainKnowledge class invokes the `atransform_documents` method of the `BaseDocumentTransformer` class to process documents, when customizing a Text Splitter, you need to inherit from `BaseDocumentTransformer` or its subclass and override the `atransform_documents` method (since the default implementation of `atransform_documents` in the `BaseDocumentTransformer` class calls `transform_documents`, you can just implement `transform_documents`).
+Since `LangchainKnowledge` invokes `BaseDocumentTransformer.atransform_documents()` to process documents, a custom Text Splitter should inherit from `BaseDocumentTransformer` (or its subclasses) and implement the required transformation interfaces. Because the default `atransform_documents()` implementation calls `transform_documents()`, implementing `transform_documents()` is usually enough.
 
 The following is an example of splitting text by a separator. For the complete example, see [knowledge_with_custom_components](../../../examples/knowledge_with_custom_components/):
 
@@ -325,10 +325,10 @@ test_documents = [
         metadata={"source": "weather.txt"}
     )
 ]
-embedder=ToyRetriever(test_documents, k = 3)
+retriever = ToyRetriever(test_documents, k=3)
 rag = LangchainKnowledge(
     ...,
-    embedder=embedder,
+    retriever=retriever,
     ...,
 )
 ```
@@ -339,7 +339,7 @@ For the complete example, see [knowledge_with_custom_components](../../../exampl
 
 ## References
 
-[How to create a custom Document Loader](https://python.langchain.com/docs/how_to/document_loader_custom/)
-[how_to/#custom](https://python.langchain.com/docs/how_to/#custom)
-[Custom Embeddings](https://python.langchain.com/docs/how_to/custom_embeddings/)
-[How to create a custom Retriever](https://python.langchain.com/docs/how_to/custom_retriever/)
+- [How to create a custom Document Loader](https://python.langchain.com/docs/how_to/document_loader_custom/)
+- [how_to/#custom](https://python.langchain.com/docs/how_to/#custom)
+- [Custom Embeddings](https://python.langchain.com/docs/how_to/custom_embeddings/)
+- [How to create a custom Retriever](https://python.langchain.com/docs/how_to/custom_retriever/)

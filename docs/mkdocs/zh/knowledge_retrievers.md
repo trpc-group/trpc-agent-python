@@ -1,6 +1,6 @@
 # Retrievers 检索器
 
-Retrievers（检索器）是 LangChain 中用于根据查询返回相关文档的通用接口。与向量存储不同，检索器不需要具备文档存储能力，只需负责检索和返回文档。检索器既可以基于向量存储构建，也支持更多样化的检索后端，例如 [Wikipedia search](https://python.langchain.com/docs/integrations/retrievers/wikipedia/) 和 [Amazon Kendra](https://python.langchain.com/docs/integrations/retrievers/amazon_kendra_retriever/)。
+Retrievers（检索器）是 LangChain 中用于根据查询返回相关文档的通用接口。与向量存储不同，检索器不需要具备文档存储能力，只需负责检索并返回文档。检索器既可以基于向量存储构建，也支持更多样化的检索后端，例如 [Wikipedia search](https://python.langchain.com/docs/integrations/retrievers/wikipedia/) 和 [Amazon Kendra](https://python.langchain.com/docs/integrations/retrievers/amazon_kendra_retriever/)。
 
 根据使用的检索器类型，有如下几种方法可创建检索器：
 
@@ -23,7 +23,7 @@ retriever = vectorstore.as_retriever()  # 使用vectorstore的as_retriever方法
 docs = retriever.invoke("your-question?")  # 进行检索
 ```
 
-同时你可以指定 search type 及更多的 search parameters，详情参考 [How to use a vectorstore as a retriever](https://python.langchain.com/docs/how_to/vectorstore_retriever/)。
+你也可以指定 `search type` 及更多 `search parameters`，详情参考 [How to use a vectorstore as a retriever](https://python.langchain.com/docs/how_to/vectorstore_retriever/)。
 
 2. 基于此 retriever 对象构造 `LangchainKnowledge` 对象
 
