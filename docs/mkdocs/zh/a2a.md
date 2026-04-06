@@ -151,7 +151,7 @@ AGENT_BASE_URL = "http://127.0.0.1:18081"
 
 
 async def main():
-    # 创建远程 Agent，指定服务 URL；客户端会自动从 /.well-known/agent-card.json 发现 Agent Card
+    # 创建远程 Agent，指定服务 URL；客户端会自动从 /.well-known/agent.json 发现 Agent Card
     remote_agent = TrpcRemoteA2aAgent(
         name="weather_agent",
         agent_base_url=AGENT_BASE_URL,
@@ -243,7 +243,7 @@ run_config = RunConfig(
 | 要点 | 说明 |
 |------|------|
 | `TrpcRemoteA2aAgent` | 继承 `BaseAgent`，可像本地 Agent 一样通过 `Runner` 使用 |
-| `agent_base_url` | 远程 A2A 服务的 HTTP 地址，客户端会自动从 `/.well-known/agent-card.json` 发现 Agent Card |
+| `agent_base_url` | 远程 A2A 服务的 HTTP 地址，客户端会自动从 `/.well-known/agent.json` 发现 Agent Card |
 | `initialize()` | 异步初始化，完成 Agent Card 发现和客户端创建 |
 | `agent_card` / `a2a_client` | 可选参数，如果已有 AgentCard 或 A2AClient 实例可直接传入，跳过自动发现 |
 | `RunConfig` | 通过 `metadata` 字段传递业务参数（如 `user_id`），服务端可通过回调读取 |

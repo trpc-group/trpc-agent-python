@@ -164,7 +164,7 @@ agent = LlmAgent(
     after_agent_callback=after_agent_callback,     # Agent 执行后的回调
 )
 ```
-表示每次运行用户的tool之前和之后执行的回调函数
+表示每次运行 Agent 之前和之后执行的回调函数
 
 - before_agent_callback: 若返回结果不为空，agent 不会被调用；正常场景下，agent 调用一次该函数被调用一次
 - after_agent_callback: 正常场景下，agent 调用一次该函数被调用一次

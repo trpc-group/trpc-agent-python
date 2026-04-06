@@ -151,7 +151,7 @@ AGENT_BASE_URL = "http://127.0.0.1:18081"
 
 
 async def main():
-    # Remote Agent with service URL; discovers Agent Card from /.well-known/agent-card.json
+    # Remote Agent with service URL; discovers Agent Card from /.well-known/agent.json
     remote_agent = TrpcRemoteA2aAgent(
         name="weather_agent",
         agent_base_url=AGENT_BASE_URL,
@@ -243,7 +243,7 @@ The server can read this metadata in the `user_id_extractor` callback (see the c
 | Topic | Description |
 |------|------|
 | `TrpcRemoteA2aAgent` | Extends `BaseAgent`; use with `Runner` like a local Agent |
-| `agent_base_url` | HTTP base URL of the remote A2A service; client discovers the Agent Card from `/.well-known/agent-card.json` |
+| `agent_base_url` | HTTP base URL of the remote A2A service; client discovers the Agent Card from `/.well-known/agent.json` |
 | `initialize()` | Async initialization: Agent Card discovery and client construction |
 | `agent_card` / `a2a_client` | Optional; pass an existing AgentCard or A2AClient to skip auto-discovery |
 | `RunConfig` | Business parameters (e.g. `user_id`) via `metadata`; server reads them in callbacks |
@@ -498,5 +498,5 @@ def custom_event_callback(event: Event, context: RequestContext) -> Event | None
 
 ## Full Examples
 
-- **Basics**: [examples/a2a](../../../examples/a2a/README.md) — A2A server deployment + 3-turn multi-turn dialogue
+- **Basics**: [examples/a2a](../../../examples/a2a/README.md) — A2A server deployment + a three-turn conversation
 - **With cancellation**: [examples/a2a_with_cancel](../../../examples/a2a_with_cancel/README.md) — Cancel during LLM streaming and during tool execution

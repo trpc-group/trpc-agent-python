@@ -30,14 +30,13 @@ Claude-Code also includes the following built-in tools. If your Agent happens to
 
 **Note:**
 - **Claude-Code's implementation is closed-source. If your business scenario requires fine-grained optimization or flow control over the underlying Agent, please use it with caution.**
-- **The WebSearch tool cannot be used due to Anthropic's restrictions, as confirmed by testing.**
 
 ## Design
 
 As shown in the architecture diagram below, tRPC-Agent provides ClaudeAgent and Anthropic Proxy Server to integrate this capability. ClaudeAgent is implemented based on Claude-Agent-SDK-Python, and the Anthropic Proxy Server forwards Claude-Code requests to connect with internal models. The core components are described as follows:
 - **ClaudeAgent**: Users develop Claude-Code-based Agents by configuring the **ClaudeAgent provided by the tRPC-Agent-Python framework**. ClaudeAgent can be configured with different Session modes — either letting Claude-Code manage sessions (default), or letting tRPC-Agent manage sessions (by setting ClaudeAgent's `enable_session: True` field).
 - **SessionManager - Claude Session**: **Enabled by default**. Sessions are managed by Claude-Code. If your business requires multi-node deployment, please use `hash` routing, as each Session will create a new Claude-Code-Process due to Claude-SDK limitations.
-- **Directly Use - tRPC Session**: **Disabled by default**. Sessions are managed by tRPC-Agent. For multi-node deployment, you only need to use the framework's RedisSession. Essentially, each call to Claude-Code is a brand new conversation, except the framework injects historical messages into the messages. Since the conversation is not managed by Claude-Code, some internal reasoning information is missing, so multi-turn conversation performance may be inferior to Claude Session in scenarios that depend on internal reasoning information.
+- **Directly Use - tRPC Session**: **Disabled by default**. Sessions are managed by tRPC-Agent. For multi-node deployment, you only need to use the framework's RedisSession. Essentially, each call to Claude-Code is a brand new conversation, except the framework injects historical messages into the conversation. Since the conversation is not managed by Claude-Code, some internal reasoning information is missing, so multi-turn conversation performance may be inferior to Claude Session in scenarios that depend on internal reasoning information.
 - **Claude Code Process**: A process is spawned by the Claude-Agent-Python-SDK, interacting with Claude-Code-CLI via stdio. Each ClaudeSession manages the interaction with one subprocess.
 - **Tools**: When configuring an Agent, users can use both Claude-Code's built-in tools and custom tools. The framework automatically injects them into the CLI.
 - **Model**: Like LlmAgent, users can freely define the model used by the Agent. When Claude-Code-CLI executes, it will call this model. Any model compatible with the framework can be configured.
@@ -454,7 +453,7 @@ The Claude Agent SDK has a built-in skill capability. With simple configuration,
     - Generally, if your skills are created in the home directory, they represent user-level skill capabilities (cross-project)
     - If your skills directory is created in the project directory, they represent project-level skill capabilities (project-specific)
 - Create a skill directory under the skills directory, e.g., traver-helper
-- Create a SKILL.md document in the skill directory. Refer to [skill format](https://platform.claude.com/docs/zh-CN/agents-and-tools/agent-skills/overview#skill) for the format reference
+- Create a SKILL.md document in the skill directory. Refer to [skill format](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview) for the format reference
 
 Example skill.md
 ```
