@@ -12,9 +12,7 @@ description = "Python LLM agent framework with multi-model support (OpenAI, Anth
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
-authors = [
-    {name = "Tencent", email = "team@tencent.com"}
-]
+authors = [{ name = "Tencent", email = "raylchen@tencent.com" }]
 keywords = ["trpc", "agent", "llm", "ai", "langchain", "langgraph", "mcp", "a2a", "fastapi", "multi-agent", "tool-calling"]
 classifiers = [
     "Development Status :: 3 - Alpha",
