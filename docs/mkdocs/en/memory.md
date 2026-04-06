@@ -876,7 +876,7 @@ pip install mem0ai
 pip install sentence-transformers qdrant-client
 
 # Or install via trpc-agent extension
-pip install trpc-agent[mem0]
+pip install -e ".[mem0]"
 ```
 
 #### 2. Create Agent

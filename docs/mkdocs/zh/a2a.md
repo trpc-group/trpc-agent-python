@@ -14,10 +14,10 @@ trpc-agent-python SDK 内置了 Agent-to-Agent (A2A) 协议支持，让你可以
 ## 安装
 
 ```bash
-pip install trpc-agent[a2a]
+pip install -e ".[a2a]"
 ```
 
-需要 Python 3.10+（建议 3.12）。
+需要使用 Python 3.12。
 
 ---
 

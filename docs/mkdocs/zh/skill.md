@@ -61,7 +61,7 @@ skills/
 
 ### 1) 要求
 
-- Python 3.10+
+- Python 3.12
 - 模型提供商的 API 密钥（兼容 OpenAI）
 - 可选 Docker（用于容器执行器）
 
