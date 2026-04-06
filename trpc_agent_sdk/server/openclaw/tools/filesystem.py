@@ -1,14 +1,17 @@
-# -*- coding: utf-8 -*-
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
 #
-# Copyright @ 2026 Tencent.com
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# This file is part of tRPC-Agent-Python and is licensed under Apache-2.0.
+#
+# Portions of this file are derived from HKUDS/nanobot (MIT License):
+# https://github.com/HKUDS/nanobot.git
+#
+# Copyright (c) 2025 nanobot contributors
+#
+# See the project LICENSE / third-party attribution notices for details.
+#
 """File system tools: read_file, write_file, edit_file, list_dir.
-
-All four tools are implemented as :class:`~trpc_agent_sdk.tools.BaseTool` subclasses.
-They share state (``workspace`` / ``allowed_dir``) set at construction time and
-have no per-turn external setters, which rules out simple function wrapping via
-:class:`~trpc_agent_sdk.tools.FunctionTool`. :class:`BaseTool` provides a clean
-``_get_declaration()`` + ``_run_async_impl()`` split that matches the existing
-pattern in ``trpc-claw/tools/file_tools/``.
 """
 
 from __future__ import annotations
