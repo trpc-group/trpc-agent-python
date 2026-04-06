@@ -164,7 +164,7 @@ agent = LlmAgent(
     after_agent_callback=after_agent_callback,     # Callback after Agent execution
 )
 ```
-Represents callback functions executed before and after each Agent tool run.
+Represents callback functions executed before and after each Agent invocation.
 
 - before_agent_callback: If the return value is non-null, the agent will not be invoked. Under normal circumstances, this function is called once per agent invocation.
 - after_agent_callback: Under normal circumstances, this function is called once per agent invocation.
