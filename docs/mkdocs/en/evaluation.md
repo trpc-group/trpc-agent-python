@@ -103,7 +103,7 @@ This section provides a minimal runnable example to help you complete your first
 
 #### Step 1: Environment Setup
 
-**System Requirements**: Python 3.10+, an accessible LLM model service.
+**System Requirements**: Python 3.12 is required; you also need an accessible LLM model service.
 
 **Install Dependencies** (includes pytest, pytest-asyncio, rouge-score, etc.):
 

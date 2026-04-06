@@ -57,7 +57,7 @@ npm install -g @anthropic-ai/claude-code
 
 然后安装 tRPC-Agent 适配 ClaudeAgent 的扩展包：
 ```bash
-pip install trpc-agent[agent-claude]
+pip install -e ".[agent-claude]"
 ```
 
 ### 使用方式

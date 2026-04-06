@@ -51,9 +51,7 @@ pip install "langgraph==0.6.0"
 python3 -m venv venv
 # 激活当前目录下的虚拟环境
 source venv/bin/activate
-# 先安装 PyPI 侧依赖
-pip install -r requirements-pypi.txt
-# 再安装项目基础依赖
+# 安装项目基础依赖
 pip install -r requirements.txt
 ```
 

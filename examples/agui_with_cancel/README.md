@@ -68,7 +68,7 @@ weather_agent_with_cancel (LlmAgent)
 
 ### 环境要求
 
-- Python 3.10+（强烈建议 3.12）
+- Python 3.12
 - Node.js 18+
 
 ### 安装步骤

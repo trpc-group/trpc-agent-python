@@ -30,7 +30,7 @@ root_agent (LlmAgent)
 
 ### 环境要求
 
-- Python 3.10+（推荐 3.12）
+- Python 3.12
 - 按 `.env` 配置可用的 SQL 连接（与示例一致）
 
 ### 安装步骤

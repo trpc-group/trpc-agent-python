@@ -21,7 +21,7 @@
 
 ## 环境与运行
 
-- Python 3.10+；仓库根目录 `pip install -e .`
+- Python 3.12；仓库根目录 `pip install -e .`
 - 配置 `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL`、`TRPC_AGENT_MODEL_NAME`
 - 技能目录默认在示例内 `skills/`，可通过环境变量 `SKILLS_ROOT` 覆盖
 

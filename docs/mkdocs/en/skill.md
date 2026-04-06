@@ -61,7 +61,7 @@ Repository and parsing: [trpc_agent_sdk/skills/_repository.py](../../../trpc_age
 
 ### 1) Requirements
 
-- Python 3.10+
+- Python 3.12
 - Model provider API key (OpenAI-compatible)
 - Optional Docker (for container executor)
 

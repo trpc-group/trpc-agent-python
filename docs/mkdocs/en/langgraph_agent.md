@@ -51,8 +51,6 @@ If you want dependencies that match the repository's current development environ
 python3 -m venv venv
 # Activate the virtual environment in the current directory
 source venv/bin/activate
-# Install PyPI-side dependencies first
-pip install -r requirements-pypi.txt
 # Then install project base dependencies
 pip install -r requirements.txt
 ```

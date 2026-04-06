@@ -36,7 +36,7 @@ memory_assistant (LlmAgent)
 
 ### 环境要求
 
-- Python 3.10+（推荐 3.12）
+- Python 3.12
 - 需要可用的 LLM 配置（`TRPC_AGENT_*`）
 - 自托管模式需要 Qdrant 与本地 embedding 相关依赖
 
