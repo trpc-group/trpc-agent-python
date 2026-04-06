@@ -21,7 +21,7 @@
 
 ## 环境与运行
 
-- Python 3.10+；已安装 Docker；仓库根目录 `pip install -e .`
+- Python 3.12；已安装 Docker；仓库根目录 `pip install -e .`
 - 配置 `TRPC_AGENT_API_KEY`、`TRPC_AGENT_BASE_URL`、`TRPC_AGENT_MODEL_NAME`
 - 可选：`SKILLS_ROOT`、`SKILLS_INPUTS_HOST`（默认 `/tmp/skillrun-inputs`）
 

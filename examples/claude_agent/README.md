@@ -57,7 +57,7 @@ claude_weather_agent (ClaudeAgent)
 
 ### 环境要求
 
-- Python 3.10+（强烈建议 3.12）
+- Python 3.12
 
 ### 安装步骤
 

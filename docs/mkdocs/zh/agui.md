@@ -18,7 +18,7 @@
 pip install -e ".[ag-ui]"
 ```
 
-需要 Python 3.10+（建议 3.12）。核心依赖包含 `ag-ui-protocol` 与 FastAPI/Uvicorn。
+要求使用 Python 3.12。核心依赖包含 `ag-ui-protocol` 与 FastAPI/Uvicorn。
 
 ## 快速上手
 

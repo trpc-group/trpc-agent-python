@@ -58,7 +58,7 @@ personal_assistant (LlmAgent)
 
 ### 环境要求
 
-- Python 3.10+（推荐 3.12）
+- Python 3.12
 - `mem0ai`
 - 自托管模式额外需要：`sentence-transformers`、`qdrant-client`
 

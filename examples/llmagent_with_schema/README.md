@@ -56,7 +56,7 @@ profile_analyzer (AgentTool)
 
 ### 环境要求
 
-- Python 3.10+（推荐 3.12）
+- Python 3.12
 
 ### 安装步骤
 
