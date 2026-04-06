@@ -18,7 +18,7 @@
 
 ## Core Capabilities of MemoryService
 
-Based on the implementation in `trpc_agent/memory/`, MemoryService provides the following core capabilities:
+Based on the implementation in `trpc_agent_sdk/memory/`, MemoryService provides the following core capabilities:
 
 ### 1. Storing Session Memory
 
@@ -58,7 +58,7 @@ async def store_session(self, session: Session, agent_context: Optional[AgentCon
 
 **Implementation Logic** (using `InMemoryMemoryService` as an example):
 ```python
-# From trpc_agent/memory/_in_memory_memory_service.py
+# From trpc_agent_sdk/memory/_in_memory_memory_service.py
 async def search_memory(self, key: str, query: str, limit: int = 10, ...) -> SearchMemoryResponse:
     # 1. Extract query keywords (supports both Chinese and English)
     words_in_query = extract_words_lower(query)  # Extract English words and Chinese characters
@@ -583,7 +583,7 @@ python3 run_agent.py
 
 ---
 
-## Integrating Mem0 
+## Integrating Mem0
 
 ### What is Mem0?
 
@@ -608,13 +608,13 @@ tRPC-Agent provides two methods for integrating Mem0:
 | Method | Class / Tool | Applicable Scenario |
 |---|---|---|
 | **Framework-level memory service** (recommended) | `Mem0MemoryService` | The framework automatically handles cross-session memory storage and retrieval, transparent to the Agent |
-| **Tool-based memory** | `search_memory_tool` / `save_memory_tool` | The Agent actively calls Mem0 through tools, with flexible control over storage and retrieval timing |
+| **Tool-based memory** | `SearchMemoryTool` / `SaveMemoryTool` | The Agent actively calls Mem0 through tools, with flexible control over storage and retrieval timing |
 
 ---
 
 ### Mem0MemoryService (Recommended)
 
-`Mem0MemoryService` is tRPC-Agent's **framework-level memory service**. The framework automatically calls `store_session` after each conversation round to store session memories. The Agent actively retrieves related memories through the `load_memory` tool during response generation, without manual management of storage and retrieval timing.
+`Mem0MemoryService` is tRPC-Agent's **framework-level memory service**. The framework automatically calls `store_session` after each turn of the conversation completes to store session memories. The Agent actively retrieves related memories through the `load_memory` tool when generating a response, without manual management of storage and retrieval timing.
 
 #### Core Design
 
@@ -629,7 +629,7 @@ tRPC-Agent provides two methods for integrating Mem0:
 ```python
 from mem0 import AsyncMemory, AsyncMemoryClient
 from trpc_agent_sdk.memory import MemoryServiceConfig
-from trpc_agent_sdk.server.memory_service.mem0_memory_service import Mem0MemoryService
+from trpc_agent_sdk.memory.mem0_memory_service import Mem0MemoryService
 
 # Self-hosted mode (AsyncMemory + Qdrant)
 from mem0.configs.base import MemoryConfig
@@ -1200,8 +1200,8 @@ ConnectionError: Cannot connect to Qdrant at localhost:6333
 
 ### 2. Keyword Search Limitations
 
-- The current implementation uses **keyword matching**, not semantic search
-- Query words must exactly match words in the event text
+- The current implementation uses **keyword (token) matching**, not semantic search
+- After `extract_words_lower` (whole English words, individual Chinese characters), **any** query token that appears in the event's token set counts as a match (this is not full-sentence semantic similarity)
 - Suitable for rapid prototyping, not suitable for complex semantic retrieval requirements
 
 ### 3. TTL Configuration

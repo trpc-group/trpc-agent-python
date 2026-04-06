@@ -220,13 +220,13 @@ agent = LlmAgent(
     name="history_demo",
     description="Agent demonstrating history control",
     ...,
-    max_history_messages=max_history_messages, # Only keep the most recent max_history_messages rounds of conversation
+    max_history_messages=max_history_messages, # Retain only the last max_history_messages messages after filtering
 )
 ```
 
 **Parameter description:**
 - `max_history_messages=0` (default): No limit on the number of historical messages, includes all filtered messages
-- `max_history_messages=N` (N > 0): Only includes the most recent N rounds of messages (applied after other filters)
+- `max_history_messages=N` (N > 0): Only includes the most recent N history messages (applied after other filters)
 
 **Use cases:**
 - Controlling token usage in long conversation scenarios
@@ -406,7 +406,7 @@ weather_agent = LlmAgent(
 
 ### ToolPrompt
 
-Sometimes, the LLM model service does not support FunctionCall capabilities, such as in fine-tuned model scenarios. To enable LLMs that do not support FunctionCall to have this capability, the framework supports injecting tool definitions into the system_prompt via `ToolPrompt`, and then parsing specific text from the LLM output to support this capability.
+Sometimes, the LLM model service does not support FunctionCall capabilities, such as in fine-tuned model scenarios. To enable LLMs that do not support FunctionCall to have this capability, the framework supports injecting tool definitions into the system_prompt via `ToolPrompt`, then parsing specific text from the LLM output to implement tool calling.
 
 The usage is straightforward. As shown below, you only need to add the `add_tools_to_prompt` option to `OpenAIModel` to enable this feature.
 
@@ -785,7 +785,7 @@ coordinator = LlmAgent(
 )
 ```
 
-**Note: To successfully delegate to child Agents, make sure to mention the `transfer_to_agent` tool in the prompt. The Agent can only call this tool (which the framework automatically injects when sub_agents are configured).**
+**Note: To successfully delegate to child Agents, mention the `transfer_to_agent` tool explicitly in the prompt. Delegation completes only when the Agent invokes this tool; the framework injects it automatically when `sub_agents` is configured.**
 
 This parameter has the following configurations:
 - None (default): The framework will enable auto-injection

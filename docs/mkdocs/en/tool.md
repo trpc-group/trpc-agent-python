@@ -4,11 +4,11 @@ Tool is the core mechanism for extending Agent capabilities in trpc_agent. With 
 
 ### Core Features
 
-- **Multiple Tool Types**: Supports Function Tools, MCP standard tools, Agent Tools, File Tools, and other tool types
-- **Streaming Response**: Supports both real-time streaming response (Streaming Tools) and standard response modes
-- **Parallel Execution**: Tool invocations support parallel execution for improved performance (`parallel_tool_calls=True`)
-- **MCP Protocol**: Full support for three transport methods: STDIO, SSE, and Streamable HTTP
-- **Session Management**: MCP toolsets support automatic session health checks and reconnection
+- **Multiple tool types**: Function Tools, MCP standard tools, Agent Tools, File Tools, and more
+- **Streaming responses**: Real-time streaming (Streaming Tools) and standard response modes
+- **Parallel execution**: Tool calls can run in parallel for better performance (`parallel_tool_calls=True`)
+- **MCP protocol**: STDIO, SSE, and Streamable HTTP transports
+- **Session management**: Automatic session health checks and reconnection for MCP toolsets
 
 ## How Agents Use Tools
 
@@ -26,7 +26,7 @@ Agents dynamically use tools through the following steps:
 |------|----------|----------|----------|
 | [Function Tools](#function-tools) | Custom business logic, data processing, API calls | Write Python async functions directly | Weather queries, database operations, file processing, calculation tools |
 | [MCP Tools](#mcp-tools) | Third-party tool integration, cross-process tool invocation, microservice architecture | Connect to existing MCP servers or create new MCP services | External API services, database tools, file system operations |
-| [Tool Set](#toolset) | Business scenarios requiring a group of related tools | Combine related tools into a ToolSet | Access all tools from an MCP Server |
+| [Tool Set](#toolset) | Business scenarios that need a cohesive set of related tools (same category) | Combine a category of tools into one ToolSet | Access all tools exposed by an MCP server |
 | [Agent Tools](#agent-tools) | Wrap an Agent as a tool for other Agents to invoke | Wrap Agent using AgentTool | Translation tools, content processing |
 | [File Tools](#file-tools) | File operations and text processing | Use FileToolSet or individual tools | Read/write files, search, command execution |
 | [LangChain Tools](#langchain-tools) | Reuse tools from the LangChain ecosystem | Wrap as async functions and package as FunctionTool | Web search (Tavily), etc. |
@@ -398,7 +398,7 @@ For a complete Function Tool usage example, see: [examples/function_tools/run_ag
 
 ## MCP Tools
 
-MCP Tools (Model Context Protocol Tools) is the mechanism in the trpc_agent framework for integrating external MCP server tools. Through the MCP protocol, Agents can invoke tools provided by other processes.
+**MCP Tools** (Model Context Protocol Tools) are how trpc_agent integrates tools from external MCP servers. Through the MCP protocol, Agents can invoke tools provided by other processes.
 
 In trpc_agent, the primary integration pattern is: **Agent as MCP client**, connecting to and using tools provided by external MCP servers via `MCPToolset`.
 
@@ -451,7 +451,7 @@ agent = LlmAgent(
 
 ### Creating an MCP Server
 
-The trpc_agent framework itself is only responsible for the MCP client side (connecting and invoking tools via `MCPToolset`). The MCP server is an independent process that provides tool capabilities externally. The following example demonstrates how to quickly create an MCP server using `FastMCP` from the third-party `mcp` library, for trpc_agent Agents to connect to.
+The trpc_agent framework itself is only responsible for the MCP client side (connecting and invoking tools via `MCPToolset`). The MCP server is an independent process that exposes tool capabilities. The following example shows how to create an MCP server quickly with `FastMCP` from the third-party `mcp` library, so Agents in trpc_agent can connect to it.
 
 ```python
 from mcp.server import FastMCP
@@ -511,7 +511,7 @@ if __name__ == "__main__":
 
 #### StdioConnectionParams for stdio Type
 
-Used to connect to a local process MCP server:
+Used to connect to an MCP server running in a local process:
 
 ```python
 import os
@@ -599,7 +599,7 @@ if __name__ == "__main__":
     # app.run(transport="streamable-http")
 ```
 
-#### StreamableHTTPConnectionParams for sse Type
+#### StreamableHTTPConnectionParams for streamable-http Type
 
 Used to connect to a remote HTTP MCP server:
 
@@ -638,7 +638,7 @@ if __name__ == "__main__":
 
 ### Framework Integration
 
-You simply need to use MCPToolset just like using a Toolset:
+Use `MCPToolset` the same way you use a **ToolSet**:
 
 ```python
 from trpc_agent_sdk.agents import LlmAgent
@@ -672,7 +672,7 @@ For a complete MCP Tools usage example, see: [examples/mcp_tools/run_agent.py](.
 
 #### Encountering `Attempted to exit a cancel scope that isn't the current tasks's current cancel scope`
 
-This error occurs because the official mcp library uses the AnyIO library, and when entering and exiting happen in different task contexts, this error is raised. If you encounter this error while running an agent, execute:
+This error occurs because the official MCP library relies on AnyIO: when entering and exiting a cancel scope happen in different task contexts, this error is raised. If you see it while running an Agent, do the following:
 
 ```python
 
@@ -692,7 +692,7 @@ from trpc_agent_sdk.tools import patch_mcp_cancel_scope_exit_issue
 
 patch_mcp_cancel_scope_exit_issue()
 
-# your main function
+# Application entry point
 
 ```
 
@@ -1238,7 +1238,7 @@ The example code demonstrates how to:
 
 LangChain Tools allow you to reuse tools from the LangChain community or official ecosystem in trpc_agent. This article uses Tavily search as an example to demonstrate how to integrate `langchain_tavily.TavilySearch` as a tool into `LlmAgent`.
 
-trpc_agent provides a development experience consistent with Function Tool: wrap functionality as an async function → package as `FunctionTool` → inject into `LlmAgent`.
+trpc_agent offers the same developer experience as **Function Tools**: wrap functionality as an async function → wrap with `FunctionTool` → inject into `LlmAgent`.
 
 ### Using Tools
 
@@ -1325,7 +1325,7 @@ root_agent = create_agent()
 #### 2. Invocation Mode Description
 
 - The official Tavily package is `langchain_tavily`: recommended class `TavilySearch`
-- Supports `.invoke/.ainvoke` two modes:
+- Supports both `invoke` and `ainvoke`:
   - Synchronous: `invoke` (blocks the current thread)
   - Asynchronous: `ainvoke` (recommended, non-blocking)
 
@@ -1333,7 +1333,7 @@ root_agent = create_agent()
 
 #### Parameter Types
 
-Consistent with Function Tool, JSON-serializable parameters are recommended. In the example, `query: str` and `max_results: int` are both simple types, making it easy for the LLM to fill them correctly.
+As with Function Tools, JSON-serializable parameters are recommended. In the example, `query: str` and `max_results: int` are both simple types, making it easy for the LLM to fill them correctly.
 
 ```python
 async def tavily_search(query: str, max_results: int = 5) -> dict[str, Any]:
@@ -1540,7 +1540,7 @@ Event 9: {"type":"message_delta","delta":{"stop_reason":"tool_use"}}
 
 #### Framework Unified Processing
 
-The TRPC Agent framework converts outputs from different models into a unified internal format:
+The trpc_agent framework converts outputs from different models into a unified internal format:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -1561,7 +1561,7 @@ This way, when consuming events, you don't need to care whether the underlying m
 
 ### Quick Start
 
-####Wrapping with `StreamingFunctionTool`
+#### Wrapping with `StreamingFunctionTool`
 
 ```python
 from trpc_agent_sdk.tools import StreamingFunctionTool
@@ -1738,7 +1738,7 @@ if __name__ == "__main__":
 
 ### Multiple Ways to Create Streaming Tools
 
-TRPC Agent provides multiple ways to create streaming tools, suitable for different scenarios:
+trpc_agent provides several ways to create streaming tools for different scenarios:
 
 #### 1. Wrapping a Synchronous Function
 
@@ -2026,7 +2026,7 @@ A2A (Agent-to-Agent) protocol supports cross-service Agent invocation. Streaming
 #### A2A Event Conversion
 
 ```
-TRPC Agent Event                     A2A Protocol Event
+trpc_agent event                     A2A protocol event
 ──────────────────────────────────────────────────────────────
 streaming_tool_call (delta)    →   TaskStatusUpdateEvent
                                    └─ metadata: trpc_streaming_tool_call=true
@@ -2047,7 +2047,7 @@ tool_result                    →   TaskStatusUpdateEvent
 If you use the AG-UI protocol, streaming tool calls are automatically converted to the corresponding events:
 
 ```
-TRPC Agent Event                    AG-UI Event
+trpc_agent event                    AG-UI event
 ─────────────────────────────────────────────────────────
 streaming_tool_call (partial)  →  TOOL_CALL_START
 streaming_tool_call (delta)    →  TOOL_CALL_ARGS

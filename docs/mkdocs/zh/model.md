@@ -53,7 +53,7 @@ def create_agent() -> LlmAgent:
         description="A helpful assistant for conversation",
         model=_create_model(),  # 把上面初始化好的模型传入
         instruction=INSTRUCTION, # 系统指令，用于约束模型的角色和行为
-        tools=[FunctionTool(get_weather_report)],  # 传入工具是
+        tools=[FunctionTool(get_weather_report)],  # 传入工具
     )
     return agent
 
@@ -70,8 +70,8 @@ root_agent = create_agent()
 
 目前大部分的LLM基本都提供了OpenAI协议的接入方式，采用`OpenAIModel`类构建模型实例:
 
-- 可从各种模型提供商获取模型名称、API密钥和基础URL，分别对应类里的`model_name`，`api_key`， `base_url`
-- 涉及到模型私有字段可以采用`GenerateContentConfig`方法设定
+- 可从各种模型提供商获取模型名称、API 密钥和基础 URL，分别对应类构造参数中的 `model_name`、`api_key`、`base_url`
+- 涉及模型特有参数时，可通过 `GenerateContentConfig` 进行配置
 
 以下列举一些模型提供商的base_url和模型名称：
 
@@ -119,7 +119,7 @@ model = OpenAIModel(
 )
 ```
 
-###  各个平台模型服务的对接方式：
+### 各个平台模型服务的对接方式：
 
 #### hunyuan模型调用方式
 
@@ -170,7 +170,7 @@ runner.run_async(xxx, new_message=user_content)
 
 ## AnthropicModel
 
-AnthropicModel 用于对接 Claude 等 Anthropic 兼容平台。若需直接使用 Claude 等外部模型服务，可通过 Anthropic 协议接入，框架已支持该协议， 采用`AnthropicModel`类构建模型实例。
+AnthropicModel 用于对接 Claude 等 Anthropic 兼容平台。若需直接使用 Claude 等外部模型服务，可通过 Anthropic 协议接入；框架已支持该协议，采用 `AnthropicModel` 类构建模型实例。
 
 ### 配置方式
 
@@ -203,7 +203,7 @@ LlmAgent(
 ```
 
 ## LiteLLMModel
-随着多个大模型供应商的出现，一些供应商定义了各自的 API 规范。目前，框架已接入 OpenAI 和 Anthropic 的 API，并在上述文章内容介绍，然而，不同供应商在实例化方式和配置项上存在差异，开发者在切换供应商时往往需要修改大量代码，增加了切换成本。
+随着多个大模型供应商的出现，一些供应商定义了各自的 API 规范。目前，框架已接入 OpenAI 和 Anthropic 的 API（如上文所述），然而，不同供应商在实例化方式和配置项上存在差异，开发者在切换供应商时往往需要修改大量代码，增加了切换成本。
 为了解决这一问题，tRPC-Agent 支持通过 [LiteLLM](https://docs.litellm.ai/) 统一接入多厂商模型，使用 **provider/model** 格式（如 `openai/gpt-4o`、`anthropic/claude-3-5-sonnet`、`gemini/gemini-1.5-pro`），一套调用方式切换不同后端。LiteLLMModel 继承 OpenAIModel，仅覆盖 API 调用路径为 `litellm.acompletion`，从而简化了供应商切换的复杂度。
 
 ### 环境变量方式配置
@@ -270,7 +270,7 @@ class LLMModel(FilterRunner):
         # 保存模型名，例如 deepseek-chat、gpt-4o 等
         self._model_name = model_name
         # 保存其余初始化参数，供具体模型实现按需读取
-        self.config = kxwargs
+        self.config = kwargs
         # 标记当前 FilterRunner 的类型为模型
         self._type = FilterType.MODEL
         # 从参数中读取 API Key
