@@ -841,7 +841,7 @@ app_name = "agui_cancel_demo"
 
 
 def serve():
-    """Start the AG-UI service, register Agent and bindroutes"""
+    """Start the AG-UI service, register Agent and bind routes"""
     service_name = "weather_agent_cancel_service"
     uri = "/weather_agent"  # AG-UI endpoint path, clients connect via this path
     from agent.agent import root_agent
