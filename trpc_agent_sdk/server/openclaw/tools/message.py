@@ -1,26 +1,17 @@
-# -*- coding: utf-8 -*-
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
 #
-# Copyright @ 2026 Tencent.com
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# This file is part of tRPC-Agent-Python and is licensed under Apache-2.0.
+#
+# Portions of this file are derived from HKUDS/nanobot (MIT License):
+# https://github.com/HKUDS/nanobot.git
+#
+# Copyright (c) 2025 nanobot contributors
+#
+# See the project LICENSE / third-party attribution notices for details.
+#
 """Message tool for sending messages to users.
-
-Implemented as a :class:`~trpc_agent_sdk.tools.BaseTool` subclass.
-
-Context passing
----------------
-All per-invocation delivery state is read from ``tool_context.agent_context``
-metadata.  Callers must write the required keys before the agent turn starts::
-
-    agent_context.with_metadata(MESSAGE_CALLBACK_KEY, async_send_fn)
-    agent_context.with_metadata(MESSAGE_CHANNEL_KEY, "telegram")
-    agent_context.with_metadata(MESSAGE_CHAT_ID_KEY, "12345")
-
-Optionally::
-
-    agent_context.with_metadata(MESSAGE_ID_KEY, "reply-to-msg-id")
-
-After each tool call the tool writes back a bool under
-:data:`MESSAGE_SENT_IN_TURN_KEY` so callers can check whether a message was
-dispatched during the current turn.
 """
 
 from __future__ import annotations

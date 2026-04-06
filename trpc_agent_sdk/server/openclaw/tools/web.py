@@ -1,6 +1,16 @@
-# -*- coding: utf-8 -*-
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
 #
-# Copyright @ 2026 Tencent.com
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# This file is part of tRPC-Agent-Python and is licensed under Apache-2.0.
+#
+# Portions of this file are derived from HKUDS/nanobot (MIT License):
+# https://github.com/HKUDS/nanobot.git
+#
+# Copyright (c) 2025 nanobot contributors
+#
+# See the project LICENSE / third-party attribution notices for details.
+#
 """Web tools: web_search and web_fetch."""
 
 from __future__ import annotations

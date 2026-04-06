@@ -1,18 +1,11 @@
-# -*- coding: utf-8 -*-
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
 #
-# Copyright @ 2026 Tencent.com
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
 """trpc-claw-style dual-layer memory summarizer for trpc-claw session.
 
-Design overview
-----------------
-This module mirrors the ``MemoryStore`` / ``MemoryConsolidator`` design from
-nanobot (https://github.com/HKUDS/nanobot/blob/main/nanobot/agent/memory.py)
-and integrates it with the existing :class:`~trpc_agent_sdk.sessions.SessionSummarizer`
-/ :class:`~trpc_agent_sdk.sessions.SummarizerSessionManager` infrastructure.
-
-``ClawSessionSummarizer`` extends :class:`~trpc_agent_sdk.sessions.SessionSummarizer`
-to produce *history_entry* + *memory_update* instead of a single *memory_update*.
-
+This module is used to summarize the session history and memory.
 """
 
 from __future__ import annotations
