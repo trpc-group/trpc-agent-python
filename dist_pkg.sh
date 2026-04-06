@@ -19,6 +19,6 @@ pip3 install twine
 python -m build
 
 
-twine upload dist/* -r tencent
+twine upload --repository pypi dist/*
 
 

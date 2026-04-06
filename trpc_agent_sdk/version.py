@@ -9,4 +9,4 @@ TRPC Agent Version Module
 This module defines the version information for TRPC Agent
 """
 
-__version__ = '0.1.0'
+__version__ = '1.0.0'
