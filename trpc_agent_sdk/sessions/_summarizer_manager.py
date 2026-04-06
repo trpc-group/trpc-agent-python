@@ -3,11 +3,26 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
+#
+# Below code are copy and modified from https://github.com/agno-agi/agno.git
+#
+# Copyright 2025-2026 Agno Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """Session summarizer manager for compressing conversation history.
 
 This module provides functionality to summarize conversation history
 to reduce memory usage and maintain context in long conversations.
-Reference: https://github.com/agno-agi/agno/blob/main/libs/agno/agno/memory/v2/summarizer.py
 """
 
 from __future__ import annotations

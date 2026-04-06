@@ -4,7 +4,6 @@
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
 #
-# Directly reuse the types from adk-python
 # Below code are copy and modified from https://github.com/google/adk-python.git
 #
 # Copyright 2025 Google LLC
