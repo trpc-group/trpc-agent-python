@@ -3,18 +3,19 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Transfer Agent example with KnotAgent as custom agent"""
+"""Transfer Agent example with TrpcRemoteA2aAgent as custom agent."""
+
+import os
 
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.agents import TransferAgent
 from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.models import OpenAIModel
-from trpc_agent_sdk.tools import FunctionTool
+from trpc_agent_sdk.server.a2a import TrpcRemoteA2aAgent
 
 from .config import get_model_config
 from .prompts import DATA_ANALYST_INSTRUCTION
 from .prompts import TRANSFER_INSTRUCTION
-from .tools import get_weather_report
 
 
 def _create_model() -> LLMModel:
@@ -25,18 +26,15 @@ def _create_model() -> LLMModel:
 
 
 def create_agent() -> TransferAgent:
-    """Create a TransferAgent with KnotAgent as the target agent.
-
-    KnotAgent's knot_model is optional; only KNOT_API_URL and KNOT_API_KEY are required.
-    """
+    """Create a TransferAgent with a remote A2A agent as the target agent."""
 
     model = _create_model()
 
-    knot_agent = LlmAgent(
-        name="knot-assistant",
-        description="A Knot API agent for information queries and assistance",
-        model=model,
-        tools=[FunctionTool(get_weather_report)],
+    remote_a2a_base_url = os.getenv("REMOTE_A2A_BASE_URL", "http://127.0.0.1:18081")
+    remote_agent = TrpcRemoteA2aAgent(
+        name="remote-weather-assistant",
+        description="A remote weather agent served over A2A",
+        agent_base_url=remote_a2a_base_url,
     )
 
     data_analyst = LlmAgent(
@@ -47,7 +45,7 @@ def create_agent() -> TransferAgent:
     )
 
     transfer_agent = TransferAgent(
-        knot_agent,
+        remote_agent,
         sub_agents=[data_analyst],
         model=model,
         transfer_instruction=TRANSFER_INSTRUCTION,

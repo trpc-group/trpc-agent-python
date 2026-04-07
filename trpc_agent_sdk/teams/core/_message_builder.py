@@ -180,7 +180,14 @@ class TeamMessageBuilder:
         message_parts.append(_LEADER_MULTI_TURN_TRANSITION_PROMPT)
 
         combined_message = "\n\n".join(message_parts)
-        return [Content(role="user", parts=[Part.from_text(text=combined_message)])]
+
+        content_parts = [Part.from_text(text=combined_message)]
+
+        # Append multi-model parts (images, etc.) from the current user message
+        if team_run_context.current_multi_model_parts:
+            content_parts.extend(team_run_context.current_multi_model_parts)
+
+        return [Content(role="user", parts=content_parts)]
 
     def _get_team_history(self, team_run_context: TeamRunContext, num_runs: int) -> str:
         """Get team history from TeamRunContext.

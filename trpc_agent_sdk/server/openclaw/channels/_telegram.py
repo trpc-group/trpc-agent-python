@@ -11,7 +11,7 @@
 #
 # See the project LICENSE / third-party attribution notices for details.
 #
-"""Telegram channel for trpc-claw."""
+"""Telegram channel for trpc_claw."""
 
 from nanobot.channels.manager import ChannelManager
 from nanobot.channels.telegram import TelegramChannel as NanobotTelegramChannel
@@ -23,7 +23,7 @@ from ._repair import register_channel_repair
 
 
 class TelegramChannel(NanobotTelegramChannel):
-    """Telegram channel for trpc-claw."""
+    """Telegram channel for trpc_claw."""
 
     async def _on_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /start command."""

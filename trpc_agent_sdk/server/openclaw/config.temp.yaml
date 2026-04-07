@@ -1,8 +1,8 @@
 runtime:
-  app_name: claw
-  user_id: user
+  app_name: trpc_claw_py
+  user_id: trpc_claw_user
 agent:
-  # workspace: ~/.trpc_agent_claw/workspace
+  # workspace: ~/.trpc_claw/workspace
   memory_window: 30
   api_key: ${TRPC_AGENT_API_KEY}
   api_base: ${TRPC_AGENT_BASE_URL}

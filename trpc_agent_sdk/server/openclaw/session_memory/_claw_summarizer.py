@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""trpc-claw-style dual-layer memory summarizer for trpc-claw session.
+"""trpc_claw-style dual-layer memory summarizer for trpc_claw session.
 
 This module is used to summarize the session history and memory.
 """
@@ -116,7 +116,7 @@ def _parse_llm_response(text: str) -> tuple[str, str]:
 
 
 class ClawSessionSummarizer(SessionSummarizer):
-    """trpc-claw-style summarizer producing *history_entry* + *memory_update*.
+    """trpc_claw-style summarizer producing *history_entry* + *memory_update*.
 
     The prompt asks for two structured outputs: a searchable history entry
     and a full long-term memory update.
@@ -164,7 +164,7 @@ class ClawSessionSummarizer(SessionSummarizer):
 
     @override
     async def create_session_summary(self, session: Session, ctx: InvocationContext = None) -> Optional[str]:
-        """Compress *session* with trpc-claw-style dual-layer memory.
+        """Compress *session* with trpc_claw-style dual-layer memory.
 
         Args:
             session: The session to summarize.
@@ -421,7 +421,7 @@ class ClawSessionSummarizer(SessionSummarizer):
 
 
 class ClawSummarizerSessionManager(SummarizerSessionManager):
-    """trpc-claw-style summarizer manager that stores dual-layer :class:`SessionSummary` objects.
+    """trpc_claw-style summarizer manager that stores dual-layer :class:`SessionSummary` objects.
 
     Uses :class:`ClawSessionSummarizer` by default.
     ``create_session_summary`` syncs ``raw_events`` before summarizing and stores a :class:`SessionSummary` 

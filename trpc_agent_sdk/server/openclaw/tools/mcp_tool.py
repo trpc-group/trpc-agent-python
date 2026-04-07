@@ -11,7 +11,7 @@
 #
 # See the project LICENSE / third-party attribution notices for details.
 #
-"""MCP tool for trpc-claw."""
+"""MCP tool for trpc_claw."""
 from typing import Any
 from typing import Optional
 
@@ -25,7 +25,7 @@ from trpc_agent_sdk.tools import patch_mcp_cancel_scope_exit_issue
 
 
 def build_mcp_toolsets(mcp_servers: Optional[dict[str, Any]] = None, ) -> list[MCPToolset]:
-    """Build MCP toolsets from trpc-claw-style mcp_servers config.
+    """Build MCP toolsets from trpc_claw-style mcp_servers config.
 
     Expected input shape (per server):
       {

@@ -398,7 +398,11 @@ class TeamAgent(BaseAgent):
             # Root mode: Normal flow
             user_text = self._extract_text_from_content(ctx.user_content)
             team_run_context.add_leader_message('user', user_text)
-
+            # Preserve non-text parts (images, etc.) for multi-model leader messages
+            if ctx.user_content.parts:
+                non_text_parts = [p for p in ctx.user_content.parts if not p.text and p.inline_data]
+                if non_text_parts:
+                    team_run_context.current_multi_model_parts = non_text_parts
         # 5. Main delegation loop
         iteration = 0
 

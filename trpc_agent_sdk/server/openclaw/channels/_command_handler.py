@@ -28,7 +28,7 @@ from ..config import DEFAULT_USER_ID
 
 @dataclass
 class TrpcClawCommandHandlerParams:
-    """Command handler for trpc-claw."""
+    """Command handler for trpc_claw."""
     config: ClawConfig
     bus: MessageBus
     session_service: BaseSessionService
@@ -40,7 +40,7 @@ TrpcClawCommandHandlerCallback: TypeAlias = Callable[[InboundMessage, TrpcClawCo
 
 
 class TrpcClawCommandHandler:
-    """Command handler for trpc-claw."""
+    """Command handler for trpc_claw."""
 
     def __init__(self,
                  params: TrpcClawCommandHandlerParams,

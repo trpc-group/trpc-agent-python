@@ -440,7 +440,9 @@ Content Processing Assistant (Main Agent)
 
 ### TransferAgent (Transfer Proxy)
 
-TransferAgent is a transfer proxy Agent designed to enable custom Agents without transfer capability (such as KnotAgent, RemoteAgent, etc.) to gain transfer capability, thereby integrating them into the tRPC-Agent framework's multi-Agent system.
+TransferAgent is a transfer proxy Agent designed to enable custom Agents without transfer capability (such as `TrpcRemoteA2aAgent`) to gain transfer capability, thereby integrating them into the tRPC-Agent framework's multi-Agent system.
+
+`TrpcRemoteA2aAgent` can be used to simulate a remote Agent scenario (first start an A2A Agent service with `examples/a2a/run_server.py` to mimic a remote Agent).
 
 Through TransferAgent, custom Agents can:
 - **Act as sub_agent**: The parent Agent can transfer control to this Agent, and this Agent can transfer control to parent/sibling Agents
@@ -452,23 +454,24 @@ No need to provide `sub_agents` or `transfer_instruction` — TransferAgent dire
 
 ```python
 from trpc_agent_sdk.agents import TransferAgent, LlmAgent
-from trpc_agent_sdk.server.knot_agent import KnotAgent
+from trpc_agent_sdk.server.a2a import TrpcRemoteA2aAgent
 
-# Create a custom Agent (without transfer capability); KnotAgent is a specific Agent supporting an internal platform
-knot_agent = KnotAgent(
-    name="knot-assistant",
-    knot_api_url="...",
-    knot_api_key="...",
-    knot_model="...",
+# Create a custom Agent (without transfer capability); use TrpcRemoteA2aAgent to simulate a remote Agent
+remote_agent = TrpcRemoteA2aAgent(
+    name="remote-weather-assistant",
+    description="A remote weather agent served over A2A",
+    agent_base_url="http://127.0.0.1:18081",  # Remote A2A service URL
 )
+# Note: TrpcRemoteA2aAgent should be initialized during application startup
+# await remote_agent.initialize()
 
-# Enable transfer capability for knot_agent via TransferAgent
+# Enable transfer capability for remote_agent via TransferAgent
 transfer_agent = TransferAgent(
-    knot_agent,
+    remote_agent,
     model=model,
 )
 
-# Now knot_agent (via transfer_agent) can be invoked as a sub_agent
+# Now remote_agent (via transfer_agent) can be invoked as a sub_agent
 coordinator = LlmAgent(
     name="coordinator",
     model=model,
@@ -482,15 +485,16 @@ After providing `sub_agents`, TransferAgent analyzes the target Agent's returned
 
 ```python
 from trpc_agent_sdk.agents import TransferAgent, LlmAgent
-from trpc_agent_sdk.server.knot_agent import KnotAgent
+from trpc_agent_sdk.server.a2a import TrpcRemoteA2aAgent
 
-# Create a custom Agent (without transfer capability); KnotAgent is a specific Agent supporting an internal platform
-knot_agent = KnotAgent(
-    name="knot-assistant",
-    knot_api_url="...",
-    knot_api_key="...",
-    knot_model="...",
+# Create a custom Agent (without transfer capability); use TrpcRemoteA2aAgent
+remote_agent = TrpcRemoteA2aAgent(
+    name="remote-weather-assistant",
+    description="A remote weather agent served over A2A",
+    agent_base_url="http://127.0.0.1:18081",
 )
+# Note: TrpcRemoteA2aAgent should be initialized during application startup
+# await remote_agent.initialize()
 
 # Create child Agents
 data_analyst = LlmAgent(
@@ -502,11 +506,11 @@ data_analyst = LlmAgent(
 
 # Method 1: Provide custom transfer rules
 transfer_agent = TransferAgent(
-    knot_agent,
+    remote_agent,
     model=model,
     sub_agents=[data_analyst],
     transfer_instruction=(
-        "After knot-assistant returns results, analyze the response:\n"
+        "After remote-weather-assistant returns results, analyze the response:\n"
         "1. If the result contains data or statistics, transfer to data_analyst.\n"
         "2. Otherwise, return directly to the user."
     ),
@@ -514,7 +518,7 @@ transfer_agent = TransferAgent(
 
 # Method 2: Use default transfer rules (do not provide transfer_instruction)
 transfer_agent = TransferAgent(
-    knot_agent,
+    remote_agent,
     model=model,
     sub_agents=[data_analyst],
 )
@@ -551,7 +555,7 @@ The default rules automatically analyze the target Agent's results:
 #### Agent Naming
 
 TransferAgent's name is automatically generated in the format `transfer_{target_agent_name}`. For example:
-- If the target Agent's name is `knot-assistant`, the TransferAgent's name will be `transfer_knot-assistant`
+- If the target Agent's name is `remote-weather-assistant`, the TransferAgent's name will be `transfer_remote-weather-assistant`
 - If the target Agent's name is `custom-agent`, the TransferAgent's name will be `transfer_custom-agent`
 
 #### Notes

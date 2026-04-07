@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Config module for trpc-claw."""
+"""Config module for trpc_claw."""
 
 from ._config import ClawConfig
 from ._config import ContainerCodeExecutorConfig
@@ -21,12 +21,9 @@ from ._config import load_config
 from ._constants import AGENT_FILE_NAME
 from ._constants import BOT_NAME
 from ._constants import DEFAULT_APP_NAME
-from ._constants import DEFAULT_BRIDGE_INSTALL_DIR
-from ._constants import DEFAULT_CLI_HISTORY_PATH
 from ._constants import DEFAULT_CONFIG_PATH
-from ._constants import DEFAULT_HISTORY_PATH
 from ._constants import DEFAULT_LEGACY_SESSIONS_DIR
-from ._constants import DEFAULT_TRPC_AGENT_CLAW_DIR
+from ._constants import DEFAULT_TRPC_CLAW_DIR
 from ._constants import DEFAULT_USER_ID
 from ._constants import DEFAULT_WORKSPACE_PATH
 from ._constants import HISTORY_FILE_NAME
@@ -49,14 +46,11 @@ __all__ = [
     "RedisStorageConfig",
     "StorageConfig",
     "BOT_NAME",
-    "DEFAULT_TRPC_AGENT_CLAW_DIR",
+    "DEFAULT_TRPC_CLAW_DIR",
     "DEFAULT_APP_NAME",
     "DEFAULT_USER_ID",
     "DEFAULT_CONFIG_PATH",
     "DEFAULT_WORKSPACE_PATH",
-    "DEFAULT_HISTORY_PATH",
-    "DEFAULT_CLI_HISTORY_PATH",
-    "DEFAULT_BRIDGE_INSTALL_DIR",
     "DEFAULT_LEGACY_SESSIONS_DIR",
     "LoggerConfig",
     "TRPC_CLAW_SKILLS_INSTALL_ROOT_ENV_NAME",

@@ -11,7 +11,7 @@
 #
 # See the project LICENSE / third-party attribution notices for details.
 #
-"""Prompts for agent."""
+"""Prompts for trpc_claw."""
 
 import platform
 from pathlib import Path
@@ -24,7 +24,7 @@ from ..config import HISTORY_FILE_NAME
 from ..config import MEMORY_FILE_NAME
 
 INSTRUCTION_DEFAULT: str = "You are a helpful assistant."
-SYSTEM_PROMPT_DEFAULT: str = f"You name is {BOT_NAME.replace('-', '_')}."
+SYSTEM_PROMPT_DEFAULT: str = f"You name is {BOT_NAME}."
 TOOL_AND_SKILL_FALLBACK: str = (
     "- If there is no direct tool that can answer/execute the request, first list available skills "
     "and select the relevant skill.\n"
@@ -39,7 +39,7 @@ REPLY_POLICY = ("Reply directly with text for conversations. Only use the 'messa
 
 
 class ClawPrompts:
-    """Claw prompts."""
+    """trpc_claw prompts."""
 
     def __init__(self, config: ClawConfig, silent: bool = False):
         """Initialize prompts."""

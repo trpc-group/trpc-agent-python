@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Metrics module for trpc-claw."""
+"""Metrics module for trpc_claw."""
 
 from ._metrics import register_metrics
 from ._metrics import setup_metrics

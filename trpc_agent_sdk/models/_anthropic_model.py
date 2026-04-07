@@ -496,7 +496,6 @@ class AnthropicModel(LLMModel):
             return self._message_to_llm_response(response)
         except Exception as ex:  # pylint: disable=broad-except
             logger.error("Anthropic API error: %s", ex)
-            logger.error("Anthropic API error: %s", ex)
             return LlmResponse(content=None,
                                error_code="API_ERROR",
                                error_message=str(ex),
@@ -674,7 +673,6 @@ class AnthropicModel(LLMModel):
 
         # Debug log the formatted messages
         logger.debug("Formatted messages for Anthropic API: %s", json.dumps([m for m in messages], indent=2))
-        logger.debug("Formatted messages for Anthropic API: %s", json.dumps([m for m in messages], indent=2))
 
         api_params = {
             _ApiParamsKey.MODEL: self._model_name,
@@ -765,7 +763,6 @@ class AnthropicModel(LLMModel):
                 response = await self._generate_single(api_params, request, ctx)
                 yield response
         except Exception as ex:  # pylint: disable=broad-except
-            logger.error("Anthropic API error: %s", ex)
             logger.error("Anthropic API error: %s", ex)
             # Create error response
             yield LlmResponse(content=None,

@@ -44,7 +44,7 @@ _DESCRIPTION = "Send a message to the user. Use this when you want to communicat
 
 
 class MessageTool(BaseTool):
-    """trpc-claw tool to send messages to users on chat channels.
+    """trpc_claw tool to send messages to users on chat channels.
 
     All delivery context (callback, channel, chat_id, message_id) is read
     from ``tool_context.agent_context`` metadata at call time — see module-

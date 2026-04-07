@@ -46,7 +46,7 @@ _DEFAULT_DENY_PATTERNS: list[str] = [
 
 
 class ExecTool(BaseTool):
-    """trpc-claw tool to execute shell commands.
+    """trpc_claw tool to execute shell commands.
 
     All parameters are static construction-time config; no per-invocation
     context is needed beyond what the LLM passes as tool arguments.

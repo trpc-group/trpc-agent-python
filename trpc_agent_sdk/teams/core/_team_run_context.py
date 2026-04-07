@@ -20,7 +20,10 @@ from dataclasses import field
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Set
+
+from trpc_agent_sdk.types import Part
 
 # Key for team context in session.state
 TEAM_STATE_KEY = "_team_context"
@@ -68,6 +71,12 @@ class TeamRunContext:
     # Human-in-the-loop pending state
     pending_function_call_id: str = ""
     """ID of the pending function call awaiting human input (leader only)."""
+
+    # Transient: multi-model parts from current user message (not serialized to session)
+    current_multi_model_parts: Optional[List[Part]] = field(default=None, repr=False)
+    """Non-text parts (e.g. images) from the current user message.
+    Only used during the current execution, not persisted to session.state.
+    """
 
     def add_interaction(self, member_name: str, task: str, response: str) -> None:
         """Record a member interaction.
