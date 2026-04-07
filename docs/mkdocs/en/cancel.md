@@ -2,7 +2,7 @@
 
 During Agent execution, the output may sometimes not meet the user's requirements. In such cases, users often interrupt the Agent execution, provide partial feedback (indicating which outputs before the interruption were unsatisfactory and what should be done next), and then let the Agent continue execution.
 
-For this scenario, the trpc-agent framework provides a Cancel mechanism that allows cancelling an Agent's ongoing operations while preserving partial content (content being streamed by the LLM, tool execution results in progress, etc.). This mechanism is based on a checkpoint design. During execution, each Agent checks at checkpoint locations (after an LLM streaming output chunk, after a tool call completes, etc.) whether the current Agent should be terminated. If termination is required, an exception is thrown, and the framework records and saves the partial information to the session history.
+For this scenario, the trpc-agent-python framework provides a Cancel mechanism that allows cancelling an Agent's ongoing operations while preserving partial content (content being streamed by the LLM, tool execution results in progress, etc.). This mechanism is based on a checkpoint design. During execution, each Agent checks at checkpoint locations (after an LLM streaming output chunk, after a tool call completes, etc.) whether the current Agent should be terminated. If termination is required, an exception is thrown, and the framework records and saves the partial information to the session history.
 
 This capability has been integrated into all Agents provided by the framework. Custom Agents implemented by other services can also be easily integrated.
 
@@ -73,9 +73,11 @@ When an Agent is cancelled, different session management strategies are applied 
 ```python
 import asyncio
 import uuid
+
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content, Part
+from trpc_agent_sdk.events import AgentCancelledEvent
 
 async def main():
     runner = Runner(
@@ -111,7 +113,11 @@ async def main():
     await asyncio.sleep(2)
 
     # Cancel the run using the same user_id and session_id
-    runner2 = Runner(xxxx)
+    runner2 = Runner(
+        app_name="my_app",
+        agent=my_agent,
+        session_service=InMemorySessionService(),
+    )
     success = await runner2.cancel_run_async(
         user_id=user_id,
         session_id=session_id,
@@ -136,6 +142,7 @@ The following is an example based on FastAPI SSE:
 
 ```python
 import asyncio
+
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from trpc_agent_sdk.runners import Runner
@@ -216,8 +223,20 @@ If a standalone cancel interface (e.g., REST API) is needed, note the following 
 ```python
 from fastapi import FastAPI, HTTPException
 
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.sessions import InMemorySessionService
+
 app = FastAPI()
-runner = Runner(...)
+
+agent = LlmAgent(name="my_agent", model=model, instruction="You are an intelligent assistant")
+session_service = InMemorySessionService()
+
+runner = Runner(
+    app_name="my_app",
+    agent=agent,
+    session_service=session_service,
+)
 
 @app.post("/sessions/{user_id}/{session_id}/cancel")
 async def cancel_session_run(user_id: str, session_id: str):
@@ -253,9 +272,13 @@ LlmAgent has checkpoints set at critical positions in the execution flow:
 **Usage example:**
 
 ```python
+import asyncio
+
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.models import OpenAIModel
 from trpc_agent_sdk.tools import FunctionTool
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import InMemorySessionService
 
 # Define tools
 async def get_weather(city: str) -> dict:
@@ -291,7 +314,7 @@ async def run_with_cancel():
 
 ### LangGraphAgent
 
-LangGraphAgent wraps LangGraph as a trpc-agent compatible Agent, and also supports the Cancel mechanism.
+LangGraphAgent wraps LangGraph as a trpc-agent-python compatible Agent, and also supports the Cancel mechanism.
 
 **Checkpoint locations:**
 - Before and after graph node execution
@@ -300,14 +323,18 @@ LangGraphAgent wraps LangGraph as a trpc-agent compatible Agent, and also suppor
 **Usage example:**
 
 ```python
+import asyncio
+
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.agents import LangGraphAgent
 from langgraph.graph import StateGraph
 
 # Build LangGraph
 def build_graph():
     builder = StateGraph(State)
-    builder.add_node("process", process_node)
-    builder.add_node("respond", respond_node)
+    builder.add_node("process", process_node) # User-defined processing node
+    builder.add_node("respond", respond_node) # User-defined response node
     builder.set_entry_point("process")
     builder.add_edge("process", "respond")
     return builder.compile()
@@ -343,6 +370,11 @@ ClaudeAgent runs using the Claude SDK's subprocess mode. When cancelled, the sub
 **Usage example:**
 
 ```python
+import asyncio
+
+from trpc_agent_sdk.tools import FunctionTool
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.server.agents.claude import ClaudeAgent, setup_claude_env
 from trpc_agent_sdk.models import OpenAIModel
 
@@ -360,7 +392,7 @@ agent = ClaudeAgent(
     name="claude_agent",
     model=model,
     instruction="You are an intelligent assistant",
-    tools=[FunctionTool(some_tool)],
+    tools=[FunctionTool(some_tool)], # some_tool is a user-defined tool
 )
 agent.initialize()
 
@@ -392,9 +424,16 @@ TeamAgent supports Cancel during both Leader planning and Member execution phase
 **Usage example:**
 
 ```python
+import asyncio
+
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.teams import TeamAgent
 from trpc_agent_sdk.tools import FunctionTool
+from trpc_agent_sdk.models import OpenAIModel
+
+model = OpenAIModel(model_name="deepseek-chat")
 
 # Create team members
 researcher = LlmAgent(

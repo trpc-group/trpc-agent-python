@@ -1,6 +1,6 @@
 # Agent Code Executor
 
-To provide Agents with a high degree of flexibility, there are times when an Agent needs to generate and execute code. The tRPC-Agent framework supports CodeExecutor for this scenario.
+To provide Agents with a high degree of flexibility, there are times when an Agent needs to generate and execute code. The tRPC-Agent-Python framework supports CodeExecutor for this scenario.
 
 When this feature is enabled, if the LLM returns text containing code snippets, the framework will invoke the corresponding CodeExecutor to execute the code and return the execution results to the LLM, which can then continue generating responses based on those results.
 
@@ -159,6 +159,8 @@ def create_agent() -> LlmAgent:
 ### UnsafeLocalCodeExecutor Parameters
 
 ```python
+from trpc_agent_sdk.code_executors import UnsafeLocalCodeExecutor, CodeBlockDelimiter
+
 code_executor = UnsafeLocalCodeExecutor(
     # Number of retries on code execution failure, default is 2
     error_retry_attempts=2,
@@ -184,6 +186,8 @@ code_executor = UnsafeLocalCodeExecutor(
 ### ContainerCodeExecutor Parameters
 
 ```python
+from trpc_agent_sdk.code_executors import ContainerCodeExecutor, CodeBlockDelimiter
+
 code_executor = ContainerCodeExecutor(
     # Docker image name (required, mutually exclusive with docker_path)
     image="python:3-slim",

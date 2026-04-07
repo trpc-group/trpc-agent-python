@@ -5,7 +5,7 @@
 | 项目       | 信息                                                                 |
 | ---------- | -------------------------------------------------------------------- |
 | 名称   | tRPC-Agent-Python (`trpc-agent-py`)                                  |
-| 版本   | **0.1.0**                                                            |
+| 版本   | **1.0.0**                                                            |
 | 描述   | 腾讯开源的生产级 Agent 框架，支持多模型（OpenAI / Anthropic / DeepSeek / LiteLLM）、工具调用、多 Agent 编排、会话与长期记忆、知识库（RAG）、FastAPI 服务部署 |
 | 许可证     | Apache-2.0                                                           |
 | 仓库地址   | https://github.com/trpc-group/trpc-agent-python                     |
@@ -86,19 +86,19 @@ pip install -e .
 
 ### 可选依赖对照表
 
-| 扩展名           | 用途                          | 关键依赖                                     | 安装命令                                |
-| ---------------- | ----------------------------- | -------------------------------------------- | --------------------------------------- |
-| `a2a`            | Google A2A 协议               | a2a-sdk, protobuf                            | `pip install "trpc-agent-py[a2a]"`            |
-| `ag-ui`          | AG-UI 协议                    | ag-ui-protocol                               | `pip install "trpc-agent-py[ag-ui]"`          |
-| `agent-claude`   | Claude Agent                  | claude-agent-sdk, cloudpickle                | `pip install "trpc-agent-py[agent-claude]"`   |
-| `knowledge`      | 知识库 / RAG                  | numpy, langchain_community, langchain_huggingface | `pip install "trpc-agent-py[knowledge]"` |
-| `mem0`           | 长期记忆（Mem0）              | mem0ai, sentence-transformers                | `pip install "trpc-agent-py[mem0]"`           |
-| `langchain_tool` | LangChain Tool 集成           | langchain_tavily                             | `pip install "trpc-agent-py[langchain_tool]"` |
-| `langfuse`       | Langfuse 可观测性             | opentelemetry-sdk, opentelemetry-exporter    | `pip install "trpc-agent-py[langfuse]"`       |
-| `eval`           | 评测框架                      | pytest, rouge-score, pandas, tabulate        | `pip install "trpc-agent-py[eval]"`           |
-| `openclaw`       | OpenClaw 集成                 | nanobot-ai, wecom-aibot-sdk-python           | `pip install "trpc-agent-py[openclaw]"`       |
-| `dev`            | 开发环境（lint/格式化/测试）  | yapf, flake8, pytest, pytest-asyncio         | `pip install "trpc-agent-py[dev]"`            |
-| `all`            | 所有可选依赖                  | 上述全部                                     | `pip install "trpc-agent-py[all]"`            |
+| 扩展名           | 用途                          | 安装命令                                |
+| ---------------- | ----------------------------- | --------------------------------------- |
+| `a2a`            | Google A2A 协议               | `pip install "trpc-agent-py[a2a]"`            |
+| `ag-ui`          | AG-UI 协议                    | `pip install "trpc-agent-py[ag-ui]"`          |
+| `agent-claude`   | Claude Agent                  | `pip install "trpc-agent-py[agent-claude]"`   |
+| `knowledge`      | 知识库 / RAG                  | `pip install "trpc-agent-py[knowledge]"`      |
+| `mem0`           | 长期记忆（Mem0）              | `pip install "trpc-agent-py[mem0]"`           |
+| `langchain_tool` | LangChain Tool 集成           | `pip install "trpc-agent-py[langchain_tool]"` |
+| `langfuse`       | Langfuse 可观测性             | `pip install "trpc-agent-py[langfuse]"`       |
+| `eval`           | 评测框架                      | `pip install "trpc-agent-py[eval]"`           |
+| `openclaw`       | OpenClaw 集成                 | `pip install "trpc-agent-py[openclaw]"`       |
+| `dev`            | 开发环境（lint/格式化/测试）  | `pip install "trpc-agent-py[dev]"`            |
+| `all`            | 所有可选依赖                  | `pip install "trpc-agent-py[all]"`            |
 
 ---
 

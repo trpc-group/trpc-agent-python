@@ -1,6 +1,6 @@
 # A2A 使用文档
 
-trpc-agent-python SDK 内置了 Agent-to-Agent (A2A) 协议支持，让你可以将本地 Agent 发布为标准 A2A 服务，也可以作为客户端远程调用其他 A2A Agent。
+trpc-agent SDK 内置了 Agent-to-Agent (A2A) 协议支持，让你可以将本地 Agent 发布为标准 A2A 服务，也可以作为客户端远程调用其他 A2A Agent。
 
 ## 🚀 核心优势
 

@@ -75,6 +75,7 @@ bind 127.0.0.1
 port 6379
 timeout 300
 ```
+
 ## Basic Usage
 
 ### 1. Initialize RedisStorage
@@ -1225,7 +1226,7 @@ class DebugRedisStorage(RedisStorage):
             raise
 ```
 
-## Running Examples
+## Installation and Environment Configuration
 
 ### Basic Run
 ```bash
@@ -1234,23 +1235,6 @@ redis-server
 
 # 2. Install dependencies
 pip install redis
-
-# 3. Run the complete example
-python examples/storage/redis_example.py
-
-# 4. Run specific operation examples
-python -c "
-import asyncio
-from examples.storage.redis_example import RedisExampleManager
-
-async def main():
-    manager = RedisExampleManager()
-    await manager.setup_redis()
-    await manager.string_operations_example()
-    await manager.close_connection()
-
-asyncio.run(main())
-"
 ```
 
 ### Run with Environment Configuration
@@ -1261,9 +1245,6 @@ export REDIS_PORT=6379
 export REDIS_DB=0
 export REDIS_PASSWORD=your_password
 export REDIS_MAX_CONNECTIONS=20
-
-# Run example
-python examples/storage/redis_example.py
 ```
 
 ### Run in Docker Environment
@@ -1271,56 +1252,6 @@ python examples/storage/redis_example.py
 # Start Redis container
 docker run -d --name redis-test -p 6379:6379 redis:latest
 
-# Run example (connect to container)
-REDIS_HOST=localhost python examples/storage/redis_example.py
-
 # Clean up container
 docker stop redis-test && docker rm redis-test
-```
-
-### Run in Cluster Environment
-```bash
-# Connect to Redis cluster
-export REDIS_URL="redis://redis-cluster:6379/0"
-python examples/storage/redis_example.py
-
-# Or specify in code
-python -c "
-import asyncio
-from examples.storage.redis_example import RedisExampleManager
-
-async def main():
-    manager = RedisExampleManager('redis://redis-cluster:6379/0')
-    await manager.setup_redis()
-    # ... other operations
-    await manager.close_connection()
-
-asyncio.run(main())
-"
-```
-
-### Run Performance Tests
-```bash
-# Run performance test
-python -c "
-import asyncio
-import time
-from examples.storage.redis_example import RedisExampleManager
-
-async def performance_test():
-    manager = RedisExampleManager()
-    await manager.setup_redis()
-
-    # Test bulk writes
-    start_time = time.time()
-    for i in range(1000):
-        await manager.string_operations_example()
-
-    end_time = time.time()
-    print(f'1000 operations completed in {end_time - start_time:.2f} seconds')
-
-    await manager.close_connection()
-
-asyncio.run(performance_test())
-"
 ```
