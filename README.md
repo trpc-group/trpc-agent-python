@@ -25,6 +25,7 @@ tRPC-Agent-Python provides an end-to-end foundation for agent building, orchestr
 - **Skills extension capability**: Supports `SKILL.md`-based skill systems for reusable capabilities and dynamic tooling.
 - **Connect to multiple LLM providers**: OpenAI-like / Anthropic / LiteLLM routing.
 - **Serving and observability**: Expose HTTP / A2A / AG-UI services through FastAPI, with built-in OpenTelemetry tracing.
+- **trpc-claw (OpenClaw-like personal agent)**: Built on [nanobot](https://github.com/HKUDS/nanobot), tRPC-Agent ships trpc-claw so you can quickly build an OpenClaw-like personal AI agent with Telegram, WeCom, and other channel support.
 
 ## Use Cases
 
@@ -38,6 +39,7 @@ tRPC-Agent-Python provides an end-to-end foundation for agent building, orchestr
 - Unified gateway access and protocol conversion
 - Component-based workflow orchestration using `GraphAgent`
 - Reusing existing LangGraph workflows in this runtime
+- Build an OpenClaw-like personal AI agent quickly with trpc-claw
 
 ## Table of Contents
 
@@ -46,6 +48,7 @@ tRPC-Agent-Python provides an end-to-end foundation for agent building, orchestr
   - [Use Cases](#use-cases)
   - [Table of Contents](#table-of-contents)
   - [Quick Start](#quick-start)
+  - [trpc-claw Usage](#trpc-claw-usage)
   - [Documentation](#documentation)
   - [Examples](#examples)
     - [1. Getting Started and Basic Agents](#1-getting-started-and-basic-agents)
@@ -75,16 +78,6 @@ tRPC-Agent-Python provides an end-to-end foundation for agent building, orchestr
 ### Installation
 
 ```bash
-git clone https://github.com/trpc-group/trpc-agent-python.git
-cd trpc-agent-python
-python3 -m venv .venv
-source .venv/bin/activate
-pip3 install -e .
-```
-
-Or install the published package directly:
-
-```bash
 pip install trpc-agent-py
 ```
 
@@ -94,22 +87,7 @@ Install optional capabilities as needed:
 pip3 install -e '.[a2a,ag-ui,knowledge,agent-claude,mem0,langfuse]'
 ```
 
-### Environment Variables
-
-Set at least the following variables (`.env` files are provided in many example directories):
-
-- `TRPC_AGENT_API_KEY`
-- `TRPC_AGENT_BASE_URL`
-- `TRPC_AGENT_MODEL_NAME`
-
-### Run Your First Example
-
-```bash
-cd examples/quickstart
-python3 run_agent.py
-```
-
-### Basic Usage
+### Develop Weather Agent
 
 ```python
 import asyncio
@@ -125,7 +103,7 @@ from trpc_agent_sdk.types import Content, Part
 
 
 async def get_weather_report(city: str) -> dict:
-    return {"city": city, "temperature": "25C", "condition": "Sunny", "humidity": "60%"}
+    return {"city": city, "temperature": "25°C", "condition": "Sunny", "humidity": "60%"}
 
 
 async def main():
@@ -148,7 +126,7 @@ async def main():
 
     user_id = "demo_user"
     session_id = str(uuid.uuid4())
-    user_content = Content(parts=[Part.from_text("What's the weather in Beijing?")])
+    user_content = Content(parts=[Part.from_text(text="What's the weather in Beijing?")])
 
     async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=user_content):
         if not event.content or not event.content.parts:
@@ -156,16 +134,84 @@ async def main():
         for part in event.content.parts:
             if part.text and event.partial:
                 print(part.text, end="", flush=True)
+            elif part.function_call:
+                print(f"\n🔧 [{part.function_call.name}({part.function_call.args})]", flush=True)
+            elif part.function_response:
+                print(f"📊 [{part.function_response.response}]", flush=True)
 
+    print()
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+### Run the Agent
+
+```bash
+export TRPC_AGENT_API_KEY=xxx
+export TRPC_AGENT_BASE_URL=xxxx
+export TRPC_AGENT_MODEL_NAME=xxxx
+python quickstart.py
+```
+
+## trpc-claw Usage
+
+tRPC-Agent ships trpc-claw (`trpc_agent_cmd openclaw`), built on [nanobot](https://github.com/HKUDS/nanobot), so you can quickly build an OpenClaw-like personal AI agent. Start it with a single command and it runs 24/7 — chat through Telegram, WeCom, or any other IM, or use it locally via CLI / UI.
+
+For full configuration and advanced features, see: [openclaw.md](./docs/mkdocs/en/openclaw.md)
+
+### Quick Start
+
+**1. Generate config**
+
+```bash
+mkdir -p ~/.trpc_agent_claw
+trpc_agent_cmd openclaw conf_temp --full > ~/.trpc_agent_claw/config.yaml
+```
+
+**2. Set environment variables**
+
+```bash
+export TRPC_AGENT_API_KEY=your_api_key
+export TRPC_AGENT_BASE_URL=your_base_url
+export TRPC_AGENT_MODEL_NAME=your_model
+```
+
+**3. Run locally**
+
+```bash
+# Force local CLI mode
+trpc_agent_cmd openclaw chat -c ~/.trpc_agent_claw/config.yaml
+
+# Local UI
+trpc_agent_cmd openclaw ui -c ~/.trpc_agent_claw/config.yaml
+```
+
+**4. Connect WeCom / Telegram**
+
+Enable the channel in `config.yaml`, then launch with `run`:
+
+```yaml
+channels:
+  wecom:
+    enabled: true
+    bot_id: ${WECOM_BOT_ID}
+    secret: ${WECOM_BOT_SECRET}
+  # or Telegram:
+  # telegram:
+  #   enabled: true
+  #   token: ${TELEGRAM_BOT_TOKEN}
+```
+
+```bash
+trpc_agent_cmd openclaw run -c ~/.trpc_agent_claw/config.yaml
+```
+
+If no channel is available, `run` automatically falls back to local CLI for easy debugging.
+
 ## Documentation
 
-- English docs: [`docs/mkdocs/en`](./docs/mkdocs/en)
-- Chinese docs: [`docs/mkdocs/zh`](./docs/mkdocs/zh)
+- See directory: [`docs/mkdocs/en`](./docs/mkdocs/en)
 
 ## Examples
 
@@ -562,4 +608,4 @@ We are also inspired by outstanding open-source frameworks including **ADK**, **
 
 ---
 
-If this project helps you, a GitHub Star is always appreciated.
+If this project helps you, a GitHub Star is always appreciated — it's the most direct encouragement and helps more developers discover this project.
