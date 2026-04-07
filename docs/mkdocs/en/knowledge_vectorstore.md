@@ -614,7 +614,7 @@ The complete example is available at [knowledge_with_vectorstore](../../../examp
 
 Steps to run the example:
 
-1. Configure environment variables in `examples/knowledge_with_vectorstore/.env`, set `VECTORSTORE_TYPE=tencentvdb` and fill in the Tencent Cloud VectorDB connection parameters:
+1. Configure environment variables in [examples/knowledge_with_vectorstore/.env](../../../examples/knowledge_with_vectorstore/.env), set `VECTORSTORE_TYPE=tencentvdb` and fill in the Tencent Cloud VectorDB connection parameters:
 
 ```bash
 VECTORSTORE_TYPE=tencentvdb

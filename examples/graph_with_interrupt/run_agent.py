@@ -10,11 +10,11 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from trpc_agent_sdk.dsl.graph import STATE_KEY_LAST_RESPONSE
-from trpc_agent_sdk.dsl.graph._events import EventUtils
-from trpc_agent_sdk.dsl.graph._events import ExecutionPhase
-from trpc_agent_sdk.dsl.graph._events import ModelExecutionMetadata
-from trpc_agent_sdk.dsl.graph._events import NodeExecutionMetadata
-from trpc_agent_sdk.dsl.graph._events import ToolExecutionMetadata
+from trpc_agent_sdk.dsl.graph import EventUtils
+from trpc_agent_sdk.dsl.graph import ExecutionPhase
+from trpc_agent_sdk.dsl.graph import ModelExecutionMetadata
+from trpc_agent_sdk.dsl.graph import NodeExecutionMetadata
+from trpc_agent_sdk.dsl.graph import ToolExecutionMetadata
 from trpc_agent_sdk.events import LongRunningEvent
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService

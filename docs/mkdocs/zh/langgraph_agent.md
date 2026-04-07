@@ -65,6 +65,24 @@ pip install -r requirements.txt
 
 ```python
 from langgraph.graph import StateGraph, START, END
+from langgraph.prebuilt import ToolNode
+
+from trpc_agent_sdk.agents import langgraph_llm_node
+from trpc_agent_sdk.dsl.graph import State
+
+class MyState(State):
+    result: str
+
+@langgraph_llm_node
+def chatbot_node(state: State):
+    """Chatbot node that can use tools."""
+    return {"messages": [llm_with_tools.invoke(state["messages"])]}
+
+graph_builder = StateGraph(State)
+
+# Add tool node
+tool_node = ToolNode(tools=[])
+graph_builder.add_node("tools", tool_node)
 
 graph_builder = StateGraph(MyState)
 graph_builder.add_node("chatbot", chatbot_node)
@@ -99,7 +117,7 @@ def chatbot_node(state: MyState, config):
 
 ```python
 from langchain_core.tools import tool
-from trpc_agent_sdk.agents.langgraph_agent import tool_node
+from trpc_agent_sdk.agents import langgraph_tool_node
 
 @tool
 @tool_node
@@ -154,7 +172,7 @@ graph_builder = StateGraph(MyState)
 `LangGraphAgent` 真正接收的不是 `StateGraph` 构建器本身，而是 `compile()` 之后的图对象。框架中的 `LangGraphAgent` 明确要求传入已编译图。
 
 ```python
-from trpc_agent_sdk.agents.langgraph_agent import LangGraphAgent
+from trpc_agent_sdk.agents import LangGraphAgent
 
 graph = graph_builder.compile()
 
@@ -180,7 +198,7 @@ agent = LangGraphAgent(
 相关参数遵循LlmAgent的参数说明。
 
 ```python
-from trpc_agent_sdk.agents.langgraph_agent import LangGraphAgent
+from trpc_agent_sdk.agents import LangGraphAgent
 
 # 假设已经构建了 LangGraph
 graph = build_your_langgraph()
@@ -198,13 +216,13 @@ agent = LangGraphAgent(
 ### 基础图结构
 
 ```python
+from typing import Annotated
+from typing_extensions import TypedDict
 from langchain.chat_models import init_chat_model
 from langchain_core.tools import tool
 from langgraph.graph import StateGraph, START
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import tools_condition, ToolNode
-from typing_extensions import TypedDict
-from typing import Annotated
 
 # 定义状态结构
 class State(TypedDict):
@@ -256,7 +274,7 @@ def custom_chatbot(state: CustomState):
 用于装饰工具执行节点，自动记录工具调用信息。注意：`@tool_node` 必须放在 LangGraph 的 `@tool` 装饰器之后：
 
 ```python
-from trpc_agent_sdk.agents.langgraph_agent import tool_node
+from trpc_agent_sdk.agents import tool_node
 from langchain_core.tools import tool
 
 @tool
@@ -303,7 +321,7 @@ runner.run_async(..., run_config=run_config)
 获取 `Event` 后，可以进一步读取 LangGraph 的原始响应数据，如下所示：
 
 ```python
-from trpc_agent_sdk.agents.langgraph_agent import get_langgraph_payload
+from trpc_agent_sdk.agents import get_langgraph_payload
 
 async for event in runner.run_async(...):
     langgraph_payload = get_langgraph_payload(event)
@@ -318,7 +336,7 @@ async for event in runner.run_async(...):
 在 LangGraph 节点中可以访问 `trpc_agent` 的上下文信息：
 
 ```python
-from trpc_agent_sdk.agents.langgraph_agent import get_langgraph_agent_context
+from trpc_agent_sdk.agents import get_langgraph_agent_context
 
 @langgraph_llm_node
 def context_aware_node(state: State, config: RunnableConfig):
@@ -448,7 +466,7 @@ from typing import AsyncGenerator
 from ag_ui.core import BaseEvent, EventType, CustomEvent
 from trpc_agent_sdk.events import Event as TrpcEvent
 from trpc_agent_sdk.agents.utils import LangGraphEventType, get_event_type
-from trpc_agent_sdk.server.ag_ui._plugin._langgraph_event_translator import (
+from trpc_agent_sdk.server.ag_ui import (
     AgUiLangGraphEventTranslator,
     AgUiTranslationContext,
 )

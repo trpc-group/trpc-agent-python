@@ -506,7 +506,7 @@ weather_agent = LlmAgent(
   - `thinking_budget`: 思考过程的token预算，必须小于 `max_output_tokens`
 
 ```python
-from trpc_agent_sdk.agents.llm_agent import LlmAgent
+from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.models import LLMModel, OpenAIModel
 from trpc_agent_sdk.tools import FunctionTool
 from trpc_agent_sdk.types import GenerateContentConfig
@@ -578,6 +578,7 @@ root_agent = create_agent()
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.models import OpenAIModel, LLMModel
 from trpc_agent_sdk.configs import RunConfig
+from trpc_agent_sdk.runners import Runner
 
 async def create_model(custom_data: dict) -> LLMModel:
     """模型创建回调函数
@@ -629,7 +630,7 @@ async for event in runner.run_async(
 
 `LlmAgent` 支持配置结构化输出（`output_schema`）。通过配置 `output_schema`，可以指定 Agent 的输出格式；通常需要在 `instruction` 中说明目标结构。
 
-output_schema的实现机制根据是否使用tools有两种不同的方法：
+output_schema 的实现机制根据是否使用tools有两种不同的方法：
 
 1. 当没有为LlmAgent配置tools时，会走LLM的 [Structured Output](https://platform.openai.com/docs/guides/structured-outputs) 能力（需要模型服务支持此能力），当LLM支持response_format为json_schema时（比如gpt系列），不需要在instruction里编写输出格式，框架会自动填充。而当LLM仅支持response_format为json_object时（比如deepseek），需要用户在instruction里指定要输出的json格式。
 2. 当配置tools时，不会走LLM的Structured Output能力（使用Tools时不能使用Structured Output），框架将会为Agent注入set_model_response工具，以触发大模型调用这个工具设置json的输出。
@@ -637,6 +638,8 @@ output_schema的实现机制根据是否使用tools有两种不同的方法：
 ```python
 from pydantic import BaseModel
 from typing import List
+
+from trpc_agent_sdk.agents import LlmAgent
 
 class UserProfileOutput(BaseModel):
     """Output schema for user profile analysis."""
@@ -665,13 +668,15 @@ user_profile = UserProfileOutput.model_validate_json(user_profile_json)
 print(user_profile)
 ```
 
-#### input_schema用法
+#### input_schema 用法
 
 LlmAgent也支持结构化输入(input_schema)，一般需要配合 [AgentTool](./tool.md) 使用，AgentTool会自动校验Agent的输入/输出是否符合schema，如下所示：
 
 ```python
 from pydantic import BaseModel
 from typing import List, Optional
+
+from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.tools import AgentTool
 
 class UserProfileInput(BaseModel):
