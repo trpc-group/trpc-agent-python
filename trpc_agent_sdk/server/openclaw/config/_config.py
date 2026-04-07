@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""trpc-claw configuration loader.
+"""trpc_claw configuration loader.
 
 This module provides a config object that:
 1. loads from YAML/JSON file
@@ -35,19 +35,19 @@ from ._constants import AGENT_FILE_NAME
 from ._constants import DEFAULT_APP_NAME
 from ._constants import DEFAULT_CONFIG_PATH
 from ._constants import DEFAULT_LEGACY_SESSIONS_DIR
-from ._constants import DEFAULT_TRPC_AGENT_CLAW_DIR
+from ._constants import DEFAULT_TRPC_CLAW_DIR
 from ._constants import DEFAULT_USER_ID
 from ._constants import DEFAULT_WORKSPACE_PATH
 from ._constants import HISTORY_FILE_NAME
 from ._constants import MEMORY_FILE_NAME
 from ._constants import SOUL_FILE_NAME
 from ._constants import TOOL_FILE_NAME
-from ._constants import TRPC_AGENT_CLAW_CONFIG
+from ._constants import TRPC_CLAW_CONFIG
 from ._constants import USER_FILE_NAME
 
 
 class LocalCodeExecutorConfig(BaseModel):
-    """trpc-claw local code executor config."""
+    """trpc_claw local code executor config."""
     workspace: str = ""
     read_only_staged_skill: bool = False
     auto_inputs: bool = True
@@ -55,7 +55,7 @@ class LocalCodeExecutorConfig(BaseModel):
 
 
 class ContainerCodeExecutorConfig(BaseModel):
-    """trpc-claw container code executor config."""
+    """trpc_claw container code executor config."""
     base_url: Optional[str] = None
     """The base url of the user hosted Docker client."""
     image: str = "python:3-slim"
@@ -79,7 +79,7 @@ class SkillConfig(BaseModel):
 
 
 class SkillRootConfig(BaseModel):
-    """trpc-claw skill root config."""
+    """trpc_claw skill root config."""
     sandbox_type: str = "local"
     skill_roots: list[str] = Field(default_factory=list)
     builtin_skill_roots: list[str] = Field(default_factory=list)
@@ -96,7 +96,7 @@ class SkillRootConfig(BaseModel):
 
 
 class RuntimeConfig(BaseModel):
-    """trpc-claw runtime-only config (not part of nanobot schema)."""
+    """trpc_claw runtime-only config (not part of nanobot schema)."""
 
     app_name: str = DEFAULT_APP_NAME
     user_id: str = DEFAULT_USER_ID
@@ -104,7 +104,7 @@ class RuntimeConfig(BaseModel):
 
 
 class AgentConfig(AgentDefaults):
-    """trpc-claw agent config."""
+    """trpc_claw agent config."""
     instruction: str = ""
     system_prompt: str = ""
     api_key: str = ""
@@ -114,25 +114,25 @@ class AgentConfig(AgentDefaults):
 
 
 class MemoryConfig(BaseModel):
-    """trpc-claw memory config."""
+    """trpc_claw memory config."""
     memory_service_config: MemoryServiceConfig = Field(default_factory=MemoryServiceConfig)
 
 
 class FileStorageConfig(BaseModel):
-    """trpc-claw file storage config."""
+    """trpc_claw file storage config."""
     base_dir: str = ""
     max_key_length: int = 255
 
 
 class SqlStorageConfig(BaseModel):
-    """trpc-claw sql storage config."""
+    """trpc_claw sql storage config."""
     url: str = ""
     is_async: bool = False
     kwargs: dict[str, Any] = Field(default_factory=dict)
 
 
 class RedisStorageConfig(BaseModel):
-    """trpc-claw redis storage config."""
+    """trpc_claw redis storage config."""
     url: str = ""
     is_async: bool = False
     password: str = ""
@@ -141,7 +141,7 @@ class RedisStorageConfig(BaseModel):
 
 
 class StorageConfig(BaseModel):
-    """trpc-claw storage config."""
+    """trpc_claw storage config."""
     model_config = ConfigDict(extra="forbid", )
     """The pydantic model config."""
     type: str = "file"
@@ -152,8 +152,8 @@ class StorageConfig(BaseModel):
 
 
 class LoggerConfig(BaseModel):
-    """trpc-claw logger config."""
-    name: str = "trpc-claw"
+    """trpc_claw logger config."""
+    name: str = "trpc_claw"
     """The logger name."""
     log_file: str = "trpc_claw.log"
     """The log file."""
@@ -163,14 +163,14 @@ class LoggerConfig(BaseModel):
 
 
 class MetricsConfig(BaseModel):
-    """trpc-claw metrics config."""
+    """trpc_claw metrics config."""
     type: str = "langfuse"
     """The metrics type."""
     langfuse: LangfuseConfig = Field(default_factory=LangfuseConfig)
 
 
 class ClawConfig(NanobotConfig):
-    """Root trpc-claw config.
+    """Root trpc_claw config.
 
     Fields are intentionally aligned with nanobot's top-level config sections
     so existing channel/cron/heartbeat code can reuse the same access pattern.
@@ -321,10 +321,10 @@ def load_config(config_path: Optional[Path] = None) -> ClawConfig:
     4) sibling yaml: ``config.yaml`` / ``config.yml`` (if present)
     """
     if not config_path:
-        config_path = os.getenv(TRPC_AGENT_CLAW_CONFIG, "").strip()
+        config_path = os.getenv(TRPC_CLAW_CONFIG, "").strip()
         if not config_path:
-            if not DEFAULT_TRPC_AGENT_CLAW_DIR.exists():
-                DEFAULT_TRPC_AGENT_CLAW_DIR.mkdir(parents=True, exist_ok=True)
+            if not DEFAULT_TRPC_CLAW_DIR.exists():
+                DEFAULT_TRPC_CLAW_DIR.mkdir(parents=True, exist_ok=True)
             config_path = str(DEFAULT_CONFIG_PATH)
 
     path = Path(config_path)

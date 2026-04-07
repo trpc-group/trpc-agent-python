@@ -130,9 +130,6 @@ class DynamicSkillToolSet(BaseToolSet):
                 self._find_tool_by_name(tool)
             else:
                 self._find_tool_by_type(tool)
-
-        logger.info("DynamicSkillToolSet initialized: %s tools, %s toolsets, only_active_skills=%s",
-                    len(self._available_tools), len(self._available_toolsets), only_active_skills)
         logger.info("DynamicSkillToolSet initialized: %s tools, %s toolsets, only_active_skills=%s",
                     len(self._available_tools), len(self._available_toolsets), only_active_skills)
 
@@ -195,7 +192,6 @@ class DynamicSkillToolSet(BaseToolSet):
                         return tool
             except Exception as ex:  # pylint: disable=broad-except
                 logger.warning("Failed to get tools from toolset '%s': %s", toolset.name, ex)
-                logger.warning("Failed to get tools from toolset '%s': %s", toolset.name, ex)
 
         # Fallback to global registry
         tool = get_tool(tool_name)
@@ -256,10 +252,8 @@ class DynamicSkillToolSet(BaseToolSet):
 
             if not tool_names:
                 logger.debug("No tools selected for skill '%s'", skill_name)
-                logger.debug("No tools selected for skill '%s'", skill_name)
                 continue
 
-            logger.debug("Skill '%s' requires tools: %s", skill_name, tool_names)
             logger.debug("Skill '%s' requires tools: %s", skill_name, tool_names)
 
             # Resolve tool names to tool instances
@@ -272,17 +266,15 @@ class DynamicSkillToolSet(BaseToolSet):
                 tool = await self._resolve_tool(tool_name, ctx)
                 if tool is None:
                     logger.warning(
-                        "Tool '%s' required by skill '%s' could not be resolved. Checked: available_tools (%s), available_toolsets (%s), global registry",
-                        tool_name, skill_name, len(self._available_tools), len(self._available_toolsets))
+                        "Tool '%s' required by skill '%s' could not be resolved. Checked: available_tools (%s), "
+                        "available_toolsets (%s), global registry", tool_name, skill_name, len(self._available_tools),
+                        len(self._available_toolsets))
                     continue
 
                 selected_tools.append(tool)
                 selected_tool_names.add(tool_name)
                 logger.debug("Resolved tool '%s' for skill '%s'", tool_name, skill_name)
-                logger.debug("Resolved tool '%s' for skill '%s'", tool_name, skill_name)
 
-        logger.debug("DynamicSkillToolSet: Returning %s tools from %s skill(s): %s", len(selected_tools),
-                     len(skills_to_process), list(selected_tool_names))
         logger.debug("DynamicSkillToolSet: Returning %s tools from %s skill(s): %s", len(selected_tools),
                      len(skills_to_process), list(selected_tool_names))
 
@@ -336,12 +328,10 @@ class DynamicSkillToolSet(BaseToolSet):
                 skill_name = key[len(SKILL_LOADED_STATE_KEY_PREFIX):]
                 active_skills.add(skill_name)
                 logger.debug("Skill '%s' is active (just loaded)", skill_name)
-                logger.debug("Skill '%s' is active (just loaded)", skill_name)
             elif key.startswith(SKILL_TOOLS_STATE_KEY_PREFIX):
                 # Skill's tools were just selected/modified
                 skill_name = key[len(SKILL_TOOLS_STATE_KEY_PREFIX):]
                 active_skills.add(skill_name)
-                logger.debug("Skill '%s' is active (tools modified)", skill_name)
                 logger.debug("Skill '%s' is active (tools modified)", skill_name)
 
         return list(active_skills)
@@ -375,7 +365,6 @@ class DynamicSkillToolSet(BaseToolSet):
             return self._get_skill_default_tools(skill_name)
         except json.JSONDecodeError:
             logger.warning("Failed to parse tools selection for skill '%s': %s", skill_name, v_str)
-            logger.warning("Failed to parse tools selection for skill '%s': %s", skill_name, v_str)
             return self._get_skill_default_tools(skill_name)
 
     def _get_skill_default_tools(self, skill_name: str) -> list[str]:
@@ -386,6 +375,5 @@ class DynamicSkillToolSet(BaseToolSet):
                 return []
             return list(sk.tools or [])
         except Exception as ex:  # pylint: disable=broad-except
-            logger.warning("Failed to get default tools for skill '%s': %s", skill_name, ex)
             logger.warning("Failed to get default tools for skill '%s': %s", skill_name, ex)
             return []

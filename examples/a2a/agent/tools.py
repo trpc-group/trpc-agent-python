@@ -34,6 +34,12 @@ def get_weather_report(city: str) -> dict:
             "condition": "Thunderstorm",
             "humidity": "85%"
         },
+        "Shenzhen": {
+            "city": "Shenzhen",
+            "temperature": "25C",
+            "condition": "Sunny",
+            "humidity": "60%"
+        },
     }
     return weather_data.get(city, {
         "city": city,

@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""File-backed session service for trpc-claw agents.
+"""File-backed session service for trpc_claw agents.
 
 """
 
@@ -34,7 +34,7 @@ from ._claw_summarizer import ClawSummarizerSessionManager
 
 
 class ClawSessionService(InMemorySessionService):
-    """trpc-claw session service that stores :class:`Session` objects.
+    """trpc_claw session service that stores :class:`Session` objects.
 
     Sessions are persisted as JSONL files under ``workspace/sessions/``.
     Args:

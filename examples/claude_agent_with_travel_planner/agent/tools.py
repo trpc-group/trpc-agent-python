@@ -12,7 +12,6 @@ from trpc_agent_sdk.tools import MCPToolset
 from trpc_agent_sdk.tools.mcp_tool import StdioConnectionParams
 
 
-# 工具环境安装请参考: https://knot.woa.com/mcp/detail/39
 # 1. (可选)安装uv: curl -LsSf https://astral.sh/uv/install.sh | sh
 # 2. 安装mcp: uv pip install duckduckgo-mcp-server
 class DuckDuckGoSearchMCP(MCPToolset):
@@ -31,5 +30,5 @@ class DuckDuckGoSearchMCP(MCPToolset):
 
 
 def get_current_date():
-    """获取今天的日期，日期格式为：2025-01-01"""
+    """get the current date, format: YYYY-MM-DD"""
     return datetime.datetime.now().strftime("%Y-%m-%d")

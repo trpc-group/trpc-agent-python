@@ -57,11 +57,11 @@ _HEARTBEAT_DECLARATION: FunctionDeclaration = FunctionDeclaration(
 
 
 class ClawHeartbeatService(heartbeat_service_package.HeartbeatService):
-    """trpc-claw heartbeat service.
+    """trpc_claw heartbeat service.
 
     Replaces the nanobot LLMProvider.chat() call in the parent _decide
     with a direct LLMModel.generate_async() call so the service works
-    inside the trpc-claw framework.
+    inside the trpc_claw framework.
     """
 
     def __init__(

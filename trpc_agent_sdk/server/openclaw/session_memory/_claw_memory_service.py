@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""trpc-claw memory service."""
+"""trpc_claw memory service."""
 
 from datetime import datetime
 from typing import Optional
@@ -26,7 +26,7 @@ from ..storage import get_memory_key
 
 
 class ClawMemoryService(InMemoryMemoryService):
-    """trpc-claw memory service."""
+    """trpc_claw memory service."""
 
     def __init__(self,
                  storage_manager: StorageManager,

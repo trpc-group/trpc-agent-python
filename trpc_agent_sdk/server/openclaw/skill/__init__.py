@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Skill module for trpc-claw."""
+"""Skill module for trpc_claw."""
 
 from ._deps import apply_dependency_plan
 from ._deps import inspect_skill_dependencies

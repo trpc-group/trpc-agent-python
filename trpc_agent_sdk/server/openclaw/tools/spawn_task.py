@@ -13,8 +13,8 @@
 #
 """Background task spawn tool.
 
-This tool provides trpc-claw-like asynchronous task spawning behavior without
-depending on trpc-claw's worker agent implementation.
+This tool provides trpc_claw-like asynchronous task spawning behavior without
+depending on trpc_claw's worker agent implementation.
 """
 
 from __future__ import annotations

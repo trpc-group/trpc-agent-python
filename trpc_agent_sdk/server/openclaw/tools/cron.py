@@ -11,7 +11,7 @@
 #
 # See the project LICENSE / third-party attribution notices for details.
 #
-"""Cron tool for trpc-claw scheduling reminders and tasks.
+"""Cron tool for trpc_claw scheduling reminders and tasks.
 
 Implemented as a :class:`~trpc_agent_sdk.tools.BaseTool` subclass.
 

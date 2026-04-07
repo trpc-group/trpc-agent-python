@@ -812,6 +812,7 @@ class AgUiAgent:
             # Stream events and track tool calls
             logger.debug("Starting to stream events for execution %s", execution.thread_id)
             has_tool_calls = False
+            has_error = False
             tool_call_ids = []
 
             logger.debug("About to iterate over _stream_events for execution %s", execution.thread_id)
@@ -827,6 +828,10 @@ class AgUiAgent:
                 if isinstance(event, ToolCallResultEvent) and event.tool_call_id in tool_call_ids:
                     logger.debug("Detected ToolCallResultEvent with id: %s", event.tool_call_id)
                     tool_call_ids.remove(event.tool_call_id)
+
+                # Track if a RUN_ERROR event has been emitted to avoid sending RUN_FINISHED afterwards
+                if isinstance(event, RunErrorEvent):
+                    has_error = True
 
                 logger.debug("Yielding event: %s", type(event).__name__)
                 yield event
@@ -846,9 +851,12 @@ class AgUiAgent:
                     )
             logger.debug("Finished streaming events for execution %s", execution.thread_id)
 
-            # Emit RUN_FINISHED
-            logger.debug("Emitting RUN_FINISHED for thread %s, run %s", input.thread_id, input.run_id)
-            yield RunFinishedEvent(type=EventType.RUN_FINISHED, thread_id=input.thread_id, run_id=input.run_id)
+            # Emit RUN_FINISHED only if no error occurred during execution
+            if has_error:
+                logger.debug("Skipping RUN_FINISHED for thread %s due to previous RUN_ERROR", input.thread_id)
+            else:
+                logger.debug("Emitting RUN_FINISHED for thread %s, run %s", input.thread_id, input.run_id)
+                yield RunFinishedEvent(type=EventType.RUN_FINISHED, thread_id=input.thread_id, run_id=input.run_id)
 
         except Exception as ex:  # pylint: disable=broad-except
             logger.error("Error in new execution: %s", ex, exc_info=True)

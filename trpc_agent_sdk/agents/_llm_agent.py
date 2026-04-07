@@ -495,7 +495,6 @@ class LlmAgent(BaseAgent):
                 code_was_executed = False
 
                 logger.debug("Starting LLM call for agent: %s", self.name)
-                logger.debug("Starting LLM call for agent: %s", self.name)
 
                 # Use LlmProcessor to get unified events
                 async for event in llm_processor.call_llm_async(request, ctx, stream=True):
@@ -594,8 +593,6 @@ class LlmAgent(BaseAgent):
 
                                             logger.debug("Long-running tool %s completed, yielding LongRunningEvent",
                                                          corresponding_call.name)
-                                            logger.debug("Long-running tool %s completed, yielding LongRunningEvent",
-                                                         corresponding_call.name)
                                             return  # End agent execution after long-running event
 
                             # Yield regular tool events
@@ -637,7 +634,6 @@ class LlmAgent(BaseAgent):
 
                     except Exception as ex:  # pylint: disable=broad-except
                         logger.error("Error executing tools for agent %s: %s", self.name, ex, exc_info=True)
-                        logger.error("Error executing tools for agent %s: %s", self.name, ex, exc_info=True)
 
                         # Create tool execution error event without content
                         yield self._create_error_event(
@@ -661,7 +657,6 @@ class LlmAgent(BaseAgent):
             raise
         except Exception as ex:  # pylint: disable=broad-except
             logger.error("Unexpected error in LLM agent %s: %s", self.name, ex, exc_info=True)
-            logger.error("Unexpected error in LLM agent %s: %s", self.name, ex, exc_info=True)
 
             # Create agent execution error event without content
             yield self._create_error_event(
@@ -682,7 +677,6 @@ class LlmAgent(BaseAgent):
             result = ''.join([part.text if not part.thought else '' for part in event.content.parts])
             ctx.state[self.output_key] = result
             event.actions.state_delta[self.output_key] = result
-            logger.debug("Saved agent output to state key '%s': %s...", self.output_key, result[:100])
             logger.debug("Saved agent output to state key '%s': %s...", self.output_key, result[:100])
 
     @field_validator('generate_content_config', mode='after')

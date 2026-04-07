@@ -166,8 +166,8 @@ tRPC-Agent 基于 [nanobot](https://github.com/HKUDS/nanobot) 提供了 trpc-cla
 **1. 生成配置文件**
 
 ```bash
-mkdir -p ~/.trpc_agent_claw
-trpc_agent_cmd openclaw conf_temp --full > ~/.trpc_agent_claw/config.yaml
+mkdir -p ~/.trpc_claw
+trpc_agent_cmd openclaw conf_temp > ~/.trpc_claw/config.yaml
 ```
 
 **2. 配置环境变量**
@@ -182,10 +182,10 @@ export TRPC_AGENT_MODEL_NAME=your_model
 
 ```bash
 # 强制本地 CLI
-trpc_agent_cmd openclaw chat -c ~/.trpc_agent_claw/config.yaml
+trpc_agent_cmd openclaw chat -c ~/.trpc_claw/config.yaml
 
 # 本地 UI
-trpc_agent_cmd openclaw ui -c ~/.trpc_agent_claw/config.yaml
+trpc_agent_cmd openclaw ui -c ~/.trpc_claw/config.yaml
 ```
 
 **4. 接入企业微信 / Telegram**
@@ -205,7 +205,7 @@ channels:
 ```
 
 ```bash
-trpc_agent_cmd openclaw run -c ~/.trpc_agent_claw/config.yaml
+trpc_agent_cmd openclaw run -c ~/.trpc_claw/config.yaml
 ```
 
 `run` 模式下若无可用通道会自动回退到本地 CLI，方便调试。

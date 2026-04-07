@@ -413,7 +413,7 @@ def inspect_skill_dependencies(
             Workspace root used by OpenClaw runtime initialization.
             Example: ``/tmp/my_deps_test/workspace``.
         skills_raw:
-            Comma-separated skill names. Example: ``"knot-skill-finder,another-skill"``.
+            Comma-separated skill names. Example: ``"skill-finder,another-skill"``.
         profiles_raw:
             Comma-separated dependency profile names.
             Supported names: ``pdf, office, audio, video, image, ocr, common-file-tools``.
@@ -438,7 +438,7 @@ def inspect_skill_dependencies(
             inspect_skill_dependencies(
                 config_path=Path("/tmp/my_deps_test/config.json"),
                 workspace=Path("/tmp/my_deps_test/workspace"),
-                skills_raw="knot-skill-finder",
+                skills_raw="skillhub-skill-finder",
             )
 
         3) Profile + skill names together:
@@ -446,8 +446,8 @@ def inspect_skill_dependencies(
                 config_path=Path("/tmp/my_deps_test/config.json"),
                 workspace=Path("/tmp/my_deps_test/workspace"),
                 profiles_raw="pdf,image",
-                skills_raw="knot-skill-finder",
-                skills_allow_bundled_raw="knot.skill.finder,knot-skill-finder",
+                skills_raw="skillhub-skill-finder",
+                skills_allow_bundled_raw="skillhub.skill.finder,skillhub-skill-finder",
             )
 
     Command-line examples (recommended usage):
@@ -461,17 +461,17 @@ def inspect_skill_dependencies(
             openclaw deps \\
               --config /tmp/my_deps_test/config.json \\
               --workspace /tmp/my_deps_test/workspace \\
-              --skills knot-skill-finder
+              --skills skillhub-skill-finder
 
         3) Profiles + skills + path overrides:
             openclaw deps \\
               --config /tmp/my_deps_test/config.json \\
               --workspace /tmp/my_deps_test/workspace \\
               --profile pdf,image \\
-              --skills knot-skill-finder \\
+              --skills skillhub-skill-finder \\
               --skills-root /path/to/skills \\
               --skills-extra-dirs /path/a,/path/b \\
-              --skills-allow-bundled knot.skill.finder,knot-skill-finder
+              --skills-allow-bundled skillhub.skill.finder,skillhub-skill-finder
 
         4) JSON output + execute install plan:
             openclaw deps \\

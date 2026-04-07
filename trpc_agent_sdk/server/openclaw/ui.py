@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Browser-only UI for trpc-claw."""
+"""Browser-only UI for trpc_claw."""
 
 from __future__ import annotations
 
@@ -38,7 +38,8 @@ from .storage import make_memory_key
 
 def _load_browser_html() -> str:
     """Load browser UI HTML template from package data."""
-    return resources.files("trpc_claw").joinpath("templates", "ui.html").read_text(encoding="utf-8")
+    return resources.files("trpc_agent_sdk.server.openclaw").joinpath("templates", "ui.html").read_text(
+        encoding="utf-8")
 
 
 _BROWSER_HTML = _load_browser_html()
@@ -596,7 +597,7 @@ def _run_browser_mode_with_bind(
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
     try:
-        print(f"trpc-claw browser UI: {url}")  # noqa: T201
+        print(f"trpc_claw browser UI: {url}")  # noqa: T201
         if open_browser:
             try:
                 webbrowser.open(url, new=1, autoraise=True)
