@@ -89,6 +89,7 @@ def _make_trpc_event(
     event.is_streaming_tool_call = Mock(return_value=is_streaming_tool_call_return)
     event.get_function_calls = Mock(return_value=function_calls or [])
     event.get_function_responses = Mock(return_value=function_responses or [])
+    event.is_error = Mock(return_value=False)
     return event
 
 
