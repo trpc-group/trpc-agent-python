@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Channels for trpc-claw."""
+"""Channels for trpc_claw."""
 
 from ._command_handler import TrpcClawCommandHandler
 from ._command_handler import TrpcClawCommandHandlerParams

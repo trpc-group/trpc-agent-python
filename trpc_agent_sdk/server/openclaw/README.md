@@ -1,14 +1,14 @@
-# OpenClaw (trpc-claw)
+# OpenClaw (trpc_claw)
 
-`openclaw` 是基于 `trpc_agent_sdk` 与 `nanobot` 的智能体运行时，支持：
+`openclaw(又称为trpc_claw)` 是基于 `trpc_agent_sdk` 与 `nanobot` 的智能体运行时，支持：
 
-- 第三方通道接入（Telegram / WeCom）
+- 第三方通道接入（例如：Telegram / WeCom等 nanobot 支持的 channels，这里都支持，参考： [nanobot/channels](https://github.com/HKUDS/nanobot/tree/main/nanobot/channels)）
 - 本地 CLI 回退交互
 - 工具调用（文件、Shell、Web、消息、定时任务、MCP、Skills）
 - 会话/记忆管理与摘要
 - Heartbeat/Cron 定时触发
 
-默认工作目录：`~/.trpc_agent_claw/workspace`
+默认工作目录：`~/.trpc_claw/workspace`
 
 ## 核心能力
 
@@ -61,31 +61,29 @@ python -V
 trpc_agent_cmd openclaw --help
 ```
 
-> 说明：历史文档里可能出现 `trpc-claw-py`，当前以 `trpc_agent_cmd openclaw` 为准。
-
 ### 3) 生成配置模板
 
 ```bash
-mkdir -p ~/.trpc_agent_claw
+mkdir -p ~/.trpc_claw
 
 # 简版模板
-trpc_agent_cmd openclaw conf_temp > ~/.trpc_agent_claw/config.yaml
+trpc_agent_cmd openclaw conf_temp > ~/.trpc_claw/config.yaml
 
 # 完整模板（建议）
-trpc_agent_cmd openclaw conf_temp --full > ~/.trpc_agent_claw/config_full.yaml
+trpc_agent_cmd openclaw conf_temp --full > ~/.trpc_claw/config_full.yaml
 ```
 
 ### 4) 启动方式
 
 ```bash
 # 自动模式：有通道走 gateway，无通道自动回退 CLI
-trpc_agent_cmd openclaw run -c ~/.trpc_agent_claw/config_full.yaml
+trpc_agent_cmd openclaw run -c ~/.trpc_claw/config_full.yaml
 
 # 强制本地 CLI 交互
-trpc_agent_cmd openclaw chat -c ~/.trpc_agent_claw/config_full.yaml
+trpc_agent_cmd openclaw chat -c ~/.trpc_claw/config_full.yaml
 
 # 启动 UI
-trpc_agent_cmd openclaw ui -c ~/.trpc_agent_claw/config_full.yaml
+trpc_agent_cmd openclaw ui -c ~/.trpc_claw/config_full.yaml
 ```
 
 ## 命令说明
@@ -106,23 +104,23 @@ trpc_agent_cmd openclaw ui -c ~/.trpc_agent_claw/config_full.yaml
 ```bash
 # 按 profile 检查（推荐）
 trpc_agent_cmd openclaw deps \
-  -c ~/.trpc_agent_claw/config_full.yaml \
+  -c ~/.trpc_claw/config_full.yaml \
   --profile common-file-tools
 
 # 指定 skill 检查
 trpc_agent_cmd openclaw deps \
-  -c ~/.trpc_agent_claw/config_full.yaml \
-  --skills knot-skill-finder
+  -c ~/.trpc_claw/config_full.yaml \
+  --skills {skill-finder} # 用于下载 skill 的 skill 名称，这里只是占位符，用户使用的时候需要修改为自己真正的 skill
 
 # 输出 JSON
 trpc_agent_cmd openclaw deps \
-  -c ~/.trpc_agent_claw/config_full.yaml \
+  -c ~/.trpc_claw/config_full.yaml \
   --profile common-file-tools \
   --json
 
 # 直接执行安装计划
 trpc_agent_cmd openclaw deps \
-  -c ~/.trpc_agent_claw/config_full.yaml \
+  -c ~/.trpc_claw/config_full.yaml \
   --profile common-file-tools \
   --apply
 ```
@@ -141,17 +139,17 @@ trpc_agent_cmd openclaw deps \
 
 配置支持 `YAML/JSON`，默认查找路径：
 
-- `~/.trpc_agent_claw/config.json`
+- `~/.trpc_claw/config.json`
 
 你也可以通过以下方式覆盖：
 
 - 命令行参数：`-c/--config`
-- 环境变量：`TRPC_AGENT_CLAW_CONFIG`
+- 环境变量：`TRPC_CLAW_CONFIG`
 
 示例：
 
 ```bash
-export TRPC_AGENT_CLAW_CONFIG=/path/to/config.yaml
+export TRPC_CLAW_CONFIG=/path/to/config.yaml
 trpc_agent_cmd openclaw chat
 ```
 
@@ -203,18 +201,20 @@ skills:
   skill_roots: []
   builtin_skill_roots: []
   config_keys:
-    - knot.enabled
-    - knot
+    - skillhub.enabled
+    - skillhub
   allow_bundled:
-    - knot.skill.finder
-    - knot-skill-finder
+    - skillhub.skill.finder
+    - skillhub-skill-finder
   skill_configs:
-    knot-skill-finder:
+    skillhub-skill-finder:
       enabled: true
       env:
-        KNOT_USERNAME: ${KNOT_USERNAME}
-        KNOT_API_TOKEN: ${KNOT_API_TOKEN}
+        SKILLHUB_USERNAME: ${SKILLHUB_USERNAME}
+        SKILLHUB_TOKEN: ${SKILLHUB_TOKEN}
 ```
+
+注意这里的 `skillhub-skill-finder` 只是一个例子，需要用户换成自己真正的 skill 名称 
 
 ### tools
 
@@ -241,8 +241,8 @@ skills:
 
 ## 默认目录
 
-- 配置目录：`~/.trpc_agent_claw/`
-- 工作目录：`~/.trpc_agent_claw/workspace`
+- 配置目录：`~/.trpc_claw/`
+- 工作目录：`~/.trpc_claw/workspace`
 
 ## 接入 ClawBot
 
@@ -268,7 +268,7 @@ export TRPC_AGENT_BASE_URL=xxx
 export TRPC_AGENT_MODEL_NAME=xxx
 export WECOM_BOT_ID=xxx
 export WECOM_BOT_SECRET=xxx
-trpc_agent_cmd openclaw run -c ~/.trpc_agent_claw/config_full.yaml
+trpc_agent_cmd openclaw run -c ~/.trpc_claw/config_full.yaml
 ```
 
 ![wecom](./image/wecom.png)
@@ -288,7 +288,7 @@ channels:
 
 ```bash
 export TELEGRAM_BOT_TOKEN=xxx
-trpc_agent_cmd openclaw run -c ~/.trpc_agent_claw/config_full.yaml
+trpc_agent_cmd openclaw run -c ~/.trpc_claw/config_full.yaml
 ```
 
 ![telegram](./image/telegram.png)
@@ -378,7 +378,7 @@ tools:
 
 ```yaml
 logger:
-  name: trpc-claw
+  name: trpc_claw
   log_file: trpc_claw.log
   log_level: INFO
   log_format: "[%(asctime)s][%(levelname)s][%(name)s][%(pathname)s:%(lineno)d][%(process)d] %(message)s"
@@ -394,10 +394,10 @@ personal:
 
 ## 目录参考（当前仓库）
 
-- `trpc_agent_sdk/server/openclaw/_cli.py`：OpenClaw CLI 命令
-- `trpc_agent_sdk/server/openclaw/claw.py`：运行时核心编排
-- `trpc_agent_sdk/server/openclaw/config/`：配置模型与加载逻辑
-- `trpc_agent_sdk/server/openclaw/channels/`：通道适配（Telegram / WeCom）
-- `trpc_agent_sdk/server/openclaw/tools/`：工具实现
-- `trpc_agent_sdk/server/openclaw/skill/`：Skill 体系（加载、解析、依赖检查）
-- `trpc_agent_sdk/server/openclaw/service/`：Cron / Heartbeat 服务
+- [trpc_agent_sdk/server/openclaw/_cli.py](../../../trpc_agent_sdk/server/openclaw/_cli.py)：OpenClaw CLI 命令
+- [trpc_agent_sdk/server/openclaw/claw.py](../../../trpc_agent_sdk/server/openclaw/claw.py)：运行时核心编排
+- [trpc_agent_sdk/server/openclaw/config/](../../../trpc_agent_sdk/server/openclaw/config/)：配置模型与加载逻辑
+- [trpc_agent_sdk/server/openclaw/channels/](../../../trpc_agent_sdk/server/openclaw/channels/)：通道适配（Telegram / WeCom）
+- [trpc_agent_sdk/server/openclaw/tools/](../../../trpc_agent_sdk/server/openclaw/tools/)：工具实现
+- [trpc_agent_sdk/server/openclaw/skill/](../../../trpc_agent_sdk/server/openclaw/skill/)：Skill 体系（加载、解析、依赖检查）
+- [trpc_agent_sdk/server/openclaw/service/](../../../trpc_agent_sdk/server/openclaw/service/)：Cron / Heartbeat 服务

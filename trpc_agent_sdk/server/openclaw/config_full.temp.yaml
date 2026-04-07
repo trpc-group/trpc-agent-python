@@ -1,15 +1,15 @@
-# 完整配置模板（对应 trpc_claw/config/_config.py）
+# 完整配置模板（对应 trpc_agent_sdk/server/openclaw/config/_config.py）
 
 runtime:
   # 默认来自 DEFAULT_APP_NAME / DEFAULT_USER_ID
   app_name: trpc_claw_py
   user_id: trpc_claw_user
   # 兼容历史 session 目录
-  legacy_sessions_dir: ~/.trpc_agent_claw/sessions
+  legacy_sessions_dir: ~/.trpc_claw/sessions
 
 agent:
-  # 默认工作目录（不填会自动使用 ~/.trpc_agent_claw/workspace）
-  workspace: ~/.trpc_agent_claw/workspace
+  # 默认工作目录（不填会自动使用 ~/.trpc_claw/workspace）
+  workspace: ~/.trpc_claw/workspace
   model: ${TRPC_AGENT_MODEL_NAME}
   provider: auto
   max_tokens: 8192
@@ -83,7 +83,7 @@ tools:
   #     enabled_tools: ["*"]
 
 skills:
-  sandbox_type: container  # local | container | pcg123
+  sandbox_type: local  # local | container | pcg123
   # 支持多个 root：本地目录 / file:// / http(s):// 技能包
   skill_roots: []
   # 示例：
@@ -96,22 +96,22 @@ skills:
   # 用于满足 skill 元数据中的 requires.config 检查
   config_keys:
     # 示例1：允许一个逻辑开关（可被 SKILL.md 的 requires.config 命中）
-    - knot.enabled
+    - skillhub.enabled
     # 示例2：允许某个命名空间（has_config_key 支持前缀匹配）
-    - knot
+    - skillhub
   # 当仅允许部分内置 skill 暴露时可配置白名单（skill_key 或 name）
   allow_bundled:
-    # 示例：knot-skill-finder 在 SKILL.md 中声明了 skill_key = knot.skill.finder
+    # 示例：skill-finder 在 SKILL.md 中声明了 skill_key = skill.finder
     # 优先按 skill_key 命中，也可补充 name 作为兼容
-    - knot.skill.finder
-    - knot-skill-finder
+    - skillhub.skill.finder
+    - skillhub-skill-finder
   # 按 skill_key 或 name 配置启停和专属环境变量
   skill_configs:
-    knot-skill-finder:
+    skillhub-skill-finder:
       enabled: true
       env:
-        KNOT_API_TOKEN: "${KNOT_API_TOKEN}"
-        KNOT_USERNAME: "${KNOT_USERNAME}"
+        SKILLHUB_TOKEN: "${SKILLHUB_TOKEN}"
+        SKILLHUB_USERNAME: ${SKILLHUB_USERNAME}
   run_tool_kwargs: {}
 
   local_config:
@@ -128,7 +128,7 @@ skills:
     inputs_host_base: ""
 
 logger:
-  name: trpc-claw
+  name: trpc_claw
   log_file: trpc_claw.log
   log_level: INFO
   log_format: "[%(asctime)s][%(levelname)s][%(name)s][%(pathname)s:%(lineno)d][%(process)d] %(message)s"

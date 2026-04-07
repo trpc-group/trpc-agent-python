@@ -19,11 +19,9 @@ import typer
 
 CLI_COMMAND_PATH = ("openclaw", )
 CLI_COMMAND_HELP = "OpenClaw gateway, chat, ui and deps tools."
-BOT_NAME = "trpc_claw"
 
 app = typer.Typer(
-    name=BOT_NAME,
-    help=f"{BOT_NAME} gateway and interactive CLI.",
+    help="trpc_claw gateway and interactive CLI.",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -36,7 +34,7 @@ def show_config_template_cmd(
             "--full",
             help="Print full config template (config_full.temp.yaml).",
         ), ) -> None:
-    """Print the trpc_claw config template YAML."""
+    """Print the openclaw config template YAML."""
     template_name = "config_full.temp.yaml" if full else "config.temp.yaml"
     template_path = Path(__file__).with_name(template_name)
     if not template_path.exists():
@@ -89,7 +87,7 @@ def run_cmd(
             help="Config file path (yaml/json).",
         ),
 ) -> None:
-    """Run trpc_claw in gateway mode when channels are enabled, else CLI fallback."""
+    """Run openclaw in gateway mode when channels are enabled, else CLI fallback."""
     _run_openclaw(workspace=workspace, config=config, force_chat=False)
 
 
@@ -108,7 +106,7 @@ def chat_cmd(
             help="Config file path (yaml/json).",
         ),
 ) -> None:
-    """Force local interactive chat (CLI fallback), ignoring third-party channels for trpc_claw."""
+    """Force local interactive chat (CLI fallback), ignoring third-party channels for openclaw."""
     _run_openclaw(workspace=workspace, config=config, force_chat=True)
 
 
@@ -228,10 +226,3 @@ def deps_cmd(
         raise typer.Exit(code=1)
 
 
-def main() -> None:
-    """CLI entrypoint for console scripts."""
-    app()
-
-
-if __name__ == "__main__":
-    main()

@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""trpc-claw session memory utils."""
+"""trpc_claw session memory utils."""
 
 import contextvars
 from typing import Optional

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright @ 2026 Tencent.com
-"""Service module for trpc-claw."""
+"""Service module for trpc_claw."""
 
 from nanobot.cron.service import CronService
 

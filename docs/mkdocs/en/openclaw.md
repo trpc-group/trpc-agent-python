@@ -1,6 +1,6 @@
-# OpenClaw (trpc-claw)
+# OpenClaw (trpc_claw)
 
-`openclaw` is an agent runtime built on top of `trpc_agent_sdk` and `nanobot`, supporting:
+`openclaw` (also called `trpc_claw`) is an agent runtime built on top of `trpc_agent_sdk` and `nanobot`, supporting:
 
 - Third-party channel integrations (for example: Telegram / WeCom and other channels supported by nanobot). OpenClaw supports all of these channels. See [nanobot/channels](https://github.com/HKUDS/nanobot/tree/main/nanobot/channels).
 - Local CLI fallback mode
@@ -8,7 +8,7 @@
 - Session/memory management and summarization
 - Heartbeat/Cron scheduled execution
 
-Default workspace: `~/.trpc_agent_claw/workspace`
+Default workspace: `~/.trpc_claw/workspace`
 
 ## Core Capabilities
 
@@ -61,31 +61,29 @@ Current recommended command entry point (aligned with the repository state):
 trpc_agent_cmd openclaw --help
 ```
 
-> Note: older docs may mention `trpc-claw-py`; use `trpc_agent_cmd openclaw` as the authoritative command.
-
 ### 3) Generate Config Templates
 
 ```bash
-mkdir -p ~/.trpc_agent_claw
+mkdir -p ~/.trpc_claw
 
 # Minimal template
-trpc_agent_cmd openclaw conf_temp > ~/.trpc_agent_claw/config.yaml
+trpc_agent_cmd openclaw conf_temp > ~/.trpc_claw/config.yaml
 
 # Full template (recommended)
-trpc_agent_cmd openclaw conf_temp --full > ~/.trpc_agent_claw/config_full.yaml
+trpc_agent_cmd openclaw conf_temp --full > ~/.trpc_claw/config_full.yaml
 ```
 
 ### 4) Startup Modes
 
 ```bash
 # Auto mode: use gateway if channels are available; otherwise fall back to CLI
-trpc_agent_cmd openclaw run -c ~/.trpc_agent_claw/config_full.yaml
+trpc_agent_cmd openclaw run -c ~/.trpc_claw/config_full.yaml
 
 # Force local CLI interaction
-trpc_agent_cmd openclaw chat -c ~/.trpc_agent_claw/config_full.yaml
+trpc_agent_cmd openclaw chat -c ~/.trpc_claw/config_full.yaml
 
 # Start UI
-trpc_agent_cmd openclaw ui -c ~/.trpc_agent_claw/config_full.yaml
+trpc_agent_cmd openclaw ui -c ~/.trpc_claw/config_full.yaml
 ```
 
 ## Command Reference
@@ -106,23 +104,23 @@ trpc_agent_cmd openclaw ui -c ~/.trpc_agent_claw/config_full.yaml
 ```bash
 # Inspect by profile (recommended)
 trpc_agent_cmd openclaw deps \
-  -c ~/.trpc_agent_claw/config_full.yaml \
+  -c ~/.trpc_claw/config_full.yaml \
   --profile common-file-tools
 
 # Inspect by skill
 trpc_agent_cmd openclaw deps \
-  -c ~/.trpc_agent_claw/config_full.yaml \
-  --skills knot-skill-finder
+  -c ~/.trpc_claw/config_full.yaml \
+  --skills {skill-finder} # Placeholder skill name for downloading skills; replace with your real skill name
 
 # Output JSON
 trpc_agent_cmd openclaw deps \
-  -c ~/.trpc_agent_claw/config_full.yaml \
+  -c ~/.trpc_claw/config_full.yaml \
   --profile common-file-tools \
   --json
 
 # Execute the installation plan directly
 trpc_agent_cmd openclaw deps \
-  -c ~/.trpc_agent_claw/config_full.yaml \
+  -c ~/.trpc_claw/config_full.yaml \
   --profile common-file-tools \
   --apply
 ```
@@ -141,17 +139,17 @@ Common options:
 
 Configuration supports `YAML/JSON`, default lookup path:
 
-- `~/.trpc_agent_claw/config.json`
+- `~/.trpc_claw/config.json`
 
 You can override via:
 
 - CLI argument: `-c/--config`
-- Environment variable: `TRPC_AGENT_CLAW_CONFIG`
+- Environment variable: `TRPC_CLAW_CONFIG`
 
 Example:
 
 ```bash
-export TRPC_AGENT_CLAW_CONFIG=/path/to/config.yaml
+export TRPC_CLAW_CONFIG=/path/to/config.yaml
 trpc_agent_cmd openclaw chat
 ```
 
@@ -203,18 +201,20 @@ skills:
   skill_roots: []
   builtin_skill_roots: []
   config_keys:
-    - knot.enabled
-    - knot
+    - skillhub.enabled
+    - skillhub
   allow_bundled:
-    - knot.skill.finder
-    - knot-skill-finder
+    - skillhub.skill.finder
+    - skillhub-finder
   skill_configs:
-    knot-skill-finder:
+    skillhub-skill-finder:
       enabled: true
       env:
-        KNOT_USERNAME: ${KNOT_USERNAME}
-        KNOT_API_TOKEN: ${KNOT_API_TOKEN}
+        SKILLHUB_USERNAME: ${SKILLHUB_USERNAME}
+        SKILLHUB_TOKEN: ${SKILLHUB_TOKEN}
 ```
+
+Note: `skillhub-skill-finder` is only an example. Replace it with your actual skill name in real usage.
 
 ### tools
 
@@ -241,8 +241,8 @@ skills:
 
 ## Default Directories
 
-- Config directory: `~/.trpc_agent_claw/`
-- Workspace: `~/.trpc_agent_claw/workspace`
+- Config directory: `~/.trpc_claw/`
+- Workspace: `~/.trpc_claw/workspace`
 
 ## Integrate with ClawBot
 
@@ -268,7 +268,7 @@ export TRPC_AGENT_BASE_URL=xxx
 export TRPC_AGENT_MODEL_NAME=xxx
 export WECOM_BOT_ID=xxx
 export WECOM_BOT_SECRET=xxx
-trpc_agent_cmd openclaw run -c ~/.trpc_agent_claw/config_full.yaml
+trpc_agent_cmd openclaw run -c ~/.trpc_claw/config_full.yaml
 ```
 
 ![wecom](./image/wecom.png)
@@ -288,7 +288,7 @@ Start:
 
 ```bash
 export TELEGRAM_BOT_TOKEN=xxx
-trpc_agent_cmd openclaw run -c ~/.trpc_agent_claw/config_full.yaml
+trpc_agent_cmd openclaw run -c ~/.trpc_claw/config_full.yaml
 ```
 
 ![telegram](./image/telegram.png)
@@ -378,7 +378,7 @@ tools:
 
 ```yaml
 logger:
-  name: trpc-claw
+  name: trpc_claw
   log_file: trpc_claw.log
   log_level: INFO
   log_format: "[%(asctime)s][%(levelname)s][%(name)s][%(pathname)s:%(lineno)d][%(process)d] %(message)s"

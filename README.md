@@ -165,8 +165,8 @@ For full configuration and advanced features, see: [openclaw.md](./docs/mkdocs/e
 **1. Generate config**
 
 ```bash
-mkdir -p ~/.trpc_agent_claw
-trpc_agent_cmd openclaw conf_temp --full > ~/.trpc_agent_claw/config.yaml
+mkdir -p ~/.trpc_claw
+trpc_agent_cmd openclaw conf_temp > ~/.trpc_claw/config.yaml
 ```
 
 **2. Set environment variables**
@@ -181,10 +181,10 @@ export TRPC_AGENT_MODEL_NAME=your_model
 
 ```bash
 # Force local CLI mode
-trpc_agent_cmd openclaw chat -c ~/.trpc_agent_claw/config.yaml
+trpc_agent_cmd openclaw chat -c ~/.trpc_claw/config.yaml
 
 # Local UI
-trpc_agent_cmd openclaw ui -c ~/.trpc_agent_claw/config.yaml
+trpc_agent_cmd openclaw ui -c ~/.trpc_claw/config.yaml
 ```
 
 **4. Connect WeCom / Telegram**
@@ -204,7 +204,7 @@ channels:
 ```
 
 ```bash
-trpc_agent_cmd openclaw run -c ~/.trpc_agent_claw/config.yaml
+trpc_agent_cmd openclaw run -c ~/.trpc_claw/config.yaml
 ```
 
 If no channel is available, `run` automatically falls back to local CLI for easy debugging.

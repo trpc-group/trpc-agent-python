@@ -266,8 +266,6 @@ class MCPSessionManager:
                     await exit_stack.aclose()
                 logger.error("Error creating session: %s mcp_info: %s error: %s", session_key, self._connection_params,
                              ex)
-                logger.error("Error creating session: %s mcp_info: %s error: %s", session_key, self._connection_params,
-                             ex)
                 raise RuntimeError(error_msg) from ex
 
     async def close(self):

@@ -4,7 +4,7 @@
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
 
-"""Utils for trpc-claw skill."""
+"""Utils for trpc_claw skill."""
 
 import re
 import shutil

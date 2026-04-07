@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright @ 2026 Tencent.com
-"""Session memory module for trpc-claw."""
+"""Session memory module for trpc_claw."""
 
 from ._claw_memory_service import ClawMemoryService
 from ._claw_session_service import ClawSessionService

@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Storage manager for trpc-claw."""
+"""Storage manager for trpc_claw."""
 
 import json
 import time
