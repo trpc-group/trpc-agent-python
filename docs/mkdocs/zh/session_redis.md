@@ -75,6 +75,7 @@ bind 127.0.0.1
 port 6379
 timeout 300
 ```
+
 ## 基本使用方法
 
 ### 1. 初始化 RedisStorage
@@ -1225,7 +1226,7 @@ class DebugRedisStorage(RedisStorage):
             raise
 ```
 
-## 运行示例
+## 安装和环境配置
 
 ### 基本运行
 ```bash
@@ -1234,23 +1235,6 @@ redis-server
 
 # 2. 安装依赖
 pip install redis
-
-# 3. 运行完整示例
-python examples/storage/redis_example.py
-
-# 4. 运行特定操作示例
-python -c "
-import asyncio
-from examples.storage.redis_example import RedisExampleManager
-
-async def main():
-    manager = RedisExampleManager()
-    await manager.setup_redis()
-    await manager.string_operations_example()
-    await manager.close_connection()
-
-asyncio.run(main())
-"
 ```
 
 ### 环境配置运行
@@ -1261,18 +1245,12 @@ export REDIS_PORT=6379
 export REDIS_DB=0
 export REDIS_PASSWORD=your_password
 export REDIS_MAX_CONNECTIONS=20
-
-# 运行示例
-python examples/storage/redis_example.py
 ```
 
 ### Docker 环境运行
 ```bash
 # 启动 Redis 容器
 docker run -d --name redis-test -p 6379:6379 redis:latest
-
-# 运行示例（连接到容器）
-REDIS_HOST=localhost python examples/storage/redis_example.py
 
 # 清理容器
 docker stop redis-test && docker rm redis-test
@@ -1282,45 +1260,4 @@ docker stop redis-test && docker rm redis-test
 ```bash
 # 连接到 Redis 集群
 export REDIS_URL="redis://redis-cluster:6379/0"
-python examples/storage/redis_example.py
-
-# 或者在代码中指定
-python -c "
-import asyncio
-from examples.storage.redis_example import RedisExampleManager
-
-async def main():
-    manager = RedisExampleManager('redis://redis-cluster:6379/0')
-    await manager.setup_redis()
-    # ... 其他操作
-    await manager.close_connection()
-
-asyncio.run(main())
-"
-```
-
-### 性能测试运行
-```bash
-# 运行性能测试
-python -c "
-import asyncio
-import time
-from examples.storage.redis_example import RedisExampleManager
-
-async def performance_test():
-    manager = RedisExampleManager()
-    await manager.setup_redis()
-
-    # 测试大量写入
-    start_time = time.time()
-    for i in range(1000):
-        await manager.string_operations_example()
-
-    end_time = time.time()
-    print(f'1000 operations completed in {end_time - start_time:.2f} seconds')
-
-    await manager.close_connection()
-
-asyncio.run(performance_test())
-"
 ```

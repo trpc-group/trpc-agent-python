@@ -756,21 +756,17 @@ storage = SqlStorage(
 )
 ```
 
-## Running Examples
+## Environment Setup
 
 ```bash
-# 1. Install dependencies
+# Install dependencies
 pip install sqlalchemy aiomysql
 
-# 2. Set environment variables
+# Set environment variables
 export DB_URL="mysql+aiomysql://root:password@localhost/test_db"
 
-# 3. Run example
-python examples/storage/sql_example.py
-
-# 4. Use a different database
+# Use a different database
 export DB_URL="postgresql+asyncpg://user:pass@localhost/test_db"
-python examples/storage/sql_example.py
 ```
 
 ## Supported Databases

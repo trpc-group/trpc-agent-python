@@ -130,6 +130,9 @@ async def run_invocation(
 注意：只需要 `FunctionResponse` 的 `id`、`name`、`response`，就可以创建用于恢复 Agent 执行的 `Content`。在 Agent 作为服务对外提供能力的场景中，只需将这些信息返回给前端；前端在人工操作完成后，于下一次 Agent 调用时携带这些信息即可。
 
 ```python
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.events import LongRunningEvent
+
 async def run_agent():
     """运行 Agent（支持长运行事件）。"""
 

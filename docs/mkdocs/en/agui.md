@@ -18,7 +18,7 @@ From the repository root after cloning (enable the `ag-ui` optional extra):
 pip install -e ".[ag-ui]"
 ```
 
-Python 3.12 is required. Core dependencies include `ag-ui-protocol` and FastAPI/Uvicorn.
+Python 3.12 is required. Core dependencies include `ag-ui-protocol` and `FastAPI/Uvicorn`.
 
 ## Quick Start
 
@@ -73,10 +73,10 @@ def serve():
     # In-memory sessions; suitable for dev/debug; replace with RedisSessionService in production
     session_service = InMemorySessionService()
 
-    # AgUiService binds to the FastAPI app; add_agent registers POST routes automatically
+    # AgUiService : binds to the FastAPI app; add_agent registers POST routes automatically
     agui_service = AgUiService(service_name, app=app)
 
-    # AgUiAgent: first positional arg is a BaseAgent instance; remaining args are keyword-only
+    # Create AgUiAgent : first positional arg is a BaseAgent instance; remaining args are keyword-only
     agui_agent = AgUiAgent(
         root_agent,
         app_name=app_name,
@@ -331,5 +331,5 @@ Public symbols exported from the `server.ag_ui` submodule include:
 
 ## Complete examples
 
-- Basic streaming and tool calls: [examples/agui/README.md](../../../examples/agui/README.md)  
-- Cancel support: [examples/agui_with_cancel/README.md](../../../examples/agui_with_cancel/README.md)  
+- AGUI basic streaming and tool calls example: [examples/agui/README.md](../../../examples/agui/README.md)  
+- AGUI cancel support example: [examples/agui_with_cancel/README.md](../../../examples/agui_with_cancel/README.md)  

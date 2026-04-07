@@ -5,7 +5,7 @@
 | Item       | Details                                                              |
 | ---------- | -------------------------------------------------------------------- |
 | Name       | tRPC-Agent-Python (`trpc-agent-py`)                                  |
-| Version    | **0.1.0**                                                            |
+| Version    | **1.0.0**                                                            |
 | Description | A production-grade agent framework developed by Tencent, supporting multiple model providers (including OpenAI, Anthropic, DeepSeek, and LiteLLM). It provides tool-calling capabilities, multi-agent orchestration, session and long-term memory management, RAG-based knowledge, and seamless deployment as a service via FastAPI. |
 | License    | Apache-2.0                                                           |
 | Repository | https://github.com/trpc-group/trpc-agent-python                     |
@@ -86,19 +86,19 @@ pip install -e .
 
 ### Optional Dependencies Reference
 
-| Extension        | Purpose                       | Key Dependencies                             | Install Command                         |
-| ---------------- | ----------------------------- | -------------------------------------------- | --------------------------------------- |
-| `a2a`            | Google A2A protocol           | a2a-sdk, protobuf                            | `pip install "trpc-agent-py[a2a]"`            |
-| `ag-ui`          | AG-UI protocol                | ag-ui-protocol                               | `pip install "trpc-agent-py[ag-ui]"`          |
-| `agent-claude`   | Claude Agent                  | claude-agent-sdk, cloudpickle                | `pip install "trpc-agent-py[agent-claude]"`   |
-| `knowledge`      | Knowledge base / RAG          | numpy, langchain_community, langchain_huggingface | `pip install "trpc-agent-py[knowledge]"` |
-| `mem0`           | Long-term memory (Mem0)       | mem0ai, sentence-transformers                | `pip install "trpc-agent-py[mem0]"`           |
-| `langchain_tool` | LangChain Tool integration    | langchain_tavily                             | `pip install "trpc-agent-py[langchain_tool]"` |
-| `langfuse`       | Langfuse observability        | opentelemetry-sdk, opentelemetry-exporter    | `pip install "trpc-agent-py[langfuse]"`       |
-| `eval`           | Evaluation framework          | pytest, rouge-score, pandas, tabulate        | `pip install "trpc-agent-py[eval]"`           |
-| `openclaw`       | OpenClaw integration          | nanobot-ai, wecom-aibot-sdk-python           | `pip install "trpc-agent-py[openclaw]"`       |
-| `dev`            | Development (lint/format/test)| yapf, flake8, pytest, pytest-asyncio         | `pip install "trpc-agent-py[dev]"`            |
-| `all`            | All optional dependencies     | All of the above                             | `pip install "trpc-agent-py[all]"`            |
+| Extension        | Purpose                       | Install Command                         |
+| ---------------- | ----------------------------- | --------------------------------------- |
+| `a2a`            | Google A2A protocol           | `pip install "trpc-agent-py[a2a]"`            |
+| `ag-ui`          | AG-UI protocol                | `pip install "trpc-agent-py[ag-ui]"`          |
+| `agent-claude`   | Claude Agent                  | `pip install "trpc-agent-py[agent-claude]"`   |
+| `knowledge`      | Knowledge base / RAG          | `pip install "trpc-agent-py[knowledge]"`      |
+| `mem0`           | Long-term memory (Mem0)       | `pip install "trpc-agent-py[mem0]"`           |
+| `langchain_tool` | LangChain Tool integration    | `pip install "trpc-agent-py[langchain_tool]"` |
+| `langfuse`       | Langfuse observability        | `pip install "trpc-agent-py[langfuse]"`       |
+| `eval`           | Evaluation framework          | `pip install "trpc-agent-py[eval]"`           |
+| `openclaw`       | OpenClaw integration          | `pip install "trpc-agent-py[openclaw]"`       |
+| `dev`            | Development (lint/format/test)| `pip install "trpc-agent-py[dev]"`            |
+| `all`            | All optional dependencies     | `pip install "trpc-agent-py[all]"`            |
 
 ---
 
