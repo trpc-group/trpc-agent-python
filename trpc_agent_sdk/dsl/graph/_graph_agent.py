@@ -28,7 +28,7 @@ from pydantic import ConfigDict
 from pydantic import model_validator
 
 from trpc_agent_sdk.abc import AgentABC
-from trpc_agent_sdk.agents._base_agent import BaseAgent
+from trpc_agent_sdk.agents import BaseAgent
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.events import LongRunningEvent

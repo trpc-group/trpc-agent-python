@@ -10,6 +10,8 @@ from ._core import AgUiUserFeedBack
 from ._core import get_agui_http_req
 from ._plugin import AgUiManager
 from ._plugin import AgUiService
+from ._plugin import AgUiLangGraphEventTranslator
+from ._plugin import AgUiTranslationContext
 from ._plugin import get_agui_service_registry
 
 __all__ = [
@@ -18,5 +20,7 @@ __all__ = [
     "get_agui_http_req",
     "AgUiManager",
     "AgUiService",
+    "AgUiLangGraphEventTranslator",
+    "AgUiTranslationContext",
     "get_agui_service_registry",
 ]

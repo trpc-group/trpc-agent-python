@@ -614,7 +614,7 @@ print(docs[0].page_content)
 
 示例运行步骤：
 
-1. 在 `examples/knowledge_with_vectorstore/.env` 中配置环境变量，设置 `VECTORSTORE_TYPE=tencentvdb` 并填写腾讯云向量数据库连接参数：
+1. 在 [examples/knowledge_with_vectorstore/.env](../../../examples/knowledge_with_vectorstore/.env) 中配置环境变量，设置 `VECTORSTORE_TYPE=tencentvdb` 并填写腾讯云向量数据库连接参数：
 
 ```bash
 VECTORSTORE_TYPE=tencentvdb

@@ -18,7 +18,7 @@
 
 ## Core Capabilities of MemoryService
 
-Based on the implementation in `trpc_agent_sdk/memory/`, MemoryService provides the following core capabilities:
+Based on the implementation in [trpc_agent_sdk/memory/](../../../trpc_agent_sdk/memory/), MemoryService provides the following core capabilities:
 
 ### 1. Storing Session Memory
 
@@ -76,7 +76,7 @@ async def search_memory(self, key: str, query: str, limit: int = 10, ...) -> Sea
                 event_ttl.update_expired_at()
 ```
 
-**Keyword Extraction** (`_utils.py`):
+**Keyword Extraction** ([_utils.py](../../../trpc_agent_sdk/memory/_utils.py)):
 ```python
 def extract_words_lower(text: str) -> set[str]:
     """Extract English words and Chinese characters"""
@@ -234,8 +234,8 @@ memory_service = InMemoryMemoryService(memory_service_config=memory_service_conf
 
 **Configuration Example**:
 ```python
-from trpc_agent_sdk.memory import RedisMemoryService, MemoryServiceConfig
 import os
+from trpc_agent_sdk.memory import RedisMemoryService, MemoryServiceConfig
 
 # Read Redis configuration from environment variables
 db_host = os.environ.get("REDIS_HOST", "127.0.0.1")
@@ -308,8 +308,8 @@ EXPIRE memory:weather_app/user_001:session_1 86400  # Expires after 24 hours
 
 **Configuration Example**:
 ```python
-from trpc_agent_sdk.memory import SqlMemoryService, MemoryServiceConfig
 import os
+from trpc_agent_sdk.memory import SqlMemoryService, MemoryServiceConfig
 
 # Read MySQL configuration from environment variables
 db_user = os.environ.get("MYSQL_USER", "root")
@@ -413,7 +413,8 @@ async def _cleanup_expired_async(self) -> None:
 
 ```python
 from trpc_agent_sdk.sessions import InMemorySessionService
-from trpc_agent_sdk.memory import InMemoryMemoryService, MemoryServiceConfig
+from trpc_agent_sdk.memory import MemoryServiceConfig
+from trpc_agent_sdk.memory import InMemoryMemoryService
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.types import Content, Part
 
@@ -1234,7 +1235,7 @@ Through proper use of MemoryService, you can achieve:
 - Cross-session knowledge sharing
 - Intelligent conversation context
 
-For more detailed usage examples, please refer to the related examples in the `examples/` directory.
+For more detailed usage examples, please refer to the related examples in the [examples/](../../../examples/) directory.
 
 - [examples/memory_service_with_in_memory/run_agent.py](../../../examples/memory_service_with_in_memory/run_agent.py)
 - [examples/memory_service_with_redis/run_agent.py](../../../examples/memory_service_with_redis/run_agent.py)

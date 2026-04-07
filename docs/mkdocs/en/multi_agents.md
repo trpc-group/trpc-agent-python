@@ -442,7 +442,7 @@ Content Processing Assistant (Main Agent)
 
 TransferAgent is a transfer proxy Agent designed to enable custom Agents without transfer capability (such as `TrpcRemoteA2aAgent`) to gain transfer capability, thereby integrating them into the tRPC-Agent framework's multi-Agent system.
 
-`TrpcRemoteA2aAgent` can be used to simulate a remote Agent scenario (first start an A2A Agent service with `examples/a2a/run_server.py` to mimic a remote Agent).
+`TrpcRemoteA2aAgent` can be used to simulate a remote Agent scenario (first start an A2A Agent service with [examples/a2a/run_server.py](../../../examples/a2a/run_server.py) to mimic a remote Agent).
 
 Through TransferAgent, custom Agents can:
 - **Act as sub_agent**: The parent Agent can transfer control to this Agent, and this Agent can transfer control to parent/sibling Agents

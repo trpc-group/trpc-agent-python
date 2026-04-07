@@ -136,7 +136,7 @@ LlmAgent(
 )
 ```
 
-#### hunyuan多模态模型调用方式
+#### hunyuan 多模态模型调用方式
 
 对于图像模态，请正确填写 `mime_type`（如 `image/png`、`image/jpeg`）。框架会自动把传入的图片原始 bytes 编码为 base64，并拼接成 `data:{mime_type};base64,{base64_data}` 这种 `image_uri` 格式，因此你只需要传入原始图片内容，不需要手动做 base64 编码或自己拼接 `image_uri`。
 
@@ -221,7 +221,7 @@ export TRPC_AGENT_MODEL_NAME="your-model-name"
 
 ```python
 from trpc_agent_sdk.models import LiteLLMModel
-from trpc_agent_sdk.agents.llm_agent import LlmAgent
+from trpc_agent_sdk.agents import LlmAgent
 
 model = LiteLLMModel(
     model_name="openai/gpt-4o",   # 必填：provider/model
@@ -236,7 +236,7 @@ LlmAgent(..., model=model, instruction="...")
 不显式实例化 `LiteLLMModel`，只传模型名字符串；框架根据 `ModelRegistry` 的 `supported_models` 正则匹配到 LiteLLMModel 并创建实例。此时 API Key、base_url 等依赖环境变量（如 `OPENAI_API_KEY`、`OPENAI_API_BASE`）。
 
 ```python
-from trpc_agent_sdk.agents.llm_agent import LlmAgent
+from trpc_agent_sdk.agents import LlmAgent
 
 LlmAgent(..., model="openai/gpt-4o", instruction="...")
 ```

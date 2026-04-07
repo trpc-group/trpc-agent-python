@@ -23,10 +23,10 @@ from langgraph.errors import GraphInterrupt
 from langgraph.graph import StateGraph as LangGraphStateGraph
 from langgraph.types import Command
 
-from trpc_agent_sdk.agents._base_agent import BaseAgent
+from trpc_agent_sdk.agents import BaseAgent
 from trpc_agent_sdk.code_executors import BaseCodeExecutor
 from trpc_agent_sdk.context import InvocationContext
-from trpc_agent_sdk.models._llm_model import LLMModel
+from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.server.knowledge.tools import LangchainKnowledgeSearchTool
 from trpc_agent_sdk.tools import MCPToolset
 from trpc_agent_sdk.types import GenerateContentConfig
