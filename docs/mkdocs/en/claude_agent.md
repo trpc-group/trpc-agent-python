@@ -97,6 +97,7 @@ INSTRUCTION = "You are a helpful assistant for writing code."
 ```
 
 Then, configure ClaudeAgent in `agent/agent.py`. Since we are developing a code generation assistant, we only need to specify its role and the tools it uses. As you can see, we specify that it can operate files (Read/Write/Edit), search filenames (Glob) and file contents (Grep), and supports task management (TodoWrite). In addition to Claude-Code's built-in tools, other tools can also be configured via `tools`. If you are unsure how to configure them, refer to [tRPC-Agent FunctionTools Usage](./tool.md) and [tRPC-Agent MCPTools Usage](./tool.md):
+
 ```python
 # agent/agent.py
 from trpc_agent_sdk.server.agents.claude import ClaudeAgent, setup_claude_env, destroy_claude_env
@@ -129,6 +130,7 @@ def create_agent() -> ClaudeAgent:
 ```
 
 Next, provide environment initialization and cleanup methods in the same file. When the process starts, before executing the Agent, you need to initialize the Proxy subprocess and Claude's default model via `setup_claude_env`, and stop the Proxy subprocess via `destroy_claude_env`:
+
 ```python
 def setup_claude(proxy_host: str = "0.0.0.0", proxy_port: int = 8082):
     """Setup Claude environment (proxy server)"""
@@ -149,6 +151,7 @@ In `run_agent.py`, implement the main flow for running the Agent. Initialize the
 import asyncio
 import uuid
 import json
+
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content, Part
@@ -245,6 +248,7 @@ export TRPC_AGENT_MODEL_NAME="your-model-name"
 ```
 
 Run the Agent program. Example output is shown below. As you can see, ClaudeAgent automatically writes code and saves it to a file based on user instructions. You can replace the query text in `demo_queries` with examples suitable for your scenario. For more examples, refer to the [trpc-agent examples directory](../../../examples/):
+
 ```text
 [2026-03-17 17:18:47][INFO][trpc_agent][_setup.py:222][68046] Proxy server proxy process started (PID: 68077)
 [2026-03-17 17:18:49][INFO][trpc_agent][_setup.py:239][68046] Proxy server is ready at http://0.0.0.0:8082
@@ -288,7 +292,8 @@ ClaudeAgent receives messages from Claude-Code through `claude_agent_sdk` and co
 ClaudeAgent supports streaming output, controlled by `run_config.streaming` in Runner:
 
 ```python
-from trpc_agent_sdk.runners import Runner, RunConfig
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.configs import RunConfig
 
 runner = Runner(app_name="my_app", agent=agent, session_service=session_service)
 
@@ -367,7 +372,12 @@ agent = ClaudeAgent(
 ClaudeAgent supports configuring Agent framework tools, including FunctionTool and MCPTool:
 
 ```python
-from trpc_agent_sdk.tools import FunctionTool, MCPToolset
+import datetime
+from mcp import StdioServerParameters
+
+from trpc_agent_sdk.server.agents.claude import ClaudeAgent
+from claude_agent_sdk.types import ClaudeAgentOptions
+from trpc_agent_sdk.tools import FunctionTool, MCPToolset, StdioConnectionParams
 
 def get_current_date():
     """Get today's date"""
@@ -473,6 +483,7 @@ When a user makes a travel planning request, follow these steps to automatically
 #### Configuring Options
 ```python
 from claude_agent_sdk.types import ClaudeAgentOptions
+from trpc_agent_sdk.server.agents.claude import ClaudeAgent
 
 agent = ClaudeAgent(
     name="travel_planner",
@@ -589,6 +600,8 @@ ClaudeAgent supports configuring model generation parameters (such as temperatur
 You can specify `generate_content_config` when creating a ClaudeAgent:
 
 ```python
+import os
+
 from trpc_agent_sdk.types import GenerateContentConfig
 from trpc_agent_sdk.models import OpenAIModel
 from trpc_agent_sdk.server.agents.claude import ClaudeAgent
@@ -619,6 +632,8 @@ agent = ClaudeAgent(
 When configuring default models in `setup_claude_env` (for handling Claude-Code's internal calls), you can also configure generation parameters for these default models.
 
 ```python
+import os
+
 from trpc_agent_sdk.types import GenerateContentConfig
 from trpc_agent_sdk.models import OpenAIModel
 from trpc_agent_sdk.server.agents.claude import setup_claude_env

@@ -8,7 +8,7 @@ To create an `LlmAgent`, you need to configure the Agent's basic information and
 
 ## Configuring Agent Basic Information
 
-In `trpc_agent`, an Agent is identified by the following properties:
+In `trpc-agent`, an Agent is identified by the following properties:
 - `name` (required): Agent name used for unique identification;
 - `description` (optional): Agent description used in multi-Agent scenarios so other Agents can understand its role;
 - `model` (required): Agent reasoning core. Different scenarios (conversation, code generation, complex problem solving, etc.) may require different models;

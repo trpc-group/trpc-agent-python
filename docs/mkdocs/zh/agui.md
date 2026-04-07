@@ -18,7 +18,7 @@
 pip install -e ".[ag-ui]"
 ```
 
-要求使用 Python 3.12。核心依赖包含 `ag-ui-protocol` 与 FastAPI/Uvicorn。
+要求使用 Python 3.12。核心依赖包含 `ag-ui-protocol` 与 `FastAPI/Uvicorn`。
 
 ## 快速上手
 
@@ -73,10 +73,10 @@ def serve():
     # 内存 Session，适合开发调试；生产可替换为 RedisSessionService
     session_service = InMemorySessionService()
 
-    # AgUiService 绑定 FastAPI app，后续 add_agent 时会自动注册 POST 路由
+    # AgUiService : 绑定 FastAPI app，后续 add_agent 时会自动注册 POST 路由
     agui_service = AgUiService(service_name, app=app)
 
-    # AgUiAgent 第一个位置参数为 BaseAgent 实例，其余均为 keyword-only
+    # 创建 AgUiAgent : 第一个位置参数为 BaseAgent 实例，其余均为 keyword-only
     agui_agent = AgUiAgent(
         root_agent,
         app_name=app_name,
@@ -331,5 +331,5 @@ class CustomAgUiAgent(AgUiAgent):
 
 ## 完整示例
 
-- 基本流式与工具调用：[examples/agui/README.md](../../../examples/agui/README.md)  
-- 支持取消：[examples/agui_with_cancel/README.md](../../../examples/agui_with_cancel/README.md)  
+- AGUI 基本流式与工具调用示例：[examples/agui/README.md](../../../examples/agui/README.md)  
+- AGUI 支持取消示例：[examples/agui_with_cancel/README.md](../../../examples/agui_with_cancel/README.md)  

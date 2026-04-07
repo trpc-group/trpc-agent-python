@@ -28,6 +28,8 @@ docs = retriever.invoke("your-question?")  # 进行检索
 2. 基于此 retriever 对象构造 `LangchainKnowledge` 对象
 
 ```python
+from trpc_agent_sdk.server.knowledge.langchain_knowledge import LangchainKnowledge
+
 rag = LangchainKnowledge(
     ...,
     retriever=retriever,

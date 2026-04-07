@@ -28,6 +28,8 @@ You can also specify the search type and additional search parameters. For detai
 2. Construct a `LangchainKnowledge` object using this `retriever` object
 
 ```python
+from trpc_agent_sdk.server.knowledge.langchain_knowledge import LangchainKnowledge
+
 rag = LangchainKnowledge(
     ...,
     retriever=retriever,

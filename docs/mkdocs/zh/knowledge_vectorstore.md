@@ -19,6 +19,8 @@ pip install -qU langchain-postgres
 创建 `PGVector` 对象并构造 `LangchainKnowledge`：
 
 ```python
+from trpc_agent_sdk.server.knowledge.langchain_knowledge import LangchainKnowledge
+
 def _build_pgvector_knowledge() -> LangchainKnowledge:
     """Build knowledge with PGVector vectorstore"""
     from langchain_huggingface import HuggingFaceEmbeddings

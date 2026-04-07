@@ -1,6 +1,6 @@
 # Agent Code Executor
 
-为了提供 Agent 高度的灵活性，有些时候会需要Agent生成并执行一些代码，tRPC-Agent 框架为这种场景支持了 CodeExecutor。
+为了提供 Agent 高度的灵活性，有些时候会需要 Agent 生成并执行一些代码，tRPC-Agent 框架为这种场景支持了 CodeExecutor。
 
 当启用了该功能之后，如果LLM返回文本中有代码片段时，框架会调用相应的 CodeExecutor 执行代码，并将执行结果返回给 LLM，LLM 可以根据执行结果继续生成响应。
 
@@ -159,6 +159,8 @@ def create_agent() -> LlmAgent:
 ### UnsafeLocalCodeExecutor 参数
 
 ```python
+from trpc_agent_sdk.code_executors import UnsafeLocalCodeExecutor, CodeBlockDelimiter
+
 code_executor = UnsafeLocalCodeExecutor(
     # 代码执行失败重试次数，默认是2次
     error_retry_attempts=2,
@@ -184,6 +186,8 @@ code_executor = UnsafeLocalCodeExecutor(
 ### ContainerCodeExecutor 参数
 
 ```python
+from trpc_agent_sdk.code_executors import ContainerCodeExecutor, CodeBlockDelimiter
+
 code_executor = ContainerCodeExecutor(
     # Docker镜像名称（必需，与docker_path二选一）
     image="python:3-slim",

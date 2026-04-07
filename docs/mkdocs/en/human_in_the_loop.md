@@ -128,6 +128,9 @@ async def run_invocation(
 Note that only the `id`, `name`, and `response` from the `FunctionResponse` are needed to create the Content for resuming Agent execution. In scenarios where the Agent is served as a service, you only need to return this information to the frontend, and the frontend can include this information in the next Agent call after the human operation is completed.
 
 ```python
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.events import LongRunningEvent
+
 async def run_agent():
     """Run the agent with support for long-running events"""
 

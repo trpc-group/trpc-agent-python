@@ -9,7 +9,7 @@ LlmAgent 封装了AI Agent的通用实现，它使用LLM作为大脑，通过工
 
 ## 配置 Agent 的基础信息
 
-如下所示，在 `trpc_agent` 中，一个 Agent 由以下信息标识：
+如下所示，在 `trpc-agent` 中，一个 Agent 由以下信息标识：
 - `name`（必填）：Agent 名称，用于唯一标识一个 Agent；
 - `description`（选填）：Agent 描述，在多 Agent 场景下用于向其他 Agent 提供身份信息；
 - `model`（必填）：Agent 的“大脑”；不同场景（对话/代码生成/复杂问题处理等）需要不同类型的模型；

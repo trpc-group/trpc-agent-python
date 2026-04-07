@@ -78,6 +78,8 @@ text_splitter = RecursiveCharacterTextSplitter(separators=["\n"], chunk_size=10,
 
 ```python
 # examples/knowledge_with_rag_agent/agent/tools.py
+from trpc_agent_sdk.server.knowledge.langchain_knowledge import LangchainKnowledge
+
 rag = LangchainKnowledge(
     prompt_template=rag_prompt,
     document_loader=text_loader,
