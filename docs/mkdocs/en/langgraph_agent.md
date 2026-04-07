@@ -65,6 +65,24 @@ A graph is the core structure of a workflow, composed of nodes and edges, used t
 
 ```python
 from langgraph.graph import StateGraph, START, END
+from langgraph.prebuilt import ToolNode
+
+from trpc_agent_sdk.agents import langgraph_llm_node
+from trpc_agent_sdk.dsl.graph import State
+
+class MyState(State):
+    result: str
+
+@langgraph_llm_node
+def chatbot_node(state: State):
+    """Chatbot node that can use tools."""
+    return {"messages": [llm_with_tools.invoke(state["messages"])]}
+
+graph_builder = StateGraph(State)
+
+# Add tool node
+tool_node = ToolNode(tools=[])
+graph_builder.add_node("tools", tool_node)
 
 graph_builder = StateGraph(MyState)
 graph_builder.add_node("chatbot", chatbot_node)
@@ -99,7 +117,7 @@ For tool nodes, they are typically used with the `@tool` and `@tool_node` decora
 
 ```python
 from langchain_core.tools import tool
-from trpc_agent_sdk.agents.langgraph_agent import tool_node
+from trpc_agent_sdk.agents import tool_node
 
 @tool
 @tool_node
@@ -154,7 +172,7 @@ Its purpose is to:
 What `LangGraphAgent` actually accepts is not the `StateGraph` builder itself, but the graph object after `compile()`. The framework's `LangGraphAgent` explicitly requires a compiled graph as input.
 
 ```python
-from trpc_agent_sdk.agents.langgraph_agent import LangGraphAgent
+from trpc_agent_sdk.agents import LangGraphAgent
 
 graph = graph_builder.compile()
 
@@ -180,7 +198,7 @@ A LangGraphAgent can be created by providing a compiled LangGraph graph, as show
 The other parameters follow the same definitions as in `LlmAgent`.
 
 ```python
-from trpc_agent_sdk.agents.langgraph_agent import LangGraphAgent
+from trpc_agent_sdk.agents import LangGraphAgent
 
 # Assume the LangGraph has already been built
 graph = build_your_langgraph()
@@ -198,13 +216,13 @@ agent = LangGraphAgent(
 ### Basic Graph Structure
 
 ```python
+from typing import Annotated
+from typing_extensions import TypedDict
 from langchain.chat_models import init_chat_model
 from langchain_core.tools import tool
 from langgraph.graph import StateGraph, START
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import tools_condition, ToolNode
-from typing_extensions import TypedDict
-from typing import Annotated
 
 # Define the state structure
 class State(TypedDict):
@@ -256,7 +274,7 @@ def custom_chatbot(state: CustomState):
 Used to decorate tool execution nodes, automatically recording tool invocation information. Note that @tool_node must be placed after LangGraph's @tool decorator:
 
 ```python
-from trpc_agent_sdk.agents.langgraph_agent import tool_node
+from trpc_agent_sdk.agents import tool_node
 from langchain_core.tools import tool
 
 @tool
@@ -303,7 +321,7 @@ runner.run_async(..., run_config=run_config)
 After receiving an `Event`, you can access the raw LangGraph payload as shown below:
 
 ```python
-from trpc_agent_sdk.agents.langgraph_agent import get_langgraph_payload
+from trpc_agent_sdk.agents import get_langgraph_payload
 
 async for event in runner.run_async(...):
     langgraph_payload = get_langgraph_payload(event)
@@ -318,7 +336,7 @@ async for event in runner.run_async(...):
 Within LangGraph nodes, you can access `trpc_agent` context information:
 
 ```python
-from trpc_agent_sdk.agents.langgraph_agent import get_langgraph_agent_context
+from trpc_agent_sdk.agents import get_langgraph_agent_context
 
 @langgraph_llm_node
 def context_aware_node(state: State, config: RunnableConfig):
@@ -448,7 +466,7 @@ from typing import AsyncGenerator
 from ag_ui.core import BaseEvent, EventType, CustomEvent
 from trpc_agent_sdk.events import Event as TrpcEvent
 from trpc_agent_sdk.agents.utils import LangGraphEventType, get_event_type
-from trpc_agent_sdk.server.ag_ui._plugin._langgraph_event_translator import (
+from trpc_agent_sdk.server.ag_ui import (
     AgUiLangGraphEventTranslator,
     AgUiTranslationContext,
 )

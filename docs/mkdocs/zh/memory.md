@@ -18,7 +18,7 @@
 
 ## MemoryService 的核心功能
 
-基于 `trpc_agent_sdk/memory/` 中的实现，MemoryService 提供以下核心功能：
+基于 [trpc_agent_sdk/memory/](../../../trpc_agent_sdk/memory/) 中的实现，MemoryService 提供以下核心功能：
 
 ### 1. 存储会话记忆
 
@@ -76,7 +76,7 @@ async def search_memory(self, key: str, query: str, limit: int = 10, ...) -> Sea
                 event_ttl.update_expired_at()
 ```
 
-**关键词提取**（`_utils.py`）：
+**关键词提取**（[_utils.py](../../../trpc_agent_sdk/memory/_utils.py)）：
 ```python
 def extract_words_lower(text: str) -> set[str]:
     """提取英文单词和中文字符"""
@@ -234,8 +234,8 @@ memory_service = InMemoryMemoryService(memory_service_config=memory_service_conf
 
 **配置示例**：
 ```python
-from trpc_agent_sdk.memory import RedisMemoryService, MemoryServiceConfig
 import os
+from trpc_agent_sdk.memory import RedisMemoryService, MemoryServiceConfig
 
 # 从环境变量读取 Redis 配置
 db_host = os.environ.get("REDIS_HOST", "127.0.0.1")
@@ -308,8 +308,8 @@ EXPIRE memory:weather_app/user_001:session_1 86400  # 24 小时后过期
 
 **配置示例**：
 ```python
-from trpc_agent_sdk.memory import SqlMemoryService, MemoryServiceConfig
 import os
+from trpc_agent_sdk.memory import SqlMemoryService, MemoryServiceConfig
 
 # 从环境变量读取 MySQL 配置
 db_user = os.environ.get("MYSQL_USER", "root")
@@ -484,7 +484,8 @@ for memory in response.memories:
 
 ```python
 from trpc_agent_sdk.sessions import InMemorySessionService
-from trpc_agent_sdk.memory import InMemoryMemoryService, MemoryServiceConfig
+from trpc_agent_sdk.memory import MemoryServiceConfig
+from trpc_agent_sdk.memory import InMemoryMemoryService
 from trpc_agent_sdk.runners import Runner
 
 # 创建服务实例
@@ -1234,7 +1235,7 @@ MemoryService 提供了强大的长期记忆管理能力：
 - 跨会话知识共享
 - 智能对话上下文
 
-更多详细的使用示例，请参考 `examples/` 目录中的相关示例。
+更多详细的使用示例，请参考 [examples/](../../../examples/) 目录中的相关示例。
 
 - [examples/memory_service_with_in_memory/run_agent.py](../../../examples/memory_service_with_in_memory/run_agent.py)
 - [examples/memory_service_with_redis/run_agent.py](../../../examples/memory_service_with_redis/run_agent.py)

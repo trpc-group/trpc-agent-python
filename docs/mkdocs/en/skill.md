@@ -96,7 +96,7 @@ Create a skill repository and a workspace executor. If no executor is specified,
 
 ```python
 import os
-from trpc_agent_sdk.agents.llm_agent import LlmAgent
+from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.models import OpenAIModel
 from trpc_agent_sdk.skills import SkillToolSet
 from trpc_agent_sdk.skills import create_default_skill_repository
@@ -1428,7 +1428,7 @@ def create_skill_dynamic_tool_set(skill_repository: BaseSkillRepository, only_ac
     )
 
 # agent/agent.py
-from trpc_agent_sdk.agents.llm_agent import LlmAgent
+from trpc_agent_sdk.agents import LlmAgent
 from .tools import create_skill_tool_set, create_skill_dynamic_tool_set
 
 def create_agent():
@@ -1692,7 +1692,7 @@ Here are the results for your requests:
 
 #### Scenario: Real-World Project Example
 
-Based on the actual implementation in `examples/skills_with_dynamic_tools/`:
+Based on the actual implementation in [examples/skills_with_dynamic_tools/](../../../examples/skills_with_dynamic_tools/):
 
 ```python
 # 1. Define all tools (agent/tools/_tools.py)
@@ -2001,7 +2001,7 @@ print(f"Tools state: {ctx.session_state.get(key)}")
 
 #### ✅ Run Results Match Expectations Exactly
 
-Based on actual run results from `examples/skills_with_dynamic_tools/run_agent.py`:
+Based on actual run results from [examples/skills_with_dynamic_tools/run_agent.py](../../../examples/skills_with_dynamic_tools/run_agent.py):
 
 ##### 1. Tool Discovery Mechanism Works Correctly
 ```

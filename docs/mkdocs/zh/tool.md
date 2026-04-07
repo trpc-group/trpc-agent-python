@@ -971,7 +971,7 @@ file_tools = FileToolSet(cwd="/home/user/project")
 如果需要单独使用某个工具，可以直接导入并逐个添加：
 
 ```python
-from trpc_agent_sdk.agents.llm_agent import LlmAgent
+from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.tools.file_tools import ReadTool, WriteTool, EditTool, GrepTool, BashTool, GlobTool
 
 # 创建工作目录

@@ -96,7 +96,7 @@ SKILLS_ROOT=./skills
 
 ```python
 import os
-from trpc_agent_sdk.agents.llm_agent import LlmAgent
+from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.models import OpenAIModel
 from trpc_agent_sdk.skills import SkillToolSet
 from trpc_agent_sdk.skills import create_default_skill_repository
@@ -1427,7 +1427,7 @@ def create_skill_dynamic_tool_set(skill_repository: BaseSkillRepository, only_ac
     )
 
 # agent/agent.py
-from trpc_agent_sdk.agents.llm_agent import LlmAgent
+from trpc_agent_sdk.agents import LlmAgent
 from .tools import create_skill_tool_set, create_skill_dynamic_tool_set
 
 def create_agent():
@@ -1690,7 +1690,7 @@ Here are the results for your requests:
 
 #### 场景：实际项目示例
 
-基于 `examples/skills_with_dynamic_tools/` 的实际实现：
+基于 [examples/skills_with_dynamic_tools/](../../../examples/skills_with_dynamic_tools/) 的实际实现：
 
 ```python
 # 1. 定义所有工具 (agent/tools/_tools.py)
@@ -1999,7 +1999,7 @@ print(f"Tools state: {ctx.session_state.get(key)}")
 
 #### ✅ 运行结果与预期完全一致
 
-基于 `examples/skills_with_dynamic_tools/run_agent.py` 的实际运行结果：
+基于 [examples/skills_with_dynamic_tools/run_agent.py](../../../examples/skills_with_dynamic_tools/run_agent.py) 的实际运行结果：
 
 ##### 1. 工具发现机制正常
 ```

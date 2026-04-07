@@ -971,7 +971,7 @@ If `cwd` is not specified, the tools will use the current working directory.
 If you need to use a specific tool individually, you can import and add them one by one:
 
 ```python
-from trpc_agent_sdk.agents.llm_agent import LlmAgent
+from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.tools.file_tools import ReadTool, WriteTool, EditTool, GrepTool, BashTool, GlobTool
 
 # Create the working directory

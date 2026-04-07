@@ -442,7 +442,7 @@ main_agent = LlmAgent(
 
 TransferAgent 是一个转移代理 Agent，用于让不支持 transfer 能力的自定义 Agent（如 TrpcRemoteA2aAgent 等）拥有 transfer 能力，从而接入到 tRPC-Agent 框架的多 Agent 系统中。
 
-`TrpcRemoteA2aAgent` 模拟远端 Agent 场景（先参考 `examples/a2a/run_server.py` 启动一个 A2A Agent 服务, 模拟远端 Agent）。
+`TrpcRemoteA2aAgent` 模拟远端 Agent 场景（先参考 [examples/a2a/run_server.py](../../../examples/a2a/run_server.py) 启动一个 A2A Agent 服务, 模拟远端 Agent）。
 
 通过 TransferAgent，自定义 Agent 可以：
 - **作为 sub_agent**：父 Agent 可转移控制权到此 Agent，此 Agent 可转移控制权给父/兄弟 Agent

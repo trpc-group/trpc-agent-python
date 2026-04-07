@@ -22,7 +22,7 @@ In trpc-agent, `SessionService` is used to manage `Session` (sessions). A `Sessi
 
 ### Core Structure of Session
 
-Based on the implementation in `trpc_agent/sessions/_session.py`, a `Session` contains the following key fields:
+Based on the implementation in [trpc_agent_sdk/sessions/_session.py](../../../trpc_agent_sdk/sessions/_session.py), a `Session` contains the following key fields:
 
 #### 1. Identity
 
@@ -84,7 +84,7 @@ def extract_state_delta(state_delta: Optional[dict[str, Any]]) -> StateStorageEn
 
 ### Core Features of SessionService
 
-Based on the implementation in `trpc_agent/sessions/`, `SessionService` provides the following core features:
+Based on the implementation in [trpc_agent_sdk/sessions/](../../../trpc_agent_sdk/sessions/), `SessionService` provides the following core features:
 
 #### 1. Session Management (CRUD)
 
@@ -700,7 +700,7 @@ The following examples demonstrate the usage of different SessionService impleme
 
 #### InMemorySessionService
 
-📁 **Example Path**: `examples/session_service_with_in_memory/`
+📁 **Example Path**: [examples/session_service_with_in_memory/](../../../examples/session_service_with_in_memory/)
 
 **Description**:
 - Demonstrates basic usage of In-Memory Session Service
@@ -718,7 +718,7 @@ python3 run_agent.py
 
 #### RedisSessionService
 
-📁 **Example Path**: `examples/session_service_with_redis/`
+📁 **Example Path**: [examples/session_service_with_redis/](../../../examples/session_service_with_redis/)
 
 **Description**:
 - Demonstrates Redis Session Service usage
@@ -736,7 +736,7 @@ python3 run_agent.py
 
 #### SqlSessionService
 
-📁 **Example Path**: `examples/session_service_with_sql/`
+📁 **Example Path**: [examples/session_service_with_sql/](../../../examples/session_service_with_sql/)
 
 **Description**:
 - Demonstrates SQL Session Service usage
@@ -808,7 +808,7 @@ By properly using SessionService, you can achieve:
 - Application-level state sharing
 - Session lifecycle management
 
-For more detailed usage examples, refer to the related examples in the `examples/` directory.
+For more detailed usage examples, refer to the related examples in the [examples/](../../../examples/) directory.
 
 - [examples/session_service_with_in_memory/run_agent.py](../../../examples/session_service_with_in_memory/run_agent.py)
 - [examples/session_service_with_redis/run_agent.py](../../../examples/session_service_with_redis/run_agent.py)

@@ -221,7 +221,7 @@ export TRPC_AGENT_MODEL_NAME="your-model-name"
 
 ```python
 from trpc_agent_sdk.models import LiteLLMModel
-from trpc_agent_sdk.agents.llm_agent import LlmAgent
+from trpc_agent_sdk.agents import LlmAgent
 
 model = LiteLLMModel(
     model_name="openai/gpt-4o",   # Required: provider/model
@@ -236,7 +236,7 @@ LlmAgent(..., model=model, instruction="...")
 Without explicitly instantiating `LiteLLMModel`, you can pass only the model name string; the framework uses `ModelRegistry`'s `supported_models` regex patterns to match and create a LiteLLMModel instance. In this case, the API Key, base_url, and other settings rely on environment variables (e.g., `OPENAI_API_KEY`, `OPENAI_API_BASE`).
 
 ```python
-from trpc_agent_sdk.agents.llm_agent import LlmAgent
+from trpc_agent_sdk.agents import LlmAgent
 
 LlmAgent(..., model="openai/gpt-4o", instruction="...")
 ```

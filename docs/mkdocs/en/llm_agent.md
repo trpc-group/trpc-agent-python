@@ -505,7 +505,7 @@ Using thinking mode requires configuring the following components:
   - `thinking_budget`: Token budget for the thinking process, must be less than `max_output_tokens`
 
 ```python
-from trpc_agent_sdk.agents.llm_agent import LlmAgent
+from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.models import LLMModel, OpenAIModel
 from trpc_agent_sdk.tools import FunctionTool
 from trpc_agent_sdk.types import GenerateContentConfig
@@ -577,6 +577,7 @@ The framework supports passing an async function as a model creation callback to
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.models import OpenAIModel, LLMModel
 from trpc_agent_sdk.configs import RunConfig
+from trpc_agent_sdk.runners import Runner
 
 async def create_model(custom_data: dict) -> LLMModel:
     """Model creation callback function
@@ -637,6 +638,8 @@ The implementation mechanism of output_schema has two different methods dependin
 from pydantic import BaseModel
 from typing import List
 
+from trpc_agent_sdk.agents import LlmAgent
+
 class UserProfileOutput(BaseModel):
     """Output schema for user profile analysis."""
     user_name: str
@@ -671,6 +674,8 @@ LlmAgent also supports structured input (input_schema), which is generally used 
 ```python
 from pydantic import BaseModel
 from typing import List, Optional
+
+from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.tools import AgentTool
 
 class UserProfileInput(BaseModel):
