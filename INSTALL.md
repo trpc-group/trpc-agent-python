@@ -5,7 +5,7 @@
 | Item       | Details                                                              |
 | ---------- | -------------------------------------------------------------------- |
 | Name       | tRPC-Agent-Python (`trpc-agent-py`)                                  |
-| Version    | **1.0.0**                                                            |
+| Version    | **1.1.0**                                                            |
 | Description | A production-grade agent framework developed by Tencent, supporting multiple model providers (including OpenAI, Anthropic, DeepSeek, and LiteLLM). It provides tool-calling capabilities, multi-agent orchestration, session and long-term memory management, RAG-based knowledge, and seamless deployment as a service via FastAPI. |
 | License    | Apache-2.0                                                           |
 | Repository | https://github.com/trpc-group/trpc-agent-python                     |

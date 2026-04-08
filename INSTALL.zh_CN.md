@@ -5,7 +5,7 @@
 | 项目       | 信息                                                                 |
 | ---------- | -------------------------------------------------------------------- |
 | 名称   | tRPC-Agent-Python (`trpc-agent-py`)                                  |
-| 版本   | **1.0.0**                                                            |
+| 版本   | **1.1.0**                                                            |
 | 描述   | 腾讯开源的生产级 Agent 框架，支持多模型（OpenAI / Anthropic / DeepSeek / LiteLLM）、工具调用、多 Agent 编排、会话与长期记忆、知识库（RAG）、FastAPI 服务部署 |
 | 许可证     | Apache-2.0                                                           |
 | 仓库地址   | https://github.com/trpc-group/trpc-agent-python                     |
