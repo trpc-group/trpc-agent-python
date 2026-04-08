@@ -84,7 +84,7 @@ pip install trpc-agent-py
 按需安装扩展能力：
 
 ```bash
-pip3 install -e 'trpc-agent-py[a2a,ag-ui,knowledge,agent-claude,mem0,langfuse]'
+pip install trpc-agent-py[a2a,ag-ui,knowledge,agent-claude,mem0,langfuse]
 ```
 
 
