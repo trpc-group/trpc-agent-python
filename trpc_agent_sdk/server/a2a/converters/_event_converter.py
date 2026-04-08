@@ -206,18 +206,18 @@ def _build_context_metadata(event: Event, ctx: InvocationContext) -> Dict[str, A
     return metadata
 
 
-def _build_message_metadata(event: Event) -> Dict[str, Any]:
+def _build_message_metadata(event: Event, effective_id: str) -> Dict[str, Any]:
     """Build message/event metadata (object_type, tag, llm_response_id)."""
     return {
         MESSAGE_METADATA_OBJECT_TYPE_KEY: _infer_message_object_type(event) or "",
         MESSAGE_METADATA_TAG_KEY: _infer_message_tag(event),
-        MESSAGE_METADATA_RESPONSE_ID_KEY: event.response_id or "",
+        MESSAGE_METADATA_RESPONSE_ID_KEY: effective_id,
     }
 
 
-def _build_event_metadata(event: Event, message: Message, ctx: InvocationContext) -> Dict[str, Any]:
+def _build_event_metadata(event: Event, message: Message, ctx: InvocationContext, effective_id: str) -> Dict[str, Any]:
     metadata = _build_context_metadata(event, ctx)
-    msg_meta = _build_message_metadata(event)
+    msg_meta = _build_message_metadata(event, effective_id)
     set_metadata(metadata, MESSAGE_METADATA_OBJECT_TYPE_KEY, msg_meta.get(MESSAGE_METADATA_OBJECT_TYPE_KEY) or "")
     set_metadata(metadata, MESSAGE_METADATA_TAG_KEY, msg_meta.get(MESSAGE_METADATA_TAG_KEY) or "")
     set_metadata(metadata, MESSAGE_METADATA_RESPONSE_ID_KEY, msg_meta.get(MESSAGE_METADATA_RESPONSE_ID_KEY) or "")
@@ -240,13 +240,21 @@ def _mark_long_running_tools(a2a_parts: List[A2APart], event: Event) -> None:
             set_metadata(root.metadata, A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY, True)
 
 
-def _build_message(event: Event, a2a_parts: List[A2APart], role: Role) -> Optional[Message]:
+def _effective_response_id(event: Event) -> str:
+    """Return ``response_id`` when present, otherwise a new UUID.
+
+    Callers that need the same id across multiple locations should invoke this
+    once and pass the result explicitly.
+    """
+    return event.response_id or str(uuid.uuid4())
+
+
+def _build_message(event: Event, a2a_parts: List[A2APart], role: Role, effective_id: str) -> Optional[Message]:
     """Assemble an A2A Message from converted parts, or return None if empty."""
     if not a2a_parts:
         return None
-    message_id = event.response_id or str(uuid.uuid4())
-    message = Message(message_id=message_id, role=role, parts=a2a_parts)
-    msg_meta = _build_message_metadata(event)
+    message = Message(message_id=effective_id, role=role, parts=a2a_parts)
+    msg_meta = _build_message_metadata(event, effective_id)
     if msg_meta:
         message.metadata = msg_meta
     return message
@@ -320,7 +328,8 @@ def convert_event_to_a2a_message(
         return None
 
     a2a_parts = _collect_parts(event, **rules)
-    return _build_message(event, a2a_parts, role)
+    effective_id = _effective_response_id(event)
+    return _build_message(event, a2a_parts, role, effective_id)
 
 
 def convert_content_to_a2a_message(
@@ -596,6 +605,7 @@ def _create_status_update_event(
     event: Event,
     task_id: Optional[str],
     context_id: Optional[str],
+    effective_id: str = "",
 ) -> TaskStatusUpdateEvent:
     status = TaskStatus(state=TaskState.working, message=message, timestamp=_now_iso())
 
@@ -614,7 +624,7 @@ def _create_status_update_event(
         task_id=task_id,
         context_id=context_id,
         status=status,
-        metadata=_build_event_metadata(event, message, ctx),
+        metadata=_build_event_metadata(event, message, ctx, effective_id),
         final=False,
     )
 
@@ -626,8 +636,9 @@ def _create_artifact_update_event(
     task_id: Optional[str] = None,
     context_id: Optional[str] = None,
     last_chunk: bool = False,
+    effective_id: str = "",
 ) -> TaskArtifactUpdateEvent:
-    artifact_id = "" if last_chunk else (event.response_id or "")
+    artifact_id = "" if last_chunk else effective_id
     return TaskArtifactUpdateEvent(
         task_id=task_id,
         context_id=context_id,
@@ -636,7 +647,7 @@ def _create_artifact_update_event(
             parts=[] if last_chunk else message.parts,
         ),
         last_chunk=last_chunk,
-        metadata=_build_event_metadata(event, message, ctx),
+        metadata=_build_event_metadata(event, message, ctx, effective_id),
     )
 
 
@@ -674,12 +685,14 @@ def convert_event_to_a2a_events(
 
     message = convert_event_to_a2a_message(event, invocation_context)
     if message:
+        effective_id = message.message_id
         status_event = _create_status_update_event(
             message,
             invocation_context,
             event,
             task_id,
             context_id,
+            effective_id=effective_id,
         )
         _notify(status_event)
 
@@ -691,6 +704,7 @@ def convert_event_to_a2a_events(
                 task_id=task_id,
                 context_id=context_id,
                 last_chunk=False,
+                effective_id=effective_id,
             )
             a2a_events.append(artifact_event)
 
