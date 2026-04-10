@@ -301,9 +301,10 @@ class TestBuildContextMetadata:
 class TestBuildMessageMetadata:
     def test_includes_object_type_and_tag(self):
         event = _make_event(text="hi", object_type="chat.completion", tag="my_tag")
-        meta = _build_message_metadata(event)
+        meta = _build_message_metadata(event, "eff-1")
         assert meta[MESSAGE_METADATA_OBJECT_TYPE_KEY] == "chat.completion"
         assert meta[MESSAGE_METADATA_TAG_KEY] == "my_tag"
+        assert meta[MESSAGE_METADATA_RESPONSE_ID_KEY] == "eff-1"
 
 
 # ---------------------------------------------------------------------------
@@ -337,12 +338,12 @@ class TestMarkLongRunningTools:
 class TestBuildMessage:
     def test_returns_none_for_empty_parts(self):
         event = _make_event(text="hi")
-        assert _build_message(event, [], Role.agent) is None
+        assert _build_message(event, [], Role.agent, "e1") is None
 
     def test_returns_message_with_parts(self):
         event = _make_event(text="hi", response_id="resp-1")
         parts = [A2APart(root=TextPart(text="hi"))]
-        msg = _build_message(event, parts, Role.agent)
+        msg = _build_message(event, parts, Role.agent, "resp-1")
         assert msg is not None
         assert msg.role == Role.agent
         assert msg.message_id == "resp-1"
@@ -636,7 +637,7 @@ class TestCreateStatusUpdateEvent:
         )
         event = _make_event(text="hi")
         ctx = _make_invocation_context()
-        result = _create_status_update_event(msg, ctx, event, "t1", "ctx1")
+        result = _create_status_update_event(msg, ctx, event, "t1", "ctx1", effective_id="m1")
         assert result.status.state == TaskState.working
 
     def test_auth_required_for_euc(self):
@@ -650,7 +651,7 @@ class TestCreateStatusUpdateEvent:
         msg = Message(message_id="m1", role=Role.agent, parts=[A2APart(root=dp)])
         event = _make_event(function_call=FunctionCall(name=REQUEST_EUC_FUNCTION_CALL_NAME, args={}))
         ctx = _make_invocation_context()
-        result = _create_status_update_event(msg, ctx, event, "t1", "ctx1")
+        result = _create_status_update_event(msg, ctx, event, "t1", "ctx1", effective_id="m1")
         assert result.status.state == TaskState.auth_required
 
     def test_input_required_for_long_running(self):
@@ -664,7 +665,7 @@ class TestCreateStatusUpdateEvent:
         msg = Message(message_id="m1", role=Role.agent, parts=[A2APart(root=dp)])
         event = _make_event(function_call=FunctionCall(name="other_tool", args={}))
         ctx = _make_invocation_context()
-        result = _create_status_update_event(msg, ctx, event, "t1", "ctx1")
+        result = _create_status_update_event(msg, ctx, event, "t1", "ctx1", effective_id="m1")
         assert result.status.state == TaskState.input_required
 
 
@@ -680,15 +681,19 @@ class TestCreateArtifactUpdateEvent:
         )
         event = _make_event(text="hi", response_id="resp-1")
         ctx = _make_invocation_context()
-        result = _create_artifact_update_event(msg, event, ctx, task_id="t1", context_id="ctx1")
-        assert result.artifact.artifact_id == "resp-1"
+        result = _create_artifact_update_event(
+            msg, event, ctx, task_id="t1", context_id="ctx1", effective_id="m1"
+        )
+        assert result.artifact.artifact_id == "m1"
         assert result.last_chunk is False
 
     def test_last_chunk(self):
         msg = Message(message_id="m1", role=Role.agent, parts=[A2APart(root=TextPart(text="hi"))])
         event = _make_event(text="hi")
         ctx = _make_invocation_context()
-        result = _create_artifact_update_event(msg, event, ctx, task_id="t1", context_id="ctx1", last_chunk=True)
+        result = _create_artifact_update_event(
+            msg, event, ctx, task_id="t1", context_id="ctx1", last_chunk=True, effective_id="m1"
+        )
         assert result.last_chunk is True
         assert result.artifact.artifact_id == ""
         assert result.artifact.parts == []
