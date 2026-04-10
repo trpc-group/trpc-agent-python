@@ -4,6 +4,7 @@
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """This module provides the main knowledge management interface for trpc-agent."""
+
 from abc import ABC
 from abc import abstractmethod
 from typing import Any

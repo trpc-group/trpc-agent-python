@@ -224,5 +224,3 @@ def deps_cmd(
         typer.echo(render_dependency_report(report))
     if apply and report.get("apply_result", {}).get("has_failures"):
         raise typer.Exit(code=1)
-
-
