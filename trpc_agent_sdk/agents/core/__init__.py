@@ -23,7 +23,13 @@ from ._output_schema_processor import get_structured_model_response
 from ._request_processor import RequestProcessor
 from ._request_processor import default_request_processor
 from ._skill_processor import SkillsRequestProcessor
+from ._skill_processor import get_skill_processor_parameters
+from ._skill_processor import set_skill_processor_parameters
+from ._skills_tool_result_processor import get_skill_tool_result_processor_parameters
+from ._skills_tool_result_processor import set_skill_tool_result_processor_parameters
 from ._tools_processor import ToolsProcessor
+from ._workspace_exec_processor import get_workspace_exec_processor_parameters
+from ._workspace_exec_processor import set_workspace_exec_processor_parameters
 
 __all__ = [
     "AgentTransferProcessor",
@@ -40,5 +46,11 @@ __all__ = [
     "RequestProcessor",
     "default_request_processor",
     "SkillsRequestProcessor",
+    "get_skill_processor_parameters",
+    "set_skill_processor_parameters",
+    "get_skill_tool_result_processor_parameters",
+    "set_skill_tool_result_processor_parameters",
     "ToolsProcessor",
+    "get_workspace_exec_processor_parameters",
+    "set_workspace_exec_processor_parameters",
 ]

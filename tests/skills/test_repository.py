@@ -27,11 +27,9 @@ from trpc_agent_sdk.skills._repository import (
     BASE_DIR_PLACEHOLDER,
     BaseSkillRepository,
     FsSkillRepository,
-    _is_doc_file,
-    _parse_tools_from_body,
-    _split_front_matter,
     create_default_skill_repository,
 )
+from trpc_agent_sdk.skills._utils import is_doc_file
 
 
 # ---------------------------------------------------------------------------
@@ -40,54 +38,54 @@ from trpc_agent_sdk.skills._repository import (
 
 class TestSplitFrontMatter:
     def test_no_front_matter(self):
-        fm, body = _split_front_matter("# Hello\nworld")
+        fm, body = FsSkillRepository.from_markdown("# Hello\nworld")
         assert fm == {}
         assert body == "# Hello\nworld"
 
     def test_with_front_matter(self):
         content = "---\nname: test\ndescription: Test skill\n---\n# Body"
-        fm, body = _split_front_matter(content)
+        fm, body = FsSkillRepository.from_markdown(content)
         assert fm["name"] == "test"
         assert fm["description"] == "Test skill"
         assert body == "# Body"
 
     def test_crlf_normalization(self):
         content = "---\r\nname: test\r\n---\r\nbody"
-        fm, body = _split_front_matter(content)
+        fm, body = FsSkillRepository.from_markdown(content)
         assert fm["name"] == "test"
         assert body == "body"
 
     def test_invalid_yaml_returns_empty_dict(self):
         content = "---\n: : : invalid\n---\nbody"
-        fm, body = _split_front_matter(content)
+        fm, body = FsSkillRepository.from_markdown(content)
         assert body == "body"
 
     def test_non_dict_yaml_returns_empty_dict(self):
         content = "---\n- item1\n- item2\n---\nbody"
-        fm, body = _split_front_matter(content)
+        fm, body = FsSkillRepository.from_markdown(content)
         assert fm == {}
         assert body == "body"
 
     def test_unclosed_front_matter(self):
         content = "---\nname: test\nno closing"
-        fm, body = _split_front_matter(content)
+        fm, body = FsSkillRepository.from_markdown(content)
         assert fm == {}
         assert body == content
 
     def test_none_values_become_empty_string(self):
         content = "---\nname:\n---\nbody"
-        fm, body = _split_front_matter(content)
+        fm, body = FsSkillRepository.from_markdown(content)
         assert fm["name"] == ""
 
     def test_none_key_converted_to_string(self):
         content = "---\nname: test\n---\nbody"
-        fm, body = _split_front_matter(content)
+        fm, body = FsSkillRepository.from_markdown(content)
         assert fm["name"] == "test"
         assert body == "body"
 
     def test_no_dash_prefix(self):
         content = "no front matter at all"
-        fm, body = _split_front_matter(content)
+        fm, body = FsSkillRepository.from_markdown(content)
         assert fm == {}
         assert body == content
 
@@ -99,29 +97,29 @@ class TestSplitFrontMatter:
 class TestParseToolsFromBody:
     def test_basic_tools_section(self):
         body = "Tools:\n- tool_a\n- tool_b\n\nOverview"
-        tools = _parse_tools_from_body(body)
+        tools = FsSkillRepository._parse_tools_from_body(body)
         assert tools == ["tool_a", "tool_b"]
 
     def test_no_tools_section(self):
         body = "# Just markdown\nNo tools here"
-        assert _parse_tools_from_body(body) == []
+        assert FsSkillRepository._parse_tools_from_body(body) == []
 
     def test_tools_section_stops_at_next_section(self):
         body = "Tools:\n- tool_a\nOverview\nMore content"
-        tools = _parse_tools_from_body(body)
+        tools = FsSkillRepository._parse_tools_from_body(body)
         assert tools == ["tool_a"]
 
     def test_tools_section_skips_headings(self):
         body = "Tools:\n# Comment\n- tool_a\n"
-        tools = _parse_tools_from_body(body)
+        tools = FsSkillRepository._parse_tools_from_body(body)
         assert tools == ["tool_a"]
 
     def test_empty_body(self):
-        assert _parse_tools_from_body("") == []
+        assert FsSkillRepository._parse_tools_from_body("") == []
 
     def test_tools_with_description_colon(self):
         body = "Tools:\n- tool_a\nDescription: something\n"
-        tools = _parse_tools_from_body(body)
+        tools = FsSkillRepository._parse_tools_from_body(body)
         assert tools == ["tool_a"]
 
 
@@ -131,16 +129,16 @@ class TestParseToolsFromBody:
 
 class TestIsDocFile:
     def test_markdown(self):
-        assert _is_doc_file("readme.md") is True
-        assert _is_doc_file("README.MD") is True
+        assert is_doc_file("readme.md") is True
+        assert is_doc_file("README.MD") is True
 
     def test_text(self):
-        assert _is_doc_file("notes.txt") is True
-        assert _is_doc_file("NOTES.TXT") is True
+        assert is_doc_file("notes.txt") is True
+        assert is_doc_file("NOTES.TXT") is True
 
     def test_non_doc(self):
-        assert _is_doc_file("script.py") is False
-        assert _is_doc_file("data.json") is False
+        assert is_doc_file("script.py") is False
+        assert is_doc_file("data.json") is False
 
 
 # ---------------------------------------------------------------------------
@@ -374,10 +372,42 @@ class TestFsSkillRepositoryEdgeCases:
 
 class TestBaseSkillRepositoryAbstract:
     def test_user_prompt_default(self):
-        repo = MagicMock(spec=BaseSkillRepository)
-        BaseSkillRepository.user_prompt(repo)
+        class _Repo(BaseSkillRepository):
+            def summaries(self):
+                return []
+
+            def get(self, name: str):
+                raise ValueError(name)
+
+            def skill_list(self, mode: str = "all"):
+                return []
+
+            def path(self, name: str) -> str:
+                return ""
+
+            def refresh(self) -> None:
+                return None
+
+        repo = _Repo(workspace_runtime=MagicMock())
+        assert BaseSkillRepository.user_prompt(repo) == ""
 
     def test_skill_run_env_default(self):
-        repo = MagicMock(spec=BaseSkillRepository)
+        class _Repo(BaseSkillRepository):
+            def summaries(self):
+                return []
+
+            def get(self, name: str):
+                raise ValueError(name)
+
+            def skill_list(self, mode: str = "all"):
+                return []
+
+            def path(self, name: str) -> str:
+                return ""
+
+            def refresh(self) -> None:
+                return None
+
+        repo = _Repo(workspace_runtime=MagicMock())
         result = BaseSkillRepository.skill_run_env(repo, "skill")
         assert result == {}

@@ -26,7 +26,6 @@ class TestSkillStageRequest:
             ctx=MagicMock(),
         )
         assert req.skill_name == "test"
-        assert req.engine is None
         assert req.timeout == 300.0
 
     def test_custom_timeout(self):

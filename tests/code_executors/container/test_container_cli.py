@@ -197,7 +197,15 @@ class TestContainerClientInitContainer:
         cc = ContainerClient(config=ContainerConfig())
 
         mock_client.containers.run.assert_called_once_with(
-            image=DEFAULT_IMAGE_TAG, detach=True, tty=True)
+            image=DEFAULT_IMAGE_TAG,
+            detach=True,
+            tty=True,
+            command=["tail", "-f", "/dev/null"],
+            stdin_open=True,
+            working_dir="/",
+            network_mode="none",
+            auto_remove=True,
+        )
         mock_container.exec_run.assert_called_once_with(["which", "python3"])
         assert cc.container is mock_container
 
@@ -215,8 +223,16 @@ class TestContainerClientInitContainer:
         cc = ContainerClient(config=cfg)
 
         mock_client.containers.run.assert_called_once_with(
-            image=DEFAULT_IMAGE_TAG, detach=True, tty=True,
-            volumes=["/host/skills:/opt/skills:ro"])
+            image=DEFAULT_IMAGE_TAG,
+            detach=True,
+            tty=True,
+            volumes=["/host/skills:/opt/skills:ro"],
+            command=["tail", "-f", "/dev/null"],
+            stdin_open=True,
+            working_dir="/",
+            network_mode="none",
+            auto_remove=True,
+        )
 
     @patch("trpc_agent_sdk.code_executors.container._container_cli.atexit")
     @patch("trpc_agent_sdk.code_executors.container._container_cli.docker")

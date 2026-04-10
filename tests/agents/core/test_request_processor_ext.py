@@ -9,11 +9,19 @@ not covered by the base test_request_processor.py."""
 from __future__ import annotations
 
 import asyncio
-import copy
 from typing import List
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import trpc_agent_sdk.skills as _skills_pkg
+
+if not hasattr(_skills_pkg, "get_skill_processor_parameters"):
+
+    def _compat_get_skill_processor_parameters(agent_context):
+        from trpc_agent_sdk.agents.core._skill_processor import get_skill_processor_parameters as _impl
+        return _impl(agent_context)
+
+    _skills_pkg.get_skill_processor_parameters = _compat_get_skill_processor_parameters
 
 from trpc_agent_sdk.agents._llm_agent import LlmAgent
 from trpc_agent_sdk.agents.core._request_processor import (
@@ -21,7 +29,7 @@ from trpc_agent_sdk.agents.core._request_processor import (
     default_request_processor,
 )
 from trpc_agent_sdk.context import InvocationContext, create_agent_context
-from trpc_agent_sdk.events import Event, EventActions
+from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.models import LLMModel, LlmRequest, LlmResponse, ModelRegistry
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content, FunctionCall, FunctionResponse, GenerateContentConfig, Part
@@ -256,7 +264,7 @@ class TestAddSkillsToRequest:
         """Returns None (no error) when agent has no skill_repository."""
         ctx.agent.skill_repository = None
         request = LlmRequest(model="test-rp-ext-model")
-        result = await processor._add_skills_to_request(ctx.agent, ctx, request)
+        result = await processor._add_skills_to_request(ctx.agent, ctx, request, parameters={})
         assert result is None
 
     @pytest.mark.asyncio
@@ -268,7 +276,7 @@ class TestAddSkillsToRequest:
             instance = MockSRP.return_value
             instance.process_llm_request = AsyncMock(side_effect=RuntimeError("skill boom"))
             request = LlmRequest(model="test-rp-ext-model")
-            result = await processor._add_skills_to_request(ctx.agent, ctx, request)
+            result = await processor._add_skills_to_request(ctx.agent, ctx, request, parameters={})
             assert result is not None
             assert result.error_code == "skill_processing_error"
 

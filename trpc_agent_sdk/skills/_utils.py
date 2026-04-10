@@ -194,3 +194,60 @@ def get_state_delta(invocation_context: InvocationContext, key: str) -> Optional
     state = dict(invocation_context.session_state.copy())
     state.update(invocation_context.actions.state_delta)
     return state.get(key, None)
+
+
+FILE_EXTENSIONS_DOC = (".md", ".txt")
+
+
+def is_doc_file(name: str) -> bool:
+    """Check if a file is a document file.
+
+    Args:
+        name: The name of the file
+
+    Returns:
+        True if the file is a document file, False otherwise
+    """
+    name_lower = name.lower()
+    return name_lower.endswith(FILE_EXTENSIONS_DOC)
+
+
+_SCRIPT_FILE_EXTENSIONS = (
+    # Shell
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".fish",
+    # Python / Node
+    ".py",
+    ".pyw",
+    ".js",
+    ".mjs",
+    ".cjs",
+    ".ts",
+    # Other interpreted / script languages
+    ".rb",
+    ".pl",
+    ".php",
+    ".lua",
+    ".r",
+    ".ps1",
+    ".awk",
+    ".tcl",
+    ".groovy",
+    ".kts",
+    ".jl",
+)
+
+
+def is_script_file(name: str) -> bool:
+    """Check if a file is a script file.
+
+    Args:
+        name: The name of the file
+
+    Returns:
+        True if the file is a script file, False otherwise
+    """
+    name_lower = name.lower()
+    return name_lower.endswith(_SCRIPT_FILE_EXTENSIONS)

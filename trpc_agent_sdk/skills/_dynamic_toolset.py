@@ -25,8 +25,9 @@ from trpc_agent_sdk.tools import ToolType
 from trpc_agent_sdk.tools import get_tool
 from trpc_agent_sdk.tools import get_tool_set
 
-from ._constants import SKILL_LOADED_STATE_KEY_PREFIX
-from ._constants import SKILL_TOOLS_STATE_KEY_PREFIX
+from ._common import loaded_scan_prefix
+from ._common import tool_scan_prefix
+from ._common import tool_state_key
 from ._repository import BaseSkillRepository
 from ._utils import get_state_delta
 
@@ -130,6 +131,7 @@ class DynamicSkillToolSet(BaseToolSet):
                 self._find_tool_by_name(tool)
             else:
                 self._find_tool_by_type(tool)
+
         logger.info("DynamicSkillToolSet initialized: %s tools, %s toolsets, only_active_skills=%s",
                     len(self._available_tools), len(self._available_toolsets), only_active_skills)
 
@@ -266,9 +268,14 @@ class DynamicSkillToolSet(BaseToolSet):
                 tool = await self._resolve_tool(tool_name, ctx)
                 if tool is None:
                     logger.warning(
-                        "Tool '%s' required by skill '%s' could not be resolved. Checked: available_tools (%s), "
-                        "available_toolsets (%s), global registry", tool_name, skill_name, len(self._available_tools),
-                        len(self._available_toolsets))
+                        "Tool '%s' required by skill '%s' could not be resolved. "
+                        "Checked: available_tools (%s), "
+                        "available_toolsets (%s), global registry",
+                        tool_name,
+                        skill_name,
+                        len(self._available_tools),
+                        len(self._available_toolsets),
+                    )
                     continue
 
                 selected_tools.append(tool)
@@ -293,13 +300,14 @@ class DynamicSkillToolSet(BaseToolSet):
             List of loaded skill names
         """
         loaded_skills: List[str] = []
-        # Combine session state and current state delta
         state = dict(ctx.session_state.copy())
         state.update(ctx.actions.state_delta)
-
+        prefix = loaded_scan_prefix(ctx)
         for key, value in state.items():
-            if key.startswith(SKILL_LOADED_STATE_KEY_PREFIX) and value:
-                skill_name = key[len(SKILL_LOADED_STATE_KEY_PREFIX):]
+            if not value or not key.startswith(prefix):
+                continue
+            skill_name = key[len(prefix):].strip()
+            if skill_name:
                 loaded_skills.append(skill_name)
         return loaded_skills
 
@@ -321,18 +329,20 @@ class DynamicSkillToolSet(BaseToolSet):
         """
         active_skills: set[str] = set()
 
-        # Check state_delta for skill-related changes
+        loaded_state_prefix = loaded_scan_prefix(ctx)
+        tools_state_prefix = tool_scan_prefix(ctx)
+
         for key, value in ctx.actions.state_delta.items():
-            if key.startswith(SKILL_LOADED_STATE_KEY_PREFIX) and value:
-                # Skill was just loaded
-                skill_name = key[len(SKILL_LOADED_STATE_KEY_PREFIX):]
-                active_skills.add(skill_name)
-                logger.debug("Skill '%s' is active (just loaded)", skill_name)
-            elif key.startswith(SKILL_TOOLS_STATE_KEY_PREFIX):
-                # Skill's tools were just selected/modified
-                skill_name = key[len(SKILL_TOOLS_STATE_KEY_PREFIX):]
-                active_skills.add(skill_name)
-                logger.debug("Skill '%s' is active (tools modified)", skill_name)
+            if key.startswith(loaded_state_prefix) and value:
+                skill_name = key[len(loaded_state_prefix):].strip()
+                if skill_name:
+                    active_skills.add(skill_name)
+                    logger.debug("Skill '%s' is active (just loaded)", skill_name)
+            if key.startswith(tools_state_prefix):
+                skill_name = key[len(tools_state_prefix):].strip()
+                if skill_name:
+                    active_skills.add(skill_name)
+                    logger.debug("Skill '%s' is active (tools modified)", skill_name)
 
         return list(active_skills)
 
@@ -346,7 +356,7 @@ class DynamicSkillToolSet(BaseToolSet):
         Returns:
             List of selected tool names
         """
-        key = SKILL_TOOLS_STATE_KEY_PREFIX + skill_name
+        key = tool_state_key(ctx, skill_name)
         v = get_state_delta(ctx, key)
         if not v:
             # Fallback to SKILL.md defaults when explicit selection state is absent.

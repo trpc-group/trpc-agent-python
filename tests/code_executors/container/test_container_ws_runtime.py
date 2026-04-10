@@ -59,6 +59,7 @@ from trpc_agent_sdk.code_executors.container._container_ws_runtime import (
     ContainerWorkspaceManager,
     ContainerWorkspaceRuntime,
     RuntimeConfig,
+    _shell_quote,
     create_container_workspace_runtime,
 )
 from trpc_agent_sdk.context import InvocationContext
@@ -105,7 +106,7 @@ class TestRuntimeConfig:
         assert cfg.run_container_base == DEFAULT_RUN_CONTAINER_BASE
         assert cfg.inputs_host_base == ""
         assert cfg.inputs_container_base == DEFAULT_INPUTS_CONTAINER
-        assert cfg.auto_map_inputs is False
+        assert cfg.auto_map_inputs is True
         assert isinstance(cfg.command_args, CommandArgs)
 
     def test_custom_values(self):
@@ -281,7 +282,7 @@ class TestNormalizeGlobs:
         assert result == [
             f"{DIR_OUT}/**", f"{DIR_OUT}/file.txt",
             f"{DIR_WORK}/data", f"{DIR_WORK}/data",
-            "./all", "./all",
+            "all", "all",
         ]
 
     def test_empty_patterns_stripped(self):
@@ -299,7 +300,7 @@ class TestInputBase:
         assert ContainerWorkspaceFS._input_base("host:///data/files") == "files"
 
     def test_artifact_ref(self):
-        assert ContainerWorkspaceFS._input_base("artifact://model@3") == "model@3"
+        assert ContainerWorkspaceFS._input_base("artifact://model@3") == "model"
 
     def test_just_filename(self):
         assert ContainerWorkspaceFS._input_base("data.csv") == "data.csv"
@@ -580,8 +581,8 @@ class TestStageInputs:
         specs = [WorkspaceInputSpec(src="workspace://work/src", dst="work/link", mode="link")]
         await fs.stage_inputs(ws, specs)
 
-        cmd_str = str(cc.exec_run.await_args)
-        assert "ln" in cmd_str
+        all_calls = "".join(str(call) for call in cc.exec_run.await_args_list)
+        assert "ln -sfn" in all_calls
 
     async def test_stage_skill_input(self):
         ws = _make_ws()
@@ -660,8 +661,8 @@ class TestStageInputs:
 
         specs = [WorkspaceInputSpec(src="host:///host/inputs/data", dst="work/link", mode="link")]
         await fs.stage_inputs(ws, specs)
-        cmd_str = str(cc.exec_run.await_args)
-        assert "ln" in cmd_str
+        all_calls = "".join(str(call) for call in cc.exec_run.await_args_list)
+        assert "ln -sfn" in all_calls
 
     async def test_stage_host_input_no_inputs_host_base(self, tmp_path):
         src = tmp_path / "data"
@@ -877,8 +878,9 @@ class TestCopyFileOut:
 
         cc.client.api.get_archive.return_value = (iter([tar_buf.getvalue()]), {})
 
-        result_data, mime = fs._copy_file_out("/container/path/test.txt")
+        result_data, size_bytes, mime = fs._copy_file_out("/container/path/test.txt")
         assert result_data == b"file content"
+        assert size_bytes == len(b"file content")
         assert mime == "text/plain"
 
     def test_copy_file_out_no_file_in_archive(self):
@@ -1034,7 +1036,7 @@ class TestStageHostInput:
         cfg = RuntimeConfig(inputs_host_base="/host/inputs")
         fs = ContainerWorkspaceFS(cc, cfg)
 
-        await fs._stage_host_input(ws, "/host/inputs/data.csv", "/ws/work/data.csv", "copy")
+        await fs._stage_host_input(ws, "/host/inputs/data.csv", "/ws/work/data.csv", "copy", "work/data.csv")
         cmd_str = str(cc.exec_run.await_args)
         assert "cp" in cmd_str
 
@@ -1044,7 +1046,7 @@ class TestStageHostInput:
         cfg = RuntimeConfig(inputs_host_base="/host/inputs")
         fs = ContainerWorkspaceFS(cc, cfg)
 
-        await fs._stage_host_input(ws, "/host/inputs/data", "/ws/work/data", "link")
+        await fs._stage_host_input(ws, "/host/inputs/data", "/ws/work/data", "link", "work/data")
         cmd_str = str(cc.exec_run.await_args)
         assert "ln" in cmd_str
 
@@ -1059,7 +1061,7 @@ class TestStageHostInput:
         cfg = RuntimeConfig(inputs_host_base="")
         fs = ContainerWorkspaceFS(cc, cfg)
 
-        await fs._stage_host_input(ws, str(src), "/ws/work/data", "copy")
+        await fs._stage_host_input(ws, str(src), "/ws/work/data", "copy", "work/data")
         cc.client.api.put_archive.assert_called()
 
 
@@ -1106,20 +1108,20 @@ class TestStageWorkspaceInput:
 class TestShellQuote:
 
     def test_empty_string(self):
-        assert ContainerProgramRunner._shell_quote("") == "''"
+        assert _shell_quote("") == "''"
 
     def test_simple_string(self):
-        assert ContainerProgramRunner._shell_quote("hello") == "'hello'"
+        assert _shell_quote("hello") == "'hello'"
 
     def test_string_with_single_quote(self):
-        result = ContainerProgramRunner._shell_quote("it's")
+        result = _shell_quote("it's")
         assert result == "'it'\\''s'"
 
     def test_string_with_spaces(self):
-        assert ContainerProgramRunner._shell_quote("hello world") == "'hello world'"
+        assert _shell_quote("hello world") == "'hello world'"
 
     def test_string_with_special_chars(self):
-        assert ContainerProgramRunner._shell_quote("a;b|c") == "'a;b|c'"
+        assert _shell_quote("a;b|c") == "'a;b|c'"
 
 
 # ---------------------------------------------------------------------------
@@ -1198,7 +1200,7 @@ class TestRunProgram:
         await runner.run_program(ws, spec)
 
         call_args = cc.exec_run.await_args.kwargs.get("command_args")
-        assert call_args.timeout == 0
+        assert call_args.timeout == 10.0
 
     async def test_run_timeout_spec_takes_precedence_when_truthy(self):
         """When spec.timeout is truthy, it is used as the initial timeout,
@@ -1230,7 +1232,7 @@ class TestRunProgram:
         await runner.run_program(ws, spec)
 
         call_args = cc.exec_run.await_args.kwargs.get("command_args")
-        assert call_args.timeout == 0
+        assert call_args.timeout == 10.0
 
     async def test_run_measures_duration(self):
         cc = _mock_container_client()

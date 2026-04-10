@@ -1,8 +1,6 @@
-# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+# -*- coding: utf-8 -*-
 #
-# Copyright (C) 2026 Tencent. All rights reserved.
-#
-# tRPC-Agent-Python is licensed under Apache-2.0.
+# Copyright @ 2025 Tencent.com
 """Container code executor for TRPC Agent framework.
 
 This module provides a code executor that uses a custom container to execute code.
@@ -14,12 +12,15 @@ from __future__ import annotations
 import asyncio
 import atexit
 import os
+import socket as pysocket
 from dataclasses import dataclass
 from typing import Optional
 
 import docker
 from docker.models.containers import Container
-
+from docker.utils.socket import consume_socket_output
+from docker.utils.socket import demux_adaptor
+from docker.utils.socket import frames_iter
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.utils import CommandExecResult
 
@@ -48,6 +49,8 @@ class CommandArgs:
     """The environment variables for the command execution."""
     timeout: Optional[float] = None
     """The timeout for the command execution in seconds."""
+    stdin: Optional[str] = None
+    """Optional stdin content to write once before reading output."""
 
 
 class ContainerClient:
@@ -151,6 +154,16 @@ class ContainerClient:
             # docker SDK `run` supports bind specs via `volumes`.
             run_kwargs["volumes"] = binds
             logger.info("Container bind mounts enabled: %s", binds)
+        command = self.host_config.get("command", ["tail", "-f", "/dev/null"])
+        stdin = self.host_config.get("stdin", True)
+        working_dir = self.host_config.get("working_dir", "/")
+        network_mode = self.host_config.get("network_mode", "none")
+        auto_remove = self.host_config.get("auto_remove", True)
+        run_kwargs.setdefault("command", command)
+        run_kwargs.setdefault("stdin_open", stdin)
+        run_kwargs.setdefault("working_dir", working_dir)
+        run_kwargs.setdefault("network_mode", network_mode)
+        run_kwargs.setdefault("auto_remove", auto_remove)
         self._container = self._client.containers.run(
             image=self.image,
             detach=True,
@@ -189,23 +202,100 @@ class ContainerClient:
             return
 
         logger.info("[Cleanup] Stopping the container...")
-        self._container.stop()
-        self._container.remove()
+        try:
+            self._container.stop()
+        except Exception:  # pylint: disable=broad-except
+            pass
+        try:
+            self._container.remove()
+        except Exception:  # pylint: disable=broad-except
+            pass
         logger.info("Container %s stopped and removed.", self._container.id)
         # self._container = None
+
+    def _exec_run_with_stdin(
+        self,
+        cmd: list[str],
+        environment: dict[str, str],
+        stdin: str,
+    ) -> CommandExecResult:
+        """Execute command with attached stdin, similar to docker exec attach."""
+        resp = self.container.client.api.exec_create(
+            self.container.container.id,
+            cmd=cmd[:],
+            stdout=True,
+            stderr=True,
+            stdin=True,
+            tty=False,
+            environment=environment,
+        )
+        exec_id = resp["Id"]
+        sock = self.container.client.api.exec_start(
+            exec_id,
+            detach=False,
+            tty=False,
+            stream=False,
+            socket=True,
+            demux=False,
+        )
+        try:
+            data = (stdin or "").encode("utf-8")
+            if data:
+                try:
+                    sock.sendall(data)
+                except Exception:  # pylint: disable=broad-except
+                    # Some transports expose the real socket as _sock.
+                    sock._sock.sendall(data)  # pylint: disable=protected-access
+
+            try:
+                sock.shutdown(pysocket.SHUT_WR)
+            except Exception:  # pylint: disable=broad-except
+                close_write = getattr(sock, "close_write", None)
+                if callable(close_write):
+                    close_write()
+
+            frames = frames_iter(sock, tty=False)
+            demux_frames = (demux_adaptor(*frame) for frame in frames)
+            output = consume_socket_output(demux_frames, demux=True)
+            stdout = output[0].decode("utf-8") if output and output[0] else ""
+            stderr = output[1].decode("utf-8") if output and output[1] else ""
+        finally:
+            try:
+                sock.close()
+            except Exception:  # pylint: disable=broad-except
+                pass
+
+        inspect = self.container.client.api.exec_inspect(exec_id)
+        exit_code = int(inspect.get("ExitCode", -1))
+        return CommandExecResult(stdout=stdout, stderr=stderr, exit_code=exit_code, is_timeout=False)
 
     async def exec_run(self, cmd: list[str], command_args: CommandArgs) -> CommandExecResult:
         """Execute command in container."""
         timeout = command_args.timeout
         try:
             loop = asyncio.get_event_loop()
-            co = loop.run_in_executor(
-                None,
-                lambda: self.container.exec_run(cmd=cmd[:], demux=True, environment=command_args.environment or {}))
-            if command_args.timeout:
-                exit_code, output = await asyncio.wait_for(co, timeout=command_args.timeout)
+            if command_args.stdin:
+                co = loop.run_in_executor(
+                    None,
+                    lambda: self._exec_run_with_stdin(
+                        cmd,
+                        command_args.environment or {},
+                        command_args.stdin or "",
+                    ),
+                )
             else:
-                exit_code, output = await co
+                co = loop.run_in_executor(
+                    None,
+                    lambda: self.container.exec_run(cmd=cmd[:], demux=True, environment=command_args.environment or {}))
+            if command_args.timeout:
+                result = await asyncio.wait_for(co, timeout=command_args.timeout)
+            else:
+                result = await co
+
+            if command_args.stdin:
+                return result
+
+            exit_code, output = result
             stdout = output[0].decode('utf-8') if output[0] else ""
             stderr = output[1].decode('utf-8') if output[1] else ""
         except asyncio.TimeoutError:

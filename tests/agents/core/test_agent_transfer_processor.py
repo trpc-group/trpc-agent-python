@@ -8,19 +8,26 @@
 from __future__ import annotations
 
 import asyncio
-from typing import AsyncGenerator, List
-from unittest.mock import Mock, patch
+from typing import List
+from unittest.mock import Mock
 
 import pytest
+import trpc_agent_sdk.skills as _skills_pkg
+
+if not hasattr(_skills_pkg, "get_skill_processor_parameters"):
+
+    def _compat_get_skill_processor_parameters(agent_context):
+        from trpc_agent_sdk.agents.core._skill_processor import get_skill_processor_parameters as _impl
+        return _impl(agent_context)
+
+    _skills_pkg.get_skill_processor_parameters = _compat_get_skill_processor_parameters
 
 from trpc_agent_sdk.agents._llm_agent import LlmAgent
-from trpc_agent_sdk.agents._base_agent import BaseAgent
 from trpc_agent_sdk.agents.core._agent_transfer_processor import (
     AgentTransferProcessor,
     default_agent_transfer_processor,
 )
 from trpc_agent_sdk.context import InvocationContext, create_agent_context
-from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.models import LLMModel, LlmRequest, LlmResponse, ModelRegistry
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import GenerateContentConfig

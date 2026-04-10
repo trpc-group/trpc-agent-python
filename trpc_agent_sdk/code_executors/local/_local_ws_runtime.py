@@ -11,9 +11,11 @@ It provides methods for staging directories and inputs into the workspace.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import shutil
+import sys
 import tempfile
 import time
 from datetime import datetime
@@ -28,10 +30,12 @@ from trpc_agent_sdk.utils import async_execute_command
 from .._artifacts import load_artifact_helper
 from .._artifacts import parse_artifact_ref
 from .._artifacts import save_artifact_helper
-from .._base_workspace_runtime import BaseProgramRunner
-from .._base_workspace_runtime import BaseWorkspaceFS
 from .._base_workspace_runtime import BaseWorkspaceManager
+from .._base_workspace_runtime import BaseWorkspaceFS
+from .._base_workspace_runtime import BaseProgramRunner
 from .._base_workspace_runtime import BaseWorkspaceRuntime
+from .._base_workspace_runtime import RunEnvProvider
+
 from .._constants import DEFAULT_FILE_MODE
 from .._constants import DEFAULT_MAX_FILES
 from .._constants import DEFAULT_MAX_TOTAL_BYTES
@@ -47,27 +51,33 @@ from .._constants import ENV_WORK_DIR
 from .._constants import MAX_READ_SIZE_BYTES
 from .._constants import WORKSPACE_ENV_DIR_KEY
 from .._types import CodeFile
-from .._types import ManifestFileRef
-from .._types import ManifestOutput
-from .._types import WorkspaceCapabilities
 from .._types import WorkspaceInfo
-from .._types import WorkspaceInputSpec
-from .._types import WorkspaceOutputSpec
 from .._types import WorkspacePutFileInfo
+from .._types import WorkspaceInputSpec
 from .._types import WorkspaceRunProgramSpec
 from .._types import WorkspaceRunResult
+from .._types import WorkspaceCapabilities
 from .._types import WorkspaceStageOptions
-from ..utils import InputRecordMeta
-from ..utils import OutputRecordMeta
-from ..utils import collect_files_with_glob
-from ..utils import copy_path
-from ..utils import detect_content_type
+from .._types import ManifestFileRef
+from .._types import ManifestOutput
+from .._types import WorkspaceOutputSpec
+from .._program_session import BaseProgramSession
 from ..utils import ensure_layout
 from ..utils import load_metadata
-from ..utils import make_symlink
-from ..utils import normalize_globs
-from ..utils import path_join
 from ..utils import save_metadata
+from ..utils import InputRecordMeta
+from ..utils import OutputRecordMeta
+from ..utils import normalize_globs
+from ..utils import collect_files_with_glob
+from ..utils import detect_content_type
+from ..utils import make_symlink
+from ..utils import copy_path
+from ..utils import path_join
+
+if sys.platform != "win32":
+    import pty
+
+from ._local_program_session import LocalProgramSession
 
 
 class LocalWorkspaceManager(BaseWorkspaceManager):
@@ -574,6 +584,35 @@ class LocalWorkspaceFS(BaseWorkspaceFS):
 class LocalProgramRunner(BaseProgramRunner):
     """Local program runner for executing commands in skill workspaces."""
 
+    def __init__(
+        self,
+        provider: Optional[RunEnvProvider] = None,
+        enable_provider_env: bool = False,
+    ):
+        super().__init__(provider=provider, enable_provider_env=enable_provider_env)
+
+    def _build_program_env(self, ws: WorkspaceInfo, spec: WorkspaceRunProgramSpec) -> dict[str, str]:
+        env = os.environ.copy()
+        user_env = dict(spec.env or {})
+        wr_path = Path(ws.path)
+        ensure_layout(wr_path)
+        run_dir = wr_path / DIR_RUNS / f"run_{datetime.now().strftime('%Y%m%dT%H%M%S.%f')}"
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        base_env = {
+            WORKSPACE_ENV_DIR_KEY: ws.path,
+            ENV_SKILLS_DIR: str(Path(ws.path) / DIR_SKILLS),
+            ENV_WORK_DIR: str(Path(ws.path) / DIR_WORK),
+            ENV_OUTPUT_DIR: str(Path(ws.path) / DIR_OUT),
+            ENV_RUN_DIR: str(run_dir),
+        }
+        for key, value in base_env.items():
+            if key not in user_env:
+                env[key] = value
+        if user_env:
+            env.update(user_env)
+        return env
+
     @override
     async def run_program(self,
                           ws: WorkspaceInfo,
@@ -591,37 +630,13 @@ class LocalProgramRunner(BaseProgramRunner):
         Returns:
             Execution result
         """
+        spec = self._apply_provider_env(spec, ctx)
         # Resolve cwd under workspace
         cwd = Path(path_join(ws.path, spec.cwd))
         cwd.mkdir(parents=True, exist_ok=True)
 
         timeout = spec.timeout or float(DEFAULT_TIMEOUT_SEC)
-
-        # Build environment
-        env = os.environ.copy()
-
-        wr_path = Path(ws.path)
-        # Ensure layout exists and compute run dir
-        ensure_layout(wr_path)
-        run_dir = wr_path / DIR_RUNS / f"run_{datetime.now().strftime('%Y%m%dT%H%M%S.%f')}"
-        run_dir.mkdir(parents=True, exist_ok=True)
-
-        # Inject well-known variables if not set
-        base_env = {
-            WORKSPACE_ENV_DIR_KEY: ws.path,
-            ENV_SKILLS_DIR: str(Path(ws.path) / DIR_SKILLS),
-            ENV_WORK_DIR: str(Path(ws.path) / DIR_WORK),
-            ENV_OUTPUT_DIR: str(Path(ws.path) / DIR_OUT),
-            ENV_RUN_DIR: str(run_dir),
-        }
-
-        for key, value in base_env.items():
-            if key not in spec.env:
-                env[key] = value
-
-        # Add user-provided environment variables
-        if spec.env:
-            env.update(spec.env)
+        env = self._build_program_env(ws, spec)
 
         # Prepare command
         cmd_args = [spec.cmd] + (spec.args or [])
@@ -639,6 +654,62 @@ class LocalProgramRunner(BaseProgramRunner):
                                   duration=time.time() - start_time,
                                   timed_out=result.is_timeout)
 
+    async def start_program(
+        self,
+        ctx: Optional[InvocationContext],
+        ws: WorkspaceInfo,
+        spec: WorkspaceRunProgramSpec,
+    ) -> BaseProgramSession:
+        """Start an interactive program session in workspace."""
+        if spec.tty and sys.platform == "win32":
+            raise ValueError("interactive tty is not supported on windows")
+
+        spec = self._apply_provider_env(spec, ctx)
+        cwd = Path(path_join(ws.path, spec.cwd))
+        cwd.mkdir(parents=True, exist_ok=True)
+        env = self._build_program_env(ws, spec)
+        timeout = spec.timeout or float(DEFAULT_TIMEOUT_SEC)
+
+        cmd_args = [spec.cmd] + (spec.args or [])
+        if spec.tty:
+            master_fd, slave_fd = pty.openpty()
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    *cmd_args,
+                    cwd=str(cwd),
+                    env=env,
+                    stdin=slave_fd,
+                    stdout=slave_fd,
+                    stderr=slave_fd,
+                    close_fds=True,
+                    preexec_fn=os.setsid,
+                )
+            except Exception:
+                os.close(master_fd)
+                os.close(slave_fd)
+                raise
+            finally:
+                try:
+                    os.close(slave_fd)
+                except OSError:
+                    pass
+            session = LocalProgramSession(process, master_fd=master_fd)
+        else:
+            process = await asyncio.create_subprocess_exec(
+                *cmd_args,
+                cwd=str(cwd),
+                env=env,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            session = LocalProgramSession(process)
+        if timeout > 0:
+            asyncio.create_task(session.enforce_timeout(float(timeout)))
+        if spec.stdin:
+            await session.write(spec.stdin, newline=False)
+        return session
+
 
 class LocalWorkspaceRuntime(BaseWorkspaceRuntime):
     """Local workspace for executing commands in skill workspaces."""
@@ -647,9 +718,11 @@ class LocalWorkspaceRuntime(BaseWorkspaceRuntime):
                  work_root: str = '',
                  read_only_staged_skill: bool = False,
                  auto_inputs: bool = True,
-                 inputs_host_base: str = ""):
+                 inputs_host_base: str = "",
+                 provider: Optional[RunEnvProvider] = None,
+                 enable_provider_env: bool = False):
         self._fs = LocalWorkspaceFS(read_only_staged_skill)
-        self._runner = LocalProgramRunner()
+        self._runner = LocalProgramRunner(provider=provider, enable_provider_env=enable_provider_env)
         self._manager = LocalWorkspaceManager(work_root, auto_inputs, inputs_host_base, self._fs)
 
     @override
@@ -681,6 +754,9 @@ class LocalWorkspaceRuntime(BaseWorkspaceRuntime):
 def create_local_workspace_runtime(work_root: str = '',
                                    read_only_staged_skill: bool = False,
                                    auto_inputs: bool = True,
-                                   inputs_host_base: str = "") -> LocalWorkspaceRuntime:
+                                   inputs_host_base: str = "",
+                                   provider: Optional[RunEnvProvider] = None,
+                                   enable_provider_env: bool = False) -> LocalWorkspaceRuntime:
     """Create a new local workspace runtime."""
-    return LocalWorkspaceRuntime(work_root, read_only_staged_skill, auto_inputs, inputs_host_base)
+    return LocalWorkspaceRuntime(work_root, read_only_staged_skill, auto_inputs, inputs_host_base, provider,
+                                 enable_provider_env)

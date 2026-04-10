@@ -23,12 +23,19 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 
 from trpc_agent_sdk.skills._dynamic_toolset import DynamicSkillToolSet
+from trpc_agent_sdk.skills._common import loaded_state_key
+from trpc_agent_sdk.skills._common import tool_state_key
+from trpc_agent_sdk.skills._constants import SKILL_CONFIG_KEY
+from trpc_agent_sdk.skills._skill_config import DEFAULT_SKILL_CONFIG
 
 
 def _make_ctx(state_delta=None, session_state=None):
     ctx = MagicMock()
     ctx.actions.state_delta = state_delta or {}
     ctx.session_state = session_state or {}
+    ctx.agent_name = ""
+    ctx.agent_context.get_metadata = MagicMock(
+        side_effect=lambda key, default=None: DEFAULT_SKILL_CONFIG if key == SKILL_CONFIG_KEY else default)
     return ctx
 
 
@@ -113,10 +120,9 @@ class TestGetLoadedSkillsFromState:
     def test_loaded_skills_from_session_and_delta(self, *_):
         repo = _make_mock_repository()
         ts = DynamicSkillToolSet(skill_repository=repo)
-        ctx = _make_ctx(
-            session_state={"temp:skill:loaded:skill-a": True},
-            state_delta={"temp:skill:loaded:skill-b": True},
-        )
+        ctx = _make_ctx()
+        ctx.session_state = {loaded_state_key(ctx, "skill-a"): True}
+        ctx.actions.state_delta = {loaded_state_key(ctx, "skill-b"): True}
         result = ts._get_loaded_skills_from_state(ctx)
         assert set(result) == {"skill-a", "skill-b"}
 
@@ -139,7 +145,7 @@ class TestGetActiveSkillsFromDelta:
     def test_active_from_loaded(self, *_):
         repo = _make_mock_repository()
         ts = DynamicSkillToolSet(skill_repository=repo)
-        ctx = _make_ctx(state_delta={"temp:skill:loaded:s1": True})
+        ctx = _make_ctx(state_delta={loaded_state_key(_make_ctx(), "s1"): True})
         result = ts._get_active_skills_from_delta(ctx)
         assert "s1" in result
 
@@ -148,7 +154,7 @@ class TestGetActiveSkillsFromDelta:
     def test_active_from_tools_modified(self, *_):
         repo = _make_mock_repository()
         ts = DynamicSkillToolSet(skill_repository=repo)
-        ctx = _make_ctx(state_delta={"temp:skill:tools:s2": json.dumps(["t1"])})
+        ctx = _make_ctx(state_delta={tool_state_key(_make_ctx(), "s2"): json.dumps(["t1"])})
         result = ts._get_active_skills_from_delta(ctx)
         assert "s2" in result
 
@@ -157,7 +163,7 @@ class TestGetActiveSkillsFromDelta:
     def test_falsy_loaded_value_ignored(self, *_):
         repo = _make_mock_repository()
         ts = DynamicSkillToolSet(skill_repository=repo)
-        ctx = _make_ctx(state_delta={"temp:skill:loaded:s1": False})
+        ctx = _make_ctx(state_delta={loaded_state_key(_make_ctx(), "s1"): False})
         assert ts._get_active_skills_from_delta(ctx) == []
 
 
@@ -173,7 +179,7 @@ class TestGetToolsSelection:
         skill.tools = ["default_tool"]
         repo = _make_mock_repository({"s1": skill})
         ts = DynamicSkillToolSet(skill_repository=repo)
-        ctx = _make_ctx(state_delta={"temp:skill:tools:s1": json.dumps(["tool_a", "tool_b"])})
+        ctx = _make_ctx(state_delta={tool_state_key(_make_ctx(), "s1"): json.dumps(["tool_a", "tool_b"])})
         result = ts._get_tools_selection(ctx, "s1")
         assert result == ["tool_a", "tool_b"]
 
@@ -184,7 +190,7 @@ class TestGetToolsSelection:
         skill.tools = ["default_tool"]
         repo = _make_mock_repository({"s1": skill})
         ts = DynamicSkillToolSet(skill_repository=repo)
-        ctx = _make_ctx(state_delta={"temp:skill:tools:s1": "*"})
+        ctx = _make_ctx(state_delta={tool_state_key(_make_ctx(), "s1"): "*"})
         result = ts._get_tools_selection(ctx, "s1")
         assert result == ["default_tool"]
 
@@ -206,7 +212,7 @@ class TestGetToolsSelection:
         skill.tools = ["fallback"]
         repo = _make_mock_repository({"s1": skill})
         ts = DynamicSkillToolSet(skill_repository=repo)
-        ctx = _make_ctx(state_delta={"temp:skill:tools:s1": "not_json"})
+        ctx = _make_ctx(state_delta={tool_state_key(_make_ctx(), "s1"): "not_json"})
         result = ts._get_tools_selection(ctx, "s1")
         assert result == ["fallback"]
 
@@ -301,7 +307,7 @@ class TestGetTools:
         mock_tool = _make_mock_tool("my_tool")
         ts._available_tools["my_tool"] = mock_tool
 
-        ctx = _make_ctx(state_delta={"temp:skill:loaded:s1": True})
+        ctx = _make_ctx(state_delta={loaded_state_key(_make_ctx(), "s1"): True})
         result = await ts.get_tools(ctx)
         assert len(result) == 1
         assert result[0] is mock_tool
@@ -316,7 +322,7 @@ class TestGetTools:
         mock_tool = _make_mock_tool("tool_a")
         ts._available_tools["tool_a"] = mock_tool
 
-        ctx = _make_ctx(session_state={"temp:skill:loaded:s1": True})
+        ctx = _make_ctx(session_state={loaded_state_key(_make_ctx(), "s1"): True})
         result = await ts.get_tools(ctx)
         assert len(result) == 1
 
@@ -332,9 +338,10 @@ class TestGetTools:
         mock_tool = _make_mock_tool("shared_tool")
         ts._available_tools["shared_tool"] = mock_tool
 
+        key_ctx = _make_ctx()
         ctx = _make_ctx(session_state={
-            "temp:skill:loaded:s1": True,
-            "temp:skill:loaded:s2": True,
+            loaded_state_key(key_ctx, "s1"): True,
+            loaded_state_key(key_ctx, "s2"): True,
         })
         result = await ts.get_tools(ctx)
         assert len(result) == 1
@@ -349,7 +356,7 @@ class TestGetTools:
         mock_tool = _make_mock_tool("fallback_tool")
         ts._available_tools["fallback_tool"] = mock_tool
 
-        ctx = _make_ctx(session_state={"temp:skill:loaded:s1": True})
+        ctx = _make_ctx(session_state={loaded_state_key(_make_ctx(), "s1"): True})
         result = await ts.get_tools(ctx)
         assert len(result) == 1
 
@@ -360,7 +367,7 @@ class TestGetTools:
         skill.tools = ["nonexistent_tool"]
         repo = _make_mock_repository({"s1": skill})
         ts = DynamicSkillToolSet(skill_repository=repo)
-        ctx = _make_ctx(state_delta={"temp:skill:loaded:s1": True})
+        ctx = _make_ctx(state_delta={loaded_state_key(_make_ctx(), "s1"): True})
         result = await ts.get_tools(ctx)
         assert len(result) == 0
 
@@ -371,7 +378,7 @@ class TestGetTools:
         skill.tools = []
         repo = _make_mock_repository({"s1": skill})
         ts = DynamicSkillToolSet(skill_repository=repo)
-        ctx = _make_ctx(state_delta={"temp:skill:loaded:s1": True})
+        ctx = _make_ctx(state_delta={loaded_state_key(_make_ctx(), "s1"): True})
         result = await ts.get_tools(ctx)
         assert result == []
 
@@ -439,7 +446,7 @@ class TestGetToolsSelectionBytes:
         skill.tools = ["default"]
         repo = _make_mock_repository({"s1": skill})
         ts = DynamicSkillToolSet(skill_repository=repo)
-        ctx = _make_ctx(state_delta={"temp:skill:tools:s1": json.dumps(["t1"]).encode()})
+        ctx = _make_ctx(state_delta={tool_state_key(_make_ctx(), "s1"): json.dumps(["t1"]).encode()})
         result = ts._get_tools_selection(ctx, "s1")
         assert result == ["t1"]
 
@@ -450,7 +457,7 @@ class TestGetToolsSelectionBytes:
         skill.tools = ["default"]
         repo = _make_mock_repository({"s1": skill})
         ts = DynamicSkillToolSet(skill_repository=repo)
-        ctx = _make_ctx(state_delta={"temp:skill:tools:s1": b"*"})
+        ctx = _make_ctx(state_delta={tool_state_key(_make_ctx(), "s1"): b"*"})
         result = ts._get_tools_selection(ctx, "s1")
         assert result == ["default"]
 
@@ -461,6 +468,6 @@ class TestGetToolsSelectionBytes:
         skill.tools = ["default"]
         repo = _make_mock_repository({"s1": skill})
         ts = DynamicSkillToolSet(skill_repository=repo)
-        ctx = _make_ctx(state_delta={"temp:skill:tools:s1": json.dumps({"not": "list"})})
+        ctx = _make_ctx(state_delta={tool_state_key(_make_ctx(), "s1"): json.dumps({"not": "list"})})
         result = ts._get_tools_selection(ctx, "s1")
         assert result == ["default"]

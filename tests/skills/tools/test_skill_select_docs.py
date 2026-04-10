@@ -17,16 +17,22 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from trpc_agent_sdk.skills._constants import SKILL_CONFIG_KEY
 from trpc_agent_sdk.skills.tools._skill_select_docs import (
     SkillSelectDocsResult,
     skill_select_docs,
 )
+from trpc_agent_sdk.skills._common import docs_state_key
+from trpc_agent_sdk.skills._skill_config import DEFAULT_SKILL_CONFIG
 
 
 def _make_ctx(state_delta=None, session_state=None):
     ctx = MagicMock()
     ctx.actions.state_delta = state_delta or {}
     ctx.session_state = session_state or {}
+    ctx.agent_name = ""
+    ctx.agent_context.get_metadata = MagicMock(
+        side_effect=lambda key, default=None: DEFAULT_SKILL_CONFIG if key == SKILL_CONFIG_KEY else default)
     return ctx
 
 
@@ -76,18 +82,16 @@ class TestSkillSelectDocs:
         assert result.selected_docs == ["doc1.md", "doc2.md"]
 
     def test_add_mode(self):
-        ctx = _make_ctx(session_state={
-            "temp:skill:docs:test-skill": json.dumps(["existing.md"]),
-        })
+        ctx = _make_ctx()
+        ctx.session_state = {docs_state_key(ctx, "test-skill"): json.dumps(["existing.md"])}
         result = skill_select_docs(ctx, "test-skill", docs=["new.md"], mode="add")
         assert result.mode == "add"
         assert "existing.md" in result.selected_docs
         assert "new.md" in result.selected_docs
 
     def test_clear_mode(self):
-        ctx = _make_ctx(session_state={
-            "temp:skill:docs:test-skill": json.dumps(["some.md"]),
-        })
+        ctx = _make_ctx()
+        ctx.session_state = {docs_state_key(ctx, "test-skill"): json.dumps(["some.md"])}
         result = skill_select_docs(ctx, "test-skill", mode="clear")
         assert result.mode == "clear"
         assert result.selected_docs == []
@@ -100,5 +104,5 @@ class TestSkillSelectDocs:
     def test_updates_state_delta(self):
         ctx = _make_ctx()
         skill_select_docs(ctx, "test-skill", docs=["a.md"], mode="replace")
-        key = "temp:skill:docs:test-skill"
+        key = docs_state_key(ctx, "test-skill")
         assert key in ctx.actions.state_delta

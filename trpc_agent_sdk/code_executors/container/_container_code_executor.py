@@ -15,7 +15,6 @@ from typing import Optional
 from typing_extensions import override
 
 from pydantic import Field
-
 from trpc_agent_sdk.context import InvocationContext
 
 from .._base_code_executor import BaseCodeExecutor

@@ -67,14 +67,13 @@ def _make_repository(path="/skills/test-skill"):
     return repo
 
 
-def _make_request(skill_name="test-skill", runtime=None, repo=None, ws=None, ctx=None):
+def _make_request(skill_name="test-skill", repo=None, ws=None, ctx=None):
     from trpc_agent_sdk.skills.stager._types import SkillStageRequest
     return SkillStageRequest(
         skill_name=skill_name,
         repository=repo or _make_repository(),
         workspace=ws or _make_workspace(),
         ctx=ctx or _make_ctx(),
-        engine=runtime,
     )
 
 
@@ -262,7 +261,7 @@ class TestStageSkill:
     async def test_fresh_staging(self, mock_digest):
         stager = Stager()
         request = _make_request()
-        runtime = request.engine or request.repository.workspace_runtime
+        runtime = request.repository.workspace_runtime
 
         mock_file = MagicMock()
         mock_file.content = json.dumps({"version": 1, "skills": {}})
@@ -275,7 +274,7 @@ class TestStageSkill:
     async def test_cached_staging_with_links(self, mock_digest):
         stager = Stager()
         request = _make_request()
-        runtime = request.engine or request.repository.workspace_runtime
+        runtime = request.repository.workspace_runtime
 
         md_data = {
             "version": 1,

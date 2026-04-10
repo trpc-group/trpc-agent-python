@@ -12,10 +12,12 @@ isolated execution environments.
 
 from abc import ABC
 from abc import abstractmethod
+from typing import Callable
 from typing import List
 from typing import Optional
 
 from trpc_agent_sdk.context import InvocationContext
+from trpc_agent_sdk.log import logger
 
 from ._types import CodeFile
 from ._types import ManifestOutput
@@ -27,6 +29,8 @@ from ._types import WorkspacePutFileInfo
 from ._types import WorkspaceRunProgramSpec
 from ._types import WorkspaceRunResult
 from ._types import WorkspaceStageOptions
+
+RunEnvProvider = Callable[[Optional[InvocationContext]], dict[str, str]]
 
 
 class BaseWorkspaceManager(ABC):
@@ -129,6 +133,40 @@ class BaseProgramRunner(ABC):
     """
     Executes programs within a workspace.
     """
+
+    def __init__(
+        self,
+        provider: Optional[RunEnvProvider] = None,
+        enable_provider_env: bool = False,
+    ) -> None:
+        self._run_env_provider = provider
+        self._enable_provider_env = bool(enable_provider_env and provider)
+
+    def _apply_provider_env(
+        self,
+        spec: WorkspaceRunProgramSpec,
+        ctx: Optional[InvocationContext] = None,
+    ) -> WorkspaceRunProgramSpec:
+        """Return spec with provider env merged when enabled.
+
+        Provider values never override keys already present in ``spec.env``.
+        The input ``spec`` is not mutated.
+        """
+        provider = getattr(self, "_run_env_provider", None)
+        if not getattr(self, "_enable_provider_env", False) or provider is None:
+            return spec
+        try:
+            extra = provider(ctx) or {}
+        except Exception as ex:  # pylint: disable=broad-except
+            logger.warning("run env provider failed: %s", ex)
+            return spec
+        if not extra:
+            return spec
+        merged = dict(spec.env or {})
+        for key, value in extra.items():
+            if key not in merged:
+                merged[key] = value
+        return spec.model_copy(update={"env": merged}, deep=True)
 
     @abstractmethod
     async def run_program(

@@ -1,8 +1,6 @@
 # Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
 #
-# Copyright (C) 2026 Tencent. All rights reserved.
-#
-# tRPC-Agent-Python is licensed under Apache-2.0.
+# Copyright @ 2025 Tencent.com
 """Request Processor implementation for TRPC Agent framework.
 
 This module provides the RequestProcessor class which handles building LlmRequest
@@ -24,6 +22,7 @@ from __future__ import annotations
 import copy
 import inspect
 import re
+from typing import Any
 from typing import List
 from typing import Optional
 
@@ -43,7 +42,12 @@ from ._history_processor import BranchFilterMode
 from ._history_processor import HistoryProcessor
 from ._history_processor import TimelineFilterMode
 from ._skill_processor import SkillsRequestProcessor
+from ._skill_processor import get_skill_processor_parameters
+from ._skills_tool_result_processor import SkillsToolResultRequestProcessor
+from ._skills_tool_result_processor import get_skill_tool_result_processor_parameters
 from ._tools_processor import ToolsProcessor
+from ._workspace_exec_processor import WorkspaceExecRequestProcessor
+from ._workspace_exec_processor import get_workspace_exec_processor_parameters
 
 
 class RequestProcessor:
@@ -124,11 +128,18 @@ class RequestProcessor:
             return error_event
 
         # 5. Add skills to the request
-        error_event = await self._add_skills_to_request(agent, ctx, request)
+        skill_parameters = get_skill_processor_parameters(ctx.agent_context)
+        error_event = await self._add_skills_to_request(agent, ctx, request, skill_parameters)
         if error_event:
             return error_event
 
-        # 6. Add conversation history (includes current user message in correct order)
+        # 6. Add workspace_exec guidance (after skills, before history)
+        workspace_exec_parameters = get_workspace_exec_processor_parameters(ctx.agent_context)
+        error_event = await self._add_workspace_exec_guidance(agent, ctx, request, workspace_exec_parameters)
+        if error_event:
+            return error_event
+
+        # 7. Add conversation history (includes current user message in correct order)
         if override_messages is not None:
             # Use provided messages directly (for TeamAgent member control)
             for content in override_messages:
@@ -150,12 +161,18 @@ class RequestProcessor:
             if error_event:
                 return error_event
 
-        # 7. Process planning if planner is available
+        # 8. Materialize loaded-skill content into tool results (post-history).
+        skill_tool_result_parameters = get_skill_tool_result_processor_parameters(ctx.agent_context)
+        error_event = await self._add_skills_tool_results(agent, ctx, request, skill_tool_result_parameters)
+        if error_event:
+            return error_event
+
+        # 9. Process planning if planner is available
         error_event = await self._add_planning_capabilities(agent, ctx, request)
         if error_event:
             return error_event
 
-        # 8. Process output schema if needed (when tools are also present)
+        # 10. Process output schema if needed (when tools are also present)
         error_event = await self._add_output_schema_capabilities(agent, ctx, request)
         if error_event:
             return error_event
@@ -303,8 +320,8 @@ class RequestProcessor:
 
         return None  # Success
 
-    async def _add_skills_to_request(self, agent: BaseAgent, ctx: InvocationContext,
-                                     request: LlmRequest) -> Optional[Event]:
+    async def _add_skills_to_request(self, agent: BaseAgent, ctx: InvocationContext, request: LlmRequest,
+                                     parameters: dict[str, Any]) -> Optional[Event]:
         """Add skills to the model request.
 
         Args:
@@ -318,13 +335,58 @@ class RequestProcessor:
         skill_repository = getattr(agent, 'skill_repository', None)
         if skill_repository:
             try:
-                skills_processor = SkillsRequestProcessor(skill_repository)
+                skills_processor = SkillsRequestProcessor(skill_repository, **parameters)
                 skill_names = await skills_processor.process_llm_request(ctx, request)
                 logger.debug("Processed %s skills for agent: %s", len(skill_names), agent.name)
                 return None  # Success
             except Exception as ex:  # pylint: disable=broad-except
                 logger.error("Error processing skills for agent %s: %s", agent.name, ex)
                 return self._create_error_event(ctx, "skill_processing_error", f"Failed to process skills: {str(ex)}")
+        return None
+
+    async def _add_workspace_exec_guidance(self, agent: BaseAgent, ctx: InvocationContext, request: LlmRequest,
+                                           parameters: dict[str, Any]) -> Optional[Event]:
+        """Inject workspace_exec guidance after skills and before history."""
+        try:
+            skill_repository = getattr(agent, "skill_repository", None)
+            repo_resolver = parameters.get("repo_resolver")
+            processor = WorkspaceExecRequestProcessor(
+                has_skills_repo=bool(skill_repository),
+                repo_resolver=repo_resolver if callable(repo_resolver) else None,
+            )
+            await processor.process_llm_request(ctx, request)
+            return None
+        except Exception as ex:  # pylint: disable=broad-except
+            logger.error("Error injecting workspace_exec guidance for agent %s: %s", agent.name, ex)
+            return self._create_error_event(
+                ctx,
+                "workspace_exec_guidance_error",
+                f"Failed to inject workspace_exec guidance: {str(ex)}",
+            )
+
+    async def _add_skills_tool_results(self, agent: BaseAgent, ctx: InvocationContext, request: LlmRequest,
+                                       parameters: dict[str, Any]) -> Optional[Event]:
+        """Materialize loaded skills into tool results after history is attached."""
+        if not parameters.get("tool_result_mode"):
+            return None
+        skill_repository = getattr(agent, "skill_repository", None)
+        if skill_repository is None:
+            return None
+        try:
+            processor = SkillsToolResultRequestProcessor(
+                skill_repository,
+                skip_fallback_on_session_summary=parameters.get("skip_fallback_on_session_summary", True),
+                repo_resolver=parameters.get("repo_resolver"),
+            )
+            await processor.process_llm_request(ctx, request)
+            return None
+        except Exception as ex:  # pylint: disable=broad-except
+            logger.error("Error processing skill tool results for agent %s: %s", agent.name, ex)
+            return self._create_error_event(
+                ctx,
+                "skill_tool_result_processing_error",
+                f"Failed to process skill tool results: {str(ex)}",
+            )
 
     async def _add_agent_transfer_capabilities(self, agent: BaseAgent, ctx: InvocationContext,
                                                request: LlmRequest) -> Optional[Event]:
@@ -879,7 +941,7 @@ class RequestProcessor:
         {session_key}, etc. with actual values from the session state.
 
         This implementation is inspired by adk-python's inject_session_state but
-        adapted for trpc_agent_sdk's architecture.
+        adapted for trpc_agent's architecture.
 
         Args:
             instruction: The instruction string containing template placeholders
@@ -920,7 +982,6 @@ class RequestProcessor:
                         # This follows the behavior of the original SafeFormatter approach
                         return match.group()
 
-            # Use regex pattern similar to adk-python but simpler for trpc_agent_sdk
             # This matches {variable_name} patterns including optional ones with ?
             pattern = r'\{[^{}]*\}'
             result = re.sub(pattern, replace_placeholder, instruction)

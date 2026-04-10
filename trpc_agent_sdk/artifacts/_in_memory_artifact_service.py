@@ -1,8 +1,6 @@
-# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+# -*- coding: utf-8 -*-
 #
-# Copyright (C) 2026 Tencent. All rights reserved.
-#
-# tRPC-Agent-Python is licensed under Apache-2.0.
+# Copyright @ 2025 Tencent.com
 #
 # Directly reuse the types from adk-python
 # Below code are copy and modified from https://github.com/google/adk-python.git
@@ -27,7 +25,6 @@ from typing_extensions import override
 
 from pydantic import BaseModel
 from pydantic import Field
-
 from trpc_agent_sdk.abc import ArtifactEntry
 from trpc_agent_sdk.abc import ArtifactId
 from trpc_agent_sdk.abc import ArtifactServiceABC
@@ -80,7 +77,7 @@ class InMemoryArtifactService(ArtifactServiceABC, BaseModel):
         else:
             raise ValueError("Not supported artifact type.")
 
-        self.artifacts[path].append(ArtifactEntry(data=artifact, artifact_version=artifact_version))
+        self.artifacts[path].append(ArtifactEntry(data=artifact, version=artifact_version))
         return version
 
     @override
@@ -122,9 +119,13 @@ class InMemoryArtifactService(ArtifactServiceABC, BaseModel):
                 version=parsed_uri.version,
             )
 
-        if (artifact_data == Part() or artifact_data == Part(text="")
-                or (artifact_data.inline_data and not artifact_data.inline_data.data)):
+        is_empty_part = artifact_data == Part()
+        is_empty_text_part = artifact_data == Part(text="")
+        has_empty_inline_data = bool(artifact_data.inline_data and not artifact_data.inline_data.data)
+        if is_empty_part or is_empty_text_part or has_empty_inline_data:
             return None
+        if artifact_entry.version.mime_type is None:
+            artifact_entry.version.mime_type = "application/octet-stream"
         return artifact_entry
 
     @override
@@ -175,7 +176,7 @@ class InMemoryArtifactService(ArtifactServiceABC, BaseModel):
         entries = self.artifacts.get(path)
         if not entries:
             return []
-        return [entry.artifact_version for entry in entries]
+        return [entry.version for entry in entries]
 
     @override
     async def get_artifact_version(
@@ -192,6 +193,6 @@ class InMemoryArtifactService(ArtifactServiceABC, BaseModel):
         if version is None:
             version = -1
         try:
-            return entries[version].artifact_version
+            return entries[version].version
         except IndexError:
             return None

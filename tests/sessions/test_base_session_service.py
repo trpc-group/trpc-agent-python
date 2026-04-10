@@ -122,7 +122,7 @@ class TestBaseSessionServiceAppendEvent:
         session = _make_session()
         event = _make_event(state_delta={f"{State.TEMP_PREFIX}temp_key": "temp_value", "regular": "value"})
         await svc.append_event(session, event)
-        assert f"{State.TEMP_PREFIX}temp_key" not in session.state
+        assert session.state.get(f"{State.TEMP_PREFIX}temp_key") == "temp_value"
         assert session.state.get("regular") == "value"
 
     async def test_append_event_no_actions(self):

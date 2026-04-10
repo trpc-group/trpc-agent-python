@@ -8,32 +8,33 @@
 
 from __future__ import annotations
 
-from typing import Any
 from typing import Optional
 
 from trpc_agent_sdk.context import InvocationContext
-from trpc_agent_sdk.log import logger
 
 from .._constants import SKILL_REPOSITORY_KEY
 from .._repository import BaseSkillRepository
 
 
-def skill_list_docs(tool_context: InvocationContext, skill_name: str) -> dict[str, Any]:
+def skill_list_docs(tool_context: InvocationContext, skill_name: str) -> list[str]:
     """List doc filenames for a skill.
+
     Args:
-        skill_name: The name of the skill to load.
+        skill_name: The name of the skill.
 
     Returns:
-        Object containing docs list and whether SKILL.md body is loaded.
+        Array of doc filenames.
     """
+    normalized_skill = (skill_name or "").strip()
+    if not normalized_skill:
+        raise ValueError("skill is required")
+
     repository: Optional[BaseSkillRepository] = tool_context.agent_context.get_metadata(SKILL_REPOSITORY_KEY)
     if repository is None:
-        raise ValueError("repository not found")
-    skill = repository.get(skill_name)
-    if skill is None:
-        logger.error("Skill %s not found", repr(skill_name))
-        return {"docs": [], "body_loaded": False}
-    return {
-        "docs": [resource.path for resource in skill.resources],
-        "body_loaded": bool(skill.body),
-    }
+        return []
+
+    try:
+        skill = repository.get(normalized_skill)
+    except ValueError as ex:
+        raise ValueError(f"unknown skill: {normalized_skill}") from ex
+    return [resource.path for resource in (skill.resources or [])]

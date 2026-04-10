@@ -3,19 +3,12 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Skill run tool for executing commands in skill workspaces.
-
-This module provides the SkillRunTool class which allows LLM to execute commands
-inside a skill workspace. It stages the entire skill directory and runs commands,
-aligned with the Go implementation at:
-https://github.com/trpc-group/trpc-agent-go/blob/main/tool/skill/run.go
-"""
+"""Skill run tool for executing commands in skill workspaces."""
 
 from __future__ import annotations
 
 import os
-import re
-import shlex
+import posixpath
 from pathlib import Path
 from typing import Any
 from typing import Dict
@@ -45,12 +38,19 @@ from trpc_agent_sdk.types import FunctionDeclaration
 from trpc_agent_sdk.types import Part
 from trpc_agent_sdk.types import Schema
 
-from .._constants import SKILL_LOADED_STATE_KEY_PREFIX
+from .._common import get_state_delta_value
+from .._common import loaded_state_key
+from .._constants import SKILL_ARTIFACTS_STATE_KEY
 from .._constants import SKILL_REPOSITORY_KEY
 from .._repository import BaseSkillRepository
 from .._utils import shell_quote
 from ..stager import SkillStageRequest
 from ..stager import Stager
+from ..stager import default_workspace_skill_dir
+from ._common import CreateWorkspaceNameCallback
+from ._common import default_create_ws_name_callback
+from ._common import get_staged_workspace_dir
+from ._common import inline_json_schema_refs
 from ._copy_stager import CopySkillStager
 
 # ---------------------------------------------------------------------------
@@ -68,7 +68,7 @@ _ENV_PATH = "PATH"
 _ENV_EDITOR = "EDITOR"
 _ENV_VISUAL = "VISUAL"
 
-_EDITOR_HELPER_DIR = ".trpc_agent_sdk"
+_EDITOR_HELPER_DIR = ".trpc_agent"
 _EDITOR_CONTENT_FILE = "editor_input.txt"
 _EDITOR_SCRIPT_FILE = "editor_write.sh"
 
@@ -115,35 +115,6 @@ _TEXT_MIME_EXACT = frozenset({
 # ---------------------------------------------------------------------------
 
 
-def _inline_json_schema_refs(schema: dict[str, Any]) -> dict[str, Any]:
-    """Inline $ref references in JSON Schema by replacing them with actual definitions."""
-    defs = schema.get('$defs', {})
-    if not defs:
-        return schema
-
-    def resolve_ref(obj: Any) -> Any:
-        if isinstance(obj, dict):
-            if '$ref' in obj:
-                ref_path = obj['$ref']
-                if ref_path.startswith('#/$defs/'):
-                    ref_name = ref_path.replace('#/$defs/', '')
-                    if ref_name in defs:
-                        resolved = resolve_ref(defs[ref_name])
-                        merged = {**resolved, **{k: v for k, v in obj.items() if k != '$ref'}}
-                        return merged
-                return obj
-            else:
-                return {k: resolve_ref(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [resolve_ref(item) for item in obj]
-        else:
-            return obj
-
-    result = {k: v for k, v in schema.items() if k != '$defs'}
-    result = resolve_ref(result)
-    return result
-
-
 def _is_text_mime(mime: str) -> bool:
     """Return True when *mime* is a text-like content type."""
     if not mime:
@@ -174,6 +145,51 @@ def _truncate_output(s: str) -> tuple[str, bool]:
 
 def _workspace_ref(name: str) -> str:
     return f"workspace://{name}" if name else ""
+
+
+def _normalize_input_dst(dst: str) -> str:
+    """Normalize declarative input destination like Go normalizeInputTo."""
+    s = (dst or "").strip().replace("\\", "/")
+    if not s:
+        return ""
+    cleaned = posixpath.normpath(s)
+    if cleaned in (".", "inputs"):
+        return ""
+    prefix = "inputs/"
+    if cleaned.startswith(prefix):
+        rest = cleaned[len(prefix):]
+        return posixpath.join(DIR_WORK, "inputs", rest)
+    return cleaned
+
+
+def _normalize_run_input(input_data: "SkillRunInput") -> "SkillRunInput":
+    """Normalize run input fields like Go normalizeRunInput."""
+    if not input_data.inputs:
+        return input_data
+    normalized_inputs: list[WorkspaceInputSpec] = []
+    for spec in input_data.inputs:
+        normalized_inputs.append(spec.model_copy(update={"dst": _normalize_input_dst(spec.dst)}))
+    return input_data.model_copy(update={"inputs": normalized_inputs})
+
+
+def _apply_run_artifacts_state_delta(ctx: InvocationContext, output: "SkillRunOutput") -> None:
+    """Write run artifact refs to state delta (Go RunTool.StateDelta parity)."""
+    tool_call_id = (ctx.function_call_id or "").strip()
+    if not tool_call_id or not output.artifact_files:
+        return
+    artifacts: list[dict[str, Any]] = []
+    for item in output.artifact_files:
+        name = (item.name or "").strip()
+        version = int(item.version)
+        if not name or version < 0:
+            continue
+        artifacts.append({"name": name, "version": version, "ref": f"artifact://{name}@{version}"})
+    if not artifacts:
+        return
+    ctx.actions.state_delta[SKILL_ARTIFACTS_STATE_KEY] = {
+        "tool_call_id": tool_call_id,
+        "artifacts": artifacts,
+    }
 
 
 def _filter_failed_empty_outputs(
@@ -215,7 +231,7 @@ def _split_command_line(cmd: str) -> list[str]:
         raise ValueError("skill_run: command is empty")
     for ch in _DISALLOWED_SHELL_META:
         if ch in cmd:
-            raise ValueError(f"skill_run: shell metacharacter {ch!r} is not allowed when "
+            raise ValueError(f"skill_run: shell meta character {ch!r} is not allowed when "
                              "command restrictions are enabled. Provide a single executable "
                              "with args only (no redirects/pipes/chaining).")
     args: list[str] = []
@@ -345,16 +361,6 @@ class SkillRunOutput(BaseModel):
         default_factory=list,
         description="Non-fatal warnings about truncation, persistence, or empty outputs",
     )
-    suggested_commands: Optional[list[str]] = Field(
-        default=None,
-        description=("Suggested runnable commands extracted from SKILL.md when the provided "
-                     "command is not found."),
-    )
-    suggested_tools: Optional[list[str]] = Field(
-        default=None,
-        description=("Suggested tool names from SKILL.md Tools section when command-not-found "
-                     "indicates the request should use tool calls instead of shell execution."),
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -375,11 +381,11 @@ class SkillRunTool(BaseTool):
         filters: Optional[List[BaseFilter]] = None,
         *,
         require_skill_loaded: bool = False,
-        block_inline_python_rewrite: bool = False,
         force_save_artifacts: bool = False,
         allowed_cmds: Optional[List[str]] = None,
         denied_cmds: Optional[List[str]] = None,
         skill_stager: Optional[Stager] = None,
+        create_ws_name_cb: Optional[CreateWorkspaceNameCallback] = None,
         **kwargs,
     ):
         """Initialize SkillRunTool.
@@ -389,9 +395,6 @@ class SkillRunTool(BaseTool):
             filters: Optional tool filters.
             require_skill_loaded: When True, skill_run raises unless skill_load was called first
                                   for this skill in the current session.
-            block_inline_python_rewrite: When True, reject ad-hoc ``python -c`` commands
-                                         if SKILL.md already provides script-based python
-                                         command examples (for example ``python3 scripts/foo.py``).
             force_save_artifacts: When True, always attempt to persist collected output files
                                   via the artifact service (if available).
             allowed_cmds: When set, only these command names (first token) are allowed.
@@ -414,7 +417,6 @@ class SkillRunTool(BaseTool):
         )
         self._repository = repository
         self._require_skill_loaded = require_skill_loaded
-        self._block_inline_python_rewrite = block_inline_python_rewrite
         self._force_save_artifacts = force_save_artifacts
         self._allowed_cmds: frozenset[str] = frozenset(c.strip() for c in (allowed_cmds or []) if c.strip())
         self._denied_cmds: frozenset[str] = frozenset(c.strip() for c in (denied_cmds or []) if c.strip())
@@ -429,9 +431,16 @@ class SkillRunTool(BaseTool):
         self._kwargs = kwargs
         self._run_tool_kwargs: dict = kwargs.pop("run_tool_kwargs", {})
         self._timeout = self._run_tool_kwargs.pop("timeout", 300.0)
+        self._create_ws_name_cb: Optional[CreateWorkspaceNameCallback] = \
+            create_ws_name_cb or default_create_ws_name_callback
 
         # Staging strategy: default is copy-based stager (mirrors Go newCopySkillStager)
         self._skill_stager: Stager = skill_stager or CopySkillStager()
+
+    @property
+    def require_skill_loaded(self) -> bool:
+        """Get the require_skill_loaded flag."""
+        return self._require_skill_loaded
 
     @property
     def skill_stager(self) -> Stager:
@@ -444,8 +453,8 @@ class SkillRunTool(BaseTool):
 
     @override
     def _get_declaration(self) -> FunctionDeclaration:
-        params_schema = _inline_json_schema_refs(SkillRunInput.model_json_schema())
-        response_schema = _inline_json_schema_refs(SkillRunOutput.model_json_schema())
+        params_schema = inline_json_schema_refs(SkillRunInput.model_json_schema())
+        response_schema = inline_json_schema_refs(SkillRunOutput.model_json_schema())
         desc = ("Run a command inside a skill workspace. "
                 "Use it only for commands required by the skill docs (not for generic shell tasks). "
                 "User-uploaded file inputs are staged under $WORK_DIR/inputs (also visible as inputs/). "
@@ -482,11 +491,10 @@ class SkillRunTool(BaseTool):
     def _is_skill_loaded(self, ctx: InvocationContext, skill_name: str) -> bool:
         """Return True when the skill was loaded in the current session."""
         try:
-            key = f"{SKILL_LOADED_STATE_KEY_PREFIX}{skill_name.strip()}"
-            val = ctx.session_state.get(key)
-            return bool(val)
+            key = loaded_state_key(ctx, skill_name.strip())
+            return bool(get_state_delta_value(ctx, key))
         except Exception:  # pylint: disable=broad-except
-            return True  # default to allowed when state is not accessible
+            return False
 
     # ------------------------------------------------------------------
     # Editor helper
@@ -639,6 +647,10 @@ class SkillRunTool(BaseTool):
             inputs = SkillRunInput.model_validate(args)
         except Exception as ex:  # pylint: disable=broad-except
             raise ValueError(f"Invalid skill_run arguments: {ex}") from ex
+        if not (inputs.skill or "").strip() or not (inputs.command or "").strip():
+            raise ValueError("skill and command are required")
+        inputs = inputs.model_copy(update={"skill": inputs.skill.strip(), "command": inputs.command.strip()})
+        inputs = _normalize_run_input(inputs)
 
         # require_skill_loaded gate
         if self._require_skill_loaded and not self._is_skill_loaded(tool_context, inputs.skill):
@@ -653,25 +665,27 @@ class SkillRunTool(BaseTool):
 
         repository = self._get_repository(tool_context)
 
-        session_id = inputs.skill
-        if tool_context.session and tool_context.session.id:
-            session_id = tool_context.session.id
-
+        workspace_id = self._create_ws_name_cb(tool_context)
         workspace_runtime = repository.workspace_runtime
         manager = workspace_runtime.manager(tool_context)
-        ws = await manager.create_workspace(session_id, tool_context)
+        ws = await manager.create_workspace(workspace_id, tool_context)
 
-        # Stage skill via the pluggable stager strategy
-        stage_result = await self._skill_stager.stage_skill(
-            SkillStageRequest(
-                skill_name=inputs.skill,
-                repository=repository,
-                workspace=ws,
-                ctx=tool_context,
-                engine=workspace_runtime,
-                timeout=self._timeout,
-            ))
-        workspace_skill_dir = stage_result.workspace_skill_dir
+        # Static stage is handled by skill_load. Keep fallback staging here for
+        # backward compatibility when callers skip skill_load.
+        if self._is_skill_loaded(tool_context, inputs.skill):
+            workspace_skill_dir = get_staged_workspace_dir(tool_context, inputs.skill)
+            if not workspace_skill_dir:
+                workspace_skill_dir = default_workspace_skill_dir(inputs.skill)
+        else:
+            stage_result = await self._skill_stager.stage_skill(
+                SkillStageRequest(
+                    skill_name=inputs.skill,
+                    repository=repository,
+                    workspace=ws,
+                    ctx=tool_context,
+                    timeout=self._timeout,
+                ))
+            workspace_skill_dir = stage_result.workspace_skill_dir
 
         if inputs.inputs:
             fs = workspace_runtime.fs(tool_context)
@@ -705,16 +719,6 @@ class SkillRunTool(BaseTool):
 
         # Select primary output
         primary = _select_primary_output(files)
-        suggested_commands = self._suggest_commands_for_missing_command(
-            result,
-            repository,
-            inputs.skill,
-        )
-        suggested_tools = self._suggest_tools_for_missing_command(
-            result,
-            repository,
-            inputs.skill,
-        )
 
         output = SkillRunOutput(
             stdout=stdout,
@@ -725,19 +729,19 @@ class SkillRunTool(BaseTool):
             output_files=files,
             primary_output=primary,
             warnings=warnings,
-            suggested_commands=suggested_commands,
-            suggested_tools=suggested_tools,
         )
 
         await self._attach_artifacts_if_requested(tool_context, ws, inputs, output, files)
         self._merge_manifest_artifact_refs(manifest, output)
 
         # omit_inline_content
-        if inputs.omit_inline_content and output.artifact_files:
+        if inputs.omit_inline_content:
             for f in output.output_files:
                 f.content = ""
             if output.primary_output:
                 output.primary_output.content = ""
+
+        _apply_run_artifacts_state_delta(tool_context, output)
 
         return output.model_dump(exclude_none=True)
 
@@ -761,12 +765,14 @@ class SkillRunTool(BaseTool):
         # Inject skill-specific env from repository (e.g. api_key → primary_env)
         repository = self._get_repository(ctx)
         try:
-            skill_env: dict[str, str] = repository.skill_run_env(input_data.skill)
+            skill_env: dict[str, str] = repository.skill_run_env(ctx, input_data.skill)
             for k, v in skill_env.items():
                 k = k.strip()
                 if not k or not v.strip():
                     continue
                 if k in env:  # don't override explicit tool-call env
+                    continue
+                if os.environ.get(k, "").strip():  # don't override host env
                     continue
                 if k.upper() in _BLOCKED_SKILL_ENV_KEYS:
                     continue
@@ -778,9 +784,6 @@ class SkillRunTool(BaseTool):
         await self._prepare_editor_env(ctx, ws, env, input_data.editor_text)
 
         # Build command (with venv activation or command restrictions)
-        blocked = self._precheck_inline_python_rewrite(repository, input_data)
-        if blocked is not None:
-            return blocked
         cmd, cmd_args = self._build_command(input_data.command, ws.path, cwd)
 
         workspace_runtime = repository.workspace_runtime
@@ -798,299 +801,9 @@ class SkillRunTool(BaseTool):
             ctx,
         )
         if ret.exit_code != 0:
-            ret = self._with_missing_command_hint(ret, input_data)
-            ret = self._with_skill_doc_command_hint(ret, repository, input_data)
-            ret = self._with_missing_entrypoint_hint(ret, input_data, ws, cwd)
-            logger.info("Failed to run program: %s", ret.stderr)
+            raw_stderr = ret.stderr or ""
+            logger.info("Failed to run program: exit_code=%s, stderr=%s", ret.exit_code, raw_stderr.strip())
         return ret
-
-    def _precheck_inline_python_rewrite(
-        self,
-        repository: BaseSkillRepository,
-        input_data: SkillRunInput,
-    ) -> Optional[WorkspaceRunResult]:
-        """Optionally block ad-hoc python -c when SKILL.md has script examples."""
-        if not self._block_inline_python_rewrite:
-            return None
-        cmd = (input_data.command or "").strip()
-        if not re.match(r"^python(?:\d+(?:\.\d+)?)?\s+-c\b", cmd):
-            return None
-        try:
-            sk = repository.get(input_data.skill)
-        except Exception:  # pylint: disable=broad-except
-            return None
-        if sk is None:
-            return None
-        examples = self._extract_shell_examples_from_skill_body(sk.body, limit=8)
-        script_examples = [
-            e for e in examples if re.match(r"^python(?:\d+(?:\.\d+)?)?\s+scripts/[^\s]+(?:\s|$)", e.strip())
-        ]
-        if not script_examples:
-            return None
-        stderr = ("skill_run rejected this ad-hoc inline python command.\n"
-                  "This skill already provides script-based Python command examples in SKILL.md.\n"
-                  "Use one of these commands exactly instead of `python -c` rewrites:\n" +
-                  "\n".join(f"- {c}" for c in script_examples) + "\n")
-        return WorkspaceRunResult(
-            stdout="",
-            stderr=stderr,
-            exit_code=2,
-            duration=0,
-            timed_out=False,
-        )
-
-    @staticmethod
-    def _with_missing_command_hint(ret: WorkspaceRunResult, input_data: SkillRunInput) -> WorkspaceRunResult:
-        """Add a targeted hint when the shell command does not exist."""
-        stderr_lower = (ret.stderr or "").lower()
-        is_missing_cmd = ret.exit_code == 127 and ("command not found" in stderr_lower or
-                                                   "not recognized as an internal or external command" in stderr_lower)
-        if not is_missing_cmd:
-            return ret
-        hint = ("\n\nSkill command hint:\n"
-                f"- The command `{input_data.command}` was not found in this skill workspace.\n"
-                "- Do not invent command names.\n"
-                "- Read the loaded `SKILL.md` and execute one of its exact shell examples.\n"
-                "- If needed, call `skill_load` first so the full skill body is injected "
-                "before calling `skill_run`.\n")
-        return ret.model_copy(update={"stderr": f"{ret.stderr}{hint}"})
-
-    @staticmethod
-    def _extract_shell_examples_from_skill_body(body: str, limit: int = 5) -> list[str]:
-        """Extract likely runnable shell command lines from SKILL.md body."""
-        if not body:
-            return []
-        out: list[str] = []
-        seen: set[str] = set()
-        lines = body.splitlines()
-
-        def maybe_add(cmd: str) -> None:
-            cmd = re.sub(r"\s+", " ", (cmd or "").strip())
-            if not cmd:
-                return
-            if cmd in seen:
-                return
-            # Keep only command-like lines.
-            if not re.match(r"^[A-Za-z0-9_./$\"'`-]", cmd):
-                return
-            # Skip function-style examples like tool_name(arg="..."), which are
-            # LLM tool calls rather than shell commands.
-            if re.match(r"^[A-Za-z_][A-Za-z0-9_]*\s*\(.*\)\s*$", cmd):
-                return
-            seen.add(cmd)
-            out.append(cmd)
-
-        # 1) Parse markdown fenced code blocks.
-        in_fence = False
-        for raw in lines:
-            line = raw.strip()
-            if line.startswith("```"):
-                in_fence = not in_fence
-                continue
-            if not in_fence:
-                continue
-            if not line or line.startswith("#"):
-                continue
-            if line in ("PY", "EOF") or line.startswith(("-", "*")):
-                continue
-            maybe_add(line)
-            if len(out) >= limit:
-                return out
-
-        # 2) Parse "Command:" sections with indented multi-line commands.
-        i = 0
-        while i < len(lines) and len(out) < limit:
-            cur = lines[i].strip()
-            if cur.lower() != "command:":
-                i += 1
-                continue
-            i += 1
-            block: list[str] = []
-            while i < len(lines):
-                raw = lines[i]
-                s = raw.strip()
-                if not s:
-                    if block:
-                        break
-                    i += 1
-                    continue
-                # Next section marker
-                if s.lower() in ("command:", "output files", "overview", "examples", "tools:"):
-                    break
-                if re.match(r"^\d+\)", s):
-                    break
-                # Command content is commonly indented in SKILL.md examples.
-                if raw.startswith(" ") or raw.startswith("\t"):
-                    block.append(s)
-                    i += 1
-                    continue
-                if block:
-                    break
-                i += 1
-            if block:
-                merged = " ".join(part.rstrip("\\").strip() for part in block)
-                maybe_add(merged)
-        return out[:limit]
-
-    def _with_skill_doc_command_hint(
-        self,
-        ret: WorkspaceRunResult,
-        repository: BaseSkillRepository,
-        input_data: SkillRunInput,
-    ) -> WorkspaceRunResult:
-        """Append SKILL.md command examples when command is not found."""
-        stderr = ret.stderr or ""
-        stderr_lower = stderr.lower()
-        is_missing_cmd = ret.exit_code == 127 and ("command not found" in stderr_lower or
-                                                   "not recognized as an internal or external command" in stderr_lower)
-        if not is_missing_cmd:
-            return ret
-        try:
-            sk = repository.get(input_data.skill)
-        except Exception:  # pylint: disable=broad-except
-            return ret
-        examples = self._extract_shell_examples_from_skill_body(sk.body, limit=5)
-        tools = list(getattr(sk, "tools", []) or [])
-        if not examples and not tools:
-            return ret
-        hint_parts: list[str] = []
-        if examples:
-            hint_parts.append("\n\nSKILL.md command examples:\n" + "\n".join(f"- {cmd}" for cmd in examples) + "\n")
-        if tools:
-            hint_parts.append("\nSKILL.md tools suggest this is a tool-call workflow:\n" +
-                              "\n".join(f"- {name}" for name in tools) + "\n" +
-                              "- Do not run these tool names via `skill_run` shell commands.\n" +
-                              "- Call those tools directly (e.g. function/tool call) after `skill_load`.\n")
-        hint = "".join(hint_parts)
-        return ret.model_copy(update={"stderr": f"{stderr}{hint}"})
-
-    @staticmethod
-    def _is_missing_command_result(ret: WorkspaceRunResult) -> bool:
-        """Return True when stderr indicates command-not-found failure."""
-        stderr_lower = (ret.stderr or "").lower()
-        return ret.exit_code == 127 and ("command not found" in stderr_lower
-                                         or "not recognized as an internal or external command" in stderr_lower)
-
-    def _suggest_commands_for_missing_command(
-        self,
-        ret: WorkspaceRunResult,
-        repository: BaseSkillRepository,
-        skill_name: str,
-    ) -> Optional[list[str]]:
-        """Return SKILL.md command suggestions for missing-command failures."""
-        if not self._is_missing_command_result(ret):
-            return None
-        try:
-            sk = repository.get(skill_name)
-        except Exception:  # pylint: disable=broad-except
-            return None
-        suggestions = self._extract_shell_examples_from_skill_body(sk.body, limit=5)
-        return suggestions or None
-
-    def _suggest_tools_for_missing_command(
-        self,
-        ret: WorkspaceRunResult,
-        repository: BaseSkillRepository,
-        skill_name: str,
-    ) -> Optional[list[str]]:
-        """Return SKILL.md tool names when command-not-found implies tool calls."""
-        if not self._is_missing_command_result(ret):
-            return None
-        try:
-            sk = repository.get(skill_name)
-        except Exception:  # pylint: disable=broad-except
-            return None
-        tools = list(getattr(sk, "tools", []) or [])
-        return tools or None
-
-    @staticmethod
-    def _extract_command_path_candidates(command: str) -> list[str]:
-        """Extract likely relative path tokens from a shell command."""
-        try:
-            tokens = shlex.split(command, posix=True)
-        except ValueError:
-            tokens = command.split()
-        out: list[str] = []
-        seen: set[str] = set()
-        for tok in tokens:
-            s = (tok or "").strip()
-            if not s or s.startswith("-"):
-                continue
-            # Keep relative path-like tokens only.
-            is_path_like = "/" in s or s.endswith((".py", ".sh", ".pl", ".rb", ".js", ".ts"))
-            if not is_path_like or os.path.isabs(s):
-                continue
-            if s in seen:
-                continue
-            seen.add(s)
-            out.append(s)
-        return out
-
-    @staticmethod
-    def _list_entrypoint_suggestions(run_dir: Path, limit: int = 20) -> list[str]:
-        """List likely runnable files from common locations under the current cwd."""
-        suggestions: list[str] = []
-        seen: set[str] = set()
-        roots = [
-            run_dir,
-            run_dir / "scripts",
-            run_dir / "bin",
-            run_dir / "tools",
-        ]
-        for root in roots:
-            try:
-                if not root.is_dir():
-                    continue
-                for p in sorted(root.rglob("*")):
-                    if len(suggestions) >= limit:
-                        return suggestions
-                    if not p.is_file():
-                        continue
-                    rel = p.relative_to(run_dir).as_posix()
-                    # Prefer obviously runnable entries.
-                    is_runnable = os.access(p.as_posix(), os.X_OK) or rel.endswith(
-                        (".py", ".sh", ".pl", ".rb", ".js", ".ts"))
-                    if not is_runnable or rel in seen:
-                        continue
-                    seen.add(rel)
-                    suggestions.append(rel)
-            except Exception:  # pylint: disable=broad-except
-                continue
-        return suggestions
-
-    @staticmethod
-    def _with_missing_entrypoint_hint(
-        ret: WorkspaceRunResult,
-        input_data: SkillRunInput,
-        ws: WorkspaceInfo,
-        cwd: str,
-    ) -> WorkspaceRunResult:
-        """Add a generic hint when command references missing relative entrypoints."""
-        stderr = ret.stderr or ""
-        stderr_lower = stderr.lower()
-        if ret.exit_code == 0:
-            return ret
-        if "no such file or directory" not in stderr_lower and "can't open file" not in stderr_lower:
-            return ret
-        missing_candidates = SkillRunTool._extract_command_path_candidates(input_data.command)
-        if not missing_candidates:
-            return ret
-
-        run_dir = Path(ws.path) / cwd
-        # Show only candidates that are truly missing under cwd.
-        missing = [p for p in missing_candidates if not (run_dir / p).exists()]
-        if not missing:
-            return ret
-        available = SkillRunTool._list_entrypoint_suggestions(run_dir, limit=20)
-        if not available:
-            return ret
-
-        hint = ("\n\nSkill entrypoint hint:\n"
-                f"- Missing relative path(s) in command: {', '.join(f'`{m}`' for m in missing)}\n"
-                f"- Runnable file candidates from current skill cwd: {', '.join(available)}\n"
-                "- Do not invent file names or paths.\n"
-                "- Read the loaded `SKILL.md` and run one of those commands exactly.\n")
-        return ret.model_copy(update={"stderr": f"{stderr}{hint}"})
 
     def _resolve_cwd(self, cwd: str, skill_dir: str) -> str:
         """Resolve the working directory relative to the workspace root.

@@ -17,16 +17,22 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from trpc_agent_sdk.skills._constants import SKILL_CONFIG_KEY
 from trpc_agent_sdk.skills.tools._skill_select_tools import (
     SkillSelectToolsResult,
     skill_select_tools,
 )
+from trpc_agent_sdk.skills._common import tool_state_key
+from trpc_agent_sdk.skills._skill_config import DEFAULT_SKILL_CONFIG
 
 
 def _make_ctx(state_delta=None, session_state=None):
     ctx = MagicMock()
     ctx.actions.state_delta = state_delta or {}
     ctx.session_state = session_state or {}
+    ctx.agent_name = ""
+    ctx.agent_context.get_metadata = MagicMock(
+        side_effect=lambda key, default=None: DEFAULT_SKILL_CONFIG if key == SKILL_CONFIG_KEY else default)
     return ctx
 
 
@@ -74,18 +80,16 @@ class TestSkillSelectTools:
         assert result.selected_tools == ["tool_a", "tool_b"]
 
     def test_add_mode(self):
-        ctx = _make_ctx(session_state={
-            "temp:skill:tools:test-skill": json.dumps(["existing_tool"]),
-        })
+        ctx = _make_ctx()
+        ctx.session_state = {tool_state_key(ctx, "test-skill"): json.dumps(["existing_tool"])}
         result = skill_select_tools(ctx, "test-skill", tools=["new_tool"], mode="add")
         assert result.mode == "add"
         assert "existing_tool" in result.selected_tools
         assert "new_tool" in result.selected_tools
 
     def test_clear_mode(self):
-        ctx = _make_ctx(session_state={
-            "temp:skill:tools:test-skill": json.dumps(["tool"]),
-        })
+        ctx = _make_ctx()
+        ctx.session_state = {tool_state_key(ctx, "test-skill"): json.dumps(["tool"])}
         result = skill_select_tools(ctx, "test-skill", mode="clear")
         assert result.mode == "clear"
         assert result.selected_tools == []
@@ -98,5 +102,5 @@ class TestSkillSelectTools:
     def test_updates_state_delta(self):
         ctx = _make_ctx()
         skill_select_tools(ctx, "test-skill", tools=["t1"], mode="replace")
-        key = "temp:skill:tools:test-skill"
+        key = tool_state_key(ctx, "test-skill")
         assert key in ctx.actions.state_delta

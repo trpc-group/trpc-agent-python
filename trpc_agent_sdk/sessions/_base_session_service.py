@@ -84,12 +84,27 @@ class BaseSessionService(SessionServiceABC):
         """Appends an event to a session object."""
         if event.partial:
             return event
+        # Apply temp-scoped state to in-memory session before trimming event delta,
+        # so same-invocation consumers can still read temp values.
+        self._apply_temp_state(session, event)
         event = self._trim_temp_delta_state(event)
         self.__update_session_state(session, event)
         session.add_event(event,
                           event_ttl_seconds=self._session_config.event_ttl_seconds,
                           max_events=self._session_config.max_events)
         return event
+
+    def _apply_temp_state(self, session: Session, event: Event) -> None:
+        """Apply temp-scoped state delta to in-memory session state only.
+
+        Temp state is intentionally ephemeral: it should be visible within
+        current invocation memory but not persisted into stored event deltas.
+        """
+        if not event.actions or not event.actions.state_delta:
+            return
+        for key, value in event.actions.state_delta.items():
+            if key.startswith(State.TEMP_PREFIX):
+                session.state[key] = value
 
     def _trim_temp_delta_state(self, event: Event) -> Event:
         """Removes temporary state delta keys from the event."""
