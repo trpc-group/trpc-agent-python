@@ -11,4 +11,4 @@ from trpc_agent_sdk.version import __version__
 
 def test_version():
     """Test the version module."""
-    assert __version__ == '0.1.0'
+    assert __version__ == '1.0.0'

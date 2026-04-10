@@ -1,0 +1,102 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: '0 17 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  lint:
+    runs-on: [self-hosted, trpc-agent-python-ci]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed Python files
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            FILES=$(git diff --name-only --diff-filter=ACM origin/${{ github.base_ref }}...HEAD -- '*.py' | grep '^trpc_agent_sdk/' || true)
+          else
+            FILES=$(git diff --name-only --diff-filter=ACM HEAD~1...HEAD -- '*.py' | grep '^trpc_agent_sdk/' || true)
+          fi
+          if [ -z "$FILES" ]; then
+            echo "has_files=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_files=true" >> "$GITHUB_OUTPUT"
+            echo "$FILES" > "$RUNNER_TEMP/changed_py_files.txt"
+            echo "Changed Python files:"
+            echo "$FILES"
+          fi
+
+      - name: Check formatting with YAPF
+        if: steps.changed.outputs.has_files == 'true'
+        run: |
+          FILES=$(cat "$RUNNER_TEMP/changed_py_files.txt" | tr '\n' ' ')
+          diff_output=$(yapf --diff $FILES) || true
+          if [ -n "$diff_output" ]; then
+            echo "$diff_output"
+            echo "::error::Code formatting check failed for changed files. Run 'yapf -i <file>' to fix."
+            exit 1
+          fi
+
+      - name: Lint with flake8
+        if: steps.changed.outputs.has_files == 'true'
+        run: |
+          FILES=$(cat "$RUNNER_TEMP/changed_py_files.txt" | tr '\n' ' ')
+          flake8 $FILES
+
+  test:
+    runs-on: [self-hosted, trpc-agent-python-ci]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install package and dependencies
+        run: |
+          pip install -r requirements-test.txt
+
+      - name: Run tests with coverage
+        # run: pytest --cov=trpc_agent_sdk --cov-report=xml --cov-report=term tests/
+        run: pytest --cov=trpc_agent_sdk --cov-report=xml --cov-report=term --cov-fail-under=80 tests/
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          file: coverage.xml
+
+  build:
+    runs-on: [self-hosted, trpc-agent-python-ci]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build package
+        run: |
+          pip install build
+          python -m build
+
+      - name: Verify package
+        run: |
+          pip install dist/*.whl
+          python -c "import trpc_agent_sdk; print('Import OK')"

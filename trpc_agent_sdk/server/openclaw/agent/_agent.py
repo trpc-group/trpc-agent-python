@@ -84,8 +84,6 @@ def create_model(config: ClawConfig) -> LLMModel:
     return model
 
 
-
-
 def create_worker_agent(
     config: ClawConfig,
     model: LLMModel,

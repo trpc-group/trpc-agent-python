@@ -23,7 +23,7 @@ from trpc_agent_sdk.server.openclaw.config._constants import (
     MEMORY_FILE_NAME,
     SOUL_FILE_NAME,
     TOOL_FILE_NAME,
-    TRPC_AGENT_CLAW_CONFIG,
+    TRPC_CLAW_CONFIG,
     USER_FILE_NAME,
 )
 
@@ -234,15 +234,15 @@ class TestLoadConfig:
             yaml.dump({"agent": {"workspace": str(ws), "api_key": "envkey"}}),
             encoding="utf-8",
         )
-        monkeypatch.setenv(TRPC_AGENT_CLAW_CONFIG, str(cfg_path))
+        monkeypatch.setenv(TRPC_CLAW_CONFIG, str(cfg_path))
         cfg = load_config()
         assert cfg.model_api_key == "envkey"
 
     @patch("trpc_agent_sdk.server.openclaw.config._config.set_config_path")
-    @patch("trpc_agent_sdk.server.openclaw.config._config.DEFAULT_TRPC_AGENT_CLAW_DIR")
+    @patch("trpc_agent_sdk.server.openclaw.config._config.DEFAULT_TRPC_CLAW_DIR")
     @patch("trpc_agent_sdk.server.openclaw.config._config.DEFAULT_CONFIG_PATH")
     def test_default_path_fallback(self, mock_default_path, mock_default_dir, mock_set_config, tmp_path, monkeypatch):
-        monkeypatch.delenv(TRPC_AGENT_CLAW_CONFIG, raising=False)
+        monkeypatch.delenv(TRPC_CLAW_CONFIG, raising=False)
         default_dir = tmp_path / ".trpc_agent_claw"
         default_dir.mkdir()
         mock_default_dir.exists.return_value = True

@@ -648,7 +648,7 @@ class TestDoGet:
         handler = self._get_handler("/")
         handler.do_GET()
         written = handler.wfile.getvalue().decode("utf-8")
-        assert "<html>" in written
+        assert "<html" in written
 
     def test_api_meta(self):
         rt = _make_runtime()

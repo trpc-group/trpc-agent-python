@@ -109,7 +109,7 @@ class TestCreateWorkerAgent:
 
         mock_llm_agent.assert_called_once()
         call_kwargs = mock_llm_agent.call_args
-        assert call_kwargs[1]["name"] == "trpc-claw-py_worker"
+        assert call_kwargs[1]["name"] == "trpc_claw_worker"
         assert len(call_kwargs[1]["tools"]) == 8
         assert result is mock_llm_agent.return_value
 
@@ -166,7 +166,7 @@ class TestCreateAgent:
 
         mock_llm_agent.assert_called_once()
         call_kwargs = mock_llm_agent.call_args[1]
-        assert call_kwargs["name"] == "trpc-claw-py"
+        assert call_kwargs["name"] == "trpc_claw"
         assert call_kwargs["sub_agents"] == [worker]
         assert call_kwargs["skill_repository"] is mock_skill_ts.repository
         assert result is mock_llm_agent.return_value
