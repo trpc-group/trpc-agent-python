@@ -8,8 +8,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import AsyncGenerator, List
-from unittest.mock import AsyncMock, Mock, patch
+from typing import List
+from unittest.mock import Mock
 
 import pytest
 

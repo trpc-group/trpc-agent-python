@@ -16,7 +16,6 @@ import abc
 from typing import Optional
 
 from pydantic import BaseModel
-
 from trpc_agent_sdk.context import InvocationContext
 
 from ._base_workspace_runtime import BaseWorkspaceRuntime
@@ -81,6 +80,9 @@ class BaseCodeExecutor(BaseModel):
 
     workspace_runtime: Optional[BaseWorkspaceRuntime] = None
     """The workspace runtime for the code execution."""
+
+    ignore_codes: list[str] = []
+    """The list of codes to ignore in the code execution."""
 
     @abc.abstractmethod
     async def execute_code(

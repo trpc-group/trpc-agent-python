@@ -27,6 +27,7 @@ from trpc_agent_sdk.code_executors import WorkspacePutFileInfo
 from trpc_agent_sdk.code_executors import WorkspaceRunProgramSpec
 from trpc_agent_sdk.code_executors import WorkspaceStageOptions
 from trpc_agent_sdk.context import InvocationContext
+from trpc_agent_sdk.log import logger
 
 from .._types import SkillMetadata
 from .._types import SkillWorkspaceMetadata
@@ -46,11 +47,13 @@ _DEFAULT_HELPER_TIMEOUT = 5.0
 
 class Stager:
     """Materializes skill package contents into a workspace.
-
-    Mirrors Go's ``internal/skillstage.Stager``.  Create an instance with
-    ``Stager()`` (or the module-level helper :func:`new`) and call
-    :meth:`stage_skill` from async tool code.
+    Stager is responsible for staging the skill package contents into a workspace.
     """
+
+    def __init__(self) -> None:
+        # Deduplicate noisy link warnings within one process lifetime.
+        # Key format: "<invocation_id>|<skill_name>|<stderr>".
+        self._link_error_warned_keys: set[str] = set()
 
     # ------------------------------------------------------------------
     # Public API
@@ -76,7 +79,7 @@ class Stager:
         ctx = request.ctx
         ws = request.workspace
         root = request.repository.path(request.skill_name)
-        runtime = request.engine or request.repository.workspace_runtime
+        runtime = request.repository.workspace_runtime
         name = request.skill_name
         digest = compute_dir_digest(root)
         md = await self.load_workspace_metadata(ctx, runtime, ws)
@@ -277,7 +280,17 @@ class Stager:
 
         cmd = (f"set -e; cd {shell_quote(skill_root)}"
                f"; rm -rf out work {_SKILL_DIR_INPUTS} {shell_quote(_SKILL_DIR_VENV)}"
-               f"; mkdir -p {shell_quote(to_inputs)} {shell_quote(_SKILL_DIR_VENV)}"
+               f"; if [ -L {shell_quote(to_work)} ]; then"
+               f" rm -rf {shell_quote(to_work)}; fi"
+               f"; if [ -e {shell_quote(to_work)} ] && [ ! -d {shell_quote(to_work)} ]; then"
+               f" rm -rf {shell_quote(to_work)}; fi"
+               f"; if [ ! -d {shell_quote(to_work)} ]; then mkdir -p {shell_quote(to_work)}; fi"
+               f"; if [ -L {shell_quote(to_inputs)} ]; then"
+               f" rm -rf {shell_quote(to_inputs)}; fi"
+               f"; if [ -e {shell_quote(to_inputs)} ] && [ ! -d {shell_quote(to_inputs)} ]; then"
+               f" rm -rf {shell_quote(to_inputs)}; fi"
+               f"; if [ ! -d {shell_quote(to_inputs)} ]; then mkdir -p {shell_quote(to_inputs)}; fi"
+               f"; mkdir -p {shell_quote(_SKILL_DIR_VENV)}"
                f"; ln -sfn {shell_quote(to_out)} out"
                f"; ln -sfn {shell_quote(to_work)} work"
                f"; ln -sfn {shell_quote(to_inputs)} {_SKILL_DIR_INPUTS}")
@@ -294,8 +307,18 @@ class Stager:
             ctx,
         )
         if ret.exit_code != 0:
-            from trpc_agent_sdk.log import logger  # noqa: PLC0415
-            logger.info("Stager._link_workspace_dirs failed for %r: %s", name, ret.stderr)
+            inv_id = ctx.invocation_id
+            err = (ret.stderr or "").strip()
+            dedupe_key = f"{inv_id}|{name}|{err}"
+            if dedupe_key in self._link_error_warned_keys:
+                logger.debug("Stager._link_workspace_dirs retry failed for %r: %s", name, ret.stderr)
+                return
+
+            self._link_error_warned_keys.add(dedupe_key)
+            # Keep the set bounded for long-lived processes.
+            if len(self._link_error_warned_keys) > 2000:
+                self._link_error_warned_keys.clear()
+            logger.warning("Stager._link_workspace_dirs failed for %r: %s", name, ret.stderr)
 
     async def _read_only_except_symlinks(
         self,
@@ -327,7 +350,6 @@ class Stager:
             ctx,
         )
         if ret.exit_code != 0:
-            from trpc_agent_sdk.log import logger  # noqa: PLC0415
             logger.info("Stager._read_only_except_symlinks failed for %r: %s", dest, ret.stderr)
 
     @classmethod

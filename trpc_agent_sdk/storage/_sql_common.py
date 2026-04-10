@@ -187,6 +187,8 @@ class DynamicPickleType(TypeDecorator):
     def load_dialect_impl(self, dialect: Dialect) -> TypeDecorator:
         if dialect.name == "spanner+spanner":
             return dialect.type_descriptor(SpannerPickleType)  # type: ignore
+        if dialect.name == "mysql":
+            return dialect.type_descriptor(mysql.LONGBLOB)  # type: ignore
         return self.impl
 
     def process_bind_param(self, value: Any, dialect: Dialect) -> Any:

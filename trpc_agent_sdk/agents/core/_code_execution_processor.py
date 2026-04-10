@@ -1,8 +1,6 @@
-# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+# -*- coding: utf-8 -*-
 #
-# Copyright (C) 2026 Tencent. All rights reserved.
-#
-# tRPC-Agent-Python is licensed under Apache-2.0.
+# Copyright @ 2025 Tencent.com
 """Code execution processor for TRPC Agent framework.
 
 This module provides code execution processing capabilities for LLM agents,
@@ -264,7 +262,8 @@ async def _run_post_processor(
     # content to the part with the first code block.
     response_content = llm_response.content
     code_blocks = CodeExecutionUtils.extract_code_and_truncate_content(response_content,
-                                                                       code_executor.code_block_delimiters)
+                                                                       code_executor.code_block_delimiters,
+                                                                       code_executor.ignore_codes)
     # Terminal state: no code to execute.
     if not code_blocks:
         return
@@ -331,7 +330,7 @@ def _extract_and_replace_inline_files(
 
             # Replace the inline data file with a file name placeholder.
             mime_type = part.inline_data.mime_type
-            file_name = f"data_{i+1}_{j+1}" + _DATA_FILE_UTIL_MAP[mime_type].extension
+            file_name = f"data_{i + 1}_{j + 1}{_DATA_FILE_UTIL_MAP[mime_type].extension}"
             llm_request.contents[i].parts[j] = Part(text="\nAvailable file: `%s`\n" % file_name)
 
             # Add the inline data as input file to the code executor context.

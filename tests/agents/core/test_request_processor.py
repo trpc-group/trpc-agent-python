@@ -8,11 +8,18 @@
 from __future__ import annotations
 
 import asyncio
-import copy
 from typing import List
-from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+import trpc_agent_sdk.skills as _skills_pkg
+
+if not hasattr(_skills_pkg, "get_skill_processor_parameters"):
+
+    def _compat_get_skill_processor_parameters(agent_context):
+        from trpc_agent_sdk.agents.core._skill_processor import get_skill_processor_parameters as _impl
+        return _impl(agent_context)
+
+    _skills_pkg.get_skill_processor_parameters = _compat_get_skill_processor_parameters
 
 from trpc_agent_sdk.agents._llm_agent import LlmAgent
 from trpc_agent_sdk.agents.core._request_processor import (

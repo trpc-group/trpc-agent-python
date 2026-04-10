@@ -12,35 +12,9 @@ Subcommands (all support ``--dry-run``):
      then lexicographical order.
    - Keep ``from __future__ import annotations`` at the very top of imports.
 
-2) audit
-   - Report files missing copyright marker ``Copyright @``.
-   - Report files missing module docstring.
-
-3) build-package-api
-   - Auto-generate per-package ``__init__.py`` export blocks.
-   - Skip optional-feature modules inferred from ``pyproject.toml`` extras.
-   - De-duplicate against symbols already manually imported in ``__init__.py``.
-
-4) sync-imports-package-api
-   - Combined maintenance workflow:
-     ensure missing ``__init__.py`` > rename private modules > rewrite imports >
-     build package API exports > sort imports.
-   - Add copyright marker to Python files when missing.
-   - Keep exactly two blank lines after import blocks.
-
-5) rename-private-modules
-   - Rename package modules from ``foo.py`` to ``_foo.py``.
-   - Rewrite import statements across project files accordingly.
-   - Optional: refresh package API blocks after rename.
-
 Examples:
   python3 format.py sort-imports --root . --dry-run
   python3 format.py sort-imports --root .
-  python3 format.py audit --root .
-  python3 format.py build-package-api --root . --dry-run
-  python3 format.py sync-imports-package-api --root . --dry-run
-  python3 format.py rename-private-modules --root . --dry-run
-  python3 format.py rename-private-modules --root . --build-package-api
   python3 format.py check-chinese --root . --dry-run
 """
 
@@ -50,6 +24,7 @@ import argparse
 import ast
 import os
 import re
+import subprocess
 import sys
 import tomllib
 from dataclasses import dataclass
@@ -74,14 +49,10 @@ EXCLUDED_DIRS = {
     ".pytest_cache",
 }
 
-COPYRIGHT_RE = re.compile(r"Copyright\s*@")
 STDLIB_COMPANION_MODULES = {"typing_extensions"}
 AUTO_EXPORT_BEGIN = "# <auto_exports>"
 AUTO_EXPORT_END = "# </auto_exports>"
 CHINESE_RE = re.compile(r"[\u4e00-\u9fff]")
-ENCODING_RE = re.compile(r"^#.*coding[:=]\s*([-\w.]+)")
-DEFAULT_COPYRIGHT_YEAR = "2026"
-DEFAULT_COPYRIGHT_OWNER = "Tencent.com"
 
 
 @dataclass(frozen=True)
@@ -89,6 +60,7 @@ class ImportLine:
     text: str
     group: int
     kind: int  # 0=import, 1=from-import
+    rel_level: int = 0  # relative import level; larger means farther (.. > .)
 
 
 @dataclass
@@ -155,42 +127,6 @@ def ensure_init_files(root: Path, apply: bool) -> list[Path]:
         if apply:
             init_path.write_text("", encoding="utf-8")
     return created
-
-
-def _default_copyright_block() -> list[str]:
-    return [
-        "# -*- coding: utf-8 -*-",
-        "#",
-        f"# Copyright @ {DEFAULT_COPYRIGHT_YEAR} {DEFAULT_COPYRIGHT_OWNER}",
-    ]
-
-
-def add_copyright_if_missing(source: str) -> tuple[str, bool]:
-    if COPYRIGHT_RE.search(source):
-        return source, False
-
-    lines = source.splitlines()
-    insert_at = 0
-    out: list[str] = []
-
-    if lines and lines[0].startswith("#!"):
-        out.append(lines[0])
-        insert_at = 1
-
-    has_encoding = insert_at < len(lines) and bool(ENCODING_RE.match(lines[insert_at]))
-    if has_encoding:
-        out.append(lines[insert_at])
-        insert_at += 1
-        out.extend(["#", f"# Copyright @ {DEFAULT_COPYRIGHT_YEAR} {DEFAULT_COPYRIGHT_OWNER}"])
-    else:
-        out.extend(_default_copyright_block())
-
-    if insert_at < len(lines) and lines[insert_at] != "":
-        out.append("")
-    out.extend(lines[insert_at:])
-
-    new_source = "\n".join(out) + ("\n" if source.endswith("\n") or not source else "")
-    return new_source, True
 
 
 def read_optional_group_tokens(pyproject_path: Path) -> set[str]:
@@ -446,21 +382,14 @@ def _extract_all_names_from_value(node: ast.AST) -> list[str]:
     return out
 
 
-def merge_init_all_exports(init_path: Path, apply: bool) -> bool:
-    """Merge multiple top-level __all__ blocks in __init__.py into one.
-
-    Order policy:
-    1) follow top-level import symbol order first (from-import aliases order),
-    2) append remaining legacy __all__ names (deduplicated) in original order.
-    """
-    if not init_path.exists():
-        return False
-    original_source = init_path.read_text(encoding="utf-8")
-    source = strip_auto_export_markers(original_source)
+def _merge_init_all_exports_source(source: str) -> str | None:
+    """Return merged __all__ source for __init__.py, or None when unchanged."""
+    original_source = source
+    source = strip_auto_export_markers(source)
     try:
         tree = ast.parse(source)
     except SyntaxError:
-        return False
+        return None
 
     all_nodes: list[ast.Assign] = []
     legacy_all_names: list[str] = []
@@ -473,6 +402,12 @@ def merge_init_all_exports(init_path: Path, apply: bool) -> bool:
             if has_all_target:
                 all_nodes.append(node)
                 legacy_all_names.extend(_extract_all_names_from_value(node.value))
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                sym = alias.asname or alias.name.split(".", 1)[0]
+                if sym not in seen_imports:
+                    seen_imports.add(sym)
+                    import_symbol_order.append(sym)
         elif isinstance(node, ast.ImportFrom):
             if node.module == "__future__":
                 continue
@@ -485,7 +420,7 @@ def merge_init_all_exports(init_path: Path, apply: bool) -> bool:
                     import_symbol_order.append(sym)
 
     if len(all_nodes) == 0:
-        return False
+        return None
 
     final_names: list[str] = []
     seen_final: set[str] = set()
@@ -515,7 +450,7 @@ def merge_init_all_exports(init_path: Path, apply: bool) -> bool:
     try:
         kept_tree = ast.parse(kept_source)
     except SyntaxError:
-        return False
+        return None
     last_import_end = 0
     for node in kept_tree.body:
         if isinstance(node, (ast.Import, ast.ImportFrom)):
@@ -529,6 +464,17 @@ def merge_init_all_exports(init_path: Path, apply: bool) -> bool:
     new_source = "\n".join(merged_lines) + ("\n" if source.endswith("\n") else "")
 
     if new_source == original_source:
+        return None
+    return new_source
+
+
+def merge_init_all_exports(init_path: Path, apply: bool) -> bool:
+    """Merge multiple top-level __all__ blocks in __init__.py into one."""
+    if not init_path.exists():
+        return False
+    original_source = init_path.read_text(encoding="utf-8")
+    new_source = _merge_init_all_exports_source(original_source)
+    if new_source is None:
         return False
     if apply:
         init_path.write_text(new_source, encoding="utf-8")
@@ -767,7 +713,7 @@ def normalize_import_block(
                 text = f"from {module} import {alias.name}"
                 if alias.asname:
                     text += f" as {alias.asname}"
-                normalized.append(ImportLine(text=text, group=group, kind=1))
+                normalized.append(ImportLine(text=text, group=group, kind=1, rel_level=node.level))
 
     groups: dict[int, list[ImportLine]] = {1: [], 2: [], 3: [], 4: []}
     for item in normalized:
@@ -777,9 +723,13 @@ def normalize_import_block(
     # 1) plain imports first
     # 2) then from-imports
     # 3) lexicographical order inside each kind
+    # 4) for relative imports, farther levels first: .. > .
     for k in groups:
         uniq = {(item.kind, item.text): item for item in groups[k]}
-        groups[k] = sorted(uniq.values(), key=lambda x: (x.kind, x.text))
+        if k == 4:
+            groups[k] = sorted(uniq.values(), key=lambda x: (x.kind, -x.rel_level, x.text))
+        else:
+            groups[k] = sorted(uniq.values(), key=lambda x: (x.kind, x.text))
 
     out: list[str] = []
     if future_annotations:
@@ -793,39 +743,79 @@ def normalize_import_block(
     return "\n".join(out) + "\n"
 
 
+def find_missing_relative_import_targets(init_path: Path, source: str) -> list[tuple[int, str]]:
+    """Check relative import module anchors in __init__.py.
+
+    For statements like ``from .a import b``, validate that ``a`` exists as
+    either ``a.py`` or directory ``a/`` at the resolved relative location.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []
+
+    missing: list[tuple[int, str]] = []
+    for node in tree.body:
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if node.level < 1 or not node.module:
+            continue
+        first_seg = node.module.split(".", 1)[0].strip()
+        if not first_seg:
+            continue
+
+        anchor = init_path.parent
+        for _ in range(max(node.level - 1, 0)):
+            anchor = anchor.parent
+        file_candidate = anchor / f"{first_seg}.py"
+        dir_candidate = anchor / first_seg
+        if not (file_candidate.exists() or dir_candidate.exists()):
+            target = "." * node.level + node.module
+            missing.append((node.lineno, target))
+    return missing
+
+
+def run_yapf_on_python_files(root: Path) -> tuple[int, list[str]]:
+    """Run yapf -i for all Python files under root."""
+    formatted = 0
+    errors: list[str] = []
+    for py_file in sorted(iter_python_files(root)):
+        try:
+            result = subprocess.run(
+                ["yapf", "-i", str(py_file)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except FileNotFoundError:
+            errors.append("yapf command not found")
+            break
+        if result.returncode != 0:
+            detail = result.stderr.strip() or result.stdout.strip() or f"exit={result.returncode}"
+            errors.append(f"{py_file}: {detail}")
+            continue
+        formatted += 1
+    return formatted, errors
+
+
 def process_file(
     path: Path,
     stdlib_names: set[str],
     project_packages: set[str],
     apply: bool,
-) -> tuple[bool, bool, bool]:
-    """Return (modified, has_copyright, has_module_docstring)."""
+) -> bool:
+    """Return whether file content was modified."""
     source = path.read_text(encoding="utf-8")
-    has_copyright = bool(COPYRIGHT_RE.search(source))
 
     try:
         tree = ast.parse(source)
     except SyntaxError:
         # Skip files that cannot be parsed.
-        return False, has_copyright, False
-
-    has_module_docstring = ast.get_docstring(tree, clean=False) is not None
-    source_after_copyright, copyright_inserted = add_copyright_if_missing(source)
-    if copyright_inserted:
-        source = source_after_copyright
-        has_copyright = True
-        try:
-            tree = ast.parse(source)
-        except SyntaxError:
-            if apply:
-                path.write_text(source, encoding="utf-8")
-            return True, has_copyright, has_module_docstring
+        return False
 
     import_nodes = extract_leading_import_nodes(tree)
     if not import_nodes:
-        if copyright_inserted and apply:
-            path.write_text(source, encoding="utf-8")
-        return copyright_inserted, has_copyright, has_module_docstring
+        return False
 
     start = import_nodes[0].lineno - 1
     end = import_nodes[-1].end_lineno or import_nodes[-1].lineno
@@ -850,12 +840,17 @@ def process_file(
         new_lines.extend(tail_lines[leading_blank_count:])
 
     new_source = "\n".join(new_lines) + ("\n" if source.endswith("\n") else "")
+    if path.name == "__init__.py":
+        merged_source = _merge_init_all_exports_source(new_source)
+        if merged_source is not None:
+            new_source = merged_source
+
     if new_source == source:
-        return False, has_copyright, has_module_docstring
+        return False
 
     if apply:
         path.write_text(new_source, encoding="utf-8")
-    return True, has_copyright, has_module_docstring
+    return True
 
 
 def _names_from_target(target: ast.AST) -> list[str]:
@@ -1097,9 +1092,14 @@ def run_sort_imports(root: Path, dry_run: bool) -> int:
     project_packages = discover_project_packages(root)
     py_files = sorted(iter_python_files(root))
     modified_files: list[Path] = []
+    missing_relative_targets: list[tuple[Path, int, str]] = []
 
     for path in py_files:
-        modified, _has_copyright, _has_module_docstring = process_file(
+        source_for_check = path.read_text(encoding="utf-8")
+        if path.name == "__init__.py":
+            for lineno, target in find_missing_relative_import_targets(path, source_for_check):
+                missing_relative_targets.append((path, lineno, target))
+        modified = process_file(
             path=path,
             stdlib_names=stdlib_names,
             project_packages=project_packages,
@@ -1112,113 +1112,20 @@ def run_sort_imports(root: Path, dry_run: bool) -> int:
     print(f"[{mode}] sort-imports scanned: {len(py_files)}, modified: {len(modified_files)}")
     for p in modified_files:
         print(str(p))
-    return 0
+    if missing_relative_targets:
+        print("Missing relative import module targets in __init__.py:")
+        for path, lineno, target in missing_relative_targets:
+            print(f"{path}:{lineno} [missing_relative_import_target] {target}")
 
+    if not dry_run:
+        formatted_count, yapf_errors = run_yapf_on_python_files(root)
+        print(f"[APPLY] yapf formatted: {formatted_count}")
+        for err in yapf_errors:
+            print(f"[yapf-error] {err}")
+        if yapf_errors:
+            return 1
 
-def run_audit(root: Path, dry_run: bool) -> int:
-    stdlib_names = set(getattr(sys, "stdlib_module_names", set()))
-    project_packages = discover_project_packages(root)
-    py_files = sorted(iter_python_files(root))
-    no_copyright_files: list[Path] = []
-    no_module_docstring_files: list[Path] = []
-
-    for path in py_files:
-        _modified, has_copyright, has_module_docstring = process_file(
-            path=path,
-            stdlib_names=stdlib_names,
-            project_packages=project_packages,
-            apply=False,
-        )
-        if not has_copyright:
-            no_copyright_files.append(path)
-        if not has_module_docstring:
-            no_module_docstring_files.append(path)
-
-    mode = "DRY_RUN" if dry_run else "APPLY"
-    print(f"[{mode}] audit scanned: {len(py_files)}")
-    print("Files missing copyright marker (Copyright @):")
-    for p in no_copyright_files:
-        print(str(p))
-    print("Files missing module docstring:")
-    for p in no_module_docstring_files:
-        print(str(p))
-    return 0
-
-
-def run_build_package_api(root: Path, dry_run: bool) -> int:
-    changed_init_files = build_package_api_exports(root, apply=not dry_run)
-    mode = "DRY_RUN" if dry_run else "APPLY"
-    print(f"[{mode}] build-package-api updated: {len(changed_init_files)}")
-    for p in changed_init_files:
-        print(str(p))
-    return 0
-
-
-def run_sync_imports_and_package_api(root: Path, dry_run: bool) -> int:
-    """Combined command: rename/fix imports + build package API + sort imports."""
-    apply = not dry_run
-    project_packages = discover_project_packages(root)
-    py_files = sorted(iter_python_files(root))
-    stdlib_names = set(getattr(sys, "stdlib_module_names", set()))
-
-    created_init_files = ensure_init_files(root, apply=apply)
-    # Refresh package discovery after creating missing __init__.py files.
-    project_packages = discover_project_packages(root)
-    py_files = sorted(iter_python_files(root))
-
-    rename_map = build_private_module_rename_map(root, project_packages)
-    rewritten_import_files = rewrite_imports_for_renamed_modules(
-        root=root,
-        py_files=py_files,
-        project_packages=project_packages,
-        rename_map=rename_map,
-        apply=apply,
-    )
-    renamed_modules = apply_private_module_renames(rename_map, apply=apply)
-
-    # Re-scan file list after module renames.
-    py_files = sorted(iter_python_files(root))
-    changed_init_files = build_package_api_exports(root, apply=apply)
-
-    modified_files: list[Path] = []
-    for path in py_files:
-        modified, _has_copyright, _has_module_docstring = process_file(
-            path=path,
-            stdlib_names=stdlib_names,
-            project_packages=project_packages,
-            apply=apply,
-        )
-        if modified:
-            modified_files.append(path)
-
-    # Ensure __all__ follows final import order in __init__.py files.
-    merged_init_files: list[Path] = []
-    for package_dir in iter_package_dirs(root):
-        init_path = package_dir / "__init__.py"
-        if merge_init_all_exports(init_path, apply=apply):
-            merged_init_files.append(init_path)
-
-    mode = "DRY_RUN" if dry_run else "APPLY"
-    print(f"[{mode}] sync-imports-package-api")
-    print(f"Created __init__.py files: {len(created_init_files)}")
-    for p in created_init_files:
-        print(str(p))
-    print(f"Import files rewritten: {len(rewritten_import_files)}")
-    for p in rewritten_import_files:
-        print(str(p))
-    print(f"Modules renamed: {len(renamed_modules)}")
-    for old_path, new_path in renamed_modules:
-        print(f"{old_path} -> {new_path}")
-    print(f"Package __init__.py refreshed: {len(changed_init_files)}")
-    for p in changed_init_files:
-        print(str(p))
-    print(f"Python files normalized: {len(modified_files)}")
-    for p in modified_files:
-        print(str(p))
-    print(f"__init__.py __all__ merged: {len(merged_init_files)}")
-    for p in merged_init_files:
-        print(str(p))
-    return 0
+    return 1 if missing_relative_targets else 0
 
 
 def run_report_private_candidates(root: Path, dry_run: bool) -> int:
@@ -1228,37 +1135,6 @@ def run_report_private_candidates(root: Path, dry_run: bool) -> int:
     print("Private module rename candidates (foo.py -> _foo.py):")
     for p in private_module_candidates:
         print(str(p))
-    return 0
-
-
-def run_rename_private_modules(root: Path, dry_run: bool, build_package_api: bool) -> int:
-    project_packages = discover_project_packages(root)
-    py_files = sorted(iter_python_files(root))
-    rename_map = build_private_module_rename_map(root, project_packages)
-    rewritten_import_files = rewrite_imports_for_renamed_modules(
-        root=root,
-        py_files=py_files,
-        project_packages=project_packages,
-        rename_map=rename_map,
-        apply=not dry_run,
-    )
-    renamed_modules = apply_private_module_renames(rename_map, apply=not dry_run)
-    changed_init_files: list[Path] = []
-    if build_package_api:
-        changed_init_files = build_package_api_exports(root, apply=not dry_run)
-
-    mode = "DRY_RUN" if dry_run else "APPLY"
-    print(f"[{mode}] rename-private-modules")
-    print(f"Import files rewritten: {len(rewritten_import_files)}")
-    for p in rewritten_import_files:
-        print(str(p))
-    print(f"Modules renamed: {len(renamed_modules)}")
-    for old_path, new_path in renamed_modules:
-        print(f"{old_path} -> {new_path}")
-    if build_package_api:
-        print(f"Package __init__.py refreshed: {len(changed_init_files)}")
-        for p in changed_init_files:
-            print(str(p))
     return 0
 
 
@@ -1304,33 +1180,9 @@ def main() -> int:
     p_sort.add_argument("--root", default=".", help="Project root directory.")
     p_sort.add_argument("--dry-run", action="store_true", help="Preview changes without writing files.")
 
-    p_audit = subparsers.add_parser("audit", help="Report missing copyright/docstring files.")
-    p_audit.add_argument("--root", default=".", help="Project root directory.")
-    p_audit.add_argument("--dry-run", action="store_true", help="Read-only mode (same output).")
-
-    p_api = subparsers.add_parser("build-package-api", help="Refresh package __init__.py export blocks.")
-    p_api.add_argument("--root", default=".", help="Project root directory.")
-    p_api.add_argument("--dry-run", action="store_true", help="Preview changes without writing files.")
-
-    p_sync = subparsers.add_parser(
-        "sync-imports-package-api",
-        help="Run rename/import-fix + build-package-api + sort-imports in one command.",
-    )
-    p_sync.add_argument("--root", default=".", help="Project root directory.")
-    p_sync.add_argument("--dry-run", action="store_true", help="Preview changes without writing files.")
-
     p_report = subparsers.add_parser("report-private-candidates", help="List foo.py -> _foo.py candidates.")
     p_report.add_argument("--root", default=".", help="Project root directory.")
     p_report.add_argument("--dry-run", action="store_true", help="Read-only mode (same output).")
-
-    p_rename = subparsers.add_parser("rename-private-modules", help="Rename modules and rewrite imports.")
-    p_rename.add_argument("--root", default=".", help="Project root directory.")
-    p_rename.add_argument("--dry-run", action="store_true", help="Preview changes without writing files.")
-    p_rename.add_argument(
-        "--build-package-api",
-        action="store_true",
-        help="Also refresh package __init__.py export blocks after rename.",
-    )
 
     p_detect = subparsers.add_parser(
         "detect-issues",
@@ -1358,16 +1210,8 @@ def main() -> int:
 
     if args.command == "sort-imports":
         return run_sort_imports(root, args.dry_run)
-    if args.command == "audit":
-        return run_audit(root, args.dry_run)
-    if args.command == "build-package-api":
-        return run_build_package_api(root, args.dry_run)
-    if args.command == "sync-imports-package-api":
-        return run_sync_imports_and_package_api(root, args.dry_run)
     if args.command == "report-private-candidates":
         return run_report_private_candidates(root, args.dry_run)
-    if args.command == "rename-private-modules":
-        return run_rename_private_modules(root, args.dry_run, args.build_package_api)
     if args.command == "detect-issues":
         return run_detect_issues(root, args.dry_run)
     if args.command == "check-chinese":

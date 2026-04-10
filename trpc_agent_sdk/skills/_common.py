@@ -24,6 +24,26 @@ from pydantic import Field
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.log import logger
 
+from ._constants import SkillLoadModeNames
+from ._skill_config import get_skill_load_mode
+from ._state_keys import docs_key
+from ._state_keys import docs_prefix
+from ._state_keys import docs_session_key
+from ._state_keys import docs_session_prefix
+from ._state_keys import loaded_key
+from ._state_keys import loaded_order_key
+from ._state_keys import loaded_prefix
+from ._state_keys import loaded_session_key
+from ._state_keys import loaded_session_order_key
+from ._state_keys import loaded_session_prefix
+from ._state_keys import tool_key
+from ._state_keys import tool_prefix
+from ._state_keys import tool_session_key
+from ._state_keys import tool_session_prefix
+from ._state_order import marshal_loaded_order
+from ._state_order import parse_loaded_order
+from ._state_order import touch_loaded_order
+
 # Generic type for selection results
 T = TypeVar('T', bound=BaseModel)  # pylint: disable=invalid-name
 
@@ -59,8 +79,45 @@ class BaseSelectionResult(BaseModel):
     mode: str = Field(default="", description="The mode used for selecting")
 
 
-def _set_state_delta(invocation_context: InvocationContext, key: str, value: Any) -> None:
-    """Set the state delta for a key.
+def get_agent_name(invocation_context: InvocationContext) -> str:
+    """Get normalized agent name from invocation context."""
+    name = getattr(invocation_context, "agent_name", "")
+    return name.strip() if isinstance(name, str) else ""
+
+
+def use_session_skill_state(invocation_context: InvocationContext) -> bool:
+    """Whether skill-related state should use persistent (non-temp) keys."""
+    return get_skill_load_mode(invocation_context) == SkillLoadModeNames.SESSION
+
+
+def normalize_selection_mode(mode: str) -> str:
+    """Normalize selection mode; defaults to replace."""
+    m = (mode or "").strip().lower()
+    if m in ("add", "replace", "clear"):
+        return m
+    return "replace"
+
+
+def get_previous_selection_by_key(invocation_context: InvocationContext, key: str) -> tuple[list[str], bool]:
+    """Get previous selection by exact state key.
+
+    Returns:
+        (selected_items, had_all)
+    """
+    value = get_state_delta_value(invocation_context, key)
+    if not value:
+        return [], False
+    if value == "*":
+        return [], True
+    try:
+        parsed = json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return [], False
+    return parsed if isinstance(parsed, list) else [], False
+
+
+def set_state_delta(invocation_context: InvocationContext, key: str, value: Any) -> None:
+    """Set the state delta of a skill workspace.
 
     Args:
         invocation_context: Invocation context
@@ -68,6 +125,35 @@ def _set_state_delta(invocation_context: InvocationContext, key: str, value: Any
         value: State value
     """
     invocation_context.actions.state_delta[key] = value
+
+
+def set_selection_state_delta_by_key(
+    invocation_context: InvocationContext,
+    key: str,
+    selected_items: list[str],
+    include_all: bool,
+) -> None:
+    """Set selection state delta by exact state key."""
+    if include_all:
+        set_state_delta(invocation_context, key, "*")
+    else:
+        set_state_delta(invocation_context, key, json.dumps(selected_items or []))
+
+
+def append_loaded_order_state_delta(
+    invocation_context: InvocationContext,
+    agent_name: str,
+    skill_name: str,
+) -> None:
+    """Append loaded-order state delta for skill touch order."""
+    key = loaded_order_key(agent_name)
+    if use_session_skill_state(invocation_context):
+        key = loaded_session_order_key(key)
+    current = parse_loaded_order(get_state_delta_value(invocation_context, key))
+    next_order = touch_loaded_order(current, skill_name)
+    encoded = marshal_loaded_order(next_order)
+    if encoded:
+        set_state_delta(invocation_context, key, encoded)
 
 
 def get_previous_selection(invocation_context: InvocationContext, state_key_prefix: str,
@@ -191,12 +277,12 @@ def set_state_delta_for_selection(invocation_context: InvocationContext, state_k
     include_all = getattr(result, 'include_all', False)
 
     if include_all:
-        _set_state_delta(invocation_context, key, '*')
+        set_state_delta(invocation_context, key, '*')
         return
 
     selected_items = getattr(result, 'selected_items', [])
     selected_json = json.dumps(selected_items)
-    _set_state_delta(invocation_context, key, selected_json)
+    set_state_delta(invocation_context, key, selected_json)
 
 
 def generic_select_items(tool_context: InvocationContext, skill_name: str, items: Optional[list[str]],
@@ -354,3 +440,52 @@ def generic_get_selection(ctx: InvocationContext,
     except json.JSONDecodeError:
         logger.warning("Failed to parse selection for skill '%s' with key '%s': %s", skill_name, key, v_str)
         return []
+
+
+def loaded_state_key(ctx: InvocationContext, skill_name: str) -> str:
+    """Return the loaded-state key for a skill."""
+    agent_name = ctx.agent_name.strip()
+    load_keys = loaded_key(agent_name, skill_name)
+    return loaded_session_key(load_keys) if use_session_skill_state(ctx) else load_keys
+
+
+def docs_state_key(ctx: InvocationContext, skill_name: str) -> str:
+    """Return the docs-state key for a skill."""
+    agent_name = ctx.agent_name.strip()
+    key = docs_key(agent_name, skill_name)
+    return docs_session_key(key) if use_session_skill_state(ctx) else key
+
+
+def tool_state_key(ctx: InvocationContext, skill_name: str) -> str:
+    """Return the tools-state key for a skill."""
+    agent_name = ctx.agent_name.strip()
+    key = tool_key(agent_name, skill_name)
+    return tool_session_key(key) if use_session_skill_state(ctx) else key
+
+
+def loaded_scan_prefix(ctx: InvocationContext) -> str:
+    """Return the loaded-state scan prefix for an agent."""
+    agent_name = ctx.agent_name.strip()
+    key = loaded_prefix(agent_name)
+    return loaded_session_prefix(key) if use_session_skill_state(ctx) else key
+
+
+def docs_scan_prefix(ctx: InvocationContext) -> str:
+    """Return the docs-state scan prefix for an agent."""
+    agent_name = ctx.agent_name.strip()
+    key = docs_prefix(agent_name)
+    return docs_session_prefix(key) if use_session_skill_state(ctx) else key
+
+
+def tool_scan_prefix(ctx: InvocationContext) -> str:
+    """Return the tools-state scan prefix for an agent."""
+    agent_name = ctx.agent_name.strip()
+    key = tool_prefix(agent_name)
+    return tool_session_prefix(key) if use_session_skill_state(ctx) else key
+
+
+def loaded_order_state_key(ctx: InvocationContext) -> str:
+    """Return the loaded-order state key for an agent."""
+    agent_name = ctx.agent_name.strip()
+    key = loaded_order_key(agent_name)
+    return loaded_session_order_key(key) if use_session_skill_state(ctx) else key

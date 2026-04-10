@@ -9,13 +9,9 @@ This module exports all public interfaces of the code execution system,
 including base classes and implementations.
 """
 
-from ._artifacts import artifact_service_from_context
-from ._artifacts import artifact_session_from_context
 from ._artifacts import load_artifact_helper
 from ._artifacts import parse_artifact_ref
 from ._artifacts import save_artifact_helper
-from ._artifacts import with_artifact_service
-from ._artifacts import with_artifact_session
 from ._base_code_executor import BaseCodeExecutor
 from ._base_workspace_runtime import BaseProgramRunner
 from ._base_workspace_runtime import BaseWorkspaceFS
@@ -47,6 +43,20 @@ from ._constants import MAX_READ_SIZE_BYTES
 from ._constants import META_FILE_NAME
 from ._constants import TMP_FILE_NAME
 from ._constants import WORKSPACE_ENV_DIR_KEY
+from ._program_session import BaseProgramSession
+from ._program_session import DEFAULT_EXEC_YIELD_MS
+from ._program_session import DEFAULT_IO_YIELD_MS
+from ._program_session import DEFAULT_POLL_LINES
+from ._program_session import DEFAULT_SESSION_KILL_SEC
+from ._program_session import DEFAULT_SESSION_TTL_SEC
+from ._program_session import PROGRAM_STATUS_EXITED
+from ._program_session import PROGRAM_STATUS_RUNNING
+from ._program_session import ProgramLog
+from ._program_session import ProgramPoll
+from ._program_session import ProgramState
+from ._program_session import poll_line_limit
+from ._program_session import wait_for_program_output
+from ._program_session import yield_duration_ms
 from ._types import CodeBlock
 from ._types import CodeBlockDelimiter
 from ._types import CodeExecutionInput
@@ -82,13 +92,9 @@ from .local import create_local_workspace_runtime
 from .utils import CodeExecutionUtils
 
 __all__ = [
-    "artifact_service_from_context",
-    "artifact_session_from_context",
     "load_artifact_helper",
     "parse_artifact_ref",
     "save_artifact_helper",
-    "with_artifact_service",
-    "with_artifact_session",
     "BaseCodeExecutor",
     "BaseProgramRunner",
     "BaseWorkspaceFS",
@@ -120,6 +126,20 @@ __all__ = [
     "META_FILE_NAME",
     "TMP_FILE_NAME",
     "WORKSPACE_ENV_DIR_KEY",
+    "BaseProgramSession",
+    "DEFAULT_EXEC_YIELD_MS",
+    "DEFAULT_IO_YIELD_MS",
+    "DEFAULT_POLL_LINES",
+    "DEFAULT_SESSION_KILL_SEC",
+    "DEFAULT_SESSION_TTL_SEC",
+    "PROGRAM_STATUS_EXITED",
+    "PROGRAM_STATUS_RUNNING",
+    "ProgramLog",
+    "ProgramPoll",
+    "ProgramState",
+    "poll_line_limit",
+    "wait_for_program_output",
+    "yield_duration_ms",
     "CodeBlock",
     "CodeBlockDelimiter",
     "CodeExecutionInput",
