@@ -5,15 +5,13 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Interactive skill execution tools.
 
-Provides four tools that mirror the Go :mod:`~trpc_agent_sdk.skills.tools.SkillExecTool` implementation:
-
-* :class:`~trpc_agent_sdk.skills.tools.SkillExecTool`          — start an interactive session
-* :class:`~trpc_agent_sdk.skills.tools.WriteStdinTool`   — write stdin to a running session
-* :class:`~trpc_agent_sdk.skills.tools.PollSessionTool`  — poll a session for new output
-* :class:`~trpc_agent_sdk.skills.tools.KillSessionTool`  — terminate and remove a session
+* ``skill_exec``          — start an interactive session (SkillExecTool)
+* ``skill_write_stdin``   — write stdin to a running session (WriteStdinTool)
+* ``skill_poll_session``  — poll a session for new output (PollSessionTool)
+* ``skill_kill_session``  — terminate and remove a session (KillSessionTool)
 
 Sessions run real sub-processes inside the staged skill workspace.  When
-:attr:`~trpc_agent_sdk.skills.tools.ExecInput.tty` is ``True`` a POSIX pseudo-terminal is allocated so TTY-aware programs work
+``tty=True`` a POSIX pseudo-terminal is allocated so TTY-aware programs work
 correctly (e.g. interactive shells, ncurses UIs).
 
 Usage example::
@@ -22,7 +20,7 @@ Usage example::
     result = await skill_exec_tool.run(ctx, {
         "skill": "my_skill",
         "command": "python interactive.py",
-        "yield_ms": 500,
+        "yield_time_ms": 500,
     })
     sid = result["session_id"]
 
@@ -38,14 +36,11 @@ Usage example::
 
 from __future__ import annotations
 
-import asyncio
-import fcntl
 import os
-import pty
 import time
 import uuid
 from dataclasses import dataclass
-from dataclasses import field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from typing import Dict
@@ -55,13 +50,29 @@ from typing_extensions import override
 
 from pydantic import BaseModel
 from pydantic import Field
+from trpc_agent_sdk.code_executors import BaseProgramRunner
+from trpc_agent_sdk.code_executors import BaseProgramSession
+from trpc_agent_sdk.code_executors import DEFAULT_EXEC_YIELD_MS
+from trpc_agent_sdk.code_executors import DEFAULT_IO_YIELD_MS
+from trpc_agent_sdk.code_executors import DEFAULT_SESSION_KILL_SEC
+from trpc_agent_sdk.code_executors import DEFAULT_SESSION_TTL_SEC
 from trpc_agent_sdk.code_executors import DIR_OUT
+from trpc_agent_sdk.code_executors import DIR_RUNS
 from trpc_agent_sdk.code_executors import DIR_SKILLS
 from trpc_agent_sdk.code_executors import DIR_WORK
+from trpc_agent_sdk.code_executors import ENV_OUTPUT_DIR
+from trpc_agent_sdk.code_executors import ENV_SKILLS_DIR
 from trpc_agent_sdk.code_executors import ENV_SKILL_NAME
+from trpc_agent_sdk.code_executors import ENV_WORK_DIR
+from trpc_agent_sdk.code_executors import PROGRAM_STATUS_EXITED
+from trpc_agent_sdk.code_executors import WORKSPACE_ENV_DIR_KEY
 from trpc_agent_sdk.code_executors import WorkspaceInfo
 from trpc_agent_sdk.code_executors import WorkspaceInputSpec
 from trpc_agent_sdk.code_executors import WorkspaceOutputSpec
+from trpc_agent_sdk.code_executors import WorkspaceRunProgramSpec
+from trpc_agent_sdk.code_executors import poll_line_limit
+from trpc_agent_sdk.code_executors import wait_for_program_output
+from trpc_agent_sdk.code_executors import yield_duration_ms
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.filter import BaseFilter
 from trpc_agent_sdk.log import logger
@@ -69,23 +80,19 @@ from trpc_agent_sdk.tools import BaseTool
 from trpc_agent_sdk.types import FunctionDeclaration
 from trpc_agent_sdk.types import Schema
 
+from .._constants import SKILL_ARTIFACTS_STATE_KEY
+from ._common import CreateWorkspaceNameCallback
+from ._common import cleanup_expired_sessions
+from ._common import default_create_ws_name_callback
+from ._common import inline_json_schema_refs
+from ._common import require_non_empty
 from ._copy_stager import SkillStageRequest
 from ._skill_run import SkillRunInput
 from ._skill_run import SkillRunOutput
 from ._skill_run import SkillRunTool
 from ._skill_run import _filter_failed_empty_outputs
-from ._skill_run import _inline_json_schema_refs
 from ._skill_run import _select_primary_output
 from ._skill_run import _truncate_output
-
-# ---------------------------------------------------------------------------
-# Defaults (mirrors Go program's session defaults)
-# ---------------------------------------------------------------------------
-
-DEFAULT_EXEC_YIELD_MS: int = 300  # wait time on skill_exec
-DEFAULT_IO_YIELD_MS: int = 100  # wait time on write/poll
-DEFAULT_POLL_LINES: int = 50  # max lines returned per call
-DEFAULT_SESSION_TTL: float = 300.0  # seconds after exit before GC
 
 # Status strings
 _STATUS_RUNNING = "running"
@@ -109,7 +116,7 @@ class ExecInput(BaseModel):
     env: dict[str, str] = Field(default_factory=dict, description="Extra environment variables")
     stdin: str = Field(default="", description="Optional initial stdin written before yielding")
     tty: bool = Field(default=False, description="Allocate a pseudo-TTY")
-    yield_ms: int = Field(default=0, description="Milliseconds to wait for initial output before returning")
+    yield_time_ms: int = Field(default=0, description="Milliseconds to wait for initial output before returning")
     poll_lines: int = Field(default=0, description="Maximum output lines to return per call")
     output_files: list[str] = Field(default_factory=list, description="Glob patterns to collect on exit")
     timeout: int = Field(default=0, description="Timeout in seconds (0 = no timeout)")
@@ -126,7 +133,7 @@ class WriteStdinInput(BaseModel):
     session_id: str = Field(..., description="Session id returned by skill_exec")
     chars: str = Field(default="", description="Text to write to stdin")
     submit: bool = Field(default=False, description="Append a newline after chars")
-    yield_ms: int = Field(default=0, description="Milliseconds to wait for new output")
+    yield_time_ms: int = Field(default=0, description="Milliseconds to wait for new output")
     poll_lines: int = Field(default=0, description="Maximum output lines to return")
 
 
@@ -134,7 +141,7 @@ class PollSessionInput(BaseModel):
     """Input for skill_poll_session."""
 
     session_id: str = Field(..., description="Session id returned by skill_exec")
-    yield_ms: int = Field(default=0, description="Milliseconds to wait for new output")
+    yield_time_ms: int = Field(default=0, description="Milliseconds to wait for new output")
     poll_lines: int = Field(default=0, description="Maximum output lines to return")
 
 
@@ -173,6 +180,31 @@ class SessionKillOutput(BaseModel):
     status: str = Field(default="", description="Final status after kill")
 
 
+def _apply_artifacts_state_delta(ctx: InvocationContext, output: ExecOutput) -> None:
+    """Store replayable artifact refs in state delta (Go execArtifactsStateDelta parity)."""
+    tool_call_id = (ctx.function_call_id or "").strip()
+    if not tool_call_id or output.result is None or not output.result.artifact_files:
+        return
+
+    artifacts: list[dict[str, Any]] = []
+    for item in output.result.artifact_files:
+        name = (item.name or "").strip()
+        version = int(item.version)
+        if not name or version < 0:
+            continue
+        artifacts.append({
+            "name": name,
+            "version": version,
+            "ref": f"artifact://{name}@{version}",
+        })
+    if not artifacts:
+        return
+    ctx.actions.state_delta[SKILL_ARTIFACTS_STATE_KEY] = {
+        "tool_call_id": tool_call_id,
+        "artifacts": artifacts,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Internal session state
 # ---------------------------------------------------------------------------
@@ -182,23 +214,9 @@ class SessionKillOutput(BaseModel):
 class _ExecSession:
     """Holds state for one running interactive skill session."""
 
-    proc: asyncio.subprocess.Process
+    proc: BaseProgramSession
     ws: WorkspaceInfo
     in_data: ExecInput
-
-    # Output buffer (all output since start as raw bytes → decoded text)
-    _output_buf: list[str] = field(default_factory=list)
-    _output_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    _output_event: asyncio.Event = field(default_factory=asyncio.Event)
-
-    # Current byte offset for incremental reads
-    _read_offset: int = 0
-
-    # Background reader task
-    reader_task: Optional[asyncio.Task] = None
-
-    # PTY master fd (None for non-TTY)
-    master_fd: Optional[int] = None
 
     # Final state
     exit_code: Optional[int] = None
@@ -206,145 +224,21 @@ class _ExecSession:
     final_result: Optional[SkillRunOutput] = None
     finalized: bool = False
 
-    async def append_output(self, chunk: str) -> None:
-        async with self._output_lock:
-            self._output_buf.append(chunk)
-        self._output_event.set()
-
-    async def total_output(self) -> str:
-        async with self._output_lock:
-            return "".join(self._output_buf)
-
-    async def yield_output(self, yield_ms: int, poll_lines: int) -> tuple[str, str, int, int]:
-        """Wait *yield_ms* ms for new output then return a chunk.
+    async def yield_output(self, yield_time_ms: int, poll_lines: int) -> tuple[str, str, int, int]:
+        """Wait *yield_time_ms* ms for new output then return a chunk.
 
         Returns ``(status, output_chunk, offset, next_offset)``.
         """
-        yield_sec = (yield_ms or DEFAULT_EXEC_YIELD_MS) / 1000.0
-        deadline = asyncio.get_event_loop().time() + yield_sec
-
-        while True:
-            remaining = deadline - asyncio.get_event_loop().time()
-            if remaining <= 0:
-                break
-            self._output_event.clear()
-            # Break early if process has already exited and we have all output
-            if self.proc.returncode is not None:
-                break
-            try:
-                await asyncio.wait_for(asyncio.shield(self._output_event.wait()), timeout=remaining)
-            except asyncio.TimeoutError:
-                break
-
-        # Determine status
-        rc = self.proc.returncode
-        if rc is not None:
-            self.exit_code = rc
-            if self.exited_at is None:
-                self.exited_at = time.time()
-        status = _STATUS_RUNNING if rc is None else _STATUS_EXITED
-
-        # Slice the output since last read
-        async with self._output_lock:
-            full = "".join(self._output_buf)
-
-        chunk = full[self._read_offset:]
-
-        # Apply poll_lines limit
-        limit = poll_lines or DEFAULT_POLL_LINES
-        if limit > 0 and chunk:
-            lines = chunk.split("\n")
-            if len(lines) > limit:
-                chunk = "\n".join(lines[:limit])
-                if not chunk.endswith("\n"):
-                    chunk += "\n"
-
-        offset = self._read_offset
-        self._read_offset += len(chunk)
-        next_offset = self._read_offset
-
-        return status, chunk, offset, next_offset
-
-
-# ---------------------------------------------------------------------------
-# Background output readers
-# ---------------------------------------------------------------------------
-
-
-async def _read_pipe(session: _ExecSession, stream: asyncio.StreamReader) -> None:
-    """Continuously read from *stream* and append to session output."""
-    try:
-        while True:
-            data = await stream.read(4096)
-            if not data:
-                break
-            await session.append_output(data.decode("utf-8", errors="replace"))
-    except Exception:  # pylint: disable=broad-except
-        pass
-    finally:
-        # Ensure exit is captured
-        try:
-            await session.proc.wait()
-        except Exception:  # pylint: disable=broad-except
-            pass
-        session._output_event.set()  # unblock any waiting yield
-
-
-async def _read_pty(session: _ExecSession, master_fd: int) -> None:
-    """Continuously read from a PTY master fd and append to session output."""
-    loop = asyncio.get_event_loop()
-    try:
-        # Set master_fd non-blocking
-        flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
-        fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-
-        # Use loop.add_reader for non-blocking reads
-        read_event = asyncio.Event()
-
-        def _on_readable() -> None:
-            read_event.set()
-
-        loop.add_reader(master_fd, _on_readable)
-        try:
-            while True:
-                read_event.clear()
-                # Check if process has exited
-                rc = session.proc.returncode
-                if rc is not None:
-                    # Drain remaining data
-                    while True:
-                        try:
-                            data = os.read(master_fd, 4096)
-                            if data:
-                                await session.append_output(data.decode("utf-8", errors="replace"))
-                            else:
-                                break
-                        except OSError:
-                            break
-                    break
-                # Wait for readable or timeout
-                try:
-                    await asyncio.wait_for(read_event.wait(), timeout=0.05)
-                except asyncio.TimeoutError:
-                    pass
-                try:
-                    data = os.read(master_fd, 4096)
-                    if data:
-                        await session.append_output(data.decode("utf-8", errors="replace"))
-                except BlockingIOError:
-                    pass
-                except OSError:
-                    break
-        finally:
-            loop.remove_reader(master_fd)
-    except Exception:  # pylint: disable=broad-except
-        pass
-    finally:
-        try:
-            await session.proc.wait()
-        except Exception:  # pylint: disable=broad-except
-            pass
-        session._output_event.set()
+        poll = await wait_for_program_output(
+            self.proc,
+            yield_duration_ms(yield_time_ms, DEFAULT_EXEC_YIELD_MS),
+            poll_line_limit(poll_lines),
+        )
+        if poll.exit_code is not None:
+            self.exit_code = poll.exit_code
+        if poll.status == _STATUS_EXITED and self.exited_at is None:
+            self.exited_at = time.time()
+        return poll.status, poll.output, poll.offset, poll.next_offset
 
 
 # ---------------------------------------------------------------------------
@@ -380,8 +274,8 @@ def _detect_interaction(status: str, output: str) -> Optional[SessionInteraction
     if not hint:
         return None
     lower = hint.lower()
-    if ("enter the number" in lower or "choose a number" in lower or "select a number" in lower
-            or _has_selection_items(output)):
+    has_selection_prompt = any(phrase in lower for phrase in ("enter the number", "choose a number", "select a number"))
+    if has_selection_prompt or _has_selection_items(output):
         return SessionInteraction(needs_input=True, kind=_INTERACTION_SELECTION, hint=hint)
     if (hint.endswith(":") or hint.endswith("?") or "press enter" in lower or "type your" in lower):
         return SessionInteraction(needs_input=True, kind=_INTERACTION_PROMPT, hint=hint)
@@ -395,10 +289,6 @@ def _detect_interaction(status: str, output: str) -> Optional[SessionInteraction
 
 def _build_exec_env(ws: WorkspaceInfo, extra: dict[str, str]) -> dict[str, str]:
     """Build the merged environment for a subprocess in *ws*."""
-    from trpc_agent_sdk.code_executors._constants import (  # lazy import to avoid circular
-        WORKSPACE_ENV_DIR_KEY, ENV_SKILLS_DIR, ENV_WORK_DIR, ENV_OUTPUT_DIR, DIR_RUNS,
-    )
-    from datetime import datetime
 
     env = os.environ.copy()
     run_dir = str(Path(ws.path) / DIR_RUNS / f"run_{datetime.now().strftime('%Y%m%dT%H%M%S_%f')}")
@@ -414,15 +304,6 @@ def _build_exec_env(ws: WorkspaceInfo, extra: dict[str, str]) -> dict[str, str]:
     env.update({k: v for k, v in base.items() if k not in extra})
     env.update(extra)
     return env
-
-
-def _resolve_abs_cwd(ws_path: str, rel_cwd: str) -> str:
-    """Return the absolute cwd by joining *ws_path* and *rel_cwd*."""
-    if rel_cwd and os.path.isabs(rel_cwd):
-        return rel_cwd
-    resolved = os.path.normpath(os.path.join(ws_path, rel_cwd or "."))
-    os.makedirs(resolved, exist_ok=True)
-    return resolved
 
 
 # ---------------------------------------------------------------------------
@@ -442,7 +323,8 @@ class SkillExecTool(BaseTool):
         self,
         run_tool: SkillRunTool,
         filters: Optional[List[BaseFilter]] = None,
-        session_ttl: float = DEFAULT_SESSION_TTL,
+        session_ttl: float = DEFAULT_SESSION_TTL_SEC,
+        create_ws_name_cb: Optional[CreateWorkspaceNameCallback] = None,
     ):
         super().__init__(name="skill_exec",
                          description=("Start an interactive command inside a skill workspace. "
@@ -452,8 +334,8 @@ class SkillExecTool(BaseTool):
                          filters=filters)
         self._run_tool = run_tool
         self._ttl = session_ttl
+        self._create_ws_name_cb = create_ws_name_cb or default_create_ws_name_callback
         self._sessions: dict[str, _ExecSession] = {}
-        self._sessions_lock = asyncio.Lock()
 
     # ------------------------------------------------------------------
     # Declaration
@@ -461,8 +343,8 @@ class SkillExecTool(BaseTool):
 
     @override
     def _get_declaration(self) -> FunctionDeclaration:
-        params_schema = _inline_json_schema_refs(ExecInput.model_json_schema())
-        response_schema = _inline_json_schema_refs(ExecOutput.model_json_schema())
+        params_schema = inline_json_schema_refs(ExecInput.model_json_schema())
+        response_schema = inline_json_schema_refs(ExecOutput.model_json_schema())
         return FunctionDeclaration(
             name="skill_exec",
             description=("Start an interactive command inside a skill workspace. "
@@ -476,37 +358,39 @@ class SkillExecTool(BaseTool):
     # Session management
     # ------------------------------------------------------------------
 
-    async def _put_session(self, sid: str, sess: _ExecSession) -> None:
-        async with self._sessions_lock:
-            await self._gc_expired_locked()
-            self._sessions[sid] = sess
+    async def _put_session(self, sid: str, exec_session: _ExecSession) -> None:
+        await self._gc_expired_sessions()
+        self._sessions[sid] = exec_session
 
-    async def get_session(self, sid: str) -> _ExecSession:
-        async with self._sessions_lock:
-            await self._gc_expired_locked()
-            sess = self._sessions.get(sid)
-        if sess is None:
+    async def _get_session(self, sid: str) -> _ExecSession:
+        await self._gc_expired_sessions()
+        session = self._sessions.get(sid)
+        if session is None:
             raise ValueError(f"unknown session_id: {sid}")
-        return sess
+        return session
 
-    async def remove_session(self, sid: str) -> _ExecSession:
-        async with self._sessions_lock:
-            await self._gc_expired_locked()
-            sess = self._sessions.pop(sid, None)
-        if sess is None:
+    async def _remove_session(self, sid: str) -> _ExecSession:
+        await self._gc_expired_sessions()
+        session = self._sessions.pop(sid, None)
+        if session is None:
             raise ValueError(f"unknown session_id: {sid}")
-        return sess
+        return session
 
-    async def _gc_expired_locked(self) -> None:
-        if self._ttl <= 0:
-            return
-        now = time.time()
-        expired = [
-            sid for sid, s in self._sessions.items() if s.exited_at is not None and (now - s.exited_at) >= self._ttl
-        ]
-        for sid in expired:
-            s = self._sessions.pop(sid)
-            _close_session(s)
+    async def _gc_expired_sessions(self) -> None:
+
+        async def _refresh_exit_state(session: _ExecSession, now: float) -> None:
+            if session.exited_at is not None:
+                return
+            session_state = await session.proc.state()
+            if session_state.status == PROGRAM_STATUS_EXITED:
+                session.exited_at = now
+
+        await cleanup_expired_sessions(
+            self._sessions,
+            ttl=self._ttl,
+            refresh_exit_state=_refresh_exit_state,
+            close_session=_close_session,
+        )
 
     # ------------------------------------------------------------------
     # Main execution
@@ -523,26 +407,30 @@ class SkillExecTool(BaseTool):
             inputs = ExecInput.model_validate(args)
         except Exception as ex:  # pylint: disable=broad-except
             raise ValueError(f"Invalid skill_exec arguments: {ex}") from ex
+        normalized_skill = inputs.skill.strip()
+        normalized_command = inputs.command.strip()
+        if not normalized_skill or not normalized_command:
+            raise ValueError("skill and command are required")
+        inputs = inputs.model_copy(update={"skill": normalized_skill, "command": normalized_command})
+
+        if self._run_tool.require_skill_loaded and not self._run_tool._is_skill_loaded(tool_context, normalized_skill):
+            raise ValueError(f"skill_exec requires skill_load first for {normalized_skill!r}")
 
         repository = self._run_tool._get_repository(tool_context)
 
         # Workspace creation
-        session_id_ws = inputs.skill
-        if tool_context.session and tool_context.session.id:
-            session_id_ws = tool_context.session.id
-
         workspace_runtime = repository.workspace_runtime
         manager = workspace_runtime.manager(tool_context)
-        ws = await manager.create_workspace(session_id_ws, tool_context)
+        workspace_id = self._create_ws_name_cb(tool_context)
+        ws = await manager.create_workspace(workspace_id, tool_context)
 
         # Stage skill via the same pluggable stager used by SkillRunTool
         stage_result = await self._run_tool.skill_stager.stage_skill(
             SkillStageRequest(
-                skill_name=inputs.skill,
+                skill_name=normalized_skill,
                 repository=repository,
                 workspace=ws,
                 ctx=tool_context,
-                engine=workspace_runtime,
                 timeout=self._run_tool._timeout,
             ))
         workspace_skill_dir = stage_result.workspace_skill_dir
@@ -553,29 +441,35 @@ class SkillExecTool(BaseTool):
 
         # Resolve cwd and env
         rel_cwd = self._run_tool._resolve_cwd(inputs.cwd, workspace_skill_dir)
-        abs_cwd = _resolve_abs_cwd(ws.path, rel_cwd)
 
         extra_env: dict[str, str] = dict(inputs.env)
         if ENV_SKILL_NAME not in extra_env:
-            extra_env[ENV_SKILL_NAME] = inputs.skill
+            extra_env[ENV_SKILL_NAME] = normalized_skill
         merged_env = _build_exec_env(ws, extra_env)
 
-        # Start subprocess
+        # Start interactive program session via runtime runner.
+        runner = workspace_runtime.runner(tool_context)
+        start_program = getattr(runner, "start_program", None)
+        if start_program is None:
+            raise ValueError("skill_exec is not supported by the current executor")
         sid = str(uuid.uuid4())
-        sess = await _start_session(inputs, ws, abs_cwd, merged_env)
-        await self._put_session(sid, sess)
+        exec_session = await _start_session(
+            runner=runner,
+            tool_context=tool_context,
+            inputs=inputs,
+            ws=ws,
+            rel_cwd=rel_cwd,
+            env=merged_env,
+        )
+        await self._put_session(sid, exec_session)
 
-        # Write initial stdin if provided
-        if inputs.stdin:
-            await _write_stdin(sess, inputs.stdin, submit=False)
-
-        yield_ms = inputs.yield_ms or DEFAULT_EXEC_YIELD_MS
-        status, chunk, offset, next_offset = await sess.yield_output(yield_ms, inputs.poll_lines)
+        yield_time_ms = inputs.yield_time_ms or DEFAULT_EXEC_YIELD_MS
+        status, chunk, offset, next_offset = await exec_session.yield_output(yield_time_ms, inputs.poll_lines)
 
         # Attempt to collect final result if already exited
         final_result = None
-        if status == _STATUS_EXITED and not sess.finalized:
-            final_result = await _collect_final_result(tool_context, sess, self._run_tool)
+        if status == _STATUS_EXITED and not exec_session.finalized:
+            final_result = await _collect_final_result(tool_context, exec_session, self._run_tool)
 
         out = ExecOutput(
             status=status,
@@ -583,10 +477,11 @@ class SkillExecTool(BaseTool):
             output=chunk,
             offset=offset,
             next_offset=next_offset,
-            exit_code=sess.exit_code,
+            exit_code=exec_session.exit_code,
             interaction=_detect_interaction(status, chunk),
             result=final_result,
         )
+        _apply_artifacts_state_delta(tool_context, out)
         return out.model_dump(exclude_none=True)
 
 
@@ -613,8 +508,8 @@ class WriteStdinTool(BaseTool):
 
     @override
     def _get_declaration(self) -> FunctionDeclaration:
-        params_schema = _inline_json_schema_refs(WriteStdinInput.model_json_schema())
-        response_schema = _inline_json_schema_refs(ExecOutput.model_json_schema())
+        params_schema = inline_json_schema_refs(WriteStdinInput.model_json_schema())
+        response_schema = inline_json_schema_refs(ExecOutput.model_json_schema())
         return FunctionDeclaration(
             name="skill_write_stdin",
             description=("Write to a running skill_exec session. Set submit=true to "
@@ -635,29 +530,32 @@ class WriteStdinTool(BaseTool):
             inputs = WriteStdinInput.model_validate(args)
         except Exception as ex:  # pylint: disable=broad-except
             raise ValueError(f"Invalid skill_write_stdin arguments: {ex}") from ex
+        normalized_session_id = require_non_empty(inputs.session_id, field_name="session_id")
+        inputs = inputs.model_copy(update={"session_id": normalized_session_id})
 
-        sess = await self._exec.get_session(inputs.session_id)
+        exec_session = await self._exec._get_session(inputs.session_id)
 
         if inputs.chars or inputs.submit:
-            await _write_stdin(sess, inputs.chars, submit=inputs.submit)
+            await _write_stdin(exec_session, inputs.chars, submit=inputs.submit)
 
-        yield_ms = inputs.yield_ms or DEFAULT_IO_YIELD_MS
-        status, chunk, offset, next_offset = await sess.yield_output(yield_ms, inputs.poll_lines)
+        yield_time_ms = inputs.yield_time_ms or DEFAULT_IO_YIELD_MS
+        status, chunk, offset, next_offset = await exec_session.yield_output(yield_time_ms, inputs.poll_lines)
 
         final_result = None
-        if status == _STATUS_EXITED and not sess.finalized:
-            final_result = await _collect_final_result(tool_context, sess, self._exec._run_tool)
+        if status == _STATUS_EXITED and not exec_session.finalized:
+            final_result = await _collect_final_result(tool_context, exec_session, self._exec._run_tool)
 
         out = ExecOutput(
             status=status,
-            session_id=inputs.session_id,
+            session_id=normalized_session_id,
             output=chunk,
             offset=offset,
             next_offset=next_offset,
-            exit_code=sess.exit_code,
+            exit_code=exec_session.exit_code,
             interaction=_detect_interaction(status, chunk),
             result=final_result,
         )
+        _apply_artifacts_state_delta(tool_context, out)
         return out.model_dump(exclude_none=True)
 
 
@@ -678,8 +576,8 @@ class PollSessionTool(BaseTool):
 
     @override
     def _get_declaration(self) -> FunctionDeclaration:
-        params_schema = _inline_json_schema_refs(PollSessionInput.model_json_schema())
-        response_schema = _inline_json_schema_refs(ExecOutput.model_json_schema())
+        params_schema = inline_json_schema_refs(PollSessionInput.model_json_schema())
+        response_schema = inline_json_schema_refs(ExecOutput.model_json_schema())
         return FunctionDeclaration(
             name="skill_poll_session",
             description=("Poll a running or recently exited skill_exec session for "
@@ -699,26 +597,29 @@ class PollSessionTool(BaseTool):
             inputs = PollSessionInput.model_validate(args)
         except Exception as ex:  # pylint: disable=broad-except
             raise ValueError(f"Invalid skill_poll_session arguments: {ex}") from ex
+        normalized_session_id = require_non_empty(inputs.session_id, field_name="session_id")
+        inputs = inputs.model_copy(update={"session_id": normalized_session_id})
 
-        sess = await self._exec.get_session(inputs.session_id)
+        exec_session = await self._exec._get_session(inputs.session_id)
 
-        yield_ms = inputs.yield_ms or DEFAULT_IO_YIELD_MS
-        status, chunk, offset, next_offset = await sess.yield_output(yield_ms, inputs.poll_lines)
+        yield_time_ms = inputs.yield_time_ms or DEFAULT_IO_YIELD_MS
+        status, chunk, offset, next_offset = await exec_session.yield_output(yield_time_ms, inputs.poll_lines)
 
         final_result = None
-        if status == _STATUS_EXITED and not sess.finalized:
-            final_result = await _collect_final_result(tool_context, sess, self._exec._run_tool)
+        if status == _STATUS_EXITED and not exec_session.finalized:
+            final_result = await _collect_final_result(tool_context, exec_session, self._exec._run_tool)
 
         out = ExecOutput(
             status=status,
-            session_id=inputs.session_id,
+            session_id=normalized_session_id,
             output=chunk,
             offset=offset,
             next_offset=next_offset,
-            exit_code=sess.exit_code,
+            exit_code=exec_session.exit_code,
             interaction=_detect_interaction(status, chunk),
             result=final_result,
         )
+        _apply_artifacts_state_delta(tool_context, out)
         return out.model_dump(exclude_none=True)
 
 
@@ -738,8 +639,8 @@ class KillSessionTool(BaseTool):
 
     @override
     def _get_declaration(self) -> FunctionDeclaration:
-        params_schema = _inline_json_schema_refs(KillSessionInput.model_json_schema())
-        response_schema = _inline_json_schema_refs(SessionKillOutput.model_json_schema())
+        params_schema = inline_json_schema_refs(KillSessionInput.model_json_schema())
+        response_schema = inline_json_schema_refs(SessionKillOutput.model_json_schema())
         return FunctionDeclaration(
             name="skill_kill_session",
             description="Terminate and remove a skill_exec session.",
@@ -758,25 +659,26 @@ class KillSessionTool(BaseTool):
             inputs = KillSessionInput.model_validate(args)
         except Exception as ex:  # pylint: disable=broad-except
             raise ValueError(f"Invalid skill_kill_session arguments: {ex}") from ex
+        normalized_session_id = require_non_empty(inputs.session_id, field_name="session_id")
+        inputs = inputs.model_copy(update={"session_id": normalized_session_id})
+        exec_session = await self._exec._get_session(normalized_session_id)
 
-        sess = await self._exec.remove_session(inputs.session_id)
-
-        rc = sess.proc.returncode
         final_status = _STATUS_EXITED
 
-        if rc is None:
+        poll = await exec_session.proc.poll(None)
+        if poll.status == _STATUS_RUNNING:
             try:
-                sess.proc.kill()
-                await asyncio.wait_for(sess.proc.wait(), timeout=5.0)
+                await exec_session.proc.kill(DEFAULT_SESSION_KILL_SEC)
             except Exception:  # pylint: disable=broad-except
                 pass
             final_status = "killed"
 
-        _close_session(sess)
+        await self._exec._remove_session(normalized_session_id)
+        await _close_session(exec_session)
 
         out = SessionKillOutput(
             ok=True,
-            session_id=inputs.session_id,
+            session_id=normalized_session_id,
             status=final_status,
         )
         return out.model_dump()
@@ -790,7 +692,7 @@ class KillSessionTool(BaseTool):
 def create_exec_tools(
     run_tool: SkillRunTool,
     filters: Optional[List[BaseFilter]] = None,
-    session_ttl: float = DEFAULT_SESSION_TTL,
+    session_ttl: float = DEFAULT_SESSION_TTL_SEC,
 ) -> tuple[SkillExecTool, WriteStdinTool, PollSessionTool, KillSessionTool]:
     """Create the full set of interactive exec tools sharing one session store.
 
@@ -823,85 +725,46 @@ def create_exec_tools(
 
 
 async def _start_session(
+    *,
+    runner: BaseProgramRunner,
+    tool_context: InvocationContext,
     inputs: ExecInput,
     ws: WorkspaceInfo,
-    abs_cwd: str,
+    rel_cwd: str,
     env: dict[str, str],
 ) -> _ExecSession:
-    """Spawn a subprocess and return an initialized :class:`_ExecSession`."""
-    command = inputs.command
-    master_fd: Optional[int] = None
-
-    if inputs.tty:
-        # Allocate a pseudo-TTY.
-        master_fd, slave_fd = pty.openpty()
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "bash",
-                "-c",
-                command,
-                stdin=slave_fd,
-                stdout=slave_fd,
-                stderr=slave_fd,
-                cwd=abs_cwd,
-                env=env,
-                close_fds=True,
-                preexec_fn=os.setsid,
-            )
-        finally:
-            os.close(slave_fd)  # parent doesn't need the slave end
-
-        sess = _ExecSession(proc=proc, ws=ws, in_data=inputs, master_fd=master_fd)
-        sess.reader_task = asyncio.create_task(_read_pty(sess, master_fd))
-    else:
-        proc = await asyncio.create_subprocess_exec(
-            "bash",
-            "-c",
-            command,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            cwd=abs_cwd,
-            env=env,
-        )
-        sess = _ExecSession(proc=proc, ws=ws, in_data=inputs)
-        if proc.stdout:
-            sess.reader_task = asyncio.create_task(_read_pipe(sess, proc.stdout))
-
-    return sess
+    """Start a ProgramSession via runtime runner."""
+    spec = WorkspaceRunProgramSpec(
+        cmd="bash",
+        args=["-c", inputs.command],
+        env=env,
+        cwd=rel_cwd,
+        stdin=inputs.stdin,
+        timeout=float(inputs.timeout or 0),
+        tty=inputs.tty,
+    )
+    proc = await runner.start_program(tool_context, ws, spec)
+    return _ExecSession(proc=proc, ws=ws, in_data=inputs)
 
 
-async def _write_stdin(sess: _ExecSession, chars: str, submit: bool) -> None:
+async def _write_stdin(exec_session: _ExecSession, chars: str, submit: bool) -> None:
     """Write *chars* (and optionally a newline) to the session's stdin."""
-    if sess.master_fd is not None:
-        # PTY path: write to master fd
-        data = (chars + ("\n" if submit else "")).encode("utf-8")
-        if data:
-            try:
-                os.write(sess.master_fd, data)
-            except OSError as ex:
-                logger.debug("skill_exec: write to pty failed: %s", ex)
-    elif sess.proc.stdin:
-        # Pipe path: use asyncio StreamWriter
-        data = (chars + ("\n" if submit else "")).encode("utf-8")
-        if data:
-            try:
-                sess.proc.stdin.write(data)
-                await sess.proc.stdin.drain()
-            except Exception as ex:  # pylint: disable=broad-except
-                logger.debug("skill_exec: write to stdin failed: %s", ex)
+    try:
+        await exec_session.proc.write(chars, submit)
+    except Exception as ex:  # pylint: disable=broad-except
+        logger.debug("skill_exec: write to stdin failed: %s", ex)
 
 
 async def _collect_final_result(
     ctx: InvocationContext,
-    sess: _ExecSession,
+    exec_session: _ExecSession,
     run_tool: SkillRunTool,
 ) -> Optional[SkillRunOutput]:
     """Collect output files and build the final :class:`SkillRunOutput`."""
-    if sess.finalized:
-        return sess.final_result
+    if exec_session.finalized:
+        return exec_session.final_result
 
-    in_data = sess.in_data
+    in_data = exec_session.in_data
     fake_run_input = SkillRunInput(
         skill=in_data.skill,
         command=in_data.command,
@@ -916,13 +779,19 @@ async def _collect_final_result(
         outputs=in_data.outputs,
     )
     try:
-        files, manifest = await run_tool._prepare_outputs(ctx, sess.ws, fake_run_input)
+        files, manifest = await run_tool._prepare_outputs(ctx, exec_session.ws, fake_run_input)
     except Exception as ex:  # pylint: disable=broad-except
         logger.warning("skill_exec: collect outputs failed: %s", ex)
         files, manifest = [], None
 
-    total_out = await sess.total_output()
-    exit_code = sess.exit_code or 0
+    try:
+        run_result = await exec_session.proc.run_result()
+        total_out = (run_result.stdout or "") + (run_result.stderr or "")
+        exit_code = run_result.exit_code
+    except Exception:  # pylint: disable=broad-except
+        run_log = await exec_session.proc.log(None, None)
+        total_out = run_log.output or ""
+        exit_code = exec_session.exit_code or 0
 
     # Reuse the same output-quality helpers as skill_run
     warnings: list[str] = []
@@ -944,30 +813,21 @@ async def _collect_final_result(
     )
 
     try:
-        await run_tool._attach_artifacts_if_requested(ctx, sess.ws, fake_run_input, result, files)
+        await run_tool._attach_artifacts_if_requested(ctx, exec_session.ws, fake_run_input, result, files)
     except Exception as ex:  # pylint: disable=broad-except
         logger.warning("skill_exec: attach artifacts failed: %s", ex)
 
     if manifest:
         run_tool._merge_manifest_artifact_refs(manifest, result)
 
-    sess.final_result = result
-    sess.finalized = True
+    exec_session.final_result = result
+    exec_session.finalized = True
     return result
 
 
-def _close_session(sess: _ExecSession) -> None:
-    """Cancel background tasks and close any open fds."""
-    if sess.reader_task and not sess.reader_task.done():
-        sess.reader_task.cancel()
-    if sess.master_fd is not None:
-        try:
-            os.close(sess.master_fd)
-        except OSError:
-            pass
-        sess.master_fd = None
-    if sess.proc.stdin and not sess.proc.stdin.is_closing():
-        try:
-            sess.proc.stdin.close()
-        except Exception:  # pylint: disable=broad-except
-            pass
+async def _close_session(exec_session: _ExecSession) -> None:
+    """Release program session resources."""
+    try:
+        await exec_session.proc.close()
+    except Exception:  # pylint: disable=broad-except
+        pass

@@ -11,7 +11,6 @@ import time
 from typing import List
 
 from pydantic import Field
-
 from trpc_agent_sdk.abc import SessionABC
 from trpc_agent_sdk.events import Event
 
@@ -55,9 +54,6 @@ class Session(SessionABC):
 
         If both filters result in removing all events, the method attempts to
         preserve the first user message and all events after it from the original events.
-
-        The filtering logic is inspired by the ApplyEventFiltering function
-        from trpc-agent-go: https://github.com/trpc-group/trpc-agent-go
 
         Args:
             event_ttl_seconds: Time-to-live in seconds for events. If 0, no TTL filtering is applied.

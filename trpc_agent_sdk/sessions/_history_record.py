@@ -23,6 +23,7 @@ class HistoryRecord(BaseModel):
     user_texts: list[str] = Field(default_factory=list, description="List of user text")
     # The text of the user
     assistant_texts: list[str] = Field(default_factory=list, description="List of assistant text")
+
     # The text of the assistant
 
     def add_record(self, user_text: str, assistant_text: str | None = ""):
