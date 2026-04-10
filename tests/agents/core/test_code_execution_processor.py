@@ -7,8 +7,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from trpc_agent_sdk.agents.core._code_execution_processor import (
     DataFileUtil,
     _DATA_FILE_UTIL_MAP,

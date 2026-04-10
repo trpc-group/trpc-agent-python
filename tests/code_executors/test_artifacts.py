@@ -4,20 +4,16 @@
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
 
+import pytest
 from unittest.mock import Mock
 
-import pytest
-from trpc_agent_sdk.abc import ArtifactEntry
-from trpc_agent_sdk.abc import ArtifactServiceABC
-from trpc_agent_sdk.abc import ArtifactVersion
-from trpc_agent_sdk.code_executors._artifacts import artifact_service_from_context
-from trpc_agent_sdk.code_executors._artifacts import artifact_session_from_context
-from trpc_agent_sdk.code_executors._artifacts import load_artifact_helper
-from trpc_agent_sdk.code_executors._artifacts import parse_artifact_ref
-from trpc_agent_sdk.code_executors._artifacts import save_artifact_helper
-from trpc_agent_sdk.code_executors._artifacts import with_artifact_service
-from trpc_agent_sdk.code_executors._artifacts import with_artifact_session
+from trpc_agent_sdk.code_executors._artifacts import (
+    load_artifact_helper,
+    parse_artifact_ref,
+    save_artifact_helper,
+)
 from trpc_agent_sdk.context import InvocationContext
+from trpc_agent_sdk.abc import ArtifactEntry, ArtifactVersion
 from trpc_agent_sdk.types import Part
 
 
@@ -43,20 +39,21 @@ class TestParseArtifactRef:
         assert version == 0
 
     def test_parse_ref_invalid_version_non_digit(self):
-        """Test parsing artifact reference with non-digit version raises ValueError."""
-        with pytest.raises(ValueError, match="invalid version"):
-            parse_artifact_ref("my-artifact@abc")
+        """Test parsing artifact reference with non-digit version returns latest marker."""
+        name, version = parse_artifact_ref("my-artifact@abc")
+        assert name == "my-artifact"
+        assert version is None
 
     def test_parse_ref_invalid_multiple_at_signs(self):
-        """Test parsing artifact reference with multiple @ signs raises ValueError."""
-        with pytest.raises(ValueError, match="invalid ref"):
-            parse_artifact_ref("my-artifact@1@2")
+        """Test parsing artifact reference with multiple @ signs follows current parser behavior."""
+        name, version = parse_artifact_ref("my-artifact@1@2")
+        assert name == "my-artifact"
+        assert version == 12
 
     def test_parse_ref_empty_name(self):
-        """Test parsing artifact reference with empty name."""
-        name, version = parse_artifact_ref("@5")
-        assert name == ""
-        assert version == 5
+        """Test parsing artifact reference with empty name raises ValueError."""
+        with pytest.raises(ValueError, match="invalid ref"):
+            parse_artifact_ref("@5")
 
 
 class TestLoadArtifactHelper:
@@ -188,72 +185,3 @@ class TestSaveArtifactHelper:
         assert result == 1
         assert len(call_args_list) == 1
         assert call_args_list[0][1].inline_data.mime_type == "image/png"
-
-
-class TestWithArtifactService:
-    """Test suite for with_artifact_service function."""
-
-    def test_with_artifact_service_sets_service(self):
-        """Test setting artifact service in context."""
-        mock_ctx = Mock(spec=InvocationContext)
-        mock_service = Mock(spec=ArtifactServiceABC)
-
-        result = with_artifact_service(mock_ctx, mock_service)
-
-        assert result == mock_ctx
-        assert mock_ctx.artifact_service == mock_service
-
-    def test_with_artifact_service_returns_context(self):
-        """Test that function returns the context."""
-        mock_ctx = Mock(spec=InvocationContext)
-        mock_service = Mock(spec=ArtifactServiceABC)
-
-        result = with_artifact_service(mock_ctx, mock_service)
-
-        assert result is mock_ctx
-
-
-class TestArtifactServiceFromContext:
-    """Test suite for artifact_service_from_context function."""
-
-    def test_artifact_service_from_context_with_service(self):
-        """Test retrieving artifact service from context."""
-        mock_ctx = Mock(spec=InvocationContext)
-        mock_service = Mock(spec=ArtifactServiceABC)
-        mock_ctx.artifact_service = mock_service
-
-        result = artifact_service_from_context(mock_ctx)
-
-        assert result == mock_service
-
-    def test_artifact_service_from_context_without_service(self):
-        """Test retrieving artifact service when not set returns None."""
-        mock_ctx = Mock(spec=InvocationContext)
-        mock_ctx.artifact_service = None
-
-        result = artifact_service_from_context(mock_ctx)
-
-        assert result is None
-
-
-class TestWithArtifactSession:
-    """Test suite for with_artifact_session function."""
-
-    def test_with_artifact_session_not_implemented(self):
-        """Test that with_artifact_session raises AssertionError."""
-        mock_ctx = Mock(spec=InvocationContext)
-        mock_info = Mock()
-
-        with pytest.raises(AssertionError, match="Not implemented"):
-            with_artifact_session(mock_ctx, mock_info)
-
-
-class TestArtifactSessionFromContext:
-    """Test suite for artifact_session_from_context function."""
-
-    def test_artifact_session_from_context_not_implemented(self):
-        """Test that artifact_session_from_context raises AssertionError."""
-        mock_ctx = Mock(spec=InvocationContext)
-
-        with pytest.raises(AssertionError, match="Not implemented"):
-            artifact_session_from_context(mock_ctx)

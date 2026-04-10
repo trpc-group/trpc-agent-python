@@ -11,7 +11,6 @@ from typing import Optional
 
 from pydantic import BaseModel
 from pydantic import Field
-
 from trpc_agent_sdk.types import CodeExecutionResult
 from trpc_agent_sdk.types import Outcome
 
@@ -148,6 +147,9 @@ class WorkspaceRunProgramSpec(BaseModel):
 
     limits: WorkspaceResourceLimits = Field(default_factory=WorkspaceResourceLimits)
     """ resource limits"""
+
+    tty: bool = Field(default=False, description="Allocate pseudo-TTY")
+    """ whether to allocate pseudo-TTY"""
 
 
 class WorkspaceRunResult(BaseModel):

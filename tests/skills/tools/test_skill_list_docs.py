@@ -42,8 +42,7 @@ class TestSkillListDocs:
         ctx = _make_ctx(repository=repo)
 
         result = skill_list_docs(ctx, "test")
-        assert result["docs"] == ["guide.md", "api.md"]
-        assert result["body_loaded"] is True
+        assert result == ["guide.md", "api.md"]
 
     def test_no_body(self):
         skill = Skill(summary=SkillSummary(name="test"), body="")
@@ -52,17 +51,16 @@ class TestSkillListDocs:
         ctx = _make_ctx(repository=repo)
 
         result = skill_list_docs(ctx, "test")
-        assert result["body_loaded"] is False
+        assert result == []
 
     def test_skill_not_found(self):
         repo = MagicMock()
-        repo.get = MagicMock(return_value=None)
+        repo.get = MagicMock(side_effect=ValueError("not found"))
         ctx = _make_ctx(repository=repo)
 
-        result = skill_list_docs(ctx, "nonexistent")
-        assert result == {"docs": [], "body_loaded": False}
+        with pytest.raises(ValueError, match="unknown skill"):
+            skill_list_docs(ctx, "nonexistent")
 
     def test_no_repository_raises(self):
         ctx = _make_ctx(repository=None)
-        with pytest.raises(ValueError, match="repository not found"):
-            skill_list_docs(ctx, "test")
+        assert skill_list_docs(ctx, "test") == []

@@ -29,7 +29,6 @@ from typing import NamedTuple
 from typing import Optional
 
 from google.genai import types
-
 from trpc_agent_sdk.abc import ArtifactId
 
 
@@ -111,8 +110,9 @@ def is_artifact_ref(artifact: types.Part) -> bool:
     Returns:
         True if the artifact part is an artifact reference, False otherwise.
     """
-    return bool(artifact.file_data and artifact.file_data.file_uri
-                and artifact.file_data.file_uri.startswith("artifact://"))
+    file_data = artifact.file_data
+    file_uri = file_data.file_uri if file_data else ""
+    return bool(file_uri and file_uri.startswith("artifact://"))
 
 
 def file_has_user_namespace(filename: str) -> bool:

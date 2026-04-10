@@ -3,56 +3,40 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""SkillsRequestProcessor — injects skill overviews and loaded contents.
-
-Mirrors ``internal/flow/processor/skills.go`` from trpc-agent-go, while
-retaining Python-unique features (user_prompt, tools-selection summary).
-
-Behavior
---------
-- Overview  : always injected (skill names + descriptions).
-- Loaded skills: full SKILL.md body injected into system prompt (or
-  deferred to tool-result mode).
-- Docs       : doc texts selected via session state keys.
-- Tools      : (Python-unique) tool selection summary for each loaded skill.
-
-Skill load modes
-----------------
-- ``turn``    (default) – loaded skill content is available for all LLM
-  calls within the current invocation, then cleared at the start of the
-  next invocation.
-- ``once``    – loaded skill content is injected once, then offloaded
-  (state keys cleared) immediately after injection.
-- ``session`` – loaded skill content persists across invocations until
-  the session expires or state is cleared explicitly.
-"""
+"""SkillsRequestProcessor — injects skill overviews and loaded contents."""
 
 from __future__ import annotations
 
 import json
+from typing import Any
 from typing import Callable
 from typing import List
 from typing import Optional
 
+from trpc_agent_sdk.context import AgentContext
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.skills import BaseSkillRepository
-from trpc_agent_sdk.skills import SKILL_DOCS_STATE_KEY_PREFIX
-from trpc_agent_sdk.skills import SKILL_LOADED_STATE_KEY_PREFIX
-from trpc_agent_sdk.skills import SKILL_TOOLS_STATE_KEY_PREFIX
 from trpc_agent_sdk.skills import Skill
-from trpc_agent_sdk.skills import generic_get_selection
+from trpc_agent_sdk.skills import SkillLoadModeNames
+from trpc_agent_sdk.skills import SkillProfileFlags
+from trpc_agent_sdk.skills import SkillProfileNames
+from trpc_agent_sdk.skills import SkillToolsNames
+from trpc_agent_sdk.skills import docs_scan_prefix
+from trpc_agent_sdk.skills import docs_state_key
+from trpc_agent_sdk.skills import get_skill_config
+from trpc_agent_sdk.skills import loaded_order_state_key
+from trpc_agent_sdk.skills import loaded_scan_prefix
+from trpc_agent_sdk.skills import loaded_state_key
+from trpc_agent_sdk.skills import marshal_loaded_order
+from trpc_agent_sdk.skills import parse_loaded_order
+from trpc_agent_sdk.skills import set_skill_config
+from trpc_agent_sdk.skills import tool_scan_prefix
+from trpc_agent_sdk.skills import tool_state_key
+from trpc_agent_sdk.skills import touch_loaded_order
 
-# ---------------------------------------------------------------------------
-# Load mode constants (mirrors Go SkillLoadModeXxx)
-# ---------------------------------------------------------------------------
-
-SKILL_LOAD_MODE_ONCE = "once"
-SKILL_LOAD_MODE_TURN = "turn"
-SKILL_LOAD_MODE_SESSION = "session"
-
-_DEFAULT_SKILL_LOAD_MODE = SKILL_LOAD_MODE_TURN
+from ._skills_tool_result_processor import SKILL_LOADED_RE
 
 # ---------------------------------------------------------------------------
 # Prompt section headers (mirrors Go const block)
@@ -62,29 +46,34 @@ _SKILLS_OVERVIEW_HEADER = "Available skills:"
 _SKILLS_CAPABILITY_HEADER = "Skill tool availability:"
 _SKILLS_TOOLING_GUIDANCE_HEADER = "Tooling and workspace guidance:"
 
-# ---------------------------------------------------------------------------
-# Internal state keys
-# ---------------------------------------------------------------------------
-
-# JSON array of skill names in load order — used by the max-cap eviction.
-_SKILLS_LOADED_ORDER_STATE_KEY = "temp:skill:loaded_order"
-
-# ---------------------------------------------------------------------------
-# Normalization helpers
-# ---------------------------------------------------------------------------
+_SKILLS_TURN_INIT_STATE_KEY = "processor:skills:turn_init"
 
 
-def _normalize_load_mode(mode: str) -> str:
-    m = (mode or "").strip().lower()
-    if m in (SKILL_LOAD_MODE_ONCE, SKILL_LOAD_MODE_TURN, SKILL_LOAD_MODE_SESSION):
-        return m
-    return _DEFAULT_SKILL_LOAD_MODE
+def normalize_load_mode(mode: str) -> str:
+    value = (mode or "").strip().lower()
+    if value in (SkillLoadModeNames.ONCE, SkillLoadModeNames.TURN, SkillLoadModeNames.SESSION):
+        return value
+    return SkillLoadModeNames.TURN
 
 
-def _is_knowledge_only(profile: str) -> bool:
-    """Return True for profiles that support knowledge lookup only."""
-    p = (profile or "").strip().lower().replace("-", "_")
-    return p in ("knowledge_only", "knowledge")
+def _append_knowledge_guidance(lines: list[str], flags: SkillProfileFlags) -> None:
+    """Append docs-loading guidance mirroring Go's appendKnowledgeGuidance."""
+    has_list_docs = flags.list_docs
+    has_select_docs = flags.select_docs
+    if has_list_docs and has_select_docs:
+        lines.append("- Use the available doc listing and selection helpers to keep"
+                     " documentation loads targeted.\n")
+    elif has_list_docs:
+        lines.append("- Use the available doc listing helper to discover doc names,"
+                     " then load only the docs you need.\n")
+    elif has_select_docs:
+        lines.append("- If doc names are already known, use the available doc"
+                     " selection helper to keep loaded docs targeted.\n")
+    else:
+        lines.append("- If you need docs, request them directly with skill_load.docs"
+                     " or include_all_docs.\n")
+    lines.append("- Avoid include_all_docs unless the user asks or the task genuinely"
+                 " needs the full doc set.\n")
 
 
 # ---------------------------------------------------------------------------
@@ -92,19 +81,58 @@ def _is_knowledge_only(profile: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _default_knowledge_only_guidance() -> str:
-    return ("\n" + _SKILLS_TOOLING_GUIDANCE_HEADER + "\n" +
-            "- Use skills for progressive disclosure only: load SKILL.md first,"
-            " then inspect only the documentation needed for the current task.\n" +
-            "- Avoid include_all_docs unless the user asks or the task genuinely"
-            " needs the full doc set.\n" + "- Treat loaded skill content as domain guidance. Do not claim you"
-            " executed scripts, shell commands, or interactive flows described by"
-            " the skill.\n" + "- If a skill depends on execution to complete the task, switch to"
-            " other registered tools (for example, MCP tools) or explain the"
+def _default_catalog_only_guidance() -> str:
+    return (f"\n{_SKILLS_TOOLING_GUIDANCE_HEADER}\n"
+            "- Use the skill overview as a catalog only. Built-in skill tools are"
+            " unavailable in this configuration; if a task depends on loading or"
+            " executing a skill, use other registered tools or explain the"
             " limitation clearly.\n")
 
 
-def _default_full_tooling_and_workspace_guidance(exec_tools_disabled: bool) -> str:
+def _default_doc_helpers_only_guidance(flags: SkillProfileFlags) -> str:
+    lines = [
+        "\n",
+        _SKILLS_TOOLING_GUIDANCE_HEADER,
+        "\n",
+    ]
+    has_list_docs = flags.list_docs
+    has_select_docs = flags.select_docs
+    if has_list_docs and has_select_docs:
+        lines.append("- Use skills only to inspect available doc names or adjust"
+                     " doc selection state.\n")
+    elif has_list_docs:
+        lines.append("- Use skills only to inspect available doc names.\n")
+    elif has_select_docs:
+        lines.append("- Use skills only to adjust doc selection when doc names are"
+                     " already known.\n")
+    lines.append("- Built-in skill loading is unavailable, so doc helpers do not"
+                 " inject SKILL.md or doc contents into context; if the task needs"
+                 " loaded content or execution, use other registered tools or"
+                 " explain the limitation clearly.\n")
+    return "".join(lines)
+
+
+def _default_knowledge_only_guidance(flags: SkillProfileFlags) -> str:
+    lines = [
+        "\n",
+        _SKILLS_TOOLING_GUIDANCE_HEADER,
+        "\n",
+        "- Use skills for progressive disclosure only: load SKILL.md first,"
+        " then inspect only the documentation needed for the current task.\n",
+    ]
+    _append_knowledge_guidance(lines, flags)
+    lines += [
+        "- Treat loaded skill content as domain guidance. Do not claim you"
+        " executed scripts, shell commands, or interactive flows described by"
+        " the skill.\n",
+        "- If a skill depends on execution to complete the task, switch to"
+        " other registered tools (for example, MCP tools) or explain the"
+        " limitation clearly.\n",
+    ]
+    return "".join(lines)
+
+
+def _default_full_tooling_and_workspace_guidance(flags: SkillProfileFlags) -> str:
     lines: list[str] = [
         "\n",
         _SKILLS_TOOLING_GUIDANCE_HEADER,
@@ -132,6 +160,9 @@ def _default_full_tooling_and_workspace_guidance(exec_tools_disabled: bool) -> s
         "- Prefer writing new files under $OUTPUT_DIR or a skill's out/"
         " directory and include output_files globs (or an outputs spec) so"
         " files can be collected or saved as artifacts.\n",
+        "- Use stdout/stderr for logs or short status text. If the model needs"
+        " large or structured text, write it to files under $OUTPUT_DIR and"
+        " return it via output_files or outputs.\n",
         "- For Python skills that need third-party packages, create a virtualenv"
         " under the skill's .venv/ directory (it is writable inside the"
         " workspace).\n",
@@ -153,69 +184,78 @@ def _default_full_tooling_and_workspace_guidance(exec_tools_disabled: bool) -> s
         "- When chaining multiple skills, read previous results from $OUTPUT_DIR"
         " (or a skill's out/ directory) instead of copying them back into inputs"
         " directories.\n",
-        "- Treat loaded skill docs as guidance, not perfect truth; when runtime"
-        " help or stderr disagrees, trust observed runtime behavior.\n",
-        "- Loading a skill gives you instructions and bundled resources; it does"
-        " not execute the skill by itself.\n",
-        "- The skill summaries above are routing summaries only; they do not"
-        " replace SKILL.md or other loaded docs.\n",
-        "- If the loaded content already provides enough guidance to answer or"
-        " produce the requested result, respond directly.\n",
-        "- A skill can still be executable even when it has no extra docs"
-        " or no custom tools. If SKILL.md provides runnable commands,"
-        " proceed with skill_run using those commands.\n",
-        "- If a skill is not loaded, call skill_load; you may pass docs or"
-        " include_all_docs.\n",
-        "- If the body is loaded and docs are missing, treat docs as optional"
-        " unless the task explicitly requires extra references; then call"
-        " skill_select_docs or skill_load again to add docs.\n",
-        "- If the skill defines tools in its SKILL.md, they will be"
-        " automatically selected when you load the skill. You can refine tool"
-        " selection with skill_select_tools.\n",
-        "- If you decide to use a skill, load SKILL.md before",
     ]
-    if exec_tools_disabled:
-        lines.append(" the first skill_run for that skill, then load only"
-                     " the docs you still need.\n")
+    if flags.load:
+        lines += [
+            "- Treat loaded skill docs as guidance, not perfect truth; when runtime"
+            " help or stderr disagrees, trust observed runtime behavior.\n",
+            "- Loading a skill gives you instructions and bundled resources; it does"
+            " not execute the skill by itself.\n",
+            "- The skill summaries above are routing summaries only; they do not"
+            " replace SKILL.md or other loaded docs.\n",
+            "- If the loaded content already provides enough guidance to answer or"
+            " produce the requested result, respond directly.\n",
+            "- If you decide to use a skill, load SKILL.md before",
+        ]
+        if flags.requires_exec_session_tools():
+            lines.append(" the first skill_run or skill_exec for that skill, then load"
+                         " only the docs you still need.\n")
+        else:
+            lines.append(" the first skill_run for that skill, then load only the docs"
+                         " you still need.\n")
+        lines += [
+            "- Do not infer commands, script entrypoints, or resource layouts from"
+            " the short summary alone.\n",
+        ]
+        _append_knowledge_guidance(lines, flags)
+    elif flags.has_doc_helpers():
+        lines += [
+            "- Built-in skill loading is unavailable in this configuration. Doc"
+            " listing or selection helpers can inspect doc names or selection"
+            " state, but they do not inject SKILL.md or doc contents into"
+            " context.\n",
+        ]
     else:
-        lines.append(" the first skill_run or skill_exec for that skill,"
-                     " then load only the docs you still need.\n")
+        lines += [
+            "- Built-in skill loading is unavailable in this configuration; do not"
+            " assume SKILL.md or doc contents are in context.\n",
+        ]
+
     lines += [
-        "- Do not infer commands, script entrypoints, or resource layouts"
-        " from the short summary alone.\n",
-        "- For docs, prefer skill_list_docs + skill_select_docs to load only"
-        " what you need.\n",
-        "- Avoid include_all_docs unless you need every doc or the user asks.\n",
-        "- Use execution tools only when running a command will reveal or"
-        " produce information or files you still need.\n",
+        "- Use execution tools only when running a command will reveal or produce"
+        " information or files you still need.\n",
     ]
-    if not exec_tools_disabled:
+    if flags.requires_exec_session_tools():
         lines.append("- Use skill_exec only when a command needs incremental stdin or"
                      " TTY-style interaction; otherwise prefer one-shot execution.\n")
     else:
         lines.append("- Do not assume interactive execution is available when only"
                      " one-shot execution tools are present.\n")
     lines += [
-        "- Prefer script-based commands from SKILL.md examples (for example,"
-        " python3 scripts/foo.py) instead of ad-hoc python -c rewrites"
-        " unless the skill explicitly recommends inline execution.\n",
-        "- skill_run is a command runner inside the skill workspace, not a"
-        " magic capability. It does not automatically add the skill directory"
-        " to PATH or install dependencies; invoke scripts via an explicit"
-        " interpreter and path (e.g., python3 scripts/foo.py).\n",
-        "- When you execute, follow the tool description, loaded skill docs,"
-        " bundled scripts, and observed runtime behavior rather than inventing"
-        " shell syntax or command arguments.\n",
-        "- If skill_list_tools returns command_examples, execute one of those"
-        " commands directly before trying ad-hoc shell alternatives.\n",
+        "- skill_run is a command runner inside the skill workspace, not a magic"
+        " capability. It does not automatically add the skill directory to PATH"
+        " or install dependencies; invoke scripts via an explicit interpreter and"
+        " path (e.g., python3 scripts/foo.py).\n",
+        "- When you execute, follow the tool description, ",
     ]
+    if flags.load:
+        lines[-1] += "loaded skill docs, "
+    lines[-1] += ("bundled scripts, and observed runtime behavior rather than inventing shell"
+                  " syntax or command arguments.\n")
     return "".join(lines)
 
 
-def _default_tooling_and_workspace_guidance(profile: str, exec_tools_disabled: bool) -> str:
-    if _is_knowledge_only(profile):
-        return _default_knowledge_only_guidance()
-    return _default_full_tooling_and_workspace_guidance(exec_tools_disabled)
+def _default_tooling_and_workspace_guidance(flags: SkillProfileFlags) -> str:
+    if not flags.is_any():
+        return _default_catalog_only_guidance()
+
+    if not flags.run:
+        if flags.load:
+            return _default_knowledge_only_guidance(flags)
+        if flags.has_doc_helpers():
+            return _default_doc_helpers_only_guidance(flags)
+        return _default_catalog_only_guidance()
+    return _default_full_tooling_and_workspace_guidance(flags)
 
 
 def _normalize_custom_guidance(guidance: str) -> str:
@@ -236,8 +276,6 @@ def _normalize_custom_guidance(guidance: str) -> str:
 class SkillsRequestProcessor:
     """Injects skill overviews and loaded contents into LLM requests.
 
-    Mirrors Go's ``SkillsRequestProcessor``.
-
     Args:
         skill_repository:  Default skill repository.
         load_mode:         ``"turn"`` (default), ``"once"``, or ``"session"``.
@@ -247,6 +285,9 @@ class SkillsRequestProcessor:
         tool_result_mode:  When ``True``, skip loaded-skill injection here
                            (content is materialized into tool results instead).
         tool_profile:      Profile string (e.g. ``"knowledge_only"``).
+        forbidden_tools: Optional explicit blacklist of built-in skill tools.
+        tool_flags:        Optional resolved flags; when set, takes precedence
+                           over ``tool_profile``/``forbidden_tools``.
         exec_tools_disabled: When ``True``, omit skill_exec guidance lines.
         repo_resolver:     Optional ``(ctx) -> BaseSkillRepository`` callable
                            that returns an invocation-specific repository.
@@ -257,25 +298,30 @@ class SkillsRequestProcessor:
         self,
         skill_repository: BaseSkillRepository,
         *,
-        load_mode: str = SKILL_LOAD_MODE_TURN,
+        load_mode: str = str(SkillLoadModeNames.TURN),
         tooling_guidance: Optional[str] = None,
         tool_result_mode: bool = False,
-        tool_profile: str = "",
+        tool_profile: str = str(SkillProfileNames.FULL),
+        forbidden_tools: Optional[list[str]] = None,
+        tool_flags: Optional[SkillProfileFlags] = None,
         exec_tools_disabled: bool = False,
         repo_resolver: Optional[Callable[[InvocationContext], BaseSkillRepository]] = None,
         max_loaded_skills: int = 0,
     ) -> None:
         self._skill_repository = skill_repository
-        self._load_mode = _normalize_load_mode(load_mode)
+        self._load_mode = normalize_load_mode(load_mode)
         self._tooling_guidance = tooling_guidance
         self._tool_result_mode = tool_result_mode
-        self._tool_profile = (tool_profile or "").strip()
-        self._exec_tools_disabled = exec_tools_disabled
+        try:
+            resolved_flags = tool_flags or SkillProfileFlags.resolve_flags(tool_profile, forbidden_tools)
+        except ValueError as ex:
+            logger.warning("skills: invalid skill tool flags config, fallback to full profile: %s", ex)
+            resolved_flags = SkillProfileFlags.preset_flags(tool_profile, forbidden_tools)
+        if exec_tools_disabled:
+            resolved_flags = resolved_flags.without_interactive_execution()
+        self._tool_flags = resolved_flags
         self._repo_resolver = repo_resolver
         self._max_loaded_skills = max_loaded_skills
-        # Tracks which invocation IDs have already had their turn-init clearing
-        # applied.  This is ephemeral instance state — not persisted to session.
-        self._initialized_invocations: set[str] = set()
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -301,17 +347,17 @@ class SkillsRequestProcessor:
         self._maybe_clear_skill_state_for_turn(ctx)
 
         # 1) Always inject overview (names + descriptions).
-        self._inject_overview(request, repo)
+        self._inject_overview(ctx, request, repo)
 
         loaded = self._get_loaded_skills(ctx)
         loaded = self._maybe_cap_loaded_skills(ctx, loaded)
 
         if self._tool_result_mode:
-            # Loaded skill bodies/docs are injected into tool results by a
-            # separate post-content processor — skip injection here.
+            # Materialization is handled by a dedicated post-history processor
+            # in request pipeline (Go-aligned ordering).
             return loaded
 
-        # 2) Loaded skills: full body + docs + tools (sorted for stable prompts).
+        # 2) Loaded skills: full body + docs (sorted for stable prompts).
         loaded.sort()
 
         parts: list[str] = []
@@ -338,8 +384,6 @@ class SkillsRequestProcessor:
                 doc_text = self._build_docs_text(sk, sel)
                 if doc_text:
                     parts.append(doc_text)
-
-            # Tools (Python-unique: skill_select_tools integration)
             tool_sel = self._get_tools_selection(ctx, name)
             parts.append("Tools selected: ")
             if not tool_sel:
@@ -373,38 +417,40 @@ class SkillsRequestProcessor:
         Uses ``ctx.invocation_id`` to detect when a new invocation has started
         without persisting an extra key to session state.
         """
-        if self._load_mode != SKILL_LOAD_MODE_TURN:
+        if self._load_mode != SkillLoadModeNames.TURN:
             return
-        inv_id = ctx.invocation_id
-        if inv_id in self._initialized_invocations:
+        if ctx.agent_context.get_metadata(_SKILLS_TURN_INIT_STATE_KEY):
             return
-        self._initialized_invocations.add(inv_id)
-        # Bound the set size to avoid unbounded growth across long-running servers.
-        if len(self._initialized_invocations) > 2000:
-            oldest = list(self._initialized_invocations)[:1000]
-            for old_id in oldest:
-                self._initialized_invocations.discard(old_id)
+        ctx.agent_context.with_metadata(_SKILLS_TURN_INIT_STATE_KEY, True)
         self._clear_skill_state(ctx)
 
     def _clear_skill_state(self, ctx: InvocationContext) -> None:
         """Clear all loaded-skill state keys from the session."""
+        loaded_state_prefix = loaded_scan_prefix(ctx)
+        docs_state_prefix = docs_scan_prefix(ctx)
+        tools_state_prefix = tool_scan_prefix(ctx)
+        order_state_key = loaded_order_state_key(ctx)
         state = self._snapshot_state(ctx)
         for k, v in state.items():
             if not v:
                 continue
-            if (k.startswith(SKILL_LOADED_STATE_KEY_PREFIX) or k.startswith(SKILL_DOCS_STATE_KEY_PREFIX)
-                    or k.startswith(SKILL_TOOLS_STATE_KEY_PREFIX) or k == _SKILLS_LOADED_ORDER_STATE_KEY):
+            if any((
+                    k.startswith(loaded_state_prefix),
+                    k.startswith(docs_state_prefix),
+                    k.startswith(tools_state_prefix),
+                    k == order_state_key,
+            )):
                 ctx.actions.state_delta[k] = None
 
     def _maybe_offload_loaded_skills(self, ctx: InvocationContext, loaded: list[str]) -> None:
         """After injection, clear skill state for once mode."""
-        if self._load_mode != SKILL_LOAD_MODE_ONCE or not loaded:
+        if self._load_mode != SkillLoadModeNames.ONCE or not loaded:
             return
         for name in loaded:
-            ctx.actions.state_delta[SKILL_LOADED_STATE_KEY_PREFIX + name] = None
-            ctx.actions.state_delta[SKILL_DOCS_STATE_KEY_PREFIX + name] = None
-            ctx.actions.state_delta[SKILL_TOOLS_STATE_KEY_PREFIX + name] = None
-        ctx.actions.state_delta[_SKILLS_LOADED_ORDER_STATE_KEY] = None
+            ctx.actions.state_delta[loaded_state_key(ctx, name)] = None
+            ctx.actions.state_delta[docs_state_key(ctx, name)] = None
+            ctx.actions.state_delta[tool_state_key(ctx, name)] = None
+        ctx.actions.state_delta[loaded_order_state_key(ctx)] = None
 
     # ------------------------------------------------------------------
     # Max-loaded-skills cap
@@ -416,40 +462,31 @@ class SkillsRequestProcessor:
             return loaded
 
         order = self._get_loaded_skill_order(ctx, loaded)
-        # Keep the most recently touched skills (tail of the order list).
+        if not order:
+            return loaded
         keep_count = self._max_loaded_skills
-        keep_set = set(order[-keep_count:]) if len(order) >= keep_count else set(order)
+        keep_set = set(order[-keep_count:])
 
         kept: list[str] = []
         for name in loaded:
             if name in keep_set:
                 kept.append(name)
             else:
-                ctx.actions.state_delta[SKILL_LOADED_STATE_KEY_PREFIX + name] = None
-                ctx.actions.state_delta[SKILL_DOCS_STATE_KEY_PREFIX + name] = None
-                ctx.actions.state_delta[SKILL_TOOLS_STATE_KEY_PREFIX + name] = None
-
+                ctx.actions.state_delta[loaded_state_key(ctx, name)] = None
+                ctx.actions.state_delta[docs_state_key(ctx, name)] = None
+                ctx.actions.state_delta[tool_state_key(ctx, name)] = None
         new_order = [n for n in order if n in keep_set]
-        ctx.actions.state_delta[_SKILLS_LOADED_ORDER_STATE_KEY] = json.dumps(new_order)
+        encoded_order = marshal_loaded_order(new_order)
+        ctx.actions.state_delta[loaded_order_state_key(ctx)] = encoded_order
         return kept
 
     def _get_loaded_skill_order(self, ctx: InvocationContext, loaded: list[str]) -> list[str]:
-        """Return skill names in load order (oldest first, most-recent last).
-
-        Reads the persisted order key; fills in any missing names
-        alphabetically (mirrors Go's fillLoadedSkillOrderAlphabetically).
-        """
-        loaded_set = set(loaded)
-        raw = self._read_state(ctx, _SKILLS_LOADED_ORDER_STATE_KEY)
-        order: list[str] = []
-        if raw:
-            try:
-                parsed = json.loads(raw) if isinstance(raw, str) else raw
-                if isinstance(parsed, list):
-                    order = [n for n in parsed if n in loaded_set]
-            except (json.JSONDecodeError, TypeError, ValueError):
-                pass
-
+        loaded_set = self._loaded_skill_set(loaded)
+        if not loaded_set:
+            return []
+        order = self._loaded_skill_order_from_state(ctx, loaded_set)
+        if len(order) < len(loaded_set):
+            order = self._append_skills_to_order_from_events(ctx, order, loaded_set)
         seen = set(order)
         for name in sorted(n for n in loaded_set if n not in seen):
             order.append(name)
@@ -459,7 +496,7 @@ class SkillsRequestProcessor:
     # Overview injection
     # ------------------------------------------------------------------
 
-    def _inject_overview(self, request: LlmRequest, repo: BaseSkillRepository) -> None:
+    def _inject_overview(self, ctx: InvocationContext, request: LlmRequest, repo: BaseSkillRepository) -> None:
         sums = repo.summaries()
         if not sums:
             return
@@ -501,23 +538,44 @@ class SkillsRequestProcessor:
 
     def _tooling_guidance_text(self) -> str:
         if self._tooling_guidance is None:
-            return _default_tooling_and_workspace_guidance(self._tool_profile, self._exec_tools_disabled)
-        return _normalize_custom_guidance(self._tooling_guidance)
+            tool_prompt = _default_tooling_and_workspace_guidance(self._tool_flags)
+        else:
+            tool_prompt = _normalize_custom_guidance(self._tooling_guidance)
+        if self._tool_flags.has_select_tools():
+            tool_prompt += """
+                - Use the skill_select_tools tool to select tools for the current task only when user asks for it."
+            """
+        if self._tool_flags.list_skills:
+            tool_prompt += """
+                - Use the skill_list_skills tool to list skills for the current task only when user asks for it."
+            """
+        return tool_prompt
 
     def _capability_guidance_text(self) -> str:
-        """Inject capability block for knowledge-only profiles."""
-        if not _is_knowledge_only(self._tool_profile):
-            return ""
+        """Inject capability block for constrained skill-tool profiles."""
         # Omit when caller explicitly cleared guidance.
-        if self._tooling_guidance is not None and self._tooling_guidance == "":
+        if self._tooling_guidance == "" or self._tool_flags.run:
             return ""
-        return ("\n" + _SKILLS_CAPABILITY_HEADER + "\n" +
-                "- This profile supports skill discovery and knowledge loading only.\n" +
-                "- Execution-oriented skill tools are unavailable in the current mode.\n" +
-                "- If a loaded skill describes scripts, shell commands, workspace paths,"
-                " generated files, or interactive flows, treat that content as reference"
-                " only. Use other registered tools for real actions, or explain that"
-                " execution is unavailable in the current mode.\n")
+        if self._tool_flags.load:
+            return (f"\n{_SKILLS_CAPABILITY_HEADER}\n"
+                    "- This configuration supports skill discovery and knowledge loading only.\n"
+                    "- Built-in skill execution tools are unavailable in the current mode.\n"
+                    "- If a loaded skill describes scripts, shell commands, workspace paths,"
+                    " generated files, or interactive flows, treat that content as reference"
+                    " only. Use other registered tools for real actions, or explain that"
+                    " execution is unavailable in the current mode.\n")
+        if self._tool_flags.has_doc_helpers():
+            return (f"\n{_SKILLS_CAPABILITY_HEADER}\n"
+                    "- This configuration supports skill discovery and skill doc inspection only.\n"
+                    "- Built-in skill loading and execution tools are unavailable in the"
+                    " current mode.\n- Listing or selecting docs does not inject SKILL.md or doc"
+                    " contents into model context by itself.\n")
+        return (f"\n{_SKILLS_CAPABILITY_HEADER}\n"
+                "- This configuration exposes skill summaries only. Built-in skill tools"
+                " are unavailable in the current mode.\n"
+                "- Treat the skill overview as a catalog of possible capabilities. Use"
+                " other registered tools, or explain the limitation clearly when the task"
+                " depends on skill loading or execution.\n")
 
     # ------------------------------------------------------------------
     # State helpers
@@ -547,57 +605,150 @@ class SkillsRequestProcessor:
         """Return names of all currently loaded skills."""
         names: list[str] = []
         state = self._snapshot_state(ctx)
+        scan_prefix = loaded_scan_prefix(ctx)
         for k, v in state.items():
-            if not k.startswith(SKILL_LOADED_STATE_KEY_PREFIX) or not v:
+            if not k.startswith(scan_prefix) or not v:
                 continue
-            name = k[len(SKILL_LOADED_STATE_KEY_PREFIX):]
-            names.append(name)
-        return names
+            name = k[len(scan_prefix):].strip()
+            if name:
+                names.append(name)
+        if names:
+            return sorted(set(names))
+        return []
 
     # ------------------------------------------------------------------
-    # Docs and tools selection
+    # Docs / tools selection
     # ------------------------------------------------------------------
 
     def _get_docs_selection(self, ctx: InvocationContext, name: str) -> list[str]:
-
-        def get_all_docs(skill_name: str) -> list[str]:
+        value = self._read_state(ctx, docs_state_key(ctx, name), default=None)
+        if not value:
+            return []
+        if isinstance(value, bytes):
             try:
-                repo = self._get_repository(ctx)
-                sk = repo.get(skill_name) if repo else None
-                if sk is None:
-                    return []
-                return [d.path for d in sk.resources]
-            except Exception as ex:  # pylint: disable=broad-except
-                logger.warning("Failed to get docs for skill '%s': %s", skill_name, ex)
+                value = value.decode("utf-8")
+            except UnicodeDecodeError:
                 return []
-
-        return generic_get_selection(
-            ctx=ctx,
-            skill_name=name,
-            state_key_prefix=SKILL_DOCS_STATE_KEY_PREFIX,
-            get_all_items_callback=get_all_docs,
-        )
+        if value == "*":
+            repo = self._get_repository(ctx)
+            if repo is None:
+                return []
+            try:
+                sk = repo.get(name)
+                return [doc.path for doc in sk.resources]
+            except Exception as ex:  # pylint: disable=broad-except
+                logger.warning("Failed to get docs for skill '%s': %s", name, ex)
+                return []
+        if not isinstance(value, str):
+            return []
+        try:
+            arr = json.loads(value)
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(arr, list):
+            return []
+        return [doc for doc in arr if isinstance(doc, str) and doc.strip()]
 
     def _get_tools_selection(self, ctx: InvocationContext, name: str) -> list[str]:
-        """Python-unique: return selected tool names for *name*."""
-
-        def get_all_tools(skill_name: str) -> list[str]:
+        value = self._read_state(ctx, tool_state_key(ctx, name), default=None)
+        if not value:
+            return []
+        if isinstance(value, bytes):
             try:
-                repo = self._get_repository(ctx)
-                sk = repo.get(skill_name) if repo else None
-                if sk is None:
-                    return []
+                value = value.decode("utf-8")
+            except UnicodeDecodeError:
+                return []
+        if value == "*":
+            repo = self._get_repository(ctx)
+            if repo is None:
+                return []
+            try:
+                sk = repo.get(name)
                 return sk.tools
             except Exception as ex:  # pylint: disable=broad-except
-                logger.warning("Failed to get tools for skill '%s': %s", skill_name, ex)
+                logger.warning("Failed to get tools for skill '%s': %s", name, ex)
                 return []
+        if not isinstance(value, str):
+            return []
+        try:
+            arr = json.loads(value)
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(arr, list):
+            return []
+        return [tool for tool in arr if isinstance(tool, str) and tool.strip()]
 
-        return generic_get_selection(
-            ctx=ctx,
-            skill_name=name,
-            state_key_prefix=SKILL_TOOLS_STATE_KEY_PREFIX,
-            get_all_items_callback=get_all_tools,
-        )
+    def _loaded_skill_set(self, loaded: list[str]) -> set[str]:
+        out: set[str] = set()
+        for name in loaded:
+            candidate = (name or "").strip()
+            if candidate:
+                out.add(candidate)
+        return out
+
+    def _loaded_skill_order_from_state(self, ctx: InvocationContext, loaded_set: set[str]) -> list[str]:
+        order = parse_loaded_order(self._read_state(ctx, loaded_order_state_key(ctx)))
+        if not order:
+            return []
+        out: list[str] = []
+        seen: set[str] = set()
+        for name in order:
+            if name not in loaded_set or name in seen:
+                continue
+            out.append(name)
+            seen.add(name)
+        return out
+
+    def _append_skills_to_order_from_events(
+        self,
+        ctx: InvocationContext,
+        order: list[str],
+        loaded_set: set[str],
+    ) -> list[str]:
+        events = list(getattr(ctx.session, "events", []) or [])
+        if not events:
+            return order
+        for event in events:
+            if ctx.agent_name and getattr(event, "author", "") != ctx.agent_name:
+                continue
+            content = getattr(event, "content", None)
+            if content is None or not getattr(content, "parts", None):
+                continue
+            for part in content.parts:
+                response = getattr(part, "function_response", None)
+                if response is None:
+                    continue
+                tool_name = (getattr(response, "name", "") or "").strip()
+                if tool_name not in (SkillToolsNames.LOAD, SkillToolsNames.SELECT_DOCS):
+                    continue
+                skill_name = self._skill_name_from_tool_response(tool_name, getattr(response, "response", None))
+                if not skill_name or skill_name not in loaded_set:
+                    continue
+                order = touch_loaded_order(order, skill_name)
+        return order
+
+    def _skill_name_from_tool_response(self, tool_name: str, response: Any) -> str:
+        if tool_name == str(SkillToolsNames.SELECT_DOCS) and isinstance(response, dict):
+            for key in ("skill", "skill_name", "name"):
+                value = response.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+            return ""
+        if tool_name == SkillToolsNames.LOAD:
+            if isinstance(response, dict):
+                for key in ("skill", "skill_name", "name", "result"):
+                    value = response.get(key)
+                    if isinstance(value, str) and value.strip():
+                        match = SKILL_LOADED_RE.search(value)
+                        if match:
+                            return match.group(1).strip()
+                        if key in ("skill", "skill_name", "name"):
+                            return value.strip()
+            if isinstance(response, str):
+                match = SKILL_LOADED_RE.search(response)
+                if match:
+                    return match.group(1).strip()
+        return ""
 
     # ------------------------------------------------------------------
     # Doc text assembly
@@ -623,3 +774,28 @@ class SkillsRequestProcessor:
         if not content:
             return
         request.append_instructions([content])
+
+
+def set_skill_processor_parameters(agent_context: AgentContext, parameters: dict[str, Any]) -> None:
+    """Set the parameters of a skill processor by agent context.
+
+    Args:
+        agent_context: AgentContext object
+        parameters: Parameters to set
+    """
+    skill_config = get_skill_config(agent_context)
+    skill_config["skill_processor"].update(parameters)
+    set_skill_config(agent_context, skill_config)
+
+
+def get_skill_processor_parameters(agent_context: AgentContext) -> dict[str, Any]:
+    """Get the parameters of a skill processor.
+
+    Args:
+        invocation_context: InvocationContext object
+
+    Returns:
+        Parameters of the skill processor
+    """
+    skill_config = get_skill_config(agent_context)
+    return skill_config["skill_processor"]

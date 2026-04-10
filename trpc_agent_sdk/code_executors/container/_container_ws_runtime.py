@@ -15,12 +15,15 @@ Container workspace runtime implementation for Docker-based code execution.
 """
 
 import io
+import json
 import os
 import tarfile
 import time
 from dataclasses import dataclass
 from dataclasses import field
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -37,9 +40,13 @@ from .._base_workspace_runtime import BaseProgramRunner
 from .._base_workspace_runtime import BaseWorkspaceFS
 from .._base_workspace_runtime import BaseWorkspaceManager
 from .._base_workspace_runtime import BaseWorkspaceRuntime
+from .._base_workspace_runtime import RunEnvProvider
 from .._constants import DEFAULT_INPUTS_CONTAINER
+from .._constants import DEFAULT_MAX_FILES
+from .._constants import DEFAULT_MAX_TOTAL_BYTES
 from .._constants import DEFAULT_RUN_CONTAINER_BASE
 from .._constants import DEFAULT_SKILLS_CONTAINER
+from .._constants import DEFAULT_TIMEOUT_SEC
 from .._constants import DIR_OUT
 from .._constants import DIR_RUNS
 from .._constants import DIR_SKILLS
@@ -62,7 +69,10 @@ from .._types import WorkspacePutFileInfo
 from .._types import WorkspaceRunProgramSpec
 from .._types import WorkspaceRunResult
 from .._types import WorkspaceStageOptions
+from ..utils import InputRecordMeta
+from ..utils import WorkspaceMetadata
 from ..utils import get_rel_path
+from ..utils import normalize_globs
 from ._container_cli import CommandArgs
 from ._container_cli import ContainerClient
 from ._container_cli import ContainerConfig
@@ -78,8 +88,14 @@ class RuntimeConfig:
     run_container_base: str = DEFAULT_RUN_CONTAINER_BASE
     inputs_host_base: str = ""
     inputs_container_base: str = DEFAULT_INPUTS_CONTAINER
-    auto_map_inputs: bool = False
+    auto_map_inputs: bool = True
     command_args: CommandArgs = field(default_factory=CommandArgs)
+
+
+def _shell_quote(s: str) -> str:
+    if not s:
+        return "''"
+    return "'" + s.replace("'", "'\\''") + "'"
 
 
 class ContainerWorkspaceManager(BaseWorkspaceManager):
@@ -124,12 +140,15 @@ class ContainerWorkspaceManager(BaseWorkspaceManager):
         ws_path = str(Path(self.config.run_container_base) / f"ws_{safe_id}_{suffix}")
 
         # Create standard directory layout
-        cmd_parts = [
-            f"mkdir -p '{ws_path}'", f"'{ws_path}/{DIR_SKILLS}'", f"'{ws_path}/{DIR_WORK}'", f"'{ws_path}/{DIR_RUNS}'",
-            f"'{ws_path}/{DIR_OUT}'",
-            f"&& [ -f '{ws_path}/{META_FILE_NAME}' ] || echo '{{}}' > '{ws_path}/{META_FILE_NAME}'"
-        ]
-        cmd = ["/bin/bash", "-lc", " ".join(cmd_parts)]
+        cmd_str = ("set -e; "
+                   f"mkdir -p {_shell_quote(ws_path)} "
+                   f"{_shell_quote(str(Path(ws_path) / DIR_SKILLS))} "
+                   f"{_shell_quote(str(Path(ws_path) / DIR_WORK))} "
+                   f"{_shell_quote(str(Path(ws_path) / DIR_RUNS))} "
+                   f"{_shell_quote(str(Path(ws_path) / DIR_OUT))}; "
+                   f"[ -f {_shell_quote(str(Path(ws_path) / META_FILE_NAME))} ] || "
+                   f"echo '{{}}' > {_shell_quote(str(Path(ws_path) / META_FILE_NAME))}")
+        cmd = ["/bin/bash", "-lc", cmd_str]
 
         result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
         if result.exit_code != 0:
@@ -268,8 +287,8 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
                 cmd = ["/bin/bash", "-lc", cmd_str]
                 result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
                 if result.exit_code != 0:
-                    logger.debug("Failed to stage directory: %s", result.stderr)
-                logger.debug("Staged directory using mount: %s -> %s", container_src, container_dst)
+                    raise RuntimeError(f"Failed to stage directory: {result.stderr}")
+                return
 
         # Fallback: tar copy
         await self._put_directory(ws, src_abs_path, dst)
@@ -327,8 +346,15 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
                 continue
             seen.add(rel_path)
 
-            data, mime = self._copy_file_out(line)
-            files.append(CodeFile(name=rel_path, content=data.decode('utf-8', errors='replace'), mime_type=mime))
+            data, size_bytes, mime = self._copy_file_out(line)
+            files.append(
+                CodeFile(
+                    name=rel_path,
+                    content=data.decode('utf-8', errors='replace'),
+                    mime_type=mime,
+                    size_bytes=size_bytes,
+                    truncated=size_bytes > len(data),
+                ))
 
         logger.info("Collected %s files from workspace", len(files))
         return files
@@ -349,31 +375,55 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         Raises:
             RuntimeError: If staging fails
         """
+        md = await self._load_workspace_metadata(ws)
         for spec in specs:
-            mode = spec.mode.lower().strip() or "copy"
-            dst = spec.dst.strip() or str(Path(DIR_WORK) / "inputs" / self._input_base(spec.src))
-            dst = os.path.join(ws.path, dst)
+            mode = (spec.mode or "").lower().strip() or "copy"
+            dst_rel = (spec.dst or "").strip() or str(Path(DIR_WORK) / "inputs" / self._input_base(spec.src))
+            dst_abs = str(Path(ws.path) / dst_rel)
+
+            resolved = ""
+            version: Optional[int] = None
 
             if spec.src.startswith("artifact://"):
-                name = spec.src.removeprefix("artifact://")
-                resolved, ver = parse_artifact_ref(name)
                 if not ctx:
                     raise ValueError("Context is required to load artifacts")
-                content, ver = await load_artifact_helper(ctx, resolved, ver)
-                await self._put_bytes_tar(content, dst)
+                name = spec.src.removeprefix("artifact://")
+                artifact_name, requested_ver = parse_artifact_ref(name)
+                use_ver = requested_ver
+                if use_ver is None and spec.pin:
+                    use_ver = self._pinned_artifact_version(md, artifact_name, dst_rel)
+                content, actual_ver = await load_artifact_helper(ctx, artifact_name, use_ver)
+                await self._put_bytes_tar(content, dst_abs)
+                resolved = artifact_name
+                version = use_ver if use_ver is not None else actual_ver
             elif spec.src.startswith("host://"):
                 host_path = spec.src.removeprefix("host://")
-                await self._stage_host_input(ws, host_path, dst, mode)
+                await self._stage_host_input(ws, host_path, dst_abs, mode, dst_rel)
+                resolved = host_path
             elif spec.src.startswith("workspace://"):
                 rel = spec.src.removeprefix("workspace://")
                 src = str(Path(ws.path) / rel)
-                await self._stage_workspace_input(src, dst, mode)
+                await self._stage_workspace_input(src, dst_abs, mode)
+                resolved = rel
             elif spec.src.startswith("skill://"):
                 rest = spec.src.removeprefix("skill://")
                 src = str(Path(ws.path) / DIR_SKILLS / rest)
-                await self._stage_workspace_input(src, dst, mode)
+                await self._stage_workspace_input(src, dst_abs, mode)
+                resolved = src
             else:
                 raise RuntimeError(f"Unsupported input: {spec.src}")
+
+            md.inputs.append(
+                InputRecordMeta(
+                    src=spec.src,
+                    dst=dst_rel,
+                    resolved=resolved,
+                    version=version,
+                    mode=mode,
+                    timestamp=datetime.now(),
+                ))
+
+        await self._save_workspace_metadata(ws, md)
 
         logger.info("Staged %s inputs into workspace", len(specs))
 
@@ -409,13 +459,15 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
             raise RuntimeError(f"Failed to collect outputs: {result.stderr}")
         stdout = result.stdout
 
-        max_files = spec.max_files or 100
+        max_files = spec.max_files or DEFAULT_MAX_FILES
         max_file_bytes = spec.max_file_bytes or MAX_READ_SIZE_BYTES
-        max_total = spec.max_total_bytes or 64 * 1024 * 1024
+        max_total = spec.max_total_bytes or DEFAULT_MAX_TOTAL_BYTES
 
         manifest = ManifestOutput()
         total_bytes = 0
         count = 0
+        saved_names: list[str] = []
+        saved_versions: list[int] = []
         for line in stdout.strip().split('\n'):
             line = line.strip()
             if not line:
@@ -425,14 +477,25 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
                 manifest.limits_hit = True
                 break
 
-            data, mime = self._copy_file_out(line)
+            data, raw_size, mime = self._copy_file_out(line)
 
             if len(data) > max_file_bytes:
                 data = data[:max_file_bytes]
                 manifest.limits_hit = True
 
+            if total_bytes + len(data) > max_total:
+                remain = max_total - total_bytes
+                if remain <= 0:
+                    manifest.limits_hit = True
+                    break
+                data = data[:remain]
+                manifest.limits_hit = True
+
             total_bytes += len(data)
             rel_path = line.removeprefix(f"{ws.path}/")
+            truncated = raw_size > len(data)
+            if truncated and spec.save:
+                raise RuntimeError(f"cannot save truncated output file: {rel_path}")
 
             file_ref = ManifestFileRef(name=rel_path, mime_type=mime)
             if spec.inline:
@@ -446,6 +509,8 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
                 version = await save_artifact_helper(ctx, save_name, data, mime)
                 file_ref.saved_as = save_name
                 file_ref.version = version
+                saved_names.append(save_name)
+                saved_versions.append(version)
 
             manifest.files.append(file_ref)
             count += 1
@@ -455,6 +520,8 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
 
     async def _put_directory(self, ws: WorkspaceInfo, src: str, dst: str) -> None:
         """Copy directory to container using tar."""
+        if not src or not str(src).strip():
+            raise ValueError("source path is empty")
         abs_src = os.path.abspath(src)
         container_dst = str(Path(ws.path) / dst) if dst else ws.path
         if self.config.skills_host_base:
@@ -464,8 +531,9 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
                 # Create destination directory
                 cmd = ["/bin/bash", "-lc", f"mkdir -p '{container_dst}' && cp -a '{container_src}/.' '{container_dst}'"]
                 result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
-                if result.exit_code:
-                    logger.debug("Failed to stage directory: %s", result.stderr)
+                if result.exit_code == 0:
+                    return None
+                logger.debug("Failed to stage directory via mount copy, fallback to tar: %s", result.stderr)
 
         cmd = ["/bin/bash", "-lc", f"[ -e '{container_dst}' ] || mkdir -p '{container_dst}'"]
         result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
@@ -507,7 +575,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         if not success:
             raise RuntimeError(f"Failed to copy bytes to {dest}")
 
-    async def _stage_host_input(self, ws: WorkspaceInfo, host: str, dst: str, mode: str) -> None:
+    async def _stage_host_input(self, ws: WorkspaceInfo, host: str, dst: str, mode: str, dst_rel: str) -> None:
         """Stage input from host path."""
         if self.config.inputs_host_base:
             rel_path = get_rel_path(self.config.inputs_host_base, host)
@@ -525,11 +593,11 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
 
                 cmd = ["/bin/bash", "-lc", cmd_str]
                 result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
-                if result.exit_code:
-                    logger.debug("Failed to stage input: %s", result.stderr)
+                if result.exit_code != 0:
+                    raise RuntimeError(f"Failed to stage host input: {result.stderr}")
                 return
         # Fallback to tar copy
-        await self._put_directory(ws, host, str(Path(dst).parent))
+        await self._put_directory(ws, host, str(Path(dst_rel).parent))
 
     async def _stage_workspace_input(self, src: str, dst: str, mode: str) -> None:
         """Stage input from workspace path."""
@@ -547,7 +615,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         if result.exit_code:
             raise RuntimeError(f"Failed to stage input: {result.stderr}")
 
-    def _copy_file_out(self, full_path: str) -> Tuple[bytes, str]:
+    def _copy_file_out(self, full_path: str) -> Tuple[bytes, int, str]:
         """
         Copy file out of container.
 
@@ -555,7 +623,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
             full_path: Full path to file in container
 
         Returns:
-            Tuple of (file_data, mime_type)
+            Tuple of (file_data, size_bytes, mime_type)
 
         Raises:
             RuntimeError: If copy fails
@@ -570,7 +638,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
                         f = tar.extractfile(member)
                         data = f.read(MAX_READ_SIZE_BYTES)
                         mime = self._detect_mime_type(data)
-                        return data, mime
+                        return data, member.size, mime
 
             raise RuntimeError(f"No file found in archive: {full_path}")
 
@@ -597,24 +665,75 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
     @staticmethod
     def _normalize_globs(patterns: List[str]) -> List[str]:
         """Normalize glob patterns."""
-        normalized = []
-        for p in patterns:
-            p = p.strip()
-            if p:
-                # Simple normalization - replace environment variables
-                p = p.replace("$OUTPUT_DIR", DIR_OUT)
-                p = p.replace("${OUTPUT_DIR}", DIR_OUT)
-                p = p.replace("$WORK_DIR", DIR_WORK)
-                p = p.replace("${WORK_DIR}", DIR_WORK)
-                p = p.replace("$WORKSPACE_DIR", ".")
-                p = p.replace("${WORKSPACE_DIR}", ".")
-                normalized.append(p)
-        return normalized
+        return normalize_globs(patterns)
 
     @staticmethod
-    def _input_base(path: str) -> str:
+    def _input_base(src: str) -> str:
         """Extract base name from input path."""
-        return Path(path).name
+        s = (src or "").strip()
+        if s.startswith("artifact://"):
+            ref = s.removeprefix("artifact://")
+            try:
+                name, _ = parse_artifact_ref(ref)
+                base = Path(name.strip()).name
+                if base and base not in (".", "..", "/"):
+                    return base
+            except Exception:  # pylint: disable=broad-except
+                pass
+        return Path(s).name
+
+    @staticmethod
+    def _pinned_artifact_version(md: Any, artifact_name: str, dst: str) -> Optional[int]:
+        for record in reversed(md.inputs or []):
+            if (record.dst or "") != dst:
+                continue
+            if record.version is None:
+                continue
+            if (record.resolved or "") == artifact_name:
+                return record.version
+            src = record.src or ""
+            if not src.startswith("artifact://"):
+                continue
+            try:
+                name, _ = parse_artifact_ref(src.removeprefix("artifact://"))
+            except Exception:  # pylint: disable=broad-except
+                continue
+            if name == artifact_name:
+                return record.version
+        return None
+
+    async def _load_workspace_metadata(self, ws: WorkspaceInfo):
+        now = datetime.now()
+        cmd = ["/bin/bash", "-lc", f"cat {_shell_quote(str(Path(ws.path) / META_FILE_NAME))}"]
+        result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
+        if result.exit_code != 0 or not result.stdout.strip():
+            return WorkspaceMetadata(version=1, created_at=now, updated_at=now, last_access=now, skills={})
+        try:
+            data = json.loads(result.stdout)
+            md = WorkspaceMetadata(**data)
+        except Exception as ex:  # pylint: disable=broad-except
+            raise RuntimeError(f"Failed to parse workspace metadata: {ex}") from ex
+        if not md.version:
+            md.version = 1
+        if md.created_at is None:
+            md.created_at = now
+        md.last_access = now
+        if md.skills is None:
+            md.skills = {}
+        return md
+
+    async def _save_workspace_metadata(self, ws: WorkspaceInfo, md: Any) -> None:
+        now = datetime.now()
+        if not md.version:
+            md.version = 1
+        if md.created_at is None:
+            md.created_at = now
+        md.updated_at = now
+        md.last_access = now
+        if md.skills is None:
+            md.skills = {}
+        payload = json.dumps(md.model_dump(exclude_none=True, by_alias=True, mode="json"), ensure_ascii=False, indent=2)
+        await self._put_bytes_tar(payload.encode("utf-8"), str(Path(ws.path) / META_FILE_NAME), mode=0o600)
 
     @staticmethod
     def _detect_mime_type(data: bytes) -> str:
@@ -637,7 +756,13 @@ class ContainerProgramRunner(BaseProgramRunner):
     Docker container-based program runner implementation.
     """
 
-    def __init__(self, container: ContainerClient, config: RuntimeConfig):
+    def __init__(
+        self,
+        container: ContainerClient,
+        config: RuntimeConfig,
+        provider: Optional[RunEnvProvider] = None,
+        enable_provider_env: bool = False,
+    ):
         """
         Initialize container program runner.
 
@@ -646,6 +771,7 @@ class ContainerProgramRunner(BaseProgramRunner):
             container: Docker container to use
             config: Runtime configuration
         """
+        super().__init__(provider=provider, enable_provider_env=enable_provider_env)
         self.container = container
         self.config = config
 
@@ -667,6 +793,7 @@ class ContainerProgramRunner(BaseProgramRunner):
         Raises:
             RuntimeError: If execution fails
         """
+        spec = self._apply_provider_env(spec, ctx)
         cwd = f"{ws.path}/{spec.cwd}" if spec.cwd else ws.path
 
         # Prepare directories
@@ -685,35 +812,41 @@ class ContainerProgramRunner(BaseProgramRunner):
         }
 
         env_parts = []
+        user_env = dict(spec.env or {})
         for k, v in base_env.items():
-            if k not in spec.env:
-                env_parts.append(f"{k}={self._shell_quote(v)}")
+            if k not in user_env:
+                env_parts.append(f"{k}={_shell_quote(v)}")
 
-        for k, v in spec.env.items():
-            env_parts.append(f"{k}={self._shell_quote(v)}")
+        for k, v in user_env.items():
+            env_parts.append(f"{k}={_shell_quote(v)}")
 
         env_str = " ".join(env_parts)
 
         # Build command line
         cmd_parts = [
-            f"mkdir -p {self._shell_quote(run_dir)} {self._shell_quote(out_dir)}", f"&& cd {self._shell_quote(cwd)}",
+            f"mkdir -p {_shell_quote(run_dir)} {_shell_quote(out_dir)}", f"&& cd {_shell_quote(cwd)}",
             "&& env" if env_str else "", env_str,
-            self._shell_quote(spec.cmd)
+            _shell_quote(spec.cmd)
         ]
 
         for arg in spec.args:
-            cmd_parts.append(self._shell_quote(arg))
+            cmd_parts.append(_shell_quote(arg))
 
         cmd_str = " ".join(filter(None, cmd_parts))
         cmd = ["/bin/bash", "-lc", cmd_str]
 
         start_time = time.time()
-        timeout = spec.timeout or self.config.command_args.timeout
-        if timeout is None:
+        if spec.timeout and spec.timeout > 0:
             timeout = spec.timeout
+        elif self.config.command_args.timeout and self.config.command_args.timeout > 0:
+            timeout = self.config.command_args.timeout
         else:
-            timeout = min(timeout, spec.timeout)
-        command_args = CommandArgs(environment=None, timeout=timeout)
+            timeout = float(DEFAULT_TIMEOUT_SEC)
+        command_args = CommandArgs(
+            environment=None,
+            timeout=timeout,
+            stdin=spec.stdin or None,
+        )
         result = await self.container.exec_run(cmd=cmd, command_args=command_args)
         return WorkspaceRunResult(stdout=result.stdout,
                                   stderr=result.stderr,
@@ -721,28 +854,20 @@ class ContainerProgramRunner(BaseProgramRunner):
                                   duration=time.time() - start_time,
                                   timed_out=result.is_timeout)
 
-    @staticmethod
-    def _shell_quote(s: str) -> str:
-        """
-        Quote string for safe shell usage.
-
-        Args:
-            s: String to quote
-
-        Returns:
-            Quoted string
-        """
-        if not s:
-            return "''"
-        return "'" + s.replace("'", "'\\''") + "'"
-
 
 class ContainerWorkspaceRuntime(BaseWorkspaceRuntime):
     """
     Docker container-based execution engine.
     """
 
-    def __init__(self, container: ContainerClient, host_config: Optional[Dict] = None, auto_inputs: bool = False):
+    def __init__(
+        self,
+        container: ContainerClient,
+        host_config: Optional[Dict] = None,
+        auto_inputs: bool = True,
+        provider: Optional[RunEnvProvider] = None,
+        enable_provider_env: bool = False,
+    ):
         """
         Initialize container engine.
 
@@ -763,7 +888,12 @@ class ContainerWorkspaceRuntime(BaseWorkspaceRuntime):
 
         self._fs = ContainerWorkspaceFS(self.container, config)
         self._manager = ContainerWorkspaceManager(self.container, config, self._fs)
-        self._runner = ContainerProgramRunner(self.container, config)
+        self._runner = ContainerProgramRunner(
+            self.container,
+            config,
+            provider=provider,
+            enable_provider_env=enable_provider_env,
+        )
 
     @override
     def manager(self, ctx: Optional[InvocationContext] = None) -> ContainerWorkspaceManager:
@@ -797,8 +927,8 @@ class ContainerWorkspaceRuntime(BaseWorkspaceRuntime):
             if len(parts) < 2:
                 continue
 
-            # Handle format: source:dest[:mode]
-            bind_dest = parts[-2] if len(parts) >= 2 else ""
+            # Handle format: source:dest[:mode], parse from right.
+            bind_dest = parts[-2]
             if bind_dest == dest:
                 source = ':'.join(parts[:-2]) if len(parts) > 2 else parts[0]
                 if Path(source).is_dir():
@@ -820,7 +950,9 @@ class ContainerWorkspaceRuntime(BaseWorkspaceRuntime):
 def create_container_workspace_runtime(
     container_config: Optional[ContainerConfig] = None,
     host_config: Optional[Dict] = None,
-    auto_inputs: bool = False,
+    auto_inputs: bool = True,
+    provider: Optional[RunEnvProvider] = None,
+    enable_provider_env: bool = False,
 ) -> ContainerWorkspaceRuntime:
     """Create a new container workspace runtime.
     Args:
@@ -838,4 +970,10 @@ def create_container_workspace_runtime(
         container = ContainerClient(config=cfg)
     else:
         container = ContainerClient(config=ContainerConfig(host_config=host_config))
-    return ContainerWorkspaceRuntime(container=container, host_config=host_config, auto_inputs=auto_inputs)
+    return ContainerWorkspaceRuntime(
+        container=container,
+        host_config=host_config,
+        auto_inputs=auto_inputs,
+        provider=provider,
+        enable_provider_env=enable_provider_env,
+    )

@@ -58,7 +58,6 @@ class _LangfuseMixin:
         Returns:
             True if the span should be skipped, False otherwise.
         """
-        global _langfuse_config  # pylint: disable=invalid-name
         # If enable_a2a_trace is True, don't filter out any spans
         if _langfuse_config.enable_a2a_trace:
             return False
@@ -99,7 +98,6 @@ class _LangfuseMixin:
 
     def _transform_span_for_langfuse(self, span: ReadableSpan) -> ReadableSpan:
         """Transform TRPC agent span attributes to Langfuse format."""
-        global _langfuse_config  # pylint: disable=invalid-name
         trpc_span_name = get_trpc_agent_span_name()
         if span.name == "invocation":
             span_name = span.attributes.get(f"{trpc_span_name}.runner.name", "unknown")
@@ -262,6 +260,8 @@ class _LangfuseMixin:
         # Map usage details
         gen_attrs["gen_ai.usage.input_tokens"] = attributes.get("gen_ai.usage.input_tokens", "0")
         gen_attrs["gen_ai.usage.output_tokens"] = attributes.get("gen_ai.usage.output_tokens", "0")
+        if "gen_ai.request.model" in attributes:
+            gen_attrs["gen_ai.request.model"] = attributes["gen_ai.request.model"]
 
         # Map generation metadata
         gen_metadata = {}
@@ -603,7 +603,6 @@ def setup(config: Optional[LangfuseConfig] = None) -> TracerProvider:
     Raises:
         ValueError: If required configuration is missing.
     """
-    global _langfuse_config  # pylint: disable=invalid-name
 
     if config is None:
         config = LangfuseConfig()
@@ -619,6 +618,7 @@ def setup(config: Optional[LangfuseConfig] = None) -> TracerProvider:
     if config.host is None:
         config.host = os.getenv("LANGFUSE_HOST")
 
+    global _langfuse_config  # pylint: disable=invalid-name
     # Set the global config and use it in span processor(Only be setted once)
     _langfuse_config = config
 

@@ -17,7 +17,6 @@ from pathlib import Path
 from typing_extensions import override
 
 from pydantic import Field
-
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.utils import async_execute_command
 
@@ -44,7 +43,7 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
 
     work_dir: str = Field(default="", description="The working directory for the code execution.")
 
-    timeout: float = Field(default=0, description="The timeout for the code execution.")
+    timeout: float = Field(default=0, description="The timeout seconds for the code execution.")
 
     clean_temp_files: bool = Field(default=True,
                                    description="Whether to clean temporary files after the code execution.")
