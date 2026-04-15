@@ -29,6 +29,7 @@ from ._sql_common import StorageData
 from ._sql_common import UTF8MB4String
 from ._sql_common import decode_content
 from ._sql_common import decode_grounding_metadata
+from ._sql_common import decode_usage_metadata
 
 __all__ = [
     "EXPIRE_METHOD",
@@ -55,4 +56,5 @@ __all__ = [
     "UTF8MB4String",
     "decode_content",
     "decode_grounding_metadata",
+    "decode_usage_metadata",
 ]
