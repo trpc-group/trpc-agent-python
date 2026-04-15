@@ -64,6 +64,7 @@ from trpc_agent_sdk.storage import SqlStorage
 from trpc_agent_sdk.storage import UTF8MB4String
 from trpc_agent_sdk.storage import decode_content
 from trpc_agent_sdk.storage import decode_grounding_metadata
+from trpc_agent_sdk.storage import decode_usage_metadata
 from trpc_agent_sdk.utils import user_key
 
 from ._base_session_service import BaseSessionService
@@ -165,6 +166,7 @@ class SessionStorageEvent(SessionStorageBase):
 
     content: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, nullable=True)
     grounding_metadata: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, nullable=True)
+    usage_metadata: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, nullable=True)
     custom_metadata: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, nullable=True)
 
     partial: Mapped[bool] = mapped_column(Boolean, nullable=True)
@@ -218,6 +220,8 @@ class SessionStorageEvent(SessionStorageBase):
             storage_event.content = event.content.model_dump(exclude_none=True, mode="json")
         if event.grounding_metadata:
             storage_event.grounding_metadata = event.grounding_metadata.model_dump(exclude_none=True, mode="json")
+        if event.usage_metadata:
+            storage_event.usage_metadata = event.usage_metadata.model_dump(exclude_none=True, mode="json")
         if event.custom_metadata:
             storage_event.custom_metadata = event.custom_metadata
         return storage_event
@@ -238,6 +242,7 @@ class SessionStorageEvent(SessionStorageBase):
             error_message=self.error_message,
             interrupted=self.interrupted,
             grounding_metadata=decode_grounding_metadata(self.grounding_metadata),
+            usage_metadata=decode_usage_metadata(self.usage_metadata),
             custom_metadata=self.custom_metadata,
         )
 

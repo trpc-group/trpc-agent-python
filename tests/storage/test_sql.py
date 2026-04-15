@@ -51,9 +51,7 @@ class TestSqlStorage:
     async def sync_storage(self, db_url):
         """Synchronous SQL storage fixture with initialized engine."""
         storage = SqlStorage(is_async=False, db_url=db_url, metadata=StorageData.metadata)
-        # Patch event.listen to work around SQLite pragma issue
-        with patch('trpc_agent_sdk.storage._sql.event.listen'):
-            await storage.create_sql_engine()
+        await storage.create_sql_engine()
         yield storage
         await storage.close()
 
@@ -61,9 +59,7 @@ class TestSqlStorage:
     async def async_storage(self, async_db_url):
         """Asynchronous SQL storage fixture with initialized engine."""
         storage = SqlStorage(is_async=True, db_url=async_db_url, metadata=StorageData.metadata)
-        # Patch event.listen to work around async engine event limitation
-        with patch('trpc_agent_sdk.storage._sql.event.listen'):
-            await storage.create_sql_engine()
+        await storage.create_sql_engine()
         yield storage
         await storage.close()
 
@@ -93,9 +89,7 @@ class TestSqlStorage:
         """Test creating async SQL engine."""
         storage = SqlStorage(is_async=True, db_url=async_db_url, metadata=StorageData.metadata)
 
-        # Patch event.listen to work around async engine event limitation
-        with patch('trpc_agent_sdk.storage._sql.event.listen'):
-            await storage.create_sql_engine()
+        await storage.create_sql_engine()
 
         assert storage._db_engine is not None
         assert storage._database_session_factory is not None
@@ -108,9 +102,7 @@ class TestSqlStorage:
         """Test creating sync SQL engine."""
         storage = SqlStorage(is_async=False, db_url=db_url, metadata=StorageData.metadata)
 
-        # Patch event.listen to work around SQLite pragma issue in tests
-        with patch('trpc_agent_sdk.storage._sql.event.listen'):
-            await storage.create_sql_engine()
+        await storage.create_sql_engine()
 
         assert storage._db_engine is not None
         assert storage._database_session_factory is not None
@@ -473,9 +465,7 @@ class TestSqlStorage:
         """Test closing async SQL engine."""
         storage = SqlStorage(is_async=True, db_url=async_db_url, metadata=StorageData.metadata)
 
-        # Patch event.listen to work around async engine event limitation
-        with patch('trpc_agent_sdk.storage._sql.event.listen'):
-            await storage.create_sql_engine()
+        await storage.create_sql_engine()
 
         assert storage._db_engine is not None
 
@@ -487,9 +477,7 @@ class TestSqlStorage:
         """Test closing sync SQL engine."""
         storage = SqlStorage(is_async=False, db_url=db_url, metadata=StorageData.metadata)
 
-        # Patch event.listen to work around SQLite pragma issue in tests
-        with patch('trpc_agent_sdk.storage._sql.event.listen'):
-            await storage.create_sql_engine()
+        await storage.create_sql_engine()
 
         assert storage._db_engine is not None
 

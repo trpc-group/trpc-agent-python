@@ -42,6 +42,7 @@ from sqlalchemy.types import TypeDecorator
 
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import GroundingMetadata
+from trpc_agent_sdk.types import GenerateContentResponseUsageMetadata
 
 
 def decode_content(content: Optional[dict[str, Any]]) -> Optional[Content]:
@@ -56,6 +57,20 @@ def decode_content(content: Optional[dict[str, Any]]) -> Optional[Content]:
     if not content:
         return None
     return Content.model_validate(content)
+
+
+def decode_usage_metadata(usage_metadata: Optional[dict[str, Any]]) -> Optional[GenerateContentResponseUsageMetadata]:
+    """Decode a usage metadata object from a JSON dictionary.
+
+    Args:
+        usage_metadata: JSON dictionary containing usage metadata
+
+    Returns:
+        Decoded GenerateContentResponseUsageMetadata object or None if usage_metadata is None
+    """
+    if not usage_metadata:
+        return None
+    return GenerateContentResponseUsageMetadata.model_validate(usage_metadata)
 
 
 def decode_grounding_metadata(grounding_metadata: Optional[dict[str, Any]]) -> Optional[GroundingMetadata]:
