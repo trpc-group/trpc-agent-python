@@ -19,11 +19,16 @@ from typing_extensions import override
 from sqlalchemy import MetaData
 from sqlalchemy import and_
 from sqlalchemy import delete as sql_delete
+from sqlalchemy import Dialect
+from sqlalchemy.sql.compiler import IdentifierPreparer
 from sqlalchemy import event
 from sqlalchemy import select
+from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine import create_engine
 from sqlalchemy.engine.interfaces import DBAPICursor
+from sqlalchemy.engine import Connection
+from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.exc import ArgumentError
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -122,6 +127,89 @@ class SqlStorage(BaseStorage):
         self.__db_url = db_url
         self.__kwargs = kwargs
 
+    def _migrate_missing_columns(self, connection: Connection) -> None:
+        """Add columns that exist in the ORM model but are missing from the database,
+        for forward compatibility across version changes.
+
+        SQLAlchemy's create_all only creates tables — it never ALTERs existing
+        tables. This helper bridges the gap for lightweight forward-only migrations.
+        Only handles adding new columns (forward-only).
+
+        All-or-nothing semantics: on databases that support transactional DDL
+        (e.g. PostgreSQL) the caller's transaction handles rollback. On databases
+        where DDL auto-commits (e.g. MySQL), a compensating DROP COLUMN is issued
+        for every column that was already added before the failure.
+
+        Args:
+            connection: A synchronous SQLAlchemy Connection object.
+        """
+        insp: Inspector = inspect(connection)
+        dialect: Dialect = connection.dialect
+        preparer: IdentifierPreparer = dialect.identifier_preparer
+        ddl_compiler = dialect.ddl_compiler(dialect, None)
+
+        pending_add_columns: list[tuple[str, str, str]] = []
+        for table_name, table in self.__metadata.tables.items():
+            if not insp.has_table(table_name):
+                continue
+            existing: set[str] = {col["name"] for col in insp.get_columns(table_name)}
+            for column in table.columns:
+                if column.name in existing:
+                    continue
+                col_type: str = column.type.compile(dialect=dialect)
+                # handle different types of default value
+                nullable: str = "" if column.nullable else " NOT NULL"
+                default: str = ""
+                default_value = ddl_compiler.get_column_default_string(column)
+                if default_value is not None:
+                    default = f" DEFAULT {default_value}"
+                elif column.server_default is not None:
+                    # if the column has server_default, but it is not a DDL server_default, warning
+                    logger.warning(
+                        "Column '%s' on table '%s' has a non-DDL server_default "
+                        "(%s); skipping DEFAULT clause generation.",
+                        column.name,
+                        table_name,
+                        type(column.server_default).__name__,
+                    )
+                elif not column.nullable:
+                    # if the column is NOT NULL and has no server_default, raise error
+                    logger.warning(
+                        "Column '%s' on table '%s' is NOT NULL without a server_default; "
+                        "migration may fail if the table already contains rows.",
+                        column.name,
+                        table_name,
+                    )
+                quoted_table: str = preparer.quote_identifier(table_name)
+                quoted_col: str = preparer.quote_identifier(column.name)
+                stmt: str = f"ALTER TABLE {quoted_table} ADD COLUMN {quoted_col} {col_type}{default}{nullable}"
+                pending_add_columns.append((stmt, column.name, table_name))
+
+        if not pending_add_columns:
+            return
+
+        added_columns: list[tuple[str, str]] = []
+        try:
+            for stmt, col_name, table_name in pending_add_columns:
+                connection.execute(text(stmt))
+                added_columns.append((col_name, table_name))
+                logger.info("Auto-migrated: added column '%s' to table '%s'", col_name, table_name)
+        except Exception:
+            logger.error("Migration failed, compensating %d already-added column(s).", len(added_columns))
+            for col_name, tbl_name in reversed(added_columns):
+                drop_stmt = (f"ALTER TABLE {preparer.quote_identifier(tbl_name)} "
+                             f"DROP COLUMN {preparer.quote_identifier(col_name)}")
+                try:
+                    connection.execute(text(drop_stmt))
+                    logger.info("Compensated: dropped column '%s' from table '%s'", col_name, tbl_name)
+                except Exception:
+                    logger.error(
+                        "Failed to compensate column '%s' on table '%s'; manual cleanup required.",
+                        col_name,
+                        tbl_name,
+                    )
+            raise
+
     async def create_sql_engine(self):
         """Create the database engine."""
         if self._db_engine:
@@ -137,16 +225,19 @@ class SqlStorage(BaseStorage):
                 self.inspector = await _async_inspect()
                 async with db_engine.begin() as conn:
                     await conn.run_sync(self.__metadata.create_all)
+                    await conn.run_sync(self._migrate_missing_columns)
                 self._database_session_factory = async_sessionmaker(bind=db_engine)
             else:
                 db_engine: SqlEngine = create_engine(self.__db_url, **self.__kwargs)
                 self.inspector = inspect(db_engine)
                 self.__metadata.create_all(db_engine)
+                with db_engine.begin() as conn:
+                    self._migrate_missing_columns(conn)
                 self._database_session_factory = sessionmaker(bind=db_engine)
 
             if db_engine.dialect.name == "sqlite":
-                # Set sqlite pragma to enable foreign keys constraints
-                event.listen(db_engine, "connect", _set_sqlite_pragma)
+                listen_target = db_engine.sync_engine if isinstance(db_engine, AsyncEngine) else db_engine
+                event.listen(listen_target, "connect", _set_sqlite_pragma)
 
         except Exception as ex:  # pylint: disable=broad-except
             if isinstance(ex, ArgumentError):

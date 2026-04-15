@@ -66,8 +66,7 @@ def _make_event_with_function_call():
 async def _create_service(config=None):
     config = config or _make_config()
     svc = SqlSessionService(db_url="sqlite:///:memory:", session_config=config, is_async=False)
-    with patch('trpc_agent_sdk.storage._sql.event.listen'):
-        await svc._sql_storage.create_sql_engine()
+    await svc._sql_storage.create_sql_engine()
     return svc
 
 
