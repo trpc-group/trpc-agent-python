@@ -47,6 +47,7 @@ from fastapi.responses import StreamingResponse
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
+from trpc_agent_sdk.version import __version__
 
 
 def create_app(manager: RunnerManager) -> FastAPI:
@@ -71,7 +72,7 @@ def create_app(manager: RunnerManager) -> FastAPI:
     app = FastAPI(
         title="TRPC Agent Server",
         description="HTTP API for TRPC Agent",
-        version="1.0.0",
+        version=__version__,
         lifespan=_lifespan,
     )
 

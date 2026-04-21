@@ -11,6 +11,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from trpc_agent_sdk.version import __version__
+
 
 class ChatRequest(BaseModel):
     """Body for POST /v1/chat and POST /v1/chat/stream."""
@@ -58,4 +60,4 @@ class HealthResponse(BaseModel):
 
     status: str = "ok"
     app_name: str
-    version: str = "1.0.0"
+    version: str = __version__

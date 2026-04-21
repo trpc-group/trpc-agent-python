@@ -17,6 +17,7 @@ from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.server.ag_ui import AgUiAgent
 from trpc_agent_sdk.server.ag_ui import AgUiManager
 from trpc_agent_sdk.server.ag_ui import AgUiService
+from trpc_agent_sdk.version import __version__
 
 
 class HealthResponse(BaseModel):
@@ -24,7 +25,7 @@ class HealthResponse(BaseModel):
 
     status: str = "ok"
     app_name: str
-    version: str = "1.0.0"
+    version: str = __version__
 
 
 class AguiRunner:
@@ -65,7 +66,7 @@ class AguiRunner:
         app = FastAPI(
             title="TRPC AG-UI Server (Cancel Demo)",
             description="HTTP API for TRPC AG-UI Server with Cancel support",
-            version="1.0.0",
+            version=__version__,
             lifespan=self._lifespan,
         )
         return app

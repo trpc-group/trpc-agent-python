@@ -6,9 +6,8 @@
 
 """Test the version module."""
 
-import pytest
 from trpc_agent_sdk.version import __version__
 
 def test_version():
     """Test the version module."""
-    assert __version__ == '1.0.0'
+    assert __version__ == '1.1.1'
