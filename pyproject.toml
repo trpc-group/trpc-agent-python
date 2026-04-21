@@ -53,6 +53,7 @@ dependencies = [
     "charset-normalizer>=3.0.0",
     "typer>=0.12.0", # MIT License
     "watchdog",
+    "markdownify>=1.2.0", # MIT License
 ]
 
 [project.optional-dependencies]
