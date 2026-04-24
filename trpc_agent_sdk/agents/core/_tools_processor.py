@@ -221,7 +221,10 @@ class ToolsProcessor:
                     state_end.update(merged_event.actions.state_delta)
 
                 # Add merged tool call tracing
-                with tracer.start_as_current_span("execute_tool (merged)"):
+                with tracer.start_as_current_span(
+                        "execute_tool (merged)",
+                        attributes={"gen_ai.operation.name": "execute_tool"},
+                ):
                     trace_merged_tool_calls(
                         response_event_id=merged_event.id,
                         function_response_event=merged_event,
@@ -285,8 +288,17 @@ class ToolsProcessor:
             Event: The result of tool execution
         """
 
-        # Wrap tool execution in telemetry span
-        with tracer.start_as_current_span(f"execute_tool {tool.name}"):
+        # Wrap tool execution in telemetry span.
+        # Pass initial attributes so the Galileo sampler can make a sampling
+        # decision at span-creation time (before trace_tool_call sets them).
+        with tracer.start_as_current_span(
+                f"execute_tool {tool.name}",
+                attributes={
+                    "gen_ai.operation.name": "execute_tool",
+                    "gen_ai.tool.name": tool.name,
+                    "gen_ai.tool.description": tool.description or "",
+                },
+        ):
             # Capture state before tool execution
             state_begin = dict(context.session.state)
 
