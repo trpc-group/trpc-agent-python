@@ -37,7 +37,7 @@ RESULT_LABELS = ("Agent Name", "Eval Set", "Overall Status", "Runs")
 
 def _result_label_width() -> int:
     """Width for aligned result labels (Agent Name, Eval Set, etc.)."""
-    return max(len(l) for l in RESULT_LABELS)
+    return max(len(label) for label in RESULT_LABELS)
 
 
 class MetricRunRecord:

@@ -284,8 +284,8 @@ class DefaultResponseScorer:
         try:
             obj = FinalResponseOutput.model_validate_json(self._extract_json(response_text))
         except Exception as e:
-            raise ValueError(f"failed to parse final response JSON: {e}" +
-                             (f"; got: {(response_text or '')[:200]!r}" if response_text else "")) from e
+            response_preview = f"; got: {(response_text or '')[:200]!r}" if response_text else ""
+            raise ValueError(f"failed to parse final response JSON: {e}{response_preview}") from e
         label = obj.is_the_agent_response_valid.strip().lower()
         score = 1.0 if label == "valid" else 0.0
         return ScoreResult(score=score, reason=obj.reasoning.strip())
@@ -294,8 +294,8 @@ class DefaultResponseScorer:
         try:
             obj = RubricJudgeOutput.model_validate_json(self._extract_json(response_text))
         except Exception as e:
-            raise ValueError(f"failed to parse rubric response JSON: {e}" +
-                             (f"; got: {(response_text or '')[:500]!r}" if response_text else "")) from e
+            response_preview = f"; got: {(response_text or '')[:500]!r}" if response_text else ""
+            raise ValueError(f"failed to parse rubric response JSON: {e}{response_preview}") from e
         if not obj.items:
             raise ValueError("rubric response JSON contains empty items array")
         rubric_scores: list[RubricScore] = []

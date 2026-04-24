@@ -57,7 +57,7 @@ def register_channel_without_stream_progress(channel: str) -> None:
 
 def merge_assistant_text(current: str, incoming: str) -> str:
     """Merge assistant text chunks while avoiding cumulative duplicates.
-    
+
     Args:
         current: The current text.
         incoming: The incoming text.

@@ -35,7 +35,8 @@ class AgUiService:
 
         Args:
             service_name: Name of the service used for route registration
-            app: Optional FastAPI app instance. If not provided, the service will not be registered with the FastAPI app.
+            app: Optional FastAPI app instance. If not provided, the service
+                 will not be registered with the FastAPI app.
             agents: Optional dictionary of agents keyed by URI path. If not provided,
                    an empty dictionary will be used.
         """
