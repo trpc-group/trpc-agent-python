@@ -10,9 +10,13 @@ from __future__ import annotations
 import base64
 import json
 import pickle
+from copy import deepcopy
+from types import SimpleNamespace
+from typing import Iterator
 from unittest.mock import MagicMock
 
 import pytest
+
 from sqlalchemy import Text
 from sqlalchemy.dialects import mysql
 from sqlalchemy.dialects import postgresql
@@ -31,8 +35,10 @@ from trpc_agent_sdk.storage._sql_common import (
     UTF8MB4String,
     decode_content,
     decode_grounding_metadata,
+    decode_grounding_metadata,
+    GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY,
+    TypeDecoratorHookRegistry,
 )
-
 
 # ---------------------------------------------------------------------------
 # decode_content
@@ -459,3 +465,129 @@ class TestSqlCommonReexports:
         assert _U is UTF8MB4String
         assert _dc is decode_content
         assert _dg is decode_grounding_metadata
+
+
+def _build_dialect(name: str) -> SimpleNamespace:
+    return SimpleNamespace(name=name, type_descriptor=lambda t: t)
+
+
+@pytest.fixture(autouse=True)
+def reset_hook_registry() -> Iterator[None]:
+    """Reset global hook registry around each test."""
+    old_load = deepcopy(TypeDecoratorHookRegistry._load_dialect_hooks)
+    old_bind = deepcopy(TypeDecoratorHookRegistry._process_bind_hooks)
+    old_result = deepcopy(TypeDecoratorHookRegistry._process_result_hooks)
+    try:
+        TypeDecoratorHookRegistry._load_dialect_hooks = {}
+        TypeDecoratorHookRegistry._process_bind_hooks = {}
+        TypeDecoratorHookRegistry._process_result_hooks = {}
+        yield
+    finally:
+        TypeDecoratorHookRegistry._load_dialect_hooks = old_load
+        TypeDecoratorHookRegistry._process_bind_hooks = old_bind
+        TypeDecoratorHookRegistry._process_result_hooks = old_result
+
+
+def test_dynamic_json_all_hooks_can_override() -> None:
+    """DynamicJSON supports load/bind/result hook overrides."""
+    json_type = DynamicJSON()
+    sqlite = _build_dialect("sqlite")
+    load_marker = object()
+
+    def load_hook(decorator, dialect):  # noqa: ANN001
+        assert decorator is json_type
+        assert dialect.name == "sqlite"
+        return load_marker
+
+    def bind_hook(decorator, value, dialect):  # noqa: ANN001
+        assert decorator is json_type
+        assert dialect.name == "sqlite"
+        return f"hooked-bind-{value}"
+
+    def result_hook(decorator, value, dialect):  # noqa: ANN001
+        assert decorator is json_type
+        assert dialect.name == "sqlite"
+        return {"hooked_result": value}
+
+    GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY.register_load_dialect_hook(DynamicJSON, load_hook)
+    GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY.register_process_bind_hook(DynamicJSON, bind_hook)
+    GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY.register_process_result_hook(DynamicJSON, result_hook)
+
+    assert json_type.load_dialect_impl(sqlite) is load_marker
+    assert json_type.process_bind_param({"k": "v"}, sqlite) == "hooked-bind-{'k': 'v'}"
+    assert json_type.process_result_value('{"k":"v"}', sqlite) == {"hooked_result": '{"k":"v"}'}
+
+
+def test_dynamic_json_hook_none_falls_back_to_default_logic() -> None:
+    """Hook skips when returning None."""
+    json_type = DynamicJSON()
+    sqlite = _build_dialect("sqlite")
+
+    GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY.register_process_bind_hook(DynamicJSON, lambda _d, _v, _dialect: None)
+    GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY.register_process_result_hook(DynamicJSON, lambda _d, _v, _dialect: None)
+
+    encoded = json_type.process_bind_param({"a": 1}, sqlite)
+    decoded = json_type.process_result_value(encoded, sqlite)
+
+    assert encoded == '{"a": 1}'
+    assert decoded == {"a": 1}
+
+
+def test_precise_timestamp_supports_all_three_hooks() -> None:
+    """PreciseTimestamp supports load/bind/result hooks."""
+    ts_type = PreciseTimestamp()
+    sqlite = _build_dialect("sqlite")
+    load_marker = object()
+
+    GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY.register_load_dialect_hook(PreciseTimestamp, lambda _d, _dialect: load_marker)
+    GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY.register_process_bind_hook(PreciseTimestamp,
+                                                                   lambda _d, value, _dialect: f"bind-{value}")
+    GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY.register_process_result_hook(PreciseTimestamp,
+                                                                     lambda _d, value, _dialect: f"result-{value}")
+
+    assert ts_type.load_dialect_impl(sqlite) is load_marker
+    assert ts_type.process_bind_param("2026-01-01", sqlite) == "bind-2026-01-01"
+    assert ts_type.process_result_value("2026-01-01", sqlite) == "result-2026-01-01"
+
+
+def test_utf8mb4_string_supports_all_three_hooks() -> None:
+    """UTF8MB4String supports load/bind/result hooks."""
+    str_type = UTF8MB4String(length=128)
+    sqlite = _build_dialect("sqlite")
+    load_marker = object()
+
+    GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY.register_load_dialect_hook(UTF8MB4String, lambda _d, _dialect: load_marker)
+    GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY.register_process_bind_hook(UTF8MB4String,
+                                                                   lambda _d, value, _dialect: f"bind-{value}")
+    GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY.register_process_result_hook(UTF8MB4String,
+                                                                     lambda _d, value, _dialect: f"result-{value}")
+
+    assert str_type.load_dialect_impl(sqlite) is load_marker
+    assert str_type.process_bind_param("hello", sqlite) == "bind-hello"
+    assert str_type.process_result_value("hello", sqlite) == "result-hello"
+
+
+def test_dynamic_pickle_hook_order_uses_first_override_result() -> None:
+    """First non-None hook result wins for DynamicPickleType."""
+    pickle_type = DynamicPickleType()
+    sqlite = _build_dialect("sqlite")
+    calls: list[str] = []
+
+    def hook_a(_d, _v, _dialect):  # noqa: ANN001
+        calls.append("a")
+        return None
+
+    def hook_b(_d, _v, _dialect):  # noqa: ANN001
+        calls.append("b")
+        return "override"
+
+    def hook_c(_d, _v, _dialect):  # noqa: ANN001
+        calls.append("c")
+        return "should-not-run"
+
+    GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY.register_process_bind_hook(DynamicPickleType, hook_a)
+    GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY.register_process_bind_hook(DynamicPickleType, hook_b)
+    GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY.register_process_bind_hook(DynamicPickleType, hook_c)
+
+    assert pickle_type.process_bind_param({"k": "v"}, sqlite) == "override"
+    assert calls == ["a", "b"]

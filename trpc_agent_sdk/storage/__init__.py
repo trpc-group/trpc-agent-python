@@ -30,6 +30,8 @@ from ._sql_common import UTF8MB4String
 from ._sql_common import decode_content
 from ._sql_common import decode_grounding_metadata
 from ._sql_common import decode_usage_metadata
+from ._sql_common import GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY
+from ._sql_common import TypeDecoratorHookRegistry
 
 __all__ = [
     "EXPIRE_METHOD",
@@ -57,4 +59,6 @@ __all__ = [
     "decode_content",
     "decode_grounding_metadata",
     "decode_usage_metadata",
+    "GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY",
+    "TypeDecoratorHookRegistry",
 ]

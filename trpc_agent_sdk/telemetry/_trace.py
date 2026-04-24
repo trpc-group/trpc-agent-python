@@ -58,7 +58,6 @@ def get_trpc_agent_span_name() -> str:
     """
     Get the span name for the trpc agent.
     """
-    global _trpc_agent_span_name  # pylint: disable=invalid-name
     return _trpc_agent_span_name
 
 
@@ -104,7 +103,6 @@ def trace_runner(
         state_begin: The state before the runner execution.
         state_end: The state after the runner execution.
     """
-    global _trpc_agent_span_name  # pylint: disable=invalid-name
     span = trace.get_current_span()
     span.set_attribute("gen_ai.system", _trpc_agent_span_name)
     span.set_attribute("gen_ai.operation.name", "run_runner")
@@ -161,7 +159,6 @@ def trace_cancellation(
         state_begin: The state before the runner execution.
         state_partial: The partial state at cancellation point.
     """
-    global _trpc_agent_span_name  # pylint: disable=invalid-name
     span = trace.get_current_span()
 
     # Set span status to ERROR for cancellation
@@ -225,7 +222,6 @@ def trace_agent(
         state_begin: The state before the agent run.
         state_end: The state after the agent run.
     """
-    global _trpc_agent_span_name  # pylint: disable=invalid-name
     span = trace.get_current_span()
     span.set_attribute("gen_ai.system", _trpc_agent_span_name)
     span.set_attribute("gen_ai.operation.name", "run_agent")
@@ -265,7 +261,6 @@ def trace_tool_call(
         state_begin: The state before the tool execution.
         state_end: The state after the tool execution.
     """
-    global _trpc_agent_span_name  # pylint: disable=invalid-name
     span = trace.get_current_span()
     span.set_attribute("gen_ai.system", _trpc_agent_span_name)
     span.set_attribute("gen_ai.operation.name", "execute_tool")
@@ -331,7 +326,6 @@ def trace_merged_tool_calls(
         state_begin: The state before the tool execution.
         state_end: The state after the tool execution.
     """
-    global _trpc_agent_span_name  # pylint: disable=invalid-name
     span = trace.get_current_span()
     span.set_attribute("gen_ai.system", _trpc_agent_span_name)
     span.set_attribute("gen_ai.operation.name", "execute_tool")
@@ -372,6 +366,8 @@ def trace_call_llm(
     llm_request: LlmRequest,
     llm_response: LlmResponse,
     instruction_metadata: Optional[InstructionMetadata] = None,
+    stream_function_calls_raw: Optional[list[dict[str, Any]]] = None,
+    stream_function_calls_post_planner: Optional[list[dict[str, Any]]] = None,
 ):
     """Traces a call to the LLM.
 
@@ -387,8 +383,11 @@ def trace_call_llm(
             with ``name``, ``version``, and ``labels`` attributes. When
             provided, these are written directly to the call_llm span for
             precise instruction-to-generation association.
+        stream_function_calls_raw: Optional function calls collected from all
+            raw LLM stream chunks.
+        stream_function_calls_post_planner: Optional function calls collected
+            from post-planner events emitted during stream processing.
     """
-    global _trpc_agent_span_name  # pylint: disable=invalid-name
     span = trace.get_current_span()
     # Special standard Open Telemetry GenaI attributes that indicate
     # that this is a span related to a Generative AI system.
@@ -413,6 +412,26 @@ def trace_call_llm(
         f"{_trpc_agent_span_name}.llm_response",
         llm_response_json,
     )
+
+    if stream_function_calls_raw:
+        span.set_attribute(
+            f"{_trpc_agent_span_name}.stream_function_calls.raw",
+            _safe_json_serialize(stream_function_calls_raw),
+        )
+        span.set_attribute(
+            f"{_trpc_agent_span_name}.stream_function_calls.raw_count",
+            len(stream_function_calls_raw),
+        )
+
+    if stream_function_calls_post_planner:
+        span.set_attribute(
+            f"{_trpc_agent_span_name}.stream_function_calls.post_planner",
+            _safe_json_serialize(stream_function_calls_post_planner),
+        )
+        span.set_attribute(
+            f"{_trpc_agent_span_name}.stream_function_calls.post_planner_count",
+            len(stream_function_calls_post_planner),
+        )
 
     if llm_response.usage_metadata is not None:
         usage = llm_response.usage_metadata

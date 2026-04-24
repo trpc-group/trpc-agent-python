@@ -79,20 +79,36 @@ class LlmProcessor:
                 return
 
             # Step 2: Call the model and process responses with telemetry tracing.
-            # Avoid start_as_current_span in async generators because cancellation can
-            # close the generator from a different context, which may trigger
-            # "Token was created in a different Context" during detach.
-            span = tracer.start_span('call_llm')
-            try:
+            with tracer.start_as_current_span('call_llm'):
                 event_id = Event.new_id()
                 final_llm_response = None
+                aggregated_raw_function_calls: list[dict] = []
+                aggregated_event_function_calls: list[dict] = []
+
+                def _append_function_calls(target: list[dict], calls: list) -> None:
+                    for call in calls or []:
+                        # Keep only telemetry-safe fields for trace attributes.
+                        target.append({
+                            "id": getattr(call, "id", None),
+                            "name": getattr(call, "name", None),
+                            "args": getattr(call, "args", None),
+                        })
 
                 async for llm_response in self.model.generate_async(request, stream=stream, ctx=context):
+                    # Collect raw model-level function calls from every chunk.
+                    raw_calls = []
+                    if llm_response.content and llm_response.content.parts:
+                        for part in llm_response.content.parts:
+                            if part.function_call:
+                                raw_calls.append(part.function_call)
+                    _append_function_calls(aggregated_raw_function_calls, raw_calls)
+
                     # Create Event directly from LlmResponse
                     event = self._create_event_from_response(context, event_id, llm_response)
 
                     # Process response with planner if available
                     event = self._process_planning_response(event, context)
+                    _append_function_calls(aggregated_event_function_calls, event.get_function_calls())
 
                     # Track the latest non-partial response for tracing
                     # In streaming mode, only the final (non-partial) response
@@ -111,9 +127,9 @@ class LlmProcessor:
                                    event_id,
                                    request,
                                    final_llm_response,
-                                   instruction_metadata=instruction_metadata)
-            finally:
-                span.end()
+                                   instruction_metadata=instruction_metadata,
+                                   stream_function_calls_raw=aggregated_raw_function_calls,
+                                   stream_function_calls_post_planner=aggregated_event_function_calls)
 
         except Exception as ex:  # pylint: disable=broad-except
             logger.error("LLM call failed for agent %s: %s", author, ex)
