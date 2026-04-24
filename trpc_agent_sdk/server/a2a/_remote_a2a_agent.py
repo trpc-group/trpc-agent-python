@@ -59,6 +59,7 @@ from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.exceptions import RunCancelledException
 from trpc_agent_sdk.log import logger
+from trpc_agent_sdk.telemetry import CustomMetricsReporter
 from trpc_agent_sdk.telemetry import CustomTraceReporter
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
@@ -246,6 +247,10 @@ class TrpcRemoteA2aAgent(BaseAgent):
             model_prefix="a2a",
             tool_description_prefix="Remote A2A tool",
         )
+        metrics_reporter = CustomMetricsReporter(
+            agent_name=self.name,
+            model_prefix="a2a",
+        )
         task_id = None
 
         out_headers: dict[str, str] = {}
@@ -277,6 +282,7 @@ class TrpcRemoteA2aAgent(BaseAgent):
 
                 for event in self._events_from_response(result, event_count, ctx):
                     trace_reporter.trace_event(ctx, event)
+                    metrics_reporter.report_event(ctx, event)
                     yield event
 
             logger.debug("Streaming completed with %s events", event_count)

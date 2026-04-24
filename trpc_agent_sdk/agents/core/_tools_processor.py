@@ -27,6 +27,7 @@ from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.events import EventActions
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.models import LlmRequest
+from trpc_agent_sdk.telemetry import report_execute_tool
 from trpc_agent_sdk.telemetry import trace_merged_tool_calls
 from trpc_agent_sdk.telemetry import trace_tool_call
 from trpc_agent_sdk.telemetry import tracer
@@ -311,10 +312,18 @@ class ToolsProcessor:
             # Set function call ID for context
             context.function_call_id = tool_call.id
 
+            start_time = time.monotonic()
+
             try:
-                start_time = time.time()
                 result = await tool.run_async(tool_context=context, args=arguments)
-                execution_time = time.time() - start_time
+                execution_time = time.monotonic() - start_time
+
+                report_execute_tool(
+                    context,
+                    tool,
+                    duration_s=execution_time,
+                    error_type=None,
+                )
 
                 # Build function response
                 if not isinstance(result, dict):
@@ -370,6 +379,13 @@ class ToolsProcessor:
                 return event
 
             except Exception as ex:  # pylint: disable=broad-except
+                report_execute_tool(
+                    context,
+                    tool,
+                    duration_s=time.monotonic() - start_time,
+                    error_type=type(ex).__name__,
+                )
+
                 error_event = self._create_error_event(context, "tool_execution_error", str(ex), tool_call.id,
                                                        tool_call.name)
 

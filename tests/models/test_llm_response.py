@@ -296,3 +296,47 @@ class TestLlmResponse:
         assert llm_response.content is not None
         assert llm_response.content.parts[0].text == "Response"
         # finish_reason=None should not cause error when content exists
+
+
+class TestLlmResponseHasContent:
+    """Test suite for :meth:`LlmResponse.has_content`."""
+
+    def test_none_content_is_false(self):
+        assert LlmResponse(content=None).has_content() is False
+
+    def test_empty_parts_is_false(self):
+        assert LlmResponse(content=Content(parts=[], role="model")).has_content() is False
+
+    def test_text_part_is_true(self):
+        content = Content(parts=[Part.from_text(text="hello")], role="model")
+        assert LlmResponse(content=content).has_content() is True
+
+    def test_function_call_part_is_true(self):
+        content = Content(
+            parts=[Part.from_function_call(name="calc", args={"x": 1})],
+            role="model",
+        )
+        assert LlmResponse(content=content).has_content() is True
+
+    def test_function_response_only_is_false(self):
+        """Function responses are not user-visible content per the contract."""
+        content = Content(
+            parts=[Part.from_function_response(name="calc", response={"ok": True})],
+            role="tool",
+        )
+        assert LlmResponse(content=content).has_content() is False
+
+    def test_empty_text_with_function_call_is_true(self):
+        content = Content(
+            parts=[
+                Part(text=""),
+                Part.from_function_call(name="calc", args={}),
+            ],
+            role="model",
+        )
+        assert LlmResponse(content=content).has_content() is True
+
+    def test_whitespace_text_only_is_true(self):
+        """Any non-empty text counts as visible content."""
+        content = Content(parts=[Part(text=" ")], role="model")
+        assert LlmResponse(content=content).has_content() is True
