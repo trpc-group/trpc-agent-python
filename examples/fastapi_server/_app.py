@@ -137,7 +137,7 @@ def create_app(manager: RunnerManager) -> FastAPI:
                             ))
 
         except Exception as exc:
-            logger.exception("Error during agent run (session=%s)", session_id)
+            logger.error("Error during agent run (session=%s): %s", session_id, exc)
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
         return ChatResponse(
@@ -214,7 +214,7 @@ def create_app(manager: RunnerManager) -> FastAPI:
                 yield _sse(StreamChunk(type="done", session_id=session_id))
 
             except Exception as exc:
-                logger.exception("Error during streaming run (session=%s)", session_id)
+                logger.error("Error during streaming run (session=%s): %s", session_id, exc)
                 yield _sse(StreamChunk(type="error", data=str(exc), session_id=session_id))
 
         return StreamingResponse(

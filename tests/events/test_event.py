@@ -42,6 +42,9 @@ class TestEventCreation:
         assert event.tag is None
         assert event.filter_key is None
         assert event.object is None
+        assert event.model_flags > 0
+        assert event.is_model_visible() is True
+        assert event.is_summary_event() is False
 
     def test_auto_generated_id_is_valid_uuid(self):
         event = Event(invocation_id="inv-1", author="a")
@@ -306,6 +309,33 @@ class TestIsError:
     def test_error_message_without_code_not_error(self):
         event = Event(invocation_id="inv-1", author="a", error_message="oops")
         assert event.is_error() is False
+
+
+# ---------------------------------------------------------------------------
+# Event model visibility / summary flags
+# ---------------------------------------------------------------------------
+
+
+class TestEventModelFlags:
+    def test_set_model_visible_false(self):
+        event = Event(invocation_id="inv-1", author="a")
+        event.set_model_visible(False)
+        assert event.is_model_visible() is False
+
+    def test_visible_field_does_not_control_model_visibility(self):
+        event = Event(invocation_id="inv-1", author="a", visible=False)
+        assert event.is_model_visible() is True
+
+    def test_set_summary_event_true(self):
+        event = Event(invocation_id="inv-1", author="a")
+        event.set_summary_event(True)
+        assert event.is_summary_event() is True
+
+    def test_clear_summary_event(self):
+        event = Event(invocation_id="inv-1", author="a")
+        event.set_summary_event(True)
+        event.set_summary_event(False)
+        assert event.is_summary_event() is False
 
 
 # ---------------------------------------------------------------------------

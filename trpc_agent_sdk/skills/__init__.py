@@ -59,6 +59,7 @@ from ._repository import BaseSkillRepository
 from ._repository import FsSkillRepository
 from ._repository import VisibilityFilter
 from ._repository import create_default_skill_repository
+from ._repository import SkillRepositoryResolver
 from ._skill_config import get_skill_config
 from ._skill_config import get_skill_load_mode
 from ._skill_config import set_skill_config
@@ -95,6 +96,7 @@ from ._utils import get_state_delta
 from ._utils import set_state_delta
 from .tools import SkillLoadTool
 from .tools import SkillRunTool
+from .tools import SkillExecTool
 from .tools import skill_list
 from .tools import skill_list_docs
 from .tools import skill_list_tools
@@ -136,6 +138,7 @@ __all__ = [
     "FsSkillRepository",
     "VisibilityFilter",
     "create_default_skill_repository",
+    "SkillRepositoryResolver",
     "get_skill_config",
     "get_skill_load_mode",
     "set_skill_config",
@@ -172,6 +175,7 @@ __all__ = [
     "set_state_delta",
     "SkillLoadTool",
     "SkillRunTool",
+    "SkillExecTool",
     "skill_list",
     "skill_list_docs",
     "skill_list_tools",

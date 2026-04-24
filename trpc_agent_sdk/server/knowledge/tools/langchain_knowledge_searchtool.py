@@ -161,12 +161,13 @@ class AgenticLangchainKnowledgeSearchTool(LangchainKnowledgeSearchTool):
             "dynamic_filter: KnowledgeFilterExpr object.\n"
             "Fields:\n"
             "- field: metadata field path, e.g. metadata.category\n"
-            "- operator: eq, ne, gt, gte, lt, lte, in, not in, like, not like, between, and, or\n"
+            "- operator: eq, ne, gt, gte, lt, lte, in, not in, like, "
+            "not like, between, and, or\n"
             "- value: comparison value, or an array of sub-conditions for and/or\n"
             "Examples:\n"
             "1) {\"field\":\"metadata.category\",\"operator\":\"eq\",\"value\":\"machine-learning\"}\n"
-            "2) {\"operator\":\"and\",\"value\":[{\"field\":\"metadata.status\",\"operator\":\"eq\",\"value\":\"active\"}]}"
-        )
+            "2) {\"operator\":\"and\",\"value\":[{\"field\":\"metadata.status\","
+            "\"operator\":\"eq\",\"value\":\"active\"}]}")
         return FunctionDeclaration(
             name=self.name,
             description=self.description,

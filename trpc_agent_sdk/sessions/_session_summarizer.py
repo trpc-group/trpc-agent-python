@@ -58,7 +58,8 @@ Please summarize the following conversation, focusing on:
 3. Actions taken or planned
 4. Context that should be remembered for future interactions
 
-Keep the summary concise but comprehensive. Focus on what would be most important to remember for continuing the conversation.
+Keep the summary concise but comprehensive. Focus on what would be most important to remember
+for continuing the conversation.
 
 Conversation:
 {conversation_text}
@@ -246,6 +247,8 @@ class SessionSummarizer:
         current_text = ""
 
         for event in events:
+            if not event.is_model_visible():
+                continue
             if not event.content or not event.content.parts:
                 continue
 
@@ -373,16 +376,17 @@ class SessionSummarizer:
             Events after compression
         """
         if keep_recent_count is None:
-            recent_events = []
             old_events = events
         else:
-            recent_events = events[-keep_recent_count:]
             old_events = events[:-keep_recent_count]
         try:
-            original_count = len(events)
+            original_count = sum(1 for event in events if event.is_model_visible())
+            old_visible_events = [event for event in old_events if event.is_model_visible()]
+            if not old_visible_events:
+                return None, events
 
             # Generate summary of old events
-            summary_text = await self._compress_session_to_summary(old_events, session_id, ctx)
+            summary_text = await self._compress_session_to_summary(old_visible_events, session_id, ctx)
 
             if summary_text:
                 # Create summary event
@@ -392,11 +396,18 @@ class SessionSummarizer:
                                           parts=[Part.from_text(text=f"Previous conversation summary: {summary_text}")],
                                           role="system"),
                                       timestamp=time.time())
+                summary_event.set_summary_event(True)
+                summary_event.set_model_visible(True)
 
-                # Replace old events with summary and keep recent events
-                events = [summary_event] + recent_events
+                # Hide old visible events from model history without dropping raw data.
+                for event in old_visible_events:
+                    event.set_model_visible(False)
 
-                compressed_count = len(events)
+                # Insert summary near the old/recent boundary while preserving all events.
+                insert_index = len(old_events)
+                events.insert(insert_index, summary_event)
+
+                compressed_count = sum(1 for event in events if event.is_model_visible())
                 logger.info("Compressed session %s: %s events -> %s events", session_id, original_count,
                             compressed_count)
 
@@ -416,10 +427,8 @@ class SessionSummarizer:
             Summary text if successful, None otherwise
             Events after compression
         """
-        summary_text, events = await self.create_session_summary_by_events(session.events, session.id,
-                                                                           self.__keep_recent_count, ctx)
-        if summary_text:
-            session.events = events
+        summary_text, _ = await self.create_session_summary_by_events(session.events, session.id,
+                                                                      self.__keep_recent_count, ctx)
         return summary_text
 
     def get_summary_metadata(self) -> Dict[str, Any]:

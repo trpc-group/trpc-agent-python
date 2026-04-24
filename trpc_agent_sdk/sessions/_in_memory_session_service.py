@@ -240,7 +240,7 @@ class InMemorySessionService(BaseSessionService):
         # Get session with TTL wrapper
         storage_session = self._get_session(app_name, user_id, session_id)
         if storage_session is None:
-            _warning(f"session not found")
+            _warning("session not found")
             return event
 
         # Add event to storage session

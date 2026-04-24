@@ -196,7 +196,7 @@ class JSONCriterion(EvalBaseModel):
         """Recursive equality using self.number_tolerance for numeric comparison."""
         if actual is None and expected is None:
             return True
-        if type(actual) != type(expected):
+        if type(actual) is not type(expected):
             return False
         tol = 1e-6 if self.number_tolerance is None else self.number_tolerance
         if isinstance(actual, (int, float)) and isinstance(expected, (int, float)):

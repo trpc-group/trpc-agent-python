@@ -13,7 +13,15 @@ from enum import Enum
 from unittest.mock import MagicMock
 
 import pytest
-from a2a import types as a2a_types
+try:
+    from a2a import types as a2a_types
+    _ = a2a_types.DataPart
+    _ = a2a_types.TextPart
+except (ImportError, AttributeError):
+    pytest.skip(
+        "Installed a2a.types does not export DataPart/TextPart; skip legacy A2A tests.",
+        allow_module_level=True,
+    )
 from google.genai import types as genai_types
 
 from trpc_agent_sdk.models import TOOL_STREAMING_ARGS
