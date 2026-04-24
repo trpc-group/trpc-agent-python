@@ -162,18 +162,28 @@ class SessionStorageEvent(SessionStorageBase):
     actions: Mapped[MutableDict[str, Any]] = mapped_column(DynamicPickleType)
     long_running_tool_ids_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     branch: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
+    request_id: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
+    parent_invocation_id: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
+    tag: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
+    filter_key: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
+    requires_completion: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     timestamp: Mapped[PreciseTimestamp] = mapped_column(PreciseTimestamp, default=func.now())
-
-    content: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, nullable=True)
-    grounding_metadata: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, nullable=True)
-    usage_metadata: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, nullable=True)
-    custom_metadata: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, nullable=True)
+    visible: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    object: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=False, default="")
+    model_flags: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     partial: Mapped[bool] = mapped_column(Boolean, nullable=True)
     turn_complete: Mapped[bool] = mapped_column(Boolean, nullable=True)
     error_code: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
     error_message: Mapped[str] = mapped_column(UTF8MB4String(1024), nullable=True)
     interrupted: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    response_id: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
+    content: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, nullable=True)
+    grounding_metadata: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, nullable=True)
+    custom_metadata: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, nullable=True)
+    usage_metadata: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, nullable=True)
+
 
     storage_session: Mapped[StorageSession] = relationship(
         "StorageSession",
@@ -201,29 +211,39 @@ class SessionStorageEvent(SessionStorageBase):
     def from_event(cls, session: Session, event: Event) -> SessionStorageEvent:
         storage_event = SessionStorageEvent(
             id=event.id,
-            invocation_id=event.invocation_id,
-            author=event.author,
-            branch=event.branch,
-            actions=event.actions,
-            session_id=session.id,
             app_name=session.app_name,
             user_id=session.user_id,
-            timestamp=datetime.fromtimestamp(event.timestamp),
+            session_id=session.id,
+            invocation_id=event.invocation_id,
+            author=event.author,
+            actions=event.actions,
             long_running_tool_ids=event.long_running_tool_ids,
+            branch=event.branch,
+            request_id=event.request_id,
+            parent_invocation_id=event.parent_invocation_id,
+            tag=event.tag,
+            filter_key=event.filter_key,
+            requires_completion=event.requires_completion,
+            version=event.version,
+            timestamp=datetime.fromtimestamp(event.timestamp),
+            visible=event.visible,
+            object=event.object,
+            model_flags=event.model_flags,
             partial=event.partial,
             turn_complete=event.turn_complete,
             error_code=event.error_code,
             error_message=event.error_message,
             interrupted=event.interrupted,
+            response_id=event.response_id,
         )
         if event.content:
             storage_event.content = event.content.model_dump(exclude_none=True, mode="json")
         if event.grounding_metadata:
             storage_event.grounding_metadata = event.grounding_metadata.model_dump(exclude_none=True, mode="json")
-        if event.usage_metadata:
-            storage_event.usage_metadata = event.usage_metadata.model_dump(exclude_none=True, mode="json")
         if event.custom_metadata:
             storage_event.custom_metadata = event.custom_metadata
+        if event.usage_metadata:
+            storage_event.usage_metadata = event.usage_metadata.model_dump(exclude_none=True, mode="json")
         return storage_event
 
     def to_event(self) -> Event:
@@ -231,19 +251,29 @@ class SessionStorageEvent(SessionStorageBase):
             id=self.id,
             invocation_id=self.invocation_id,
             author=self.author,
-            branch=self.branch,
             actions=self.actions,  # type: ignore
-            timestamp=self.timestamp.timestamp(),
-            content=decode_content(self.content),
             long_running_tool_ids=self.long_running_tool_ids,
+            branch=self.branch,
+            request_id=self.request_id,
+            parent_invocation_id=self.parent_invocation_id,
+            tag=self.tag,
+            filter_key=self.filter_key,
+            requires_completion=self.requires_completion,
+            version=self.version,
+            visible=self.visible,
+            object=self.object,
+            model_flags=self.model_flags,
+            timestamp=self.timestamp.timestamp(),
             partial=self.partial,
             turn_complete=self.turn_complete,
             error_code=self.error_code,
             error_message=self.error_message,
             interrupted=self.interrupted,
+            response_id=self.response_id,
+            content=decode_content(self.content),
             grounding_metadata=decode_grounding_metadata(self.grounding_metadata),
-            usage_metadata=decode_usage_metadata(self.usage_metadata),
             custom_metadata=self.custom_metadata,
+            usage_metadata=decode_usage_metadata(self.usage_metadata),
         )
 
 

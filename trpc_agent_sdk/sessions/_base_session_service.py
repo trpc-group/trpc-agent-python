@@ -183,17 +183,17 @@ class BaseSessionService(SessionServiceABC):
 
     def filter_events(self, session: Session) -> None:
         """Filter events based on the session config."""
+        visible_events = [event for event in session.events if event.is_model_visible()]
         if self._session_config.num_recent_events > 0:
-            session.events = session.events[-self._session_config.num_recent_events:]
+            if len(visible_events) > self._session_config.num_recent_events:
+                hide_count = len(visible_events) - self._session_config.num_recent_events
+                for event in visible_events[:hide_count]:
+                    event.set_model_visible(False)
         if self._session_config.event_ttl_seconds > 0:
             cutoff_timestamp = time.time() - self._session_config.event_ttl_seconds
-            i = len(session.events) - 1
-            while i >= 0:
-                if session.events[i].timestamp <= cutoff_timestamp:
-                    break
-                i -= 1
-            if i >= 0:
-                session.events = session.events[i + 1:]
+            for event in visible_events:
+                if event.timestamp <= cutoff_timestamp:
+                    event.set_model_visible(False)
 
     @override
     async def close(self) -> None:

@@ -44,9 +44,13 @@ class EvalSessionService(BaseSessionService):
             agent_context=agent_context,
         )
         if context_messages:
+            user_messages = []
             for content in reversed(context_messages):
                 author = content.role or "user"
-                session.events.insert(0, Event(author=author, content=content))
+                user_messages.append(Event(author=author, content=content))
+            if user_messages:
+               user_messages.reverse()
+               session.insert_events(user_messages)
             await self._inner.update_session(session)
         return session
 

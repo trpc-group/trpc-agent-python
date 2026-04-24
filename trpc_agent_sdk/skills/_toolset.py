@@ -20,6 +20,7 @@ from typing_extensions import override
 from trpc_agent_sdk.abc import ToolSetABC
 from trpc_agent_sdk.abc import ToolPredicate
 from trpc_agent_sdk.abc import ToolABC
+from trpc_agent_sdk.code_executors import WorkspaceRuntimeResolver
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.context import get_invocation_ctx
 from trpc_agent_sdk.tools import FunctionTool
@@ -30,6 +31,7 @@ from ._constants import SKILL_REPOSITORY_KEY
 from ._repository import FsSkillRepository
 from ._repository import BaseSkillRepository
 from ._registry import SKILL_REGISTRY
+from ._repository import SkillRepositoryResolver
 from ._registry import SkillToolFunction
 from ._skill_config import DEFAULT_SKILL_CONFIG
 from ._skill_config import set_skill_config
@@ -69,6 +71,8 @@ class SkillToolSet(ToolSetABC):
     def __init__(self,
                  paths: Optional[List[str]] = None,
                  repository: BaseSkillRepository = None,
+                 repo_resolver: Optional[SkillRepositoryResolver] = None,
+                 workspace_runtime_resolver: Optional[WorkspaceRuntimeResolver] = None,
                  enable_hot_reload: bool = False,
                  tool_filter: Optional[Union[ToolPredicate, List[str]]] = None,
                  is_include_all_tools: bool = True,
@@ -91,7 +95,8 @@ class SkillToolSet(ToolSetABC):
         """
         super().__init__(tool_filter=tool_filter, is_include_all_tools=is_include_all_tools)
         self.name = "skill_toolset"
-
+        self._repo_resolver: Optional[SkillRepositoryResolver] = repo_resolver
+        self._workspace_runtime_resolver: Optional[WorkspaceRuntimeResolver] = workspace_runtime_resolver
         self._repository = repository or FsSkillRepository(
             *(paths or []),
             enable_hot_reload=enable_hot_reload,
@@ -100,9 +105,11 @@ class SkillToolSet(ToolSetABC):
         self._create_ws_name_cb = create_ws_name_cb or default_create_ws_name_callback
         self._skill_stager = skill_stager or CopySkillStager()
         self._load_tool = SkillLoadTool(repository=self._repository,
+                                        repo_resolver=repo_resolver,
                                         skill_stager=self._skill_stager,
                                         create_ws_name_cb=self._create_ws_name_cb)
         self._run_tool = SkillRunTool(repository=self._repository,
+                                      repo_resolver=repo_resolver,
                                       create_ws_name_cb=self._create_ws_name_cb,
                                       skill_stager=self._skill_stager,
                                       **run_tool_kwargs)
@@ -118,9 +125,11 @@ class SkillToolSet(ToolSetABC):
             self._runtime_tools = runtime_tools
         else:
             workspace_exec_tool = WorkspaceExecTool(workspace_runtime=self._repository.workspace_runtime,
+                                                    workspace_runtime_resolver=self._workspace_runtime_resolver,
                                                     create_ws_name_cb=self._create_ws_name_cb)
             self._runtime_tools: List[ToolABC] = [
                 SaveArtifactTool(workspace_runtime=self._repository.workspace_runtime,
+                                 workspace_runtime_resolver=self._workspace_runtime_resolver,
                                  create_ws_name_cb=self._create_ws_name_cb),
                 workspace_exec_tool,
                 WorkspaceWriteStdinTool(workspace_exec_tool),
@@ -145,12 +154,16 @@ class SkillToolSet(ToolSetABC):
         tools: List[ToolABC] = []
         skill_functions: List[SkillToolFunction] = SKILL_REGISTRY.get_all()
         skill_functions.extend(self._function_tools)
+        if self._repo_resolver is not None:
+            repository = self._repo_resolver(invocation_context)
+        else:
+            repository = self._repository
         if not invocation_context:
             invocation_context = get_invocation_ctx()
         if invocation_context:
             agent_context = invocation_context.agent_context
             agent_context.with_metadata(SKILL_REGISTRY_KEY, SKILL_REGISTRY)
-            agent_context.with_metadata(SKILL_REPOSITORY_KEY, self._repository)
+            agent_context.with_metadata(SKILL_REPOSITORY_KEY, repository)
             if not is_exist_skill_config(agent_context):
                 set_skill_config(agent_context, self._skill_config)
         tools.append(self._load_tool)

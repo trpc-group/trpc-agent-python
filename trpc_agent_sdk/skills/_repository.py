@@ -21,9 +21,11 @@ from pathlib import Path
 from typing import Callable
 from typing import List
 from typing import Optional
+from typing import TypeAlias
 from typing_extensions import override
 
 import yaml
+from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.code_executors import BaseWorkspaceRuntime
 from trpc_agent_sdk.code_executors import create_local_workspace_runtime
 from trpc_agent_sdk.log import logger
@@ -535,3 +537,7 @@ def create_default_skill_repository(
         workspace_runtime=workspace_runtime,
         enable_hot_reload=enable_hot_reload,
     )
+
+
+SkillRepositoryResolver: TypeAlias = Callable[[InvocationContext], BaseSkillRepository]
+"""Callback to resolve a skill repository."""

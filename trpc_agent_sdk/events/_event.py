@@ -37,6 +37,9 @@ from trpc_agent_sdk.types import EventActions
 from trpc_agent_sdk.types import FunctionCall
 from trpc_agent_sdk.types import FunctionResponse
 
+_EVENT_FLAG_MODEL_VISIBLE = 1 << 0
+_EVENT_FLAG_SUMMARY = 1 << 1
+
 
 class Event(LlmResponse):
     """Represents an event in a conversation between agents and users.
@@ -55,6 +58,7 @@ class Event(LlmResponse):
       id: The unique identifier of the event.
       timestamp: The timestamp of the event.
       visible: Whether the event is visible to outside observers. Default is True.
+      model_flags: Bit flags controlling model visibility and summary state.
       request_id: Optional request ID for tracking across system boundaries.
       parent_invocation_id: Optional parent invocation ID for nested agent executions.
       tag: Optional business-specific labels for filtering/routing.
@@ -160,6 +164,13 @@ class Event(LlmResponse):
     Provides a standardized way to identify event types alongside the legacy event_type in state_delta.
     """
 
+    model_flags: int = _EVENT_FLAG_MODEL_VISIBLE
+    """Bit flags for event model-state control.
+
+    - MODEL_VISIBLE flag controls whether this event can be seen by model history builders.
+    - SUMMARY flag marks this event as a summary-generated event.
+    """
+
     def model_post_init(self, __context):
         """Post initialization logic for the event."""
         # Generates a random ID for the event.
@@ -172,6 +183,28 @@ class Event(LlmResponse):
             return True
         return (not self.get_function_calls() and not self.get_function_responses() and not self.partial
                 and not self.has_trailing_code_execution_result() and not self.has_trailing_executable_code())
+
+    def is_model_visible(self) -> bool:
+        """Returns whether the event should be visible to model history."""
+        return bool(self.model_flags & _EVENT_FLAG_MODEL_VISIBLE)
+
+    def is_summary_event(self) -> bool:
+        """Returns whether the event is generated as a summary event."""
+        return bool(self.model_flags & _EVENT_FLAG_SUMMARY)
+
+    def set_model_visible(self, model_visible: bool) -> None:
+        """Set whether this event can be seen by model history builders."""
+        if model_visible:
+            self.model_flags |= _EVENT_FLAG_MODEL_VISIBLE
+        else:
+            self.model_flags &= ~_EVENT_FLAG_MODEL_VISIBLE
+
+    def set_summary_event(self, is_summary: bool = True) -> None:
+        """Set whether this event is marked as a summary event."""
+        if is_summary:
+            self.model_flags |= _EVENT_FLAG_SUMMARY
+        else:
+            self.model_flags &= ~_EVENT_FLAG_SUMMARY
 
     def get_function_calls(self) -> list[FunctionCall]:
         """Returns the function calls in the event."""
