@@ -49,6 +49,17 @@ class LlmResponse(ResponseABC):
       custom_metadata: The custom metadata of the LlmResponse.
     """
 
+    def has_content(self) -> bool:
+        """Returns whether the response carries user-visible content (text or function call).
+
+        Returns True if any content part contains text or a function call. Parts that
+        only hold function responses, executable code, or code execution results are
+        not considered content for this check.
+        """
+        if not self.content or not self.content.parts:
+            return False
+        return any(p.text or p.function_call for p in self.content.parts)
+
     @override
     def create(
         self,

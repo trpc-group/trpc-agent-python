@@ -5,7 +5,11 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Telemetry module for TRPC Agent framework."""
 
+from ._custom_metrics import CustomMetricsReporter
 from ._custom_trace import CustomTraceReporter
+from ._metrics import report_call_llm
+from ._metrics import report_execute_tool
+from ._metrics import report_invoke_agent
 from ._trace import get_trpc_agent_span_name
 from ._trace import set_trpc_agent_span_name
 from ._trace import trace_agent
@@ -17,7 +21,11 @@ from ._trace import trace_tool_call
 from ._trace import tracer
 
 __all__ = [
+    "CustomMetricsReporter",
     "CustomTraceReporter",
+    "report_call_llm",
+    "report_execute_tool",
+    "report_invoke_agent",
     "trace_agent",
     "trace_call_llm",
     "trace_cancellation",

@@ -21,6 +21,7 @@ Classes:
 
 from __future__ import annotations
 
+import time
 from abc import abstractmethod
 from functools import partial
 from typing import Any
@@ -48,6 +49,34 @@ from ._callback import AgentCallbackFilter
 
 # Type aliases for instruction providers
 InstructionProvider = Callable[[InvocationContext], Union[str, Awaitable[str]]]
+
+
+def _aggregate_llm_usage(events: list[Event]) -> tuple[int, int]:
+    """Sum prompt/completion tokens across LLM events during one agent run.
+
+    Agent-level metrics (``GenAIInvokeAgent``) roll up the token usage of every
+    LLM call performed during the agent run. Each non-partial ``Event`` produced
+    by an LLM carries a :class:`GenerateContentResponseUsageMetadata` with the
+    cumulative counts for that single model call.
+
+    Args:
+        events: Non-partial events collected during the agent run.
+
+    Returns:
+        Tuple of ``(input_tokens, output_tokens)``.
+    """
+    input_tokens = 0
+    output_tokens = 0
+    for event in events:
+        usage = getattr(event, "usage_metadata", None)
+        if usage is None:
+            continue
+        prompt = getattr(usage, "prompt_token_count", None) or 0
+        total = getattr(usage, "total_token_count", None) or 0
+        if prompt and total:
+            input_tokens += prompt
+            output_tokens += max(total - prompt, 0)
+    return input_tokens, output_tokens
 
 
 def _build_action_string_from_events(events: list[Event], max_length: int = 500) -> str:
@@ -227,6 +256,7 @@ class BaseAgent(AgentABC):
                 - State changes
                 - Actions
         """
+        from trpc_agent_sdk.telemetry import report_invoke_agent
         from trpc_agent_sdk.telemetry._trace import tracer
         from trpc_agent_sdk.telemetry._trace import trace_agent
 
@@ -246,14 +276,23 @@ class BaseAgent(AgentABC):
             # Track all non-partial events for building action trace
             non_partial_events = []
 
+            mono_start = time.monotonic()
+            t_first_visible: Optional[float] = None
+            metrics_error_type: Optional[str] = None
+
             try:
                 gen_co = run_stream_filters(ctx.agent_context, None, self.filters, handle)  # type: ignore
                 async for event in gen_co:
+                    if t_first_visible is None and event.has_content():
+                        t_first_visible = time.monotonic()
                     if not event.partial and event.content is not None:
                         # Collect non-partial events with content for tracing
                         # This excludes state update events which have content=None
                         non_partial_events.append(event)
                     yield event  # type: ignore
+            except Exception as ex:
+                metrics_error_type = type(ex).__name__
+                raise
             finally:
                 # Compute state after agent run
                 state_end = dict(ctx.session.state)
@@ -268,6 +307,21 @@ class BaseAgent(AgentABC):
                     state_begin=state_begin,
                     state_end=state_end,
                 )
+
+                duration_s = time.monotonic() - mono_start
+                ttft_s = (t_first_visible - mono_start) if t_first_visible is not None else duration_s
+                input_tokens, output_tokens = _aggregate_llm_usage(non_partial_events)
+                is_stream = bool(ctx.run_config and ctx.run_config.streaming)
+                report_invoke_agent(
+                    ctx,
+                    duration_s=duration_s,
+                    ttft_s=ttft_s,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    is_stream=is_stream,
+                    error_type=metrics_error_type,
+                )
+
                 # avoid memory leak
                 reset_invocation_ctx(token)
         finally:
