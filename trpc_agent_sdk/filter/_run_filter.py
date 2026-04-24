@@ -51,8 +51,7 @@ async def run_stream_filters(ctx: AgentContext, req: Any, filters: list[BaseFilt
     if handle is None:
         raise ValueError("handle must be provided")
     current_handle = partial(stream_handler_adapter, handle)
-    filters.reverse()
-    for filter in filters:
+    for filter in reversed(filters):
         current_handle = partial(filter.run_stream, ctx, req, current_handle)
     async for event in current_handle():
         yield event.rsp
@@ -95,9 +94,8 @@ async def run_filters(ctx: AgentContext, req: Any, filters: list[BaseFilter],
     """
     if handle is None:
         raise ValueError("handle must be provided")
-    filters.reverse()
     current_handle = partial(coroutine_handler_adapter, handle)
-    for filter in filters:
+    for filter in reversed(filters):
         current_handle = partial(filter.run, ctx, req, current_handle)
     rsp, error = await current_handle()
     if error:
