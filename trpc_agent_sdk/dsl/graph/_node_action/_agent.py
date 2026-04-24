@@ -187,7 +187,7 @@ class AgentNodeAction(BaseNodeAction):
                         if text_parts:
                             last_response = text_parts[-1]
 
-                    if not event.visible:
+                    if not event.visible or not event.is_model_visible():
                         if event.actions and event.actions.transfer_to_agent:
                             raise ValueError("Agent transfer requested but invisible is not allowed.")
                         continue
@@ -221,7 +221,7 @@ class AgentNodeAction(BaseNodeAction):
                     await self._run_agent_event_callbacks(state, error_event)
                     if hasattr(child_session, "events"):
                         child_session.events.append(error_event.model_copy(deep=True))
-                    if error_event.visible:
+                    if error_event.visible or error_event.is_model_visible():
                         self.writer.write_event(error_event)
                     break
 

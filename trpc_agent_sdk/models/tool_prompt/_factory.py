@@ -80,7 +80,6 @@ def get_factory() -> ToolPromptFactory:
     Raises:
         RuntimeError: If factory is not initialized
     """
-    global _factory  # pylint: disable=invalid-name
     if _factory is None:
         raise RuntimeError("Factory is not initialized. Call initialize() first.")
     return _factory

@@ -38,8 +38,8 @@ from .storage import make_memory_key
 
 def _load_browser_html() -> str:
     """Load browser UI HTML template from package data."""
-    return resources.files("trpc_agent_sdk.server.openclaw").joinpath("templates", "ui.html").read_text(
-        encoding="utf-8")
+    return resources.files("trpc_agent_sdk.server.openclaw").joinpath("templates",
+                                                                      "ui.html").read_text(encoding="utf-8")
 
 
 _BROWSER_HTML = _load_browser_html()

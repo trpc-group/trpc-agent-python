@@ -37,7 +37,6 @@ from trpc_agent_sdk.types import FunctionCall
 from ._criterion_registry import CRITERION_REGISTRY
 from ._eval_case import Invocation
 from ._eval_case import get_all_tool_calls
-from ._eval_criterion import ToolTrajectoryCriterion
 from ._eval_metrics import EvalMetric
 from ._eval_metrics import EvalStatus
 from ._eval_metrics import Interval

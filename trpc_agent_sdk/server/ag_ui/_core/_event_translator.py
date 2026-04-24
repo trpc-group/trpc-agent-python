@@ -197,7 +197,6 @@ class EventTranslator:
             if trpc_event.actions and trpc_event.actions.state_delta:
                 yield self._create_state_delta_event(trpc_event.actions.state_delta, trpc_event.timestamp)
 
-
             # Handle error events - distinguish recoverable tool errors from fatal system errors.
             # Tool execution errors (with function_response) are recoverable: the error is already
             # passed back to the LLM as a tool result, so the LLM can retry or adjust its approach.
@@ -205,13 +204,12 @@ class EventTranslator:
             # emit RunErrorEvent to terminate the run.
             if trpc_event.is_error() and not function_responses:
                 # Fatal system/LLM error - emit RunErrorEvent to terminate the run
-                logger.error("Fatal error (non-recoverable), error_code=%s, error_message=%s",
-                             trpc_event.error_code, trpc_event.error_message)
+                logger.error("Fatal error (non-recoverable), error_code=%s, error_message=%s", trpc_event.error_code,
+                             trpc_event.error_message)
                 # Force close any streaming message before emitting error
                 async for close_event in self.force_close_streaming_message():
                     yield close_event
-                error_msg = (trpc_event.error_message
-                             or (trpc_event.custom_metadata or {}).get("error")
+                error_msg = (trpc_event.error_message or (trpc_event.custom_metadata or {}).get("error")
                              or "Unknown error")
                 yield RunErrorEvent(
                     type=EventType.RUN_ERROR,

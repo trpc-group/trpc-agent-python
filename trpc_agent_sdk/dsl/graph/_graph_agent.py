@@ -413,6 +413,8 @@ class GraphAgent(BaseAgent):
         user_input = ""
         user_input_event = None
         for event in reversed(ctx.session.events):
+            if not event.is_model_visible():
+                continue
             if event.author == "user" and event.content and event.content.parts:
                 for part in event.content.parts:
                     if part.text:
@@ -430,6 +432,8 @@ class GraphAgent(BaseAgent):
         messages = []
         if not has_saved_checkpoint:
             for event in ctx.session.events:
+                if not event.is_model_visible():
+                    continue
                 if event.content:
                     # Skip the user input event - it will be added via STATE_KEY_USER_INPUT
                     if event is user_input_event:

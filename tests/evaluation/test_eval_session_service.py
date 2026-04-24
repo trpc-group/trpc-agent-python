@@ -18,6 +18,10 @@ def _make_session():
     """Create a mock session with required attributes."""
     session = MagicMock()
     session.events = []
+    def _insert_events(events, idx=None):
+        insert_idx = 0 if idx is None else idx
+        session.events[insert_idx:insert_idx] = list(events)
+    session.insert_events = MagicMock(side_effect=_insert_events)
     return session
 
 
