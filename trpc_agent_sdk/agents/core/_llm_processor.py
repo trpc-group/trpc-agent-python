@@ -14,7 +14,9 @@ The LlmProcessor is simplified to directly create Event objects from LlmResponse
 
 from __future__ import annotations
 
+import time
 from typing import AsyncGenerator
+from typing import Optional
 
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
@@ -23,6 +25,7 @@ from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.models import LlmResponse
 from trpc_agent_sdk.planners import default_planning_processor
+from trpc_agent_sdk.telemetry import report_call_llm
 from trpc_agent_sdk.telemetry import trace_call_llm
 from trpc_agent_sdk.telemetry import tracer
 
@@ -94,29 +97,56 @@ class LlmProcessor:
                             "args": getattr(call, "args", None),
                         })
 
-                async for llm_response in self.model.generate_async(request, stream=stream, ctx=context):
-                    # Collect raw model-level function calls from every chunk.
-                    raw_calls = []
-                    if llm_response.content and llm_response.content.parts:
-                        for part in llm_response.content.parts:
-                            if part.function_call:
-                                raw_calls.append(part.function_call)
-                    _append_function_calls(aggregated_raw_function_calls, raw_calls)
+                t_start = time.monotonic()
+                t_first_token: Optional[float] = None
+                metrics_error_type: Optional[str] = None
+                try:
+                    async for llm_response in self.model.generate_async(request, stream=stream, ctx=context):
+                        if t_first_token is None and llm_response.has_content():
+                            t_first_token = time.monotonic()
+                        # Collect raw model-level function calls from every chunk.
+                        raw_calls = []
+                        if llm_response.content and llm_response.content.parts:
+                            for part in llm_response.content.parts:
+                                if part.function_call:
+                                    raw_calls.append(part.function_call)
+                        _append_function_calls(aggregated_raw_function_calls, raw_calls)
 
-                    # Create Event directly from LlmResponse
-                    event = self._create_event_from_response(context, event_id, llm_response)
+                        # Create Event directly from LlmResponse
+                        event = self._create_event_from_response(context, event_id, llm_response)
 
-                    # Process response with planner if available
-                    event = self._process_planning_response(event, context)
-                    _append_function_calls(aggregated_event_function_calls, event.get_function_calls())
+                        # Process response with planner if available
+                        event = self._process_planning_response(event, context)
+                        _append_function_calls(aggregated_event_function_calls, event.get_function_calls())
 
-                    # Track the latest non-partial response for tracing
-                    # In streaming mode, only the final (non-partial) response
-                    # contains complete data suitable for telemetry reporting.
-                    if not llm_response.partial:
-                        final_llm_response = llm_response
+                        # Create Event directly from LlmResponse
+                        event = self._create_event_from_response(context, event_id, llm_response)
 
-                    yield event
+                        # Process response with planner if available
+                        event = self._process_planning_response(event, context)
+
+                        # Track the latest non-partial response for tracing
+                        # In streaming mode, only the final (non-partial) response
+                        # contains complete data suitable for telemetry reporting.
+                        if not llm_response.partial:
+                            final_llm_response = llm_response
+
+                        yield event
+                except Exception as ex:
+                    metrics_error_type = type(ex).__name__
+                    raise
+                finally:
+                    duration_s = time.monotonic() - t_start
+                    ttft_s = (t_first_token - t_start) if t_first_token is not None else duration_s
+                    report_call_llm(
+                        context,
+                        request,
+                        final_llm_response,
+                        duration_s=duration_s,
+                        ttft_s=ttft_s,
+                        is_stream=stream,
+                        error_type=metrics_error_type,
+                    )
 
                 # Trace the LLM call once after the stream completes,
                 # using the final complete response to avoid attribute
