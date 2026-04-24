@@ -19,6 +19,7 @@ from ._base_workspace_runtime import BaseWorkspaceManager
 from ._base_workspace_runtime import BaseWorkspaceRuntime
 from ._base_workspace_runtime import DefaultWorkspace
 from ._base_workspace_runtime import new_default_workspace_runtime
+from ._base_workspace_runtime import WorkspaceRuntimeResolver
 from ._code_executor_context import CodeExecutorContext
 from ._constants import DEFAULT_CREATE_TIMEOUT_SEC
 from ._constants import DEFAULT_FILE_MODE
@@ -102,6 +103,7 @@ __all__ = [
     "BaseWorkspaceRuntime",
     "DefaultWorkspace",
     "new_default_workspace_runtime",
+    "WorkspaceRuntimeResolver",
     "CodeExecutorContext",
     "DEFAULT_CREATE_TIMEOUT_SEC",
     "DEFAULT_FILE_MODE",

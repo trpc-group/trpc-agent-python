@@ -13,6 +13,7 @@ isolated execution environments.
 from abc import ABC
 from abc import abstractmethod
 from typing import Callable
+from typing import TypeAlias
 from typing import List
 from typing import Optional
 
@@ -308,3 +309,7 @@ def new_default_workspace_runtime(
         DefaultWorkspace
     """
     return DefaultWorkspace(manager=manager, fs=fs, runner=runner)
+
+
+WorkspaceRuntimeResolver: TypeAlias = Callable[[InvocationContext], BaseWorkspaceRuntime]
+"""Callback to resolve a workspace runtime."""

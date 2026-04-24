@@ -323,6 +323,8 @@ class TrpcRemoteA2aAgent(BaseAgent):
 
         user_event = None
         for event in reversed(ctx.session.events):
+            if not event.is_model_visible():
+                continue
             if event.author == "user" and event.content:
                 user_event = event
                 break

@@ -28,7 +28,6 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 from trpc_agent_sdk.abc import MemoryServiceConfig
-from trpc_agent_sdk.code_executors import CodeBlockDelimiter
 from trpc_agent_sdk.server.langfuse.tracing.opentelemetry import LangfuseConfig
 
 from ._constants import AGENT_FILE_NAME

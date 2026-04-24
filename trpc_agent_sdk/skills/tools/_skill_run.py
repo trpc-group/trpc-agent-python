@@ -41,8 +41,8 @@ from trpc_agent_sdk.types import Schema
 from .._common import get_state_delta_value
 from .._common import loaded_state_key
 from .._constants import SKILL_ARTIFACTS_STATE_KEY
-from .._constants import SKILL_REPOSITORY_KEY
 from .._repository import BaseSkillRepository
+from .._repository import SkillRepositoryResolver
 from .._utils import shell_quote
 from ..stager import SkillStageRequest
 from ..stager import Stager
@@ -378,6 +378,7 @@ class SkillRunTool(BaseTool):
     def __init__(
         self,
         repository: BaseSkillRepository,
+        repo_resolver: Optional[SkillRepositoryResolver] = None,
         filters: Optional[List[BaseFilter]] = None,
         *,
         require_skill_loaded: bool = False,
@@ -392,6 +393,7 @@ class SkillRunTool(BaseTool):
 
         Args:
             repository: Skill repository.
+            repo_resolver: Skill repository resolver.
             filters: Optional tool filters.
             require_skill_loaded: When True, skill_run raises unless skill_load was called first
                                   for this skill in the current session.
@@ -416,6 +418,7 @@ class SkillRunTool(BaseTool):
             filters=filters,
         )
         self._repository = repository
+        self._repo_resolver: Optional[SkillRepositoryResolver] = repo_resolver
         self._require_skill_loaded = require_skill_loaded
         self._force_save_artifacts = force_save_artifacts
         self._allowed_cmds: frozenset[str] = frozenset(c.strip() for c in (allowed_cmds or []) if c.strip())
@@ -479,10 +482,10 @@ class SkillRunTool(BaseTool):
     # Repository access
     # ------------------------------------------------------------------
 
-    def _get_repository(self, context: InvocationContext) -> BaseSkillRepository:
-        if self._repository:
-            return self._repository
-        return context.agent_context.get_metadata(SKILL_REPOSITORY_KEY)
+    def _get_repository(self, context: InvocationContext) -> Optional[BaseSkillRepository]:
+        if self._repo_resolver is not None:
+            return self._repo_resolver(context)
+        return self._repository
 
     # ------------------------------------------------------------------
     # Skill-loaded check
@@ -802,7 +805,8 @@ class SkillRunTool(BaseTool):
         )
         if ret.exit_code != 0:
             raw_stderr = ret.stderr or ""
-            logger.info("Failed to run program: exit_code=%s, stderr=%s", ret.exit_code, raw_stderr.strip())
+            logger.info("Failed to run program: cmd=%s, exit_code=%s, stderr=%s", cmd, ret.exit_code,
+                        raw_stderr.strip())
         return ret
 
     def _resolve_cwd(self, cwd: str, skill_dir: str) -> str:

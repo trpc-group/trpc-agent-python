@@ -12,7 +12,11 @@ the entire flow including service management, context creation, and agent lifecy
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
+import threading
 from typing import AsyncGenerator
+from typing import Awaitable
+from typing import Callable
 from typing import Optional
 
 from trpc_agent_sdk import cancel
@@ -36,6 +40,121 @@ from trpc_agent_sdk.telemetry._trace import trace_runner
 from trpc_agent_sdk.tools import BaseToolSet
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
+
+
+class _PostTurnWorkerThread:
+    """Dedicated thread + event loop for deferred post-turn processing."""
+
+    def __init__(
+        self,
+        *,
+        name: str,
+        run_job: Callable[[InvocationContext], Awaitable[None]],
+        maxsize: int,
+    ) -> None:
+        self._name = name
+        self._run_job = run_job
+        self._maxsize = max(1, int(maxsize))
+        self._thread: threading.Thread | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._queue: asyncio.Queue[InvocationContext | None] | None = None
+        self._ready = threading.Event()
+        self._closed = False
+        self._state_lock = threading.Lock()
+
+    def start(self) -> None:
+        if self._thread is not None and self._thread.is_alive():
+            return
+        with self._state_lock:
+            self._closed = False
+        self._ready.clear()
+        self._thread = threading.Thread(target=self._run, name=self._name, daemon=True)
+        self._thread.start()
+        self._ready.wait()
+
+    def submit(self, job: InvocationContext) -> bool:
+        self.start()
+        with self._state_lock:
+            if self._closed:
+                return False
+        loop = self._loop
+        queue = self._queue
+        if loop is None or queue is None or not loop.is_running():
+            return False
+        loop.call_soon_threadsafe(self._put_nowait, queue, job)
+        return True
+
+    def stop(self, *, drain_timeout: float = 10.0, join_timeout: float = 5.0) -> bool:
+        with self._state_lock:
+            self._closed = True
+        loop = self._loop
+        queue = self._queue
+        thread = self._thread
+        if loop is not None and queue is not None and loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(
+                self._stop_after_drain(queue, drain_timeout),
+                loop,
+            )
+            try:
+                future.result(timeout=drain_timeout + 1.0)
+            except concurrent.futures.TimeoutError:
+                pass
+        if thread is not None:
+            thread.join(timeout=join_timeout)
+            return not thread.is_alive()
+        return True
+
+    def _run(self) -> None:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        self._loop = loop
+        self._queue = asyncio.Queue(maxsize=self._maxsize)
+        self._ready.set()
+        try:
+            loop.run_until_complete(self._worker())
+        finally:
+            try:
+                pending = asyncio.all_tasks(loop)
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            finally:
+                loop.close()
+                self._loop = None
+                self._queue = None
+
+    async def _worker(self) -> None:
+        assert self._queue is not None
+        while True:
+            item = await self._queue.get()
+            try:
+                if item is None:
+                    return
+                await self._run_job(invocation_context=item)
+            finally:
+                self._queue.task_done()
+
+    @staticmethod
+    def _put_nowait(
+        queue: asyncio.Queue[InvocationContext | None],
+        job: InvocationContext,
+    ) -> None:
+        try:
+            queue.put_nowait(job)
+        except asyncio.QueueFull:
+            logger.warning("Post-turn thread queue full; dropping deferred job")
+
+    @staticmethod
+    async def _stop_after_drain(
+        queue: asyncio.Queue[InvocationContext | None],
+        drain_timeout: float,
+    ) -> None:
+        try:
+            await asyncio.wait_for(queue.join(), timeout=drain_timeout)
+        except asyncio.TimeoutError:
+            pass
+        await queue.put(None)
 
 
 class Runner:
@@ -72,6 +191,9 @@ class Runner:
         session_service: BaseSessionService,
         artifact_service: Optional[BaseArtifactService] = None,
         memory_service: Optional[BaseMemoryService] = None,
+        enable_post_turn_processing: bool = True,
+        defer_post_turn_processing: bool = False,
+        post_turn_queue_maxsize: int = 256,
     ):
         """Initializes the Runner.
 
@@ -81,12 +203,85 @@ class Runner:
             artifact_service: The artifact service for the runner.
             session_service: The session service for the runner.
             memory_service: The memory service for the runner.
+            enable_post_turn_processing: If False, skip post-turn summarization
+                and memory persistence entirely for this runner.
+            defer_post_turn_processing: If True, session summarization + memory
+                persistence run in a dedicated thread/event loop so request
+                completion is not blocked by post-turn I/O/LLM latency.
+            post_turn_queue_maxsize: Max buffered post-turn jobs per runner.
         """
         self.app_name = app_name
         self.agent = agent
         self.artifact_service = artifact_service
         self.session_service = session_service
         self.memory_service = memory_service
+        self._enable_post_turn_processing = enable_post_turn_processing
+        self._defer_post_turn_processing = defer_post_turn_processing
+        self._post_turn_thread: _PostTurnWorkerThread | None = None
+        self._post_turn_queue_maxsize = max(1, int(post_turn_queue_maxsize))
+
+    async def _run_post_turn_processing(
+        self,
+        *,
+        invocation_context: InvocationContext,
+    ) -> None:
+        """Run post-turn summarization + memory persistence."""
+        session = invocation_context.session
+        try:
+            await self.session_service.create_session_summary(session, ctx=invocation_context)
+            if self.memory_service and self.memory_service.enabled:
+                await self.memory_service.store_session(session, agent_context=invocation_context.agent_context)
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "Post-turn processing failed for session %s: %s",
+                getattr(session, "id", "?"),
+                exc,
+            )
+
+    def _ensure_post_turn_worker(self) -> None:
+        """Start post-turn worker lazily on first enqueue."""
+        if not self._defer_post_turn_processing:
+            return
+        if self._post_turn_thread is None:
+            self._post_turn_thread = _PostTurnWorkerThread(
+                name=f"runner-post-turn:{self.app_name}",
+                run_job=self._run_post_turn_processing,
+                maxsize=self._post_turn_queue_maxsize,
+            )
+        self._post_turn_thread.start()
+
+    async def _schedule_post_turn_processing(
+        self,
+        *,
+        invocation_context: InvocationContext,
+    ) -> None:
+        """Schedule post-turn work; non-blocking when deferred mode is on."""
+        if not self._enable_post_turn_processing:
+            return
+        if not self._defer_post_turn_processing:
+            await self._run_post_turn_processing(invocation_context=invocation_context, )
+            return
+
+        self._ensure_post_turn_worker()
+        if self._post_turn_thread is None:
+            return
+        if not self._post_turn_thread.submit(invocation_context):
+            logger.warning(
+                "Post-turn thread unavailable for app %s; dropping deferred job",
+                self.app_name,
+            )
+
+    async def _shutdown_post_turn_worker(self) -> None:
+        """Gracefully flush and stop deferred post-turn processing."""
+        if self._post_turn_thread is not None:
+            stopped = await asyncio.to_thread(
+                self._post_turn_thread.stop,
+                drain_timeout=10.0,
+                join_timeout=5.0,
+            )
+            if not stopped:
+                logger.warning("Post-turn thread shutdown timed out for app %s", self.app_name)
+            self._post_turn_thread = None
 
     async def cancel_run_async(
         self,
@@ -291,8 +486,8 @@ class Runner:
                             # Check if transferring to the same agent
                             if transfer_target == current_agent.name:
                                 logger.warning(
-                                    "Transfer to same agent '%s' detected, add 'already on agent' message to let agent continue",
-                                    transfer_target)
+                                    "Transfer to same agent '%s' detected, add 'already on agent'"
+                                    "message to let agent continue", transfer_target)
                                 already_in_event = Event(
                                     invocation_id=invocation_context.invocation_id,
                                     author=current_agent.name,
@@ -345,14 +540,14 @@ class Runner:
                         logger.debug("No transfer requested by %s, ending execution", current_agent.name)
                         break
 
-                # Trigger summarization if enabled
-                await self.session_service.create_session_summary(session, ctx=invocation_context)
-                if self.memory_service and self.memory_service.enabled:
-                    await self.memory_service.store_session(session, agent_context=agent_context)
+                # Trigger summarization/memory persistence. Can be deferred to a
+                # background worker to avoid blocking request completion.
+                await self._schedule_post_turn_processing(invocation_context=invocation_context, )
 
                 # Compute state after runner execution
                 state_end = dict(session.state)
-                if last_non_streaming_event and last_non_streaming_event.actions and last_non_streaming_event.actions.state_delta:
+                if (last_non_streaming_event and last_non_streaming_event.actions
+                        and last_non_streaming_event.actions.state_delta):
                     state_end.update(last_non_streaming_event.actions.state_delta)
 
                 # Call trace function with runner execution details
@@ -626,6 +821,7 @@ class Runner:
         2. Close each toolset with proper error handling
         3. Ensure all resources are released before shutdown
         """
+        await self._shutdown_post_turn_worker()
         await self._cleanup_toolsets(self._collect_toolset(self.agent))
         if self.session_service:
             await self.session_service.close()

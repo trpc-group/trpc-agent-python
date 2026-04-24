@@ -47,7 +47,7 @@ class AgUiManager:
 
         Args:
           service_name: The name of the service.
-        
+
         Returns:
           The AG-UI service.
         """

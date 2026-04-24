@@ -175,6 +175,9 @@ class OpenAIModel(LLMModel):
 
         # Default generation config that can be overridden per request
         self.generate_content_config = generate_content_config
+        # Optional hard cap for tool-response payload injected into model
+        # context. Disabled by default; callers (e.g. OpenClaw) can opt in.
+        self._tool_response_clip_chars = int(kwargs.get("tool_response_clip_chars", 0) or 0)
 
         # Validate tool_prompt parameter
         if isinstance(self.tool_prompt, str):
@@ -379,6 +382,7 @@ class OpenAIModel(LLMModel):
                         else:
                             content += str(func_response.response)
                         content += "\n"
+                    content = self._clip_tool_response_text(content, "tool_response_merged")
                     if len(content) > 0:
                         tool_message = {
                             const.ROLE: const.USER,
@@ -388,13 +392,16 @@ class OpenAIModel(LLMModel):
                 else:
                     for func_response in function_responses:
                         # Standard tool message format for OpenAI API
+                        raw_text = (json.dumps(func_response.response, ensure_ascii=False) if isinstance(
+                            func_response.response, dict) else str(func_response.response))
+                        clipped_text = self._clip_tool_response_text(
+                            raw_text,
+                            getattr(func_response, "name", "tool"),
+                        )
                         tool_message = {
-                            const.ROLE:
-                            const.TOOL,
-                            const.TOOL_CALL_ID:
-                            getattr(func_response, "id", "unknown"),
-                            const.CONTENT: (json.dumps(func_response.response, ensure_ascii=False) if isinstance(
-                                func_response.response, dict) else str(func_response.response)),
+                            const.ROLE: const.TOOL,
+                            const.TOOL_CALL_ID: getattr(func_response, "id", "unknown"),
+                            const.CONTENT: clipped_text,
                         }
                         formatted_messages.append(tool_message)
 
@@ -860,7 +867,6 @@ class OpenAIModel(LLMModel):
         for idx, tool_call_data in enumerate(accumulated_tool_calls):
             function_map: dict = tool_call_data.get(ToolKey.FUNCTION, {})
             name = function_map.get(ToolKey.NAME, "")
-            accumulated_args = function_map.get(ToolKey.ARGUMENTS, "")
             tool_call_id = tool_call_data.get(ToolKey.ID, "")
 
             if not name:
@@ -1131,6 +1137,16 @@ class OpenAIModel(LLMModel):
                 openai_tools.append(tool)
 
         return openai_tools
+
+    def _clip_tool_response_text(self, text: str, tool_name: str) -> str:
+        """Hard-clip tool response text to protect model context budget."""
+        limit = self._tool_response_clip_chars
+        if limit <= 0 or len(text) <= limit:
+            return text
+        truncated = len(text) - limit
+        suffix = f"\n...[TRUNCATED {truncated} CHARS FROM TOOL RESPONSE: {tool_name}]"
+        keep = max(0, limit - len(suffix))
+        return text[:keep] + suffix
 
     def _convert_schema_to_openai_format(self, schema: Schema) -> Dict[str, Any]:
         """Convert Google GenAI Schema to OpenAI parameters format.

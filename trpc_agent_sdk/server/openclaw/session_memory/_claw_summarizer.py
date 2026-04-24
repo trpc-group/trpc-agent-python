@@ -293,10 +293,10 @@ class ClawSessionSummarizer(SessionSummarizer):
         If the first response is empty or fails XML validation a second attempt is made before giving up.
         ``memory_update`` must be at least 20 characters long (guards against the LLM echoing only the XML tags
             or returning a blank body).
-        A response that passes regex parsing but is too short is treated the same as a parse failure and 
+        A response that passes regex parsing but is too short is treated the same as a parse failure and
         triggers a retry.
 
-        Returns ``("", "")`` when all attempts fail (the caller's failure counter will decide whether to raw-archive or 
+        Returns ``("", "")`` when all attempts fail (the caller's failure counter will decide whether to raw-archive or
         simply skip this round).
 
         Args:
@@ -353,11 +353,11 @@ class ClawSessionSummarizer(SessionSummarizer):
         tool response in the recent window and its matching call in the
         to-be-summarized bucket.
 
-        Starting from ``len(events) - keep_n`` (the ideal split), scan backward until an event authored by ``"user"`` 
+        Starting from ``len(events) - keep_n`` (the ideal split), scan backward until an event authored by ``"user"``
         is found.  Split immediately before that event so the entire user turn (plus any following model / tool events)
         stays in the recent bucket intact.
 
-        If no user event is found before the ideal split (e.g. the session starts with a long system preamble) 
+        If no user event is found before the ideal split (e.g. the session starts with a long system preamble)
         the ideal split is used as-is.
 
         Args:
@@ -385,8 +385,8 @@ class ClawSessionSummarizer(SessionSummarizer):
     def _make_raw_archive(self, events: List[Event], current_memory: str) -> tuple[str, str]:
         """Build a plain-text ``(history_entry, memory_update)`` without LLM.
 
-        Called after ``MAX_FAILURES_BEFORE_RAW_ARCHIVE`` consecutive LLM failures.  The raw conversation text is 
-        appended to the existing long-term memory so that the session always makes progress even 
+        Called after ``MAX_FAILURES_BEFORE_RAW_ARCHIVE`` consecutive LLM failures.  The raw conversation text is
+        appended to the existing long-term memory so that the session always makes progress even
         when the summarization LLM is unavailable.
 
         Args:
@@ -424,7 +424,7 @@ class ClawSummarizerSessionManager(SummarizerSessionManager):
     """trpc_claw-style summarizer manager that stores dual-layer :class:`SessionSummary` objects.
 
     Uses :class:`ClawSessionSummarizer` by default.
-    ``create_session_summary`` syncs ``raw_events`` before summarizing and stores a :class:`SessionSummary` 
+    ``create_session_summary`` syncs ``raw_events`` before summarizing and stores a :class:`SessionSummary`
     (with accumulated ``history_entries``) in the in-memory cache.
     ``get_session_summary`` returns a :class:`SessionSummary`.
 

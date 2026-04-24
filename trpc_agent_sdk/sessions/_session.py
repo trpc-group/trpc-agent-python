@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import time
-from typing import List
+from typing import List, Optional
 
 from pydantic import Field
 from trpc_agent_sdk.abc import SessionABC
@@ -66,33 +66,57 @@ class Session(SessionABC):
         if event_ttl_seconds <= 0 and max_events <= 0:
             return
 
-        # Save original events for potential user message recovery
-        original_events = self.events.copy()
+        # Apply filtering only to the currently model-visible events.  Raw
+        # session events stay in place; events filtered out of this visible
+        # window are hidden from model history.
+        visible_events = [event for event in self.events if event.is_model_visible()]
+        if not visible_events:
+            return
+        retained_events = visible_events.copy()
 
         # Step 1: Apply TTL filtering if configured
         if event_ttl_seconds > 0:
             cutoff_time = time.time() - event_ttl_seconds
-            self.events = [e for e in self.events if e.timestamp >= cutoff_time]
+            retained_events = [e for e in retained_events if e.timestamp >= cutoff_time]
 
         # Step 2: Apply count filtering if configured
         if max_events > 0:
-            if len(self.events) > max_events:
-                self.events = self.events[-max_events:]
+            if len(retained_events) > max_events:
+                retained_events = retained_events[-max_events:]
 
-        for i, event in enumerate(self.events):
+        for i, event in enumerate(retained_events):
             if self._is_user_message(event):
-                self.events = self.events[i:]
-                return
+                retained_events = retained_events[i:]
+                break
+        else:
+            # Step 3: If all visible events were filtered out, retain the
+            # first user message that the original behavior would have
+            # re-inserted, but only from the already-visible subset.
+            retained_events = []
+            for event in reversed(visible_events):
+                if self._is_user_message(event):
+                    retained_events.insert(0, event)
+                    break
 
-        # Step 3: If all events were filtered out, insert the first user message at the beginning
-        # Find the last user message from original events
-        for event in reversed(original_events):
-            if self._is_user_message(event):
-                self.events.insert(0, event)
-                return
+        retained_ids = {id(event) for event in retained_events}
+        for event in visible_events:
+            if id(event) not in retained_ids:
+                event.set_model_visible(False)
 
-        # If no user message found, keep events empty
-        self.events = []
+    def get_first_visible_event_idx(self) -> int:
+        """Get the first visible event index in the session."""
+        first_visible_idx = 0
+        for idx, event in enumerate(self.events):
+            if event.is_model_visible():
+                first_visible_idx = idx
+                break
+        return first_visible_idx
+
+    def insert_events(self, events: List[Event], idx: Optional[int] = None) -> None:
+        """Insert events at the given index, replacing the existing events."""
+        if idx is None:
+            idx = self.get_first_visible_event_idx()
+        self.events[idx:idx] = events
 
     def _is_user_message(self, event: Event) -> bool:
         """Check if an event is a user message.

@@ -353,7 +353,6 @@ class AnthropicModel(LLMModel):
         current_tool = accumulated_tool_uses[-1]
         tool_name = current_tool.get("name", "")
         tool_id = current_tool.get("id", "")
-        accumulated_args = current_tool.get("accumulated_input", "")
 
         if not tool_name:
             return None
@@ -517,7 +516,6 @@ class AnthropicModel(LLMModel):
         accumulated_tool_uses: list[dict] = []
         # Map content block index to tool use index in accumulated_tool_uses
         block_index_to_tool_index: dict[int, int] = {}
-        last_usage = None
 
         # Get the set of tool names that should stream
         streaming_tool_names = getattr(request, 'streaming_tool_names', None) or set()
@@ -589,16 +587,6 @@ class AnthropicModel(LLMModel):
                                 tool_idx = len(accumulated_tool_uses)
                                 accumulated_tool_uses.append(tool_entry)
                                 block_index_to_tool_index[block_index] = tool_idx
-
-                    # Handle message delta events (for usage)
-                    elif hasattr(event, "type") and event.type == "message_delta":
-                        if hasattr(event, "usage"):
-                            usage = event.usage
-                            last_usage = GenerateContentResponseUsageMetadata(
-                                prompt_token_count=0,
-                                candidates_token_count=usage.output_tokens,
-                                total_token_count=usage.output_tokens,
-                            )
 
             # Get the final message for complete usage stats
             final_message = await stream.get_final_message()

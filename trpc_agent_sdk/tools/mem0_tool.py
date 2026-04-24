@@ -102,12 +102,14 @@ class SaveMemoryTool(BaseTool):
         """Save important information to memory"""
         user_id = tool_context.user_id
         try:
-            result = await self.client.add([{
-                "role": "user",
-                "content": args["content"]
-            }],
-                                           user_id=user_id,
-                                           **self.kwargs)
+            result = await self.client.add(
+                [{
+                    "role": "user",
+                    "content": args["content"]
+                }],
+                user_id=user_id,
+                **self.kwargs,
+            )
             return {"status": "success", "message": "Information saved to memory", "result": result, "user_id": user_id}
         except Exception as e:
             return {"status": "error", "message": f"Failed to save memory: {str(e)}", "user_id": user_id}

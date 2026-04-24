@@ -46,15 +46,15 @@ class EventActions(BaseModel):
     skip_summarization: Optional[bool] = None
     """If true, it won't call model to summarize function response.
 
-  Only used for function_response event.
-  """
+    Only used for function_response event.
+    """
 
     state_delta: dict[str, object] = Field(default_factory=dict)
     """Indicates that the event is updating the state with the given delta."""
 
     artifact_delta: dict[str, int] = Field(default_factory=dict)
     """Indicates that the event is updating an artifact. key is the filename,
-  value is the version."""
+    value is the version."""
 
     transfer_to_agent: Optional[str] = None
     """If set, the event transfers to the specified agent."""

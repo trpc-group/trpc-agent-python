@@ -36,6 +36,7 @@ from ._common import CreateWorkspaceNameCallback
 from ._common import default_create_ws_name_callback
 from ._common import set_staged_workspace_dir
 from ._copy_stager import CopySkillStager
+from .._repository import SkillRepositoryResolver
 
 
 class SkillLoadTool(BaseTool):
@@ -44,6 +45,7 @@ class SkillLoadTool(BaseTool):
     def __init__(
         self,
         repository: BaseSkillRepository,
+        repo_resolver: Optional[SkillRepositoryResolver] = None,
         skill_stager: Optional[Stager] = None,
         create_ws_name_cb: Optional[CreateWorkspaceNameCallback] = None,
         filters: Optional[List[BaseFilter]] = None,
@@ -53,6 +55,7 @@ class SkillLoadTool(BaseTool):
         self._skill_stager: Stager = skill_stager or CopySkillStager()
         self._create_ws_name_cb: Optional[
             CreateWorkspaceNameCallback] = create_ws_name_cb or default_create_ws_name_callback
+        self._repo_resolver: Optional[SkillRepositoryResolver] = repo_resolver
 
     @override
     def _get_declaration(self) -> Optional[FunctionDeclaration]:
@@ -80,6 +83,11 @@ class SkillLoadTool(BaseTool):
                             description="Result of skill_load. message is a string indicating the skill was loaded."),
         )
 
+    def _get_repository(self, ctx: InvocationContext) -> Optional[BaseSkillRepository]:
+        if self._repo_resolver is not None:
+            return self._repo_resolver(ctx)
+        return self._repository
+
     @override
     async def _run_async_impl(self, *, tool_context: InvocationContext, args: dict[str, Any]) -> str:
         if not (args["skill_name"] or "").strip():
@@ -88,7 +96,8 @@ class SkillLoadTool(BaseTool):
         docs = args.get("docs", [])
         include_all_docs = args.get("include_all_docs", False)
         normalized_skill = skill_name.strip()
-        skill = self._repository.get(normalized_skill)
+        repository = self._get_repository(tool_context)
+        skill = repository.get(normalized_skill)
         await self._ensure_staged(ctx=tool_context, skill_name=skill_name)
         clean_docs = [doc.strip() for doc in (docs or []) if isinstance(doc, str) and doc.strip()]
         self.__set_state_delta_for_skill_load(tool_context, skill_name, clean_docs, include_all_docs)
@@ -97,12 +106,13 @@ class SkillLoadTool(BaseTool):
         return f"skill {skill_name!r} loaded"
 
     async def _ensure_staged(self, *, ctx: InvocationContext, skill_name: str) -> None:
-        runtime = self._repository.workspace_runtime
+        repository = self._get_repository(ctx)
+        runtime = repository.workspace_runtime
         manager = runtime.manager(ctx)
         ws_id = self._create_ws_name_cb(ctx)
         ws = await manager.create_workspace(ws_id, ctx)
         result = await self._skill_stager.stage_skill(
-            SkillStageRequest(skill_name=skill_name, repository=self._repository, workspace=ws, ctx=ctx))
+            SkillStageRequest(skill_name=skill_name, repository=repository, workspace=ws, ctx=ctx))
         set_staged_workspace_dir(ctx, skill_name, result.workspace_skill_dir)
 
     def __set_state_delta_for_skill_load(self,

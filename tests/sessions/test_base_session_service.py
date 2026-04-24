@@ -172,7 +172,9 @@ class TestBaseSessionServiceFilterEvents:
         for i in range(10):
             session.events.append(_make_event(text=f"msg{i}"))
         svc.filter_events(session)
-        assert len(session.events) == 3
+        assert len(session.events) == 10
+        visible_events = [event for event in session.events if event.is_model_visible()]
+        assert [event.get_text() for event in visible_events] == ["msg7", "msg8", "msg9"]
 
     def test_filter_by_event_ttl(self):
         config = SessionServiceConfig(event_ttl_seconds=5.0)
@@ -188,8 +190,10 @@ class TestBaseSessionServiceFilterEvents:
         session.events.append(new_event)
 
         svc.filter_events(session)
-        assert len(session.events) == 1
-        assert session.events[0].get_text() == "new"
+        assert len(session.events) == 2
+        visible_events = [event for event in session.events if event.is_model_visible()]
+        assert len(visible_events) == 1
+        assert visible_events[0].get_text() == "new"
 
     def test_filter_no_config(self):
         svc = ConcreteSessionService()
@@ -208,7 +212,8 @@ class TestBaseSessionServiceFilterEvents:
             e.timestamp = time.time() - 100
             session.events.append(e)
         svc.filter_events(session)
-        assert len(session.events) == 0
+        assert len(session.events) == 5
+        assert all(not event.is_model_visible() for event in session.events)
 
 
 class TestBaseSessionServiceSetSummarizerManager:

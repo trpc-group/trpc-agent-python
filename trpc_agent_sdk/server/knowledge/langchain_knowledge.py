@@ -8,8 +8,9 @@ from enum import Enum
 from typing import Any
 from typing import Dict
 from typing import List
-from pydantic import BaseModel
+from typing_extensions import override
 
+from pydantic import BaseModel
 
 from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import BaseDocumentTransformer
@@ -31,15 +32,11 @@ except ImportError:
     from langchain.chains.base import Chain
 
 from trpc_agent_sdk.context import AgentContext
-from trpc_agent_sdk.knowledge import (
-    KnowledgeBase,
-    KnowledgeFilterExpr,
-    SearchDocument,
-    SearchRequest,
-    SearchResult,
-)
+from trpc_agent_sdk.knowledge import KnowledgeBase
+from trpc_agent_sdk.knowledge import SearchDocument
+from trpc_agent_sdk.knowledge import SearchRequest
+from trpc_agent_sdk.knowledge import SearchResult
 from trpc_agent_sdk.log import logger
-from typing_extensions import override
 
 
 # SearchType vector retrieval type
@@ -73,7 +70,8 @@ class LangchainKnowledge(KnowledgeBase):
         """Implement the default logic for RAG, integrate with tRPC-Agent framework, support Langchain ecosystem
 
         :params:
-        chain: complete Langchain chain; if a complete Langchain chain is already available, it can be directly called, other configurations are ignored
+        chain: complete Langchain chain; if available, it can be called directly
+            and other configurations are ignored
         prompt_template: Langchain Prompt template
         document_loader: Langchain document loader
         document_transformer: Langchain document transformer
@@ -81,7 +79,8 @@ class LangchainKnowledge(KnowledgeBase):
         vectorstore: Langchain vector database
         retriever: Langchain retriever
         """
-        # Initialize embedder etc. components, if chain is not empty, other configurations will be ignored and Chain will be called directly
+        # Initialize embedder etc. components. If chain is set, other
+        # configurations are ignored and the chain is called directly.
         self.chain = chain
         self.prompt_template = prompt_template
         self.document_loader = document_loader
@@ -145,7 +144,7 @@ class LangchainKnowledge(KnowledgeBase):
         if assistant_name:
             context += f"assistant: {assistant_name}\n"
         context += f"session_id: {session_id}\n"
-        context += f"content: "
+        context += "content: "
         for msg in history:
             context += msg.text()
 
@@ -164,7 +163,7 @@ class LangchainKnowledge(KnowledgeBase):
         if req.query.text:
             query = req.query.text
         else:
-            raise ValueError(f"query should be text, but got None")
+            raise ValueError("query should be text, but got None")
 
         chain_runnable_config = None
         if self.common_runnable_config:
@@ -255,7 +254,7 @@ class LangchainKnowledge(KnowledgeBase):
         if req.query.text:
             query = req.query.text
         else:
-            raise ValueError(f"query should be text, but got None")
+            raise ValueError("query should be text, but got None")
 
         if self.prompt_template:
             query_runnable_config = None

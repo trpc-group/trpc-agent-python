@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from typing import Callable
 from typing import List
 from typing import Optional
 
@@ -22,6 +21,7 @@ from trpc_agent_sdk.skills import Skill
 from trpc_agent_sdk.skills import SkillLoadModeNames
 from trpc_agent_sdk.skills import SkillProfileFlags
 from trpc_agent_sdk.skills import SkillProfileNames
+from trpc_agent_sdk.skills import SkillRepositoryResolver
 from trpc_agent_sdk.skills import SkillToolsNames
 from trpc_agent_sdk.skills import docs_scan_prefix
 from trpc_agent_sdk.skills import docs_state_key
@@ -305,7 +305,7 @@ class SkillsRequestProcessor:
         forbidden_tools: Optional[list[str]] = None,
         tool_flags: Optional[SkillProfileFlags] = None,
         exec_tools_disabled: bool = False,
-        repo_resolver: Optional[Callable[[InvocationContext], BaseSkillRepository]] = None,
+        repo_resolver: Optional[SkillRepositoryResolver] = None,
         max_loaded_skills: int = 0,
     ) -> None:
         self._skill_repository = skill_repository
