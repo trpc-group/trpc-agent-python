@@ -37,6 +37,11 @@ from ._tool_adapter import convert_toolunion_to_tool_list
 from ._tool_adapter import create_tool
 from ._tool_adapter import create_toolset
 from ._transfer_to_agent_tool import transfer_to_agent
+from ._webfetch_tool import FetchResult
+from ._webfetch_tool import WebFetchTool
+from ._websearch_tool import SearchHit
+from ._websearch_tool import WebSearchResult
+from ._websearch_tool import WebSearchTool
 from .file_tools import BashTool
 from .file_tools import EditTool
 from .file_tools import FileToolSet
@@ -90,6 +95,11 @@ __all__ = [
     "create_tool",
     "create_toolset",
     "transfer_to_agent",
+    "FetchResult",
+    "WebFetchTool",
+    "SearchHit",
+    "WebSearchResult",
+    "WebSearchTool",
     "BashTool",
     "EditTool",
     "FileToolSet",

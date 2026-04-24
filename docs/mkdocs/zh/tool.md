@@ -31,6 +31,8 @@ Agent 通过以下步骤动态使用工具：
 | [File Tools](#file-tools) | 文件操作和文本处理 | 使用 FileToolSet 或单独工具 | 读写文件、搜索、命令执行 |
 | [LangChain Tools](#langchain-tools) | 复用 LangChain 生态工具 | 封装为异步函数并包装为 FunctionTool | 联网搜索（Tavily）等 |
 | [Streaming Tools（流式工具）](#streaming-tools流式工具) | 实时预览长文本生成 | 使用 StreamingFunctionTool | 代码生成、文档写作 |
+| [WebFetchTool](#webfetchtool) | 抓取并文本化单个公网 URL | 实例化 WebFetchTool 并加入 tools | 阅读文档页、RFC、changelog、新闻 |
+| [WebSearchTool](#websearchtool) | 公网搜索引擎检索 | 实例化 WebSearchTool 并加入 tools | 实时资讯、版本发布、事实/定义查询 |
 | [Agent Code Executor](./code_executor.md) | 自动生成并执行代码场景、数据处理场景 | 配置 CodeExecutor | API 自动调用、表格数据处理 |
 ---
 
@@ -2260,3 +2262,586 @@ print(regular_tool.is_streaming)  # False
 
 - [流式工具完整示例](../../../examples/streaming_tools/run_agent.py) - 流式工具运行示例
 - [函数工具文档](#function-tools) - 普通函数工具的使用
+
+## WebFetchTool (网页获取工具)
+
+`WebFetchTool` 是 trpc-agent-python 框架内置的**单 URL 联网抓取工具**。当 Agent 需要阅读、摘要或引用某个公开网页的内容时，可以通过该工具发起一次 HTTP GET 请求，框架会将响应统一转换为可供 LLM 消费的结构化文本：HTML 会被裁剪为 Markdown 纯文本，其它 `text/*` / `application/json` 等文本型 MIME 按原样返回，二进制响应则以结构化错误拒收。
+
+### 功能特性
+
+- **单次 HTTP GET**：HTML 自动转换为 Markdown 纯文本（去除 `<script>` / `<style>` / `<svg>` 等非内容块）；其他文本型 MIME 按原样返回；二进制响应（PDF、图片、归档等）以 `UNSUPPORTED_CONTENT_TYPE` 错误拒收
+- **SSRF 防护**：`block_private_network=True`（默认）会对请求目标及**每一跳重定向**做 DNS 解析校验，拒绝回环 / 私网 / 链路本地（含 `169.254.169.254` 云元数据端点）/ 保留 / 组播 / 未指定地址
+- **域名白/黑名单**：`allowed_domains` / `blocked_domains` 为**工具级**配置，子域感知匹配（`www.` 前缀剥离，`python.org` 同时匹配 `docs.python.org`）
+- **内容与字节双重裁剪**：`max_content_length`（字符）与 `max_response_bytes`（字节）分别控制返回文本长度与实际读取的原始字节；LLM 还可在调用时通过 `max_length` 参数进一步控制
+- **手动重定向控制**：`follow_redirects` / `max_redirects` 提供可预期的重定向循环上限，避免无限跳转
+- **进程内 LRU 缓存**：`enable_cache=True` 时启用 URL → `FetchResult` LRU；`cache_ttl_seconds` / `cache_max_bytes` 控制TTL与缓存字节预算，命中时响应上 `cached=true`，缓存键会做 URL 归一化（统一 scheme 大小写、剥离 `www.`、忽略默认端口和尾部 `/`）
+
+### WebFetchTool 参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `timeout` | `float` | `30.0` | HTTP 超时时间（秒） |
+| `user_agent` | `str` | `"trpc-agent-python-webfetch/1.0"` | HTTP `User-Agent` 头，便于下游日志区分来源流量 |
+| `proxy` | `Optional[str]` | `None` | 可选的 HTTP 代理 URL，直接转发给 `httpx` |
+| `http_client` | `Optional[httpx.AsyncClient]` | `None` | 可选的预构建 `httpx.AsyncClient`，用于复用连接池（调用方负责其生命周期） |
+| `max_content_length` | `int` | `100_000` | 返回 `content` 的字符上限，`0` 表示不限；可被调用参数 `max_length` 覆盖 |
+| `max_response_bytes` | `int` | `5 * 1024 * 1024`（5 MB） | 读取的原始响应字节上限，`0` 表示不限；流式读取命中上限即终止 |
+| `allowed_domains` | `Optional[List[str]]` | `None` | 工具级 host 白名单（子域感知，`www.` 前缀剥离），LLM 无法覆盖 |
+| `blocked_domains` | `Optional[List[str]]` | `None` | 工具级 host 黑名单，匹配规则同白名单；**优先于白名单**检查 |
+| `block_private_network` | `bool` | `True` | SSRF 防护开关；开启时拒绝所有解析到私网 / 回环 / 链路本地等地址的目标 |
+| `follow_redirects` | `bool` | `True` | 是否手动跟随 3xx 重定向 |
+| `max_redirects` | `int` | `5` | 重定向最大跳数上限 |
+| `enable_cache` | `bool` | `False` | 是否启用进程内 LRU 缓存 |
+| `cache_ttl_seconds` | `float` | `900.0`（15 分钟） | 缓存项 TTL，超时后下次访问穿透并淘汰 |
+| `cache_max_bytes` | `int` | `50 * 1024 * 1024`（50 MB） | 缓存总字节容量；超过该容量将被静默跳过 |
+| `filters_name` | `Optional[List[str]]` | `None` | 关联的 filter 名称，透传给 `BaseTool` |
+| `filters` | `Optional[List[BaseFilter]]` | `None` | 直接注入的 filter 实例，透传给 `BaseTool` |
+
+**LLM 调用参数**（由 LLM 在调用时填充，非构造参数）：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `url` | `string` | 是 | 绝对 http(s) URL，必须包含 scheme（如 `https://docs.python.org/3/whatsnew/3.13.html`） |
+| `max_length` | `integer` | 否 | 本次调用的 `content` 字符上限（覆盖工具级 `max_content_length`），`0` 禁用该上限 |
+
+**`FetchResult` 返回字段**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `url` | `str` | 重定向后最终的 URL |
+| `status_code` | `int` | HTTP 状态码（请求未完成时为 `0`） |
+| `status_text` | `str` | HTTP 状态原因短语 |
+| `content_type` | `str` | 规范化后的 media type（无附加参数） |
+| `content` | `str` | 文本化后的正文，可能被截断 |
+| `bytes` | `int` | `content` 的 UTF-8 字节长度 |
+| `duration_ms` | `int` | 整个请求的耗时（毫秒） |
+| `cached` | `bool` | 是否命中进程内 LRU 缓存 |
+| `error` | `str` | 失败或被拒绝时的结构化错误码（如 `BLOCKED_URL` / `SSRF_BLOCKED_URL` / `HTTP_STATUS` / `UNSUPPORTED_CONTENT_TYPE` / `HTTP_ERROR`） |
+
+### 使用方式
+
+#### 构造 WebFetchTool Agent
+
+在`agent/agent.py` 中创建 WebFetchTool Agent：
+
+```python
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import LLMModel, OpenAIModel
+from trpc_agent_sdk.tools import WebFetchTool
+
+from .config import get_model_config
+from .prompts import INSTRUCTION
+
+
+def _create_model() -> LLMModel:
+    """创建 LLM 模型"""
+    api_key, url, model_name = get_model_config()
+    return OpenAIModel(model_name=model_name, api_key=api_key, base_url=url)
+
+
+def create_default_fetch_agent() -> LlmAgent:
+    """创建 WebFetchTool Agent"""
+    web_fetch = WebFetchTool(
+        timeout=10.0, # 超时时间配置
+        user_agent="trpc-agent-python-webfetch-example/1.0", # User-Agent 头
+        max_content_length=4000, # 返回文本字符上限
+        max_response_bytes=1 * 1024 * 1024, # 读取的原始字节上限
+        follow_redirects=True, # 手动重定向循环
+        max_redirects=3, # 重定向最大跳数上限
+        block_private_network=True, # SSRF 防护开关
+        # allowed_domains=["python.org"], # 域名白名单
+        # blocked_domains=["example.com"], # 域名黑名单
+        # enable_cache=True, # 启用缓存
+        # cache_ttl_seconds=120.0, # 缓存TTL
+        # cache_max_bytes=1 * 1024 * 1024, # 缓存字节容量
+    )
+    return LlmAgent(
+        name="default_webfetch_assistant",
+        description="Web-reading assistant that fetches a single URL and summarises its textual content.",
+        model=_create_model(),
+        instruction=INSTRUCTION,
+        tools=[web_fetch],
+    )
+```
+
+> **注意**：
+> - `allowed_domains` / `blocked_domains` 是**工具级**配置，LLM **无法在调用参数里覆盖**；匹配规则为**子域感知**（`www.` 前缀会被剥离），且**每一跳重定向都会重新校验**，防止"合法首跳 → 跳到被禁主机"的绕过
+> - `block_private_network=True` 默认开启 SSRF 防护；仅当调用方已用外部白名单限定目标且确信输入可信时可以考虑关闭
+> - `enable_cache` 默认关闭，需显式 opt-in；缓存键会做 URL 归一化（统一 scheme 大小写、剥离 `www.`、忽略默认端口、忽略尾 `/`），`https://example.com` 与 `https://www.example.com/` 共享同一条缓存项
+
+#### 驱动 Agent 并打印工具事件
+
+`run_agent.py` 驱动 Agent，逐条执行 `(label, query)` 场景，并从事件流里提取 `function_call` / `function_response` 以便直观观察工具调用：
+
+```python
+import asyncio
+import uuid
+
+from dotenv import load_dotenv
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.types import Content, Part
+
+load_dotenv()
+
+APP_NAME = "webfetch_agent_demo"
+USER_ID = "demo_user"
+
+
+async def _run_one_query(runner: Runner, *, label: str, query: str) -> None:
+    """Drive a single user query through ``runner`` and pretty-print events."""
+    session_id = str(uuid.uuid4())
+    await runner.session_service.create_session(
+        app_name=APP_NAME,
+        user_id=USER_ID,
+        session_id=session_id,
+        state={"user_name": USER_ID},
+    )
+
+    print(f"\n========== {label} ==========")
+    print(f"📝 User: {query}")
+    print("🤖 Assistant: ", end="", flush=True)
+
+    user_content = Content(parts=[Part.from_text(text=query)])
+    async for event in runner.run_async(
+            user_id=USER_ID,
+            session_id=session_id,
+            new_message=user_content,
+    ):
+        if not event.content or not event.content.parts:
+            continue
+
+        if event.partial:
+            for part in event.content.parts:
+                if part.text:
+                    print(part.text, end="", flush=True)
+            continue
+
+        for part in event.content.parts:
+            # 跳过思考部分
+            if part.thought:
+                continue
+            # 打印工具调用
+            if part.function_call:
+                print(f"\n🔧 [Invoke Tool: {part.function_call.name}({part.function_call.args})]")
+            # 打印工具响应
+            elif part.function_response:
+                resp = part.function_response.response
+                print(f"📊 [Tool Result: {resp}]")
+
+    print("\n" + "-" * 40)
+
+
+async def _drive_agent(agent: LlmAgent, *, scenarios: list[tuple[str, str]]) -> None:
+    """驱动 Agent 执行场景"""
+    runner = Runner(
+        app_name=APP_NAME,
+        agent=agent,
+        session_service=InMemorySessionService(),
+    )
+    for label, query in scenarios:
+        await _run_one_query(runner, label=label, query=query)
+
+
+async def main() -> None:
+    from agent.agent import default_fetch_agent
+
+    await _drive_agent(default_fetch_agent, scenarios=[
+        ("Default · plain fetch",
+         "Fetch https://example.com and summarise the page in one short paragraph.")
+    ])
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+#### 运行示例
+
+**返回值示例**：
+
+成功抓取时，`function_response` 中的 `FetchResult` 形如：
+
+```python
+{
+    "url": "https://example.com",
+    "status_code": 200,
+    "status_text": "OK",
+    "content_type": "text/html",
+    "content": "Example Domain\n\n# Example Domain\n\nThis domain is for use in ...",
+    "bytes": 183,
+    "duration_ms": 87,
+    "cached": False,
+    "error": "",
+}
+```
+
+命中缓存时 `cached=True`；被域名策略或 SSRF 防护拦截时 `error` 会包含结构化错误码：
+
+```python
+# 被域名策略拒绝
+{"url": "https://example.com", "error": "BLOCKED_URL: 'example.com' is not permitted by the tool's domain policy", ...}
+
+# 被 SSRF 防护拒绝（如目标解析到 127.0.0.1）
+{"url": "http://localhost:8080", "error": "SSRF_BLOCKED_URL: localhost resolves to private/reserved address 127.0.0.1", ...}
+
+# 二进制响应被拒
+{"url": "https://example.com/a.pdf", "error": "UNSUPPORTED_CONTENT_TYPE: application/pdf", ...}
+```
+
+建议在 Agent 的 `instruction` 中约定：当工具返回 `error` 字段时，应向用户**复述错误码并解释原因**，而不是编造内容；当 `content` 被截断或命中缓存时，也应在回答中显式说明
+
+### WebFetchTool 最佳实践
+
+- **安全优先**：在能访问云元数据端点（如 AWS EC2 的 `169.254.169.254`）或内网资源的环境中部署 Agent 时，**保留 `block_private_network=True` 默认值**
+- **内容裁剪**：为防止长页面撑爆上下文窗口，建议为 `max_content_length` 设置一个与模型窗口匹配的合理值（例如 4000~20000 字符）；LLM 仅需摘要时可通过 `max_length`设置
+- **字节预算**：对大文件（如巨型 HTML、日志页）优先依赖 `max_response_bytes` 在网络层提前止损，而不是先下载再裁剪
+- **缓存策略**：对热点文档 / changelog / status page 打开 `enable_cache=True`，并依据页面平均大小设置 `cache_max_bytes`；注意 TTL 过长可能返回过期内容，`cached=true` 可用于下游判断
+- **域名策略**：需要把 Agent 限定在可信站点时使用 `allowed_domains`；想屏蔽噪声或高风险站点则使用 `blocked_domains`；两者可组合使用，**黑名单优先**
+- **与 MCP 工具配合**：当存在专用的 MCP 抓取工具（带鉴权、JS 渲染、表单提交能力）时，优先使用 MCP 工具；`WebFetchTool` 更适合对无需登录的公开文档类页面做快速阅读
+- **自定义 HTTP 行为**：需要对接公司代理、mTLS 或复用连接池时，通过构造参数 `proxy` 或注入 `http_client` 实现
+
+### WebFetchTool 完整示例
+
+完整的 WebFetchTool 使用示例见：[examples/webfetch_tool/run_agent.py](../../../examples/webfetch_tool/run_agent.py)
+
+示例中覆盖了以下场景：
+
+- 基线：HTTP 形态默认项 + SSRF 默认项
+- `max_length` 按调用覆盖：LLM 在调用参数里进一步返回文本长度
+- LRU 缓存命中：同一 URL 连续抓取两次，第二次 `cached=true`
+- 白名单拒绝：非白名单主机被拒并返回 `BLOCKED_URL`
+- 黑名单拒绝：黑名单主机被拒并返回 `BLOCKED_URL`
+
+## WebSearchTool （网络搜索工具）
+
+`WebSearchTool` 是 trpc-agent-python 框架内置的**公网搜索工具**。当 Agent 需要回答"最新动态 / 版本号 / 事件 / 定义 / 事实类"等超出模型知识截止日期的问题时，可以通过该工具调用主流搜索引擎的检索 API，获取带标题、URL 与摘要的结构化结果，并按约定将所有引用以 Markdown 超链接的形式列在 `Sources:` 段落中。
+
+该工具采用**可插拔 provider** 设计，目前内置两种后端：
+
+- **`duckduckgo`（默认）**：DuckDuckGo Instant Answer API，**无需 API Key**。返回 DDG 精选的 instant answer / abstract / definition 摘要及相关主题，适合百科/定义/事实类查询；注意返回的并非完整的实时网页结果，而是 DDG 的 curated 结果集
+- **`google`**：Google Custom Search（CSE）JSON API，需要配置 `api_key` 与 `engine_id`（即 CSE 的 `cx`）；返回真实的公网搜索结果，支持 `siteSearch`、`hl`（语言）、`safe`（SafeSearch）、`dateRestrict`（时效性）等 CSE 原生参数
+
+在此基础上，`WebSearchTool` 还内置了**域名白/黑名单过滤、URL 归一化去重、结果裁剪、引用规范强制注入、HTTP 连接池复用**等能力，帮助你在生产环境中稳定、可控地把联网检索接入 LLM Agent。
+
+### 功能特性
+
+- **双 Provider 支持**：`duckduckgo`（keyless，适合定义/百科）与 `google`（需要 CSE API Key，支持真实公网搜索）通过 `provider` 参数切换，对 LLM 暴露的 `FunctionDeclaration` 保持一致
+- **域名白/黑名单**：LLM 可在调用时填入 `allowed_domains` / `blocked_domains`（二者互斥），工具会做**子域感知**匹配（`www.` 前缀剥离，`python.org` 同时匹配 `docs.python.org`）；Google 单域名时走服务端 `siteSearch` 快速路径，多域名自动回退到客户端过滤
+- **URL 归一化去重**：`dedup_urls=True`（默认）会按 scheme/host/path 归一化键合并重复命中，避免 `Sources:` 段里出现同一来源多次；设置为 `False` 可保留原始召回列表，便于接入下游 re-ranker / 多样化采样 / 离线评估
+- **结果裁剪**：`results_num` / `snippet_len` / `title_len` 分别控制返回条数、单条摘要与标题的字符上限，所有参数都会按 `[1, _MAX_*]` 做 clamp，避免误配超上下文窗口；LLM 还可通过 `count` 参数在调用时进一步控制返回条数
+- **强制引用规范**：工具在 `process_request` 阶段自动向 LLM 追加指令，**强制**要求：（1）回答末尾必须追加 `Sources:` 段并以 `[Title](URL)` 列出工具返回的 URL；（2）不得编造 URL；（3）涉及"最新/recent"类查询时使用**当前年月**入参，避免幻觉旧年份
+- **Provider 原生参数透传**：`ddg_extra_params` / `google_extra_params` 让你把 provider 专属的高级参数（如 Google CSE 的 `safe`、`dateRestrict`、`gl`、`cr`）固化在 agent 层，每次工具调用自动带上，无需在 `FunctionDeclaration` 里额外暴露
+- **共享 httpx 连接池**：通过构造参数 `http_client` 传入预建好的 `httpx.AsyncClient`，可在多个 agent / 多次调用之间复用连接池；调用方负责其生命周期（工具不会帮你 `aclose`）
+- **结构化输出**：统一返回 `WebSearchResult`，包含 `query` / `provider` / `results: List[{title, url, snippet}]` / `summary`，便于 LLM 引用拼装，也便于下游做 re-rank / RAG
+
+### WebSearchTool 参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `provider` | `Literal["duckduckgo", "google"]` | `"duckduckgo"` | 搜索后端；`google` 需要同时配置 `api_key` 与 `engine_id`，否则调用时返回未配置提示 |
+| `api_key` | `Optional[str]` | `None` | Google CSE API Key，缺省时回退到环境变量 `GOOGLE_CSE_API_KEY` |
+| `engine_id` | `Optional[str]` | `None` | Google CSE 引擎 ID（即 `cx`），缺省时回退到环境变量 `GOOGLE_CSE_ENGINE_ID` |
+| `base_url` | `Optional[str]` | provider 默认 | 覆盖 provider 的 API Base URL（主要用于测试 / 代理） |
+| `user_agent` | `str` | `"trpc-agent-python-websearch/1.0"` | HTTP `User-Agent` 头，便于下游日志区分来源流量 |
+| `proxy` | `Optional[str]` | `None` | 可选的 HTTP 代理 URL，直接转发给 `httpx` |
+| `lang` | `Optional[str]` | `None` | Google CSE 默认语言（对应 `hl` 参数），DDG 会忽略；LLM 可通过调用参数 `lang` 覆盖 |
+| `http_client` | `Optional[httpx.AsyncClient]` | `None` | 可选的预构建 `httpx.AsyncClient`，用于复用连接池（调用方负责生命周期） |
+| `results_num` | `int` | `5` | 默认返回条数上限，clamp 到 `[1, 10]`；可被调用参数 `count` 覆盖 |
+| `snippet_len` | `int` | `300` | 单条 `snippet` 的字符上限，clamp 到 `[1, 1000]` |
+| `title_len` | `int` | `100` | 单条 `title` 的字符上限，clamp 到 `[1, 200]` |
+| `timeout` | `float` | `15.0` | HTTP 超时时间（秒） |
+| `dedup_urls` | `bool` | `True` | 是否按归一化键合并重复 URL；`False` 时保留原始命中顺序 |
+| `ddg_extra_params` | `Optional[dict]` | `None` | 透传给 DDG 的额外查询参数 |
+| `google_extra_params` | `Optional[dict]` | `None` | 透传给 Google CSE 的额外查询参数（如 `{"safe": "active"}`、`{"dateRestrict": "m6"}`、`{"gl": "us"}` 等） |
+| `filters_name` | `Optional[List[str]]` | `None` | 关联的 filter 名称，透传给 `BaseTool` |
+| `filters` | `Optional[List[BaseFilter]]` | `None` | 直接注入的 filter 实例，透传给 `BaseTool` |
+
+**LLM 调用参数**（由 LLM 在调用时填充，非构造参数）：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `query` | `string` | 是 | 检索关键词，至少 2 个字符；对于"最新/版本号"类主题建议显式带上年份/版本号 |
+| `count` | `integer` | 否 | 本次调用的返回条数上限，`1-10`（clamp）；默认为工具级 `results_num` |
+| `allowed_domains` | `array[string]` | 否 | 域名白名单（host only，子域感知，`www.` 自动剥离）；与 `blocked_domains` 互斥 |
+| `blocked_domains` | `array[string]` | 否 | 域名黑名单，匹配规则同上；与 `allowed_domains` 互斥 |
+| `lang` | `string` | 否 | 仅 Google CSE 生效（对应 `hl`），DDG 会忽略；覆盖工具级 `lang` |
+
+**`WebSearchResult` 返回字段**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `query` | `str` | 本次检索的查询词（原样回显） |
+| `provider` | `"duckduckgo" \| "google"` | 实际使用的 provider |
+| `results` | `List[SearchHit]` | 结构化命中列表，每项包含 `title` / `url` / `snippet` |
+| `summary` | `str` | DDG 的 instant answer / abstract / definition 聚合摘要；Google 在发生拼写纠错或 API 错误时也会写入此字段 |
+
+当调用参数非法（如同时传入 `allowed_domains` 与 `blocked_domains`、`query` 过短）或 HTTP 出错时，工具会返回结构化错误对象（如 `{"error": "INVALID_ARGS: ..."}` / `{"error": "HTTP_ERROR: ..."}`），便于 LLM 做降级处理。
+
+### 使用方式
+
+#### 构造 WebSearchTool Agent
+
+在 `agent/agent.py` 中创建 WebSearchTool Agent（以默认的 DuckDuckGo provider 为例，**无需任何 API Key** 即可开跑）：
+
+```python
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import LLMModel, OpenAIModel
+from trpc_agent_sdk.tools import WebSearchTool
+
+from .config import get_model_config
+from .prompts import INSTRUCTION
+
+
+def _create_model() -> LLMModel:
+    """创建 LLM 模型"""
+    api_key, url, model_name = get_model_config()
+    return OpenAIModel(model_name=model_name, api_key=api_key, base_url=url)
+
+
+def create_ddg_agent() -> LlmAgent:
+    """创建基于 DuckDuckGo 的 WebSearchTool Agent"""
+    web_search = WebSearchTool(
+        provider="duckduckgo",     # keyless，适合定义/百科/事实类查询
+        results_num=3,             # 默认返回最多 3 条
+        snippet_len=300,           # 每条摘要最多 300 字符
+        title_len=80,              # 每条标题最多 80 字符
+        timeout=10.0,
+        # dedup_urls=False,                    # 关闭 URL 归一化去重，保留原始召回
+        # ddg_extra_params={"region": "us-en"},  # DDG 原生参数透传
+    )
+    return LlmAgent(
+        name="ddg_research_assistant",
+        description="Web research assistant powered by DuckDuckGo Instant Answers.",
+        model=_create_model(),
+        instruction=INSTRUCTION,
+        tools=[web_search],
+    )
+```
+
+**切换到 Google Custom Search**：当需要真正的公网搜索结果、或需要时效性/语言/SafeSearch 控制时，切换到 `provider="google"`。Google 需要先在 [Google Cloud Console](https://developers.google.com/custom-search/v1/overview) 申请 API Key，在 [Programmable Search Engine](https://programmablesearchengine.google.com/) 创建引擎获取 `cx`；
+
+```python
+import httpx
+
+from .config import get_google_cse_config, get_http_proxy
+
+# 业务侧创建并负责生命周期：程序退出前调用 await shared_client.aclose()
+shared_client = httpx.AsyncClient(
+    timeout=15.0,
+    limits=httpx.Limits(max_connections=16, max_keepalive_connections=8),
+)
+
+
+def create_google_agent() -> LlmAgent:
+    """创建基于 Google Custom Search 的 WebSearchTool Agent"""
+    api_key, engine_id = get_google_cse_config()
+    web_search = WebSearchTool(
+        provider="google", # 使用 Google Custom Search
+        api_key=api_key, # Google CSE API Key
+        engine_id=engine_id, # Google CSE Engine ID
+        user_agent="trpc-agent-python-websearch-demo/1.0 (+google-cse)", # User-Agent 头
+        proxy=get_http_proxy(),                # 可选：出口代理
+        lang="en", # 语言设定
+        http_client=shared_client,             # 复用连接池，需要调用方显式关闭
+        results_num=3, # 返回条数
+        snippet_len=240, # 单条摘要字符上限
+        title_len=80, # 单条标题字符上限
+        timeout=15.0, # 超时时间
+        dedup_urls=True, # 开启 URL 归一化去重
+        google_extra_params={"safe": "active"},       # 打开 Google SafeSearch
+        # google_extra_params={"dateRestrict": "m6"}, # 仅保留过去 6 个月索引的结果
+    )
+    return LlmAgent(
+        name="google_research_assistant",
+        description="Web research assistant powered by Google Custom Search (SafeSearch on).",
+        model=_create_model(),
+        instruction=INSTRUCTION,
+        tools=[web_search],
+    )
+```
+
+> **注意**：
+> - `allowed_domains` / `blocked_domains` 由 **LLM 在调用参数里**填入（而非构造参数），LLM 可根据用户 prompt 决定是否启用；两者互斥，同时传入会返回 `INVALID_ARGS`
+> - 当传入外部 `http_client` 时，`WebSearchTool` **不会**帮你调用 `aclose()`，需要调用方在**同一个事件循环**内显式关闭，避免 `Unclosed client` 警告
+> - 即使复用外部 client，工具内部仍会在每次 `GET` 时强制应用构造器里的 `timeout` 与 `user_agent`，保证 agent 层的约束始终生效
+> - 其他常用的 Google CSE 透传参数包括 `gl`（地理偏向）、`cr`（国家限制）、`filter`、`sort` 等；对 DuckDuckGo 可通过 `ddg_extra_params` 透传 `region`、`kl` 等
+
+#### 驱动 Agent 并打印工具事件
+
+`run_agent.py` 驱动 Agent，逐条执行 `(label, query)` 场景，并从事件流里提取 `function_call` / `function_response` 以便直观观察工具调用：
+
+```python
+import asyncio
+import uuid
+
+from dotenv import load_dotenv
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.types import Content, Part
+
+load_dotenv()
+
+APP_NAME = "websearch_agent_demo"
+USER_ID = "demo_user"
+
+
+async def _run_one_query(runner: Runner, *, label: str, query: str) -> None:
+    """Drive a single user query through ``runner`` and pretty-print events."""
+    session_id = str(uuid.uuid4())
+    await runner.session_service.create_session(
+        app_name=APP_NAME,
+        user_id=USER_ID,
+        session_id=session_id,
+        state={"user_name": USER_ID},
+    )
+
+    print(f"\n========== {label} ==========")
+    print(f"📝 User: {query}")
+    print("🤖 Assistant: ", end="", flush=True)
+
+    user_content = Content(parts=[Part.from_text(text=query)])
+    async for event in runner.run_async(
+            user_id=USER_ID,
+            session_id=session_id,
+            new_message=user_content,
+    ):
+        if not event.content or not event.content.parts:
+            continue
+
+        if event.partial:
+            for part in event.content.parts:
+                if part.text:
+                    print(part.text, end="", flush=True)
+            continue
+
+        for part in event.content.parts:
+            if part.thought:
+                continue
+            # 打印工具调用  
+            if part.function_call:
+                print(f"\n🔧 [Invoke Tool: {part.function_call.name}({part.function_call.args})]")
+            # 打印工具响应
+            elif part.function_response:
+                resp = part.function_response.response
+                print(f"📊 [Tool Result: {resp}]") # 工具响应
+
+    print("\n" + "-" * 40)
+
+
+async def _drive_agent(agent: LlmAgent, *, scenarios: list[tuple[str, str]]) -> None:
+    """驱动 Agent 执行场景"""
+    runner = Runner(
+        app_name=APP_NAME,
+        agent=agent,
+        session_service=InMemorySessionService(),
+    )
+    for label, query in scenarios:
+        await _run_one_query(runner, label=label, query=query)
+
+
+async def main() -> None:
+    from agent.agent import ddg_agent
+
+    await _drive_agent(ddg_agent, scenarios=[
+        ("DuckDuckGo · plain lookup",
+         "Look up the entity 'Python (programming language)' and summarise it in "
+         "one paragraph. Use count=1.")
+    ])
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+LLM 看到上述 prompt 后，会按 `FunctionDeclaration` 自动组装出类似如下的工具调用：
+
+```python
+# LLM 自动生成的 function_call.args
+{
+    "query": "Python (programming language)",
+    "count": 3,
+    "allowed_domains": ["wikipedia.org"],
+}
+```
+
+#### 运行示例
+
+**返回值示例**：
+
+成功时，`function_response` 中的 `WebSearchResult` 形如：
+
+```python
+{
+    "query": "Python 3.13 release highlights",
+    "provider": "google",
+    "results": [
+        {
+            "title": "What's New In Python 3.13",
+            "url": "https://docs.python.org/3/whatsnew/3.13.html",
+            "snippet": "This article explains the new features in Python 3.13, compared to 3.12 ...",
+        },
+        {
+            "title": "Python 3.13.0 Release Notes",
+            "url": "https://www.python.org/downloads/release/python-3130/",
+            "snippet": "Python 3.13 is the newest major release ...",
+        },
+    ],
+    "summary": "",
+}
+```
+
+DuckDuckGo provider 在命中 instant answer 时，`summary` 字段会包含 DDG 聚合的摘要文本（如维基摘要、词典定义等），LLM 可直接引用；当 DDG 没有 `Results` 时，工具会兜底把 DDG 搜索页 URL 作为唯一来源返回，保证 `Sources:` 段不为空。
+
+**错误处理**：当参数非法或 HTTP 出错时，工具返回结构化错误对象：
+
+```python
+# 同时传入白/黑名单
+{"error": "INVALID_ARGS: cannot specify both allowed_domains and blocked_domains in the same request"}
+
+# query 过短
+{"error": "INVALID_QUERY: query must be at least 2 characters"}
+
+# Google CSE 未配置 api_key / engine_id
+{"query": "...", "provider": "google", "results": [],
+ "summary": "Google provider is not configured: set api_key + engine_id ..."}
+
+# 网络 / HTTP 错误
+{"error": "HTTP_ERROR: ConnectTimeout(...)", "provider": "google", "query": "..."}
+```
+
+建议在 Agent 的 `instruction` 中约定：当工具返回 `error` 字段时，应向用户**复述错误原因并给出降级方案**（如提示用户稍后重试、改换查询词、检查域名白名单等），而不是编造内容。
+
+**自动注入的引用规范**：`WebSearchTool.process_request` 会在每次请求前自动 `append_instructions`，强制要求 LLM：
+
+- 回答末尾必须追加 `Sources:` 段并以 `[Title](URL)` 列出工具返回的 URL
+- **不得编造 URL**，只能引用工具实际返回的 URL
+- 涉及"最新/recent/current"类查询时使用**当前月份与年份**入参，避免幻觉旧年份
+
+这部分逻辑无需用户在 `instruction` 中重复声明，只要挂载 `WebSearchTool` 即自动生效。
+
+### WebSearchTool 最佳实践
+
+- **Provider 选择**：仅需无 API Key、轻量的定义/百科/事实类检索时使用默认的 `duckduckgo`；需要真实公网搜索、支持 site/语言/SafeSearch/时效性时切换到 `google` 并配置 CSE 凭据
+- **结果裁剪**：为防止长摘要超过上下文窗口，建议为 `snippet_len` / `title_len` / `results_num` 设置与模型窗口匹配的合理值；LLM 仅需少量来源时可通过调用参数 `count` 进一步收紧
+- **域名策略**：需要把 Agent 限定在可信站点（如企业官网、官方文档）时，在 prompt 中显式要求 LLM 填入 `allowed_domains`；想屏蔽内容农场或噪声站点时使用 `blocked_domains`；两者互斥
+- **Google 多域名过滤**：Google CSE 的 `siteSearch` 只接受单个值，因此多域名白/黑名单时工具会自动回退到客户端过滤。若希望单域名走服务端快速路径，prompt 中约束 LLM 一次只传一个域名即可
+- **去重开关**：默认开启URL归一化去重，避免 `Sources:` 段里出现同一来源多次；设置为 `False` 可保留原始召回列表，便于接入下游 re-ranker / 多样化采样 / 离线评估
+- **时效性控制**：对"最新/what's new/today"类 Agent，把 `google_extra_params={"dateRestrict": "m6"}`（最近 6 个月）/ `"m1"`（1 个月）/ `"d7"`（7 天）固化在 agent 层，比在 prompt 里反复强调更可靠
+- **连接池复用**：同一进程内挂载多个 `WebSearchTool` 或高频调用时，通过 `http_client` 传入共享的 `httpx.AsyncClient`，并在程序退出时由调用方显式 `aclose()`
+- **凭据与代理**：Google CSE 的 `api_key` / `engine_id` 建议通过环境变量（`GOOGLE_CSE_API_KEY` / `GOOGLE_CSE_ENGINE_ID`）注入，不硬编码在源码；需要经过企业出口代理时通过 `proxy` 参数配置
+- **与 WebFetchTool 配合**：`WebSearchTool` 用来"发现 URL"，`WebFetchTool` 用来"读取 URL 全文"——当 LLM 需要对某条搜索结果做深入阅读 / 摘要 / 引述时，把两个工具同时挂到 Agent 上，形成"搜索 → 精读"的两阶段工作流
+- **与 Knowledge/RAG 配合**：把搜索结果作为实时补充语料接入 RAG 流程时，参考 [examples/knowledge_with_searchtool_rag_agent](../../../examples/knowledge_with_searchtool_rag_agent)
+
+### WebSearchTool 完整示例
+
+完整的 WebSearchTool 使用示例见：[examples/websearch_tool/run_agent.py](../../../examples/websearch_tool/run_agent.py)
+
+示例中构建了四个独立 Agent，覆盖以下场景：
+
+- **DuckDuckGo 基线**（`ddg_agent`，`dedup_urls=True`）：实体名查询 + 白名单 + 黑名单
+- **DuckDuckGo 原始命中**（`ddg_raw_agent`，`dedup_urls=False`）：保留 provider 原始召回列表，便于下游处理
+- **Google 基线**（`google_agent`，`safe=active`）：真实公网搜索 + 服务端单域 `siteSearch` + 客户端多域过滤 + 黑名单 + per-call `lang` 覆盖
+- **Google 时效性 Agent**（`google_raw_agent`，`dateRestrict=m6` + `dedup_urls=False`）：只保留过去 6 个月索引的结果，适合"最新/what's new"类查询

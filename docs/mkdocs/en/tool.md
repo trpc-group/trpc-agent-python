@@ -2260,3 +2260,584 @@ print(regular_tool.is_streaming)  # False
 
 - [Streaming Tools Complete Example](../../../examples/streaming_tools/run_agent.py) - Streaming tools running example
 - [Function Tools Documentation](#function-tools) - Usage of standard function tools
+
+## WebFetchTool
+
+`WebFetchTool` is the built-in **single-URL web fetching tool** in the trpc-agent-python framework. When an Agent needs to read, summarize, or cite content from a public web page, it can use this tool to issue a single HTTP GET request. The framework then converts the response into structured text consumable by the LLM: HTML is reduced to plain Markdown text, textual MIME types such as `text/*` and `application/json` are returned as-is, and binary responses are rejected with a structured error.
+
+### Features
+
+- **HTTP GET**: HTML is automatically converted to plain Markdown text, with non-content blocks such as `<script>`, `<style>`, and `<svg>` removed; other textual MIME types are returned as-is; binary responses (PDFs, images, archives, and so on) are rejected with the `UNSUPPORTED_CONTENT_TYPE` error
+- **SSRF protection**: `block_private_network=True` (default) performs DNS resolution checks on the request target and **every redirect hop**, rejecting loopback, private, link-local (including the `169.254.169.254` cloud metadata endpoint), reserved, multicast, and unspecified addresses
+- **Domain allowlist and blocklist**: `allowed_domains` and `blocked_domains` are **tool-level** settings with subdomain-aware matching (`www.` is stripped, and `python.org` also matches `docs.python.org`)
+- **Dual truncation by content and bytes**: `max_content_length` (characters) and `max_response_bytes` (bytes) separately control the returned text length and the raw response bytes actually read; the LLM can further control the result at call time through the `max_length` parameter
+- **Manual redirect control**: `follow_redirects` and `max_redirects` provide a predictable upper bound for redirect chains and prevent infinite redirects
+- **In-process LRU cache**: when `enable_cache=True`, an LRU cache for URL -> `FetchResult` is enabled; `cache_ttl_seconds` and `cache_max_bytes` control the TTL and cache byte budget; on a cache hit, the response is marked with `cached=true`; cache keys use URL normalization (scheme case normalization, `www.` stripping, and ignoring default ports and trailing `/`)
+
+### WebFetchTool Parameters
+
+| Parameter | Type | Default | Description |
+|------|------|--------|------|
+| `timeout` | `float` | `30.0` | HTTP timeout in seconds |
+| `user_agent` | `str` | `"trpc-agent-python-webfetch/1.0"` | HTTP `User-Agent` header, used to help downstream systems identify request sources in logs |
+| `proxy` | `Optional[str]` | `None` | Optional HTTP proxy URL, passed directly to `httpx` |
+| `http_client` | `Optional[httpx.AsyncClient]` | `None` | Optional prebuilt `httpx.AsyncClient` for connection pool reuse (its lifecycle is managed by the caller) |
+| `max_content_length` | `int` | `100_000` | Maximum number of characters returned in `content`; `0` means unlimited; can be overridden by the call-time `max_length` argument |
+| `max_response_bytes` | `int` | `5 * 1024 * 1024` (5 MB) | Maximum number of raw response bytes to read; `0` means unlimited; streaming reads stop once the limit is reached |
+| `allowed_domains` | `Optional[List[str]]` | `None` | Tool-level host allowlist (subdomain-aware, with `www.` stripped); cannot be overridden by the LLM |
+| `blocked_domains` | `Optional[List[str]]` | `None` | Tool-level host blocklist; uses the same matching rules as the allowlist; checked **before the allowlist** |
+| `block_private_network` | `bool` | `True` | SSRF protection switch; when enabled, rejects any target that resolves to private, loopback, link-local, or similar addresses |
+| `follow_redirects` | `bool` | `True` | Whether to manually follow 3xx redirects |
+| `max_redirects` | `int` | `5` | Maximum number of redirect hops |
+| `enable_cache` | `bool` | `False` | Whether to enable the in-process LRU cache |
+| `cache_ttl_seconds` | `float` | `900.0` (15 minutes) | Cache entry TTL; once expired, the next access will bypass and evict the entry |
+| `cache_max_bytes` | `int` | `50 * 1024 * 1024` (50 MB) | Total cache byte capacity; entries exceeding the capacity are silently skipped |
+| `filters_name` | `Optional[List[str]]` | `None` | Names of associated filters, passed through to `BaseTool` |
+| `filters` | `Optional[List[BaseFilter]]` | `None` | Filter instances injected directly, passed through to `BaseTool` |
+
+**LLM call-time parameters** (filled by the LLM at invocation time, not constructor arguments):
+
+| Parameter | Type | Required | Description |
+|------|------|------|------|
+| `url` | `string` | Yes | Absolute `http(s)` URL that must include the scheme, such as `https://docs.python.org/3/whatsnew/3.13.html` |
+| `max_length` | `integer` | No | Character limit for `content` in this call (overrides the tool-level `max_content_length`); `0` disables this limit |
+
+**`FetchResult` return fields**:
+
+| Field | Type | Description |
+|------|------|------|
+| `url` | `str` | Final URL after redirects |
+| `status_code` | `int` | HTTP status code (`0` if the request did not complete) |
+| `status_text` | `str` | HTTP reason phrase |
+| `content_type` | `str` | Normalized media type without additional parameters |
+| `content` | `str` | Textual response body, which may be truncated |
+| `bytes` | `int` | UTF-8 byte length of `content` |
+| `duration_ms` | `int` | Total request duration in milliseconds |
+| `cached` | `bool` | Whether the in-process LRU cache was hit |
+| `error` | `str` | Structured error code when the request fails or is rejected, such as `BLOCKED_URL`, `SSRF_BLOCKED_URL`, `HTTP_STATUS`, `UNSUPPORTED_CONTENT_TYPE`, or `HTTP_ERROR` |
+
+### Usage
+
+#### Create a WebFetchTool Agent
+
+```python
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import LLMModel, OpenAIModel
+from trpc_agent_sdk.tools import WebFetchTool
+
+from .config import get_model_config
+from .prompts import INSTRUCTION
+
+
+def _create_model() -> LLMModel:
+    """Create the LLM model."""
+    api_key, url, model_name = get_model_config()
+    return OpenAIModel(model_name=model_name, api_key=api_key, base_url=url)
+
+
+def create_default_fetch_agent() -> LlmAgent:
+    """Create a WebFetchTool Agent."""
+    web_fetch = WebFetchTool(
+        timeout=10.0, # Request timeout
+        user_agent="trpc-agent-python-webfetch-example/1.0", # User-Agent header
+        max_content_length=4000, # Maximum returned text length
+        max_response_bytes=1 * 1024 * 1024, # Maximum raw response bytes to read
+        follow_redirects=True, # Manually follow redirect chains
+        max_redirects=3, # Maximum number of redirect hops
+        block_private_network=True, # Enable SSRF protection
+        # allowed_domains=["python.org"], # Domain allowlist
+        # blocked_domains=["example.com"], # Domain blocklist
+        # enable_cache=True, # Enable cache
+        # cache_ttl_seconds=120.0, # Cache TTL
+        # cache_max_bytes=1 * 1024 * 1024, # Cache byte budget
+    )
+    return LlmAgent(
+        name="default_webfetch_assistant",
+        description="Web-reading assistant that fetches a single URL and summarises its textual content.",
+        model=_create_model(),
+        instruction=INSTRUCTION,
+        tools=[web_fetch],
+    )
+```
+
+> **Note**:
+> - `allowed_domains` and `blocked_domains` are **tool-level** settings and **cannot be overridden by the LLM in call arguments**; matching is **subdomain-aware** (`www.` is stripped), and **every redirect hop is revalidated** to prevent bypasses such as "an allowed first hop redirecting to a blocked host"
+> - `block_private_network=True` enables SSRF protection by default; consider disabling it only when the caller already restricts targets with an external allowlist and fully trusts the input
+> - `enable_cache` is disabled by default and must be explicitly enabled; cache keys apply URL normalization (scheme case normalization, `www.` stripping, ignoring default ports, and ignoring trailing `/`), so `https://example.com` and `https://www.example.com/` share the same cache entry
+
+#### Drive the Agent and Print Tool Events
+
+`run_agent.py` drives the Agent by executing each `(label, query)` scenario in sequence and extracting `function_call` / `function_response` from the event stream so that tool invocations can be observed directly:
+
+```python
+import asyncio
+import uuid
+
+from dotenv import load_dotenv
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.types import Content, Part
+
+load_dotenv()
+
+APP_NAME = "webfetch_agent_demo"
+USER_ID = "demo_user"
+
+
+async def _run_one_query(runner: Runner, *, label: str, query: str) -> None:
+    """Drive a single user query through ``runner`` and pretty-print events."""
+    session_id = str(uuid.uuid4())
+    await runner.session_service.create_session(
+        app_name=APP_NAME,
+        user_id=USER_ID,
+        session_id=session_id,
+        state={"user_name": USER_ID},
+    )
+
+    print(f"\n========== {label} ==========")
+    print(f"📝 User: {query}")
+    print("🤖 Assistant: ", end="", flush=True)
+
+    user_content = Content(parts=[Part.from_text(text=query)])
+    async for event in runner.run_async(
+            user_id=USER_ID,
+            session_id=session_id,
+            new_message=user_content,
+    ):
+        if not event.content or not event.content.parts:
+            continue
+
+        if event.partial:
+            for part in event.content.parts:
+                if part.text:
+                    print(part.text, end="", flush=True)
+            continue
+
+        for part in event.content.parts:
+            # Skip thought parts
+            if part.thought:
+                continue
+            # Print tool calls
+            if part.function_call:
+                print(f"\n🔧 [Invoke Tool: {part.function_call.name}({part.function_call.args})]")
+            # Print tool responses
+            elif part.function_response:
+                resp = part.function_response.response
+                print(f"📊 [Tool Result: {resp}]")
+
+    print("\n" + "-" * 40)
+
+
+async def _drive_agent(agent: LlmAgent, *, scenarios: list[tuple[str, str]]) -> None:
+    """Drive the Agent through the scenarios."""
+    runner = Runner(
+        app_name=APP_NAME,
+        agent=agent,
+        session_service=InMemorySessionService(),
+    )
+    for label, query in scenarios:
+        await _run_one_query(runner, label=label, query=query)
+
+
+async def main() -> None:
+    from agent.agent import default_fetch_agent
+
+    await _drive_agent(default_fetch_agent, scenarios=[
+        ("Default · plain fetch",
+         "Fetch https://example.com and summarise the page in one short paragraph.")
+    ])
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+#### Example Output
+
+**Example return value**:
+
+When fetching succeeds, the `FetchResult` inside `function_response` looks like this:
+
+```python
+{
+    "url": "https://example.com",
+    "status_code": 200,
+    "status_text": "OK",
+    "content_type": "text/html",
+    "content": "Example Domain\n\n# Example Domain\n\nThis domain is for use in ...",
+    "bytes": 183,
+    "duration_ms": 87,
+    "cached": False,
+    "error": "",
+}
+```
+
+When the cache is hit, `cached=True`; when the request is blocked by domain policy or SSRF protection, `error` contains a structured error code:
+
+```python
+# Rejected by domain policy
+{"url": "https://example.com", "error": "BLOCKED_URL: 'example.com' is not permitted by the tool's domain policy", ...}
+
+# Rejected by SSRF protection (for example, when the target resolves to 127.0.0.1)
+{"url": "http://localhost:8080", "error": "SSRF_BLOCKED_URL: localhost resolves to private/reserved address 127.0.0.1", ...}
+
+# Rejected because the response is binary
+{"url": "https://example.com/a.pdf", "error": "UNSUPPORTED_CONTENT_TYPE: application/pdf", ...}
+```
+
+It is recommended to specify in the Agent's `instruction` that when the tool returns an `error` field, the Agent should **repeat the error code and explain the reason** to the user rather than inventing content; when `content` is truncated or served from cache, that should also be stated explicitly in the response
+
+### Best Practices
+
+- **Security first**: when deploying an Agent in environments that can access cloud metadata endpoints such as AWS EC2 `169.254.169.254` or other internal resources, **keep the default `block_private_network=True`**
+- **Content truncation**: to prevent long pages from exhausting the context window, set `max_content_length` to a reasonable value that matches the model window, for example 4000 to 20000 characters; if the LLM only needs a summary, it can further limit the result through `max_length`
+- **Byte budget**: for large files such as oversized HTML pages or log pages, prefer relying on `max_response_bytes` to stop early at the network layer rather than downloading first and truncating later
+- **Cache strategy**: enable `enable_cache=True` for hot documents, changelogs, or status pages, and size `cache_max_bytes` according to the average page size; note that an overly long TTL may return stale content, and `cached=true` can be used for downstream handling
+- **Domain policy**: use `allowed_domains` when the Agent should be restricted to trusted sites; use `blocked_domains` to exclude noisy or high-risk sites; both can be combined, with the **blocklist taking precedence**
+- **Using it with MCP tools**: when a dedicated MCP fetching tool is available with capabilities such as authentication, JavaScript rendering, or form submission, prefer the MCP tool; `WebFetchTool` is better suited for quickly reading public documentation-style pages that do not require login
+- **Custom HTTP behavior**: when you need to integrate with a corporate proxy, mTLS, or a reused connection pool, configure `proxy` or inject `http_client`
+
+### Complete Example
+
+The complete WebFetchTool usage example is available at: [examples/webfetch_tool/run_agent.py](../../../examples/webfetch_tool/run_agent.py)
+
+The example covers the following scenarios:
+
+- Baseline: default HTTP behavior plus default SSRF behavior
+- Per-call override with `max_length`: the LLM further limits the returned text length in the call arguments
+- LRU cache hit: fetch the same URL twice in succession, with `cached=true` on the second response
+- Allowlist rejection: a host outside the allowlist is rejected with `BLOCKED_URL`
+- Blocklist rejection: a host in the blocklist is rejected with `BLOCKED_URL`
+
+## WebSearchTool
+
+`WebSearchTool` is the built-in **public web search tool** in the trpc-agent-python framework. When an Agent needs to answer questions about "latest developments / version numbers / events / definitions / factual topics" that fall beyond the model's knowledge cutoff, it can use this tool to call mainstream search-engine retrieval APIs, obtain structured results containing titles, URLs, and snippets, and then list all citations in a `Sources:` section as Markdown hyperlinks according to the prescribed format.
+
+This tool uses a **pluggable provider** design and currently includes two built-in backends:
+
+- **`duckduckgo` (default)**: DuckDuckGo Instant Answer API, which **does not require an API key**. It returns DDG-curated instant answers / abstracts / definitions and related topics, making it suitable for encyclopedia, definition, and fact-based queries. Note that it does not return full real-time web search results, but rather DDG's curated result set
+- **`google`**: Google Custom Search (CSE) JSON API, which requires `api_key` and `engine_id` (that is, the CSE `cx`). It returns real public web search results and supports native CSE parameters such as `siteSearch`, `hl` (language), `safe` (SafeSearch), and `dateRestrict` (freshness)
+
+On top of that, `WebSearchTool` also provides **domain allowlist/blocklist filtering, URL normalization and deduplication, result truncation, mandatory citation-policy injection, and HTTP connection-pool reuse**, helping you integrate network retrieval into LLM Agents in a stable and controllable way for production environments.
+
+### Features
+
+- **Dual provider support**: switch between `duckduckgo` (keyless, suitable for definitions/encyclopedia/facts) and `google` (requires CSE API credentials and supports real public web search) through the `provider` parameter, while exposing a consistent `FunctionDeclaration` to the LLM
+- **Domain allowlist/blocklist**: the LLM may fill in `allowed_domains` or `blocked_domains` at call time (the two are mutually exclusive). The tool performs **subdomain-aware** matching (`www.` is stripped, and `python.org` also matches `docs.python.org`). For Google, a single allowed domain takes the server-side `siteSearch` fast path, while multiple domains automatically fall back to client-side filtering
+- **URL normalization and deduplication**: `dedup_urls=True` (default) merges duplicate hits by a normalized scheme/host/path key, preventing the same source from appearing multiple times in the `Sources:` section. Set it to `False` to preserve the raw recall list for downstream re-rankers, diversified sampling, or offline evaluation
+- **Result truncation**: `results_num`, `snippet_len`, and `title_len` control the number of returned items and the character limits for each snippet and title. All parameters are clamped to `[1, _MAX_*]` to avoid misconfiguration that would exceed the context window. The LLM can further control the returned count at call time via the `count` parameter
+- **Mandatory citation policy**: during `process_request`, the tool automatically appends instructions to the LLM and **strictly requires** that: (1) the final answer must end with `Sources:` section listing the URLs returned by the tool in `[Title](URL)` format; (2) the Agent must not fabricate URLs; and (3) for "latest/recent" queries, the **current year and month** must be included in the search input to reduce stale-year hallucinations
+- **Provider-native parameter passthrough**: `ddg_extra_params` and `google_extra_params` let you pin provider-specific advanced parameters at the Agent level, such as Google CSE's `safe`, `dateRestrict`, `gl`, and `cr`, so they are automatically included in every tool invocation without exposing additional fields in the `FunctionDeclaration`
+- **Shared `httpx` connection pool**: by passing a prebuilt `httpx.AsyncClient` through the `http_client` constructor argument, you can reuse the connection pool across multiple Agents or multiple invocations. The caller is responsible for managing its lifecycle (the tool will not call `aclose`)
+- **Structured output**: always returns a `WebSearchResult` containing `query`, `provider`, `results: List[{title, url, snippet}]`, and `summary`, making it easier both for the LLM to compose citations and for downstream re-ranking or RAG pipelines
+
+### WebSearchTool Parameters
+
+| Parameter | Type | Default | Description |
+|------|------|--------|------|
+| `provider` | `Literal["duckduckgo", "google"]` | `"duckduckgo"` | Search backend. `google` requires both `api_key` and `engine_id`; otherwise a not-configured message is returned at call time |
+| `api_key` | `Optional[str]` | `None` | Google CSE API key. If omitted, falls back to the `GOOGLE_CSE_API_KEY` environment variable |
+| `engine_id` | `Optional[str]` | `None` | Google CSE engine ID (that is, `cx`). If omitted, falls back to the `GOOGLE_CSE_ENGINE_ID` environment variable |
+| `base_url` | `Optional[str]` | provider default | Override the provider's API base URL (mainly for testing or proxies) |
+| `user_agent` | `str` | `"trpc-agent-python-websearch/1.0"` | HTTP `User-Agent` header, used to help downstream systems distinguish request traffic in logs |
+| `proxy` | `Optional[str]` | `None` | Optional HTTP proxy URL, passed directly to `httpx` |
+| `lang` | `Optional[str]` | `None` | Default Google CSE language (maps to `hl`). Ignored by DDG. Can be overridden by the call-time `lang` parameter |
+| `http_client` | `Optional[httpx.AsyncClient]` | `None` | Optional prebuilt `httpx.AsyncClient` for connection-pool reuse (its lifecycle is managed by the caller) |
+| `results_num` | `int` | `5` | Default upper bound on returned results, clamped to `[1, 10]`; can be overridden by the call-time `count` parameter |
+| `snippet_len` | `int` | `300` | Character limit for each `snippet`, clamped to `[1, 1000]` |
+| `title_len` | `int` | `100` | Character limit for each `title`, clamped to `[1, 200]` |
+| `timeout` | `float` | `15.0` | HTTP timeout in seconds |
+| `dedup_urls` | `bool` | `True` | Whether to merge duplicate URLs by normalized key; if `False`, the original hit order is preserved |
+| `ddg_extra_params` | `Optional[dict]` | `None` | Additional query parameters passed through to DDG |
+| `google_extra_params` | `Optional[dict]` | `None` | Additional query parameters passed through to Google CSE, such as `{"safe": "active"}`, `{"dateRestrict": "m6"}`, or `{"gl": "us"}` |
+| `filters_name` | `Optional[List[str]]` | `None` | Names of associated filters, passed through to `BaseTool` |
+| `filters` | `Optional[List[BaseFilter]]` | `None` | Filter instances injected directly, passed through to `BaseTool` |
+
+**LLM call-time parameters** (filled by the LLM at invocation time, not constructor arguments):
+
+| Parameter | Type | Required | Description |
+|------|------|------|------|
+| `query` | `string` | Yes | Search keywords, at least 2 characters. For topics such as "latest" or "version number", it is recommended to explicitly include the year or version number |
+| `count` | `integer` | No | Upper bound on the number of results returned in this call, clamped to `1-10`; defaults to the tool-level `results_num` |
+| `allowed_domains` | `array[string]` | No | Domain allowlist (host only, subdomain-aware, with `www.` stripped automatically); mutually exclusive with `blocked_domains` |
+| `blocked_domains` | `array[string]` | No | Domain blocklist, using the same matching rules as `allowed_domains`; mutually exclusive with `allowed_domains` |
+| `lang` | `string` | No | Only effective for Google CSE (maps to `hl`). Ignored by DDG. Overrides the tool-level `lang` |
+
+**`WebSearchResult` return fields**:
+
+| Field | Type | Description |
+|------|------|------|
+| `query` | `str` | Query term used for this search (echoed back verbatim) |
+| `provider` | `"duckduckgo" \| "google"` | Provider actually used |
+| `results` | `List[SearchHit]` | Structured hit list, where each item contains `title`, `url`, and `snippet` |
+| `summary` | `str` | Aggregated summary from DDG instant answers / abstracts / definitions. For Google, this field is also populated when spelling correction or API errors occur |
+
+When call-time arguments are invalid, such as passing both `allowed_domains` and `blocked_domains`, or when `query` is too short, or when an HTTP error occurs, the tool returns a structured error object such as `{"error": "INVALID_ARGS: ..."}` or `{"error": "HTTP_ERROR: ..."}`, making it easier for the LLM to perform graceful fallback handling.
+
+### Usage
+
+#### Build a WebSearchTool Agent
+
+Create a WebSearchTool Agent (using the default DuckDuckGo provider as an example, which runs **without any API key**):
+
+```python
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import LLMModel, OpenAIModel
+from trpc_agent_sdk.tools import WebSearchTool
+
+from .config import get_model_config
+from .prompts import INSTRUCTION
+
+
+def _create_model() -> LLMModel:
+    """Create the LLM model."""
+    api_key, url, model_name = get_model_config()
+    return OpenAIModel(model_name=model_name, api_key=api_key, base_url=url)
+
+
+def create_ddg_agent() -> LlmAgent:
+    """Create a WebSearchTool Agent based on DuckDuckGo."""
+    web_search = WebSearchTool(
+        provider="duckduckgo",     # Keyless; suitable for definitions, encyclopedia, and fact-based queries
+        results_num=3,             # Return up to 3 results by default
+        snippet_len=300,           # Each snippet is capped at 300 characters
+        title_len=80,              # Each title is capped at 80 characters
+        timeout=10.0,
+        # dedup_urls=False,                    # Disable URL normalization/deduplication and keep the raw recall list
+        # ddg_extra_params={"region": "us-en"},  # Pass through DDG-native parameters
+    )
+    return LlmAgent(
+        name="ddg_research_assistant",
+        description="Web research assistant powered by DuckDuckGo Instant Answers.",
+        model=_create_model(),
+        instruction=INSTRUCTION,
+        tools=[web_search],
+    )
+```
+
+**Switch to Google Custom Search**: when you need real public web search results, or need freshness, language, or SafeSearch controls, switch to `provider="google"`. Google requires an API key from the [Google Cloud Console](https://developers.google.com/custom-search/v1/overview) and a `cx` value from a [Programmable Search Engine](https://programmablesearchengine.google.com/):
+
+```python
+import httpx
+
+from .config import get_google_cse_config, get_http_proxy
+
+# Created and owned by the application. Call await shared_client.aclose() before exit.
+shared_client = httpx.AsyncClient(
+    timeout=15.0,
+    limits=httpx.Limits(max_connections=16, max_keepalive_connections=8),
+)
+
+
+def create_google_agent() -> LlmAgent:
+    """Create a WebSearchTool Agent based on Google Custom Search."""
+    api_key, engine_id = get_google_cse_config()
+    web_search = WebSearchTool(
+        provider="google", # Use Google Custom Search
+        api_key=api_key, # Google CSE API key
+        engine_id=engine_id, # Google CSE engine ID
+        user_agent="trpc-agent-python-websearch-demo/1.0 (+google-cse)", # User-Agent header
+        proxy=get_http_proxy(),                # Optional outbound proxy
+        lang="en", # Language setting
+        http_client=shared_client,             # Reuse the connection pool; the caller must close it explicitly
+        results_num=3, # Number of results
+        snippet_len=240, # Character limit for each snippet
+        title_len=80, # Character limit for each title
+        timeout=15.0, # Timeout
+        dedup_urls=True, # Enable URL normalization and deduplication
+        google_extra_params={"safe": "active"},       # Enable Google SafeSearch
+        # google_extra_params={"dateRestrict": "m6"}, # Keep only results indexed within the last 6 months
+    )
+    return LlmAgent(
+        name="google_research_assistant",
+        description="Web research assistant powered by Google Custom Search (SafeSearch on).",
+        model=_create_model(),
+        instruction=INSTRUCTION,
+        tools=[web_search],
+    )
+```
+
+> **Note**:
+> - `allowed_domains` and `blocked_domains` are filled in by the **LLM in the call arguments** rather than the constructor. The LLM may decide whether to use them based on the user prompt. The two are mutually exclusive, and passing both returns `INVALID_ARGS`
+> - When an external `http_client` is provided, `WebSearchTool` will **not** call `aclose()` for you. The caller must explicitly close it in the **same event loop** to avoid `Unclosed client` warnings
+> - Even when an external client is reused, the tool still force-applies the constructor's `timeout` and `user_agent` on every `GET` request, ensuring that the Agent-level constraints always remain in effect
+> - Other commonly used Google CSE passthrough parameters include `gl` (geographic bias), `cr` (country restriction), `filter`, and `sort`. For DuckDuckGo, parameters such as `region` and `kl` can be passed through via `ddg_extra_params`
+
+#### Drive the Agent and Print Tool Events
+
+`run_agent.py` drives the Agent by executing each `(label, query)` scenario in sequence and extracting `function_call` / `function_response` from the event stream so that tool invocations can be observed directly:
+
+```python
+import asyncio
+import uuid
+
+from dotenv import load_dotenv
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.types import Content, Part
+
+load_dotenv()
+
+APP_NAME = "websearch_agent_demo"
+USER_ID = "demo_user"
+
+
+async def _run_one_query(runner: Runner, *, label: str, query: str) -> None:
+    """Drive a single user query through ``runner`` and pretty-print events."""
+    session_id = str(uuid.uuid4())
+    await runner.session_service.create_session(
+        app_name=APP_NAME,
+        user_id=USER_ID,
+        session_id=session_id,
+        state={"user_name": USER_ID},
+    )
+
+    print(f"\n========== {label} ==========")
+    print(f"📝 User: {query}")
+    print("🤖 Assistant: ", end="", flush=True)
+
+    user_content = Content(parts=[Part.from_text(text=query)])
+    async for event in runner.run_async(
+            user_id=USER_ID,
+            session_id=session_id,
+            new_message=user_content,
+    ):
+        if not event.content or not event.content.parts:
+            continue
+
+        if event.partial:
+            for part in event.content.parts:
+                if part.text:
+                    print(part.text, end="", flush=True)
+            continue
+
+        for part in event.content.parts:
+            if part.thought:
+                continue
+            # Print tool calls
+            if part.function_call:
+                print(f"\n🔧 [Invoke Tool: {part.function_call.name}({part.function_call.args})]")
+            # Print tool responses
+            elif part.function_response:
+                resp = part.function_response.response
+                print(f"📊 [Tool Result: {resp}]") # Tool response
+
+    print("\n" + "-" * 40)
+
+
+async def _drive_agent(agent: LlmAgent, *, scenarios: list[tuple[str, str]]) -> None:
+    """Drive the Agent through the scenarios."""
+    runner = Runner(
+        app_name=APP_NAME,
+        agent=agent,
+        session_service=InMemorySessionService(),
+    )
+    for label, query in scenarios:
+        await _run_one_query(runner, label=label, query=query)
+
+
+async def main() -> None:
+    from agent.agent import ddg_agent
+
+    await _drive_agent(ddg_agent, scenarios=[
+        ("DuckDuckGo · plain lookup",
+         "Look up the entity 'Python (programming language)' and summarise it in "
+         "one paragraph. Use count=1.")
+    ])
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+After seeing the prompt above, the LLM automatically assembles a tool call similar to the following from the `FunctionDeclaration`:
+
+```python
+# function_call.args generated automatically by the LLM
+{
+    "query": "Python (programming language)",
+    "count": 3,
+    "allowed_domains": ["wikipedia.org"],
+}
+```
+
+#### Example Output
+
+**Example return value**:
+
+When the call succeeds, the `WebSearchResult` inside `function_response` looks like this:
+
+```python
+{
+    "query": "Python 3.13 release highlights",
+    "provider": "google",
+    "results": [
+        {
+            "title": "What's New In Python 3.13",
+            "url": "https://docs.python.org/3/whatsnew/3.13.html",
+            "snippet": "This article explains the new features in Python 3.13, compared to 3.12 ...",
+        },
+        {
+            "title": "Python 3.13.0 Release Notes",
+            "url": "https://www.python.org/downloads/release/python-3130/",
+            "snippet": "Python 3.13 is the newest major release ...",
+        },
+    ],
+    "summary": "",
+}
+```
+
+For the DuckDuckGo provider, when an instant answer is hit, the `summary` field contains the aggregated summary text returned by DDG, such as a Wikipedia abstract or dictionary definition, which the LLM may cite directly. When DDG has no `Results`, the tool falls back to returning the DDG search-page URL as the only source, ensuring that the `Sources:` section is never empty.
+
+**Error handling**: when arguments are invalid or an HTTP error occurs, the tool returns a structured error object:
+
+```python
+# Passing both the allowlist and blocklist
+{"error": "INVALID_ARGS: cannot specify both allowed_domains and blocked_domains in the same request"}
+
+# Query is too short
+{"error": "INVALID_QUERY: query must be at least 2 characters"}
+
+# Google CSE is not configured with api_key / engine_id
+{"query": "...", "provider": "google", "results": [],
+ "summary": "Google provider is not configured: set api_key + engine_id ..."}
+
+# Network / HTTP error
+{"error": "HTTP_ERROR: ConnectTimeout(...)", "provider": "google", "query": "..."}
+```
+
+It is recommended to specify in the Agent's `instruction` that when the tool returns an `error` field, the Agent should **repeat the reason for the error and offer a fallback option** to the user, such as retrying later, changing the query, or checking the domain allowlist, rather than fabricating content.
+
+**Automatically injected citation policy**: `WebSearchTool.process_request` automatically calls `append_instructions` before each request and strictly requires the LLM to:
+
+- Append a `Sources:` section at the end of the answer and list the URLs returned by the tool in `[Title](URL)` format
+- **Never fabricate URLs** and cite only the URLs actually returned by the tool
+- For "latest/recent/current" queries, include the **current month and year** in the search input to reduce stale-year hallucinations
+
+You do not need to restate this logic in the user's own `instruction`; it takes effect automatically as long as `WebSearchTool` is mounted.
+
+### Best Practices
+
+- **Provider selection**: use the default `duckduckgo` provider when you need lightweight definition, encyclopedia, or fact-based lookups without an API key. Switch to `google` with CSE credentials when you need real public web search or controls over site, language, SafeSearch, or freshness
+- **Result truncation**: to prevent long snippets from exceeding the context window, configure `snippet_len`, `title_len`, and `results_num` to match the model window. When the LLM only needs a small number of sources, it can further tighten the result set via the call-time `count` parameter
+- **Domain strategy**: when the Agent should be restricted to trusted sites such as official documentation or a company website, explicitly instruct the LLM in the prompt to fill in `allowed_domains`. Use `blocked_domains` to exclude content farms or noisy domains. The two are mutually exclusive
+- **Google multi-domain filtering**: Google CSE `siteSearch` accepts only a single value, so when multiple allowed or blocked domains are provided, the tool automatically falls back to client-side filtering. If you want a single domain to take the server-side fast path, constrain the prompt so that the LLM passes only one domain at a time
+- **Deduplication toggle**: URL normalization and deduplication are enabled by default to avoid repeating the same source in the `Sources:` section. Set `dedup_urls=False` to preserve the raw recall list for downstream re-rankers, diversified sampling, or offline evaluation
+- **Freshness control**: for Agents that answer "latest / what's new / today" queries, pin `google_extra_params={"dateRestrict": "m6"}` (last 6 months), `"m1"` (1 month), or `"d7"` (7 days) at the Agent level. This is more reliable than repeatedly emphasizing freshness in the prompt
+- **Connection-pool reuse**: when multiple `WebSearchTool` instances are mounted in the same process or the tool is called at high frequency, pass a shared `httpx.AsyncClient` via `http_client` and explicitly `aclose()` it when the program exits
+- **Credentials and proxies**: inject the Google CSE `api_key` and `engine_id` through environment variables (`GOOGLE_CSE_API_KEY` and `GOOGLE_CSE_ENGINE_ID`) rather than hard-coding them in source code. When a corporate outbound proxy is required, configure it through the `proxy` parameter
+- **Using it with WebFetchTool**: `WebSearchTool` is used to "discover URLs", while `WebFetchTool` is used to "read full page content". When the LLM needs to closely read, summarize, or quote a specific search result, mount both tools on the Agent to form a two-stage workflow of "search -> close reading"
+- **Using it with Knowledge/RAG**: when search results are used as real-time supplementary material in a RAG pipeline, refer to [examples/knowledge_with_searchtool_rag_agent](../../../examples/knowledge_with_searchtool_rag_agent)
+
+### Complete Example
+
+The complete WebSearchTool usage example is available at: [examples/websearch_tool/run_agent.py](../../../examples/websearch_tool/run_agent.py)
+
+The example builds four independent Agents and covers the following scenarios:
+
+- **DuckDuckGo baseline** (`ddg_agent`, `dedup_urls=True`): entity-name query + allowlist + blocklist
+- **DuckDuckGo raw-hit mode** (`ddg_raw_agent`, `dedup_urls=False`): preserves the provider's raw recall list for downstream processing
+- **Google baseline** (`google_agent`, `safe=active`): real public web search + server-side single-domain `siteSearch` + client-side multi-domain filtering + blocklist + per-call `lang` override
+- **Google freshness Agent** (`google_raw_agent`, `dateRestrict=m6` + `dedup_urls=False`): keeps only results indexed within the last 6 months, suitable for "latest / what's new" queries
