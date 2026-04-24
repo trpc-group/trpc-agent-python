@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.2](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.2) (2026-04-24)
+
+### Features
+
+* Telemetry: Added OpenTelemetry metrics reporting and introduced `custom_metrics` to support framework metric reporting when parsing remote agent responses.
+* Tools: Added `web_search` with DuckDuckGo and Google providers, and added `web_fetch` for webpage content retrieval.
+* Docs/Examples: Added usage documentation and examples for `web_search` and `web_fetch`.
+
+### Bug Fixes
+
+* Teams: Fixed parallel delegation signal loss and enabled streaming output in team delegation flows.
+
 ## [1.1.1](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.1) (2026-04-20)
 
 ### Features
