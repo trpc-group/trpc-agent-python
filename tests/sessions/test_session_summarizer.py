@@ -340,7 +340,10 @@ class TestCreateSessionSummaryByEvents:
         summary_text, result_events = await summarizer.create_session_summary_by_events(
             events, "s1", keep_recent_count=3)
         assert summary_text is not None
-        assert len(result_events) == 4  # 1 summary + 3 recent
+        assert len(result_events) == 11  # preserve all original events + 1 summary
+        visible_events = [event for event in result_events if event.is_model_visible()]
+        assert len(visible_events) == 4  # 1 summary + 3 recent
+        assert any(event.is_summary_event() for event in result_events)
 
     async def test_summary_without_keep_recent(self):
         model = _make_model_mock()
@@ -356,7 +359,9 @@ class TestCreateSessionSummaryByEvents:
         summary_text, result_events = await summarizer.create_session_summary_by_events(
             events, "s1", keep_recent_count=None)
         assert summary_text is not None
-        assert len(result_events) == 1  # only summary event
+        assert len(result_events) == 6  # preserve all original events + 1 summary
+        visible_events = [event for event in result_events if event.is_model_visible()]
+        assert len(visible_events) == 1  # only summary event remains model-visible
 
     async def test_summary_no_events(self):
         model = _make_model_mock()
@@ -397,7 +402,10 @@ class TestCreateSessionSummary:
         session = _make_session(events=[_make_event(text=f"msg{i}") for i in range(10)])
         result = await summarizer.create_session_summary(session)
         assert result is not None
-        assert len(session.events) == 3  # 1 summary + 2 recent
+        assert len(session.events) == 11  # preserve all original events + 1 summary
+        visible_events = [event for event in session.events if event.is_model_visible()]
+        assert len(visible_events) == 3  # 1 summary + 2 recent
+        assert any(event.is_summary_event() for event in session.events)
 
     async def test_summary_no_update_on_failure(self):
         model = _make_model_mock()

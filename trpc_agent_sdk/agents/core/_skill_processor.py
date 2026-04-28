@@ -35,7 +35,7 @@ from trpc_agent_sdk.skills import set_skill_config
 from trpc_agent_sdk.skills import tool_scan_prefix
 from trpc_agent_sdk.skills import tool_state_key
 from trpc_agent_sdk.skills import touch_loaded_order
-
+from trpc_agent_sdk.skills import SkillRepositoryResolver
 from ._skills_tool_result_processor import SKILL_LOADED_RE
 
 # ---------------------------------------------------------------------------
@@ -305,7 +305,7 @@ class SkillsRequestProcessor:
         forbidden_tools: Optional[list[str]] = None,
         tool_flags: Optional[SkillProfileFlags] = None,
         exec_tools_disabled: bool = False,
-        repo_resolver: Optional[Callable[[InvocationContext], BaseSkillRepository]] = None,
+        repo_resolver: Optional[SkillRepositoryResolver] = None,
         max_loaded_skills: int = 0,
     ) -> None:
         self._skill_repository = skill_repository

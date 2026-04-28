@@ -19,6 +19,7 @@ from pydantic import Field
 from trpc_agent_sdk.code_executors import BaseCodeExecutor
 from trpc_agent_sdk.code_executors import BaseProgramSession
 from trpc_agent_sdk.code_executors import BaseWorkspaceRuntime
+from trpc_agent_sdk.code_executors import WorkspaceRuntimeResolver
 from trpc_agent_sdk.code_executors import DEFAULT_EXEC_YIELD_MS
 from trpc_agent_sdk.code_executors import DEFAULT_SESSION_KILL_SEC
 from trpc_agent_sdk.code_executors import DEFAULT_SESSION_TTL_SEC
@@ -31,6 +32,7 @@ from trpc_agent_sdk.code_executors import PROGRAM_STATUS_RUNNING
 from trpc_agent_sdk.code_executors import ProgramPoll
 from trpc_agent_sdk.code_executors import WorkspaceRunProgramSpec
 from trpc_agent_sdk.code_executors import poll_line_limit
+from trpc_agent_sdk.code_executors import WorkspaceInfo
 from trpc_agent_sdk.code_executors import wait_for_program_output
 from trpc_agent_sdk.code_executors import yield_duration_ms
 from trpc_agent_sdk.code_executors.utils import normalize_globs
@@ -156,10 +158,6 @@ class _WriteInput(BaseModel):
     append_newline: bool = Field(default=False)
 
 
-class _KillInput(BaseModel):
-    session_id: str = Field(default="")
-
-
 @dataclass
 class _ExecSession:
     proc: BaseProgramSession
@@ -174,6 +172,7 @@ class WorkspaceExecTool(BaseTool):
     def __init__(
         self,
         workspace_runtime: BaseWorkspaceRuntime,
+        workspace_runtime_resolver: Optional[WorkspaceRuntimeResolver] = None,
         create_ws_name_cb: Optional[CreateWorkspaceNameCallback] = None,
         session_ttl: float = DEFAULT_SESSION_TTL_SEC,
         filters_name: Optional[list[str]] = None,
@@ -187,25 +186,25 @@ class WorkspaceExecTool(BaseTool):
             filters=filters,
         )
         self._workspace_runtime = workspace_runtime
+        self._workspace_runtime_resolver = workspace_runtime_resolver
         self._create_ws_name_cb = create_ws_name_cb or default_create_ws_name_callback
         self._ttl = session_ttl
         self._sessions: dict[str, _ExecSession] = {}
 
-    def _runtime(self) -> BaseWorkspaceRuntime:
-        runtime = self._workspace_runtime
-        if runtime is None:
-            raise ValueError("workspace_exec requires an executor with live workspace support")
-        return runtime
+    def _runtime(self, ctx: InvocationContext) -> BaseWorkspaceRuntime:
+        if self._workspace_runtime_resolver is not None:
+            return self._workspace_runtime_resolver(ctx)
+        return self._workspace_runtime
 
-    async def _workspace(self, ctx: InvocationContext):
-        runtime = self._runtime()
+    async def _workspace(self, ctx: InvocationContext) -> tuple[BaseWorkspaceRuntime, WorkspaceInfo]:
+        runtime = self._runtime(ctx)
         manager = runtime.manager(ctx)
         workspace_id = self._create_ws_name_cb(ctx)
         ws = await manager.create_workspace(workspace_id, ctx)
         return runtime, ws
 
     def _supports_interactive(self, ctx: InvocationContext) -> bool:
-        runner = self._runtime().runner(ctx)
+        runner = self._runtime(ctx).runner(ctx)
         start_program = getattr(runner, "start_program", None)
         return start_program is not None
 
@@ -305,7 +304,7 @@ class WorkspaceExecTool(BaseTool):
         if (not inputs.background) and (not tty) and yield_ms <= 0:
             return await _run_one_shot(runtime, ws, spec, tool_context)
 
-        runner = runtime.runner(tool_context)
+        runner = self._runtime(tool_context).runner(tool_context)
         interactive_spec = WorkspaceRunProgramSpec(
             cmd=spec.cmd,
             args=spec.args,
@@ -506,6 +505,7 @@ def create_workspace_exec_tools(
     code_executor: BaseCodeExecutor,
     *,
     workspace_runtime: Optional[BaseWorkspaceRuntime] = None,
+    workspace_runtime_resolver: Optional[WorkspaceRuntimeResolver] = None,
     session_ttl: float = DEFAULT_SESSION_TTL_SEC,
     filters_name: Optional[list[str]] = None,
     filters: Optional[list[BaseFilter]] = None,
@@ -514,6 +514,7 @@ def create_workspace_exec_tools(
     exec_tool = WorkspaceExecTool(
         code_executor=code_executor,
         workspace_runtime=workspace_runtime,
+        workspace_runtime_resolver=workspace_runtime_resolver,
         session_ttl=session_ttl,
         filters_name=filters_name,
         filters=filters,

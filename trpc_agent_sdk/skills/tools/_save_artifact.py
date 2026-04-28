@@ -19,6 +19,7 @@ from trpc_agent_sdk.code_executors import DIR_OUT
 from trpc_agent_sdk.code_executors import DIR_RUNS
 from trpc_agent_sdk.code_executors import DIR_WORK
 from trpc_agent_sdk.code_executors import WORKSPACE_ENV_DIR_KEY
+from trpc_agent_sdk.code_executors import WorkspaceRuntimeResolver
 from trpc_agent_sdk.code_executors.utils import normalize_globs
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.filter import BaseFilter
@@ -164,6 +165,7 @@ class SaveArtifactTool(BaseTool):
         self,
         max_file_bytes: int = _DEFAULT_MAX_BYTES,
         workspace_runtime: Optional[BaseWorkspaceRuntime] = None,
+        workspace_runtime_resolver: Optional[WorkspaceRuntimeResolver] = None,
         create_ws_name_cb: Optional[CreateWorkspaceNameCallback] = None,
         filters_name: Optional[list[str]] = None,
         filters: Optional[list[BaseFilter]] = None,
@@ -175,13 +177,19 @@ class SaveArtifactTool(BaseTool):
             filters_name=filters_name,
             filters=filters,
         )
+        self._workspace_runtime_resolver = workspace_runtime_resolver
         self._max_file_bytes = max_file_bytes
         self._workspace_runtime = workspace_runtime
         self._create_ws_name_cb = create_ws_name_cb or default_create_ws_name_callback
+    
+    def _get_workspace_runtime(self, ctx: InvocationContext) -> BaseWorkspaceRuntime:
+        if self._workspace_runtime_resolver is not None:
+            return self._workspace_runtime_resolver(ctx)
+        return self._workspace_runtime
 
     async def _resolve_workspace_root(self, ctx: InvocationContext) -> str:
         """Resolve workspace root, preferring the shared workspace_exec workspace."""
-        runtime = self._workspace_runtime
+        runtime = self._get_workspace_runtime(ctx)
         if runtime is not None:
             workspace_id = self._create_ws_name_cb(ctx)
             ws = await runtime.manager(ctx).create_workspace(workspace_id, ctx)
