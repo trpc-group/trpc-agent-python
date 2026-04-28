@@ -74,7 +74,7 @@ class StreamableHttpMCPToolset(MCPToolset):
         super().__init__()
         self._connection_params = StreamableHTTPConnectionParams(
             url="http://localhost:8000/mcp",
-            headers={"Authorization": "Bearer token"},
+            headers={"Authorization": "Bearer <token>"},
             timeout=5,
             sse_read_timeout=60 * 5,
             terminate_on_close=True,  # send termination signal when the toolset is closed
