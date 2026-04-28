@@ -127,7 +127,7 @@ async def summarize_session(session_service: InMemorySessionService, app_name: s
             print(f"   - Compression ratio: {summary.get_compression_ratio():.1f}%")
 
 
-SUMMARIZER_COUNT = 3  # Run summarization every SUMMARIZER_COUNT turns (e.g. 3 => every 3 turns)
+SUMMARIZER_COUNT = 2  # Keep the example short: summarize after a couple of turns.
 
 
 def create_summarizer_manager(model: OpenAIModel) -> SummarizerSessionManager:
@@ -154,8 +154,8 @@ def create_summarizer_manager(model: OpenAIModel) -> SummarizerSessionManager:
             #     set_summarizer_time_interval_threshold(10),
             # )
         ],
-        max_summary_length=600,  # Max summary length kept; default 1000; beyond shows ...
-        keep_recent_count=4,  # How many recent turns to keep; default 10
+        max_summary_length=300,  # Max summary length kept; default 1000; beyond shows ...
+        keep_recent_count=2,  # Keep only the latest turns so compression is easy to observe.
     )
     # Create SummarizerSessionManager
     summarizer_manager = SummarizerSessionManager(
@@ -169,7 +169,7 @@ def create_summarizer_manager(model: OpenAIModel) -> SummarizerSessionManager:
 async def llm_agent_summarizer():
     """Demo LlmAgent integrated with SummarizerSessionManager."""
     print("=" * 60)
-    print("Example 2: LlmAgent + SummarizerSessionManager demo")
+    print("Example: LlmAgent + SummarizerSessionManager demo")
     print("=" * 60)
     app_name = "llm_summarizer_manager_demo"
 
@@ -183,22 +183,13 @@ async def llm_agent_summarizer():
     current_session_id = str(uuid.uuid4())
     print(f"📊 Session: {app_name}/{user_id}/{current_session_id}")
 
-    # Demo conversation turns
+    # Short demo conversation.  Four turns are enough to trigger automatic
+    # summarization while keeping the example quick to run.
     conversations = [
         "Hello! I want to learn Python programming. Can you help me?",
         "What is a variable? Can you give an example?",
-        "Got it! What data types are there?",
-        "What does control flow mean?",
-        "I understand those ideas. I'd like a small project to practice.",
-        "OK! How do I build this calculator?",
-        "The calculator looks good—I ran it successfully. I'd like to learn more advanced Python.",
-        "I'd like to start with functions—I think they're central to programming.",
-        "I see—functions make code modular and reusable. I'd like to learn OOP next.",
-        "I get OOP now. I'd like to learn exception handling.",
-        "I've learned these advanced topics. I'd like a bigger project that ties them together.",
-        "Yes! How do I implement this library system?",
-        "The structure looks good. How do I persist data to files?",
-        "Great! I've covered basics and advanced topics including files. I'd like a recap of what I learned.",
+        "Please give me a tiny calculator example.",
+        "Can you recap what I learned so far?",
     ]
 
     print(f"\n💬 Multi-turn dialogue ({len(conversations)} turns)...")
@@ -230,18 +221,18 @@ async def llm_agent_summarizer():
                 # elif part.text:
                 #     print(f"\n✅ {part.text}")
 
-        # After every SUMMARIZER_COUNT turns, inspect session state
-        if index % SUMMARIZER_COUNT == 0:  # summarizer should fire around this cadence
-            if session:
-                print(f"\n📊 Session state after turn {index + 1}:")
-                summary = await session_service.summarizer_manager.get_session_summary(session)
+        # Inspect the summary after the threshold cadence.
+        if (index + 1) % SUMMARIZER_COUNT == 0 and session:
+            print(f"\n📊 Session state after turn {index + 1}:")
+            summary = await session_service.summarizer_manager.get_session_summary(session)
+            if summary:
                 print(f"   - Summary text: {summary.summary_text[:100]}...")
                 print(f"   - Original event count: {summary.original_event_count}")
                 print(f"   - Compressed event count: {summary.compressed_event_count}")
                 print(f"   - Compression ratio: {summary.get_compression_ratio()}")
+            else:
+                print("   - Summary not created yet.")
         print("\n" + "-" * 40)
-    # Manual forced summary test
-    await summarize_session(session_service, app_name, user_id, current_session_id)
 
 
 if __name__ == "__main__":
