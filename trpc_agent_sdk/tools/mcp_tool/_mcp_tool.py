@@ -30,6 +30,7 @@ services, enabling agents to utilize MCP tools as part of their toolset.
 from __future__ import annotations
 
 from typing import Optional
+from typing import Union
 from typing_extensions import override
 
 from mcp.types import CallToolResult
@@ -180,28 +181,45 @@ class MCPTool(BaseTool):
         )
         return function_decl
 
-    def _parse_mcp_call_tool_result_to_str(self, result: CallToolResult) -> str:
+    def _parse_mcp_call_tool_result_to_str(self, result: CallToolResult) -> Union[str, list[str]]:
         """Converts MCP call result into standardized string format.
 
         Args:
             result: Raw result from MCP tool call
 
         Returns:
-            str: Parsed result in string format
+            Union[str, list[str]]: Parsed tool result.
+            - Single parsed content returns ``str``.
+            - Multiple parsed contents return ``list[str]``.
         """
-        if result.isError:
-            return f"Error: {result.content[0].text}"  # type: ignore
+        parsed_items: list[str] = []
         for data in result.content:
             if data.type == "text":
-                return data.text
-            if data.type == "image":
-                return data.data
-            if data.type == "resource":
-                text = getattr(data.resource, 'text', '')
-                if not text:
-                    text = getattr(data.resource, 'blob', '')
-                return text
-        return result.content  # type: ignore
+                text = getattr(data, "text", "")
+                if text:
+                    parsed_items.append(text)
+            elif data.type == "image":
+                image_data = getattr(data, "data", "")
+                if image_data:
+                    parsed_items.append(image_data)
+            elif data.type == "resource":
+                resource = getattr(data, "resource", None)
+                if resource is not None:
+                    text = getattr(resource, "text", "") or getattr(resource, "blob", "")
+                    if text:
+                        parsed_items.append(text)
+
+        if not parsed_items:
+            fallback = str(result.content)
+            return f"Error: {fallback}" if result.isError else fallback
+
+        if len(parsed_items) == 1:
+            payload = parsed_items[0]
+            return f"Error: {payload}" if result.isError else payload
+
+        if result.isError:
+            return [f"Error: {item}" for item in parsed_items]
+        return parsed_items
 
     @retry_on_closed_resource
     @override

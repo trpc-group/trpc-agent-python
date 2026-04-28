@@ -358,7 +358,7 @@ class TestParseMcpCallToolResult:
         )
         assert tool._parse_mcp_call_tool_result_to_str(result) == "blob_data"
 
-    def test_multiple_contents_returns_first_text(self):
+    def test_multiple_contents_returns_list(self):
         tool = self._tool()
         result = CallToolResult(
             isError=False,
@@ -367,10 +367,10 @@ class TestParseMcpCallToolResult:
                 TextContent(type="text", text="second"),
             ],
         )
-        assert tool._parse_mcp_call_tool_result_to_str(result) == "first"
+        assert tool._parse_mcp_call_tool_result_to_str(result) == ["first", "second"]
 
     def test_fallback_returns_raw_content(self):
-        """When no content type matches, raw content list is returned."""
+        """When no content type matches, stringified raw content is returned."""
         tool = self._tool()
         result = MagicMock()
         result.isError = False
@@ -378,7 +378,7 @@ class TestParseMcpCallToolResult:
         mock_content.type = "unknown"
         result.content = [mock_content]
         ret = tool._parse_mcp_call_tool_result_to_str(result)
-        assert ret == result.content
+        assert ret == str(result.content)
 
 
 # ---------------------------------------------------------------------------
