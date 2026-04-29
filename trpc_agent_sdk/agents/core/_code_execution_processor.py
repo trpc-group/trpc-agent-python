@@ -249,10 +249,6 @@ async def _run_post_processor(
         return
 
     code_executor_context = CodeExecutorContext(invocation_context.session.state)
-    if (code_executor.execute_once_per_invocation
-            and code_executor_context.has_executed_in_invocation(invocation_context.invocation_id)):
-        return
-
     # Skip if the error count exceeds the max retry attempts.
     if code_executor_context.get_error_count(invocation_context.invocation_id) >= code_executor.error_retry_attempts:
         return
@@ -285,7 +281,6 @@ async def _run_post_processor(
         code_blocks,
         code_execution_result,
     )
-    code_executor_context.mark_executed_in_invocation(invocation_context.invocation_id)
 
     # Generate events for code execution results
     # Event 1: Code execution event

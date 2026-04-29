@@ -175,6 +175,9 @@ class HistoryProcessor:
         if timeline_filter_mode == TimelineFilterMode.ALL:
             return True
 
+        if event.is_summary_event():
+            return True
+
         # INVOCATION mode: Filter by invocation_id (which represents a single runner.run_async() call)
         if timeline_filter_mode == TimelineFilterMode.INVOCATION:
             if ctx and event.invocation_id:
