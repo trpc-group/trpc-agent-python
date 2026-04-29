@@ -18,7 +18,6 @@ from pydantic import Field
 from trpc_agent_sdk.context import InvocationContext
 
 from .._base_code_executor import BaseCodeExecutor
-from .._types import CodeBlockDelimiter
 from .._types import CodeExecutionInput
 from .._types import CodeExecutionResult
 from .._types import create_code_execution_result
@@ -149,12 +148,3 @@ class ContainerCodeExecutor(BaseCodeExecutor):
         output = "".join(all_output)
         err_str = "".join(all_errors)
         return create_code_execution_result(stdout=output, stderr=err_str)
-
-    @override
-    def code_block_delimiter(self) -> CodeBlockDelimiter:
-        """Return the code block delimiter used by this executor.
-
-        Returns:
-            CodeBlockDelimiter instance
-        """
-        return CodeBlockDelimiter(start="```tool_code\n", end="\n```")
