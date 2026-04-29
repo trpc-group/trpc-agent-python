@@ -193,16 +193,17 @@ class TestContainerCodeExecutor:
             await executor.execute_code(self.mock_ctx, code_input)
 
     @patch('trpc_agent_sdk.code_executors.container._container_code_executor.ContainerClient')
-    def test_code_block_delimiter(self, mock_container_client_class):
-        """Test code_block_delimiter method."""
+    def test_code_block_delimiters(self, mock_container_client_class):
+        """Test default code_block_delimiters value."""
         mock_container_client = Mock()
         mock_container_client_class.return_value = mock_container_client
 
         executor = ContainerCodeExecutor(image="python:3-slim")
-        delimiter = executor.code_block_delimiter()
+        delimiters = executor.code_block_delimiters
 
-        assert delimiter.start == "```tool_code\n"
-        assert delimiter.end == "\n```"
+        assert isinstance(delimiters, list)
+        assert delimiters[0].start == "```tool_code\n"
+        assert delimiters[0].end == "\n```"
 
     @patch('trpc_agent_sdk.code_executors.container._container_code_executor.ContainerClient')
     async def test_execute_code_empty_language_defaults_to_python(self, mock_container_client_class):

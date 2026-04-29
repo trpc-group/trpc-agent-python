@@ -39,6 +39,7 @@ class CodeExecutorContext:
                 "execution_id": None,
                 "error_counts": {},
                 "code_execution_results": {},
+                "executed_invocations": {},
             }
 
     def get_input_files(self) -> List[CodeFile]:
@@ -137,6 +138,14 @@ class CodeExecutorContext:
             "result":
             code_execution_result.model_dump(),
         })
+
+    def has_executed_in_invocation(self, invocation_id: str) -> bool:
+        """Whether code has already been executed in a given invocation."""
+        return bool(self.session_state["code_execution"]["executed_invocations"].get(invocation_id, False))
+
+    def mark_executed_in_invocation(self, invocation_id: str) -> None:
+        """Mark that code execution has happened in a given invocation."""
+        self.session_state["code_execution"]["executed_invocations"][invocation_id] = True
 
     def get_state_delta(self) -> Dict:
         """Get state delta for the current execution.

@@ -62,27 +62,22 @@ class TestUnsafeLocalCodeExecutorInit:
         executor = UnsafeLocalCodeExecutor(clean_temp_files=False)
         assert executor.clean_temp_files is False
 
-    def test_custom_delimiter(self):
-        delim = CodeBlockDelimiter(start="<<<", end=">>>")
-        executor = UnsafeLocalCodeExecutor(delimiter=delim)
-        assert executor.delimiter.start == "<<<"
-        assert executor.delimiter.end == ">>>"
-
 
 class TestCodeBlockDelimiter:
-    """Tests for code_block_delimiter method."""
+    """Tests for code block delimiter configuration."""
 
-    def test_returns_default_delimiter(self):
+    def test_returns_default_delimiters(self):
         executor = UnsafeLocalCodeExecutor()
-        delimiter = executor.code_block_delimiter()
-        assert isinstance(delimiter, CodeBlockDelimiter)
-        assert delimiter.start == "```"
-        assert delimiter.end == "```"
+        delimiters = executor.code_block_delimiters
+        assert isinstance(delimiters, list)
+        assert all(isinstance(d, CodeBlockDelimiter) for d in delimiters)
+        assert delimiters[0].start == "```tool_code\n"
+        assert delimiters[0].end == "\n```"
 
-    def test_returns_custom_delimiter(self):
+    def test_returns_custom_delimiters(self):
         custom = CodeBlockDelimiter(start="---", end="---")
-        executor = UnsafeLocalCodeExecutor(delimiter=custom)
-        assert executor.code_block_delimiter() == custom
+        executor = UnsafeLocalCodeExecutor(code_block_delimiters=[custom])
+        assert executor.code_block_delimiters == [custom]
 
 
 class TestPrepareWorkDir:

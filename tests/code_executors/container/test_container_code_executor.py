@@ -321,11 +321,12 @@ class TestExecuteCode:
 class TestCodeBlockDelimiter:
 
     @patch("trpc_agent_sdk.code_executors.container._container_code_executor.ContainerClient")
-    def test_returns_correct_delimiter(self, mock_cc_cls):
+    def test_returns_default_delimiters(self, mock_cc_cls):
         mock_cc_cls.return_value = Mock()
         executor = ContainerCodeExecutor(image="img")
-        delim = executor.code_block_delimiter()
+        delims = executor.code_block_delimiters
 
-        assert isinstance(delim, CodeBlockDelimiter)
-        assert delim.start == "```tool_code\n"
-        assert delim.end == "\n```"
+        assert isinstance(delims, list)
+        assert all(isinstance(d, CodeBlockDelimiter) for d in delims)
+        assert delims[0].start == "```tool_code\n"
+        assert delims[0].end == "\n```"

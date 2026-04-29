@@ -248,19 +248,20 @@ async def _run_post_processor(
     if not llm_response or not llm_response.content:
         return
 
-    # For container and unsafe local executors, we handle execution in post-processing
-    if isinstance(code_executor, (ContainerCodeExecutor, UnsafeLocalCodeExecutor)):
-        # Continue with post-processing for these executors
-        pass
-
     code_executor_context = CodeExecutorContext(invocation_context.session.state)
+    if (code_executor.execute_once_per_invocation
+            and code_executor_context.has_executed_in_invocation(invocation_context.invocation_id)):
+        return
+
     # Skip if the error count exceeds the max retry attempts.
     if code_executor_context.get_error_count(invocation_context.invocation_id) >= code_executor.error_retry_attempts:
         return
 
-    # [Step 1] Extract code from the model predict response and truncate the
-    # content to the part with the first code block.
-    response_content = llm_response.content
+    # [Step 1] Extract code from a cloned response content.
+    # IMPORTANT: extract_code_and_truncate_content mutates the input Content in place.
+    # Clone first to avoid mutating shared references that are later used by
+    # telemetry tracing and session persistence.
+    response_content = copy.deepcopy(llm_response.content)
     code_blocks = CodeExecutionUtils.extract_code_and_truncate_content(response_content,
                                                                        code_executor.code_block_delimiters,
                                                                        code_executor.ignore_codes)
@@ -284,6 +285,7 @@ async def _run_post_processor(
         code_blocks,
         code_execution_result,
     )
+    code_executor_context.mark_executed_in_invocation(invocation_context.invocation_id)
 
     # Generate events for code execution results
     # Event 1: Code execution event
@@ -302,9 +304,27 @@ async def _run_post_processor(
                                                              code_execution_result)
     yield result_event
 
-    # [Step 3] Skip processing the original model response
-    # to continue code generation loop.
-    llm_response.content = None
+    # [Step 3] Skip executable code parts to continue the code generation loop,
+    # while preserving:
+    #   1) text parts (after truncation/extraction) for conversation memory
+    #   2) function_call parts for downstream function_call/function_response pairing
+    retained_parts: list[Part] = []
+
+    # Keep text parts from the transformed response content (code stripped out).
+    if response_content and response_content.parts:
+        retained_parts.extend([copy.deepcopy(part) for part in response_content.parts if part.text])
+
+    # Keep original function_call parts from the original response payload.
+    if llm_response.content and llm_response.content.parts:
+        retained_parts.extend([copy.deepcopy(part) for part in llm_response.content.parts if part.function_call])
+
+    if retained_parts:
+        llm_response.content = Content(
+            role=llm_response.content.role if llm_response.content else "model",
+            parts=retained_parts,
+        )
+    else:
+        llm_response.content = None
 
 
 def _extract_and_replace_inline_files(

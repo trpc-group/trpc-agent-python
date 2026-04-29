@@ -22,7 +22,6 @@ from trpc_agent_sdk.utils import async_execute_command
 
 from .._base_code_executor import BaseCodeExecutor
 from .._types import CodeBlock
-from .._types import CodeBlockDelimiter
 from .._types import CodeExecutionInput
 from .._types import CodeExecutionResult
 from .._types import create_code_execution_result
@@ -47,9 +46,6 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
 
     clean_temp_files: bool = Field(default=True,
                                    description="Whether to clean temporary files after the code execution.")
-
-    delimiter: CodeBlockDelimiter = Field(default_factory=CodeBlockDelimiter,
-                                          description="The delimiter for the code execution.")
 
     def __init__(self, **data):
         """Initialize the UnsafeLocalCodeExecutor."""
@@ -96,11 +92,6 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
 
         return create_code_execution_result(stdout="\n".join(output_parts) if output_parts else "",
                                             stderr="\n".join(error_parts) if error_parts else "")
-
-    @override
-    def code_block_delimiter(self) -> CodeBlockDelimiter:
-        """Return the code block delimiter used by this executor."""
-        return self.delimiter
 
     def _prepare_work_dir(self, execution_id: str) -> tuple[Path, bool]:
         """Prepare working directory for execution.

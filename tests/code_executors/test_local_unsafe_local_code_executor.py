@@ -59,12 +59,13 @@ class TestUnsafeLocalCodeExecutor:
         assert executor.timeout == 30.0
         assert executor.clean_temp_files is False
 
-    def test_code_block_delimiter(self):
-        """Test code_block_delimiter method."""
+    def test_code_block_delimiters(self):
+        """Test default code_block_delimiters value."""
         executor = UnsafeLocalCodeExecutor()
-        delimiter = executor.code_block_delimiter()
+        delimiters = executor.code_block_delimiters
 
-        assert isinstance(delimiter, CodeBlockDelimiter)
+        assert isinstance(delimiters, list)
+        assert all(isinstance(delimiter, CodeBlockDelimiter) for delimiter in delimiters)
 
     @patch('trpc_agent_sdk.code_executors.local._unsafe_local_code_executor.async_execute_command')
     async def test_execute_code_python(self, mock_async_execute):
