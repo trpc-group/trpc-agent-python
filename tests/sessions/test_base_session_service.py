@@ -170,7 +170,8 @@ class TestBaseSessionServiceFilterEvents:
         svc = ConcreteSessionService(session_config=config)
         session = _make_session()
         for i in range(10):
-            session.events.append(_make_event(text=f"msg{i}"))
+            author = "user" if i == 7 else "agent"
+            session.events.append(_make_event(author=author, text=f"msg{i}"))
         svc.filter_events(session)
         assert len(session.events) == 10
         visible_events = [event for event in session.events if event.is_model_visible()]
@@ -185,7 +186,7 @@ class TestBaseSessionServiceFilterEvents:
         old_event.timestamp = time.time() - 100
         session.events.append(old_event)
 
-        new_event = _make_event(text="new")
+        new_event = _make_event(author="user", text="new")
         new_event.timestamp = time.time()
         session.events.append(new_event)
 
@@ -214,6 +215,23 @@ class TestBaseSessionServiceFilterEvents:
         svc.filter_events(session)
         assert len(session.events) == 5
         assert all(not event.is_model_visible() for event in session.events)
+
+    def test_filter_by_num_recent_events_preserves_summary_anchor(self):
+        config = SessionServiceConfig(num_recent_events=3)
+        svc = ConcreteSessionService(session_config=config)
+        session = _make_session()
+
+        summary_event = _make_event(author="system", text="summary")
+        summary_event.set_summary_event(True)
+        session.events.append(summary_event)
+        for i in range(5):
+            session.events.append(_make_event(text=f"agent{i}"))
+
+        svc.filter_events(session)
+
+        visible_events = [event for event in session.events if event.is_model_visible()]
+        assert len(visible_events) == 1
+        assert visible_events[0].is_summary_event()
 
 
 class TestBaseSessionServiceSetSummarizerManager:

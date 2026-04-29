@@ -639,7 +639,7 @@ class LlmAgent(BaseAgent):
                         logger.debug("Tool execution completed, continuing conversation")
                         continue
 
-                    except RunCancelledException as ex:
+                    except RunCancelledException:
                         # raise to runner to handle
                         raise
 
@@ -663,7 +663,7 @@ class LlmAgent(BaseAgent):
                     continue
 
                 running = False
-        except RunCancelledException as ex:
+        except RunCancelledException:
             # raise to runner to handle
             raise
         except Exception as ex:  # pylint: disable=broad-except
