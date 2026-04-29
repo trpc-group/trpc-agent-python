@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.2.post1](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.2.post1) (2026-04-29)
+
+### Features
+
+* Session: Updated session summarization to retain full conversation history while marking summarized events as model-invisible.
+* Session: Added backend-threaded summarization execution to avoid blocking front-end conversation turns.
+* Skill: Added multi-user support for skill operations.
+
+### Bug Fixes
+
+* Code Execution: Fixed the conflict between code execution and tool invocation where tool data could be lost after code execution.
+* MCP: Added support for parsing and returning multiple MCP tool results in a single response.
+
 ## [1.1.2](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.2) (2026-04-24)
 
 ### Features
