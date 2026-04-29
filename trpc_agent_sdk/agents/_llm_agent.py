@@ -517,20 +517,31 @@ class LlmAgent(BaseAgent):
                         if event.is_final_response():
                             self._save_output_to_state(ctx, event)
 
-                        # Process code execution responses if code executor is configured
+                        # Process code execution responses if code executor is configured.
+                        # We collect code execution events first (this mutates event.content in place,
+                        # stripping executable_code parts but keeping text/function_call), then yield
+                        # the main event BEFORE the code execution events so the causal order in
+                        # session is preserved: assistant declaration → code execution → result.
+                        pending_code_events: list[Event] = []
                         if self.code_executor and event.content:
                             async for code_event in CodeExecutionResponseProcessor.run_async(ctx, event):
-                                # Check if this is a code execution result event
                                 if code_event.content and code_event.content.parts:
                                     for part in code_event.content.parts:
                                         if part.code_execution_result or part.executable_code:
                                             code_was_executed = True
                                             break
-                                yield code_event
+                                pending_code_events.append(code_event)
 
-                        # Yield LLM response events directly
-                        yield event
-                        accumulate_content(event)
+                        # Yield the main LLM response event first (now stripped of executable_code
+                        # but still carrying text and function_call parts).
+                        # Skip empty events (content became None after all parts were consumed).
+                        if event.content is not None:
+                            yield event
+                            accumulate_content(event)
+
+                        # Then yield code execution events in order.
+                        for code_event in pending_code_events:
+                            yield code_event
                     else:
                         # Yield other events directly
                         yield event
