@@ -18,15 +18,23 @@ import copy
 
 import pytest
 
+from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.sessions._utils import (
     StateStorageEntry,
     app_state_key,
     extract_state_delta,
+    find_events_for_summary,
     merge_state,
     session_key,
     user_state_key,
 )
+from trpc_agent_sdk.types import Content
+from trpc_agent_sdk.types import Part
 from trpc_agent_sdk.types import State
+
+
+def _make_event(author: str = "agent", text: str = "hello") -> Event:
+    return Event(author=author, content=Content(parts=[Part.from_text(text=text)]))
 
 
 class TestStateStorageEntry:
@@ -158,6 +166,117 @@ class TestMergeState:
         result = merge_state(entry, need_copy=False)
         result["new_key"] = "new_value"
         assert "new_key" in original_session_state
+
+
+class TestFindEventsForSummary:
+    """Test event selection for summary generation."""
+
+    def test_defaults_start_from_user_and_keep_recent(self):
+        events = [
+            _make_event(author="system", text="system preamble"),
+            _make_event(author="user", text="question"),
+            _make_event(author="agent", text="answer"),
+            _make_event(author="user", text="recent question"),
+        ]
+
+        selected_events, insert_index = find_events_for_summary(events, keep_recent_count=1)
+
+        assert selected_events == events[:3]
+        assert insert_index == 3
+
+    def test_first_visible_summary_event_starts_summary_window(self):
+        summary_event = _make_event(author="system", text="previous summary")
+        summary_event.set_summary_event(True)
+        events = [
+            summary_event,
+            _make_event(author="agent", text="answer"),
+            _make_event(author="user", text="recent question"),
+        ]
+
+        selected_events, insert_index = find_events_for_summary(events, keep_recent_count=1)
+
+        assert selected_events == events[:2]
+        assert insert_index == 2
+
+    def test_fallback_to_first_visible_event(self):
+        events = [
+            _make_event(author="agent", text="answer 1"),
+            _make_event(author="agent", text="answer 2"),
+        ]
+
+        selected_events, insert_index = find_events_for_summary(events, keep_recent_count=1)
+
+        assert selected_events == events[:1]
+        assert insert_index == 1
+
+    def test_traces_back_to_invisible_user_before_first_visible_event(self):
+        hidden_user = _make_event(author="user", text="hidden")
+        hidden_user.set_model_visible(False)
+        events = [
+            _make_event(author="system", text="hidden preamble"),
+            hidden_user,
+            _make_event(author="agent", text="visible answer"),
+            _make_event(author="agent", text="visible answer"),
+        ]
+        events[0].set_model_visible(False)
+
+        selected_events, insert_index = find_events_for_summary(events, keep_recent_count=10)
+
+        assert selected_events == events[1:]
+        assert insert_index == len(events)
+
+    def test_aligns_recent_window_to_next_user_turn(self):
+        events = [_make_event(author="user" if idx in (8, 80, 92) else "agent", text=f"msg {idx}") for idx in range(100)]
+        for idx, event in enumerate(events):
+            event.set_model_visible(10 <= idx < 99)
+
+        selected_events, insert_index = find_events_for_summary(events, keep_recent_count=10)
+
+        assert selected_events == events[8:92]
+        assert insert_index == 92
+
+    def test_keep_recent_count_uses_model_visible_events(self):
+        events = [_make_event(author="agent", text=f"msg {idx}") for idx in range(20)]
+        for idx, event in enumerate(events):
+            event.set_model_visible(idx in (0, 1, 2, 10, 15, 19))
+
+        selected_events, insert_index = find_events_for_summary(
+            events, keep_recent_count=3, start_by_user_turn=False)
+
+        assert selected_events == events[:10]
+        assert insert_index == 10
+
+    def test_ignores_keep_recent_when_it_would_empty_selection(self):
+        events = [
+            _make_event(author="user", text="question"),
+            _make_event(author="agent", text="answer"),
+        ]
+
+        selected_events, insert_index = find_events_for_summary(events, keep_recent_count=10)
+
+        assert selected_events == events
+        assert insert_index == len(events)
+
+    def test_zero_keep_recent_selects_all_matching_events(self):
+        events = [
+            _make_event(author="system", text="system preamble"),
+            _make_event(author="user", text="question"),
+            _make_event(author="agent", text="answer"),
+        ]
+
+        selected_events, insert_index = find_events_for_summary(events, keep_recent_count=0)
+
+        assert selected_events == events
+        assert insert_index == len(events)
+
+    def test_no_visible_events(self):
+        event = _make_event(author="user", text="hidden")
+        event.set_model_visible(False)
+
+        selected_events, insert_index = find_events_for_summary([event])
+
+        assert selected_events == []
+        assert insert_index == -1
 
 
 class TestKeyFunctions:

@@ -14,6 +14,8 @@ from pydantic import Field
 from trpc_agent_sdk.abc import SessionABC
 from trpc_agent_sdk.events import Event
 
+from ._utils import is_summary_anchor
+
 
 class Session(SessionABC):
     """Represents a series of interactions between a user and agents.
@@ -85,7 +87,7 @@ class Session(SessionABC):
                 retained_events = retained_events[-max_events:]
 
         for i, event in enumerate(retained_events):
-            if self._is_user_message(event):
+            if is_summary_anchor(event):
                 retained_events = retained_events[i:]
                 break
         else:
@@ -94,7 +96,7 @@ class Session(SessionABC):
             # re-inserted, but only from the already-visible subset.
             retained_events = []
             for event in reversed(visible_events):
-                if self._is_user_message(event):
+                if is_summary_anchor(event):
                     retained_events.insert(0, event)
                     break
 
@@ -117,14 +119,3 @@ class Session(SessionABC):
         if idx is None:
             idx = self.get_first_visible_event_idx()
         self.events[idx:idx] = events
-
-    def _is_user_message(self, event: Event) -> bool:
-        """Check if an event is a user message.
-
-        Args:
-            event: The event to check.
-
-        Returns:
-            True if the event is from a user, False otherwise.
-        """
-        return event.author.lower() == "user"

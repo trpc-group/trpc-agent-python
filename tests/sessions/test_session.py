@@ -10,6 +10,7 @@ from google.genai.types import Content
 from google.genai.types import Part
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.sessions import Session
+from trpc_agent_sdk.sessions import is_summary_anchor
 
 
 class TestSession:
@@ -35,15 +36,16 @@ class TestSession:
         assert session.events[0].author == "user"
         assert session.last_update_time == event.timestamp
 
-    def test_is_user_message(self):
-        """Test checking if an event is a user message."""
-        session = Session(id="test-session", app_name="test-app", user_id="test-user", save_key="test-key")
-
+    def test_is_anchor_message(self):
+        """Test checking if an event can anchor visible conversation history."""
         user_event = Event(author="user", content=Content(parts=[Part.from_text(text="Hello")]))
         agent_event = Event(author="agent-1", content=Content(parts=[Part.from_text(text="Hi")]))
+        summary_event = Event(author="system", content=Content(parts=[Part.from_text(text="Summary")]))
+        summary_event.set_summary_event(True)
 
-        assert session._is_user_message(user_event) is True
-        assert session._is_user_message(agent_event) is False
+        assert is_summary_anchor(user_event) is True
+        assert is_summary_anchor(agent_event) is False
+        assert is_summary_anchor(summary_event) is True
 
     def test_apply_event_filtering_no_config(self):
         """Test event filtering with no configuration."""

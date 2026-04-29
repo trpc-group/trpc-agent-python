@@ -42,6 +42,8 @@ from ._types import SessionServiceConfig
 from ._utils import StateStorageEntry
 from ._utils import app_state_key
 from ._utils import extract_state_delta
+from ._utils import find_events_for_summary
+from ._utils import is_summary_anchor
 from ._utils import merge_state
 from ._utils import session_key
 from ._utils import user_state_key
@@ -77,7 +79,9 @@ __all__ = [
     "StateStorageEntry",
     "app_state_key",
     "extract_state_delta",
+    "find_events_for_summary",
     "merge_state",
+    "is_summary_anchor",
     "session_key",
     "user_state_key",
 ]

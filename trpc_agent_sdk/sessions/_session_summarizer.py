@@ -50,6 +50,7 @@ from trpc_agent_sdk.types import Part
 from ._session import Session
 from ._summarizer_checker import CheckSummarizerFunction
 from ._summarizer_checker import set_summarizer_conversation_threshold
+from ._utils import find_events_for_summary
 
 DEFAULT_SUMMARIZER_PROMPT = dedent("""\
 Please summarize the following conversation, focusing on:
@@ -124,12 +125,13 @@ class SessionSummarizer:
     """
 
     def __init__(
-        self,
-        model: LLMModel,
-        summarizer_prompt: str = DEFAULT_SUMMARIZER_PROMPT,
-        check_summarizer_functions: Optional[List[CheckSummarizerFunction]] = None,
-        max_summary_length: int = 1000,
-        keep_recent_count: int = 10,
+            self,
+            model: LLMModel,
+            summarizer_prompt: str = DEFAULT_SUMMARIZER_PROMPT,
+            check_summarizer_functions: Optional[List[CheckSummarizerFunction]] = None,
+            max_summary_length: int = 1000,
+            keep_recent_count: int = 10,
+            start_by_user_turn: bool = True,  # Whether to start summarization by user turn, default is True
     ):
         """Initialize the session summarizer.
 
@@ -138,12 +140,13 @@ class SessionSummarizer:
             check_summarizer_functions: List of check summarizer functions
             max_summary_length: Maximum length of generated summary
             keep_recent_count: Number of recent events to keep after compression
+            start_by_user_turn: Whether to start summarization by user turn, default is True
         """
         self._summarizer_prompt = summarizer_prompt
         self.check_summarizer_functions = check_summarizer_functions or [set_summarizer_conversation_threshold()]
         self.max_summary_length = max_summary_length
         self.__keep_recent_count = keep_recent_count
-
+        self.__start_by_user_turn = start_by_user_turn
         # Initialize LLM model for summarization
         self._model = model
 
@@ -194,7 +197,7 @@ class SessionSummarizer:
     async def _compress_session_to_summary(self,
                                            events: List[Event],
                                            session_id: str,
-                                           ctx: InvocationContext = None) -> Optional[str]:
+                                           ctx: InvocationContext | None = None) -> Optional[str]:
         """Generate a summary for a session.
 
         Args:
@@ -247,8 +250,6 @@ class SessionSummarizer:
         current_text = ""
 
         for event in events:
-            if not event.is_model_visible():
-                continue
             if not event.content or not event.content.parts:
                 continue
 
@@ -312,7 +313,7 @@ class SessionSummarizer:
 
         return "\n".join(conversation_parts)
 
-    async def _generate_summary(self, conversation_text: str, ctx: InvocationContext = None) -> str:
+    async def _generate_summary(self, conversation_text: str, ctx: InvocationContext | None = None) -> str:
         """Generate a summary using the LLM model.
 
         Args:
@@ -361,8 +362,8 @@ class SessionSummarizer:
     async def create_session_summary_by_events(self,
                                                events: List[Event],
                                                session_id: str,
-                                               keep_recent_count: int | None = None,
-                                               ctx: InvocationContext = None) -> Optional[str]:
+                                               keep_recent_count: int = 10,
+                                               ctx: InvocationContext | None = None) -> Optional[str]:
         """Compress a session by summarizing old events.
 
         Args:
@@ -375,13 +376,10 @@ class SessionSummarizer:
             Summary text if successful, None otherwise
             Events after compression
         """
-        if keep_recent_count is None:
-            old_events = events
-        else:
-            old_events = events[:-keep_recent_count]
         try:
             original_count = sum(1 for event in events if event.is_model_visible())
-            old_visible_events = [event for event in old_events if event.is_model_visible()]
+            old_visible_events, insert_index = find_events_for_summary(events, keep_recent_count,
+                                                                       self.__start_by_user_turn)
             if not old_visible_events:
                 return None, events
 
@@ -394,17 +392,16 @@ class SessionSummarizer:
                                       author="system",
                                       content=Content(
                                           parts=[Part.from_text(text=f"Previous conversation summary: {summary_text}")],
-                                          role="system"),
+                                          role="user"),
                                       timestamp=time.time())
                 summary_event.set_summary_event(True)
                 summary_event.set_model_visible(True)
 
-                # Hide old visible events from model history without dropping raw data.
-                for event in old_visible_events:
+                # Hide all events before the summary insertion point without dropping raw data.
+                for event in events[:insert_index]:
                     event.set_model_visible(False)
 
-                # Insert summary near the old/recent boundary while preserving all events.
-                insert_index = len(old_events)
+                # Insert summary before the recent complete conversation window.
                 events.insert(insert_index, summary_event)
 
                 compressed_count = sum(1 for event in events if event.is_model_visible())
@@ -416,7 +413,7 @@ class SessionSummarizer:
             logger.error("Failed to compress session %s: %s", session_id, ex, exc_info=True)
             return None, events
 
-    async def create_session_summary(self, session: Session, ctx: InvocationContext = None) -> Optional[str]:
+    async def create_session_summary(self, session: Session, ctx: InvocationContext | None = None) -> Optional[str]:
         """Compress a session by summarizing old events.
 
         Args:

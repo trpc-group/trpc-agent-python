@@ -59,14 +59,6 @@ class BaseCodeExecutor(BaseModel):
     error_retry_attempts: int = 2
     """The number of attempts to retry on consecutive code execution errors. Default to 2."""
 
-    execute_once_per_invocation: bool = False
-    """Whether to execute model-extracted code at most once per invocation.
-
-    When enabled, post-processing code execution runs only for the first
-    detected code block in a single ``invocation_id`` and skips subsequent
-    auto-execution attempts for that invocation.
-    """
-
     code_block_delimiters: list[CodeBlockDelimiter] = [
         CodeBlockDelimiter(start="```tool_code\n", end="\n```"),
         CodeBlockDelimiter(start="```python\n", end="\n```"),

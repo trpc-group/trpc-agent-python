@@ -193,7 +193,12 @@ class Event(LlmResponse):
         return bool(self.model_flags & _EVENT_FLAG_SUMMARY)
 
     def set_model_visible(self, model_visible: bool) -> None:
-        """Set whether this event can be seen by model history builders."""
+        """Set whether this event can be seen by model history builders.
+
+        This is intended for session summarization/compression internals. User
+        code should not call it directly because it can break the model-visible
+        history window maintained by the session summarizer.
+        """
         if model_visible:
             self.model_flags |= _EVENT_FLAG_MODEL_VISIBLE
         else:
