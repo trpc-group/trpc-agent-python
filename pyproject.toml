@@ -98,6 +98,10 @@ mem0 = [
     "sentence-transformers",
 ]
 
+cube = [
+    "e2b-code-interpreter>=2.0.0",
+]
+
 langchain_tool = [
     "langchain_tavily",
     "langchain",
@@ -140,6 +144,7 @@ all = [
     "aiofiles",
     "wecom-aibot-sdk-python>=0.1.5",
     "a2a-sdk<1.0.0,>=0.3.22",
+    "e2b-code-interpreter>=2.0.0",
 ]
 
 [project.scripts]

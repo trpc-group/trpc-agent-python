@@ -322,50 +322,145 @@ class TestLocalWorkspaceFS:
         assert isinstance(files[0], CodeFile)
         assert files[0].mime_type
 
-    # --- _read_limited ---
-    def test_read_limited_small_file(self):
+    @pytest.mark.asyncio
+    async def test_collect_symlinked_workspace_returns_relative_names(self, tmp_path):
+        """Regression: ``ws.path`` containing a symlink must still yield
+        workspace-relative ``CodeFile.name`` values, not absolute
+        canonical paths.
+
+        Repro setup mirrors the common real-world cases (macOS ``/tmp``
+        → ``/private/tmp``, Linux scratch bind-mounts, ``$HOME`` on NFS
+        with a symlinked home): the workspace root is a symlink to the
+        actual storage. The pre-refactor ``collect`` canonicalised both
+        the root and each match before computing ``name``, so this case
+        produced ``a.txt``. After the shared-helper refactor a missed
+        canonicalisation made the helper's prefix-strip silently fall
+        back to returning the absolute resolved path.
+        """
+        real = tmp_path / "real_ws"
+        real.mkdir()
+        (real / "a.txt").write_text("hello")
+        link = tmp_path / "link_ws"
+        link.symlink_to(real, target_is_directory=True)
+
+        ws = WorkspaceInfo(id="symlink_test", path=str(link))
+        files = await self.fs.collect(ws, ["*.txt"])
+
+        assert len(files) == 1
+        assert files[0].name == "a.txt", (
+            f"symlinked workspace leaked absolute path as CodeFile.name: "
+            f"{files[0].name!r}"
+        )
+        assert files[0].content == "hello"
+
+    @pytest.mark.asyncio
+    async def test_collect_outputs_symlinked_workspace_returns_relative_names(self, tmp_path):
+        """Same regression guard for ``collect_outputs``: ``ManifestFileRef.name``
+        must stay workspace-relative when ``ws.path`` resolves through a symlink.
+        """
+        real = tmp_path / "real_ws_out"
+        real.mkdir()
+        ensure_layout(str(real))
+        out_dir = real / DIR_OUT
+        (out_dir / "result.txt").write_text("result data")
+
+        link = tmp_path / "link_ws_out"
+        link.symlink_to(real, target_is_directory=True)
+
+        ws = WorkspaceInfo(id="symlink_outputs", path=str(link))
+        spec = WorkspaceOutputSpec(globs=["out/*.txt"])
+        manifest = await self.fs.collect_outputs(ws, spec)
+
+        assert len(manifest.files) == 1
+        assert manifest.files[0].name == "out/result.txt", (
+            f"symlinked workspace leaked absolute path as ManifestFileRef.name: "
+            f"{manifest.files[0].name!r}"
+        )
+
+    # --- _fetch_bytes (local fetcher for shared collection helpers) ---
+    @pytest.mark.asyncio
+    async def test_fetch_bytes_small_file(self):
         f = Path(self.tmpdir) / "small.txt"
         f.write_text("hello")
-        content, mime = self.fs._read_limited(f)
-        assert content == "hello"
-        assert mime
+        data, raw = await self.fs._fetch_bytes(str(f), 1024)
+        assert data == b"hello"
+        assert raw == 5
 
-    def test_read_limited_nonexistent(self):
+    @pytest.mark.asyncio
+    async def test_fetch_bytes_nonexistent(self):
+        """``_fetch_bytes`` raises on read failure so the shared
+        collection helpers can apply their ``application/octet-stream``
+        sentinel — matching the pre-refactor ``_read_limited`` contract.
+        Swallowing the error here would pass ``b""`` into the happy-path
+        MIME sniffer and mis-label an unreadable ``foo.json`` as
+        ``application/json``.
+        """
         f = Path(self.tmpdir) / "missing.txt"
-        content, mime = self.fs._read_limited(f)
-        assert content == ""
-        assert mime == "application/octet-stream"
+        with pytest.raises(FileNotFoundError):
+            await self.fs._fetch_bytes(str(f), 1024)
 
-    # --- _read_limited_with_cap ---
-    def test_read_limited_with_cap_zero(self):
+    @pytest.mark.asyncio
+    async def test_collect_skips_unreadable_file_with_octet_stream(self, tmp_path):
+        """Regression: ``collect`` must stay best-effort across unreadable
+        files and label them ``application/octet-stream`` (the canonical
+        "unknown / unreadable" sentinel), not whatever the filename
+        extension would imply. This is the contract the pre-refactor
+        ``_read_limited`` enforced inline.
+        """
+        ws_path = tmp_path / "ws"
+        ws_path.mkdir()
+        (ws_path / "good.txt").write_text("ok")
+        bad = ws_path / "bad.json"
+        bad.write_text("{}")
+
+        ws = WorkspaceInfo(id="unreadable_test", path=str(ws_path))
+
+        async def failing_fetcher(full_path, max_bytes):
+            if full_path.endswith("bad.json"):
+                raise OSError("simulated read failure")
+            return bad.read_bytes() if False else (Path(full_path).read_bytes()[:max_bytes], Path(full_path).stat().st_size)
+
+        # Patch the fetcher on the instance so the enumeration path still
+        # runs; this exercises the helper's except branch end-to-end.
+        original = self.fs._fetch_bytes
+        self.fs._fetch_bytes = failing_fetcher  # type: ignore[assignment]
+        try:
+            files = await self.fs.collect(ws, ["*"])
+        finally:
+            self.fs._fetch_bytes = original  # type: ignore[assignment]
+
+        by_name = {f.name: f for f in files}
+        assert "good.txt" in by_name
+        assert "bad.json" in by_name
+        assert by_name["bad.json"].content == ""
+        assert by_name["bad.json"].mime_type == "application/octet-stream", (
+            "unreadable file must fall back to octet-stream, not extension-guessed MIME"
+        )
+
+    @pytest.mark.asyncio
+    async def test_fetch_bytes_zero_budget(self):
         f = Path(self.tmpdir) / "cap_zero.txt"
         f.write_text("data")
-        content, mime = self.fs._read_limited_with_cap(f, 0)
-        assert content == ""
+        data, raw = await self.fs._fetch_bytes(str(f), 0)
+        assert data == b""
+        # raw_size reflects on-disk size, not the read budget.
+        assert raw == 4
 
-    def test_read_limited_with_cap_negative(self):
-        f = Path(self.tmpdir) / "cap_neg.txt"
-        f.write_text("data")
-        content, mime = self.fs._read_limited_with_cap(f, -1)
-        assert content == ""
-
-    def test_read_limited_with_cap_small(self):
+    @pytest.mark.asyncio
+    async def test_fetch_bytes_truncates_to_budget(self):
         f = Path(self.tmpdir) / "cap_small.txt"
         f.write_text("hello world")
-        content, mime = self.fs._read_limited_with_cap(f, 5)
-        assert len(content) <= 5
+        data, raw = await self.fs._fetch_bytes(str(f), 5)
+        assert len(data) == 5
+        assert raw == 11
 
-    def test_read_limited_with_cap_large(self):
+    @pytest.mark.asyncio
+    async def test_fetch_bytes_budget_above_size(self):
         f = Path(self.tmpdir) / "cap_large.txt"
         f.write_text("hello world")
-        content, mime = self.fs._read_limited_with_cap(f, MAX_READ_SIZE_BYTES + 1000)
-        assert content == "hello world"
-
-    def test_read_limited_with_cap_nonexistent(self):
-        f = Path(self.tmpdir) / "missing_cap.txt"
-        content, mime = self.fs._read_limited_with_cap(f, 100)
-        assert content == ""
-        assert mime == "application/octet-stream"
+        data, raw = await self.fs._fetch_bytes(str(f), MAX_READ_SIZE_BYTES + 1000)
+        assert data == b"hello world"
+        assert raw == 11
 
     # --- _copy_directory ---
     def test_copy_directory(self):
@@ -620,7 +715,7 @@ class TestLocalWorkspaceFS:
         result = await self.fs.collect_outputs(self.ws, spec)
         assert len(result.files) == 0
 
-    @patch('trpc_agent_sdk.code_executors.local._local_ws_runtime.save_artifact_helper', new_callable=AsyncMock)
+    @patch('trpc_agent_sdk.code_executors.utils._collect.save_artifact_helper', new_callable=AsyncMock)
     @pytest.mark.asyncio
     async def test_collect_outputs_save_with_ctx(self, mock_save):
         mock_save.return_value = 1
@@ -646,7 +741,7 @@ class TestLocalWorkspaceFS:
         with pytest.raises(ValueError, match="Context is required"):
             await self.fs.collect_outputs(self.ws, spec)
 
-    @patch('trpc_agent_sdk.code_executors.local._local_ws_runtime.save_artifact_helper', new_callable=AsyncMock)
+    @patch('trpc_agent_sdk.code_executors.utils._collect.save_artifact_helper', new_callable=AsyncMock)
     @pytest.mark.asyncio
     async def test_collect_outputs_save_with_name_template(self, mock_save):
         mock_save.return_value = 1

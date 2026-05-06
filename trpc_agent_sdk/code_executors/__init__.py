@@ -92,6 +92,37 @@ from .local import UnsafeLocalCodeExecutor
 from .local import create_local_workspace_runtime
 from .utils import CodeExecutionUtils
 
+# Cube/E2B is exposed via PEP 562 lazy `__getattr__` below so that importing
+# this package never pulls in the optional `e2b-code-interpreter` dependency
+# unless a Cube symbol is actually accessed.
+_CUBE_LAZY_ATTRS = {
+    "CubeCodeExecutor",
+    "CubeCodeExecutorConfig",
+    "CubeCommandResult",
+    "CubeProgramRunner",
+    "CubeSandboxClient",
+    "CubeWorkspaceFS",
+    "CubeWorkspaceManager",
+    "CubeWorkspaceRuntime",
+    "CubeWorkspaceRuntimeConfig",
+    "OnExisting",
+    "create_cube_workspace_runtime",
+}
+
+
+def __getattr__(name: str):
+    if name in _CUBE_LAZY_ATTRS:
+        from . import cube as _cube  # local import keeps cube/ off the eager path
+        value = getattr(_cube, name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals().keys()) | _CUBE_LAZY_ATTRS)
+
+
 __all__ = [
     "load_artifact_helper",
     "parse_artifact_ref",
@@ -175,4 +206,15 @@ __all__ = [
     "UnsafeLocalCodeExecutor",
     "create_local_workspace_runtime",
     "CodeExecutionUtils",
+    "CubeCodeExecutor",
+    "CubeCodeExecutorConfig",
+    "CubeCommandResult",
+    "CubeProgramRunner",
+    "CubeSandboxClient",
+    "CubeWorkspaceFS",
+    "CubeWorkspaceManager",
+    "CubeWorkspaceRuntime",
+    "CubeWorkspaceRuntimeConfig",
+    "OnExisting",
+    "create_cube_workspace_runtime",
 ]

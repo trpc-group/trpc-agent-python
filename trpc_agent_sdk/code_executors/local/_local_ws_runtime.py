@@ -22,6 +22,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 from typing import Optional
+from typing import Tuple
 from typing_extensions import override
 
 from trpc_agent_sdk.context import InvocationContext
@@ -29,7 +30,6 @@ from trpc_agent_sdk.utils import async_execute_command
 
 from .._artifacts import load_artifact_helper
 from .._artifacts import parse_artifact_ref
-from .._artifacts import save_artifact_helper
 from .._base_workspace_runtime import BaseWorkspaceManager
 from .._base_workspace_runtime import BaseWorkspaceFS
 from .._base_workspace_runtime import BaseProgramRunner
@@ -37,8 +37,6 @@ from .._base_workspace_runtime import BaseWorkspaceRuntime
 from .._base_workspace_runtime import RunEnvProvider
 
 from .._constants import DEFAULT_FILE_MODE
-from .._constants import DEFAULT_MAX_FILES
-from .._constants import DEFAULT_MAX_TOTAL_BYTES
 from .._constants import DEFAULT_TIMEOUT_SEC
 from .._constants import DIR_OUT
 from .._constants import DIR_RUNS
@@ -48,7 +46,6 @@ from .._constants import ENV_OUTPUT_DIR
 from .._constants import ENV_RUN_DIR
 from .._constants import ENV_SKILLS_DIR
 from .._constants import ENV_WORK_DIR
-from .._constants import MAX_READ_SIZE_BYTES
 from .._constants import WORKSPACE_ENV_DIR_KEY
 from .._types import CodeFile
 from .._types import WorkspaceInfo
@@ -58,10 +55,11 @@ from .._types import WorkspaceRunProgramSpec
 from .._types import WorkspaceRunResult
 from .._types import WorkspaceCapabilities
 from .._types import WorkspaceStageOptions
-from .._types import ManifestFileRef
 from .._types import ManifestOutput
 from .._types import WorkspaceOutputSpec
 from .._program_session import BaseProgramSession
+from ..utils import build_code_files
+from ..utils import build_manifest_output
 from ..utils import ensure_layout
 from ..utils import load_metadata
 from ..utils import save_metadata
@@ -69,7 +67,6 @@ from ..utils import InputRecordMeta
 from ..utils import OutputRecordMeta
 from ..utils import normalize_globs
 from ..utils import collect_files_with_glob
-from ..utils import detect_content_type
 from ..utils import make_symlink
 from ..utils import copy_path
 from ..utils import path_join
@@ -280,69 +277,88 @@ class LocalWorkspaceFS(BaseWorkspaceFS):
         Returns:
             List of matching file references
         """
-        out = []
-        root = Path(ws.path)
-        patterns = normalize_globs(patterns)
+        real_root, matches = self._enumerate_local_matches(ws.path, normalize_globs(patterns))
+        return await build_code_files(real_root, matches, self._fetch_bytes)
 
-        # Canonicalize root
+    def _enumerate_local_matches(
+        self,
+        ws_path: str,
+        patterns: List[str],
+    ) -> Tuple[str, List[str]]:
+        """Expand ``patterns`` under ``ws_path`` into absolute paths.
+
+        Resolves symlinks and drops anything that escapes the
+        canonicalised workspace root, preserving the security property
+        that the pre-refactor hand-written loop used to enforce.
+
+        Returns ``(real_root, matches)`` where ``real_root`` is the
+        canonicalised workspace root and ``matches`` is the list of
+        canonical absolute paths under it. Both are passed to
+        :func:`build_code_files` / :func:`build_manifest_output` as a
+        matched pair so the helpers' prefix-stripping ``_relativize``
+        operates on canonical-vs-canonical paths. Passing the raw
+        (un-resolved) ``ws.path`` would silently leak absolute paths as
+        ``CodeFile.name`` whenever ``ws.path`` itself contains a symlink
+        component (e.g. macOS ``/tmp`` → ``/private/tmp``, Linux scratch
+        bind-mounts), because the canonical match would not start with
+        the un-canonical prefix.
+        """
+        root = Path(ws_path)
         try:
             real_root = root.resolve()
         except Exception:  # pylint: disable=broad-except
             real_root = root
+        real_root_str = real_root.as_posix()
 
-        seen = set()
-
+        seen: set[str] = set()
+        out: List[str] = []
         for pattern in patterns:
-            matches = collect_files_with_glob(ws.path, pattern)
-            for match_path in matches:
+            for match_path in collect_files_with_glob(ws_path, pattern):
                 m_abs = Path("/" + match_path.lstrip("/"))
-                # Ensure it is within root
                 try:
                     m_abs.relative_to(root)
                 except ValueError:
                     continue
-
-                # Collapse symlinks to canonical path and deduplicate
                 try:
                     real_path = m_abs.resolve()
                 except Exception:  # pylint: disable=broad-except
                     real_path = m_abs
-
-                # Re-check containment against canonical root
                 try:
-                    name = str(real_path.relative_to(real_root))
+                    # Re-check containment against canonical root.
+                    real_path.relative_to(real_root)
                 except ValueError:
                     continue
-
-                if name in seen:
+                key = real_path.as_posix()
+                if key in seen:
                     continue
+                seen.add(key)
+                out.append(key)
+        return real_root_str, out
 
-                seen.add(name)
-                content, mime_type = self._read_limited(real_path)
+    async def _fetch_bytes(self, full_path: str, max_bytes: int) -> tuple[bytes, int]:
+        """Fetcher contract for shared collection helpers.
 
-                out.append(CodeFile(
-                    name=name,
-                    content=content,
-                    mime_type=mime_type,
-                ))
+        Reads up to ``max_bytes`` from ``full_path`` and reports the
+        on-disk size so the helpers can decide truncation flags without
+        needing a second ``stat`` call.
 
-        return out
-
-    def _read_limited(self, path: Path) -> tuple[str, str]:
-        """Read file with size limit.
-
-        Args:
-            path: Path to the file
-
-        Returns:
-            The content and MIME type of the file.
+        On read failure this raises and lets
+        :func:`build_code_files` / :func:`build_manifest_output`
+        apply their shared ``application/octet-stream`` sentinel — the
+        pre-refactor ``_read_limited`` returned that MIME explicitly for
+        unreadable files, and we preserve that design intent by routing
+        through the shared helper's except branch instead of swallowing
+        the error here (which would pass an empty payload through the
+        happy-path MIME sniffer and mis-label an unreadable ``foo.json``
+        as ``application/json``).
         """
+        path = Path(full_path)
         try:
-            content = path.read_bytes()[:MAX_READ_SIZE_BYTES]
-            mime_type = detect_content_type(path, content)
-            return content.decode('utf-8', errors='ignore'), mime_type
-        except Exception:  # pylint: disable=broad-except
-            return "", "application/octet-stream"
+            raw_size = path.stat().st_size
+        except OSError:
+            raw_size = 0
+        data = path.read_bytes()[:max_bytes]
+        return data, max(raw_size, len(data))
 
     @override
     async def stage_inputs(
@@ -467,9 +483,11 @@ class LocalWorkspaceFS(BaseWorkspaceFS):
                               ws: WorkspaceInfo,
                               spec: WorkspaceOutputSpec,
                               ctx: Optional[InvocationContext] = None) -> ManifestOutput:
-        """Collect outputs from the workspace."""
-        """
-        Implement declarative collector with limits.
+        """Collect outputs from the workspace.
+
+        Implements the declarative collector with limits, inline and
+        save options, records an :class:`OutputRecordMeta` entry in the
+        workspace metadata.
 
         Args:
             ctx: Context for the operation
@@ -481,73 +499,10 @@ class LocalWorkspaceFS(BaseWorkspaceFS):
         """
         ensure_layout(ws.path)
 
-        max_files = spec.max_files or DEFAULT_MAX_FILES
-        max_file_bytes = spec.max_file_bytes or MAX_READ_SIZE_BYTES
-        max_total_bytes = spec.max_total_bytes or DEFAULT_MAX_TOTAL_BYTES
+        real_root, matches = self._enumerate_local_matches(ws.path, normalize_globs(spec.globs))
+        out, saved_names, saved_vers = await build_manifest_output(real_root, spec, matches, self._fetch_bytes, ctx)
 
-        left_total = max_total_bytes
-        globs = normalize_globs(spec.globs)
-        out = ManifestOutput()
-
-        saved_names = []
-        saved_vers = []
-        count = 0
-
-        for pattern in globs:
-            matches = collect_files_with_glob(ws.path, pattern)
-
-            for match_path in matches:
-                if count >= max_files:
-                    out.limits_hit = True
-                    break
-
-                m_abs = Path("/" + match_path.lstrip("/"))
-                # Ensure it is within workspace
-                try:
-                    name = str(m_abs.relative_to(ws.path))
-                except ValueError:
-                    continue
-
-                # Respect both per-file and total byte limits
-                limit = min(max_file_bytes, left_total)
-
-                content, mime_type = self._read_limited_with_cap(m_abs, limit)
-
-                # Mark limits hit when a file reached per-file cap
-                if len(content) >= max_file_bytes:
-                    out.limits_hit = True
-
-                left_total -= len(content)
-                count += 1
-
-                file_ref = ManifestFileRef(
-                    name=name,
-                    mime_type=mime_type,
-                )
-
-                if spec.inline:
-                    file_ref.content = content
-
-                if spec.save:
-                    save_name = name
-                    if spec.name_template:
-                        save_name = spec.name_template + name
-                    if not ctx:
-                        raise ValueError("Context is required to save artifacts")
-                    ver = await save_artifact_helper(ctx, save_name, content, mime_type)
-                    # Placeholder for artifact saving
-                    file_ref.saved_as = save_name
-                    file_ref.version = ver
-                    saved_names.append(save_name)
-                    saved_vers.append(ver)
-
-                out.files.append(file_ref)
-
-                if left_total <= 0:
-                    out.limits_hit = True
-                    break
-
-        # Record output
+        # Record output in workspace metadata (local-only bookkeeping).
         md = load_metadata(ws.path)
         md.outputs.append(
             OutputRecordMeta(
@@ -560,25 +515,6 @@ class LocalWorkspaceFS(BaseWorkspaceFS):
         save_metadata(ws.path, md)
 
         return out
-
-    def _read_limited_with_cap(
-        self,
-        path: Path,
-        cap_bytes: int,
-    ) -> tuple[str, str]:
-        """Read file with specific capacity limit."""
-        if cap_bytes <= 0:
-            return "", "application/octet-stream"
-
-        if cap_bytes > MAX_READ_SIZE_BYTES:
-            cap_bytes = MAX_READ_SIZE_BYTES
-
-        try:
-            content = path.read_bytes()[:cap_bytes]
-            mime_type = detect_content_type(path, content)
-            return content.decode('utf-8', errors='ignore'), mime_type
-        except Exception:  # pylint: disable=broad-except
-            return "", "application/octet-stream"
 
 
 class LocalProgramRunner(BaseProgramRunner):
