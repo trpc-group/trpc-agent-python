@@ -833,6 +833,27 @@ class TestCollectOutputs:
 
         assert len(manifest.files) == 0
 
+    async def test_collect_outputs_empty_globs_short_circuits(self):
+        """Empty pattern list must skip the bash glob entirely.
+
+        Regression guard for ``_enumerate_matches``: when callers pass
+        ``globs=[]`` (or an all-whitespace list normalised to empty),
+        the helper returns ``[]`` immediately rather than synthesising
+        a degenerate ``patterns=()`` shell command. We verify by
+        asserting ``exec_run`` is never invoked.
+        """
+        ws = _make_ws()
+        cc = _mock_container_client()
+        cfg = RuntimeConfig()
+        fs = ContainerWorkspaceFS(cc, cfg)
+
+        spec = WorkspaceOutputSpec(globs=[])
+        manifest = await fs.collect_outputs(ws, spec)
+
+        assert manifest.files == []
+        assert manifest.limits_hit is False
+        cc.exec_run.assert_not_called()
+
     async def test_collect_outputs_max_total_bytes(self):
         ws = _make_ws()
         cc = _mock_container_client()

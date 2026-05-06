@@ -10,6 +10,9 @@ extracting code from responses, and handling code execution results.
 """
 
 from ._code_execution import CodeExecutionUtils
+from ._collect import ManifestFetcher
+from ._collect import build_code_files
+from ._collect import build_manifest_output
 from ._files import collect_files_with_glob
 from ._files import copy_dir
 from ._files import copy_path
@@ -31,6 +34,9 @@ from ._workspace import normalize_globs
 
 __all__ = [
     "CodeExecutionUtils",
+    "ManifestFetcher",
+    "build_code_files",
+    "build_manifest_output",
     "collect_files_with_glob",
     "copy_dir",
     "copy_path",

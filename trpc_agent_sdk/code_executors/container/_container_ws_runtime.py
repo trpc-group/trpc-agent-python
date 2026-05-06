@@ -35,15 +35,12 @@ from trpc_agent_sdk.log import logger
 
 from .._artifacts import load_artifact_helper
 from .._artifacts import parse_artifact_ref
-from .._artifacts import save_artifact_helper
 from .._base_workspace_runtime import BaseProgramRunner
 from .._base_workspace_runtime import BaseWorkspaceFS
 from .._base_workspace_runtime import BaseWorkspaceManager
 from .._base_workspace_runtime import BaseWorkspaceRuntime
 from .._base_workspace_runtime import RunEnvProvider
 from .._constants import DEFAULT_INPUTS_CONTAINER
-from .._constants import DEFAULT_MAX_FILES
-from .._constants import DEFAULT_MAX_TOTAL_BYTES
 from .._constants import DEFAULT_RUN_CONTAINER_BASE
 from .._constants import DEFAULT_SKILLS_CONTAINER
 from .._constants import DEFAULT_TIMEOUT_SEC
@@ -59,7 +56,6 @@ from .._constants import MAX_READ_SIZE_BYTES
 from .._constants import META_FILE_NAME
 from .._constants import WORKSPACE_ENV_DIR_KEY
 from .._types import CodeFile
-from .._types import ManifestFileRef
 from .._types import ManifestOutput
 from .._types import WorkspaceCapabilities
 from .._types import WorkspaceInfo
@@ -71,6 +67,8 @@ from .._types import WorkspaceRunResult
 from .._types import WorkspaceStageOptions
 from ..utils import InputRecordMeta
 from ..utils import WorkspaceMetadata
+from ..utils import build_code_files
+from ..utils import build_manifest_output
 from ..utils import get_rel_path
 from ..utils import normalize_globs
 from ._container_cli import CommandArgs
@@ -318,44 +316,13 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         Raises:
             RuntimeError: If collection fails
         """
-        patterns = self._normalize_globs(patterns)
-
-        # Build bash command to find files
-        pattern_str = " ".join([f"'{p}'" for p in patterns])
-        cmd_str = (f"cd '{ws.path}' && shopt -s globstar nullglob dotglob; "
-                   f"for p in {pattern_str}; do for f in $p; do "
-                   f"if [ -f \"$f\" ]; then "
-                   f"(readlink -f \"$f\" 2>/dev/null || realpath \"$f\" 2>/dev/null || echo \"$(pwd)/$f\"); "
-                   f"fi; done; done")
-
-        cmd = ["/bin/bash", "-lc", cmd_str]
-        result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
-        if result.exit_code != 0:
-            raise RuntimeError(f"Failed to collect files: {result.stderr}")
-        stdout = result.stdout
-        files = []
-        seen = set()
-
-        for line in stdout.strip().split('\n'):
-            line = line.strip()
-            if not line:
-                continue
-
-            rel_path = line.removeprefix(f"{ws.path}/")
-            if rel_path in seen:
-                continue
-            seen.add(rel_path)
-
-            data, size_bytes, mime = self._copy_file_out(line)
-            files.append(
-                CodeFile(
-                    name=rel_path,
-                    content=data.decode('utf-8', errors='replace'),
-                    mime_type=mime,
-                    size_bytes=size_bytes,
-                    truncated=size_bytes > len(data),
-                ))
-
+        matches = await self._enumerate_matches(
+            ws,
+            self._normalize_globs(patterns),
+            resolve_symlinks=True,
+            error_prefix="Failed to collect files",
+        )
+        files = await build_code_files(ws.path, matches, self._fetch_bytes)
         logger.info("Collected %s files from workspace", len(files))
         return files
 
@@ -446,77 +413,84 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         Raises:
             RuntimeError: If collection fails
         """
-        globs = self._normalize_globs(spec.globs)
-        pattern_str = " ".join([f"'{g}'" for g in globs])
+        matches = await self._enumerate_matches(
+            ws,
+            self._normalize_globs(spec.globs),
+            resolve_symlinks=False,
+            error_prefix="Failed to collect outputs",
+        )
+        # Container refuses to persist a half-read artifact, preserving
+        # the historical "never save a truncated binary" guarantee.
+        manifest, _, _ = await build_manifest_output(
+            ws.path,
+            spec,
+            matches,
+            self._fetch_bytes,
+            ctx,
+            strict_truncated_save=True,
+        )
+        logger.info("Collected %s output files", len(manifest.files))
+        return manifest
 
-        cmd_str = (f"cd '{ws.path}' && shopt -s globstar nullglob dotglob; "
-                   f"for p in {pattern_str}; do for f in $p; do "
-                   f"if [ -f \"$f\" ]; then echo \"$(pwd)/$f\"; fi; done; done")
+    async def _enumerate_matches(self, ws: WorkspaceInfo, patterns: List[str], *, resolve_symlinks: bool,
+                                 error_prefix: str) -> List[str]:
+        """Run the glob inside the container, return absolute paths.
 
+        ``collect`` historically resolved symlinks (via ``readlink -f``)
+        while ``collect_outputs`` did not; ``resolve_symlinks`` preserves
+        that distinction. ``error_prefix`` keeps the original per-caller
+        ``RuntimeError`` messages intact ("Failed to collect files" vs
+        "Failed to collect outputs") for backwards compatibility.
+
+        Patterns may contain spaces (e.g. "my dir/*.txt"). The fix shape
+        — bash array + ``IFS=`` — mirrors the cube backend's ``_glob`` so
+        that a space-bearing pattern is neither word-split (which would
+        turn "my dir/*.txt" into two useless tokens "my" and
+        "dir/*.txt") nor quoted as a literal (which would disable
+        globbing). See ``cube/_runtime.py::_glob`` for the long-form
+        rationale.
+        """
+        if not patterns:
+            return []
+        array_literal = " ".join([_shell_quote(p) for p in patterns])
+        if resolve_symlinks:
+            emit = ("(readlink -f \"$f\" 2>/dev/null "
+                    "|| realpath \"$f\" 2>/dev/null "
+                    "|| echo \"$(pwd)/$f\")")
+        else:
+            emit = "echo \"$(pwd)/$f\""
+        cmd_str = (f"cd {_shell_quote(ws.path)} && "
+                   f"shopt -s globstar nullglob dotglob; "
+                   f"patterns=({array_literal}); "
+                   f"_saved_ifs=$IFS; IFS=; "
+                   f'for p in "${{patterns[@]}}"; do '
+                   f"matches=( $p ); "
+                   f'for f in "${{matches[@]}}"; do '
+                   f'if [ -f "$f" ]; then {emit}; fi; '
+                   f"done; "
+                   f"done; "
+                   f"IFS=$_saved_ifs")
         cmd = ["/bin/bash", "-lc", cmd_str]
         result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
         if result.exit_code:
-            raise RuntimeError(f"Failed to collect outputs: {result.stderr}")
-        stdout = result.stdout
-
-        max_files = spec.max_files or DEFAULT_MAX_FILES
-        max_file_bytes = spec.max_file_bytes or MAX_READ_SIZE_BYTES
-        max_total = spec.max_total_bytes or DEFAULT_MAX_TOTAL_BYTES
-
-        manifest = ManifestOutput()
-        total_bytes = 0
-        count = 0
-        saved_names: list[str] = []
-        saved_versions: list[int] = []
-        for line in stdout.strip().split('\n'):
+            raise RuntimeError(f"{error_prefix}: {result.stderr}")
+        out: List[str] = []
+        for line in result.stdout.strip().split("\n"):
             line = line.strip()
-            if not line:
-                continue
+            if line:
+                out.append(line)
+        return out
 
-            if count >= max_files or total_bytes >= max_total:
-                manifest.limits_hit = True
-                break
+    async def _fetch_bytes(self, full_path: str, max_bytes: int) -> Tuple[bytes, int]:
+        """Fetcher contract for shared collection helpers.
 
-            data, raw_size, mime = self._copy_file_out(line)
-
-            if len(data) > max_file_bytes:
-                data = data[:max_file_bytes]
-                manifest.limits_hit = True
-
-            if total_bytes + len(data) > max_total:
-                remain = max_total - total_bytes
-                if remain <= 0:
-                    manifest.limits_hit = True
-                    break
-                data = data[:remain]
-                manifest.limits_hit = True
-
-            total_bytes += len(data)
-            rel_path = line.removeprefix(f"{ws.path}/")
-            truncated = raw_size > len(data)
-            if truncated and spec.save:
-                raise RuntimeError(f"cannot save truncated output file: {rel_path}")
-
-            file_ref = ManifestFileRef(name=rel_path, mime_type=mime)
-            if spec.inline:
-                file_ref.content = data.decode('utf-8', errors='replace')
-            if spec.save:
-                save_name = rel_path
-                if spec.name_template:
-                    save_name = spec.name_template + rel_path
-                if not ctx:
-                    raise ValueError("Context is required to save artifacts")
-                version = await save_artifact_helper(ctx, save_name, data, mime)
-                file_ref.saved_as = save_name
-                file_ref.version = version
-                saved_names.append(save_name)
-                saved_versions.append(version)
-
-            manifest.files.append(file_ref)
-            count += 1
-
-        logger.info("Collected %s output files", len(manifest.files))
-        return manifest
+        Copies the file out of the container via ``get_archive`` and
+        caps the returned slice at ``max_bytes``. ``raw_size`` is the
+        tar member's real size, so helpers can still flag truncation
+        even when ``max_bytes < raw_size``.
+        """
+        data, raw_size, _ = self._copy_file_out(full_path, max_bytes=max_bytes)
+        return data, raw_size
 
     async def _put_directory(self, ws: WorkspaceInfo, src: str, dst: str) -> None:
         """Copy directory to container using tar."""
@@ -615,12 +589,14 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         if result.exit_code:
             raise RuntimeError(f"Failed to stage input: {result.stderr}")
 
-    def _copy_file_out(self, full_path: str) -> Tuple[bytes, int, str]:
+    def _copy_file_out(self, full_path: str, *, max_bytes: int = MAX_READ_SIZE_BYTES) -> Tuple[bytes, int, str]:
         """
         Copy file out of container.
 
         Args:
             full_path: Full path to file in container
+            max_bytes: Upper bound on the returned byte slice; the
+                actual file size is still reported as ``size_bytes``.
 
         Returns:
             Tuple of (file_data, size_bytes, mime_type)
@@ -636,7 +612,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
                 for member in tar.getmembers():
                     if member.isfile():
                         f = tar.extractfile(member)
-                        data = f.read(MAX_READ_SIZE_BYTES)
+                        data = f.read(max_bytes)
                         mime = self._detect_mime_type(data)
                         return data, member.size, mime
 
