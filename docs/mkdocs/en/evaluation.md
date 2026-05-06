@@ -425,6 +425,8 @@ The eval configuration describes "how to judge." This section teaches you how to
 
 `test_config.json` must be placed in the **same directory** as the eval set file (`.evalset.json` / `.test.json`); the framework loads it automatically.
 
+> **Advanced**: If you want **multiple eval sets to share a single configuration** (e.g., centralizing all metric definitions in one JSON), pass `eval_metrics_file_path_or_dir` at call time to bypass the same-directory convention. See [Shared Configuration: `eval_metrics_file_path_or_dir`](#shared-configuration-eval_metrics_file_path_or_dir).
+
 #### Structure Definition
 
 **EvalConfig** (parsed from `test_config.json`)
@@ -718,7 +720,10 @@ Compare using text "contains" with case-insensitivity (common when the final res
 
 | Field | Type | Description |
 | --- | --- | --- |
-| judge_model | object | Judge model configuration (JudgeModelOptions); required |
+| judge_model | object | Judge model configuration (JudgeModelOptions); required when `judge_models` is not set |
+| judge_models | array | Multi-model judge list (JudgeModelOptions items); mutually exclusive with `judge_model`. Cross-model results are combined by `models_aggregator` |
+| models_aggregator | string | Cross-model aggregation strategy. Built-in: `all_pass` (default) / `any_pass` / `majority_pass` / `avg` / `weighted_avg` / `weighted_majority`. Custom names must be registered via `LLM_EVALUATOR_REGISTRY.register_models_aggregator` before evaluation |
+| parallel | boolean | Whether to run the multiple judge models concurrently; default `true` |
 | rubrics | array | Rubric list; required for llm_rubric_response and llm_rubric_knowledge_recall |
 | knowledge_tool_names | array | List of knowledge retrieval tool names; used by llm_rubric_knowledge_recall, default `["knowledge_search"]` |
 
@@ -730,7 +735,9 @@ Compare using text "contains" with case-insensitivity (common when the final res
 | api_key | string | API key |
 | base_url | string | Optional, custom endpoint |
 | num_samples | number | Number of judge samples per turn; default 1 |
-| generation_config | object | Generation parameters (max_tokens, temperature, etc.) |
+| weight | number | Per-model weight used by `weighted_avg` / `weighted_majority` aggregators; default 1.0 |
+| think | boolean | Controls the judge model's thinking mode. `false`: disable thinking (sets both `thinking_config.thinking_budget=0` and `chat_template_kwargs.enable_thinking=false`). `true`: enable thinking with automatic budget (`include_thoughts=true`). Unset (default): keep the model default. Recommended `false` for judge models to save tokens and latency |
+| generation_config | object | Generation parameters (max_tokens, temperature, etc.; may also explicitly set `thinking_config` / `http_options`; the `think` field overrides them) |
 
 **Rubric** (items in the rubrics array)
 
@@ -811,6 +818,71 @@ LLM response quality with rubrics (llm_rubric_response or llm_rubric_knowledge_r
 ```
 
 It is recommended to use environment variable placeholders for `api_key` and `base_url` (e.g., `${TRPC_AGENT_API_KEY}`), which are replaced by the execution environment, to avoid writing plaintext in configuration files.
+
+**Multi-model judge (cross-model aggregation)**
+
+A single LLM-judge metric may use multiple judge models simultaneously and combine their verdicts via `models_aggregator`. Use `judge_models` instead of `judge_model`; the two fields are mutually exclusive. Per-model details are available on `PerInvocationResult.per_model_scores` (a list of `NamedScoreResult`).
+
+Built-in aggregators:
+
+| Name | Pass rule | Overall score |
+| --- | --- | --- |
+| `all_pass` (default) | all models pass | min of per-model scores |
+| `any_pass` | any model passes | max of per-model scores |
+| `majority_pass` | strict majority passes (`passed*2 > total`) | `passed_count / total` |
+| `avg` | mean ≥ threshold | mean of per-model scores |
+| `weighted_avg` | weighted mean ≥ threshold | `sum(w*s) / sum(w)` |
+| `weighted_majority` | weighted-passed share ≥ 0.5 | `sum(w where passed) / sum(w)` |
+
+If a single judge model raises during execution, that model is counted as a non-passing vote; if every model raises, the invocation is reported as `NOT_EVALUATED`.
+
+```json
+{
+  "metrics": [
+    {
+      "metric_name": "llm_final_response",
+      "threshold": 1,
+      "criterion": {
+        "llm_judge": {
+          "judge_models": [
+            {
+              "model_name": "glm-4.7",
+              "api_key": "${TRPC_AGENT_API_KEY}",
+              "base_url": "${TRPC_AGENT_BASE_URL}",
+              "weight": 2.0
+            },
+            {
+              "model_name": "gpt-4o",
+              "api_key": "${TRPC_AGENT_API_KEY}",
+              "base_url": "${TRPC_AGENT_BASE_URL}",
+              "weight": 1.0
+            }
+          ],
+          "models_aggregator": "weighted_avg",
+          "parallel": true
+        }
+      }
+    }
+  ]
+}
+```
+
+`parallel` controls how multiple judge models are executed: `true` (default) calls all models concurrently, with latency bounded by the slowest model; `false` calls them sequentially in the declared order. Only takes effect when `judge_models` contains more than one model.
+
+If a judge model has thinking enabled by default, consider setting `"think": false` on its `JudgeModelOptions`: the judge output is a structured JSON, thinking traces add no value to the final verdict, and disabling thinking significantly reduces token cost and latency. Each judge model has its own independent `think` flag.
+
+Custom aggregators can be registered at runtime and take precedence over the `models_aggregator` name written in the criterion:
+
+```python
+from trpc_agent_sdk.evaluation import LLM_EVALUATOR_REGISTRY, ScoreResult
+
+def my_aggregator(per_model, threshold, weights):
+    # per_model: list[ScoreResult]; weights: list[float]
+    score = sum(s.score or 0.0 for s in per_model) / len(per_model)
+    return ScoreResult(score=score, reason="custom aggregation")
+
+LLM_EVALUATOR_REGISTRY.register_models_aggregator("llm_final_response", my_aggregator)
+```
 
 #### Custom Criteria
 
@@ -1764,6 +1836,16 @@ In default mode, the eval service actually calls the Agent for inference. If you
 
 Replaying existing conversations, offline evaluation, or avoiding repeated Agent and model calls when debugging evaluation flows.
 
+**`agent_module` is optional**
+
+`agent_module` tells the framework where to load the Agent from, so it can call the Agent for inference during evaluation. Trace mode no longer calls the Agent, so when **every case in the eval set is in trace mode**, `AgentEvaluator.evaluate()` / `get_executer()` no longer needs `agent_module` and you can simply omit it:
+
+```python
+await AgentEvaluator.evaluate(
+    eval_dataset_file_path_or_dir=trace_only_eval_set_path,
+)
+```
+
 **Example**: A Trace mode case in the eval set
 
 ```json
@@ -2159,6 +2241,53 @@ async def test_evaluate_with_custom_runner():
 ```
 
 For the complete example, see [examples/evaluation/custom_runner/](../../../examples/evaluation/custom_runner/).
+
+#### Shared Configuration (eval_metrics_file_path_or_dir)
+
+By default, every eval set needs a `test_config.json` placed in its **own directory**, which the framework loads automatically. When multiple eval sets need to use the same metrics and thresholds, copying `test_config.json` into every directory is redundant and prone to drift. You can extract the config into a single shared location and point to it via `eval_metrics_file_path_or_dir` at call time. The framework will then **ignore the same-directory convention** and apply this shared config to every eval set.
+
+**Comparison**: in the default layout each eval set needs its own `test_config.json`; in the shared layout there is only one.
+
+```
+## Default (same-directory)        ## Shared (eval_metrics_file_path_or_dir)
+project/                           project/
+└── eval_data/                     ├── shared_metrics.json     ← shared config
+    ├── weather/                   └── eval_data/
+    │   ├── weather.evalset.json       ├── weather/weather.evalset.json
+    │   └── test_config.json           ├── booking/booking.evalset.json
+    └── booking/                       └── search/search.evalset.json
+        ├── booking.evalset.json
+        └── test_config.json
+```
+
+**Configuration**
+
+Pass `eval_metrics_file_path_or_dir` to `AgentEvaluator.evaluate()` / `get_executer()`:
+
+- A **file path** (`.json`): loaded directly as the shared configuration;
+- A **directory path**: the framework looks up `*.json` in that directory **non-recursively**, and exactly one must be present; otherwise it raises `FileNotFoundError` (zero matches) or `ValueError` (more than one);
+- Omitted or `None`: keep the default behavior—load `test_config.json` from each eval set's own directory.
+
+**Applicable Scenarios**
+
+Multiple eval sets sharing the same metrics and thresholds; switching thresholds per environment (dev / staging / prod) in CI; eval sets generated by other tools (WebUI, log replayers, etc.) where maintaining a per-directory `test_config.json` is inconvenient.
+
+**Example**: point all eval sets in the right-hand layout above to `shared_metrics.json`
+
+```python
+import os
+import pytest
+from trpc_agent_sdk.evaluation import AgentEvaluator
+
+@pytest.mark.asyncio
+async def test_with_shared_metrics():
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    await AgentEvaluator.evaluate(
+        agent_module="agent",
+        eval_dataset_file_path_or_dir=os.path.join(project_dir, "eval_data"),
+        eval_metrics_file_path_or_dir=os.path.join(project_dir, "shared_metrics.json"),
+    )
+```
 
 
 ## Using WebUI for Agent Evaluation

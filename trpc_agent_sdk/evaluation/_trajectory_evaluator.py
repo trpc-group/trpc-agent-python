@@ -55,6 +55,8 @@ class TrajectoryEvaluator(Evaluator):
     Without: strict count, order, name and arguments match.
     """
 
+    requires_reference = True
+
     def __init__(
         self,
         threshold: Optional[float] = None,

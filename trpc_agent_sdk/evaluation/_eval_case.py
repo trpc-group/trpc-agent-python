@@ -210,13 +210,29 @@ class EvalCase(EvalBaseModel):
 
     @model_validator(mode="after")
     def ensure_conversation_xor_conversation_scenario(self) -> EvalCase:
-        """Trace: conversation or actual_conversation (no scenario). Default: conversation xor conversation_scenario."""
+        """Trace: actual_conversation is required (conversation optional as reference).
+        Default: conversation xor conversation_scenario.
+
+        Trace-mode legal shapes (after Bug 3.2 strict fix):
+          * actual_conversation only                -> scenario 3 (no reference)
+          * actual_conversation + conversation      -> scenario 1 (full comparison)
+
+        The legacy shape of providing only `conversation` under eval_mode='trace'
+        is now rejected because the field would have to serve as both the
+        recorded trace (actual) and the reference (expected), which is ambiguous
+        and causes silent evaluation errors in reference-based metrics
+        (see docs/superpowers/specs/2026-05-06-evaluator-trace-metric-strict-compat-design.md).
+        """
         is_trace = self.eval_mode == EvalModeTrace
         if is_trace:
             if self.conversation_scenario is not None:
                 raise ValueError("conversation_scenario is not allowed when eval_mode is \"trace\"")
-            if not self.conversation and not self.actual_conversation:
-                raise ValueError("trace mode requires at least one of conversation or actual_conversation")
+            if not self.actual_conversation:
+                raise ValueError("eval_mode='trace' requires `actual_conversation` field. "
+                                 "If the provided `conversation` is a recorded trace, move it to "
+                                 "`actual_conversation`. If it's a reference answer, also provide "
+                                 "`actual_conversation` for scenario-1 full comparison. "
+                                 "See Bug 3.2 of evaluator-trace-metric-strict-compat-design.")
             return self
         if (self.conversation is None) == (self.conversation_scenario is None):
             raise ValueError("Exactly one of conversation and conversation_scenario must be provided")

@@ -94,7 +94,7 @@ class LocalEvalService(BaseEvalService):
 
     def __init__(
         self,
-        root_agent: BaseAgent,
+        root_agent: Optional[BaseAgent],
         eval_sets_manager: EvalSetsManager,
         evaluator_registry: Optional[EvaluatorRegistry] = None,
         session_service: Optional[BaseSessionService] = None,
@@ -109,7 +109,9 @@ class LocalEvalService(BaseEvalService):
         """Initialize the local evaluation service.
 
         Args:
-            root_agent: The agent to evaluate
+            root_agent: The agent to evaluate. May be ``None`` only when every
+                eval case to be processed uses ``eval_mode='trace'``; standard
+                or mixed modes require a concrete agent.
             eval_sets_manager: Manager for eval sets storage
             evaluator_registry: Registry of metric evaluators
             session_service: Session service for maintaining state
@@ -242,6 +244,13 @@ class LocalEvalService(BaseEvalService):
         Yields:
             EvalCaseResult for each evaluated inference
         """
+        # Fail-fast: validate every (eval_case × metric) pair is semantically
+        # feasible before running any evaluator. See Bug 3.1 design doc.
+        self._validate_metric_compat(
+            inference_results=evaluate_request.inference_results,
+            evaluate_config=evaluate_request.evaluate_config,
+        )
+
         run_ctx: dict[str, Any] = {}
         start_time = time.monotonic()
         eval_case_results_list: list[EvalCaseResult] = []
@@ -483,6 +492,93 @@ class LocalEvalService(BaseEvalService):
                 expected_invocations=expected_invocations,
             )
 
+    def _validate_metric_compat(
+        self,
+        inference_results: list[InferenceResult],
+        evaluate_config: EvaluateConfig,
+    ) -> None:
+        """Fail-fast check every (eval_case × metric) pair for semantic feasibility.
+
+        Reference-based metrics (``requires_reference=True``) need a real
+        expected answer in ``eval_case.conversation``. Scenario-3 trace cases
+        (only ``actual_conversation`` set) have placeholder-only expected
+        invocations, which would produce silent 0.0 (rouge/final_response) or
+        phantom 1.0 (tool_trajectory with subset_matching) results.
+
+        This method aggregates ALL incompatible pairs across the request and
+        raises a single ValueError listing each one, so the user can fix them
+        in one pass. See Bug 3.1 of the strict-compat design doc.
+        """
+        incompatible: list[tuple[str, str, str]] = []
+        for ir in inference_results:
+            eval_case = self._eval_sets_manager.get_eval_case(
+                app_name=ir.app_name,
+                eval_set_id=ir.eval_set_id,
+                eval_case_id=ir.eval_case_id,
+            )
+            if eval_case is None:
+                # The per-case evaluate path will raise a clear error later;
+                # skip here to avoid duplicate / misleading messages.
+                continue
+            has_reference = self._case_has_reference(eval_case)
+            for eval_metric in evaluate_config.eval_metrics:
+                try:
+                    evaluator_cls = self._evaluator_registry.get_evaluator_class(eval_metric)
+                except ValueError:
+                    # Unknown metric — let the regular evaluate loop surface the
+                    # registry error so the message stays consistent.
+                    continue
+                if getattr(evaluator_cls, "requires_reference", True) and not has_reference:
+                    incompatible.append((
+                        ir.eval_case_id,
+                        eval_metric.metric_name,
+                        "requires reference answer (set in eval_case.conversation)",
+                    ))
+
+        if incompatible:
+            raise ValueError(self._format_compat_error(incompatible))
+
+    @staticmethod
+    def _case_has_reference(eval_case: EvalCase) -> bool:
+        """True iff ``expected_invocations`` will carry a real reference answer.
+
+        - Non-trace (``eval_mode is None``): ``conversation`` IS the expected → True.
+        - Scenario 1 (trace + both conversation and actual_conversation): True.
+        - Scenario 3 (trace + only actual_conversation): expected is a placeholder
+          built by ``_trace_expecteds_for_eval`` → False.
+        """
+        if eval_case.eval_mode != EvalModeTrace:
+            return True
+        return bool(eval_case.conversation and eval_case.actual_conversation)
+
+    @staticmethod
+    def _format_compat_error(incompatible: list[tuple[str, str, str]]) -> str:
+        """Aggregate incompatible pairs into a single actionable error message.
+
+        Groups by eval_case_id for readability; always closes with a fix guide.
+        """
+        by_case: dict[str, list[tuple[str, str]]] = {}
+        for eval_id, metric_name, reason in incompatible:
+            by_case.setdefault(eval_id, []).append((metric_name, reason))
+
+        lines = ["evaluator config incompatible with eval_set:", ""]
+        for eval_id in sorted(by_case):
+            lines.append(f"  eval_case='{eval_id}' (scenario: trace-without-reference):")
+            for metric_name, reason in by_case[eval_id]:
+                lines.append(f"    - metric '{metric_name}' {reason}")
+        lines.extend([
+            "",
+            "To fix, choose one:",
+            "  (a) Remove the incompatible metrics from your EvaluateConfig.",
+            "  (b) Use reference-free metrics only: llm_rubric_response, "
+            "llm_rubric_knowledge_recall.",
+            "  (c) Upgrade eval_cases to scenario-1 by providing BOTH `conversation` "
+            "(expected) and `actual_conversation` (actual) fields.",
+            "",
+            f"Incompatible (metric_name, eval_id) pairs: {len(incompatible)}",
+        ])
+        return "\n".join(lines)
+
     def _generate_final_eval_status(self, overall_eval_metric_results: list[EvalMetricResult]) -> EvalStatus:
         """Determine final evaluation status from all metrics.
 
@@ -539,6 +635,10 @@ class LocalEvalService(BaseEvalService):
                     raise ValueError(
                         f"inference eval case (eval_case_id={eval_case.eval_id}, session_id={session_id}): "
                         "actual_conversation is only supported in trace mode")
+                if root_agent is None:
+                    raise ValueError(f"inference eval case (eval_case_id={eval_case.eval_id}, "
+                                     f"session_id={session_id}): a root_agent is required for "
+                                     f"standard (non-trace) eval_mode; got root_agent=None")
                 inferences = await self._generate_inferences_from_agent(
                     agent=root_agent,
                     eval_case=eval_case,
