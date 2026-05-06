@@ -103,6 +103,19 @@ class EvaluatorRegistry:
 
         return evaluator
 
+    def get_evaluator_class(self, eval_metric: EvalMetric) -> Type[Evaluator]:
+        """Return evaluator CLASS (not instance) for inspecting class attributes.
+
+        Used by LocalEvalService._validate_metric_compat to look up the
+        `requires_reference` ClassVar without instantiating the evaluator
+        (which may have side effects like loading rouge-score or creating an
+        LLM judge). Raises if metric not registered.
+        """
+        if eval_metric.metric_name not in self._registry:
+            raise ValueError(f"No evaluator registered for metric: {eval_metric.metric_name}. "
+                             f"Available metrics: {list(self._registry.keys())}")
+        return self._registry[eval_metric.metric_name]
+
 
 # Global default registry
 EVALUATOR_REGISTRY = EvaluatorRegistry()

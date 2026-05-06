@@ -94,6 +94,7 @@ from ._eval_result import EvalSetRunSummary
 from ._eval_result import EvalStatusCounts
 from ._eval_result import EvaluateResult
 from ._eval_result import EvaluationResult
+from ._eval_result import NamedScoreResult
 from ._eval_result import PerInvocationResult
 from ._eval_service_base import BaseEvalService
 from ._eval_service_base import EvaluateConfig
@@ -121,6 +122,10 @@ from ._final_response_evaluator import FinalResponseEvaluator
 from ._in_memory_eval_sets_manager import InMemoryEvalSetsManager
 from ._llm_criterion import DEFAULT_KNOWLEDGE_TOOL_NAMES
 from ._llm_criterion import DEFAULT_NUM_SAMPLES
+from ._llm_criterion import BUILT_IN_MODELS_AGGREGATORS
+from ._llm_criterion import DEFAULT_MODELS_AGGREGATOR
+from ._llm_criterion import DEFAULT_PARALLEL
+from ._llm_criterion import WEIGHTED_MODELS_AGGREGATORS
 from ._llm_criterion import JudgeModelOptions
 from ._llm_criterion import LLMJudgeCriterion
 from ._llm_criterion import Rubric
@@ -137,20 +142,29 @@ from ._llm_evaluator import LLMRubricResponseEvaluator
 from ._llm_evaluator import LLM_EVALUATOR_REGISTRY
 from ._llm_evaluator import LLM_METRIC_NAMES
 from ._llm_evaluator import MessagesConstructorFn
+from ._llm_evaluator import ModelsAggregatorFn
 from ._llm_evaluator import ResponseScorerFn
 from ._llm_evaluator import SamplesAggregatorFn
+from ._llm_judge import AllPassModelsAggregator
+from ._llm_judge import AnyPassModelsAggregator
 from ._llm_judge import AverageInvocationsAggregator
+from ._llm_judge import AverageModelsAggregator
 from ._llm_judge import DefaultMessagesConstructor
 from ._llm_judge import DefaultResponseScorer
 from ._llm_judge import FinalResponseOutput
 from ._llm_judge import InvocationsAggregator
 from ._llm_judge import LLMJudge
+from ._llm_judge import MajorityPassModelsAggregator
 from ._llm_judge import MajorityVoteSamplesAggregator
 from ._llm_judge import MessagesConstructor
+from ._llm_judge import ModelsAggregator
 from ._llm_judge import ResponseScorer
 from ._llm_judge import RubricItemOutput
 from ._llm_judge import RubricJudgeOutput
 from ._llm_judge import SamplesAggregator
+from ._llm_judge import WeightedAverageModelsAggregator
+from ._llm_judge import WeightedMajorityModelsAggregator
+from ._llm_judge import get_builtin_models_aggregator
 from ._local_eval_service import LocalEvalService
 from ._local_eval_set_results_manager import LocalEvalSetResultsManager
 from ._local_eval_sets_manager import LocalEvalSetsManager
@@ -223,6 +237,7 @@ __all__ = [
     "EvaluateResult",
     "EvaluationResult",
     "PerInvocationResult",
+    "NamedScoreResult",
     "BaseEvalService",
     "EvaluateConfig",
     "EvaluateRequest",
@@ -239,6 +254,10 @@ __all__ = [
     "LLMJudgeCriterion",
     "DEFAULT_KNOWLEDGE_TOOL_NAMES",
     "DEFAULT_NUM_SAMPLES",
+    "BUILT_IN_MODELS_AGGREGATORS",
+    "DEFAULT_MODELS_AGGREGATOR",
+    "DEFAULT_PARALLEL",
+    "WEIGHTED_MODELS_AGGREGATORS",
     "RubricScore",
     "ScoreResult",
     "AverageInvocationsAggregator",
@@ -249,6 +268,14 @@ __all__ = [
     "MessagesConstructor",
     "ResponseScorer",
     "SamplesAggregator",
+    "AllPassModelsAggregator",
+    "AnyPassModelsAggregator",
+    "AverageModelsAggregator",
+    "MajorityPassModelsAggregator",
+    "ModelsAggregator",
+    "WeightedAverageModelsAggregator",
+    "WeightedMajorityModelsAggregator",
+    "get_builtin_models_aggregator",
     "LocalEvalSetResultsManager",
     "LocalEvalSetsManager",
     "BaseUserSimulatorConfig",
@@ -266,6 +293,7 @@ __all__ = [
     "LLM_EVALUATOR_REGISTRY",
     "LLM_METRIC_NAMES",
     "MessagesConstructorFn",
+    "ModelsAggregatorFn",
     "ResponseScorerFn",
     "SamplesAggregatorFn",
     "LocalEvalService",

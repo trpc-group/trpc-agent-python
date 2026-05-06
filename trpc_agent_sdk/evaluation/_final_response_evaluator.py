@@ -33,6 +33,8 @@ class FinalResponseEvaluator(Evaluator):
     else exact text. Score 1.0 or 0.0 per invocation, overall = mean.
     """
 
+    requires_reference = True
+
     def __init__(
         self,
         threshold: Optional[float] = None,

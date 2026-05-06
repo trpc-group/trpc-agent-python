@@ -35,6 +35,29 @@ from ._eval_metrics import EvalMetric
 from ._eval_metrics import EvalStatus
 
 
+class NamedScoreResult(EvalBaseModel):
+    """One judge model's per-invocation score, used inside PerInvocationResult.per_model_scores.
+
+    Attributes:
+        model_name: Judge model name.
+        provider_name: Provider name; empty when unset.
+        score: Numeric score from this model after SamplesAggregator on its own samples.
+        reason: Reason text from the judge model (or exception text on soft failure).
+        rubric_scores: Per-rubric scores (rubric metrics). Use _llm_criterion.RubricScore.
+        passed: True iff score >= metric.threshold.
+    """
+
+    model_name: str = Field(default="", description="Judge model name.")
+    provider_name: str = Field(default="", description="Provider name.")
+    score: float = Field(default=0.0, description="Score from this model.")
+    reason: str = Field(default="", description="Reason from this model.")
+    rubric_scores: list[Any] = Field(
+        default_factory=list,
+        description="Per-rubric scores from this model (rubric metrics).",
+    )
+    passed: bool = Field(default=False, description="True iff score >= threshold.")
+
+
 class PerInvocationResult(EvalBaseModel):
     """Result for a single invocation.
 
@@ -55,6 +78,11 @@ class PerInvocationResult(EvalBaseModel):
     rubric_scores: Optional[list[Any]] = Field(
         default=None,
         description="Per-rubric scores (LLM rubric metrics). Use _llm_criterion.RubricScore.",
+    )
+    per_model_scores: Optional[list[NamedScoreResult]] = Field(
+        default=None,
+        description=("Per-judge-model breakdown for multi-model LLM judge metrics. "
+                     "None for single-model or non-LLM metrics (back-compatible)."),
     )
 
 

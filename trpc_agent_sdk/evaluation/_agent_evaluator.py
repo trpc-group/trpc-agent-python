@@ -51,6 +51,7 @@ from trpc_agent_sdk.agents import BaseAgent
 from ._local_eval_service import LocalEvalService
 from . import _utils
 from ._eval_callbacks import Callbacks
+from ._eval_case import EvalModeTrace
 from ._eval_config import EvalConfig
 from ._eval_metrics import EvalStatus
 from ._eval_pass import pass_at_k as _pass_at_k
@@ -85,8 +86,9 @@ class _EvalExecuter:
 
     def __init__(
         self,
-        agent_module: str,
         eval_dataset_file_path_or_dir: str,
+        *,
+        agent_module: Optional[str] = None,
         num_runs: int = NUM_RUNS,
         agent_name: Optional[str] = None,
         print_detailed_results: bool = True,
@@ -95,6 +97,7 @@ class _EvalExecuter:
         case_parallelism: Optional[int] = None,
         case_eval_parallelism: Optional[int] = None,
         callbacks: Optional[Callbacks] = None,
+        eval_metrics_file_path_or_dir: Optional[str] = None,
     ):
         self._agent_module = agent_module
         self._eval_dataset_file_path_or_dir = eval_dataset_file_path_or_dir
@@ -106,6 +109,7 @@ class _EvalExecuter:
         self._case_parallelism = case_parallelism
         self._case_eval_parallelism = case_eval_parallelism
         self._callbacks = callbacks
+        self._eval_metrics_file_path_or_dir = eval_metrics_file_path_or_dir
         self._result: Optional[EvaluateResult] = None
         self._task: Optional[asyncio.Task] = None
 
@@ -120,6 +124,10 @@ class _EvalExecuter:
         case_parallelism = self._case_parallelism
         case_eval_parallelism = self._case_eval_parallelism
         callbacks = self._callbacks
+        eval_metrics_file_path_or_dir = self._eval_metrics_file_path_or_dir
+
+        # Resolve shared config once; None means "fall back to dataset-local test_config.json".
+        shared_eval_config = AgentEvaluator._resolve_shared_config(eval_metrics_file_path_or_dir)
 
         test_files = []
         if os.path.isdir(eval_dataset_file_path_or_dir):
@@ -139,15 +147,22 @@ class _EvalExecuter:
         all_results: list[tuple[str, list[str]]] = []
         results_by_eval_set_id: dict[str, EvalSetAggregateResult] = {}
         for test_file in test_files:
-            eval_config = AgentEvaluator.find_config_for_test_file(test_file)
+            if shared_eval_config is not None:
+                eval_config = shared_eval_config
+                # When shared config is explicit, honor its num_runs iff user
+                # set one; we keep the same precedence behavior as the
+                # dataset-local path (config overrides parameter).
+                num_runs_for_set = eval_config.num_runs
+            else:
+                eval_config = AgentEvaluator.find_config_for_test_file(test_file)
+                # Config (test_config.json) overrides parameter
+                config_path = os.path.join(os.path.dirname(test_file), "test_config.json")
+                num_runs_for_set = (eval_config.num_runs if os.path.exists(config_path) else num_runs)
             eval_set = AgentEvaluator._load_eval_set_from_file(test_file, eval_config)
-            # Config (test_config.json) overrides parameter
-            config_path = os.path.join(os.path.dirname(test_file), "test_config.json")
-            num_runs_for_set = (eval_config.num_runs if os.path.exists(config_path) else num_runs)
             failed_summary, details_lines, result_lines, eval_results_by_eval_id = (
                 await AgentEvaluator.evaluate_eval_set(
+                    eval_set,
                     agent_module=agent_module,
-                    eval_set=eval_set,
                     eval_config=eval_config,
                     num_runs=num_runs_for_set,
                     agent_name=agent_name,
@@ -172,7 +187,7 @@ class _EvalExecuter:
             _RESULT_HANDLER.print_evaluation_report(
                 all_details=all_details,
                 all_results=all_results,
-                display_agent_name=agent_name or agent_module,
+                display_agent_name=agent_name or agent_module or "trace-only",
                 num_runs=num_runs_for_set,
             )
         self._result = EvaluateResult(results_by_eval_set_id=results_by_eval_set_id)
@@ -232,8 +247,8 @@ class AgentEvaluator:
 
         # Run evaluation
         await AgentEvaluator.evaluate_eval_set(
-            agent=my_agent,
-            eval_set=eval_set,
+            eval_set,
+            agent_module="my_pkg.my_agent",
             eval_config=eval_config,
         )
         ```
@@ -254,9 +269,19 @@ class AgentEvaluator:
         return AgentEvaluator._load_config_from_file(config_path)
 
     @staticmethod
+    def _is_trace_only(eval_set: EvalSet) -> bool:
+        """Return True iff every case in the EvalSet has eval_mode == 'trace'.
+
+        Empty eval_cases list returns True by ``all()`` semantics; callers
+        that require at least one case should validate separately.
+        """
+        return all(case.eval_mode == EvalModeTrace for case in eval_set.eval_cases)
+
+    @staticmethod
     async def evaluate(
-        agent_module: str,
         eval_dataset_file_path_or_dir: str,
+        *,
+        agent_module: Optional[str] = None,
         num_runs: int = NUM_RUNS,
         agent_name: Optional[str] = None,
         print_detailed_results: bool = True,
@@ -265,13 +290,17 @@ class AgentEvaluator:
         case_parallelism: Optional[int] = None,
         case_eval_parallelism: Optional[int] = None,
         callbacks: Optional[Callbacks] = None,
+        eval_metrics_file_path_or_dir: Optional[str] = None,
     ) -> None:
         """Run evaluation; no result returned. Use get_executer() if you need the result.
 
         Args:
-            agent_module: Python module path containing the agent (look for 'root_agent' or 'get_agent_async').
             eval_dataset_file_path_or_dir: Path to eval dataset file or directory
-                (recursively .test.json / .evalset.json).
+                (recursively .test.json / .evalset.json). Positional-only usage
+                recommended.
+            agent_module: Python module path containing the agent (look for
+                'root_agent' or 'get_agent_async'). Optional when every case in
+                every discovered dataset uses ``eval_mode='trace'``.
             num_runs: Number of runs per eval set.
             agent_name: Display name of the agent.
             print_detailed_results: Whether to print per-case details.
@@ -281,10 +310,14 @@ class AgentEvaluator:
             case_eval_parallelism: Max concurrent cases for evaluation (scoring);
                 None uses default.
             callbacks: Optional lifecycle callbacks.
+            eval_metrics_file_path_or_dir: Optional explicit path to a shared
+                evaluation config JSON (file) or directory containing a single
+                config JSON. When provided, overrides the dataset-local
+                ``test_config.json`` convention for ALL discovered datasets.
         """
         executer = AgentEvaluator.get_executer(
+            eval_dataset_file_path_or_dir,
             agent_module=agent_module,
-            eval_dataset_file_path_or_dir=eval_dataset_file_path_or_dir,
             num_runs=num_runs,
             agent_name=agent_name,
             print_detailed_results=print_detailed_results,
@@ -293,13 +326,15 @@ class AgentEvaluator:
             case_parallelism=case_parallelism,
             case_eval_parallelism=case_eval_parallelism,
             callbacks=callbacks,
+            eval_metrics_file_path_or_dir=eval_metrics_file_path_or_dir,
         )
         await executer.evaluate()
 
     @staticmethod
     def get_executer(
-        agent_module: str,
         eval_dataset_file_path_or_dir: str,
+        *,
+        agent_module: Optional[str] = None,
         num_runs: int = NUM_RUNS,
         agent_name: Optional[str] = None,
         print_detailed_results: bool = True,
@@ -308,13 +343,17 @@ class AgentEvaluator:
         case_parallelism: Optional[int] = None,
         case_eval_parallelism: Optional[int] = None,
         callbacks: Optional[Callbacks] = None,
+        eval_metrics_file_path_or_dir: Optional[str] = None,
     ) -> _EvalExecuter:
         """Return an executer (does not run). Await executer.evaluate() then executer.get_result() for result.
 
         Args:
-            agent_module: Python module path containing the agent (look for 'root_agent' or 'get_agent_async').
             eval_dataset_file_path_or_dir: Path to eval dataset file or directory
-                (recursively .test.json / .evalset.json).
+                (recursively .test.json / .evalset.json). Positional-only usage
+                recommended.
+            agent_module: Python module path containing the agent (look for
+                'root_agent' or 'get_agent_async'). Optional when every case in
+                every discovered dataset uses ``eval_mode='trace'``.
             num_runs: Number of runs per eval set.
             agent_name: Display name of the agent.
             print_detailed_results: Whether to print per-case details.
@@ -324,13 +363,17 @@ class AgentEvaluator:
             case_eval_parallelism: Max concurrent cases for evaluation (scoring);
                 None uses default.
             callbacks: Optional lifecycle callbacks.
+            eval_metrics_file_path_or_dir: Optional explicit path to a shared
+                evaluation config JSON (file) or directory containing a single
+                config JSON. When provided, overrides the dataset-local
+                ``test_config.json`` convention for ALL discovered datasets.
 
         Returns:
             _EvalExecuter: Await .evaluate() to run, then .get_result() for EvaluateResult.
         """
         return _EvalExecuter(
+            eval_dataset_file_path_or_dir,
             agent_module=agent_module,
-            eval_dataset_file_path_or_dir=eval_dataset_file_path_or_dir,
             num_runs=num_runs,
             agent_name=agent_name,
             print_detailed_results=print_detailed_results,
@@ -339,6 +382,7 @@ class AgentEvaluator:
             case_parallelism=case_parallelism,
             case_eval_parallelism=case_eval_parallelism,
             callbacks=callbacks,
+            eval_metrics_file_path_or_dir=eval_metrics_file_path_or_dir,
         )
 
     @staticmethod
@@ -384,8 +428,9 @@ class AgentEvaluator:
 
     @staticmethod
     async def evaluate_eval_set(
-        agent_module: str,
         eval_set: EvalSet,
+        *,
+        agent_module: Optional[str] = None,
         eval_config: Optional[EvalConfig] = None,
         num_runs: int = NUM_RUNS,
         agent_name: Optional[str] = None,
@@ -399,10 +444,14 @@ class AgentEvaluator:
         """Evaluates an agent using the given EvalSet.
 
         Args:
+            eval_set: The eval set. (Positional-only usage recommended.)
             agent_module: The path to python module that contains the definition of
                 the agent. There is convention in place here, where the code is going to
                 look for 'root_agent' or `get_agent_async` in the loaded module.
-            eval_set: The eval set.
+                Optional when every case in ``eval_set`` has ``eval_mode == 'trace'``
+                (pre-recorded conversation used as inference result, no agent run).
+                Required otherwise; a ``ValueError`` is raised listing non-trace
+                case ids.
             eval_config: The evaluation config.
             num_runs: Number of times all entries in the eval dataset should be
                 assessed.
@@ -427,7 +476,16 @@ class AgentEvaluator:
         if eval_config is None:
             raise ValueError("`eval_config` is required.")
 
-        agent_for_eval = await AgentEvaluator._get_agent_for_eval(module_name=agent_module, agent_name=agent_name)
+        trace_only = AgentEvaluator._is_trace_only(eval_set)
+        if agent_module is None and not trace_only:
+            non_trace_ids = [case.eval_id for case in eval_set.eval_cases if case.eval_mode != EvalModeTrace]
+            raise ValueError("`agent_module` is required unless every case in eval_set uses "
+                             "eval_mode='trace'. Non-trace case ids: "
+                             f"{non_trace_ids}")
+
+        agent_for_eval: Optional[BaseAgent] = None
+        if agent_module is not None:
+            agent_for_eval = await AgentEvaluator._get_agent_for_eval(module_name=agent_module, agent_name=agent_name)
         eval_metrics = eval_config.get_eval_metrics()
 
         user_simulator_provider = UserSimulatorProvider(user_simulator_config=eval_config.user_simulator_config)
@@ -448,7 +506,7 @@ class AgentEvaluator:
 
         # Step 2: Post-process the results
         failures: list[str] = []
-        display_agent_name = agent_name or agent_module
+        display_agent_name = agent_name or agent_module or "trace-only"
         details_lines: list[str] = []
         result_lines: list[str] = []
 
@@ -620,6 +678,70 @@ class AgentEvaluator:
             raise ValueError(f"Failed to load config from {file_path}: {ex}")
 
     @staticmethod
+    def _load_config_from_file_strict(file_path: str) -> EvalConfig:
+        """Load EvalConfig from JSON file; raise if missing (no default fallback).
+
+        Unlike ``_load_config_from_file`` which silently returns a default config
+        when the file is absent, this strict variant is intended for explicit
+        user-supplied paths (e.g. ``eval_metrics_file_path_or_dir``) where a
+        missing file is a programmer error, not a signal to use defaults.
+
+        Args:
+            file_path: Path to the config JSON file. Must exist.
+
+        Returns:
+            EvalConfig instance loaded from ``file_path``.
+
+        Raises:
+            FileNotFoundError: If ``file_path`` does not exist.
+            ValueError: If the file cannot be parsed as EvalConfig JSON.
+        """
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Eval metrics/config file not found: {file_path}")
+        return AgentEvaluator._load_config_from_file(file_path)
+
+    @staticmethod
+    def _resolve_shared_config(eval_metrics_file_path_or_dir: Optional[str], ) -> Optional[EvalConfig]:
+        """Resolve a user-provided metrics/config path into a single EvalConfig.
+
+        Resolution rules:
+        - ``None``                 -> returns ``None`` (no shared config; callers
+          fall back to per-dataset ``test_config.json`` convention).
+        - Path is a regular file  -> load that file strictly.
+        - Path is a directory:
+            - Exactly one ``*.json`` in the directory (non-recursive) -> load it.
+            - Zero ``*.json``     -> ``FileNotFoundError``.
+            - Two or more         -> ``ValueError`` (ambiguous).
+        - Path does not exist     -> ``FileNotFoundError``.
+
+        Args:
+            eval_metrics_file_path_or_dir: User-supplied path or None.
+
+        Returns:
+            EvalConfig when a shared config was resolved, else None.
+        """
+        if eval_metrics_file_path_or_dir is None:
+            return None
+
+        path = eval_metrics_file_path_or_dir
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"eval_metrics_file_path_or_dir does not exist: {path}")
+
+        if os.path.isfile(path):
+            return AgentEvaluator._load_config_from_file_strict(path)
+
+        # Directory case: non-recursive lookup for *.json
+        json_files = sorted(
+            os.path.join(path, entry) for entry in os.listdir(path)
+            if entry.endswith(".json") and os.path.isfile(os.path.join(path, entry)))
+        if not json_files:
+            raise FileNotFoundError(f"No *.json config file found in directory: {path}")
+        if len(json_files) > 1:
+            raise ValueError("eval_metrics_file_path_or_dir directory contains multiple "
+                             f"*.json files; expected exactly one. Found: {json_files}")
+        return AgentEvaluator._load_config_from_file_strict(json_files[0])
+
+    @staticmethod
     def _get_eval_sets_manager(app_name: str, eval_set: EvalSet) -> EvalSetsManager:
         """Create and populate an in-memory eval sets manager.
 
@@ -644,7 +766,7 @@ class AgentEvaluator:
 
     @staticmethod
     async def _get_eval_results_by_eval_id(
-        agent_for_eval: BaseAgent,
+        agent_for_eval: Optional[BaseAgent],
         eval_set: EvalSet,
         eval_metrics: list,
         num_runs: int,
@@ -735,9 +857,12 @@ class AgentEvaluator:
 
         return eval_results_by_eval_id
 
+    # yapf: disable
     @staticmethod
     def _get_eval_metric_results_with_invocation(
-        eval_results_per_eval_id: list[EvalCaseResult], ) -> dict[str, list[_utils.MetricRunRecord]]:
+        eval_results_per_eval_id: list[EvalCaseResult],
+    ) -> dict[str, list[_utils.MetricRunRecord]]:
+        # yapf: enable
         """Returns MetricRunRecord grouped by metric.
 
         EvalCaseResult contain results for each metric per invocation.

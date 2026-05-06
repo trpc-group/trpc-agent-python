@@ -13,10 +13,22 @@ from typing import Optional
 
 from pydantic import Field
 from pydantic import model_serializer
+from pydantic import model_validator
 
 from ._common import EvalBaseModel
 
 DEFAULT_NUM_SAMPLES = 1
+DEFAULT_MODELS_AGGREGATOR = "all_pass"
+DEFAULT_PARALLEL = True
+BUILT_IN_MODELS_AGGREGATORS = frozenset({
+    "all_pass",
+    "any_pass",
+    "majority_pass",
+    "avg",
+    "weighted_avg",
+    "weighted_majority",
+})
+WEIGHTED_MODELS_AGGREGATORS = frozenset({"weighted_avg", "weighted_majority"})
 
 
 def sanitize_criterion_for_export(criterion: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
@@ -80,6 +92,17 @@ class JudgeModelOptions(EvalBaseModel):
         default=None,
         description="Generation params: max_tokens, temperature, stream, etc.",
     )
+    weight: float = Field(
+        default=1.0,
+        description="Weight for weighted_* models_aggregator; ignored otherwise.",
+    )
+    think: Optional[bool] = Field(
+        default=None,
+        description=("Toggle judge thinking mode. None (default): no change; "
+                     "False: disable thinking via both ThinkingConfig(include_thoughts=False, "
+                     "thinking_budget=0) and extra_body.chat_template_kwargs.enable_thinking=False; "
+                     "True: enable thinking with automatic budget."),
+    )
 
     def get_num_samples(self) -> int:
         """Return configured num_samples or DEFAULT_NUM_SAMPLES."""
@@ -123,6 +146,22 @@ class LLMJudgeCriterion(EvalBaseModel):
         default=None,
         description="Judge model options (required for all LLM judge metrics).",
     )
+    judge_models: Optional[list[JudgeModelOptions]] = Field(
+        default=None,
+        description=("Multi-model judge list. Mutually exclusive with judge_model. "
+                     "Cross-model results are combined by models_aggregator."),
+    )
+    models_aggregator: str = Field(
+        default=DEFAULT_MODELS_AGGREGATOR,
+        description=("Cross-model aggregation strategy. Built-in: all_pass | any_pass | "
+                     "majority_pass | avg | weighted_avg | weighted_majority. "
+                     "Custom names must be registered via "
+                     "LLM_EVALUATOR_REGISTRY.register_models_aggregator before LLMJudge construction."),
+    )
+    parallel: bool = Field(
+        default=DEFAULT_PARALLEL,
+        description="Run multiple judge models concurrently via asyncio.gather (default True).",
+    )
     rubrics: list[Rubric] = Field(
         default_factory=list,
         description="Rubric items for rubric-based metrics.",
@@ -144,6 +183,44 @@ class LLMJudgeCriterion(EvalBaseModel):
         if self.knowledge_tool_names:
             return list(self.knowledge_tool_names)
         return list(DEFAULT_KNOWLEDGE_TOOL_NAMES)
+
+    @model_validator(mode="after")
+    def _validate_multi_model_fields(self) -> "LLMJudgeCriterion":
+        """Validate judge_model/judge_models exclusivity, weights, and aggregator name shape.
+
+        Registry-registered aggregator names are not validated here; only built-in
+        names are rejected at LLMJudge construction time when registry lookup misses.
+        """
+        if self.judge_model is not None and self.judge_models is not None:
+            raise ValueError("judge_model and judge_models are mutually exclusive; set only one")
+        if self.judge_models is not None and len(self.judge_models) == 0:
+            raise ValueError("judge_models must not be empty when set")
+        if not isinstance(self.models_aggregator, str) or not self.models_aggregator:
+            raise ValueError("models_aggregator must be a non-empty string")
+        models = self.get_judge_models()
+        for m in models:
+            if m.weight < 0:
+                raise ValueError(f"judge model weight must not be negative: model_name={m.model_name!r} "
+                                 f"weight={m.weight}")
+        if self.models_aggregator in WEIGHTED_MODELS_AGGREGATORS and models:
+            total = sum(m.weight for m in models)
+            if total <= 0:
+                raise ValueError(f"models_aggregator={self.models_aggregator!r} requires sum of weights > 0; "
+                                 f"got total weight {total}")
+        return self
+
+    def get_judge_models(self) -> list[JudgeModelOptions]:
+        """Return effective list of judge model options.
+
+        - judge_models set -> returned as-is.
+        - only legacy judge_model set -> returned as 1-element list.
+        - neither set -> []. Caller (LLMJudge) decides whether to error.
+        """
+        if self.judge_models is not None:
+            return list(self.judge_models)
+        if self.judge_model is not None:
+            return [self.judge_model]
+        return []
 
     @classmethod
     def from_dict(cls, d: dict | None) -> Optional["LLMJudgeCriterion"]:

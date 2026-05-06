@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import copy
 import json
 import os
 import uuid
@@ -21,10 +23,14 @@ from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.context import create_agent_context
 from trpc_agent_sdk.context import new_invocation_context_id
 from trpc_agent_sdk.models import ModelRegistry
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.planners import BuiltInPlanner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import GenerateContentConfig
+from trpc_agent_sdk.types import HttpOptions
 from trpc_agent_sdk.types import Part
+from trpc_agent_sdk.types import ThinkingConfig
 
 from ._eval_case import IntermediateData
 from ._eval_case import Invocation
@@ -33,8 +39,10 @@ from ._eval_case import get_all_tool_responses
 from ._eval_metrics import EvalMetric
 from ._eval_metrics import EvalStatus
 from ._eval_result import EvaluationResult
+from ._eval_result import NamedScoreResult
 from ._eval_result import PerInvocationResult
 from ._llm_criterion import LLMJudgeCriterion
+from ._llm_criterion import JudgeModelOptions
 from ._llm_criterion import Rubric
 from ._llm_criterion import RubricScore
 from ._llm_criterion import ScoreResult
@@ -103,6 +111,18 @@ class InvocationsAggregator(Protocol):
         ...
 
 
+class ModelsAggregator(Protocol):
+    """Aggregates per-model judge ScoreResults (single invocation, multiple judge models) into one ScoreResult."""
+
+    def aggregate_models(
+        self,
+        per_model: list[ScoreResult],
+        threshold: float,
+        weights: list[float],
+    ) -> ScoreResult:
+        ...
+
+
 class MajorityVoteSamplesAggregator:
     """Selects one sample by majority vote on pass/fail; on tie, prefers a failed sample if any."""
 
@@ -138,6 +158,161 @@ class AverageInvocationsAggregator:
         overall = sum(scores) / len(scores)
         status = EvalStatus.PASSED if overall >= threshold else EvalStatus.FAILED
         return (overall, status)
+
+
+def _format_per_model_reason(per_model: list[ScoreResult], threshold: float) -> str:
+    """Build a multi-line per-model breakdown string for ScoreResult.reason."""
+    lines: list[str] = []
+    for i, s in enumerate(per_model):
+        passed = (s.score or 0.0) >= threshold
+        snippet = (s.reason or "").replace("\n", " ").strip()
+        if len(snippet) > 200:
+            snippet = snippet[:200] + "..."
+        lines.append(f"  model#{i}: score={s.score:.4f} passed={passed} reason={snippet}")
+    return "\n".join(lines)
+
+
+class AllPassModelsAggregator:
+    """All models must pass (AND); returned score = min(scores)."""
+
+    def aggregate_models(
+        self,
+        per_model: list[ScoreResult],
+        threshold: float,
+        weights: list[float],
+    ) -> ScoreResult:
+        if not per_model:
+            raise ValueError("per_model must not be empty")
+        scores = [s.score or 0.0 for s in per_model]
+        overall = min(scores)
+        passed_all = all(s >= threshold for s in scores)
+        base_reason = _format_per_model_reason(per_model, threshold)
+        reason = f"{base_reason}\naggregator=all_pass -> {'PASSED' if passed_all else 'FAILED'}"
+        return ScoreResult(score=overall, reason=reason)
+
+
+class AnyPassModelsAggregator:
+    """Any model passing is enough (OR); returned score = max(scores)."""
+
+    def aggregate_models(
+        self,
+        per_model: list[ScoreResult],
+        threshold: float,
+        weights: list[float],
+    ) -> ScoreResult:
+        if not per_model:
+            raise ValueError("per_model must not be empty")
+        scores = [s.score or 0.0 for s in per_model]
+        overall = max(scores)
+        passed_any = any(s >= threshold for s in scores)
+        base_reason = _format_per_model_reason(per_model, threshold)
+        reason = f"{base_reason}\naggregator=any_pass -> {'PASSED' if passed_any else 'FAILED'}"
+        return ScoreResult(score=overall, reason=reason)
+
+
+class MajorityPassModelsAggregator:
+    """Strict majority must pass (passed*2 > total). Score = passed_count/total."""
+
+    def aggregate_models(
+        self,
+        per_model: list[ScoreResult],
+        threshold: float,
+        weights: list[float],
+    ) -> ScoreResult:
+        if not per_model:
+            raise ValueError("per_model must not be empty")
+        passed_count = sum(1 for s in per_model if (s.score or 0.0) >= threshold)
+        total = len(per_model)
+        overall = passed_count / total if total else 0.0
+        passed_majority = passed_count * 2 > total
+        reason = (_format_per_model_reason(per_model, threshold) + f"\naggregator=majority_pass -> "
+                  f"{'PASSED' if passed_majority else 'FAILED'} ({passed_count}/{total})")
+        return ScoreResult(score=overall, reason=reason)
+
+
+class AverageModelsAggregator:
+    """Mean of scores."""
+
+    def aggregate_models(
+        self,
+        per_model: list[ScoreResult],
+        threshold: float,
+        weights: list[float],
+    ) -> ScoreResult:
+        if not per_model:
+            raise ValueError("per_model must not be empty")
+        scores = [s.score or 0.0 for s in per_model]
+        overall = sum(scores) / len(scores)
+        reason = (_format_per_model_reason(per_model, threshold) + f"\naggregator=avg -> mean={overall:.4f}")
+        return ScoreResult(score=overall, reason=reason)
+
+
+class WeightedAverageModelsAggregator:
+    """Weighted mean: sum(w*s)/sum(w). Zero total -> 0.0."""
+
+    def aggregate_models(
+        self,
+        per_model: list[ScoreResult],
+        threshold: float,
+        weights: list[float],
+    ) -> ScoreResult:
+        if not per_model:
+            raise ValueError("per_model must not be empty")
+        if len(weights) != len(per_model):
+            raise ValueError(f"weights length {len(weights)} must equal per_model length {len(per_model)}")
+        total_w = sum(weights)
+        if total_w <= 0:
+            overall = 0.0
+        else:
+            overall = sum(w * (s.score or 0.0) for w, s in zip(weights, per_model)) / total_w
+        base_reason = _format_per_model_reason(per_model, threshold)
+        reason = f"{base_reason}\naggregator=weighted_avg -> weighted_mean={overall:.4f} (total_w={total_w})"
+        return ScoreResult(score=overall, reason=reason)
+
+
+class WeightedMajorityModelsAggregator:
+    """passed_weight*2 > total_weight (strict). Score = passed_weight/total_weight."""
+
+    def aggregate_models(
+        self,
+        per_model: list[ScoreResult],
+        threshold: float,
+        weights: list[float],
+    ) -> ScoreResult:
+        if not per_model:
+            raise ValueError("per_model must not be empty")
+        if len(weights) != len(per_model):
+            raise ValueError(f"weights length {len(weights)} must equal per_model length {len(per_model)}")
+        total_w = sum(weights)
+        passed_w = sum(w for w, s in zip(weights, per_model) if (s.score or 0.0) >= threshold)
+        if total_w <= 0:
+            overall = 0.0
+            passed_majority = False
+        else:
+            overall = passed_w / total_w
+            passed_majority = passed_w * 2 > total_w
+        reason = (_format_per_model_reason(per_model, threshold) + f"\naggregator=weighted_majority -> "
+                  f"{'PASSED' if passed_majority else 'FAILED'} "
+                  f"(passed_w={passed_w}, total_w={total_w})")
+        return ScoreResult(score=overall, reason=reason)
+
+
+_BUILTIN_MODELS_AGGREGATORS: dict[str, type] = {
+    "all_pass": AllPassModelsAggregator,
+    "any_pass": AnyPassModelsAggregator,
+    "majority_pass": MajorityPassModelsAggregator,
+    "avg": AverageModelsAggregator,
+    "weighted_avg": WeightedAverageModelsAggregator,
+    "weighted_majority": WeightedMajorityModelsAggregator,
+}
+
+
+def get_builtin_models_aggregator(name: str) -> Optional[ModelsAggregator]:
+    """Return a built-in ModelsAggregator instance by name, or None if unknown."""
+    cls = _BUILTIN_MODELS_AGGREGATORS.get(name)
+    if cls is None:
+        return None
+    return cls()
 
 
 def _extract_text_from_content(content: Any) -> str:
@@ -617,13 +792,97 @@ def _expand_env(s: str) -> str:
     return os.path.expandvars(s)
 
 
+def _create_judge_model(opts: JudgeModelOptions) -> Any:
+    """Build the underlying LLM model for one judge option.
+
+    Provider routing:
+      - provider_name empty or "openai" -> OpenAIModel(...) directly. This
+        matches the framework's standard pattern for OpenAI-compatible
+        endpoints (see examples/llmagent/) and ensures http_options.extra_body
+        (e.g. chat_template_kwargs.enable_thinking used by judge `think` field)
+        is forwarded to the backend. Routing via "openai/<name>" through
+        ModelRegistry lands on LiteLLMModel whose current implementation
+        drops extra_body.
+      - Any other provider_name -> ModelRegistry.create_model("{provider}/{model}")
+        which routes to LiteLLMModel for multi-provider support.
+    """
+    provider_name = _expand_env(opts.provider_name or "")
+    model_name = _expand_env(opts.model_name or "")
+    base_url = _expand_env(opts.base_url or "")
+    api_key = _expand_env(opts.api_key or "")
+    extra = dict(opts.extra_fields or {})
+
+    if not provider_name or provider_name.lower() == "openai":
+        # Direct OpenAIModel instantiation bypasses ModelRegistry regex routing,
+        # so any model_name (e.g. "glm-5.1-w4afp8") works against any
+        # OpenAI-compatible endpoint.
+        return OpenAIModel(
+            model_name=model_name,
+            api_key=api_key,
+            base_url=base_url or None,
+            **extra,
+        )
+
+    model_str = f"{provider_name}/{model_name}"
+    return ModelRegistry.create_model(
+        model_str,
+        api_key=api_key,
+        base_url=base_url or "",
+        **extra,
+    )
+
+
 # Default judge generation params when not specified in criterion.
 DEFAULT_JUDGE_MAX_TOKENS = 4096
 DEFAULT_JUDGE_TEMPERATURE = 0.8
 
 
-def _judge_generation_config(gen: dict[str, Any] | None) -> GenerateContentConfig:
-    """Build GenerateContentConfig from criterion generation_config; use defaults for missing fields."""
+def _merge_extra_body(
+    http_options: Optional[HttpOptions],
+    patch: dict[str, Any],
+) -> HttpOptions:
+    """Deep-merge patch into http_options.extra_body at nested-dict granularity.
+
+    - None http_options -> returns new HttpOptions(extra_body=deepcopy(patch)).
+    - For top-level keys in patch: if both sides have dict, merge recursively (deep-copying
+      patch values); otherwise patch value wins.
+    - Other existing top-level keys in http_options.extra_body are preserved.
+    """
+    base = (http_options.extra_body or {}) if http_options is not None else {}
+    merged: dict[str, Any] = dict(base)
+    for key, patch_val in patch.items():
+        base_val = merged.get(key)
+        if isinstance(base_val, dict) and isinstance(patch_val, dict):
+            new_child = dict(base_val)
+            for subkey, subval in patch_val.items():
+                new_child[subkey] = copy.deepcopy(subval)
+            merged[key] = new_child
+        else:
+            merged[key] = copy.deepcopy(patch_val)
+    if http_options is None:
+        return HttpOptions(extra_body=merged)
+    return http_options.model_copy(update={"extra_body": merged})
+
+
+def _judge_generation_config(
+    gen: dict[str, Any] | None,
+    think: Optional[bool],
+) -> tuple[GenerateContentConfig, Optional[ThinkingConfig]]:
+    """Build GenerateContentConfig from criterion generation_config and resolve thinking config.
+
+    Returns (cfg, effective_thinking_config):
+      - cfg: GenerateContentConfig WITHOUT thinking_config set (LlmAgent rejects it;
+        thinking_config must be applied via BuiltInPlanner).
+      - effective_thinking_config: None means caller should not build a planner;
+        otherwise caller wraps it in BuiltInPlanner.
+
+    Resolution order:
+      1. Parse gen for base fields (max_tokens/temperature/top_p/stop/...).
+      2. Parse gen["thinking_config"] dict into a candidate ThinkingConfig (not written to cfg).
+      3. Parse gen["http_options"] dict into cfg.http_options (if present).
+      4. If `think` is not None, override the candidate ThinkingConfig and deep-merge
+         chat_template_kwargs.enable_thinking into cfg.http_options (preserving siblings).
+    """
     gen = gen or {}
     cfg = GenerateContentConfig()
     cfg.max_output_tokens = (gen.get("max_tokens") or gen.get("max_output_tokens") or DEFAULT_JUDGE_MAX_TOKENS)
@@ -638,7 +897,43 @@ def _judge_generation_config(gen: dict[str, Any] | None) -> GenerateContentConfi
         setattr(cfg, "presence_penalty", gen["presence_penalty"])
     if "frequency_penalty" in gen and gen["frequency_penalty"] is not None:
         setattr(cfg, "frequency_penalty", gen["frequency_penalty"])
-    return cfg
+
+    # Parse thinking_config dict from generation_config (candidate; may be overridden by `think`).
+    effective_thinking_config: Optional[ThinkingConfig] = None
+    tc_dict = gen.get("thinking_config")
+    if isinstance(tc_dict, dict):
+        effective_thinking_config = ThinkingConfig(**tc_dict)
+
+    # Parse http_options dict from generation_config, if any.
+    http_opts_dict = gen.get("http_options")
+    if isinstance(http_opts_dict, dict):
+        cfg.http_options = HttpOptions(**http_opts_dict)
+
+    # `think` field overrides both paths when set.
+    if think is True:
+        effective_thinking_config = ThinkingConfig(
+            include_thoughts=True,
+            thinking_budget=-1,
+        )
+        cfg.http_options = _merge_extra_body(
+            cfg.http_options,
+            {"chat_template_kwargs": {
+                "enable_thinking": True
+            }},
+        )
+    elif think is False:
+        effective_thinking_config = ThinkingConfig(
+            include_thoughts=False,
+            thinking_budget=0,
+        )
+        cfg.http_options = _merge_extra_body(
+            cfg.http_options,
+            {"chat_template_kwargs": {
+                "enable_thinking": False
+            }},
+        )
+
+    return cfg, effective_thinking_config
 
 
 class _JudgeAgent:
@@ -651,6 +946,7 @@ class _JudgeAgent:
         system_prompt: str,
         output_schema: Optional[type[PydanticBaseModel]] = None,
         tools: Optional[list] = None,
+        planner: Optional[Any] = None,
     ) -> None:
         self._agent = LlmAgent(
             name="judge",
@@ -660,6 +956,7 @@ class _JudgeAgent:
             add_name_to_instruction=False,
             output_schema=output_schema,
             tools=tools or [],
+            planner=planner,
         )
         self._session_service = InMemorySessionService()
 
@@ -694,9 +991,16 @@ class _JudgeAgent:
 
 
 class LLMJudge:
-    """Builds a judge agent from eval_metric.
-    Pluggable: messages constructor, response scorer, samples/invocations aggregators.
-    Defaults used when not provided.
+    """Builds judge agent(s) from eval_metric. Supports 1..N judge models with cross-model aggregation.
+
+    Pluggable: messages_constructor, response_scorer, samples_aggregator, invocations_aggregator,
+    models_aggregator, judge_tools.
+
+    models_aggregator resolution order:
+      1) explicit constructor argument (if any)
+      2) registry-registered ModelsAggregator for metric_name (resolved by caller, e.g. _judge_for_metric)
+      3) criterion.models_aggregator string -> built-in 6 names
+      4) fallback: all_pass
     """
 
     def __init__(
@@ -707,32 +1011,36 @@ class LLMJudge:
         response_scorer: Optional[ResponseScorer] = None,
         samples_aggregator: Optional[SamplesAggregator] = None,
         invocations_aggregator: Optional[InvocationsAggregator] = None,
+        models_aggregator: Optional[ModelsAggregator] = None,
         judge_tools: Optional[list] = None,
     ) -> None:
         if not eval_metric:
             raise ValueError("LLMJudge requires eval_metric")
         self._eval_metric = eval_metric
         criterion = get_llm_criterion_from_metric(eval_metric)
-        if not criterion or not criterion.judge_model:
-            raise ValueError("eval_metric.criterion.llmJudge with judge_model is required")
+        if not criterion:
+            raise ValueError("eval_metric.criterion.llmJudge is required")
+        judge_models_list = criterion.get_judge_models()
+        if not judge_models_list:
+            raise ValueError("eval_metric.criterion.llmJudge requires either judge_model or judge_models")
         self._criterion = criterion
         self._metric_name = eval_metric.metric_name or ""
+        self._judge_models: list[JudgeModelOptions] = judge_models_list
+        self._parallel: bool = bool(criterion.parallel)
 
-        opts = criterion.judge_model
-        provider_name = _expand_env(opts.provider_name or "")
-        model_name = _expand_env(opts.model_name or "")
-        base_url = _expand_env(opts.base_url or "")
-        api_key = _expand_env(opts.api_key or "")
-        model_str = f"{provider_name or 'openai'}/{model_name}"
-        extra = dict(opts.extra_fields or {})
-        model = ModelRegistry.create_model(
-            model_str,
-            api_key=api_key,
-            base_url=base_url or "",
-            **extra,
-        )
-        cfg = _judge_generation_config(opts.generation_config)
+        # Resolve models_aggregator: explicit > built-in name lookup > error.
+        resolved_models_agg = models_aggregator
+        if resolved_models_agg is None:
+            agg_name = criterion.models_aggregator or "all_pass"
+            built = get_builtin_models_aggregator(agg_name)
+            if built is None:
+                raise ValueError(f"models_aggregator {agg_name!r} is not a built-in name; "
+                                 f"register it via LLM_EVALUATOR_REGISTRY.register_models_aggregator "
+                                 f"before constructing LLMJudge")
+            resolved_models_agg = built
+        self._models_aggregator: ModelsAggregator = resolved_models_agg
 
+        # Pick metric-specific system prompt + user template + output schema (unchanged from before).
         if self._metric_name == "llm_final_response":
             system_prompt = FINAL_RESPONSE_PROMPT
             user_template = ("<user_prompt>\n"
@@ -746,6 +1054,7 @@ class LLMJudge:
                              "<reference_response>\n"
                              "{expected_response}\n"
                              "</reference_response>")
+            output_schema: Optional[type[PydanticBaseModel]] = FinalResponseOutput
         elif self._metric_name == "llm_rubric_response":
             system_prompt = _rubric_system(RUBRIC_RESPONSE_PROMPT)
             user_template = ("<user_prompt>\n"
@@ -763,6 +1072,7 @@ class LLMJudge:
                              "<rubric>\n"
                              "{rubrics}\n"
                              "</rubric>")
+            output_schema = RubricJudgeOutput
         elif self._metric_name == "llm_rubric_knowledge_recall":
             system_prompt = _rubric_system(RUBRIC_KNOWLEDGE_RECALL_PROMPT)
             user_template = ("<user_prompt>\n"
@@ -778,15 +1088,25 @@ class LLMJudge:
                              "<rubric>\n"
                              "{rubrics}\n"
                              "</rubric>")
+            output_schema = RubricJudgeOutput
         else:
             raise ValueError(f"Unsupported metric_name for LLMJudge: {self._metric_name!r}")
 
-        if self._metric_name == "llm_final_response":
-            output_schema: Optional[type[PydanticBaseModel]] = FinalResponseOutput
-        else:
-            output_schema = RubricJudgeOutput
-
-        self._agent = _JudgeAgent(model, cfg, system_prompt, output_schema=output_schema, tools=judge_tools)
+        # Build one _JudgeAgent per judge model option, in order.
+        self._judge_agents: list[_JudgeAgent] = []
+        for opts in judge_models_list:
+            model = _create_judge_model(opts)
+            cfg, effective_tc = _judge_generation_config(opts.generation_config, opts.think)
+            planner = (BuiltInPlanner(thinking_config=effective_tc) if effective_tc is not None else None)
+            self._judge_agents.append(
+                _JudgeAgent(
+                    model,
+                    cfg,
+                    system_prompt,
+                    output_schema=output_schema,
+                    tools=judge_tools,
+                    planner=planner,
+                ))
 
         self._messages_constructor = messages_constructor or DefaultMessagesConstructor(user_template)
         self._response_scorer = response_scorer or DefaultResponseScorer()
@@ -794,25 +1114,69 @@ class LLMJudge:
         self._invocations_aggregator = invocations_aggregator or AverageInvocationsAggregator()
 
     def get_num_samples(self) -> int:
-        """Return the number of judge samples to run per invocation (e.g. for majority vote)."""
+        """Return num_samples for the *first* judge model (legacy single-model API).
+
+        Multi-model judges may use different num_samples per model; callers that need
+        per-model sample counts should iterate criterion.get_judge_models() directly.
+        """
         return self._criterion.get_num_samples()
+
+    async def _run_one_judge(
+        self,
+        agent_index: int,
+        opts: JudgeModelOptions,
+        user_message: str,
+        threshold: float,
+    ) -> "tuple[NamedScoreResult, ScoreResult, bool]":
+        """Run num_samples calls for one judge model, then SamplesAggregator.
+
+        Returns (named_score, raw_score_result, had_exception). On exception, returns
+        a soft-failure NamedScoreResult with passed=False, score=0.0, reason=str(exc),
+        and had_exception=True.
+        """
+        agent = self._judge_agents[agent_index]
+        n = opts.get_num_samples()
+        try:
+            samples: list[ScoreResult] = []
+            for _ in range(n):
+                response_text = await agent.get_response(user_message)
+                samples.append(self._response_scorer.parse_response(response_text, self._metric_name))
+            chosen = self._samples_aggregator.aggregate_samples(samples, threshold)
+        except Exception as exc:
+            named = NamedScoreResult(
+                model_name=opts.model_name or "",
+                provider_name=opts.provider_name or "",
+                score=0.0,
+                reason=str(exc),
+                rubric_scores=[],
+                passed=False,
+            )
+            return named, ScoreResult(score=0.0, reason=str(exc)), True
+        passed = (chosen.score or 0.0) >= threshold
+        named = NamedScoreResult(
+            model_name=opts.model_name or "",
+            provider_name=opts.provider_name or "",
+            score=chosen.score or 0.0,
+            reason=chosen.reason or "",
+            rubric_scores=list(chosen.rubric_scores or []),
+            passed=passed,
+        )
+        return named, chosen, False
 
     async def evaluate(
         self,
         actual_invocations: list[Invocation],
         expected_invocations: Optional[list[Invocation]],
     ) -> EvaluationResult:
-        """Run the judge for each invocation, aggregate samples then invocations, and return EvaluationResult."""
+        """Run multi-model judge per invocation, aggregate per-model + per-invocation."""
         if expected_invocations is None:
             expected_invocations = []
         if len(actual_invocations) != len(expected_invocations):
             raise ValueError(f"actual_invocations ({len(actual_invocations)}) and "
                              f"expected_invocations ({len(expected_invocations)}) length mismatch")
-        num_samples = self.get_num_samples()
-        if num_samples <= 0:
-            raise ValueError("num_samples must be greater than 0")
 
         threshold = self._eval_metric.threshold
+        weights = [m.weight for m in self._judge_models]
         per_invocation_results: list[PerInvocationResult] = []
 
         for i in range(len(actual_invocations)):
@@ -826,22 +1190,56 @@ class LLMJudge:
                 self._metric_name,
             )
 
-            samples: list[ScoreResult] = []
-            for _ in range(num_samples):
-                response_text = await self._agent.get_response(user_message)
-                samples.append(self._response_scorer.parse_response(response_text, self._metric_name))
+            # Step 1: each model runs its own samples + SamplesAggregator -> (named, raw, had_exception)
+            if self._parallel and len(self._judge_models) > 1:
+                tasks = [
+                    self._run_one_judge(idx, opts, user_message, threshold)
+                    for idx, opts in enumerate(self._judge_models)
+                ]
+                triples = await asyncio.gather(*tasks)
+            else:
+                triples = []
+                for idx, opts in enumerate(self._judge_models):
+                    triples.append(await self._run_one_judge(idx, opts, user_message, threshold))
 
-            chosen = self._samples_aggregator.aggregate_samples(samples, threshold)
-            status = EvalStatus.PASSED if (chosen.score or 0) >= threshold else EvalStatus.FAILED
-            rubric_scores = (list(chosen.rubric_scores) if chosen.rubric_scores else None)
+            named_results: list[NamedScoreResult] = [t[0] for t in triples]
+            score_results: list[ScoreResult] = [t[1] for t in triples]
+            exceptions: list[bool] = [t[2] for t in triples]
+
+            # Step 2: if every model raised, mark NOT_EVALUATED.
+            all_exception = all(exceptions) and len(exceptions) > 0
+
+            if all_exception:
+                per_invocation_results.append(
+                    PerInvocationResult(
+                        actual_invocation=actual,
+                        expected_invocation=expected,
+                        score=None,
+                        eval_status=EvalStatus.NOT_EVALUATED,
+                        reason="all judge models failed: " + "; ".join(f"{n.model_name}={n.reason}"
+                                                                       for n in named_results),
+                        rubric_scores=None,
+                        per_model_scores=named_results,
+                    ))
+                continue
+
+            # Step 3: cross-model aggregation -> single ScoreResult
+            invocation_score = self._models_aggregator.aggregate_models(
+                score_results,
+                threshold,
+                weights,
+            )
+            status = (EvalStatus.PASSED if (invocation_score.score or 0.0) >= threshold else EvalStatus.FAILED)
+            rubric_scores = (list(invocation_score.rubric_scores) if invocation_score.rubric_scores else None)
             per_invocation_results.append(
                 PerInvocationResult(
                     actual_invocation=actual,
                     expected_invocation=expected,
-                    score=chosen.score,
+                    score=invocation_score.score,
                     eval_status=status,
-                    reason=chosen.reason or None,
+                    reason=invocation_score.reason or None,
                     rubric_scores=rubric_scores,
+                    per_model_scores=named_results,
                 ))
 
         overall_score, overall_status = self._invocations_aggregator.aggregate_invocations(
