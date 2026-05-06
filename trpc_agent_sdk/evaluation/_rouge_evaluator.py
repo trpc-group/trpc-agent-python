@@ -51,6 +51,8 @@ class RougeEvaluator(Evaluator):
     Score range: [0, 1], where 1 means perfect match.
     """
 
+    requires_reference = True
+
     def __init__(
         self,
         threshold: Optional[float] = None,

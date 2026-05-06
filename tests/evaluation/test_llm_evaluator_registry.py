@@ -59,3 +59,46 @@ class TestLLMEvaluatorRegistry:
         assert "llm_rubric_response" in LLM_METRIC_NAMES
         assert "llm_rubric_knowledge_recall" in LLM_METRIC_NAMES
         assert len(LLM_METRIC_NAMES) == 3
+
+
+class TestModelsAggregatorRegistry:
+    """Test suite for register_models_aggregator on LLMEvaluatorRegistry."""
+
+    @pytest.fixture
+    def registry(self):
+        from trpc_agent_sdk.evaluation import LLMEvaluatorRegistry
+        return LLMEvaluatorRegistry()
+
+    def test_register_and_get(self, registry):
+        """Test register_models_aggregator + get_models_aggregator round-trip."""
+        from trpc_agent_sdk.evaluation import ScoreResult
+
+        def custom(per_model, threshold, weights):
+            return ScoreResult(score=1.0, reason="always pass")
+
+        registry.register_models_aggregator("llm_final_response", custom)
+        agg = registry.get_models_aggregator("llm_final_response")
+        assert agg is not None
+        out = agg.aggregate_models([ScoreResult(score=0.0)], 0.5, [1.0])
+        assert out.score == 1.0
+
+    def test_register_invalid_metric_raises(self, registry):
+        """Test register_models_aggregator with non-LLM metric raises ValueError."""
+        with pytest.raises(ValueError, match="must be one of"):
+            registry.register_models_aggregator("rouge_score", lambda *a, **k: None)
+
+    def test_get_unregistered_returns_none(self, registry):
+        """Test get_models_aggregator returns None when not set."""
+        assert registry.get_models_aggregator("llm_final_response") is None
+
+    def test_unregister(self, registry):
+        """Test unregister_models_aggregator removes the registration."""
+        from trpc_agent_sdk.evaluation import ScoreResult
+
+        def custom(per_model, threshold, weights):
+            return ScoreResult(score=1.0)
+
+        registry.register_models_aggregator("llm_rubric_response", custom)
+        assert registry.get_models_aggregator("llm_rubric_response") is not None
+        registry.unregister_models_aggregator("llm_rubric_response")
+        assert registry.get_models_aggregator("llm_rubric_response") is None

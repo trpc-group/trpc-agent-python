@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from abc import ABC
 from abc import abstractmethod
+from typing import ClassVar
 from typing import Optional
 
 from ._eval_case import Invocation
@@ -37,6 +38,22 @@ class Evaluator(ABC):
 
     An evaluator implements a specific evaluation metric, taking actual
     and expected invocations and computing a score.
+    """
+
+    requires_reference: ClassVar[bool] = True
+    """Whether this metric requires expected_invocations with non-placeholder
+    `final_response` / `intermediate_data` fields (a "reference answer").
+
+    Set to False for reference-free metrics (e.g. rubric-based LLM judges that
+    evaluate actual output against a rubric, not against a reference answer).
+
+    Checked by `LocalEvalService._validate_metric_compat` at evaluate() startup
+    to fail-fast on incompatible (eval_case, metric) combinations. Defaults to
+    True — safer for new evaluators; opt into False explicitly when adding a
+    reference-free metric.
+
+    See Bug 3.1 of
+    docs/superpowers/specs/2026-05-06-evaluator-trace-metric-strict-compat-design.md.
     """
 
     @abstractmethod

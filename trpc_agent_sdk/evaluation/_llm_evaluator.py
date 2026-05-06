@@ -25,6 +25,7 @@ from ._llm_criterion import ScoreResult
 from ._llm_judge import InvocationsAggregator
 from ._llm_judge import LLMJudge
 from ._llm_judge import MessagesConstructor
+from ._llm_judge import ModelsAggregator
 from ._llm_judge import ResponseScorer
 from ._llm_judge import SamplesAggregator
 
@@ -40,6 +41,7 @@ MessagesConstructorFn = Callable[[list[Invocation], Optional[list[Invocation]], 
 ResponseScorerFn = Callable[[str, str], ScoreResult]
 SamplesAggregatorFn = Callable[[list[ScoreResult], float], ScoreResult]
 InvocationsAggregatorFn = Callable[[list[PerInvocationResult], float], tuple[Optional[float], EvalStatus]]
+ModelsAggregatorFn = Callable[[list[ScoreResult], float, list[float]], ScoreResult]
 
 
 class _MessagesConstructorAdapter:
@@ -82,6 +84,16 @@ class _InvocationsAggregatorAdapter:
         return self._fn(results, threshold)
 
 
+class _ModelsAggregatorAdapter:
+    """Adapts a plain function to ModelsAggregator."""
+
+    def __init__(self, fn: ModelsAggregatorFn) -> None:
+        self._fn = fn
+
+    def aggregate_models(self, per_model, threshold, weights):
+        return self._fn(per_model, threshold, weights)
+
+
 def _validate_metric(metric_name: str) -> None:
     """Raise ValueError if metric_name is not an LLM metric."""
     if metric_name not in LLM_METRIC_NAMES:
@@ -97,6 +109,7 @@ class LLMEvaluatorRegistry:
         self._response_scorer: dict[str, ResponseScorer] = {}
         self._samples_aggregator: dict[str, SamplesAggregator] = {}
         self._invocations_aggregator: dict[str, InvocationsAggregator] = {}
+        self._models_aggregator: dict[str, ModelsAggregator] = {}
         self._judge_tools: dict[str, List[Any]] = {}
 
     def register_messages_constructor(self, metric_name: str, fn: MessagesConstructorFn) -> None:
@@ -114,6 +127,10 @@ class LLMEvaluatorRegistry:
     def register_invocations_aggregator(self, metric_name: str, fn: InvocationsAggregatorFn) -> None:
         _validate_metric(metric_name)
         self._invocations_aggregator[metric_name] = _InvocationsAggregatorAdapter(fn)
+
+    def register_models_aggregator(self, metric_name: str, fn: ModelsAggregatorFn) -> None:
+        _validate_metric(metric_name)
+        self._models_aggregator[metric_name] = _ModelsAggregatorAdapter(fn)
 
     def register_judge_tools(self, metric_name: str, tools: List[Any]) -> None:
         """Register tools for the judge LlmAgent (e.g. BaseTool, BaseToolSet, or callables)."""
@@ -136,6 +153,9 @@ class LLMEvaluatorRegistry:
     def get_invocations_aggregator(self, metric_name: str) -> Optional[InvocationsAggregator]:
         return self._invocations_aggregator.get(metric_name)
 
+    def get_models_aggregator(self, metric_name: str) -> Optional[ModelsAggregator]:
+        return self._models_aggregator.get(metric_name)
+
     def unregister_messages_constructor(self, metric_name: str) -> None:
         self._messages_constructor.pop(metric_name, None)
 
@@ -147,6 +167,9 @@ class LLMEvaluatorRegistry:
 
     def unregister_invocations_aggregator(self, metric_name: str) -> None:
         self._invocations_aggregator.pop(metric_name, None)
+
+    def unregister_models_aggregator(self, metric_name: str) -> None:
+        self._models_aggregator.pop(metric_name, None)
 
     def unregister_judge_tools(self, metric_name: str) -> None:
         self._judge_tools.pop(metric_name, None)
@@ -165,12 +188,15 @@ def _judge_for_metric(eval_metric: EvalMetric) -> LLMJudge:
         response_scorer=LLM_EVALUATOR_REGISTRY.get_response_scorer(name),
         samples_aggregator=LLM_EVALUATOR_REGISTRY.get_samples_aggregator(name),
         invocations_aggregator=LLM_EVALUATOR_REGISTRY.get_invocations_aggregator(name),
+        models_aggregator=LLM_EVALUATOR_REGISTRY.get_models_aggregator(name),
         judge_tools=LLM_EVALUATOR_REGISTRY.get_judge_tools(name),
     )
 
 
 class LLMFinalResponseEvaluator(Evaluator):
     """LLM judge for final response (valid/invalid). Metric: llm_final_response."""
+
+    requires_reference = True
 
     def __init__(self, eval_metric: Optional[EvalMetric] = None) -> None:
         if not eval_metric:
@@ -190,6 +216,8 @@ class LLMFinalResponseEvaluator(Evaluator):
 class LLMRubricResponseEvaluator(Evaluator):
     """LLM rubric-based response quality. Metric: llm_rubric_response."""
 
+    requires_reference = False
+
     def __init__(self, eval_metric: Optional[EvalMetric] = None) -> None:
         if not eval_metric:
             raise ValueError("eval_metric is required for LLMRubricResponseEvaluator")
@@ -207,6 +235,8 @@ class LLMRubricResponseEvaluator(Evaluator):
 
 class LLMRubricKnowledgeRecallEvaluator(Evaluator):
     """LLM rubric knowledge recall. Metric: llm_rubric_knowledge_recall."""
+
+    requires_reference = False
 
     def __init__(self, eval_metric: Optional[EvalMetric] = None) -> None:
         if not eval_metric:

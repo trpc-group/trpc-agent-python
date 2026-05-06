@@ -52,7 +52,10 @@ class TestSanitizeCriterionForExport:
         """Test apiKey is stripped when key is judgeModel."""
         c = {
             "llmJudge": {
-                "judgeModel": {"model_name": "glm-4", "apiKey": "secret"},
+                "judgeModel": {
+                    "model_name": "glm-4",
+                    "apiKey": "secret"
+                },
             },
         }
         out = sanitize_criterion_for_export(c)
@@ -114,9 +117,18 @@ class TestLLMJudgeCriterion:
     def test_from_dict_snake_case(self):
         """Test from_dict with snake_case keys."""
         d = {
-            "judge_model": {"model_name": "glm-4", "num_samples": 2},
+            "judge_model": {
+                "model_name": "glm-4",
+                "num_samples": 2
+            },
             "rubrics": [
-                {"id": "1", "content": {"text": "Must be relevant."}, "description": "Relevance"},
+                {
+                    "id": "1",
+                    "content": {
+                        "text": "Must be relevant."
+                    },
+                    "description": "Relevance"
+                },
             ],
         }
         c = LLMJudgeCriterion.from_dict(d)
@@ -159,7 +171,9 @@ class TestGetLlmCriterionFromMetric:
             threshold=1.0,
             criterion={
                 "llm_judge": {
-                    "judge_model": {"model_name": "glm-4"},
+                    "judge_model": {
+                        "model_name": "glm-4"
+                    },
                 },
             },
         )
@@ -175,7 +189,9 @@ class TestGetLlmCriterionFromMetric:
             threshold=1.0,
             criterion={
                 "llmJudge": {
-                    "judgeModel": {"model_name": "glm-4"},
+                    "judgeModel": {
+                        "model_name": "glm-4"
+                    },
                     "rubrics": [],
                 },
             },
@@ -183,3 +199,139 @@ class TestGetLlmCriterionFromMetric:
         c = get_llm_criterion_from_metric(m)
         assert c is not None
         assert c.judge_model.model_name == "glm-4"
+
+
+class TestJudgeModelOptionsWeight:
+    """Test suite for JudgeModelOptions.weight."""
+
+    def test_weight_default_is_one(self):
+        """Test weight defaults to 1.0 when omitted."""
+        opts = JudgeModelOptions(model_name="m")
+        assert opts.weight == 1.0
+
+    def test_weight_custom_value(self):
+        """Test weight accepts custom float."""
+        opts = JudgeModelOptions(model_name="m", weight=2.5)
+        assert opts.weight == 2.5
+
+
+class TestLLMJudgeCriterionMultiModel:
+    """Test suite for LLMJudgeCriterion multi-model fields and validation."""
+
+    def test_default_models_aggregator_and_parallel(self):
+        """Test defaults: models_aggregator='all_pass', parallel=True."""
+        c = LLMJudgeCriterion(judge_model=JudgeModelOptions(model_name="m"))
+        assert c.models_aggregator == "all_pass"
+        assert c.parallel is True
+
+    def test_get_judge_models_normalizes_singular(self):
+        """Test get_judge_models() returns 1-element list when only judge_model is set."""
+        c = LLMJudgeCriterion(judge_model=JudgeModelOptions(model_name="m1"))
+        models = c.get_judge_models()
+        assert len(models) == 1
+        assert models[0].model_name == "m1"
+
+    def test_get_judge_models_returns_list_directly(self):
+        """Test get_judge_models() returns judge_models when set."""
+        c = LLMJudgeCriterion(judge_models=[
+            JudgeModelOptions(model_name="m1"),
+            JudgeModelOptions(model_name="m2"),
+        ], )
+        models = c.get_judge_models()
+        assert [m.model_name for m in models] == ["m1", "m2"]
+
+    def test_get_judge_models_empty_when_neither_set(self):
+        """Test get_judge_models() returns [] when neither field set (allowed at criterion level)."""
+        c = LLMJudgeCriterion()
+        assert c.get_judge_models() == []
+
+    def test_validate_judge_model_and_judge_models_mutually_exclusive(self):
+        """Test setting both judge_model and judge_models raises ValueError."""
+        import pytest as _pytest
+        with _pytest.raises(ValueError, match="judge_model.*judge_models"):
+            LLMJudgeCriterion(
+                judge_model=JudgeModelOptions(model_name="m1"),
+                judge_models=[JudgeModelOptions(model_name="m2")],
+            )
+
+    def test_validate_empty_judge_models_raises(self):
+        """Test empty judge_models list raises ValueError."""
+        import pytest as _pytest
+        with _pytest.raises(ValueError, match="judge_models.*empty"):
+            LLMJudgeCriterion(judge_models=[])
+
+    def test_validate_negative_weight_raises(self):
+        """Test any negative weight raises ValueError."""
+        import pytest as _pytest
+        with _pytest.raises(ValueError, match="weight.*negative"):
+            LLMJudgeCriterion(judge_models=[
+                JudgeModelOptions(model_name="m1", weight=1.0),
+                JudgeModelOptions(model_name="m2", weight=-0.5),
+            ], )
+
+    def test_validate_weighted_aggregator_zero_total_weight_raises(self):
+        """Test weighted_avg with all-zero weights raises ValueError."""
+        import pytest as _pytest
+        with _pytest.raises(ValueError, match="weight"):
+            LLMJudgeCriterion(
+                judge_models=[
+                    JudgeModelOptions(model_name="m1", weight=0.0),
+                    JudgeModelOptions(model_name="m2", weight=0.0),
+                ],
+                models_aggregator="weighted_avg",
+            )
+
+    def test_built_in_aggregator_names_accepted(self):
+        """Test all 6 built-in aggregator names pass validation."""
+        for name in ("all_pass", "any_pass", "majority_pass", "avg", "weighted_avg", "weighted_majority"):
+            c = LLMJudgeCriterion(
+                judge_models=[JudgeModelOptions(model_name="m", weight=1.0)],
+                models_aggregator=name,
+            )
+            assert c.models_aggregator == name
+
+    def test_validate_models_aggregator_must_be_non_empty_string(self):
+        """Test empty models_aggregator string raises ValueError at criterion level."""
+        import pytest as _pytest
+        with _pytest.raises(ValueError, match="models_aggregator.*non-empty"):
+            LLMJudgeCriterion(
+                judge_model=JudgeModelOptions(model_name="m"),
+                models_aggregator="",
+            )
+
+    def test_from_dict_with_judge_models(self):
+        """Test from_dict accepts judge_models list and models_aggregator string."""
+        c = LLMJudgeCriterion.from_dict({
+            "judge_models": [
+                {
+                    "model_name": "m1",
+                    "weight": 2.0
+                },
+                {
+                    "model_name": "m2",
+                    "weight": 1.0
+                },
+            ],
+            "models_aggregator":
+            "weighted_avg",
+            "parallel":
+            False,
+        })
+        assert c is not None
+        assert len(c.judge_models) == 2
+        assert c.judge_models[0].weight == 2.0
+        assert c.models_aggregator == "weighted_avg"
+        assert c.parallel is False
+
+    def test_from_dict_legacy_judge_model_still_works(self):
+        """Test from_dict still works with legacy single judge_model (back compat)."""
+        c = LLMJudgeCriterion.from_dict({
+            "judge_model": {
+                "model_name": "glm-4"
+            },
+        })
+        assert c is not None
+        assert c.judge_model.model_name == "glm-4"
+        assert c.judge_models is None
+        assert c.models_aggregator == "all_pass"
+        assert c.parallel is True
