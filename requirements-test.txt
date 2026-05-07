@@ -22,6 +22,13 @@ google-genai>=1.24.0
 rapidfuzz>=3.0.0
 docker
 
+# Test Cube/E2B code executor
+# Cube tests now `import e2b_code_interpreter` at the top of the cube
+# subpackage modules (the lazy-import seam was removed); without this
+# wheel the whole `tests/code_executors/cube/` tree fails at collection
+# time on CI. Mirrors the `[cube]` optional extra in pyproject.toml.
+e2b-code-interpreter>=2.0.0
+
 # Test Langfuse
 opentelemetry-sdk<2.0.0,>=1.28.0
 opentelemetry-exporter-otlp-proto-http<2.0.0,>=1.28.0
