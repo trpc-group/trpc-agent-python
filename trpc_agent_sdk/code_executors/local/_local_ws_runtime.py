@@ -499,7 +499,11 @@ class LocalWorkspaceFS(BaseWorkspaceFS):
 
         real_root, matches = self._enumerate_local_matches(ws.path, normalize_globs(spec.globs))
         out, saved_names, saved_vers = await self._build_manifest_output(
-            real_root, spec, matches, self._fetch_bytes, ctx,
+            real_root,
+            spec,
+            matches,
+            self._fetch_bytes,
+            ctx,
         )
 
         # Record output in workspace metadata (local-only bookkeeping).
