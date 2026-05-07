@@ -469,11 +469,17 @@ class TestCollect:
 
     @pytest.mark.asyncio
     async def test_truncation_marker(self, mock_client, monkeypatch):
-        # Force a tiny max so truncation happens. The constant moved to
-        # the shared collection helper after the build_code_files
-        # extraction; ``CubeWorkspaceFS.collect`` reads it from there.
-        from trpc_agent_sdk.code_executors.utils import _collect
-        monkeypatch.setattr(_collect, "MAX_READ_SIZE_BYTES", 4)
+        # Force a tiny per-file cap so truncation happens. ``max_read_size``
+        # is a keyword-only argument on the protected base-class helper
+        # with a module-level default; patching the function's
+        # ``__kwdefaults__`` lets us simulate a tiny cap without altering
+        # the public ``CubeWorkspaceFS.collect`` signature.
+        from trpc_agent_sdk.code_executors._base_workspace_runtime import BaseWorkspaceFS
+        monkeypatch.setitem(
+            BaseWorkspaceFS._build_code_files.__kwdefaults__,
+            "max_read_size",
+            4,
+        )
         ws = _ws()
         mock_client.commands_run.return_value = _ok(stdout=f"{ws.path}/f.txt\n")
         mock_client.read_file_bytes.return_value = b"0123456789"
@@ -531,8 +537,8 @@ class TestCollectOutputs:
             saved.append((name, data, mime))
             return 7
 
-        from trpc_agent_sdk.code_executors.utils import _collect as collect_mod
-        monkeypatch.setattr(collect_mod, "save_artifact_helper", fake_save)
+        from trpc_agent_sdk.code_executors import _base_workspace_runtime as base_mod
+        monkeypatch.setattr(base_mod, "save_artifact_helper", fake_save)
         ctx = MagicMock()
         manifest = await fs.collect_outputs(
             ws,

@@ -14,6 +14,7 @@ from typing import Optional
 
 from typing_extensions import override
 
+import e2b_code_interpreter as e2b
 from pydantic import Field
 from pydantic import PrivateAttr
 
@@ -25,13 +26,29 @@ from .._types import CodeBlockDelimiter
 from .._types import CodeExecutionInput
 from .._types import CodeExecutionResult
 from .._types import create_code_execution_result
-from ._e2b import _import_e2b
 from ._sandbox import CubeCommandResult
 from ._sandbox import CubeSandboxClient
 from ._types import CubeCodeExecutorConfig
 
 _PYTHON_LANGUAGES = frozenset({"python", "py", "python3", ""})
 _BASH_LANGUAGES = frozenset({"bash", "sh"})
+
+_BASH_DELIMITER = CodeBlockDelimiter(start="```bash\n", end="\n```")
+
+
+def _cube_default_code_block_delimiters() -> list[CodeBlockDelimiter]:
+    """Default delimiters for :class:`CubeCodeExecutor`.
+
+    Reuses :attr:`BaseCodeExecutor.code_block_delimiters` so the parent's
+    defaults (currently ``tool_code`` + ``python``) stay the single
+    source of truth, then appends a ``bash`` fence so text-path
+    extraction matches what :meth:`CubeCodeExecutor.execute_code` can
+    actually run (see :meth:`_select_interpreter`). Returns a fresh list
+    on every call to keep per-instance defaults independent of one
+    another.
+    """
+    parent_default = BaseCodeExecutor.model_fields["code_block_delimiters"].default
+    return [*parent_default, _BASH_DELIMITER]
 
 
 class CubeCodeExecutor(BaseCodeExecutor):
@@ -67,15 +84,15 @@ class CubeCodeExecutor(BaseCodeExecutor):
     stateful: bool = Field(default=False, frozen=True, exclude=True)
     optimize_data_file: bool = Field(default=False, frozen=True, exclude=True)
 
-    # Extend the base default (`tool_code` + `python`) with a `bash` fence
-    # so text-path extraction matches what ``execute_code`` can actually
-    # run (see ``_select_interpreter``). Callers may still override via
-    # the ``code_block_delimiters`` field at construction time.
-    code_block_delimiters: list[CodeBlockDelimiter] = [
-        CodeBlockDelimiter(start="```tool_code\n", end="\n```"),
-        CodeBlockDelimiter(start="```python\n", end="\n```"),
-        CodeBlockDelimiter(start="```bash\n", end="\n```"),
-    ]
+    # Extend the inherited default with a ``bash`` fence so text-path
+    # extraction matches what ``execute_code`` can actually run (see
+    # ``_select_interpreter``). The factory reads the parent's default
+    # at call time so the base list stays the single source of truth;
+    # callers may still override via the ``code_block_delimiters`` field
+    # at construction time.
+    code_block_delimiters: list[CodeBlockDelimiter] = Field(
+        default_factory=_cube_default_code_block_delimiters,
+    )
 
     # `_client` is `Optional` because :meth:`close` / :meth:`destroy`
     # legitimately drop the handle post-construction. `_cfg` has no such
@@ -150,7 +167,6 @@ class CubeCodeExecutor(BaseCodeExecutor):
         """
         if not cfg.sandbox_id:
             return await cls.create(cfg)
-        e2b = _import_e2b()
         try:
             return await cls.create(cfg)
         except e2b.SandboxNotFoundException:
@@ -227,6 +243,7 @@ class CubeCodeExecutor(BaseCodeExecutor):
 
         stdouts: list[str] = []
         stderrs: list[str] = []
+        any_timed_out = False
         for index, block in enumerate(blocks):
             if not block.code:
                 continue
@@ -240,8 +257,14 @@ class CubeCodeExecutor(BaseCodeExecutor):
                 stdin=block.code.encode("utf-8"),
                 timeout=cfg.execute_timeout,
             )
+            if result.timed_out:
+                any_timed_out = True
             self._collect(result, stdouts, stderrs)
-        return create_code_execution_result(stdout="".join(stdouts), stderr="".join(stderrs))
+        return create_code_execution_result(
+            stdout="".join(stdouts),
+            stderr="".join(stderrs),
+            is_timed_out=any_timed_out,
+        )
 
     @staticmethod
     def _select_interpreter(language: str) -> str:

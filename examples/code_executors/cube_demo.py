@@ -34,9 +34,9 @@ import asyncio
 import os
 import sys
 
-from trpc_agent_sdk.code_executors import CubeCodeExecutor
-from trpc_agent_sdk.code_executors import CubeCodeExecutorConfig
-from trpc_agent_sdk.code_executors import create_cube_workspace_runtime
+from trpc_agent_sdk.code_executors.cube import CubeCodeExecutor
+from trpc_agent_sdk.code_executors.cube import CubeCodeExecutorConfig
+from trpc_agent_sdk.code_executors.cube import create_cube_workspace_runtime
 from trpc_agent_sdk.code_executors._types import CodeBlock
 from trpc_agent_sdk.code_executors._types import CodeExecutionInput
 from trpc_agent_sdk.code_executors._types import WorkspaceOutputSpec

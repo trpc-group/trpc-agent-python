@@ -5,11 +5,18 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Shared fixtures for the cube/ test suite.
 
-Exposes a ``fake_e2b`` fixture that patches
-:func:`trpc_agent_sdk.code_executors.cube._e2b._import_e2b` to return a
-fake vendor module with stub classes / enums that match the surface the
-production code consults. This keeps the whole test suite independent
-of the real ``e2b-code-interpreter`` dependency.
+Production code does ``import e2b_code_interpreter as e2b`` at module
+top-level in :mod:`trpc_agent_sdk.code_executors.cube._sandbox` and
+:mod:`trpc_agent_sdk.code_executors.cube._code_executor`. Tests still
+need to swap that vendor surface out for a fake — both to avoid talking
+to a real Cube server and to inject precise exception types — so the
+``fake_e2b`` fixture monkeypatches the ``e2b`` symbol in *both* importer
+modules' globals (NOT ``sys.modules['e2b_code_interpreter']``, which
+would only affect callers that re-import the package after the patch).
+
+The fake mirrors just the surface the production code actually
+consults: a handful of vendor exceptions, the ``SandboxState`` /
+``FileType`` enums, and a placeholder ``AsyncSandbox``.
 """
 
 from __future__ import annotations
@@ -44,11 +51,25 @@ class _FakeCommandExitException(Exception):
         self.exit_code = exit_code
 
 
+class _FakeTimeoutException(Exception):
+    """Mirrors e2b_code_interpreter.TimeoutException.
+
+    The real vendor message is long and prescriptive ("passing 'timeout'
+    when making the request", "Use '0' to disable"). Production code
+    catches this type in :meth:`CubeSandboxClient.commands_run` and
+    rewrites it into a structured ``CubeCommandResult(timed_out=True)``,
+    so what actually gets surfaced to callers never contains this
+    message. The fake keeps the *type* precise while leaving the message
+    empty so tests can assert on the translated shape.
+    """
+
+
 def _make_fake_e2b() -> SimpleNamespace:
     ns = SimpleNamespace()
     ns.SandboxException = _FakeSandboxException
     ns.SandboxNotFoundException = _FakeSandboxNotFoundException
     ns.CommandExitException = _FakeCommandExitException
+    ns.TimeoutException = _FakeTimeoutException
     ns.SandboxState = SimpleNamespace(
         RUNNING=SimpleNamespace(value="running"),
         PAUSED=SimpleNamespace(value="paused"),
@@ -61,23 +82,22 @@ def _make_fake_e2b() -> SimpleNamespace:
 
 @pytest.fixture
 def fake_e2b(monkeypatch):
-    """Patch ``_import_e2b`` everywhere the cube package imports it."""
+    """Swap ``e2b_code_interpreter`` for a fake in every cube import site.
+
+    Production code does ``import e2b_code_interpreter as e2b`` at the
+    top of ``_sandbox.py`` and ``_code_executor.py``, which binds an
+    ``e2b`` name in those modules' globals. We patch each of those
+    bindings independently (rather than ``sys.modules``) so already-
+    executed ``from … import e2b`` statements see the fake.
+    """
     ns = _make_fake_e2b()
-    # The production code does ``from ._e2b import _import_e2b`` in
-    # _sandbox.py and _code_executor.py, which rebinds the symbol in
-    # those modules' globals — so we must patch every import site, not
-    # just the original definition.
     monkeypatch.setattr(
-        "trpc_agent_sdk.code_executors.cube._e2b._import_e2b",
-        lambda: ns,
+        "trpc_agent_sdk.code_executors.cube._sandbox.e2b",
+        ns,
     )
     monkeypatch.setattr(
-        "trpc_agent_sdk.code_executors.cube._sandbox._import_e2b",
-        lambda: ns,
-    )
-    monkeypatch.setattr(
-        "trpc_agent_sdk.code_executors.cube._code_executor._import_e2b",
-        lambda: ns,
+        "trpc_agent_sdk.code_executors.cube._code_executor.e2b",
+        ns,
     )
     return ns
 
@@ -92,7 +112,6 @@ def _make_fake_async_sandbox(sandbox_id: str = "sbx-1"):
     sbx.sandbox_id = sandbox_id
     sbx.kill = AsyncMock(return_value=None)
     sbx.set_timeout = AsyncMock(return_value=None)
-    # get_info returns a state holder by default; tests override.
     info = SimpleNamespace(state=SimpleNamespace(value="running"))
     sbx.get_info = AsyncMock(return_value=info)
     sbx.commands = MagicMock()

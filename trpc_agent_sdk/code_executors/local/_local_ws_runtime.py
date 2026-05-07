@@ -58,8 +58,6 @@ from .._types import WorkspaceStageOptions
 from .._types import ManifestOutput
 from .._types import WorkspaceOutputSpec
 from .._program_session import BaseProgramSession
-from ..utils import build_code_files
-from ..utils import build_manifest_output
 from ..utils import ensure_layout
 from ..utils import load_metadata
 from ..utils import save_metadata
@@ -278,7 +276,7 @@ class LocalWorkspaceFS(BaseWorkspaceFS):
             List of matching file references
         """
         real_root, matches = self._enumerate_local_matches(ws.path, normalize_globs(patterns))
-        return await build_code_files(real_root, matches, self._fetch_bytes)
+        return await self._build_code_files(real_root, matches, self._fetch_bytes)
 
     def _enumerate_local_matches(
         self,
@@ -294,8 +292,8 @@ class LocalWorkspaceFS(BaseWorkspaceFS):
         Returns ``(real_root, matches)`` where ``real_root`` is the
         canonicalised workspace root and ``matches`` is the list of
         canonical absolute paths under it. Both are passed to
-        :func:`build_code_files` / :func:`build_manifest_output` as a
-        matched pair so the helpers' prefix-stripping ``_relativize``
+        :meth:`_build_code_files` / :meth:`_build_manifest_output` as
+        a matched pair so the helpers' prefix-stripping ``_relativize``
         operates on canonical-vs-canonical paths. Passing the raw
         (un-resolved) ``ws.path`` would silently leak absolute paths as
         ``CodeFile.name`` whenever ``ws.path`` itself contains a symlink
@@ -343,7 +341,7 @@ class LocalWorkspaceFS(BaseWorkspaceFS):
         needing a second ``stat`` call.
 
         On read failure this raises and lets
-        :func:`build_code_files` / :func:`build_manifest_output`
+        :meth:`_build_code_files` / :meth:`_build_manifest_output`
         apply their shared ``application/octet-stream`` sentinel — the
         pre-refactor ``_read_limited`` returned that MIME explicitly for
         unreadable files, and we preserve that design intent by routing
@@ -500,7 +498,9 @@ class LocalWorkspaceFS(BaseWorkspaceFS):
         ensure_layout(ws.path)
 
         real_root, matches = self._enumerate_local_matches(ws.path, normalize_globs(spec.globs))
-        out, saved_names, saved_vers = await build_manifest_output(real_root, spec, matches, self._fetch_bytes, ctx)
+        out, saved_names, saved_vers = await self._build_manifest_output(
+            real_root, spec, matches, self._fetch_bytes, ctx,
+        )
 
         # Record output in workspace metadata (local-only bookkeeping).
         md = load_metadata(ws.path)

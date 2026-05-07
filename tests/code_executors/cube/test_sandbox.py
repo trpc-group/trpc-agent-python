@@ -5,9 +5,11 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Unit tests for trpc_agent_sdk.code_executors.cube._sandbox.
 
-Every test in this file patches ``_import_e2b`` via the ``fake_e2b``
-fixture in conftest.py so the real ``e2b-code-interpreter`` package is
-never required or touched.
+Every test in this file uses the ``fake_e2b`` fixture in conftest.py,
+which monkeypatches the ``e2b`` symbol bound in
+``trpc_agent_sdk.code_executors.cube._sandbox`` (and ``_code_executor``)
+so the real ``e2b-code-interpreter`` SDK is never invoked, even though
+it is now a hard import dependency of the cube subpackage.
 """
 
 from __future__ import annotations

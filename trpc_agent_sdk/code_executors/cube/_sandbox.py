@@ -19,12 +19,18 @@ the SDK code executor and workspace runtime are built on top of:
   :meth:`read_file_bytes` / :meth:`write_file_bytes`.
 
 Pure path/quote helpers live in :mod:`._paths`. The tar-based directory
-transfer protocol lives in :mod:`._transfer`. The e2b vendor seam
-(lazy import + ``user=`` constant) lives in :mod:`._e2b`. This module
-is intentionally the only place that holds an ``AsyncSandbox`` reference
+transfer protocol lives in :mod:`._transfer`. This module is
+intentionally the only place that holds an ``AsyncSandbox`` reference
 and therefore is the only place that needs to absorb e2b's quirks
 (``CommandExitException`` / ``"STOPPED"`` /
 ``SandboxNotFoundException``).
+
+``e2b_code_interpreter`` is imported at module top-level. It is
+distributed as the optional ``[cube]`` extra (``pip install
+trpc-agent-py[cube]``); any code path that reaches this module is by
+construction a Cube-backend caller and therefore must have the extra
+installed. A missing extra surfaces as a normal :class:`ImportError`
+at import time, which is the right place for the failure to land.
 """
 
 from __future__ import annotations
@@ -32,15 +38,15 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
 from typing import Any
 from typing import Mapping
 from typing import Optional
 
+import e2b_code_interpreter as e2b
+from e2b_code_interpreter import AsyncSandbox
+
 from trpc_agent_sdk.log import logger
 
-from ._e2b import _GUEST_USER
-from ._e2b import _import_e2b
 from ._paths import wrap_stdin_heredoc
 from ._transfer import OnExisting
 from ._transfer import download_directory_via_tar
@@ -48,8 +54,10 @@ from ._transfer import reserve_local_destination
 from ._transfer import upload_directory_via_tar
 from ._types import CubeCodeExecutorConfig
 
-if TYPE_CHECKING:
-    from e2b_code_interpreter import AsyncSandbox
+# The unix user we run sandbox commands and FS ops as. Standard cube/e2b
+# templates ship with `root`; downstream callers do not need to override
+# this and we deliberately do not expose a knob to keep the surface small.
+_GUEST_USER = "root"
 
 
 @dataclass
@@ -60,12 +68,22 @@ class CubeCommandResult:
     absorbs the e2b SDK's :class:`CommandExitException` so callers always
     see a structured return value (matches the local/container
     code-executor behavior).
+
+    The ``timed_out`` flag distinguishes a deadline-exceeded run from a
+    plain non-zero exit: e2b raises :class:`e2b.TimeoutException` when
+    the per-command ``timeout`` is hit, and ``commands_run`` catches it
+    so callers never see the raw exception. When ``timed_out`` is ``True``
+    the process has already been killed by e2b; ``exit_code`` is set to
+    ``-1`` (mirroring the local/container executors' convention) and
+    ``stderr`` carries a short, hand-written description rather than the
+    e2b SDK's verbose original message.
     """
 
     stdout: str
     stderr: str
     exit_code: int
     duration: float
+    timed_out: bool = False
 
 
 class CubeSandboxClient:
@@ -84,7 +102,9 @@ class CubeSandboxClient:
       the "already STOPPED" / :class:`SandboxNotFoundException`
       workarounds.
     - ``commands_run()`` always returns a structured result; non-zero
-      exit codes never raise.
+      exit codes never raise, and deadline-exceeded runs surface as
+      ``CubeCommandResult(timed_out=True, exit_code=-1)`` rather than
+      propagating e2b's :class:`TimeoutException`.
     - ``upload_path`` / ``download_path`` auto-dispatch file vs directory
       and preserve symlinks/perms via tar (see :mod:`._transfer`).
 
@@ -92,8 +112,8 @@ class CubeSandboxClient:
     the constructor directly.
     """
 
-    def __init__(self, sandbox: "AsyncSandbox", *, idle_timeout: int, execute_timeout: float):
-        self._sbx: Optional["AsyncSandbox"] = sandbox
+    def __init__(self, sandbox: AsyncSandbox, *, idle_timeout: int, execute_timeout: float):
+        self._sbx: Optional[AsyncSandbox] = sandbox
         self._idle_timeout = idle_timeout
         self._execute_timeout = execute_timeout
 
@@ -105,7 +125,6 @@ class CubeSandboxClient:
     @classmethod
     async def open_new(cls, cfg: CubeCodeExecutorConfig) -> "CubeSandboxClient":
         """Create a brand-new remote sandbox."""
-        e2b = _import_e2b()
         sbx = await e2b.AsyncSandbox.create(
             template=cfg.resolve_template(),
             api_url=cfg.resolve_api_url(),
@@ -125,7 +144,6 @@ class CubeSandboxClient:
                 PAUSED); caller should not silently overwrite locator
                 state.
         """
-        e2b = _import_e2b()
         sbx = await e2b.AsyncSandbox.connect(
             sandbox_id,
             api_url=cfg.resolve_api_url(),
@@ -150,7 +168,6 @@ class CubeSandboxClient:
         sbx = self._sbx
         if sbx is None:
             return
-        e2b = _import_e2b()
         try:
             await sbx.kill()
         except e2b.SandboxNotFoundException as exc:
@@ -172,7 +189,6 @@ class CubeSandboxClient:
           not silently discard operator-managed pause state.
         """
         sbx = self._require()
-        e2b = _import_e2b()
         info = await sbx.get_info(request_timeout=self._execute_timeout)
         if info.state != e2b.SandboxState.RUNNING:
             raise e2b.SandboxException(f"Cube sandbox {sbx.sandbox_id} is in state {info.state.value!r}, "
@@ -203,32 +219,62 @@ class CubeSandboxClient:
     ) -> CubeCommandResult:
         """Run a single shell command and return a structured result.
 
-        Non-zero exit codes never raise. Stdin (when provided) is encoded
-        as a bash heredoc because the e2b SDK's ``stdin`` flag is not a
-        data channel.
+        Non-zero exit codes never raise. Deadline-exceeded runs never
+        raise either: the e2b SDK's :class:`e2b.TimeoutException` is
+        caught here and turned into a :class:`CubeCommandResult` with
+        ``timed_out=True`` and ``exit_code=-1``, mirroring the
+        local/container executors so upstream callers see a single,
+        unified shape for "command did not succeed". Stdin (when
+        provided) is encoded as a bash heredoc because the e2b SDK's
+        ``stdin`` flag is not a data channel.
         """
         sbx = self._require()
-        e2b = _import_e2b()
         if stdin is not None:
             command = wrap_stdin_heredoc(command, stdin)
+        timeout_sec = float(timeout if timeout is not None else self._execute_timeout)
         kwargs: dict[str, Any] = {
             "envs": dict(env or {}),
             "user": _GUEST_USER,
-            "timeout": float(timeout if timeout is not None else self._execute_timeout),
+            "timeout": timeout_sec,
         }
         if cwd:
             kwargs["cwd"] = cwd
 
         loop = asyncio.get_running_loop()
         start = loop.time()
+        timed_out = False
         try:
             result = await sbx.commands.run(command, **kwargs)
         except e2b.CommandExitException as exc:
             result = exc
+        except BaseException as exc:
+            # Timeouts surface here as one of several types depending on
+            # which transport layer fires first:
+            #   - e2b.TimeoutException (vendor SDK layer)
+            #   - httpcore.ReadTimeout / httpcore.TimeoutException
+            #     (transport layer — can race ahead of the e2b mapping on
+            #     slow Cube deployments)
+            # The httpcore path is only reachable via the transitive
+            # dependency, so we match by type-name instead of importing
+            # httpcore just to subclass-check. We still re-raise anything
+            # that is not timeout-flavoured so real errors stay visible.
+            name = type(exc).__name__
+            if "Timeout" not in name:
+                raise
+            result = None
+            timed_out = True
         duration = loop.time() - start
 
         await self.set_timeout(self._idle_timeout)
 
+        if timed_out:
+            return CubeCommandResult(
+                stdout="",
+                stderr=f"Command timed out after {timeout_sec:g}s",
+                exit_code=-1,
+                duration=float(duration),
+                timed_out=True,
+            )
         return CubeCommandResult(
             stdout=str(getattr(result, "stdout", "") or ""),
             stderr=str(getattr(result, "stderr", "") or ""),
@@ -296,11 +342,10 @@ class CubeSandboxClient:
     async def _is_remote_dir(self, remote_abs: str) -> bool:
         """Return whether ``remote_abs`` resolves to a directory inside the sandbox."""
         sbx = self._require()
-        e2b = _import_e2b()
         info = await sbx.files.get_info(remote_abs, user=_GUEST_USER)
         return info.type == e2b.FileType.DIR
 
-    def _require(self) -> "AsyncSandbox":
+    def _require(self) -> AsyncSandbox:
         if self._sbx is None:
             raise RuntimeError("CubeSandboxClient is closed.")
         return self._sbx
