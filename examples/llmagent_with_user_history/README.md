@@ -67,7 +67,6 @@ python3 run_agent.py
 🤖 Assistant: From our previous conversation, I mentioned that the weather in Paris is sunny ...
 📝 User: Do you remember my name?
 🤖 Assistant: I don't believe you've shared your name with me yet! ...
-[END] llmagent_with_user_history (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
@@ -75,7 +74,6 @@ python3 run_agent.py
 结论：**符合本示例测试要求**。
 
 - 注入历史支撑了第二轮“巴黎天气”的续写式回答；第三轮体现会话消息与注入块差异
-- `exit_code=0`，`error.txt` 为空
 
 ## 适用场景建议
 

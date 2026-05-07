@@ -68,7 +68,6 @@ python3 run_agent.py
 🔧 [Invoke Tool:: get_weather_report({'city': 'Guangzhou'})]
 📊 [Tool Result: {'temperature': '32°C', 'condition': 'Thunderstorm', ...}]
 ...
-[END] llmagent_with_tool_prompt (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
@@ -76,7 +75,6 @@ python3 run_agent.py
 结论：**符合本示例测试要求**。
 
 - 首轮澄清城市；后续轮次出现 XML 风格工具块并成功执行工具
-- `exit_code=0`，`error.txt` 为空
 
 ## 适用场景建议
 

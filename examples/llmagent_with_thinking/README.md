@@ -69,7 +69,6 @@ python3 run_agent.py
 📝 User: What will the weather be like in Shanghai for the next three days?
 🔧 [Invoke Tool:: get_weather_forecast({'city': 'Shanghai', 'days': 3})]
 ...
-[END] llmagent_with_thinking (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
@@ -77,7 +76,6 @@ python3 run_agent.py
 结论：**符合本示例测试要求**。
 
 - 三轮问答均完成工具调用并得到结构化结果与总结回复
-- 进程以 `exit_code=0` 结束，`error.txt` 为空
 
 ## 适用场景建议
 

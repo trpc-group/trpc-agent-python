@@ -42,12 +42,11 @@ DynamicSkillToolSet initialized: 3 tools, 0 toolsets, only_active_skills=True
 ...
 📊 [Tool Result: {'city': 'Beijing', 'temperature': 22, ...}]
 ...
-[END] skills_with_dynamic_tools (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
-符合本示例测试要求：`exit_code=0`；动态工具集初始化与 `weather-tools` 加载、多工具调用及最终回答均与日志一致，超出技能能力的问题（如人物信息）被合理拒答或说明。
+符合本示例测试要求：动态工具集初始化与 `weather-tools` 加载、多工具调用及最终回答均与日志一致，超出技能能力的问题（如人物信息）被合理拒答或说明。
 
 ## 适用场景建议
 

@@ -69,15 +69,13 @@ First run
 📊 [Tool Result: {'result': '{"memories": [{"content": ...
 Yes, your name is Alice! ...
 ...
-[END] memory_service_with_in_memory (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
 结论：**符合本示例测试要求**。
 
-- 首轮空记忆、后续命中记忆并与自然语言回答一致；正常结束 `exit_code=0`
-- `error.txt` 为空
+- 首轮空记忆、后续命中记忆并与自然语言回答一致，正常结束
 
 ## 适用场景建议
 

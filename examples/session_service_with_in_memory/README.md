@@ -70,14 +70,13 @@ Second run
 🤖 Assistant: Yes, Alice! I remember your name from earlier in this conversation...
 ...
 [2026-04-01 ...] Cleanup completed: deleted 3 items ...
-[END] session_service_with_in_memory (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
 结论：**符合本示例测试要求**。
 
-- 多段运行与会话内/跨段语义在日志中可区分；正常以 `exit_code=0` 结束；`error.txt` 为空
+- 多段运行与会话内/跨段语义在日志中可区分；
 
 ## 适用场景建议
 

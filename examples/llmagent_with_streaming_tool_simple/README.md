@@ -67,7 +67,6 @@ Streaming Tool Call Arguments Demo
 ...
 ✅ [Tool Call Complete] write_file
 📊 [Tool Result] {'success': True, 'path': 'index.html', 'bytes_written': 360, ...}
-[END] llmagent_with_streaming_tool_simple (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
@@ -75,7 +74,6 @@ Streaming Tool Call Arguments Demo
 结论：**符合本示例测试要求**。
 
 - 出现流式参数片段、`Tool Call Complete` 与 `Tool Result` 成功字段
-- `exit_code=0`，`error.txt` 为空
 
 ## 适用场景建议
 

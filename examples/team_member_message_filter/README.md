@@ -43,12 +43,11 @@ python3 run_agent.py
 ### Summary of Analysis
 This year's sales performance shows strong growth across all regions...
 ...
-[END] team_member_message_filter (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
-符合本示例测试要求：`exit_code=0`；多步工具调用后仍能产出区域销售总结，自定义过滤逻辑在运行中可被触发（控制台附加日志），与 `member_message_filter` 演示目标一致。
+符合本示例测试要求：多步工具调用后仍能产出区域销售总结，自定义过滤逻辑在运行中可被触发（控制台附加日志），与 `member_message_filter` 演示目标一致。
 
 ## 适用场景建议
 

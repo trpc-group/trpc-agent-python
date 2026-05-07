@@ -40,12 +40,11 @@ python3 run_agent.py
 ...
 15 multiplied by 23 is 345.
 ...
-[END] team_member_agent_langgraph (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
-符合本示例测试要求：`exit_code=0`；两轮计算均经 `delegate_to_member` 进入 LangGraph 成员并返回正确数值，说明 Team 与 LangGraph 成员集成正常。
+符合本示例测试要求：两轮计算均经 `delegate_to_member` 进入 LangGraph 成员并返回正确数值，说明 Team 与 LangGraph 成员集成正常。
 
 ## 适用场景建议
 

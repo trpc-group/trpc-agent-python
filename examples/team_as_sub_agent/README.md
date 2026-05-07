@@ -46,12 +46,11 @@ python3 run_agent.py
   Args: {'agent_name': 'coordinator'}
 ...
 Demo completed!
-[END] team_as_sub_agent (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
-符合本示例测试要求：`exit_code=0`；日志中出现 coordinator ↔ finance_team 的 transfer、成员分析与 report 流程，与子 Agent + 转账机制说明一致。
+符合本示例测试要求：日志中出现 coordinator ↔ finance_team 的 transfer、成员分析与 report 流程，与子 Agent + 转账机制说明一致。
 
 ## 适用场景建议
 

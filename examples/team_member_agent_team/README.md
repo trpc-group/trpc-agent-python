@@ -40,12 +40,11 @@ python3 run_agent.py
 [dev_team] Tool: delegate_to_member, Args: {'member_name': 'backend_dev', ...
 [dev_team] Tool: delegate_to_member, Args: {'member_name': 'frontend_dev', ...
 ...
-[END] team_member_agent_team (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
-符合本示例测试要求：`exit_code=0`；日志体现 project_manager → dev_team → 前后端成员的嵌套委派与工具输出，与层级设计一致。
+符合本示例测试要求：日志体现 project_manager → dev_team → 前后端成员的嵌套委派与工具输出，与层级设计一致。
 
 ## 适用场景建议
 

@@ -39,12 +39,11 @@ python3 run_agent.py
 ✅ Code generation complete!
 📊 [Tool Result: {'success': True, 'path': 'hello.py', 'size': 837}]
 ...
-[END] streaming_tools (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
-符合本示例测试要求：`exit_code=0`；流式阶段有连续进度输出，最终 `write_file` 返回成功且路径与大小与日志一致，说明流式工具管线工作正常。
+符合本示例测试要求：流式阶段有连续进度输出，最终 `write_file` 返回成功且路径与大小与日志一致，说明流式工具管线工作正常。
 
 ## 适用场景建议
 
