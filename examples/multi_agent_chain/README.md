@@ -66,14 +66,13 @@ Chain Agent Demo - Information Passing via output_key
 Processing Flow: Extraction → Translation
 [content_extractor] Output：（Markdown，含 # Smart Home Control System 等章节）
 [translator] Output：（英文化 Markdown，结构与上游对应）
-[END] multi_agent_chain (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
 结论：**符合本示例测试要求**。
 
-- 两段 Markdown 输出先后打印，链路闭合；`exit_code=0`，`error.txt` 为空
+- 两段 Markdown 输出先后打印，链路闭合
 
 ## 适用场景建议
 

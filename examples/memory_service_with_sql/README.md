@@ -66,15 +66,13 @@ First run
 📊 [Tool Result: {'status': 'success', 'report': 'The weather in Paris is sunny...'}]
 ...
 [2026-04-01 ...][INFO]... Memory cleanup completed: deleted ...
-[END] memory_service_with_sql (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
 结论：**符合本示例测试要求**。
 
-- 记忆查询、天气工具与清理日志均出现，并以 `exit_code=0` 结束
-- `error.txt` 为空
+- 记忆查询、天气工具与清理日志均出现
 
 ## 适用场景建议
 

@@ -70,14 +70,13 @@ Run Process：
 ...
 [security_analyst] ### **Security Analysis: Smart Home Security System**
 ...
-[END] multi_agent_compose (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
 结论：**符合本示例测试要求**。
 
-- 质量与安全分析报告均落地，并以 `exit_code=0` 结束；`error.txt` 为空
+- 质量与安全分析报告均落地
 
 ## 适用场景建议
 

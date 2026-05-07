@@ -70,14 +70,13 @@ Scenario 1: Technical Support
 Scenario 2: Sales Inquiry
 🔧 [customer_service_coordinator] Invoke Tool: transfer_to_agent ... 'sales_consultant'
 🔧 [sales_consultant] Invoke Tool: get_product_info ... 'security'
-[END] multi_agent_subagent (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
 结论：**符合本示例测试要求**。
 
-- 两场景均完成转交、工具调用与回复；`exit_code=0`，`error.txt` 为空
+- 两场景均完成转交、工具调用与回复；
 
 ## 适用场景建议
 

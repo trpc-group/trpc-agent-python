@@ -44,12 +44,11 @@ Human provides approval: {'status': 'approved', ...
 Resuming team execution...
 ...
 HITL Flow Completed!
-[END] team_human_in_the_loop (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
-符合本示例测试要求：`exit_code=0`；审批从 pending 到 approved、恢复执行与最终「发布」说明完整，与 HITL 设计一致。
+符合本示例测试要求：审批从 pending 到 approved、恢复执行与最终「发布」说明完整，与 HITL 设计一致。
 
 ## 适用场景建议
 

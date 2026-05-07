@@ -68,14 +68,13 @@ Second run
 [2026-04-01 ...] Cleanup completed: deleted 3 items ...
 Third run
 🤖 Assistant: No, I don't have the ability to remember ... between conversations...
-[END] session_service_with_sql (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
 结论：**符合本示例测试要求**。
 
-- 第二轮体现跨轮持久记忆，第三轮回到无跨会话记忆说明；`exit_code=0`，`error.txt` 为空
+- 第二轮体现跨轮持久记忆，第三轮回到无跨会话记忆说明；
 
 ## 适用场景建议
 

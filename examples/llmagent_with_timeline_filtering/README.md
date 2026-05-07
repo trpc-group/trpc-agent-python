@@ -70,7 +70,6 @@ Scenario 2: TimelineFilterMode.INVOCATION
 Key Takeaways:
 - TimelineFilterMode.ALL: Full conversation history
 - TimelineFilterMode.INVOCATION: Invocation-scoped history (per runner.run_async() call)
-[END] llmagent_with_timeline_filtering (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
@@ -78,7 +77,6 @@ Key Takeaways:
 结论：**符合本示例测试要求**。
 
 - `ALL` 下第三轮能综合前两轮信息；`INVOCATION` 下第三轮明确表示无此前信息，与模式语义一致
-- `exit_code=0`，`error.txt` 为空
 
 ## 适用场景建议
 
