@@ -715,7 +715,7 @@ class TestLocalWorkspaceFS:
         result = await self.fs.collect_outputs(self.ws, spec)
         assert len(result.files) == 0
 
-    @patch('trpc_agent_sdk.code_executors.utils._collect.save_artifact_helper', new_callable=AsyncMock)
+    @patch('trpc_agent_sdk.code_executors._base_workspace_runtime.save_artifact_helper', new_callable=AsyncMock)
     @pytest.mark.asyncio
     async def test_collect_outputs_save_with_ctx(self, mock_save):
         mock_save.return_value = 1
@@ -741,7 +741,7 @@ class TestLocalWorkspaceFS:
         with pytest.raises(ValueError, match="Context is required"):
             await self.fs.collect_outputs(self.ws, spec)
 
-    @patch('trpc_agent_sdk.code_executors.utils._collect.save_artifact_helper', new_callable=AsyncMock)
+    @patch('trpc_agent_sdk.code_executors._base_workspace_runtime.save_artifact_helper', new_callable=AsyncMock)
     @pytest.mark.asyncio
     async def test_collect_outputs_save_with_name_template(self, mock_save):
         mock_save.return_value = 1

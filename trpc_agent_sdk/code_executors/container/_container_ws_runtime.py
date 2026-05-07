@@ -67,8 +67,6 @@ from .._types import WorkspaceRunResult
 from .._types import WorkspaceStageOptions
 from ..utils import InputRecordMeta
 from ..utils import WorkspaceMetadata
-from ..utils import build_code_files
-from ..utils import build_manifest_output
 from ..utils import get_rel_path
 from ..utils import normalize_globs
 from ._container_cli import CommandArgs
@@ -322,7 +320,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
             resolve_symlinks=True,
             error_prefix="Failed to collect files",
         )
-        files = await build_code_files(ws.path, matches, self._fetch_bytes)
+        files = await self._build_code_files(ws.path, matches, self._fetch_bytes)
         logger.info("Collected %s files from workspace", len(files))
         return files
 
@@ -421,7 +419,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         )
         # Container refuses to persist a half-read artifact, preserving
         # the historical "never save a truncated binary" guarantee.
-        manifest, _, _ = await build_manifest_output(
+        manifest, _, _ = await self._build_manifest_output(
             ws.path,
             spec,
             matches,

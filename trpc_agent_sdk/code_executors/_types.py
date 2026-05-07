@@ -321,7 +321,7 @@ def create_code_execution_result(stdout: str = '',
         outcome = Outcome.OUTCOME_FAILED
     if is_timed_out:
         out_str += "Code execution timed out\n"
-        outcome = Outcome.OUTCOME_TIMED_OUT
+        outcome = Outcome.OUTCOME_DEADLINE_EXCEEDED
     if stdout:
         out_str += f"Code execution result:\n{stdout}\n"
     if output_files:
