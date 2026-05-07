@@ -556,3 +556,77 @@ async def test_bug11_copy_remote_issues_rm_before_cp(mock_client):
     cp_idx = next(i for i, c in enumerate(cmds) if c.startswith("cp -a"))
     assert rm_idx < cp_idx, "rm must precede cp"
 
+
+
+
+
+@pytest.mark.asyncio
+async def test_bug12_commands_run_translates_timeout_to_structured_result(
+    fake_e2b, fake_async_sandbox,
+):
+    """TimeoutException at the e2b boundary must become a CubeCommandResult."""
+    fake_async_sandbox.commands.run = AsyncMock(
+        side_effect=fake_e2b.TimeoutException()
+    )
+    client = CubeSandboxClient(
+        fake_async_sandbox, idle_timeout=60, execute_timeout=30.0,
+    )
+    result = await client.commands_run("sleep 9999", timeout=1.5)
+    assert isinstance(result, CubeCommandResult)
+    assert result.timed_out is True, "timed_out flag must be set"
+    assert result.exit_code == -1, (
+        f"exit_code on timeout must be -1 (matches local/container "
+        f"executors); got {result.exit_code}"
+    )
+    assert result.stdout == "", f"stdout must be empty on timeout: {result.stdout!r}"
+    # The rewritten stderr is short and hand-written. Importantly, it does
+    # NOT contain the e2b vendor boilerplate.
+    assert "timed out" in result.stderr.lower(), (
+        f"stderr must describe the timeout: {result.stderr!r}"
+    )
+    assert "1.5" in result.stderr, (
+        f"stderr must mention the configured timeout value: {result.stderr!r}"
+    )
+    for leaked in ("passing 'timeout'", "context deadline exceeded", "Use '0'"):
+        assert leaked not in result.stderr, (
+            f"vendor message leaked into stderr: {leaked!r} in {result.stderr!r}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_bug12_execute_code_surfaces_deadline_exceeded_outcome(
+    fake_e2b, fake_async_sandbox,
+):
+    """Timeout must appear as OUTCOME_DEADLINE_EXCEEDED, not a raised exception."""
+    from trpc_agent_sdk.code_executors._types import (
+        CodeBlock,
+        CodeExecutionInput,
+        Outcome,
+    )
+    from trpc_agent_sdk.code_executors.cube._code_executor import CubeCodeExecutor
+
+    fake_async_sandbox.commands.run = AsyncMock(
+        side_effect=fake_e2b.TimeoutException()
+    )
+    client = CubeSandboxClient(
+        fake_async_sandbox, idle_timeout=60, execute_timeout=2.0,
+    )
+    cfg = CubeCodeExecutorConfig(
+        template="t", api_url="u", api_key="k",
+        idle_timeout=60, execute_timeout=2.0,
+    )
+    executor = CubeCodeExecutor(client, cfg)
+
+    # execute_code MUST return a result, not raise.
+    result = await executor.execute_code(
+        invocation_context=None,  # type: ignore[arg-type]
+        code_execution_input=CodeExecutionInput(
+            code_blocks=[CodeBlock(code="import time; time.sleep(9999)", language="python")],
+        ),
+    )
+    assert result.outcome == Outcome.OUTCOME_DEADLINE_EXCEEDED, (
+        f"expected OUTCOME_DEADLINE_EXCEEDED, got {result.outcome}"
+    )
+    assert "timed out" in result.output.lower(), (
+        f"output must mention the timeout: {result.output!r}"
+    )

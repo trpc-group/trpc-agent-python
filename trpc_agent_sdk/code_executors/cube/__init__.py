@@ -5,10 +5,12 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Cube/E2B code executor and workspace runtime.
 
-The optional ``e2b-code-interpreter`` dependency is imported lazily inside
-the first sandbox-constructing call (`CubeCodeExecutor.create` /
-`.attach` / `.create_or_recreate`). Importing this package does not
-require the ``[cube]`` extra to be installed.
+This subpackage requires the optional ``e2b-code-interpreter`` dependency
+(install with ``pip install trpc-agent-py[cube]``); importing any module
+here pulls it in eagerly. Code paths that don't need the Cube backend
+should import from :mod:`trpc_agent_sdk.code_executors` instead — that
+package never references this subpackage and therefore stays
+``[cube]``-free.
 """
 
 from ._code_executor import CubeCodeExecutor

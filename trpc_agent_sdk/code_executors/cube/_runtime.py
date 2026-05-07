@@ -47,8 +47,6 @@ from .._types import WorkspacePutFileInfo
 from .._types import WorkspaceRunProgramSpec
 from .._types import WorkspaceRunResult
 from .._types import WorkspaceStageOptions
-from ..utils import build_code_files
-from ..utils import build_manifest_output
 from ..utils import normalize_globs
 from ._code_executor import CubeCodeExecutor
 from ._paths import join_remote
@@ -227,7 +225,7 @@ class CubeWorkspaceFS(BaseWorkspaceFS):
                       patterns: List[str],
                       ctx: Optional[InvocationContext] = None) -> List[CodeFile]:
         matches = await self._glob(ws.path, normalize_globs(patterns))
-        files = await build_code_files(ws.path, matches, self._fetch_file)
+        files = await self._build_code_files(ws.path, matches, self._fetch_file)
         logger.debug("Cube collected %d files from %s", len(files), ws.path)
         return files
 
@@ -237,13 +235,13 @@ class CubeWorkspaceFS(BaseWorkspaceFS):
                               spec: WorkspaceOutputSpec,
                               ctx: Optional[InvocationContext] = None) -> ManifestOutput:
         matches = await self._glob(ws.path, normalize_globs(spec.globs))
-        manifest, _, _ = await build_manifest_output(ws.path, spec, matches, self._fetch_file, ctx)
+        manifest, _, _ = await self._build_manifest_output(ws.path, spec, matches, self._fetch_file, ctx)
         logger.debug("Cube collected %d outputs from %s", len(manifest.files), ws.path)
         return manifest
 
     async def _fetch_file(self, full_path: str, max_bytes: int) -> Tuple[bytes, int]:
-        """Fetcher contract for :func:`utils.build_code_files` /
-        :func:`utils.build_manifest_output`.
+        """Fetcher contract for :meth:`BaseWorkspaceFS._build_code_files` /
+        :meth:`BaseWorkspaceFS._build_manifest_output`.
 
         Cube exposes no cheap ``stat`` RPC, so we read the full payload
         and slice locally; ``raw_size`` reflects the true on-disk size
@@ -268,6 +266,16 @@ class CubeWorkspaceFS(BaseWorkspaceFS):
         # nesting stale data instead of replacing it. Removing DST first
         # makes the operation idempotent across repeated stage_inputs
         # calls targeting the same destination.
+        #
+        # Safety: ``dst`` is supplied exclusively by :meth:`stage_inputs`,
+        # which routes the caller-provided ``spec.dst`` through
+        # :func:`normalize_remote_relative` (rejects empty, absolute, and
+        # ``..``-bearing relatives) and :func:`join_remote` (collapses
+        # ``..`` after joining under ``ws.path``). ``shell_quote`` then
+        # neutralises any shell metacharacters in the resulting absolute
+        # path, and GNU ``rm``'s default ``--preserve-root`` is the
+        # backstop. New callers of ``_copy_remote`` MUST funnel ``dst``
+        # through the same validation chain.
         rm_result = await self._client.commands_run(
             f"rm -rf {shell_quote(dst)}",
             timeout=self._timeout,
@@ -383,6 +391,7 @@ class CubeProgramRunner(BaseProgramRunner):
             stderr=result.stderr,
             exit_code=result.exit_code,
             duration=time.time() - start,
+            timed_out=result.timed_out,
         )
 
 

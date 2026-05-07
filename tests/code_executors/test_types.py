@@ -469,14 +469,17 @@ class TestCreateCodeExecutionResult:
         assert "Code execution error:\nsome error\n" in result.output
 
     def test_timed_out_only(self):
-        """is_timed_out=True triggers Outcome.OUTCOME_TIMED_OUT which is not defined."""
-        with pytest.raises(AttributeError):
-            create_code_execution_result(is_timed_out=True)
+        """is_timed_out=True maps to OUTCOME_DEADLINE_EXCEEDED."""
+        result = create_code_execution_result(is_timed_out=True)
+        assert result.outcome == Outcome.OUTCOME_DEADLINE_EXCEEDED
+        assert "Code execution timed out" in result.output
 
     def test_stderr_and_timed_out(self):
-        """stderr + timed_out triggers the missing OUTCOME_TIMED_OUT attribute."""
-        with pytest.raises(AttributeError):
-            create_code_execution_result(stderr="err", is_timed_out=True)
+        """stderr + timed_out: timed_out wins the outcome, both messages present."""
+        result = create_code_execution_result(stderr="err", is_timed_out=True)
+        assert result.outcome == Outcome.OUTCOME_DEADLINE_EXCEEDED
+        assert "Code execution error:\nerr\n" in result.output
+        assert "Code execution timed out" in result.output
 
     def test_stdout_and_stderr(self):
         """stderr + stdout → FAILED, both messages present."""
@@ -497,16 +500,20 @@ class TestCreateCodeExecutionResult:
         assert "`a.txt`" in result.output
         assert "`b.csv`" in result.output
 
-    def test_all_args_combined_with_timed_out_raises(self):
-        """All arguments with timed_out triggers the missing OUTCOME_TIMED_OUT attribute."""
+    def test_all_args_combined_with_timed_out(self):
+        """All arguments with timed_out: DEADLINE_EXCEEDED wins, all payload present."""
         files = [CodeFile(name="out.txt", content="", mime_type="text/plain")]
-        with pytest.raises(AttributeError):
-            create_code_execution_result(
-                stdout="output",
-                stderr="error",
-                output_files=files,
-                is_timed_out=True,
-            )
+        result = create_code_execution_result(
+            stdout="output",
+            stderr="error",
+            output_files=files,
+            is_timed_out=True,
+        )
+        assert result.outcome == Outcome.OUTCOME_DEADLINE_EXCEEDED
+        assert "Code execution error:\nerror\n" in result.output
+        assert "Code execution result:\noutput\n" in result.output
+        assert "Code execution timed out" in result.output
+        assert "`out.txt`" in result.output
 
     def test_output_files_none_defaults_to_empty(self):
         """Passing output_files=None does not cause errors."""
