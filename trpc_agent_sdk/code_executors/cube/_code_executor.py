@@ -90,9 +90,7 @@ class CubeCodeExecutor(BaseCodeExecutor):
     # at call time so the base list stays the single source of truth;
     # callers may still override via the ``code_block_delimiters`` field
     # at construction time.
-    code_block_delimiters: list[CodeBlockDelimiter] = Field(
-        default_factory=_cube_default_code_block_delimiters,
-    )
+    code_block_delimiters: list[CodeBlockDelimiter] = Field(default_factory=_cube_default_code_block_delimiters, )
 
     # `_client` is `Optional` because :meth:`close` / :meth:`destroy`
     # legitimately drop the handle post-construction. `_cfg` has no such
