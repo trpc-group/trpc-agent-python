@@ -42,12 +42,11 @@ python3 run_agent.py
 🔧 [Invoke Tool: get_weather_forecast({'city': 'Beijing', 'days': 5})]
 ...
 ✅ Weather ToolSet demo finished!
-[END] toolsets (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
-符合本示例测试要求：`exit_code=0`；BASIC 仅触发当前天气工具，VIP 可调用预报工具，与动态 `get_tools` 逻辑一致。
+符合本示例测试要求：BASIC 仅触发当前天气工具，VIP 可调用预报工具，与动态 `get_tools` 逻辑一致。
 
 ## 适用场景建议
 

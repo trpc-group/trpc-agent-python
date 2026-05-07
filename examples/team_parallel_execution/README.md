@@ -41,12 +41,11 @@ python3 run_agent.py
 Demo completed in 42.60 seconds!
 Note: With parallel_execution=True, the three analyst delegations
 execute concurrently.
-[END] team_parallel_execution (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
-符合本示例测试要求：`exit_code=0`；同一时间戳上多条委派与文末耗时说明与并行模式相符，最终合成报告覆盖市场、竞品与监管风险。
+符合本示例测试要求：同一时间戳上多条委派与文末耗时说明与并行模式相符，最终合成报告覆盖市场、竞品与监管风险。
 
 ## 适用场景建议
 

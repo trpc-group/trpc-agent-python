@@ -75,14 +75,13 @@ Example 2: Modifying State in tools
 Example 4: State scope demonstration
 📊 user1 session2 state ... 💬 会话级状态: {}
 📊 user2 session3 state ... 👤 用户级状态: {}
-[END] session_state (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
 结论：**符合本示例测试要求**。
 
-- 四个示例均打印预期阶段标题、工具结果或 state 快照；`exit_code=0`，`error.txt` 为空
+- 四个示例均打印预期阶段标题、工具结果或 state 快照；
 
 ## 适用场景建议
 

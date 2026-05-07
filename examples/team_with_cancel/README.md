@@ -44,12 +44,11 @@ TeamAgent 'content_team_with_cancel' cancelled during leader planning
 ...
 It seems the previous task ... was interrupted by a cancellation.
 ...
-[END] team_with_cancel (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
-符合本示例测试要求：`exit_code=0`；日志明确记录取消发生阶段与后续追问的上下文恢复，说明取消与记忆行为符合演示预期。
+符合本示例测试要求：日志明确记录取消发生阶段与后续追问的上下文恢复，说明取消与记忆行为符合演示预期。
 
 ## 适用场景建议
 

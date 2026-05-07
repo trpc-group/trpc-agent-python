@@ -71,7 +71,6 @@ Comprehensive Streaming Tool Test Suite
   ✅ [Tool Complete] write_file
   📊 [Result] tool_type=sync_function
 ...
-[END] llmagent_with_streaming_tool_complex (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
@@ -79,7 +78,6 @@ Comprehensive Streaming Tool Test Suite
 结论：**符合本示例测试要求**。
 
 - 日志展示多组流式工具测试与 `[Streaming]` 分片输出
-- 收尾为 `exit_code=0`，与本批 `error.txt` 为空一致
 
 ## 适用场景建议
 

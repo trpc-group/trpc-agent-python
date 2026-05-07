@@ -68,14 +68,13 @@ Parallel Reviewing:
 [security_reviewer] Finished
 [Quality Review] # Quality Review / Score: 6/10 / Feedback: ...
 [Security Review] # Security Review: AI Smart Home System / Security Score: 5/10 ...
-[END] multi_agent_parallel (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
 结论：**符合本示例测试要求**。
 
-- 双评审均完成并输出结构化 Markdown；`exit_code=0`，`error.txt` 为空
+- 双评审均完成并输出结构化 Markdown；
 
 ## 适用场景建议
 

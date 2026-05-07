@@ -42,12 +42,11 @@ python3 run_agent.py
 🔧 [Invoke Tool:: skill_run({'skill': 'python-math', 'command': 'python3 scripts/fib.py 10 > out/fib.txt', ...
 📊 [Tool Result: {... 'content': '0\n1\n1\n2\n3\n5\n8\n13\n21\n34\n', ...}]
 ...
-[END] skills (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
-符合本示例测试要求：进程以 `exit_code=0` 结束；多会话下 `skill_load` / `skill_run` 均返回成功，Fibonacci 与摘要等输出与工具结果一致，说明技能链路与本地工作区执行正常。
+符合本示例测试要求：多会话下 `skill_load` / `skill_run` 均返回成功，Fibonacci 与摘要等输出与工具结果一致，说明技能链路与本地工作区执行正常。
 
 ## 适用场景建议
 

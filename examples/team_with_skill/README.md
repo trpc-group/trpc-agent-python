@@ -40,12 +40,11 @@ python3 run_agent.py
 ...
 [content_team_with_skill] Tool: delegate_to_member, Args: {'member_name': 'researcher', ...
 ...
-[END] team_with_skill (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
-符合本示例测试要求：`exit_code=0`；Leader 先完成 `skill_run` 再委派成员，输出中包含笔记文件内容与后续撰文，和「技能 + 团队」组合目标一致。
+符合本示例测试要求：Leader 先完成 `skill_run` 再委派成员，输出中包含笔记文件内容与后续撰文，和「技能 + 团队」组合目标一致。
 
 ## 适用场景建议
 

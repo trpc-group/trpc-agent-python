@@ -67,14 +67,13 @@ python3 run_agent.py
 🔧 [Invoke Tool: get_weather_report({'city': 'Beijing'})]
 📊 [Tool Result: {'temperature': '25°C', 'condition': 'Sunny', 'humidity': '60%'}]
 The current weather in Beijing is sunny ...
-[END] quickstart (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
 结论：**符合本示例测试要求**。
 
-- 澄清与工具调用路径均出现；`exit_code=0`，`error.txt` 为空
+- 澄清与工具调用路径均出现；
 
 ## 适用场景建议
 

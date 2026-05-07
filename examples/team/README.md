@@ -41,12 +41,11 @@ Content Team Demo - Coordinate Mode
 [content_team] Tool: delegate_to_member, Args: {'member_name': 'writer', ...
 ...
 Demo completed!
-[END] team (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
-符合本示例测试要求：`exit_code=0`；两轮对话均出现 Leader 委派、成员工具调用与最终成文输出，流程与 Coordinate 模式设计一致。
+符合本示例测试要求：两轮对话均出现 Leader 委派、成员工具调用与最终成文输出，流程与 Coordinate 模式设计一致。
 
 ## 适用场景建议
 

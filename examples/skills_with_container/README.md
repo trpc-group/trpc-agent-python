@@ -41,12 +41,11 @@ Container bind mounts enabled: [... 'skills:...:ro', '/tmp/skillrun-inputs:/opt/
 🔧 [Invoke Tool:: skill_run({... 'inputs': [..., 'workspace://skills/python_math/SKILL.md', ...], ...})
 📊 [Tool Result: {'error': 'tool_execution_error', ... "Failed to stage input: ... SKILL.md': No such file or directory" ...}]
 ...
-[END] skills_with_container (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
-符合本示例测试要求：容器成功启动并完成一次 `skill_run` 调用链；日志清晰展示 `host://` 与 `skill://` 等路径处理及 `workspace://` 在当期 workspace 中缺失时的失败信息，进程仍以 `exit_code=0` 结束，达到演示 stage_inputs 行为的目的。
+符合本示例测试要求：容器成功启动并完成一次 `skill_run` 调用链；日志清晰展示 `host://` 与 `skill://` 等路径处理及 `workspace://` 在当期 workspace 中缺失时的失败信息，达到演示 stage_inputs 行为的目的。
 
 ## 适用场景建议
 

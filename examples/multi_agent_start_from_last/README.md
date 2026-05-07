@@ -71,14 +71,13 @@ Multi-Agent Demo: start_from_last_agent=True
 [sales_consultant] Tool: get_product_info({'product_type': 'displays'})
 ...
 Demo completed!
-[END] multi_agent_start_from_last (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
 结论：**符合本示例测试要求**。
 
-- Turn 2/3 仍由 `sales_consultant` 处理，体现“留在上一子 Agent”；`exit_code=0`，`error.txt` 为空
+- Turn 2/3 仍由 `sales_consultant` 处理，体现“留在上一子 Agent”；
 
 ## 适用场景建议
 

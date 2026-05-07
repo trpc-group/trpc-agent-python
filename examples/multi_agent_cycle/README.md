@@ -72,14 +72,13 @@ Clarity: 10/10
 🔧 Invoke Tool：exit_refinement_loop
 📋 Tool Result：{'status': 'content_approved', ...}
 🎉 Content Improvement Completed！
-[END] multi_agent_cycle (exit_code=0)
 ```
 
 ## 结果分析（是否符合要求）
 
 结论：**符合本示例测试要求**。
 
-- 单轮即达标并调用退出工具，流程结束语与 `exit_code=0` 一致；`error.txt` 为空
+- 单轮即达标并调用退出工具
 
 ## 适用场景建议
 
