@@ -16,12 +16,18 @@ import abc
 from typing import Optional
 
 from pydantic import BaseModel
+from pydantic import Field
 from trpc_agent_sdk.context import InvocationContext
 
 from ._base_workspace_runtime import BaseWorkspaceRuntime
 from ._types import CodeBlockDelimiter
 from ._types import CodeExecutionInput
 from ._types import CodeExecutionResult
+
+DEFAULT_CODE_BLOCK_DELIMITERS: tuple[CodeBlockDelimiter, ...] = (
+    CodeBlockDelimiter(start="```tool_code\n", end="\n```"),
+    CodeBlockDelimiter(start="```python\n", end="\n```"),
+)
 
 
 class BaseCodeExecutor(BaseModel):
@@ -59,10 +65,15 @@ class BaseCodeExecutor(BaseModel):
     error_retry_attempts: int = 2
     """The number of attempts to retry on consecutive code execution errors. Default to 2."""
 
-    code_block_delimiters: list[CodeBlockDelimiter] = [
-        CodeBlockDelimiter(start="```tool_code\n", end="\n```"),
-        CodeBlockDelimiter(start="```python\n", end="\n```"),
-    ]
+    execute_once_per_invocation: bool = False
+    """Whether to execute model-extracted code at most once per invocation.
+
+    When enabled, post-processing code execution runs only for the first
+    detected code block in a single ``invocation_id`` and skips subsequent
+    auto-execution attempts for that invocation.
+    """
+
+    code_block_delimiters: list[CodeBlockDelimiter] = Field(default_factory=lambda: list(DEFAULT_CODE_BLOCK_DELIMITERS))
     """The list of the enclosing delimiters to identify the code blocks.
 
     For example, the delimiter ('```python\\n', '\\n```') can be

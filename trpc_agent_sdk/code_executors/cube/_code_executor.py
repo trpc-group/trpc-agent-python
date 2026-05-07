@@ -21,6 +21,7 @@ from pydantic import PrivateAttr
 from trpc_agent_sdk.context import InvocationContext
 
 from .._base_code_executor import BaseCodeExecutor
+from .._base_code_executor import DEFAULT_CODE_BLOCK_DELIMITERS
 from .._types import CodeBlock
 from .._types import CodeBlockDelimiter
 from .._types import CodeExecutionInput
@@ -34,21 +35,6 @@ _PYTHON_LANGUAGES = frozenset({"python", "py", "python3", ""})
 _BASH_LANGUAGES = frozenset({"bash", "sh"})
 
 _BASH_DELIMITER = CodeBlockDelimiter(start="```bash\n", end="\n```")
-
-
-def _cube_default_code_block_delimiters() -> list[CodeBlockDelimiter]:
-    """Default delimiters for :class:`CubeCodeExecutor`.
-
-    Reuses :attr:`BaseCodeExecutor.code_block_delimiters` so the parent's
-    defaults (currently ``tool_code`` + ``python``) stay the single
-    source of truth, then appends a ``bash`` fence so text-path
-    extraction matches what :meth:`CubeCodeExecutor.execute_code` can
-    actually run (see :meth:`_select_interpreter`). Returns a fresh list
-    on every call to keep per-instance defaults independent of one
-    another.
-    """
-    parent_default = BaseCodeExecutor.model_fields["code_block_delimiters"].default
-    return [*parent_default, _BASH_DELIMITER]
 
 
 class CubeCodeExecutor(BaseCodeExecutor):
@@ -84,13 +70,8 @@ class CubeCodeExecutor(BaseCodeExecutor):
     stateful: bool = Field(default=False, frozen=True, exclude=True)
     optimize_data_file: bool = Field(default=False, frozen=True, exclude=True)
 
-    # Extend the inherited default with a ``bash`` fence so text-path
-    # extraction matches what ``execute_code`` can actually run (see
-    # ``_select_interpreter``). The factory reads the parent's default
-    # at call time so the base list stays the single source of truth;
-    # callers may still override via the ``code_block_delimiters`` field
-    # at construction time.
-    code_block_delimiters: list[CodeBlockDelimiter] = Field(default_factory=_cube_default_code_block_delimiters, )
+    code_block_delimiters: list[CodeBlockDelimiter] = Field(
+        default_factory=lambda: [*DEFAULT_CODE_BLOCK_DELIMITERS, _BASH_DELIMITER])
 
     # `_client` is `Optional` because :meth:`close` / :meth:`destroy`
     # legitimately drop the handle post-construction. `_cfg` has no such
