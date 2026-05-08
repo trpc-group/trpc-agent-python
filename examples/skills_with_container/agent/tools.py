@@ -83,19 +83,19 @@ def build_container_stage_inputs_specs(inputs_host: str = "/tmp/skillrun-inputs"
         ),
         WorkspaceInputSpec(
             # This file exists after skill staging, so the workspace:// demo is stable.
-            src="workspace://skills/python_math/SKILL.md",
-            dst="work/staged_inputs/python_math_skill.md",
+            src="workspace://skills/python-math/SKILL.md",
+            dst="work/staged_inputs/python-math_skill.md",
             mode="copy",
         ),
         WorkspaceInputSpec(
-            src="skill://python_math/scripts/fib.py",
+            src="skill://python-math/scripts/fib.py",
             dst="work/staged_inputs/fib.py",
             mode="copy",
         ),
     ]
 
 
-def build_container_skill_run_payload(skill_name: str = "python_math",
+def build_container_skill_run_payload(skill_name: str = "python-math",
                                       inputs_host: str = "/tmp/skillrun-inputs") -> dict[str, Any]:
     """Build a full ``skill_run`` payload for container mode demonstration.
 
@@ -108,7 +108,7 @@ def build_container_skill_run_payload(skill_name: str = "python_math",
         skill_name,
         "cwd":
         f"$SKILLS_DIR/{skill_name}",
-        "command": ("python scripts/fib.py --n 10 > out/fib.txt && "
+        "command": ("python scripts/fib.py 10 > out/fib.txt && "
                     "(ls -R work/inputs; echo '---'; ls -R work/staged_inputs) > out/staged_inputs_tree.txt"),
         "inputs": [spec.model_dump() for spec in build_container_stage_inputs_specs(inputs_host=inputs_host)],
         "output_files": [
