@@ -38,14 +38,26 @@ python3 run_agent.py
 Docker client initialized successfully
 Container bind mounts enabled: [... 'skills:...:ro', '/tmp/skillrun-inputs:/opt/trpc-agent/inputs:ro']
 ...
-🔧 [Invoke Tool:: skill_run({... 'inputs': [..., 'workspace://skills/python_math/SKILL.md', ...], ...})
-📊 [Tool Result: {'error': 'tool_execution_error', ... "Failed to stage input: ... SKILL.md': No such file or directory" ...}]
+🔧 [Invoke Tool:: skill_run({... 'inputs': [
+  'host:///tmp/skillrun-inputs/sales.csv',
+  'workspace://skills/python-math/SKILL.md',
+  'skill://python-math/scripts/fib.py',
+], ...})
+📊 [Tool Result: {
+  'stdout': '', 'stderr': '', 'exit_code': 0,
+  'output_files': [
+    {'name': 'out/fib.txt', 'content': '0\n1\n1\n2\n3\n5\n8\n13\n21\n34\n', ...},
+    {'name': 'out/staged_inputs_tree.txt', 'content':
+      'work/inputs:\nsales.csv\n---\nwork/staged_inputs:\nfib.py\npython-math_skill.md\n', ...},
+  ],
+  ...
+}]
 ...
 ```
 
 ## 结果分析（是否符合要求）
 
-符合本示例测试要求：容器成功启动并完成一次 `skill_run` 调用链；日志清晰展示 `host://` 与 `skill://` 等路径处理及 `workspace://` 在当期 workspace 中缺失时的失败信息，达到演示 stage_inputs 行为的目的。
+符合本示例测试要求：容器成功启动并完成一次 `skill_run` 调用链；`host://` / `workspace://` / `skill://` 三种 input scheme 都成功落入工作区，输出文件 `out/fib.txt` 和 `out/staged_inputs_tree.txt` 正常产出，进程以 `exit_code=0` 结束。
 
 ## 适用场景建议
 
