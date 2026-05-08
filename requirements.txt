@@ -48,3 +48,4 @@ rapidfuzz>=3.0.0
 charset-normalizer>=3.0.0
 
 litellm>=1.75.5
+mempalace==3.3.4

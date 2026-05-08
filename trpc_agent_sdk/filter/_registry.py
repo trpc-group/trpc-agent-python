@@ -80,7 +80,6 @@ class _FilterManager(BaseRegistryFactory[BaseFilter]):
           Raises:
               TypeError: If filter already exists and force=False
           """
-            nonlocal name
             self.register(cls.__name__, cls)
             filter_instance = self.create_and_save(cls.__name__, name)
             assert isinstance(filter_instance, BaseFilter)

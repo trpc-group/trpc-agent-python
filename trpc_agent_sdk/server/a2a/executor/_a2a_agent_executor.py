@@ -42,6 +42,7 @@ from pydantic import BaseModel
 from trpc_agent_sdk.cancel import SessionKey
 from trpc_agent_sdk.cancel import is_run_cancelled
 from trpc_agent_sdk.context import new_agent_context
+from trpc_agent_sdk.events import AgentCancelledEvent
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.runners import Runner
@@ -263,7 +264,6 @@ class TrpcA2aAgentExecutor(AgentExecutor):
         aggregator = TaskResultAggregator()
         event_callback = self._config.event_callback if self._config else None
         async for trpc_event in runner.run_async(**run_args):
-            from trpc_agent_sdk.events import AgentCancelledEvent
             if isinstance(trpc_event, AgentCancelledEvent):
                 await event_queue.enqueue_event(
                     create_cancellation_event(

@@ -48,6 +48,7 @@ from ..exceptions import RunCancelledException
 from ._base_agent import BaseAgent
 from ._callback import ModelCallback
 from ._callback import ToolCallback
+from ._constants import TRPC_AGENT_RUNNING_KEY
 from .core import BranchFilterMode
 from .core import CodeExecutionRequestProcessor
 from .core import CodeExecutionResponseProcessor
@@ -450,6 +451,7 @@ class LlmAgent(BaseAgent):
         # Resolve model (may invoke factory callback)
         model_instance = await self._resolve_model(ctx)
         llm_processor = LlmProcessor(model_instance)
+        agent_context = ctx.agent_context
 
         # Copy override_messages to local mutable list if provided (internal only)
         local_messages: Optional[List[Content]] = None
@@ -462,7 +464,7 @@ class LlmAgent(BaseAgent):
                 local_messages.append(event.content)
 
         try:
-            running = True
+            running = agent_context.get_metadata(TRPC_AGENT_RUNNING_KEY, True)
             # Multi-turn conversation loop - continue until no more tool calls or code execution
             while running:
                 # CHECKPOINT 1: At start of each conversation turn
@@ -662,7 +664,7 @@ class LlmAgent(BaseAgent):
                     logger.debug("Code execution completed, continuing conversation for agent to summarize results")
                     continue
 
-                running = False
+                running = agent_context.get_metadata(TRPC_AGENT_RUNNING_KEY, False)
         except RunCancelledException:
             # raise to runner to handle
             raise

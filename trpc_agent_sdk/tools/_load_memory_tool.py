@@ -58,7 +58,7 @@ async def load_memory(query: str, tool_context: InvocationContext) -> dict[str, 
   """
     search_memory_response = await tool_context.search_memory(query)
     rsp = LoadMemoryResponse(memories=search_memory_response.memories)
-    return json.dumps(rsp.model_dump())
+    return json.dumps(rsp.model_dump(exclude_none=True), ensure_ascii=False)
 
 
 class LoadMemoryTool(FunctionTool):
