@@ -217,7 +217,7 @@ python3 run_agent.py
 ```
 
 示例技能（摘录）：
-[examples/skills/skills/python_math/SKILL.md](../../../examples/skills/skills/python_math/SKILL.md)
+[examples/skills/skills/python-math/SKILL.md](../../../examples/skills/skills/python-math/SKILL.md)
 
 提示词：
 - 说出你想要完成的任务；模型会根据概览决定是否需要某个技能。
@@ -2133,6 +2133,6 @@ Tools:
   - 动态工具选择完整示例：[examples/skills_with_dynamic_tools/run_agent.py](../../../examples/skills_with_dynamic_tools/run_agent.py)
   - 示例结构说明：[examples/skills/README.md](../../../examples/skills/README.md)
   - 示例技能：
-    - [examples/skills/skills/python_math/SKILL.md](../../../examples/skills/skills/python_math/SKILL.md)
+    - [examples/skills/skills/python-math/SKILL.md](../../../examples/skills/skills/python-math/SKILL.md)
     - [examples/skills/skills/file_tools/SKILL.md](../../../examples/skills/skills/file_tools/SKILL.md)
     - [examples/skills/skills/user_file_ops/SKILL.md](../../../examples/skills/skills/user_file_ops/SKILL.md)

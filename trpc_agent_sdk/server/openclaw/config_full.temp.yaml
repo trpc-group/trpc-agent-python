@@ -88,7 +88,7 @@ skills:
   skill_roots: []
   # 示例：
   # skill_roots:
-  #   - /data/xxx/python_math
+  #   - /data/xxx/python-math
   #   - file:///tmp/test_skill.zip
   #   - http://127.0.0.1:8088/archive/test_skill.zip
   #   - file:///data/xxx/skill_dir

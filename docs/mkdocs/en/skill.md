@@ -218,7 +218,7 @@ python3 run_agent.py
 ```
 
 Example skill (excerpt):
-[examples/skills/skills/python_math/SKILL.md](../../../examples/skills/skills/python_math/SKILL.md)
+[examples/skills/skills/python-math/SKILL.md](../../../examples/skills/skills/python-math/SKILL.md)
 
 Tips:
 - Describe the task you want to accomplish; the model will decide whether a skill is needed based on the overview.
@@ -2135,6 +2135,6 @@ The **Dynamic Tool Selection** mechanism has been fully implemented and verified
   - Dynamic tool selection full example: [examples/skills_with_dynamic_tools/run_agent.py](../../../examples/skills_with_dynamic_tools/run_agent.py)
   - Example structure guide: [examples/skills/README.md](../../../examples/skills/README.md)
   - Example skills:
-    - [examples/skills/skills/python_math/SKILL.md](../../../examples/skills/skills/python_math/SKILL.md)
+    - [examples/skills/skills/python-math/SKILL.md](../../../examples/skills/skills/python-math/SKILL.md)
     - [examples/skills/skills/file_tools/SKILL.md](../../../examples/skills/skills/file_tools/SKILL.md)
     - [examples/skills/skills/user_file_ops/SKILL.md](../../../examples/skills/skills/user_file_ops/SKILL.md)
