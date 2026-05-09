@@ -102,6 +102,33 @@ class TypeDecoratorHookRegistry:
 # Global class object used as unified registration entry.
 GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY = TypeDecoratorHookRegistry
 
+_VALID_PART_PAYLOAD_FIELDS = (
+    "text",
+    "function_call",
+    "function_response",
+    "code_execution_result",
+    "executable_code",
+    "inline_data",
+)
+
+
+def sanitize_content_json(content: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    """Drop empty parts so persisted history remains valid for model requests."""
+    if not content:
+        return None
+
+    parts = content.get("parts") or []
+    valid_parts = [
+        part for part in parts
+        if isinstance(part, dict) and any(part.get(field) for field in _VALID_PART_PAYLOAD_FIELDS)
+    ]
+    if not valid_parts:
+        return None
+
+    sanitized_content = dict(content)
+    sanitized_content["parts"] = valid_parts
+    return sanitized_content
+
 
 def decode_content(content: Optional[dict[str, Any]]) -> Optional[Content]:
     """Decode a content object from a JSON dictionary.
@@ -296,7 +323,7 @@ class DynamicPickleType(TypeDecorator):
         if hook_result is not None:
             return hook_result
         if value is not None:
-            if dialect.name == "spanner+spanner":
+            if dialect.name in ("mysql", "spanner+spanner"):
                 return pickle.dumps(value)
         return value
 
@@ -305,7 +332,7 @@ class DynamicPickleType(TypeDecorator):
         if hook_result is not None:
             return hook_result
         if value is not None:
-            if dialect.name == "spanner+spanner":
+            if dialect.name in ("mysql", "spanner+spanner"):
                 return pickle.loads(value)
         return value
 

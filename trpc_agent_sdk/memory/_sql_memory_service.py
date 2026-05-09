@@ -43,6 +43,7 @@ from trpc_agent_sdk.storage import SqlKey
 from trpc_agent_sdk.storage import SqlStorage
 from trpc_agent_sdk.storage import decode_content
 from trpc_agent_sdk.storage import decode_grounding_metadata
+from trpc_agent_sdk.storage import sanitize_content_json
 
 from ._utils import extract_words_lower
 from ._utils import format_timestamp
@@ -110,7 +111,7 @@ class MemStorageEvent(MemStorageData):
         self.error_message = event.error_message
         self.interrupted = event.interrupted
         if event.content:
-            self.content = event.content.model_dump(exclude_none=True, mode="json")
+            self.content = sanitize_content_json(event.content.model_dump(exclude_none=True, mode="json"))
         if event.grounding_metadata:
             self.grounding_metadata = event.grounding_metadata.model_dump(exclude_none=True, mode="json")
         if event.custom_metadata:
@@ -135,7 +136,7 @@ class MemStorageEvent(MemStorageData):
             interrupted=event.interrupted,
         )
         if event.content:
-            storage_event.content = event.content.model_dump(exclude_none=True, mode="json")
+            storage_event.content = sanitize_content_json(event.content.model_dump(exclude_none=True, mode="json"))
         if event.grounding_metadata:
             storage_event.grounding_metadata = event.grounding_metadata.model_dump(exclude_none=True, mode="json")
         if event.custom_metadata:
@@ -150,7 +151,7 @@ class MemStorageEvent(MemStorageData):
             branch=self.branch,
             actions=self.actions,  # type: ignore
             timestamp=self.timestamp.timestamp(),
-            content=decode_content(self.content),
+            content=decode_content(sanitize_content_json(self.content)),
             long_running_tool_ids=self.long_running_tool_ids,
             partial=self.partial,
             turn_complete=self.turn_complete,
@@ -194,15 +195,15 @@ class SqlMemoryService(BaseMemoryService):
 
         Only stores events that are not expired based on event_ttl_seconds.
         """
-        if not isinstance(session, Session):
-            raise TypeError(f"Content must be a Session, got {type(session)}")
-
         async with self._sql_storage.create_db_session() as sql_session:
             is_exist = False
             for event in session.events:
                 if not event.is_model_visible():
                     continue
-                if event.content and event.content.parts:
+                if not event.content or not event.content.parts:
+                    continue
+                content = sanitize_content_json(event.content.model_dump(exclude_none=True, mode="json"))
+                if content:
                     is_exist = True
                     # Check if the event already exists
                     event_key = SqlKey(key=(event.id, session.save_key, session.id), storage_cls=MemStorageEvent)
@@ -324,7 +325,7 @@ class SqlMemoryService(BaseMemoryService):
             return
 
         self.__cleanup_stop_event = asyncio.Event()
-        self.__cleanup_task = asyncio.create_task(self._cleanup_loop())
+        self.__cleanup_task = asyncio.get_event_loop().create_task(self._cleanup_loop())
         logger.debug("Memory cleanup task created")
 
     def _stop_cleanup_task(self) -> None:

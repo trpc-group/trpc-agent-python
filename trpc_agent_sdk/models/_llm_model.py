@@ -27,6 +27,8 @@ from . import _constants as const
 from ._llm_request import LlmRequest
 from ._llm_response import LlmResponse
 
+_VALID_ROLES: set[str] = {const.USER, const.ASSISTANT, const.MODEL, const.SYSTEM}
+
 
 class LLMModel(FilterRunner):
     """Abstract base class for all model implementations."""
@@ -106,7 +108,6 @@ class LLMModel(FilterRunner):
             Error responses should have error_code and error_message set.
         """
 
-    @abstractmethod
     def validate_request(self, request: LlmRequest) -> None:
         """Validate the request before processing.
 
@@ -119,6 +120,17 @@ class LLMModel(FilterRunner):
         Raises:
             ValueError: If request is invalid
         """
+        if not request.contents:
+            raise ValueError("At least one content is required")
+
+        # Validate content structure
+        for content in request.contents:
+            if not content.parts:
+                raise ValueError("Content must have at least one part")
+
+            # Check if content has valid role
+            if content.role and content.role not in _VALID_ROLES:
+                raise ValueError(f"Invalid content role: {content.role}")
 
     @property
     def name(self) -> str:

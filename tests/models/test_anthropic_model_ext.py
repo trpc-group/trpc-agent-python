@@ -519,14 +519,5 @@ class TestValidateRequestExtended:
         request = LlmRequest(contents=[Content(parts=[part], role="user")])
         model.validate_request(request)
 
-    def test_part_with_no_content_raises(self):
-        """Part with no meaningful content raises ValueError."""
-        model = _model()
-        part = Part()
-        request = LlmRequest(contents=[Content(parts=[part], role="user")])
-        with pytest.raises(ValueError, match="Content parts must have"):
-            model.validate_request(request)
-
-
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

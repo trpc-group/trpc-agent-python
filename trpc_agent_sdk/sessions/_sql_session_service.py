@@ -65,6 +65,7 @@ from trpc_agent_sdk.storage import UTF8MB4String
 from trpc_agent_sdk.storage import decode_content
 from trpc_agent_sdk.storage import decode_grounding_metadata
 from trpc_agent_sdk.storage import decode_usage_metadata
+from trpc_agent_sdk.storage import sanitize_content_json
 from trpc_agent_sdk.utils import user_key
 
 from ._base_session_service import BaseSessionService
@@ -74,6 +75,23 @@ from ._types import SessionServiceConfig
 from ._utils import StateStorageEntry
 from ._utils import extract_state_delta
 from ._utils import merge_state
+
+
+def _event_field_or_default(field_name: str, value: Any) -> Any:
+    """Use Event's default when legacy SQL rows contain NULL for non-null Event fields."""
+    if value is not None:
+        return value
+    return Event.model_fields[field_name].default
+
+
+def _event_object_to_storage(value: Optional[str]) -> str:
+    """Store object as a non-null string for compatibility with existing SQL schemas."""
+    return value or ""
+
+
+def _event_object_from_storage(value: Optional[str]) -> Optional[str]:
+    """Restore Event.object default from the legacy empty-string storage sentinel."""
+    return value or Event.model_fields["object"].default
 
 
 class SessionStorageBase(DeclarativeBase):
@@ -161,28 +179,29 @@ class SessionStorageEvent(SessionStorageBase):
     author: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH))
     actions: Mapped[MutableDict[str, Any]] = mapped_column(DynamicPickleType)
     long_running_tool_ids_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    branch: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
-    request_id: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
-    parent_invocation_id: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
-    tag: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
-    filter_key: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
-    requires_completion: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    branch: Mapped[Optional[str]] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
+    request_id: Mapped[Optional[str]] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
+    parent_invocation_id: Mapped[Optional[str]] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH),
+                                                                nullable=True)
+    tag: Mapped[Optional[str]] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
+    filter_key: Mapped[Optional[str]] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
+    requires_completion: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True, default=False)
+    version: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=0)
     timestamp: Mapped[PreciseTimestamp] = mapped_column(PreciseTimestamp, default=func.now())
-    visible: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    visible: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True, default=True)
     object: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=False, default="")
-    model_flags: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    model_flags: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=1)
 
-    partial: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    turn_complete: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    error_code: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
-    error_message: Mapped[str] = mapped_column(UTF8MB4String(1024), nullable=True)
-    interrupted: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    response_id: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
-    content: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, nullable=True)
-    grounding_metadata: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, nullable=True)
-    custom_metadata: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, nullable=True)
-    usage_metadata: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, nullable=True)
+    partial: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    turn_complete: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    error_code: Mapped[Optional[str]] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(UTF8MB4String(1024), nullable=True)
+    interrupted: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    response_id: Mapped[Optional[str]] = mapped_column(UTF8MB4String(DEFAULT_MAX_VARCHAR_LENGTH), nullable=True)
+    content: Mapped[Optional[dict[str, Any]]] = mapped_column(DynamicJSON, nullable=True)
+    grounding_metadata: Mapped[Optional[dict[str, Any]]] = mapped_column(DynamicJSON, nullable=True)
+    custom_metadata: Mapped[Optional[dict[str, Any]]] = mapped_column(DynamicJSON, nullable=True)
+    usage_metadata: Mapped[Optional[dict[str, Any]]] = mapped_column(DynamicJSON, nullable=True)
 
     storage_session: Mapped[StorageSession] = relationship(
         "StorageSession",
@@ -226,7 +245,7 @@ class SessionStorageEvent(SessionStorageBase):
             version=event.version,
             timestamp=datetime.fromtimestamp(event.timestamp),
             visible=event.visible,
-            object=event.object,
+            object=_event_object_to_storage(event.object),
             model_flags=event.model_flags,
             partial=event.partial,
             turn_complete=event.turn_complete,
@@ -236,7 +255,7 @@ class SessionStorageEvent(SessionStorageBase):
             response_id=event.response_id,
         )
         if event.content:
-            storage_event.content = event.content.model_dump(exclude_none=True, mode="json")
+            storage_event.content = sanitize_content_json(event.content.model_dump(exclude_none=True, mode="json"))
         if event.grounding_metadata:
             storage_event.grounding_metadata = event.grounding_metadata.model_dump(exclude_none=True, mode="json")
         if event.custom_metadata:
@@ -257,11 +276,11 @@ class SessionStorageEvent(SessionStorageBase):
             parent_invocation_id=self.parent_invocation_id,
             tag=self.tag,
             filter_key=self.filter_key,
-            requires_completion=self.requires_completion,
-            version=self.version,
-            visible=self.visible,
-            object=self.object,
-            model_flags=self.model_flags,
+            requires_completion=_event_field_or_default("requires_completion", self.requires_completion),
+            version=_event_field_or_default("version", self.version),
+            visible=_event_field_or_default("visible", self.visible),
+            object=_event_object_from_storage(self.object),
+            model_flags=_event_field_or_default("model_flags", self.model_flags),
             timestamp=self.timestamp.timestamp(),
             partial=self.partial,
             turn_complete=self.turn_complete,
@@ -269,7 +288,7 @@ class SessionStorageEvent(SessionStorageBase):
             error_message=self.error_message,
             interrupted=self.interrupted,
             response_id=self.response_id,
-            content=decode_content(self.content),
+            content=decode_content(sanitize_content_json(self.content)),
             grounding_metadata=decode_grounding_metadata(self.grounding_metadata),
             custom_metadata=self.custom_metadata,
             usage_metadata=decode_usage_metadata(self.usage_metadata),
@@ -574,7 +593,7 @@ class SqlSessionService(BaseSessionService):
             await self._sql_storage.add(sql_session, storage_app_state)
         else:
             storage_app_state.state = app_state  # type: ignore
-        storage_app_state.update_time = func.now()
+        storage_app_state.update_time = datetime.now()
 
         return app_state
 
@@ -604,7 +623,7 @@ class SqlSessionService(BaseSessionService):
         if storage_app_state:
             if not self._session_config.is_expired_by_timestamp(storage_app_state.update_time.timestamp()):
                 app_state = storage_app_state.state
-                storage_app_state.update_time = func.now()
+                storage_app_state.update_time = datetime.now()
                 await self._sql_storage.commit(sql_session)
 
         return app_state
@@ -617,7 +636,7 @@ class SqlSessionService(BaseSessionService):
         if storage_user_state:
             if not self._session_config.is_expired_by_timestamp(storage_user_state.update_time.timestamp()):
                 user_state = storage_user_state.state
-                storage_user_state.update_time = func.now()
+                storage_user_state.update_time = datetime.now()
                 await self._sql_storage.commit(sql_session)
 
         return user_state
@@ -633,7 +652,7 @@ class SqlSessionService(BaseSessionService):
             logger.debug("Session %s is expired", session_id)
             return None
 
-        storage_session.update_time = func.now()
+        storage_session.update_time = datetime.now()
         await self._sql_storage.commit(sql_session)
 
         return storage_session
@@ -645,7 +664,7 @@ class SqlSessionService(BaseSessionService):
         Deletes all expired data in three batch SQL DELETE statements.
         """
         async with self._sql_storage.create_db_session() as sql_session:
-            # Calculate expiration threshold once (using database local time)
+            # Calculate expiration threshold once in application time for cross-database compatibility.
             expire_before = datetime.now() - timedelta(seconds=self._session_config.ttl.ttl_seconds)
             total_deleted = 0
 
@@ -721,7 +740,7 @@ class SqlSessionService(BaseSessionService):
             return
 
         self.__cleanup_stop_event = asyncio.Event()
-        self.__cleanup_task = asyncio.create_task(self._cleanup_loop())
+        self.__cleanup_task = asyncio.get_event_loop().create_task(self._cleanup_loop())
         logger.debug("Cleanup task created")
 
     def _stop_cleanup_task(self) -> None:

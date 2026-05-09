@@ -200,7 +200,7 @@ class InMemoryMemoryService(BaseMemoryService):
             return
 
         self.__cleanup_stop_event = asyncio.Event()
-        self.__cleanup_task = asyncio.create_task(self._cleanup_loop())
+        self.__cleanup_task = asyncio.get_event_loop().create_task(self._cleanup_loop())
         logger.debug("Cleanup task created")
 
     def _stop_cleanup_task(self) -> None:

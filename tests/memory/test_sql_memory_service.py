@@ -278,17 +278,6 @@ class TestSqlStoreSession:
         svc._sql_storage.add.assert_not_called()
         svc._sql_storage.commit.assert_not_called()
 
-    async def test_store_raises_on_non_session(self):
-        svc = SqlMemoryService.__new__(SqlMemoryService)
-        svc._memory_service_config = _make_config_no_ttl()
-        svc._sql_storage = _patch_sql_storage()
-        svc._SqlMemoryService__cleanup_task = None
-        svc._SqlMemoryService__cleanup_stop_event = None
-
-        with pytest.raises(TypeError, match="Content must be a Session"):
-            await svc.store_session("not a session")
-
-
 # ---------------------------------------------------------------------------
 # SqlMemoryService — search_memory
 # ---------------------------------------------------------------------------

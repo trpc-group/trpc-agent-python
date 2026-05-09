@@ -38,8 +38,6 @@ from ._llm_request import LlmRequest
 from ._llm_response import LlmResponse
 from ._registry import register_model
 
-_VALID_ROLES: set[str] = {const.USER, const.ASSISTANT, const.MODEL, const.SYSTEM}
-
 
 class _FinishReason(str, Enum):
     """Reasons why model generation finished."""
@@ -116,41 +114,6 @@ class AnthropicModel(LLMModel):
             base_url=self._base_url if self._base_url else None,
             **self.client_args,
         )
-
-    @override
-    def validate_request(self, request: LlmRequest) -> None:
-        """Validate the request before processing."""
-
-        if not request.contents:
-            raise ValueError("At least one content is required")
-
-        # Validate content structure
-        for content in request.contents:
-            if not content.parts:
-                raise ValueError("Content must have at least one part")
-
-            # Check if content has valid role
-            if content.role and content.role not in _VALID_ROLES:
-                raise ValueError(f"Invalid content role: {content.role}")
-
-            # Validate parts have content
-            has_content = False
-            for part in content.parts:
-                condition_iter = [
-                    part.text,
-                    part.function_call,
-                    part.function_response,
-                    part.code_execution_result,
-                    part.executable_code,
-                    part.inline_data,
-                ]
-                has_content = any(condition_iter)
-                if has_content:
-                    break
-
-            if not has_content:
-                raise ValueError("Content parts must have text, function_call, function_response, "
-                                 "code_execution_result, executable_code, or inline_data")
 
     def _to_claude_role(self, role: Optional[str]) -> Literal["user", "assistant"]:
         """Convert role to Claude format."""
