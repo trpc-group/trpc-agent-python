@@ -9,11 +9,12 @@ import platform
 import sys
 from typing import Any
 from typing import Dict
+from enum import Enum
 
 PY_310 = sys.version_info >= (3, 10)
 
 
-def checkenum(value, enum_class) -> bool:
+def check_enum(value: Any, enum_class: type[Enum]) -> bool:
     """Check if a value is a valid member of an enum class."""
     try:
         return value in enum_class

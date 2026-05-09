@@ -9,10 +9,10 @@ Common utilities for TRPC Agent.
 
 from ._compatible import OSDetector
 from ._compatible import OS_DETECTOR
-from ._compatible import checkenum
+from ._compatible import check_enum
 
 __all__ = [
     "OSDetector",
     "OS_DETECTOR",
-    "checkenum",
+    "check_enum",
 ]

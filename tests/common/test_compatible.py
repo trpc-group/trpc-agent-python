@@ -7,7 +7,7 @@
 
 Covers:
 - PY_310 version flag
-- checkenum() with standard enums, IntEnum, and fallback path
+- check_enum() with standard enums, IntEnum, and fallback path
 - OSDetector: platform detection, properties, get_os_name, get_os_info, __str__
 - OS_DETECTOR module-level singleton
 """
@@ -21,7 +21,7 @@ from unittest.mock import patch
 
 import pytest
 
-from trpc_agent_sdk.common._compatible import OS_DETECTOR, OSDetector, PY_310, checkenum
+from trpc_agent_sdk.common._compatible import OS_DETECTOR, OSDetector, PY_310, check_enum
 
 
 # ---------------------------------------------------------------------------
@@ -40,7 +40,7 @@ class TestPY310:
 
 
 # ---------------------------------------------------------------------------
-# checkenum
+# check_enum
 # ---------------------------------------------------------------------------
 
 
@@ -63,32 +63,32 @@ class _FlagEnum(enum.Flag):
 
 
 class TestCheckenum:
-    """Tests for checkenum()."""
+    """Tests for check_enum()."""
 
     def test_valid_enum_member(self):
-        assert checkenum(_Color.RED, _Color) is True
+        assert check_enum(_Color.RED, _Color) is True
 
     def test_invalid_enum_member(self):
-        assert checkenum("yellow", _Color) is False
+        assert check_enum("yellow", _Color) is False
 
     def test_valid_int_enum_member(self):
-        assert checkenum(_Priority.HIGH, _Priority) is True
+        assert check_enum(_Priority.HIGH, _Priority) is True
 
     def test_invalid_int_enum_member(self):
-        assert checkenum(99, _Priority) is False
+        assert check_enum(99, _Priority) is False
 
     def test_valid_flag_enum_member(self):
-        assert checkenum(_FlagEnum.READ, _FlagEnum) is True
+        assert check_enum(_FlagEnum.READ, _FlagEnum) is True
 
     def test_string_value_is_found_by_value(self):
         # Python 3.12+ enum __contains__ matches by value
-        assert checkenum("red", _Color) is True
+        assert check_enum("red", _Color) is True
 
     def test_string_not_matching_any_value(self):
-        assert checkenum("magenta", _Color) is False
+        assert check_enum("magenta", _Color) is False
 
     def test_none_is_not_member(self):
-        assert checkenum(None, _Color) is False
+        assert check_enum(None, _Color) is False
 
     def test_fallback_to_members_values(self):
         """When ``in`` raises, falls back to __members__.values()."""
@@ -108,8 +108,8 @@ class TestCheckenum:
             def __iter__(self):
                 raise TypeError("broken __iter__")
 
-        assert checkenum("a", _BadContains()) is True
-        assert checkenum("c", _BadContains()) is False
+        assert check_enum("a", _BadContains()) is True
+        assert check_enum("c", _BadContains()) is False
 
 
 # ---------------------------------------------------------------------------

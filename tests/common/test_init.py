@@ -11,11 +11,11 @@ Verifies that the package re-exports the expected symbols from _compatible.
 from __future__ import annotations
 
 import trpc_agent_sdk.common as common_mod
-from trpc_agent_sdk.common import OS_DETECTOR, OSDetector, checkenum
+from trpc_agent_sdk.common import OS_DETECTOR, OSDetector, check_enum
 from trpc_agent_sdk.common._compatible import (
     OS_DETECTOR as _ORIG_OS_DETECTOR,
     OSDetector as _OrigOSDetector,
-    checkenum as _orig_checkenum,
+    check_enum as _orig_check_enum,
 )
 
 
@@ -23,7 +23,7 @@ class TestPublicExports:
     """Ensure __init__.py re-exports the right objects."""
 
     def test_all_contains_expected_names(self):
-        assert set(common_mod.__all__) == {"OSDetector", "OS_DETECTOR", "checkenum"}
+        assert set(common_mod.__all__) == {"OSDetector", "OS_DETECTOR", "check_enum"}
 
     def test_os_detector_class_is_same_object(self):
         assert OSDetector is _OrigOSDetector
@@ -32,4 +32,4 @@ class TestPublicExports:
         assert OS_DETECTOR is _ORIG_OS_DETECTOR
 
     def test_checkenum_is_same_function(self):
-        assert checkenum is _orig_checkenum
+        assert check_enum is _orig_check_enum

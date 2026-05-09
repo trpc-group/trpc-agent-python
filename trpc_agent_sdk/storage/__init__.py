@@ -31,6 +31,7 @@ from ._sql_common import decode_content
 from ._sql_common import decode_grounding_metadata
 from ._sql_common import decode_usage_metadata
 from ._sql_common import GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY
+from ._sql_common import sanitize_content_json
 from ._sql_common import TypeDecoratorHookRegistry
 
 __all__ = [
@@ -60,5 +61,6 @@ __all__ = [
     "decode_grounding_metadata",
     "decode_usage_metadata",
     "GLOBAL_TYPE_DECORATOR_HOOK_REGISTRY",
+    "sanitize_content_json",
     "TypeDecoratorHookRegistry",
 ]

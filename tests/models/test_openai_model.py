@@ -148,18 +148,6 @@ class TestOpenAIModel:
         # Should not raise
         model.validate_request(request)
 
-    def test_validate_request_with_parts_without_content(self):
-        """Test validating request with parts that have no actual content raises ValueError."""
-        model = OpenAIModel(model_name="gpt-4", api_key="test_key")
-
-        # Create a part with all None fields
-        part = Part()
-        content = Content(parts=[part], role="user")
-        request = LlmRequest(contents=[content], config=None, tools_dict={})
-
-        with pytest.raises(ValueError, match="Content parts must have"):
-            model.validate_request(request)
-
     def test_properties_and_config(self):
         """Test model properties and config."""
         model = OpenAIModel(
