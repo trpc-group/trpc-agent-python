@@ -16,10 +16,10 @@ tRPC-Agent-Python provides an end-to-end foundation for agent building, orchestr
 
 - **Multi-paradigm agent orchestration**: Built-in orchestration supports `ChainAgent` / `ParallelAgent` / `CycleAgent` / `TransferAgent`, with `GraphAgent` for graph-based orchestration.
 - **Graph orchestration capability (`GraphAgent`)**: Use DSL to orchestrate `Agent` / `Tool` / `MCP` / `Knowledge` / `CodeExecutor` in one unified flow.
-- **Efficient integration with Python AI ecosystems**: Agent ecosystem extensions (`claude-agent-sdk` / `LangGraph`, etc.) / Tool ecosystem extensions (`mcp`, etc.) / Knowledge ecosystem extensions (`LangChain`, etc.) / Model ecosystem extensions (`LiteLLM`, etc.) / Memory ecosystem extensions (`Mem0`, etc.).
+- **Efficient integration with Python AI ecosystems**: Agent ecosystem extensions (`claude-agent-sdk` / `LangGraph`, etc.) / Tool ecosystem extensions (`mcp`, etc.) / Knowledge ecosystem extensions (`LangChain`, etc.) / Model ecosystem extensions (`LiteLLM`, etc.) / Memory ecosystem extensions (`Mem0`, `Mempalace`, etc.).
 - **Agent ecosystem extensions**: Supports `LangGraphAgent` / `ClaudeAgent` / `TeamAgent` (Agno-Like).
 - **Tool ecosystem extensions**: `FunctionTool` / File tools / `MCPToolset` / LangChain Tool / Agent-as-Tool.
-- **Complete memory capability (`Session` / `Memory`)**: `Session` manages messages and state within a single session, while `Memory` manages cross-session long-term memory and personalization. Persistence supports `InMemory` / `Redis` / `SQL`; `Memory` also supports `Mem0`.
+- **Complete memory capability (`Session` / `Memory`)**: `Session` manages messages and state within a single session, while `Memory` manages cross-session long-term memory and personalization. Persistence supports `InMemory` / `Redis` / `SQL`; `Memory` also supports `Mem0`、`Mempalace`.
 - **Production-grade knowledge capability**: Built on LangChain components with first-class RAG support.
 - **CodeExecutor extension capability**: Supports local / container executors for code execution and task grounding.
 - **Skills extension capability**: Supports `SKILL.md`-based skill systems for reusable capabilities and dynamic tooling.
@@ -84,7 +84,7 @@ pip install trpc-agent-py
 Install optional capabilities as needed:
 
 ```bash
-pip install trpc-agent-py[a2a,ag-ui,knowledge,agent-claude,mem0,langfuse]
+pip install trpc-agent-py[a2a,ag-ui,knowledge,agent-claude,mem0, Mempalace, langfuse]
 ```
 
 ### Develop Weather Agent
@@ -457,7 +457,7 @@ Related docs:
 This group helps you:
 
 - Session: manage per-session messages, summaries, and state
-- Memory: manage cross-session long-term memory (including Mem0)
+- Memory: manage cross-session long-term memory (including Mem0, Mempalace)
 - Knowledge: cover document loading, retrieval, RAG, and prompt templates
 
 ### 10. Serving and Protocols
@@ -545,12 +545,12 @@ The framework is organized in an event-driven architecture where each layer can 
 - **Runner layer**: Unified execution entry, coordinating Session / Memory / Artifact services
 - **Tool layer**: FunctionTool / file tools / MCPToolset / Skill tools
 - **Model layer**: OpenAIModel / AnthropicModel / LiteLLMModel
-- **Memory layer**: SessionService / MemoryService / SessionSummarizer / Mem0MemoryService
+- **Memory layer**: SessionService / MemoryService / SessionSummarizer / Mem0MemoryService / MempalaceMemoryService
 - **Knowledge layer**: Production-grade LangChain-based knowledge and RAG capability
 - **Execution and skill layer**: CodeExecutor (local / container) / Skills
 - **Service layer**: FastAPI / A2A / AG-UI
 - **Observability layer**: OpenTelemetry tracing/metrics, integrable with platforms like Langfuse
-- **Ecosystem adapter layer**: claude-agent-sdk / mcp / LangChain / LiteLLM / Mem0 plugged into the main chain through model/tool/memory adapters
+- **Ecosystem adapter layer**: claude-agent-sdk / mcp / LangChain / LiteLLM / Mem0 / Mempalace plugged into the main chain through model/tool/memory adapters
 
 Key packages:
 

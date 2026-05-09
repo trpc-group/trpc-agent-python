@@ -76,10 +76,9 @@ async def run_weather_agent():
     ]
 
     for query in demo_queries:
-        # Use a new session for each query
-
         user_content = Content(parts=[Part.from_text(text=query)])
 
+        print(f"👤 User: {query}")
         print("🤖 Assistant: ", end="", flush=True)
         async for event in runner.run_async(user_id=user_id, session_id=current_session_id, new_message=user_content):
             # Check if event.content exists

@@ -24,7 +24,7 @@ from typing_extensions import override
 import openai
 from pydantic import BaseModel
 
-from trpc_agent_sdk.common import checkenum
+from trpc_agent_sdk.common import check_enum
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.types import Content
@@ -43,8 +43,6 @@ from ._registry import register_model
 from .tool_prompt import ToolPromptFactory
 from .tool_prompt import get_factory
 from .tool_prompt._base import ToolPrompt
-
-VALID_ROLES: set[str] = {const.USER, const.ASSISTANT, const.MODEL, const.SYSTEM}
 
 
 class ToolCall(BaseModel):
@@ -213,37 +211,6 @@ class OpenAIModel(LLMModel):
             factory: ToolPromptFactory = get_factory()
             return factory.create(self.tool_prompt)
         return self.tool_prompt()
-
-    @override
-    def validate_request(self, request: LlmRequest) -> None:
-        """Validate the request before processing."""
-
-        if not request.contents:
-            raise ValueError("At least one content is required")
-
-        # Validate content structure
-        for content in request.contents:
-            if not content.parts:
-                raise ValueError("Content must have at least one part")
-
-            # Check if content has valid role
-            if content.role and content.role not in VALID_ROLES:
-                raise ValueError(f"Invalid content role: {content.role}")
-
-            # Validate parts have content
-            has_content = False
-            for part in content.parts:
-                condition_iter = [
-                    part.text, part.function_call, part.function_response, part.code_execution_result,
-                    part.executable_code, part.inline_data
-                ]
-                has_content = any(condition_iter)
-                if has_content:
-                    break
-
-            if not has_content:
-                raise ValueError("Content parts must have text, function_call, function_response, "
-                                 "code_execution_result, executable_code, or inline_data")
 
     def _get_part_thought_signature(self, part: Part) -> str:
         """Get thought_signature from Part as str; return dummy if missing.
@@ -551,7 +518,7 @@ class OpenAIModel(LLMModel):
 
     def _parse_finish_reason(self, finish_reason: str) -> FinishReason:
         """Convert OpenAI finish reason to our enum."""
-        if not checkenum(finish_reason, FinishReason):
+        if not check_enum(finish_reason, FinishReason):
             return FinishReason.ERROR
         return FinishReason(finish_reason)
 

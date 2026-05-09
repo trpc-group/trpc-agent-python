@@ -125,6 +125,9 @@ class SqlStorage(BaseStorage):
         self.__metadata = metadata if metadata is not None else StorageData.metadata
         self.__is_async = is_async
         self.__db_url = db_url
+        self.__sessionmaker_kwargs: dict[str, Any] = kwargs.pop("sessionmaker_kwargs", {})
+        expire_on_commit: bool = kwargs.pop("expire_on_commit", True)
+        self.__sessionmaker_kwargs.setdefault("expire_on_commit", expire_on_commit)
         self.__kwargs = kwargs
 
     def _migrate_missing_columns(self, connection: Connection) -> None:
@@ -226,14 +229,14 @@ class SqlStorage(BaseStorage):
                 async with db_engine.begin() as conn:
                     await conn.run_sync(self.__metadata.create_all)
                     await conn.run_sync(self._migrate_missing_columns)
-                self._database_session_factory = async_sessionmaker(bind=db_engine)
+                self._database_session_factory = async_sessionmaker(bind=db_engine, **self.__sessionmaker_kwargs)
             else:
                 db_engine: SqlEngine = create_engine(self.__db_url, **self.__kwargs)
                 self.inspector = inspect(db_engine)
                 self.__metadata.create_all(db_engine)
                 with db_engine.begin() as conn:
                     self._migrate_missing_columns(conn)
-                self._database_session_factory = sessionmaker(bind=db_engine)
+                self._database_session_factory = sessionmaker(bind=db_engine, **self.__sessionmaker_kwargs)
 
             if db_engine.dialect.name == "sqlite":
                 listen_target = db_engine.sync_engine if isinstance(db_engine, AsyncEngine) else db_engine

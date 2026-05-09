@@ -332,6 +332,14 @@ class TestDynamicPickleType:
         result = dpt.process_bind_param(value, dialect)
         assert pickle.loads(result) == value
 
+    def test_process_bind_param_mysql(self):
+        dpt = DynamicPickleType()
+        dialect = _make_dialect("mysql")
+        value = {"key": "value", "nums": [1, 2, 3]}
+        result = dpt.process_bind_param(value, dialect)
+        assert isinstance(result, bytes)
+        assert pickle.loads(result) == value
+
     def test_process_bind_param_non_spanner(self):
         dpt = DynamicPickleType()
         dialect = _make_dialect("sqlite")
@@ -347,6 +355,14 @@ class TestDynamicPickleType:
     def test_process_result_value_spanner(self):
         dpt = DynamicPickleType()
         dialect = _make_dialect("spanner+spanner")
+        original = {"key": "value", "nums": [1, 2, 3]}
+        pickled = pickle.dumps(original)
+        result = dpt.process_result_value(pickled, dialect)
+        assert result == original
+
+    def test_process_result_value_mysql(self):
+        dpt = DynamicPickleType()
+        dialect = _make_dialect("mysql")
         original = {"key": "value", "nums": [1, 2, 3]}
         pickled = pickle.dumps(original)
         result = dpt.process_result_value(pickled, dialect)

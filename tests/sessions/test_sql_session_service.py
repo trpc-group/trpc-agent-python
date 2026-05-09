@@ -90,11 +90,38 @@ class TestSessionStorageEvent:
         storage_event = SessionStorageEvent.from_event(session, event)
         assert storage_event.content is not None
 
+    def test_from_event_drops_empty_parts(self):
+        session = Session(id="s1", app_name="app", user_id="user", save_key="k")
+        event = Event(
+            invocation_id="inv-1",
+            author="agent",
+            content=Content(parts=[Part()]),
+        )
+        storage_event = SessionStorageEvent.from_event(session, event)
+        assert storage_event.content is None
+
     def test_from_event_no_content(self):
         session = Session(id="s1", app_name="app", user_id="user", save_key="k")
         event = Event(invocation_id="inv-1", author="agent", actions=EventActions())
         storage_event = SessionStorageEvent.from_event(session, event)
         assert storage_event.content is None
+
+    def test_to_event_drops_legacy_empty_parts(self):
+        storage_event = SessionStorageEvent(
+            id="e1",
+            app_name="app",
+            user_id="user",
+            session_id="s1",
+            invocation_id="inv-1",
+            author="agent",
+            actions=EventActions(),
+            long_running_tool_ids=set(),
+            timestamp=datetime.now(),
+            model_flags=1,
+            content={"parts": [{}], "role": "model"},
+        )
+        event = storage_event.to_event()
+        assert event.content is None
 
     def test_long_running_tool_ids_property(self):
         session = Session(id="s1", app_name="app", user_id="user", save_key="k")
