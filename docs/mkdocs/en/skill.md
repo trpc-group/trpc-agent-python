@@ -102,10 +102,16 @@ from trpc_agent_sdk.skills import SkillToolSet
 from trpc_agent_sdk.skills import create_default_skill_repository
 from trpc_agent_sdk.code_executors import create_local_workspace_runtime
 from trpc_agent_sdk.code_executors import create_container_workspace_runtime
+# Cube is an optional extra (`pip install 'trpc-agent-py[cube]'`); import lazily.
+# from trpc_agent_sdk.code_executors.cube import CubeCodeExecutor, CubeCodeExecutorConfig
+# from trpc_agent_sdk.code_executors.cube import create_cube_workspace_runtime
 
-# Create workspace runtime (local or container)
+# Create workspace runtime (local, container, or cube)
 workspace_runtime = create_local_workspace_runtime()
 # Or use container: workspace_runtime = create_container_workspace_runtime()
+# Or use a remote Cube/E2B sandbox:
+#   executor = await CubeCodeExecutor.create(CubeCodeExecutorConfig())
+#   workspace_runtime = create_cube_workspace_runtime(executor)
 
 # Create skill repository
 repository = create_default_skill_repository("./skills", workspace_runtime=workspace_runtime)
@@ -1073,10 +1079,19 @@ LLM calls skill_run(skill="python-math", command="python3 scripts/fib.py 10")
   - Executes commands directly on the local system, suitable for development and testing
 - **Container executor** (Docker): [trpc_agent_sdk/code_executors/container/_container_ws_runtime.py](../../../trpc_agent_sdk/code_executors/container/_container_ws_runtime.py)
   - Executes in Docker containers, providing better isolation
+- **Cube executor** (remote E2B sandbox): [trpc_agent_sdk/code_executors/cube/_runtime.py](../../../trpc_agent_sdk/code_executors/cube/_runtime.py)
+  - Executes inside a remote Cube/E2B sandbox; suitable for environments without local Docker, or when strong remote isolation is required
+  - Construct via `create_cube_workspace_runtime(executor, workspace_cfg=...)`; see [code_executor.md](code_executor.md#cubeworkspaceruntime) for details
+  - Requires the optional `[cube]` extra (`pip install 'trpc-agent-py[cube]'`) and the `E2B_API_URL` / `E2B_API_KEY` / `CUBE_TEMPLATE_ID` environment variables (or equivalent cfg fields)
 
 **Container executor notes**:
 - The run base directory is writable; when `$SKILLS_ROOT` is set, it is mounted in read-only mode
 - Network access is disabled by default for reproducibility and security
+
+**Cube executor notes**:
+- File and directory transfers use a tar-based protocol so directory upload/download stays a single round-trip and preserves symlinks/permissions
+- The remote workspace root defaults to `/workspace/cube_agent`; per-execution subtrees follow the `ws_<exec_id>_<suffix>` naming convention and are recreated lazily on every `create_workspace` call (so external sandbox cleanup heals transparently)
+- The same Cube sandbox can back both the bare `CubeCodeExecutor` and the workspace runtime; commands share `execute_timeout` from `CubeCodeExecutorConfig`
 
 **Security and resource limits**:
 - **Workspace isolation**: All read/write operations are confined within the workspace

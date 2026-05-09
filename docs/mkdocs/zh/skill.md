@@ -102,10 +102,16 @@ from trpc_agent_sdk.skills import SkillToolSet
 from trpc_agent_sdk.skills import create_default_skill_repository
 from trpc_agent_sdk.code_executors import create_local_workspace_runtime
 from trpc_agent_sdk.code_executors import create_container_workspace_runtime
+# Cube 是可选 extra（`pip install 'trpc-agent-py[cube]'`），按需引入。
+# from trpc_agent_sdk.code_executors.cube import CubeCodeExecutor, CubeCodeExecutorConfig
+# from trpc_agent_sdk.code_executors.cube import create_cube_workspace_runtime
 
-# 创建工作空间运行时（本地或容器）
+# 创建工作空间运行时（本地、容器或 Cube）
 workspace_runtime = create_local_workspace_runtime()
 # 或使用容器：workspace_runtime = create_container_workspace_runtime()
+# 或使用远端 Cube/E2B 沙箱：
+#   executor = await CubeCodeExecutor.create(CubeCodeExecutorConfig())
+#   workspace_runtime = create_cube_workspace_runtime(executor)
 
 # 创建技能仓库
 repository = create_default_skill_repository("./skills", workspace_runtime=workspace_runtime)
@@ -1072,10 +1078,19 @@ LLM 调用 skill_run(skill="python-math", command="python3 scripts/fib.py 10")
   - 直接在本地系统执行命令，适合开发和测试
 - **容器执行器**（Docker）：[trpc_agent_sdk/code_executors/container/_container_ws_runtime.py](../../../trpc_agent_sdk/code_executors/container/_container_ws_runtime.py)
   - 在 Docker 容器中执行，提供更好的隔离性
+- **Cube 执行器**（远端 E2B 沙箱）：[trpc_agent_sdk/code_executors/cube/_runtime.py](../../../trpc_agent_sdk/code_executors/cube/_runtime.py)
+  - 在远端 Cube/E2B 沙箱中执行；适合宿主上没有 Docker、或者需要强远端隔离的场景
+  - 通过 `create_cube_workspace_runtime(executor, workspace_cfg=...)` 构造；详见 [code_executor.md](code_executor.md#cubeworkspaceruntime)
+  - 需要安装可选 extra `[cube]`（`pip install 'trpc-agent-py[cube]'`），并配置 `E2B_API_URL` / `E2B_API_KEY` / `CUBE_TEMPLATE_ID` 环境变量（或对应 cfg 字段）
 
 **容器执行器注意事项**：
 - 运行基础目录可写；当设置了 `$SKILLS_ROOT` 时，会以只读方式挂载
 - 默认禁用网络访问，以提高可重复性和安全性
+
+**Cube 执行器注意事项**：
+- 文件 / 目录传输使用 tar 协议，目录上传下载是单次往返，并保留符号链接和权限
+- 远端工作根目录默认 `/workspace/cube_agent`；按执行隔离的子目录命名为 `ws_<exec_id>_<suffix>`，每次 `create_workspace` 都会幂等地 `mkdir -p`，外部清理也能透明恢复
+- 同一个 Cube 沙箱可以同时承载 bare `CubeCodeExecutor` 与 workspace runtime，命令共享 `CubeCodeExecutorConfig.execute_timeout`
 
 **安全性和资源限制**：
 - **工作空间隔离**：所有读写操作限制在工作空间内
