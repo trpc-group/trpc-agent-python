@@ -6,7 +6,7 @@
 
 ## 代码执行器类型
 
-目前提供下面两种代码执行器：
+目前提供下面三种代码执行器：
 
 ### UnsafeLocalCodeExecutor
 
@@ -34,6 +34,21 @@
 - 需要执行不可信代码的场景
 - 需要环境隔离的场景
 
+### CubeCodeExecutor
+
+**特点：**
+- Agent 派发代码片段到远端 Cube/E2B 沙箱中执行，支持 `Python/Bash` 语言
+- 强沙箱环境，运行在远端宿主上，适合大规模执行不可信代码
+- 生命周期解耦：通过 `sandbox_id` 可以跨进程重新挂接到同一个沙箱（提供 `create` / `attach` / `create_or_recreate` 三种工厂方法）
+- 附带可选的 `CubeWorkspaceRuntime`：提供按执行隔离的工作目录、文件/目录上传下载（目录走 tar 协议）、结构化程序运行能力，可用于 Skill 子系统
+- 需要安装可选 extra `[cube]`（`pip install 'trpc-agent-py[cube]'`，会带上 `e2b-code-interpreter`），并能访问 Cube/E2B 兼容网关
+
+**适用场景：**
+- 生产环境，且 Agent 宿主上没有 Docker
+- 对不可信代码需要强远端隔离的场景
+- 需要长期复用工作空间、跨多次 `execute_code` 共享文件的 Skill / 代码执行任务
+- 多租户 Agent 平台，共用一组远端沙箱集群
+
 ## 使用示例
 
 创建 LlmAgent 时，构建 CodeExecutor 并配置`code_executor`参数，即可启用代码执行功能。
@@ -48,15 +63,19 @@ from trpc_agent_sdk.models import OpenAIModel
 from trpc_agent_sdk.code_executors import BaseCodeExecutor
 from trpc_agent_sdk.code_executors import UnsafeLocalCodeExecutor
 from trpc_agent_sdk.code_executors import ContainerCodeExecutor
+# Cube 是可选 extra（`pip install 'trpc-agent-py[cube]'`），按需引入。
+from trpc_agent_sdk.code_executors.cube import CubeCodeExecutor
+from trpc_agent_sdk.code_executors.cube import CubeCodeExecutorConfig
 from trpc_agent_sdk.log import logger
 
-def _create_code_executor(code_executor_type: str = "unsafe_local") -> BaseCodeExecutor:
+async def _create_code_executor(code_executor_type: str = "unsafe_local") -> BaseCodeExecutor:
     """Create a code executor.
 
     Args:
         code_executor_type: Type of code executor to use. Options:
             - "unsafe_local": Use UnsafeLocalCodeExecutor (default, no Docker required)
             - "container": Use ContainerCodeExecutor (requires Docker)
+            - "cube": Use CubeCodeExecutor (requires the [cube] extra and a Cube/E2B gateway)
             - None: Auto-detect from environment variable CODE_EXECUTOR_TYPE,
                     or default to "unsafe_local"
 
@@ -76,9 +95,18 @@ def _create_code_executor(code_executor_type: str = "unsafe_local") -> BaseCodeE
         executor = ContainerCodeExecutor(image="python:3-slim", error_retry_attempts=1)
         logger.info("ContainerCodeExecutor initialized successfully")
         return executor
+    elif code_executor_type == "cube":
+        # CubeCodeExecutor 在 cfg 字段未设时，会从环境变量读取
+        # E2B_API_URL / E2B_API_KEY / CUBE_TEMPLATE_ID。
+        # `create()` 会开一个新的远端沙箱；如果想挂接到已有沙箱，
+        # 在 cfg 里传 `sandbox_id=...` 即可。
+        cfg = CubeCodeExecutorConfig(execute_timeout=30.0, idle_timeout=600)
+        executor = await CubeCodeExecutor.create(cfg)
+        logger.info("CubeCodeExecutor initialized: sandbox_id=%s", executor.sandbox_id)
+        return executor
     else:
         raise ValueError(f"Invalid code executor type: {code_executor_type}. "
-                         "Valid options are: 'unsafe_local', 'container'")
+                         "Valid options are: 'unsafe_local', 'container', 'cube'")
 
 ```
 
@@ -154,6 +182,65 @@ def create_agent() -> LlmAgent:
 ![ContainerCodeExecutor执行结果](../assets/imgs/container0.png)
 ![ContainerCodeExecutor执行结果1](../assets/imgs/container1.png)
 
+### 使用 CubeCodeExecutor
+
+```python
+# ...
+async def create_agent() -> LlmAgent:
+    """Create an agent backed by a remote Cube/E2B sandbox.
+
+    必备环境变量（由 CubeCodeExecutorConfig.resolve_* 读取）：
+    - E2B_API_URL:      Cube/E2B 兼容网关 URL
+    - E2B_API_KEY:      网关 API Key
+    - CUBE_TEMPLATE_ID: Cube 模板 id（如 `std-XXXXXXXX`）
+
+    说明：`_create_code_executor` 改成 async 是因为 `CubeCodeExecutor.create`
+    需要走网络打开远端沙箱。executor 持有该沙箱，Agent 退出时
+    需要 `await executor.destroy()` 显式释放远端资源；`executor.close()`
+    只丢本地句柄，沙箱会按 idle_timeout 自然过期。
+    """
+    # 选择 cube
+    executor = await _create_code_executor(code_executor_type="cube")
+    agent = LlmAgent(
+        name="code_assistant",
+        description="代码执行助手",
+        model=_create_model(),  # You can change this to your preferred model
+        instruction=INSTRUCTION,
+        code_executor=executor,  # Enables code execution functionality
+    )
+    return agent
+
+# 使用前先安装可选 extra：
+#   pip install 'trpc-agent-py[cube]'
+# 并导出网关凭据：
+#   export E2B_API_URL=...
+#   export E2B_API_KEY=...
+#   export CUBE_TEMPLATE_ID=...
+```
+
+#### 挂接到已存在的沙箱
+
+`CubeCodeExecutor` 提供三个 async 工厂方法，让调用方显式选择生命周期策略。
+三者都从 `cfg.sandbox_id` 读取目标沙箱 id（单一来源）：
+
+```python
+# 1. 严格 create-or-attach：cfg.sandbox_id 已设则挂接并断言 RUNNING；
+#    未设则新建一个。
+executor = await CubeCodeExecutor.create(cfg)
+
+# 2. 仅挂接：要求 cfg.sandbox_id 已设；不会新建。
+executor = await CubeCodeExecutor.attach(cfg)
+
+# 3. attach-or-recreate：沙箱已不存在时调用 `on_recreate`，再透明地新建。
+#    适合需要在 recreate 时清理外部 locator 状态的长生命周期 Agent。
+executor = await CubeCodeExecutor.create_or_recreate(
+    cfg, on_recreate=lambda old_id: clear_locator(old_id),
+)
+```
+
+`close()` 对远端沙箱是 no-op，只丢本地句柄；`destroy()` 才会显式杀掉
+远端沙箱。
+
 ## 配置参数
 
 ### UnsafeLocalCodeExecutor 参数
@@ -208,6 +295,113 @@ code_executor = ContainerCodeExecutor(
 )
 ```
 
+### CubeCodeExecutor 参数
+
+`CubeCodeExecutor` 按 ISP 拆成两个 dataclass：`CubeCodeExecutorConfig`
+只承载沙箱生命周期 / 命令执行相关字段，`CubeWorkspaceRuntimeConfig`
+只承载工作空间相关字段（见下一节）。
+
+```python
+from trpc_agent_sdk.code_executors.cube import (
+    CubeCodeExecutor,
+    CubeCodeExecutorConfig,
+)
+
+cfg = CubeCodeExecutorConfig(
+    # 新建沙箱使用的 Cube 模板 id；为空时回退到环境变量 CUBE_TEMPLATE_ID。
+    template=None,
+
+    # E2B 兼容的 Cube API URL；为空时回退到环境变量 E2B_API_URL。
+    api_url=None,
+
+    # E2B API Key；为空时回退到环境变量 E2B_API_KEY。
+    api_key=None,
+
+    # 已存在的远端沙箱 id。设置后工厂方法会“挂接”而非新建。
+    sandbox_id=None,
+
+    # 单条命令默认超时（秒，float）。bare executor 与 workspace
+    # runtime 共用该值。默认 60.0。
+    execute_timeout=60.0,
+
+    # 沙箱空闲生命周期（int 秒，>=1），每次命令都会续期。默认
+    # 3600（1 小时）。底层 e2b API 接收 int 秒，所以这里禁止
+    # 浮点值（在构造期就拒掉，避免 0.9 静默被截成 0）。
+    idle_timeout=3600,
+)
+
+executor = await CubeCodeExecutor.create(cfg)
+```
+
+`CubeCodeExecutor` 也支持 `code_block_delimiters`，默认在标准的 `python`
+和 `tool_code` 之外又加了一个 `bash` 分隔符，所以普通的
+\`\`\`bash\n ... \n\`\`\` 围栏也能被识别。
+
+## CubeWorkspaceRuntime
+
+对于 Skill 执行等需要按执行隔离工作目录（输入暂存、结构化程序运行、
+输出收集）的场景，Cube 子包还提供了 `CubeWorkspaceRuntime`。它在同一个
+`CubeSandboxClient` 之上组合了：
+
+- `CubeWorkspaceManager`：工作目录生命周期
+- `CubeWorkspaceFS`：文件 / 目录上传下载、按 glob 收集输出
+- `CubeProgramRunner`：结构化的 `cmd` + `args` 程序运行
+
+```python
+from trpc_agent_sdk.code_executors._types import (
+    WorkspaceOutputSpec,
+    WorkspacePutFileInfo,
+    WorkspaceRunProgramSpec,
+)
+from trpc_agent_sdk.code_executors.cube import (
+    CubeCodeExecutor,
+    CubeCodeExecutorConfig,
+    CubeWorkspaceRuntimeConfig,
+    create_cube_workspace_runtime,
+)
+
+executor = await CubeCodeExecutor.create(CubeCodeExecutorConfig())
+
+# `workspace_cfg` 可选，省略时使用 DEFAULT_REMOTE_WORKSPACE
+# = "/workspace/cube_agent" 作为根目录。
+runtime = create_cube_workspace_runtime(
+    executor,
+    workspace_cfg=CubeWorkspaceRuntimeConfig(
+        # Manager 在该路径下创建按执行隔离的
+        # `ws_<exec_id>_<suffix>` 子目录。
+        remote_workspace="/workspace/cube_agent",
+    ),
+)
+
+manager = runtime.manager()
+fs = runtime.fs()
+runner = runtime.runner()
+
+ws = await manager.create_workspace("demo-1")           # /workspace/cube_agent/ws_demo-1_<ts>
+
+await fs.put_files(ws, [
+    WorkspacePutFileInfo(path="work/script.py",
+                         content=b"print('script ran')\n"),
+])
+
+run_result = await runner.run_program(
+    ws,
+    WorkspaceRunProgramSpec(cmd="python3", args=["work/script.py"], timeout=15.0),
+)
+print(run_result.exit_code, run_result.stdout)
+
+outputs = await fs.collect_outputs(
+    ws, WorkspaceOutputSpec(globs=["work/*.py"], inline=True),
+)
+for ref in outputs.files:
+    print(ref.name, len(ref.content))
+
+await manager.cleanup("demo-1")
+```
+
+该 runtime 可以直接接入 Skill 子系统 —— 在创建 skill repository 时
+作为 `workspace_runtime` 传入即可（详见 [skill.md](skill.md)）。
+
 ## 代码块格式
 
 Agent会自动识别LLM返回中的代码块并执行。支持的代码块格式：
@@ -242,6 +436,10 @@ print(result)
 - Bash (`bash`, `sh`)
 
 ### ContainerCodeExecutor
+- Python (`python`, `py`, `python3`, 空字符串默认为Python)
+- Bash (`bash`, `sh`)
+
+### CubeCodeExecutor
 - Python (`python`, `py`, `python3`, 空字符串默认为Python)
 - Bash (`bash`, `sh`)
 
@@ -291,9 +489,39 @@ code_executor = UnsafeLocalCodeExecutor(timeout=30)  # 30秒超时
 - 查看日志输出，框架会记录详细的错误信息
 - 对于ContainerCodeExecutor，检查容器日志
 
+### 4. CubeCodeExecutor 无法连接 / 鉴权到错误租户
+
+**问题：** `CubeCodeExecutor.create` 抛出形如
+`Cube sandbox requires \`api_url\` or E2B_API_URL env`、`... api_key ...`、
+或 `... template ... CUBE_TEMPLATE_ID ...` 的错误。
+
+**解决方案：**
+- 安装可选 extra：`pip install 'trpc-agent-py[cube]'`
+- 导出三个必备环境变量（或在 `CubeCodeExecutorConfig` 上显式传入）：
+  `E2B_API_URL`、`E2B_API_KEY`、`CUBE_TEMPLATE_ID`
+- 多租户部署建议显式给 cfg 字段赋值，避免不同 Agent 实例落到同一份
+  进程级环境变量上
+
+### 5. CubeCodeExecutor 沙箱在两次调用之间消失
+
+**问题：** 通过 `cfg.sandbox_id` 挂接的沙箱，在下一次命令时抛
+`SandboxNotFoundException`（已销毁）或 `SandboxException`（PAUSED）。
+
+**解决方案：**
+- 长生命周期 Agent 推荐使用
+  `CubeCodeExecutor.create_or_recreate(cfg, on_recreate=...)`，让 executor
+  透明地新建沙箱，并通过 callback 通知调用方清理外部 locator 状态
+- 如果确实需要更长的空闲窗口，调大 `idle_timeout`（默认 3600 秒），
+  每次命令都会续期
+- 仅想丢掉某个工作目录而保留沙箱时，用
+  `CubeWorkspaceManager.cleanup(exec_id)` 而不是 `executor.destroy()`
+
 ## 完整示例
 
 查看完整示例代码：[examples/code_executors/agent/agent.py](../../../examples/code_executors/agent/agent.py)
+
+Cube 端到端示例（executor + workspace runtime）：
+[examples/code_executors/cube_demo.py](../../../examples/code_executors/cube_demo.py)
 
 ## 安全建议
 
@@ -307,4 +535,5 @@ code_executor = UnsafeLocalCodeExecutor(timeout=30)  # 30秒超时
 
 - **UnsafeLocalCodeExecutor**：执行速度快，适合快速迭代
 - **ContainerCodeExecutor**：首次启动需要拉取镜像，后续执行速度较快
-- 建议在生产环境使用 ContainerCodeExecutor，开发环境可以使用 UnsafeLocalCodeExecutor
+- **CubeCodeExecutor**：每条命令多一次远端网络往返，但因为沙箱可以跨多次调用复用（且通过 `sandbox_id` 跨进程复用），长会话场景摊销得很好；工作空间文件传输使用 tar 协议，目录上传/下载都是单次往返
+- 建议在生产环境使用 ContainerCodeExecutor 或 CubeCodeExecutor，开发环境可以使用 UnsafeLocalCodeExecutor
