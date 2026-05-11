@@ -73,14 +73,14 @@ AGENT_TOOL_APP_NAME_SUFFIX = "_trpc_agent_tool_"
 class AgentTool(BaseTool):
     """A tool that wraps an agent.
 
-  This tool allows an agent to be called as a tool within a larger application.
-  The agent's input schema is used to define the tool's input parameters, and
-  the agent's output is returned as the tool's result.
+    This tool allows an agent to be called as a tool within a larger application.
+    The agent's input schema is used to define the tool's input parameters, and
+    the agent's output is returned as the tool's result.
 
-  Attributes:
-    agent: The agent to wrap.
-    skip_summarization: Whether to skip summarization of the agent output.
-  """
+    Attributes:
+      agent: The agent to wrap.
+      skip_summarization: Whether to skip summarization of the agent output.
+    """
 
     def __init__(self,
                  agent: AgentABC,

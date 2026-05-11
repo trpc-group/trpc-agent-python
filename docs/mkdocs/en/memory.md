@@ -28,6 +28,7 @@ Based on the implementation in [trpc_agent_sdk/memory/](../../../trpc_agent_sdk/
 - **InMemoryMemoryService**: Stored in an in-process memory dictionary
 - **RedisMemoryService**: Stored in a Redis List (JSON format)
 - **SqlMemoryService**: Stored in the `mem_events` table in MySQL/PostgreSQL
+- **MempalaceMemoryService**: Stored as MemPalace drawers in a local ChromaDB-backed palace
 
 **Code Example**:
 ```python
@@ -54,7 +55,7 @@ async def store_session(self, session: Session, agent_context: Optional[AgentCon
 
 **Function**: Searches for related historical memories based on query keywords.
 
-**Search Method**: **Keyword matching** (not semantic search)
+**Search Method**: Built-in InMemory/Redis/SQL services use **keyword matching**; semantic memory services such as MemPalace and Mem0 use vector / semantic retrieval.
 
 **Implementation Logic** (using `InMemoryMemoryService` as an example):
 ```python
@@ -117,6 +118,7 @@ for memory in response.memories:
 - **InMemoryMemoryService**: Background periodic cleanup task (`_cleanup_loop`)
 - **RedisMemoryService**: Redis native `EXPIRE` mechanism (automatic expiration)
 - **SqlMemoryService**: Background periodic cleanup task (batch SQL DELETE)
+- **MempalaceMemoryService**: Background periodic cleanup task (batch drawer deletion by metadata timestamp)
 
 **TTL Configuration**:
 ```python
@@ -135,6 +137,7 @@ memory_service_config = MemoryServiceConfig(
 **TTL Refresh Mechanism**:
 - **Refresh on access**: TTL is refreshed for matched events during `search_memory`
 - **Refresh on storage**: TTL is set for new events during `store_session`
+- **Persistent semantic services**: Some services, such as MemPalace, delete expired drawers by stored event timestamp rather than refreshing TTL on every search.
 
 ---
 
@@ -165,7 +168,7 @@ _session_events = {
 
 ## MemoryService Implementations
 
-trpc-agent provides three `MemoryService` implementations, allowing you to choose the appropriate storage backend based on your scenario:
+trpc-agent provides multiple `MemoryService` implementations, allowing you to choose the appropriate storage backend based on your scenario:
 
 ### InMemoryMemoryService
 
@@ -1092,7 +1095,7 @@ await memory.delete(memory_id="memory-id")
 await memory.delete_all(user_id="alice")
 ```
 
-**More Advanced Usage:** [Advanced Usage Documentation](../../../examples/mem_0/README.md#高级用法)
+**More Advanced Usage:** [Advanced Usage Documentation](../../../examples/mem0_tools/README.md#高级用法)
 
 ---
 
@@ -1135,7 +1138,7 @@ ConnectionError: Cannot connect to Qdrant at localhost:6333
 |---|---|---|
 | `Mem0MemoryService` complete example | [examples/memory_service_with_mem0/](../../../examples/memory_service_with_mem0/README.md) | Includes execution result analysis, FAQ |
 | `Mem0MemoryService` source code | [mem0_memory_service.py](../../../trpc_agent_sdk/memory/mem0_memory_service.py) | Service implementation |
-| Tool-based integration source code | [mem0_tool.py](../../../trpc_agent_sdk/tools/mem0_tool.py) | `SearchMemoryTool` / `SaveMemoryTool` tool classes |
+| Tool-based integration source code | [mem0_tools.py](../../../trpc_agent_sdk/tools/mem0_tools.py) | `SearchMemoryTool` / `SaveMemoryTool` tool classes |
 | infer parameter details | [README.md#infer-参数详解](../../../examples/memory_service_with_mem0/README.md#infer-参数详解) | True vs False comparison |
 | FAQ | [README.md#常见问题-qa](../../../examples/memory_service_with_mem0/README.md#常见问题-qa) | Error analysis and answers |
 
@@ -1157,6 +1160,569 @@ ConnectionError: Cannot connect to Qdrant at localhost:6333
 
 ---
 
+## Integrating MemPalace
+
+### What is MemPalace?
+
+MemPalace is a local-first memory system for storing verbatim memories and retrieving historical context with semantic search. Its core storage hierarchy can be understood as:
+
+```text
+Palace
+  └── Wing
+        └── Room
+              └── Drawer
+```
+
+In `MempalaceMemoryService`, each storable framework event is filed as a drawer. The drawer contains the original text and metadata such as `wing`, `room`, `session_id`, `event_id`, `author`, and `timestamp`.
+
+**Core Capabilities:**
+- Local persistent storage in a MemPalace palace directory
+- Semantic search through MemPalace / ChromaDB
+- `wing` and `room` filters for memory isolation
+- CLI inspection through `mempalace search`
+- TTL cleanup managed by the framework memory service
+
+---
+
+### tRPC-Agent Integration Methods
+
+The recommended integration path is the framework-level memory service:
+
+| Method | Class / Tool | Applicable Scenario |
+|---|---|---|
+| **Framework-level memory service** (recommended) | `MempalaceMemoryService` | The framework automatically writes cross-session memories; the Agent retrieves them through `load_memory` |
+| **MemPalace tools** | `mempalace_search` / `mempalace_add_drawer`, etc. | The Agent needs direct access to MemPalace drawers, diary, KG, or other advanced capabilities |
+
+`MempalaceMemoryService` is the standard MemoryService integration for this project. The framework calls `store_session()` automatically after each turn to persist memory, while the Agent calls `load_memory` during response generation to retrieve historical memories through `search_memory()`.
+
+---
+
+### MempalaceMemoryService (Recommended)
+
+`MempalaceMemoryService` is a framework-level memory service. The framework stores session memories automatically after each turn, while the Agent retrieves related memories through the built-in `load_memory` tool.
+
+**How It Works**: Stores memory data as MemPalace drawers in a local-first memory palace backed by ChromaDB.
+
+**Implementation Details** (based on `mempalace_memory_service.py`):
+- **Data Structure**: MemPalace `Palace -> Wing -> Room -> Drawer`
+- **Storage Location**: Local MemPalace palace directory, usually `~/.mempalace/palace`
+- **Search Method**: MemPalace hybrid semantic search (`search_memories`) with `wing` / `room` filters
+- **TTL Mechanism**: Background periodic cleanup task; expired drawers are deleted by metadata timestamp
+- **Write Mode**: Incremental background writes; events already scheduled or stored in the current process are skipped
+- **Cross-session sharing**: `session.save_key`, usually `{app_name}/{user_id}`, is used as the cross-session memory dimension
+
+**Persistence**: ✅ **Yes**. Data is persisted in the MemPalace palace directory and can be recovered after application restart.
+
+**Applicable Scenarios**:
+- ✅ Local-first semantic memory
+- ✅ Cross-session user profile and preference memory
+- ✅ Development or private deployments that should keep memory data on local disk
+- ✅ Scenarios where CLI inspection with `mempalace search` is useful
+
+#### Quick Integration
+
+**Step 1: Install dependencies**
+
+```bash
+# Install through the trpc-agent extra
+pip install -e ".[mempalace]"
+
+# Or install MemPalace directly
+pip install mempalace
+```
+
+**Step 2: Create `MempalaceMemoryService`**
+
+```python
+from trpc_agent_sdk.memory import MemoryServiceConfig
+from trpc_agent_sdk.memory.mempalace_memory_service import MempalaceMemoryService
+
+memory_service = MempalaceMemoryService(
+    memory_service_config=MemoryServiceConfig(
+        enabled=True,
+        ttl=MemoryServiceConfig.create_ttl_config(
+            enable=True,
+            ttl_seconds=86400,
+            cleanup_interval_seconds=3600,
+        ),
+    ),
+    wing="my_app_user",
+    room="conversations",
+    store_only_model_visible=True,
+)
+```
+
+**Step 3: Pass `memory_service` to `Runner`**
+
+```python
+from trpc_agent_sdk.runners import Runner
+from trpc_agent_sdk.sessions import InMemorySessionService
+from trpc_agent_sdk.tools import load_memory_tool
+
+agent = LlmAgent(
+    name="assistant",
+    model=your_model,
+    tools=[load_memory_tool],
+    instruction="Use load_memory to recall relevant past conversations before answering.",
+)
+
+runner = Runner(
+    app_name="my_app",
+    agent=agent,
+    session_service=InMemorySessionService(),
+    memory_service=memory_service,
+)
+```
+
+**Step 4: Run the Agent; memories are persisted across sessions automatically**
+
+```python
+# First conversation round (session_1)
+async for event in runner.run_async(user_id="alice", session_id="session_1", new_message=...):
+    ...
+# After the turn finishes, the framework calls store_session and writes storable events to MemPalace.
+
+# Second conversation round (session_2) — a new session can still retrieve memories from session_1.
+async for event in runner.run_async(user_id="alice", session_id="session_2", new_message=...):
+    ...
+```
+
+**Complete Runnable Example:** [examples/memory_service_with_mempalace/run_agent.py](../../../examples/memory_service_with_mempalace/run_agent.py)
+
+---
+
+#### MemPalace Hierarchy Mapping
+
+```text
+session.save_key = "{app_name}/{user_id}"   -> wing (when wing is not explicitly configured)
+room                                      -> room, defaults to conversations
+Event                                     -> drawer
+session.id / event.id / author / timestamp -> drawer metadata
+```
+
+If `wing="trpc-agent"` is configured explicitly, all memories are written into that wing. If `wing` is omitted, the service derives the wing from `save_key`, which is usually the more natural isolation strategy for app/user-scoped long-term memory.
+
+---
+
+#### Path and CLI Search
+
+MemPalace stores data under `MempalaceConfig().palace_path`. The default path is usually:
+
+```text
+~/.mempalace/palace
+```
+
+You can configure a custom path through an environment variable:
+
+```bash
+export MEMPALACE_PALACE_PATH=/path/to/palace
+```
+
+Or through `~/.mempalace/config.json`:
+
+```json
+{
+  "palace_path": "/path/to/palace",
+  "collection_name": "mempalace_drawers"
+}
+```
+
+If the application is configured to use a custom palace path, CLI search must use the same path:
+
+```bash
+mempalace --palace /path/to/palace search "user name"
+```
+
+Filter by `wing` and `room`:
+
+```bash
+mempalace --palace /path/to/palace search "user name" \
+  --wing my_app_user \
+  --room conversations
+```
+
+If no custom path is configured, MemPalace uses its default config, and CLI search can omit `--palace`:
+
+```bash
+mempalace search "user name" --wing my_app_user --room conversations
+```
+
+> `/path/to/palace` is the MemPalace data directory that contains `chroma.sqlite3`, not a single database file.
+
+---
+
+#### TTL Configuration (Optional)
+
+```python
+memory_service_config = MemoryServiceConfig(
+    enabled=True,
+    ttl=MemoryServiceConfig.create_ttl_config(
+        enable=True,
+        ttl_seconds=86400,              # Keep memories for 24 hours
+        cleanup_interval_seconds=3600,  # Run cleanup every hour
+    ),
+)
+```
+
+Important notes:
+
+- MemPalace itself does not delete memories automatically just because they have not been used for a long time.
+- `MempalaceMemoryService` implements TTL cleanup at the framework layer.
+- Cleanup scans drawers written by this service and deletes expired records based on the `timestamp` metadata.
+- This TTL policy is based on the original event timestamp; it is not an "extend expiration on access" policy.
+
+---
+
+#### Direct Memory Management
+
+The service provides a helper to delete all drawers in a wing, or only drawers in a specific room:
+
+```python
+await memory_service.delete_memory(wing="my_app_user")
+await memory_service.delete_memory(wing="my_app_user", room="conversations")
+```
+
+> MemPalace CLI currently does not provide a direct command to delete all memories by `wing` / `room`; use the service helper or call the underlying collection `delete(where=...)`.
+
+---
+
+#### Storage Content Policy
+
+In general, only ordinary text events with long-term value should be written to MemPalace. Intermediate tool calls, tool responses, and code execution results are usually poor long-term memories because they can cause:
+
+- `load_memory` results to be written back into memory again
+- nested historical memory JSON inside newly stored memories
+- tool logs polluting long-term memory and reducing retrieval quality
+
+`MempalaceMemoryService` is better suited for memories such as:
+
+```text
+User: My name is Alice.
+User: My favorite color is blue.
+Assistant: Confirmed the user's name or preference.
+```
+
+Rather than:
+
+```text
+[tool_call] load_memory: ...
+[tool_response] load_memory: {"memories": [...]}
+```
+
+---
+
+#### Typical Workflow
+
+```text
+1. User: Do you remember my name?
+   ↓
+   Agent calls: load_memory(query="user name")
+   ↓
+   Result: {"memories": []}
+   ↓
+   Agent: I don't know your name yet.
+
+2. User: My name is Alice
+   ↓
+   After the turn, the framework automatically calls MempalaceMemoryService.store_session()
+   ↓
+   The user message is written as a drawer under the configured wing/room
+
+3. User starts a new session: Do you remember my name?
+   ↓
+   Agent calls: load_memory(query="user name")
+   ↓
+   MemPalace returns a historical memory containing "My name is Alice"
+   ↓
+   Agent: Yes, your name is Alice.
+```
+
+**Complete Demo Output (MempalaceMemoryService):** [examples/memory_service_with_mempalace/README.md](../../../examples/memory_service_with_mempalace/README.md)
+
+---
+
+### Tool-based Integration (mempalace_tool)
+
+`mempalace_tool` is another way to integrate with MemPalace. It is not the recommended standard MemoryService path. Instead, it exposes MemPalace capabilities as Agent-callable tools, allowing the Agent to decide when to search, write drawers, read or write diary entries, or maintain KG facts.
+
+The difference from `MempalaceMemoryService` is:
+
+| Method | Write Timing | Retrieval Method | Applicable Scenario |
+|---|---|---|---|
+| `MempalaceMemoryService` | The framework writes automatically after each turn | `load_memory` indirectly calls `search_memory()` | Standard cross-session long-term memory |
+| `mempalace_tool` | The Agent explicitly calls tools to write | The Agent explicitly calls `mempalace_search` | Fine-grained control over MemPalace drawers, diary, KG, or manual memory management |
+
+#### Available Tools
+
+| Tool Class | Tool Name | Function | Use Case |
+|---|---|---|---|
+| `MempalaceSearchTool` | `mempalace_search` | Semantically search saved drawer content | The Agent needs to recall user profiles, preferences, or historical facts |
+| `MempalaceAddDrawerTool` | `mempalace_add_drawer` | Write a verbatim drawer under a specified `wing/room` | The user explicitly asks the Agent to remember long-term information |
+| `MempalaceDiaryWriteTool` | `mempalace_diary_write` | Write an agent diary entry | Record runtime observations, task progress, or interim summaries |
+| `MempalaceDiaryReadTool` | `mempalace_diary_read` | Read recent diary entries for an agent | The Agent needs to review previous task notes |
+| `MempalaceKGAddTool` | `mempalace_kg_add` | Write a knowledge-graph triple fact | Structured facts such as `subject -> predicate -> object` |
+| `MempalaceKGQueryTool` | `mempalace_kg_query` | Query relationships for a knowledge-graph entity | Query facts about Alice, project dependencies, or entity relationships |
+| `MempalaceKGTimelineTool` | `mempalace_kg_timeline` | Read knowledge-graph facts as a timeline | Inspect how an entity's relationships change over time |
+| `MempalaceKGInvalidateTool` | `mempalace_kg_invalidate` | Mark a current fact as no longer valid | Represent fact changes while keeping historical records |
+
+> **Note**: Like `mem0_tool`, `mempalace_tool` exposes tools to the Agent and lets the model decide when to call them. Unlike Mem0's two search/save tools, MemPalace tools also cover diary and KG operations. See the complete example at [examples/mempalace_tools/README.md](../../../examples/mempalace_tools/README.md), and the tool source at [mempalace_tool.py](../../../trpc_agent_sdk/tools/mempalace_tool.py).
+
+#### Integration Architecture
+
+```
+┌──────────────────────┐
+│    User Input        │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  tRPC-Agent          │◄────────────────┐
+│  LlmAgent            │                 │
+└──────────┬───────────┘                 │
+           │                             │ returns tool results
+           │ calls tools                 │
+           ▼                             │
+┌──────────────────────┐                 │
+│  MemPalace Tools     │─────────────────┘
+│  - mempalace_search  │
+│  - add_drawer        │
+│  - diary read/write  │
+│  - KG tools          │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  MemPalace Backend   │
+│  - Palace / ChromaDB │
+│  - KG SQLite         │
+└──────────────────────┘
+```
+
+#### Quick Integration
+
+```python
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.tools.mempalace_tool import MempalaceAddDrawerTool
+from trpc_agent_sdk.tools.mempalace_tool import MempalaceDiaryReadTool
+from trpc_agent_sdk.tools.mempalace_tool import MempalaceDiaryWriteTool
+from trpc_agent_sdk.tools.mempalace_tool import MempalaceKGAddTool
+from trpc_agent_sdk.tools.mempalace_tool import MempalaceKGInvalidateTool
+from trpc_agent_sdk.tools.mempalace_tool import MempalaceKGQueryTool
+from trpc_agent_sdk.tools.mempalace_tool import MempalaceKGTimelineTool
+from trpc_agent_sdk.tools.mempalace_tool import MempalaceSearchTool
+
+palace_path = "/tmp/trpc-agent-mempalace-demo"
+kg_path = "/tmp/trpc-agent-mempalace-demo/knowledge_graph.sqlite3"
+
+tools = [
+    MempalaceSearchTool(palace_path=palace_path),
+    MempalaceAddDrawerTool(palace_path=palace_path),
+    MempalaceDiaryWriteTool(palace_path=palace_path),
+    MempalaceDiaryReadTool(palace_path=palace_path),
+    MempalaceKGAddTool(palace_path=palace_path, kg_path=kg_path),
+    MempalaceKGQueryTool(palace_path=palace_path, kg_path=kg_path),
+    MempalaceKGTimelineTool(palace_path=palace_path, kg_path=kg_path),
+    MempalaceKGInvalidateTool(palace_path=palace_path, kg_path=kg_path),
+]
+
+agent = LlmAgent(
+    name="memory_assistant",
+    model=your_model,
+    instruction="""
+    You are a helpful assistant with MemPalace tools.
+    - Use mempalace_search before answering questions that may require past memory.
+    - Use mempalace_add_drawer when the user explicitly asks you to remember stable facts.
+    - Use diary tools for agent diary entries.
+    - Use KG tools for structured facts such as Alice -> likes -> Italian food.
+    """,
+    tools=tools,
+)
+```
+
+#### Specify the MemPalace Path
+
+Tool classes accept `palace_path`. If it is omitted, they use `MempalaceConfig().palace_path`. KG tools also accept `kg_path`; if `kg_path` is omitted and `palace_path` is provided, they default to `palace_path/knowledge_graph.sqlite3`:
+
+```python
+mempalace_search_tool = MempalaceSearchTool(palace_path="/path/to/palace")
+mempalace_add_drawer_tool = MempalaceAddDrawerTool(palace_path="/path/to/palace")
+mempalace_kg_query_tool = MempalaceKGQueryTool(
+    palace_path="/path/to/palace",
+    kg_path="/path/to/palace/knowledge_graph.sqlite3",
+)
+```
+
+Use the same path when inspecting memories from the CLI:
+
+```bash
+mempalace --palace /path/to/palace search "user name"
+```
+
+The example manages paths through `.env`:
+
+```bash
+MEMPALACE_PALACE_PATH=/tmp/trpc-agent-mempalace-demo
+MEMPALACE_KG_PATH=/tmp/trpc-agent-mempalace-demo/knowledge_graph.sqlite3
+MEMPALACE_WING=personal_assistant_alice
+MEMPALACE_ROOM=user_profile
+```
+
+#### Tool-based Workflow
+
+```text
+1. User: Use mempalace_search to check whether you remember my name.
+   ↓
+   Agent calls: mempalace_search(
+       query="name",
+       wing="personal_assistant_alice",
+       room="user_profile"
+   )
+   ↓
+   Result: No palace found or empty results
+   ↓
+   Agent: I do not know your name yet.
+
+2. User: Use mempalace_add_drawer to remember that my name is Alice.
+   ↓
+   Agent calls: mempalace_add_drawer(
+       wing="personal_assistant_alice",
+       room="user_profile",
+       content="User's name is Alice."
+   )
+   ↓
+   MemPalace writes the drawer
+
+3. User starts a new session: Use mempalace_search to recall my name.
+   ↓
+   Agent calls: mempalace_search(query="name", wing="personal_assistant_alice", room="user_profile")
+   ↓
+   MemPalace returns "User's name is Alice."
+   ↓
+   Agent: Your name is Alice.
+
+4. User: Use mempalace_kg_add to add this fact: Alice likes Italian food.
+   ↓
+   Agent calls: mempalace_kg_add(subject="Alice", predicate="likes", object="Italian food")
+   ↓
+   KG writes the triple fact: Alice -> likes -> Italian food
+
+5. User: Use mempalace_kg_invalidate to mark the fact Alice likes Italian food as ended today.
+   ↓
+   Agent calls: mempalace_kg_invalidate(subject="Alice", predicate="likes", object="Italian food")
+   ↓
+   KG keeps the historical fact but marks current as false
+```
+
+**Complete tool-based demo and result analysis:** [examples/mempalace_tools/README.md](../../../examples/mempalace_tools/README.md)
+
+---
+
+#### MempalaceSearchTool
+
+Semantically searches drawer content saved in MemPalace.
+
+**Constructor:**
+```python
+MempalaceSearchTool(
+    palace_path: str | None = None,
+    filters_name: list[str] | None = None,
+    filters: list[Any] | None = None,
+)
+```
+
+**Agent Tool Parameters (callable by LLM):**
+- `query` (string, required): Search query
+- `limit` (integer, optional): Maximum number of results, defaults to 5
+- `wing` (string, optional): Filter by wing
+- `room` (string, optional): Filter by room
+
+**Return Value Example:**
+```python
+{
+    "query": "name favorite food",
+    "filters": {"wing": "personal_assistant_alice", "room": "user_profile"},
+    "results": [
+        {"text": "User's name is Alice.", "wing": "personal_assistant_alice", "room": "user_profile"},
+        {"text": "My favorite food is Italian food.", "wing": "personal_assistant_alice", "room": "user_profile"},
+    ],
+}
+```
+
+---
+
+#### MempalaceAddDrawerTool
+
+Writes a verbatim drawer under a specified `wing/room`. It is suitable for long-term facts that the user explicitly asks the Agent to remember.
+
+**Agent Tool Parameters (callable by LLM):**
+- `wing` (string, required): Storage scope, for example `personal_assistant_alice`
+- `room` (string, required): Memory topic, for example `user_profile`
+- `content` (string, required): Verbatim content to save
+- `source_file` (string, optional): Source identifier
+
+**Return Value Example:**
+```python
+{
+    "success": True,
+    "drawer_id": "drawer_personal_assistant_alice_user_profile_xxx",
+    "wing": "personal_assistant_alice",
+    "room": "user_profile",
+}
+```
+
+---
+
+#### Diary Tools
+
+`MempalaceDiaryWriteTool` and `MempalaceDiaryReadTool` record and read agent diary entries. They are useful for "what happened in this task, what was observed, and what to watch next" style runtime notes, and should not replace user-profile memories.
+
+| Tool | Key Parameters | Return Highlights |
+|---|---|---|
+| `mempalace_diary_write` | `entry`, `agent_name`, `topic`, `wing` | `success`, `entry_id`, `agent`, `topic` |
+| `mempalace_diary_read` | `agent_name`, `last_n`, `wing` | `entries`, `total`, `showing` |
+
+In the example output, after writing `Alice tested the MemPalace tools example today.`, a later new session can still read that diary entry, showing that diary data is persisted.
+
+---
+
+#### KG Tools
+
+KG tools maintain structured facts. A fact is usually represented as a triple:
+
+```text
+subject -> predicate -> object
+Alice -> likes -> Italian food
+```
+
+| Tool | Key Parameters | Semantics |
+|---|---|---|
+| `mempalace_kg_add` | `subject`, `predicate`, `object`, `valid_from`, `valid_to`, `confidence` | Write a structured fact |
+| `mempalace_kg_query` | `entity`, `as_of`, `direction` | Query facts related to an entity |
+| `mempalace_kg_timeline` | `entity` | Inspect an entity's fact timeline |
+| `mempalace_kg_invalidate` | `subject`, `predicate`, `object`, `ended` | Mark a fact as no longer valid |
+
+`mempalace_kg_invalidate` does not delete the historical fact. It sets `valid_to` and makes `current=False`. The example therefore runs invalidation after the second-phase persistence verification, so it does not alter the query result used to validate persistence.
+
+#### Recommendations
+
+- If you only need standard cross-session long-term memory, prefer `MempalaceMemoryService`.
+- Use `mempalace_tool` when the Agent needs direct control over what to write, how to classify it, diary operations, or KG maintenance.
+- For user profiles and preferences, write to a stable `wing/room`, such as `personal_assistant_alice/user_profile`.
+- For KG fact changes, prefer `mempalace_kg_invalidate` to express "no longer true" instead of deleting history.
+- Do not let the Agent write `load_memory` tool results, code execution outputs, or other intermediate traces directly into drawers, as this can pollute long-term memory.
+
+---
+
+### MemPalace Resources
+
+| Resource | Path | Description |
+|---|---|---|
+| `MempalaceMemoryService` complete example | [examples/memory_service_with_mempalace/](../../../examples/memory_service_with_mempalace/README.md) | Installation, path configuration, CLI search, and execution result analysis |
+| `MempalaceMemoryService` source code | [mempalace_memory_service.py](../../../trpc_agent_sdk/memory/mempalace_memory_service.py) | Recommended framework-level memory service implementation |
+| MemPalace tools source code | [mempalace_tool.py](../../../trpc_agent_sdk/tools/mempalace_tool.py) | Optional tool-based integration: `mempalace_search`, `mempalace_add_drawer`, diary, KG tools |
+
+---
+
 ## Core Feature Summary
 
 ### 1. Cross-session Memory Sharing
@@ -1165,17 +1731,19 @@ ConnectionError: Cannot connect to Qdrant at localhost:6333
 - ✅ Uses `save_key` (`app_name/user_id`) as the memory key
 - ✅ Suitable for storing user profiles, long-term preferences, and other cross-session information
 
-### 2. Keyword Search
+### 2. Keyword or Semantic Search
 
 - ✅ Supports keyword extraction and matching for both Chinese and English
 - ✅ Uses `extract_words_lower` to extract English words and Chinese characters
 - ✅ Matching logic: returns on any query word match
+- ✅ Semantic memory services such as `MempalaceMemoryService` and `Mem0MemoryService` use vector / semantic retrieval instead of simple keyword matching
 
 ### 3. TTL Cache Eviction
 
 - ✅ Automatically cleans up expired memories, preventing unlimited storage growth
 - ✅ Refreshes TTL on access (during `search_memory`)
 - ✅ Different implementations use different cleanup mechanisms
+- ⚠️ Some persistent semantic services may use fixed event timestamps for TTL cleanup rather than refreshing TTL on every search
 
 ### 4. Automatic Storage
 
@@ -1188,6 +1756,7 @@ ConnectionError: Cannot connect to Qdrant at localhost:6333
 - ✅ Supports multiple implementations: In-Memory, Redis, SQL, Mem0, etc.
 - ✅ Supports TRPC Redis integration
 - ✅ Supports Mem0 semantic memory integration (vector search + LLM extraction)
+- ✅ Supports MemPalace local-first semantic memory integration (ChromaDB-backed palace)
 - ✅ Choose the appropriate implementation based on your scenario
 
 ---
@@ -1201,21 +1770,23 @@ ConnectionError: Cannot connect to Qdrant at localhost:6333
 
 ### 2. Keyword Search Limitations
 
-- The current implementation uses **keyword (token) matching**, not semantic search
+- The built-in InMemory/Redis/SQL implementations use **keyword (token) matching**, not semantic search
 - After `extract_words_lower` (whole English words, individual Chinese characters), **any** query token that appears in the event's token set counts as a match (this is not full-sentence semantic similarity)
 - Suitable for rapid prototyping, not suitable for complex semantic retrieval requirements
+- For semantic retrieval, use `MempalaceMemoryService` or `Mem0MemoryService`
 
 ### 3. TTL Configuration
 
 - `ttl_seconds`: Memory expiration time (in seconds)
-- `cleanup_interval_seconds`: Cleanup interval (InMemory/SQL only; Redis handles expiration automatically)
-- TTL is automatically refreshed on access, extending the memory's validity period
+- `cleanup_interval_seconds`: Cleanup interval (InMemory/SQL/MemPalace; Redis handles expiration automatically)
+- InMemory/Redis refresh TTL on access; persistent semantic services may use stored timestamps for expiration
 
 ### 4. Concurrency Safety
 
 - `InMemoryMemoryService`: Thread-safe within a single process
 - `RedisMemoryService`: Supports multi-process/multi-server concurrency
 - `SqlMemoryService`: Supports multi-process/multi-server concurrency (using database transactions)
+- `MempalaceMemoryService`: Local-first storage; avoid multiple processes writing to the same palace unless the underlying MemPalace/ChromaDB deployment is managed carefully
 
 ---
 
@@ -1225,9 +1796,9 @@ MemoryService provides powerful long-term memory management capabilities:
 
 - ✅ **Cross-session sharing**: Different sessions can access shared memories
 - ✅ **Automatic storage**: Automatically stores Session events when `enabled=True`
-- ✅ **Keyword search**: Supports Chinese and English keyword matching
+- ✅ **Search**: Supports keyword matching and semantic memory retrieval depending on implementation
 - ✅ **TTL eviction**: Automatically cleans up expired memories
-- ✅ **Multiple implementations**: In-Memory, Redis, SQL, TRPC Redis, Mem0
+- ✅ **Multiple implementations**: In-Memory, Redis, SQL, TRPC Redis, Mem0, MemPalace
 
 Through proper use of MemoryService, you can achieve:
 - User profile construction
@@ -1241,3 +1812,4 @@ For more detailed usage examples, please refer to the related examples in the [e
 - [examples/memory_service_with_redis/run_agent.py](../../../examples/memory_service_with_redis/run_agent.py)
 - [examples/memory_service_with_sql/run_agent.py](../../../examples/memory_service_with_sql/run_agent.py)
 - [examples/memory_service_with_mem0/run_agent.py](../../../examples/memory_service_with_mem0/run_agent.py)
+- [examples/memory_service_with_mempalace/run_agent.py](../../../examples/memory_service_with_mempalace/run_agent.py)

@@ -269,27 +269,41 @@ class PlanReActPlanner(BasePlanner):
             NL planner system instruction with structured workflow guidance
         """
         high_level_preamble = f"""
-When answering the question, try to leverage the available tools to gather the information instead of your memorized knowledge.
+When answering the question, try to leverage the available tools to gather the information instead of your memorized
+knowledge.
 
-Follow this process when answering the question: (1) first come up with a plan in natural language text format; (2) Then use tools to execute the plan and provide reasoning between tool code snippets to make a summary of current state and next step. Tool code snippets and reasoning should be interleaved with each other. (3) In the end, return one final answer.
+Follow this process when answering the question: (1) first come up with a plan in natural language text format;
+(2) Then use tools to execute the plan and provide reasoning between tool code snippets to make a summary of current
+state and next step. Tool code snippets and reasoning should be interleaved with each other. (3) In the end, return one
+final answer.
 
-Follow this format when answering the question: (1) The planning part should be under {PLANNING_TAG}. (2) The tool code snippets should be under {ACTION_TAG}, and the reasoning parts should be under {REASONING_TAG}. (3) The final answer part should be under {FINAL_ANSWER_TAG}.
+Follow this format when answering the question: (1) The planning part should be under {PLANNING_TAG}. (2) The tool
+code snippets should be under {ACTION_TAG}, and the reasoning parts should be under {REASONING_TAG}. (3) The final
+answer part should be under {FINAL_ANSWER_TAG}.
 """
 
         planning_preamble = f"""
 Below are the requirements for the planning:
-The plan is made to answer the user query if following the plan. The plan is coherent and covers all aspects of information from user query, and only involves the tools that are accessible by the agent. The plan contains the decomposed steps as a numbered list where each step should use one or multiple available tools. By reading the plan, you can intuitively know which tools to trigger or what actions to take.
-If the initial plan cannot be successfully executed, you should learn from previous execution results and revise your plan. The revised plan should be under {REPLANNING_TAG}. Then use tools to follow the new plan.
+The plan is made to answer the user query if following the plan. The plan is coherent and covers all aspects of
+information from user query, and only involves the tools that are accessible by the agent. The plan contains the
+decomposed steps as a numbered list where each step should use one or multiple available tools. By reading the plan,
+you can intuitively know which tools to trigger or what actions to take.
+If the initial plan cannot be successfully executed, you should learn from previous execution results and revise your
+plan. The revised plan should be under {REPLANNING_TAG}. Then use tools to follow the new plan.
 """
 
         reasoning_preamble = """
 Below are the requirements for the reasoning:
-The reasoning makes a summary of the current trajectory based on the user query and tool outputs. Based on the tool outputs and plan, the reasoning also comes up with instructions to the next steps, making the trajectory closer to the final answer.
+The reasoning makes a summary of the current trajectory based on the user query and tool outputs. Based on the tool
+outputs and plan, the reasoning also comes up with instructions to the next steps, making the trajectory closer to the
+final answer.
 """
 
         final_answer_preamble = """
 Below are the requirements for the final answer:
-The final answer should be precise and follow query formatting requirements. Some queries may not be answerable with the available tools and information. In those cases, inform the user why you cannot process their query and ask for more information.
+The final answer should be precise and follow query formatting requirements. Some queries may not be answerable with
+the available tools and information. In those cases, inform the user why you cannot process their query and ask for more
+information.
 """
 
         # Tool code requirements
@@ -297,11 +311,13 @@ The final answer should be precise and follow query formatting requirements. Som
 Below are the requirements for the tool code:
 
 **Custom Tools:** The available tools are described in the context and can be directly used.
-- Code must be valid self-contained Python snippets with no imports and no references to tools or Python libraries that are not in the context.
+- Code must be valid self-contained Python snippets with no imports and no references to tools or Python libraries that
+  are not in the context.
 - You cannot use any parameters or fields that are not explicitly defined in the APIs in the context.
 - The code snippets should be readable, efficient, and directly relevant to the user query and reasoning steps.
 - When using the tools, you should use the library name together with the function name, e.g., vertex_search.search().
-- If Python libraries are not provided in the context, NEVER write your own code other than the function calls using the provided tools.
+- If Python libraries are not provided in the context, NEVER write your own code other than the function calls using the
+  provided tools.
 """
 
         user_input_preamble = """

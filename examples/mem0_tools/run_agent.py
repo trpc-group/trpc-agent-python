@@ -17,7 +17,7 @@ from trpc_agent_sdk.types import Part
 load_dotenv()
 
 
-async def run_mem_zero_agent():
+async def run_mem0_agent():
     """Run the mem zero agent demo"""
 
     app_name = "memory_assistant"
@@ -73,12 +73,12 @@ async def run_mem_zero_agent():
 
 
 async def main():
-    await run_mem_zero_agent()
+    await run_mem0_agent()
     # Sleep for 10 seconds, wait for user input
     print("Press Enter to continue...")
     await asyncio.sleep(10)
     print("Sleeping for 10 seconds...")
-    await run_mem_zero_agent()
+    await run_mem0_agent()
 
 
 if __name__ == "__main__":

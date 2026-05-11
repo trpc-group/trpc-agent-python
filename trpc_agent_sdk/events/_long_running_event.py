@@ -5,9 +5,10 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Long Running Event."""
 
-from trpc_agent_sdk.events._event import Event
 from trpc_agent_sdk.types import FunctionCall
 from trpc_agent_sdk.types import FunctionResponse
+
+from ._event import Event
 
 
 class LongRunningEvent(Event):

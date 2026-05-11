@@ -200,6 +200,8 @@ class SqlMemoryService(BaseMemoryService):
         async with self._sql_storage.create_db_session() as sql_session:
             is_exist = False
             for event in session.events:
+                if not event.is_model_visible():
+                    continue
                 if event.content and event.content.parts:
                     is_exist = True
                     # Check if the event already exists
