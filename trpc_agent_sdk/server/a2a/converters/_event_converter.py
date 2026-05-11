@@ -612,11 +612,9 @@ def _a2a_part_requests_euc_auth(part: A2APart) -> bool:
     if not md:
         return False
     t = get_metadata(md, A2A_DATA_PART_METADATA_TYPE_KEY)
-    return all([
-        t == A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL,
-        metadata_is_true(md, A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY),
-        root.data.get("name") == REQUEST_EUC_FUNCTION_CALL_NAME,
-    ])
+    return (t == A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL
+            and metadata_is_true(md, A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY)
+            and root.data.get("name") == REQUEST_EUC_FUNCTION_CALL_NAME)
 
 
 def _a2a_part_is_long_running_function_call(part: A2APart) -> bool:
@@ -625,10 +623,8 @@ def _a2a_part_is_long_running_function_call(part: A2APart) -> bool:
     if not md:
         return False
     t = get_metadata(md, A2A_DATA_PART_METADATA_TYPE_KEY)
-    return all([
-        t == A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL,
-        metadata_is_true(md, A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY),
-    ])
+    return (t == A2A_DATA_PART_METADATA_TYPE_FUNCTION_CALL
+            and metadata_is_true(md, A2A_DATA_PART_METADATA_IS_LONG_RUNNING_KEY))
 
 
 def _create_status_update_event(

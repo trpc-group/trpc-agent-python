@@ -43,3 +43,6 @@ Maps internal type identifiers to standardized type names used in:
 - Error messages
 - Schema validation
 """
+
+TRPC_AGENT_RUNNING_KEY = "__trpc_agent__running"
+"""Key for storing the running state of the agent."""

@@ -39,6 +39,7 @@ from trpc_agent_sdk.memory.mem0_memory_service import (
     get_mem0_filters,
     set_mem0_filters,
 )
+from trpc_agent_sdk.memory._utils import event_to_text
 from trpc_agent_sdk.sessions import Session
 from trpc_agent_sdk.types import Content, Part, SearchMemoryResponse
 
@@ -188,22 +189,22 @@ class TestParseMem0Kwargs:
 class TestStaticHelpers:
     def test_event_to_text_basic(self):
         event = _make_event("hello world")
-        assert Mem0MemoryService._event_to_text(event) == "hello world"
+        assert event_to_text(event) == "hello world"
 
     def test_event_to_text_no_content(self):
         event = _make_event_no_content()
-        assert Mem0MemoryService._event_to_text(event) == ""
+        assert event_to_text(event) == ""
 
     def test_event_to_text_no_parts(self):
         event = Event(id="e1", invocation_id="inv-1", author="user", content=Content(parts=[]))
-        assert Mem0MemoryService._event_to_text(event) == ""
+        assert event_to_text(event) == ""
 
     def test_event_to_text_multiple_parts(self):
         event = Event(
             id="e1", invocation_id="inv-1", author="user",
             content=Content(parts=[Part.from_text(text="hello"), Part.from_text(text="world")]),
         )
-        assert Mem0MemoryService._event_to_text(event) == "hello world"
+        assert event_to_text(event) == "hello world"
 
     def test_event_to_role_user(self):
         event = _make_event(author="user")

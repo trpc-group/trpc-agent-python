@@ -10,8 +10,8 @@ from mem0 import AsyncMemoryClient
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.models import OpenAIModel
-from trpc_agent_sdk.tools.mem0_tool import SaveMemoryTool
-from trpc_agent_sdk.tools.mem0_tool import SearchMemoryTool
+from trpc_agent_sdk.tools.mem0_tools import SaveMemoryTool
+from trpc_agent_sdk.tools.mem0_tools import SearchMemoryTool
 
 from .config import get_mem0_platform_config
 from .config import get_memory_config

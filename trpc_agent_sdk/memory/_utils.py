@@ -6,6 +6,7 @@
 """Utility functions for memory service."""
 import re
 from datetime import datetime
+from trpc_agent_sdk.events import Event
 
 
 def format_timestamp(timestamp: float) -> str:
@@ -26,3 +27,18 @@ def extract_words_lower(text: str) -> set[str]:
     # Extract Chinese characters
     words.update(re.findall(r'[\u4e00-\u9fff]', text))
     return words
+
+
+def event_to_text(event: Event) -> str:
+    """Extract text from event content parts.
+
+    Args:
+        event: The event to extract text from.
+
+    Returns:
+        The text from the event content parts.
+    """
+    if not event.content or not event.content.parts:
+        return ""
+    parts = [part.text for part in event.content.parts if part.text]
+    return " ".join(parts).strip()

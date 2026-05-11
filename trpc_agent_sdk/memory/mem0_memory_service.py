@@ -31,6 +31,8 @@ from trpc_agent_sdk.types import MemoryEntry
 from trpc_agent_sdk.types import Part
 from trpc_agent_sdk.types import SearchMemoryResponse
 
+from ._utils import event_to_text
+
 _MEM0_KEY_METADATA = "metadata"
 
 
@@ -83,7 +85,8 @@ class Mem0MemoryService(BaseMemoryService):
         super().__init__(memory_service_config=memory_service_config)
         self._mem0 = mem0_client
         self._infer = infer
-        # only for AsyncMemoryClient, when async_mode is True, the platform will wait for the indexing to complete before returning
+        # only for AsyncMemoryClient, when async_mode is True,
+        # the platform will wait for the indexing to complete before returning
         self._async_mode = async_mode
         self._known_user_ids: Set[tuple[str, str]] = set()
 
@@ -144,7 +147,9 @@ class Mem0MemoryService(BaseMemoryService):
         level-1 key: session.save_key -> user_id
         level-2 key: session.id -> metadata["session_id"]
         """
-        valid_events = [event for event in session.events if event.content and event.content.parts]
+        valid_events = [
+            event for event in session.events if event.content and event.content.parts and event.is_model_visible()
+        ]
         if not valid_events:
             return
 
@@ -161,7 +166,7 @@ class Mem0MemoryService(BaseMemoryService):
         user_messages = []
         assistant_messages = []
         for event in valid_events:
-            text = self._event_to_text(event)
+            text = event_to_text(event)
             if not text:
                 continue
             role = self._event_to_role(event)
@@ -190,8 +195,15 @@ class Mem0MemoryService(BaseMemoryService):
                 for key, value in mem0_kwargs.filters.items():
                     api_filters.append({key: value})
             filters = {"AND": [{"OR": api_filters}, {"run_id": "*"}]}
-            search_fn = lambda: self._mem0.search(
-                query=query, user_id=mem0_kwargs.user_id, filters=filters, top_k=limit)
+
+            async def search_fn():
+                return await self._mem0.search(
+                    query=query,
+                    user_id=mem0_kwargs.user_id,
+                    filters=filters,
+                    top_k=limit,
+                )
+
             return await self._retry_transport("search", search_fn)
         kwargs: dict[str, Any] = {"user_id": mem0_kwargs.user_id, "limit": limit}
         if mem0_kwargs.agent_id:
@@ -275,14 +287,6 @@ class Mem0MemoryService(BaseMemoryService):
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-
-    @staticmethod
-    def _event_to_text(event: EventCls) -> str:
-        """Extract text from event content parts."""
-        if not event.content or not event.content.parts:
-            return ""
-        parts = [part.text for part in event.content.parts if part.text]
-        return " ".join(parts).strip()
 
     @staticmethod
     def _event_to_role(event: EventCls) -> str:

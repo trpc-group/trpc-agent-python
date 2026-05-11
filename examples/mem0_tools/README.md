@@ -25,10 +25,10 @@ personal_assistant (LlmAgent)
 
 关键文件：
 
-- [examples/mem_0/agent/agent.py](./agent/agent.py)
-- [examples/mem_0/agent/config.py](./agent/config.py)
-- [examples/mem_0/run_agent.py](./run_agent.py)
-- `trpc_agent_sdk/tools/mem0_tool.py`
+- [examples/mem0_tools/agent/agent.py](./agent/agent.py)
+- [examples/mem0_tools/agent/config.py](./agent/config.py)
+- [examples/mem0_tools/run_agent.py](./run_agent.py)
+- `trpc_agent_sdk/tools/mem0_tools.py`
 
 ## 关键代码解释
 
@@ -79,7 +79,7 @@ pip3 install sentence-transformers qdrant-client
 
 ### 环境变量要求
 
-在 [examples/mem_0/.env](./.env) 中配置（或通过 `export`）：
+在 [examples/mem0_tools/.env](./.env) 中配置（或通过 `export`）：
 
 - `TRPC_AGENT_API_KEY`
 - `TRPC_AGENT_BASE_URL`
@@ -91,7 +91,7 @@ pip3 install sentence-transformers qdrant-client
 ### 运行命令
 
 ```bash
-cd examples/mem_0
+cd examples/mem0_tools
 python3 run_agent.py
 ```
 
@@ -369,4 +369,4 @@ AsyncMemoryClient 平台客户端参数
 
 - [Mem0 Docs](https://docs.mem0.ai/introduction)
 - [Mem0 Examples](https://github.com/mem0ai/mem0/tree/main/examples)
-- [tRPC-Agent Mem0 Tool](../../trpc_agent_ecosystem/tools/mem0_tool.py)
+- [tRPC-Agent Mem0 Tool](../../trpc_agent_ecosystem/tools/mem0_tools.py)
