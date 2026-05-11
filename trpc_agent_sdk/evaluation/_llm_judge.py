@@ -11,12 +11,15 @@ import asyncio
 import copy
 import json
 import os
+import re
 import uuid
 from typing import Any
 from typing import Optional
 from typing import Protocol
 
+import json_repair
 from pydantic import BaseModel as PydanticBaseModel
+from pydantic import field_validator
 
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.context import InvocationContext
@@ -52,7 +55,20 @@ from ._llm_criterion import get_llm_criterion_from_metric
 class FinalResponseOutput(PydanticBaseModel):
     """Pydantic schema for llm_final_response judge output (reasoning + valid/invalid)."""
     reasoning: str
-    is_the_agent_response_valid: str  # Must be "valid" or "invalid"
+    is_the_agent_response_valid: str  # "valid" or "invalid"
+
+    # Coerce non-string reasoning (e.g. nested object) to JSON repr.
+    @field_validator("reasoning", mode="before")
+    @classmethod
+    def _stringify_reasoning(cls, v: Any) -> str:
+        if v is None:
+            return ""
+        if isinstance(v, str):
+            return v
+        try:
+            return json.dumps(v, ensure_ascii=False)
+        except (TypeError, ValueError):
+            return str(v)
 
 
 class RubricItemOutput(PydanticBaseModel):
@@ -63,10 +79,39 @@ class RubricItemOutput(PydanticBaseModel):
     reason: str
     verdict: str  # "yes" or "no"
 
+    # Coerce scalar types (int/float/bool) into strings before validation.
+    @field_validator("id", "rubric", "evidence", "reason", "verdict", mode="before")
+    @classmethod
+    def _stringify(cls, v: Any) -> str:
+        if v is None:
+            return ""
+        if isinstance(v, str):
+            return v
+        if isinstance(v, bool):
+            # bool must precede int (bool is a subclass of int).
+            return "yes" if v else "no"
+        if isinstance(v, (int, float)):
+            return str(v)
+        try:
+            return json.dumps(v, ensure_ascii=False)
+        except (TypeError, ValueError):
+            return str(v)
+
 
 class RubricJudgeOutput(PydanticBaseModel):
     """Pydantic schema for llm_rubric_response and llm_rubric_knowledge_recall judge output."""
     items: list[RubricItemOutput]
+
+    # Unpack items that were double-serialized as a JSON-encoded string.
+    @field_validator("items", mode="before")
+    @classmethod
+    def _unpack_items(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return v
+        return v
 
 
 class MessagesConstructor(Protocol):
@@ -414,8 +459,24 @@ class DefaultMessagesConstructor:
         raise ValueError(f"Unknown metric_name: {metric_name!r}")
 
 
+_SALVAGE_MARK = "[salvaged]"
+
+# Verdict tokens recognized by salvage regex; canonicalized to yes/no.
+_VERDICT_YES = {"yes", "true", "pass", "passed", "valid"}
+_VERDICT_NO = {"no", "false", "fail", "failed", "invalid"}
+
+
 class DefaultResponseScorer:
-    """Parses judge JSON into ScoreResult; dispatches by metric (final_response vs rubric)."""
+    """Parses judge LLM output into a ScoreResult.
+
+    Two-layer pipeline:
+      1. json_repair.loads + Pydantic.model_validate (handles markdown fences,
+         single quotes, trailing commas, scalar-type coercion via field
+         validators on the schema classes).
+      2. Regex salvage on the raw text when Pydantic rejects the dict. Extracts
+         only verdict tokens; does not fabricate rubric/reason/evidence. If no
+         verdict token is found, the caller raises (no silent zero-score).
+    """
 
     def parse_response(self, response_text: str, metric_name: str) -> ScoreResult:
         if metric_name == "llm_final_response":
@@ -425,52 +486,91 @@ class DefaultResponseScorer:
         raise ValueError(f"unknown metric_name: {metric_name!r}")
 
     @staticmethod
-    def _extract_json(text: str) -> str:
-        """Extract the first JSON object or array from text, stripping any surrounding non-JSON content.
+    def _load_json(text: str) -> Any:
+        """Lenient JSON load via json_repair (falls back to repair parser on failure)."""
+        return json_repair.loads(text or "")
 
-        Example: when the judge model returns Markdown-wrapped JSON, we strip the fence
-        so that model_validate_json receives valid JSON instead of failing on the prefix:
+    @staticmethod
+    def _salvage_final_response(text: str) -> Optional[ScoreResult]:
+        """Regex-extract the valid/invalid verdict; return None if not found."""
+        if not text:
+            return None
+        m = re.search(
+            r'is_the_agent_response_valid["\s:=]+["\']?(valid|invalid)\b',
+            text,
+            re.IGNORECASE,
+        )
+        if not m:
+            return None
+        label = m.group(1).strip().lower()
+        score = 1.0 if label == "valid" else 0.0
+        return ScoreResult(
+            score=score,
+            reason=f"{_SALVAGE_MARK} verdict={label!r}; reasoning omitted",
+        )
 
-            input:  '```json\\n{"items": [{"id": "1", "verdict": "yes"}]}\\n```'
-            output: '{"items": [{"id": "1", "verdict": "yes"}]}'
+    @staticmethod
+    def _salvage_rubric_response(text: str) -> Optional[ScoreResult]:
+        """Regex-extract verdict tokens; return None if none found.
 
-        Without this, Pydantic would raise: Invalid JSON: expected value at line 1 column 1
-        (because the first character is '`' rather than '{' or '[').
+        Only verdict values are scraped — id/rubric/evidence/reason are not,
+        because positional alignment across free-form fields is unreliable.
         """
-        text = (text or "").strip()
-        # Strip markdown code fence (e.g. ```json ... ```) so model output wrapped in code block still parses
-        if text.startswith("```"):
-            first_line, _, rest = text.partition("\n")
-            if first_line in ("```json", "```"):
-                text = rest
-            text = text.strip()
-        if text.endswith("```"):
-            text = text[:-3].strip()
-        for start_char, end_char in [("{", "}"), ("[", "]")]:
-            start = text.find(start_char)
-            if start == -1:
-                continue
-            end = text.rfind(end_char)
-            if end > start:
-                return text[start:end + 1]
-        return text
+        if not text:
+            return None
+        # `\\?` tolerates escaped quotes from double-serialized JSON strings.
+        matches = re.findall(
+            r'\\?["\']verdict\\?["\']\s*:\s*\\?["\']([A-Za-z]+)\\?["\']',
+            text,
+        )
+        scores: list[float] = []
+        for raw in matches:
+            tok = raw.strip().lower()
+            if tok in _VERDICT_YES:
+                scores.append(1.0)
+            elif tok in _VERDICT_NO:
+                scores.append(0.0)
+            # Unknown tokens dropped; never mapped to a guessed score.
+        if not scores:
+            return None
+        rubric_scores = [
+            RubricScore(
+                id=f"salvaged_{i}",
+                reason=f"{_SALVAGE_MARK} original rubric text omitted",
+                score=s,
+            ) for i, s in enumerate(scores)
+        ]
+        avg = sum(scores) / len(scores)
+        return ScoreResult(
+            score=avg,
+            reason=f"{_SALVAGE_MARK} extracted {len(scores)} verdict(s); rubric/evidence/reason omitted",
+            rubric_scores=rubric_scores,
+        )
 
     def _parse_final_response(self, response_text: str) -> ScoreResult:
         try:
-            obj = FinalResponseOutput.model_validate_json(self._extract_json(response_text))
+            data = self._load_json(response_text)
+            obj = FinalResponseOutput.model_validate(data)
         except Exception as e:
-            response_preview = f"; got: {(response_text or '')[:200]!r}" if response_text else ""
-            raise ValueError(f"failed to parse final response JSON: {e}{response_preview}") from e
+            salvaged = self._salvage_final_response(response_text)
+            if salvaged is not None:
+                return salvaged
+            preview = f"; got: {(response_text or '')[:200]!r}" if response_text else ""
+            raise ValueError(f"failed to parse final response JSON: {e}{preview}") from e
         label = obj.is_the_agent_response_valid.strip().lower()
         score = 1.0 if label == "valid" else 0.0
         return ScoreResult(score=score, reason=obj.reasoning.strip())
 
     def _parse_rubric_response(self, response_text: str) -> ScoreResult:
         try:
-            obj = RubricJudgeOutput.model_validate_json(self._extract_json(response_text))
+            data = self._load_json(response_text)
+            obj = RubricJudgeOutput.model_validate(data)
         except Exception as e:
-            response_preview = f"; got: {(response_text or '')[:500]!r}" if response_text else ""
-            raise ValueError(f"failed to parse rubric response JSON: {e}{response_preview}") from e
+            salvaged = self._salvage_rubric_response(response_text)
+            if salvaged is not None:
+                return salvaged
+            preview = f"; got: {(response_text or '')[:500]!r}" if response_text else ""
+            raise ValueError(f"failed to parse rubric response JSON: {e}{preview}") from e
         if not obj.items:
             raise ValueError("rubric response JSON contains empty items array")
         rubric_scores: list[RubricScore] = []
