@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.3](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.3) (2026-05-12)
+
+### Features
+
+* Model: Added an OpenAI-compatible adapter layer to isolate provider-specific behaviors, including DeepSeek v4 reasoning/format handling and hy3-preview tool-prompt parsing support.
+* Memory: Added MemPalace integration with `MemPalaceMemoryService` and `mempalace_tool`, plus related examples and documentation.
+* Code Execution: Added Cube/E2B sandbox executor and workspace runtime with optional dependency support and end-to-end example coverage.
+* Eval: Added support for evaluating the same metric across different LLMs.
+
+### Bug Fixes
+
+* Model: Fixed ToolPrompt streaming parsing so multiple tool calls in one response are preserved instead of only the last call.
+* Storage: Improved SQL storage compatibility by filtering empty content parts, fixing MySQL `DynamicPickleType` serialization, and stabilizing session timestamp updates.
+* Eval: Fixed judge-agent JSON output handling in the eval module.
+* CI: Added missing `e2b-code-interpreter` test dependency to prevent cube test collection failures.
+
 ## [1.1.2.post1](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.2.post1) (2026-04-29)
 
 ### Features
