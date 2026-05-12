@@ -40,9 +40,10 @@ from ._llm_model import LLMModel
 from ._llm_request import LlmRequest
 from ._llm_response import LlmResponse
 from ._registry import register_model
+from .openai_adapter import get_openai_adapter
 from .tool_prompt import ToolPromptFactory
 from .tool_prompt import get_factory
-from .tool_prompt._base import ToolPrompt
+from .tool_prompt import ToolPrompt
 
 
 class ToolCall(BaseModel):
@@ -102,7 +103,7 @@ class ApiParamsKey(str, Enum):
     PARALLEL_TOOL_CALLS = "parallel_tool_calls"
 
 
-@register_model(model_name="OpenAIModel", supported_models=[r"gpt-.*", r"o1-.*", r"deepseek-.*"])
+@register_model(model_name="OpenAIModel", supported_models=[r"gpt-.*", r"o1-.*", r"deepseek-.*", r"hy3-.*"])
 class OpenAIModel(LLMModel):
     """OpenAI model implementation using the abstract model interface.
 
@@ -162,6 +163,7 @@ class OpenAIModel(LLMModel):
         **kwargs,
     ):
         super().__init__(model_name, filters_name, **kwargs)
+        self._adapter = get_openai_adapter(self._model_name, self._base_url)
 
         # Extract OpenAI-specific config
         self.organization: str = kwargs.get(const.ORGANIZATION, "")
@@ -187,6 +189,20 @@ class OpenAIModel(LLMModel):
                 raise ValueError(f"Invalid tool_prompt string '{self.tool_prompt}': {ex}")
         elif not (isinstance(self.tool_prompt, type) and issubclass(self.tool_prompt, ToolPrompt)):
             raise ValueError(f"tool_prompt must be a string or ToolPrompt class, got {type(self.tool_prompt)}")
+
+    def _refresh_adapter(self) -> None:
+        """Refresh provider adapter after model or endpoint changes."""
+        self._adapter = get_openai_adapter(self._model_name, self._base_url)
+
+    @override
+    def set_base_url(self, value: str) -> None:
+        super().set_base_url(value)
+        self._refresh_adapter()
+
+    @override
+    def set_model_name(self, value: str) -> None:
+        super().set_model_name(value)
+        self._refresh_adapter()
 
     def _create_async_client(self):
         """Create a new async client instance."""
@@ -286,7 +302,10 @@ class OpenAIModel(LLMModel):
             # Handle different content structures
             if all(conditions_iter):
                 # Simple text message
-                formatted_messages.append({const.ROLE: role, const.CONTENT: parts[0].text})
+                message = {const.ROLE: role, const.CONTENT: parts[0].text}
+                if self._adapter.should_backfill_reasoning_content(role, message):
+                    message[const.REASONING_CONTENT] = ""
+                formatted_messages.append(message)
             else:
                 # Complex message with multiple parts or function calls/responses
                 # Separate function responses from other content
@@ -297,6 +316,8 @@ class OpenAIModel(LLMModel):
 
                 for part in parts:  # type: ignore
                     if part.text:
+                        if part.thought:
+                            continue
                         text_parts.append(part.text)
                     elif part.inline_data and part.inline_data.mime_type:
                         # Handle image data - convert to OpenAI vision format
@@ -315,8 +336,9 @@ class OpenAIModel(LLMModel):
                                     "arguments": (part.function_call.args if isinstance(part.function_call.args, str)
                                                   else json.dumps(part.function_call.args, ensure_ascii=False)),
                                 },
-                                "thought_signature": self._get_part_thought_signature(part),
                             }
+                            if self._adapter.should_include_thought_signature():
+                                tool_call["thought_signature"] = self._get_part_thought_signature(part)
                             tool_calls.append(tool_call)
                         # If add_tools_to_prompt is enabled, skip tool calls (they're handled via text prompts)
                     elif part.function_response:
@@ -398,6 +420,9 @@ class OpenAIModel(LLMModel):
                     # Add tool calls if any (only when add_tools_to_prompt is disabled)
                     if tool_calls and not self.add_tools_to_prompt:
                         message[const.TOOL_CALLS] = tool_calls
+
+                    if self._adapter.should_backfill_reasoning_content(role, message):
+                        message[const.REASONING_CONTENT] = ""
 
                     formatted_messages.append(message)
 
@@ -571,6 +596,9 @@ class OpenAIModel(LLMModel):
 
         thinking_config = request.config.thinking_config
 
+        if self._adapter.apply_thinking(request, http_options):
+            return
+
         # Only set thinking parameters if include_thoughts is True
         if not thinking_config.include_thoughts:
             return
@@ -682,9 +710,11 @@ class OpenAIModel(LLMModel):
         usage_data = chunk_dict.get(const.USAGE)
         if usage_data is None:
             return None
+        completion_details = usage_data.get("completion_tokens_details") or {}
         return GenerateContentResponseUsageMetadata(
             prompt_token_count=usage_data.get("prompt_tokens", 0),
             candidates_token_count=usage_data.get("completion_tokens", 0),
+            thoughts_token_count=completion_details.get("reasoning_tokens"),
             total_token_count=usage_data.get("total_tokens", 0),
         )
 
@@ -942,9 +972,11 @@ class OpenAIModel(LLMModel):
             return None
 
         usage_data: dict[str, int] = response_dict[const.USAGE]
+        completion_details = usage_data.get("completion_tokens_details") or {}
         return GenerateContentResponseUsageMetadata(
             prompt_token_count=usage_data.get("prompt_tokens", 0),
             candidates_token_count=usage_data.get("completion_tokens", 0),
+            thoughts_token_count=completion_details.get("reasoning_tokens"),
             total_token_count=usage_data.get("total_tokens", 0),
         )
 
@@ -974,6 +1006,7 @@ class OpenAIModel(LLMModel):
 
         # Extract content
         text_content = message.get(const.CONTENT, "")
+        reasoning_content = message.get(const.REASONING_CONTENT)
 
         # Check for tool calls
         tool_calls = self._process_tool_calls_from_message(message)
@@ -982,7 +1015,7 @@ class OpenAIModel(LLMModel):
         if self.add_tools_to_prompt and text_content and not tool_calls:
             try:
                 tool_prompt = self._create_tool_prompt()
-                parsed_function_calls = tool_prompt.parse_function(text_content)
+                parsed_function_calls = self._adapter.parse_tool_prompt_function_calls(text_content, tool_prompt)
                 if parsed_function_calls:
                     # Convert FunctionCall objects to ToolCall objects
                     tool_calls = []
@@ -997,8 +1030,13 @@ class OpenAIModel(LLMModel):
 
         parts = []
 
+        if reasoning_content:
+            content_part = Part.from_text(text=reasoning_content)
+            content_part.thought = True
+            parts.append(content_part)
+
         # Add text content if present
-        if text_content:
+        if text_content and not (tool_calls and self._adapter.should_suppress_tool_prompt_text()):
             content_part = Part.from_text(text=text_content)
             content_part.thought = False  # Regular text content is not thought
             parts.append(content_part)
@@ -1218,6 +1256,10 @@ class OpenAIModel(LLMModel):
         """
         # Handle response_mime_type and response_schema
         if config.response_mime_type == "application/json":
+            handled, response_format = self._adapter.build_response_format(config)
+            if handled:
+                return response_format
+
             if config.response_schema:
                 # response_schema must be pydantic.BaseModel
                 if not isinstance(config.response_schema, type(BaseModel)):
@@ -1374,6 +1416,9 @@ class OpenAIModel(LLMModel):
 
         # Update request with merged config
         request.config = merged_config
+        if (request.config and request.config.tools and self._adapter.requires_add_tools_to_prompt()
+                and not self.add_tools_to_prompt):
+            raise ValueError(f"{self._model_name} requires add_tools_to_prompt=True when tools are used.")
 
         # Prepare OpenAI API parameters
         messages = self._format_messages(request)
@@ -1393,11 +1438,14 @@ class OpenAIModel(LLMModel):
                 # Log warnings for unsupported configuration options
                 self._log_unsupported_config_options(request.config)
                 if request.config.max_output_tokens:
-                    # Use max_completion_tokens for newer models (preferred), fallback to max_tokens
-                    api_params[ApiParamsKey.MAX_COMPLETION_TOKENS] = request.config.max_output_tokens
-                    # Keep max_tokens for backward compatibility (skip for gpt models)
-                    if "gpt-5" not in self._model_name.lower():
+                    if self._adapter.use_max_tokens_only():
                         api_params[ApiParamsKey.MAX_TOKENS] = request.config.max_output_tokens
+                    else:
+                        # Use max_completion_tokens for newer models (preferred), fallback to max_tokens
+                        api_params[ApiParamsKey.MAX_COMPLETION_TOKENS] = request.config.max_output_tokens
+                        # Keep max_tokens for backward compatibility (skip for gpt models)
+                        if "gpt-5" not in self._model_name.lower():
+                            api_params[ApiParamsKey.MAX_TOKENS] = request.config.max_output_tokens
                 if request.config.temperature is not None:
                     api_params[ApiParamsKey.TEMPERATURE] = request.config.temperature
                 if request.config.top_p is not None:
@@ -1406,15 +1454,18 @@ class OpenAIModel(LLMModel):
                     api_params[ApiParamsKey.STOP] = request.config.stop_sequences
 
                 # Additional OpenAI-specific parameters
-                if request.config.frequency_penalty is not None:
+                if (request.config.frequency_penalty is not None
+                        and not self._adapter.should_skip_config_param("frequency_penalty")):
                     api_params[ApiParamsKey.FREQUENCY_PENALTY] = request.config.frequency_penalty
-                if request.config.presence_penalty is not None:
+                if (request.config.presence_penalty is not None
+                        and not self._adapter.should_skip_config_param("presence_penalty")):
                     api_params[ApiParamsKey.PRESENCE_PENALTY] = request.config.presence_penalty
-                if request.config.seed is not None:
+                if request.config.seed is not None and not self._adapter.should_skip_config_param("seed"):
                     api_params[ApiParamsKey.SEED] = request.config.seed
 
                 # Handle candidate count (maps to OpenAI's 'n' parameter)
-                if request.config.candidate_count is not None and request.config.candidate_count > 0:
+                if (request.config.candidate_count is not None and request.config.candidate_count > 0
+                        and not self._adapter.should_skip_config_param("candidate_count")):
                     api_params[ApiParamsKey.N] = request.config.candidate_count
 
                 # Handle logprobs configuration
@@ -1481,8 +1532,13 @@ class OpenAIModel(LLMModel):
 
         # Create tool prompt instance for streaming if needed
         tool_prompt = None
+        streaming_text_filter_state = None
         if self.add_tools_to_prompt:
             tool_prompt = self._create_tool_prompt()
+            streaming_text_filter_state = {
+                "content": self._adapter.create_streaming_text_filter_state(),
+                "reasoning": self._adapter.create_streaming_text_filter_state(),
+            }
 
         client = self._create_async_client()
         try:
@@ -1547,11 +1603,20 @@ class OpenAIModel(LLMModel):
                 if delta.get(const.REASONING_CONTENT):
                     reasoning_content = delta.get(const.REASONING_CONTENT)
                     if reasoning_content is not None:
+                        partial_text = reasoning_content
+                        if (tool_prompt and streaming_text_filter_state is not None
+                                and self._adapter.should_filter_reasoning_text()):
+                            reasoning_filter_state = streaming_text_filter_state["reasoning"]
+                            partial_text = self._adapter.filter_streaming_text(reasoning_content,
+                                                                               reasoning_filter_state)
+                        if not partial_text:
+                            continue
+
                         # Reasoning content is always thinking content
-                        thought_content += reasoning_content
+                        thought_content += partial_text
 
                         # Set thought flag to True for reasoning content
-                        content_part = Part.from_text(text=reasoning_content)
+                        content_part = Part.from_text(text=partial_text)
                         content_part.thought = True
 
                         partial_content = Content(parts=[content_part], role=const.MODEL)
@@ -1569,8 +1634,15 @@ class OpenAIModel(LLMModel):
                         else:
                             thought_content += content
 
+                        partial_text = content
+                        if tool_prompt and streaming_text_filter_state is not None:
+                            content_filter_state = streaming_text_filter_state["content"]
+                            partial_text = self._adapter.filter_streaming_text(content, content_filter_state)
+                        if not partial_text:
+                            continue
+
                         # Set thought flag based on current thinking state
-                        content_part = Part.from_text(text=content)
+                        content_part = Part.from_text(text=partial_text)
                         content_part.thought = is_thinking
 
                         partial_content = Content(parts=[content_part], role=const.MODEL)
@@ -1583,6 +1655,30 @@ class OpenAIModel(LLMModel):
                 usage = self._process_usage(chunk_dict)
                 if usage:
                     last_usage = usage
+
+            if tool_prompt and streaming_text_filter_state is not None:
+                if self._adapter.should_filter_reasoning_text():
+                    flushed_reasoning_text = self._adapter.flush_streaming_text(
+                        streaming_text_filter_state["reasoning"])
+                    if flushed_reasoning_text:
+                        thought_content += flushed_reasoning_text
+                        content_part = Part.from_text(text=flushed_reasoning_text)
+                        content_part.thought = True
+                        partial_content = Content(parts=[content_part], role=const.MODEL)
+                        yield LlmResponse(content=partial_content,
+                                          partial=True,
+                                          response_id=response_id,
+                                          custom_metadata={"stream_filter_flushed": "reasoning"})
+
+                flushed_content_text = self._adapter.flush_streaming_text(streaming_text_filter_state["content"])
+                if flushed_content_text:
+                    content_part = Part.from_text(text=flushed_content_text)
+                    content_part.thought = is_thinking
+                    partial_content = Content(parts=[content_part], role=const.MODEL)
+                    yield LlmResponse(content=partial_content,
+                                      partial=True,
+                                      response_id=response_id,
+                                      custom_metadata={"stream_filter_flushed": "content"})
 
             # Yield final complete response
             final_content = None
@@ -1599,7 +1695,8 @@ class OpenAIModel(LLMModel):
             complete_tool_calls = self._create_complete_tool_calls(accumulated_tool_calls)
             if tool_prompt and accumulated_content and not complete_tool_calls:
                 try:
-                    parsed_function_calls = tool_prompt.parse_function(accumulated_content)
+                    parsed_function_calls = self._adapter.parse_tool_prompt_function_calls(
+                        accumulated_content, tool_prompt)
                     if parsed_function_calls:
                         # Convert FunctionCall objects to ToolCall objects
                         complete_tool_calls = []
@@ -1607,14 +1704,14 @@ class OpenAIModel(LLMModel):
                             tool_call = ToolCall(id=f"call_{uuid.uuid4().hex[:24]}",
                                                  name=func_call.name,
                                                  arguments=func_call.args)
-                        complete_tool_calls.append(tool_call)
+                            complete_tool_calls.append(tool_call)
                         logger.debug("Parsed %s function calls from final accumulated content",
                                      len(complete_tool_calls))
                 except Exception as ex:  # pylint: disable=broad-except
                     logger.warning("Failed to parse function calls from final accumulated content: %s", ex)
 
             # Add text content if present
-            if accumulated_content:
+            if accumulated_content and not complete_tool_calls:
                 logger.debug("Final accumulated regular content: %s...", accumulated_content[:200])
                 content_part = Part.from_text(text=accumulated_content)
                 content_part.thought = False  # Final accumulated content represents the answer, not thinking

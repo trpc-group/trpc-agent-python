@@ -11,7 +11,7 @@ from trpc_agent_sdk.planners import BuiltInPlanner
 from trpc_agent_sdk.tools import FunctionTool
 from trpc_agent_sdk.types import GenerateContentConfig
 from trpc_agent_sdk.types import ThinkingConfig
-
+from trpc_agent_sdk.types import HttpOptions
 from .config import get_model_config
 from .prompts import INSTRUCTION
 from .tools import get_weather_forecast
@@ -32,8 +32,9 @@ def _create_model() -> LLMModel:
         #    if the LLM model service fails to return the JSON format of tool calls, you can also enable ToolPrompt.
         #    This will prompt the LLM model to output the special text for tool calling in the main content,
         #    thereby increasing the probability of successful tool invocation.
-        # You can uncomment the code below to use ToolPrompt.
-        # add_tools_to_prompt=True,
+        # Thinking models may emit tool calls as text. ToolPrompt lets the
+        # framework parse those text calls back into executable FunctionCalls.
+        add_tools_to_prompt=model_name.lower() == "hy3-preview",  # Enable ToolPrompt for Hy3-preview model
     )
     return model
 
@@ -45,6 +46,9 @@ def create_agent():
     weather_tool = FunctionTool(get_weather_report)
     forecast_tool = FunctionTool(get_weather_forecast)
 
+    # Set reasoning effort to high for Hy3-preview model
+    http_options=HttpOptions(extra_body={"chat_template_kwargs": {"reasoning_effort": "high"}})
+
     return LlmAgent(
         name="weather_agent",
         description=
@@ -54,7 +58,7 @@ def create_agent():
         instruction=INSTRUCTION,
         tools=[weather_tool, forecast_tool],
         # Note: thinking_budget must be less than max_output_tokens
-        generate_content_config=GenerateContentConfig(max_output_tokens=10240, ),
+        generate_content_config=GenerateContentConfig(max_output_tokens=10240, http_options=http_options),
         # The model must be a thinking model to use this Planner; this configuration will not take effect for non-thinking models.
         planner=BuiltInPlanner(thinking_config=ThinkingConfig(
             include_thoughts=True,
