@@ -65,6 +65,7 @@ Triggering evaluation through pytest allows eval test cases to be integrated int
 | Knowledge Recall Evaluation | Evaluates whether retrieved knowledge in RAG scenarios is sufficient to support the answer | Verify that knowledge base retrieval results cover the key facts in the question |
 | Multiple Runs and Statistics | Runs the same test case multiple times, computing stability metrics such as pass@k | Evaluate the Agent's pass rate across multiple attempts |
 | Trace Replay | Skips inference, directly scores using pre-recorded conversation traces | Perform offline evaluation using production logs without consuming inference resources |
+| External Agent Evaluation | Evaluate Agents not created by this framework via `call_agent` (HTTP services, CLI, other frameworks) | Run regression tests against an existing Claude Code CLI or remote API |
 | Callback Hooks | Attach custom logic at 8 lifecycle points during inference/scoring | Instrumentation, logging, sampling, reporting |
 
 #### Overall Evaluation Flow
@@ -299,7 +300,7 @@ This section explains the components of the evaluation module and their relation
 | **AgentEvaluator** | The entry point exposed to users, providing `evaluate()` and `get_executer()` | Call it in pytest tests |
 | **Eval Set (EvalSet)** | Describes "what to test"—scenarios, user inputs, expected outputs | Write `.evalset.json` files |
 | **Eval Config (EvalConfig)** | Describes "how to judge"—which metrics, thresholds, matching rules | Write `test_config.json` files |
-| **Eval Service (LocalEvalService)** | The engine that executes inference and scoring | Automatically created by the framework; usually no action needed |
+| **Eval Service (LocalEvalService / RemoteEvalService)** | The engine that executes inference and scoring (local Agent or `call_agent`) | Automatically created by the framework; usually no action needed |
 | **Evaluator** | The concrete implementation that computes scores per metric | Choose built-in evaluators, or register custom ones |
 | **Evaluator Registry (EvaluatorRegistry)** | Maintains the mapping from `metric_name` to evaluator type | Register when custom evaluators are needed |
 | **Evaluation Result (EvaluateResult)** | Holds the structured evaluation results | Obtain and analyze via `get_result()` |
@@ -308,11 +309,30 @@ This section explains the components of the evaluation module and their relation
 
 AgentEvaluator is the entry point and orchestrator of the entire evaluation flow:
 
-1. **Loading Phase**: AgentEvaluator loads the EvalSet from eval set files (`.evalset.json` / `.test.json`), loads the EvalConfig from `test_config.json` in the same directory, and loads the Agent by `agent_module`.
-2. **Building the Eval Service**: AgentEvaluator writes the EvalSet into InMemoryEvalSetsManager and creates LocalEvalService (depending on the Manager, UserSimulatorProvider, optional EvalSetResultsManager, Runner, and Callbacks). By default, it uses StaticUserSimulator, which drives inference using user_content from the conversation. Optionally, LocalEvalSetResultsManager can be injected to persist run results to a directory.
-3. **Inference Phase**: The eval service drives the Runner for inference based on test cases and conversations in the EvalSet, producing actual Invocation lists (actual tool calls, actual responses).
+1. **Loading Phase**: AgentEvaluator loads the EvalSet from eval set files (`.evalset.json` / `.test.json`), loads the EvalConfig from `test_config.json` in the same directory; for local Agent paths, loads the Agent by `agent_module` (can be omitted when using `call_agent` or when all cases use [Trace Mode](#trace-mode)).
+2. **Building the Eval Service**: AgentEvaluator writes the EvalSet into InMemoryEvalSetsManager; when `call_agent` is provided, creates RemoteEvalService; otherwise creates LocalEvalService (depending on the Manager, UserSimulatorProvider, optional EvalSetResultsManager, Runner, and Callbacks).
+3. **Inference Phase**: The eval service performs turn-by-turn inference based on test cases and conversations in the EvalSet: LocalEvalService drives the Runner to call the Agent; RemoteEvalService calls `call_agent(query)` to obtain each turn's actual response, producing actual Invocation lists.
 4. **Scoring Phase**: The eval service obtains evaluators from the EvaluatorRegistry based on the EvalMetric list in the EvalConfig, scores actual vs. expected item by item, and aggregates into EvalCaseResult.
 5. **Result Aggregation**: AgentEvaluator determines pass/fail based on results, raises `AssertionError` when any test case falls below the threshold, and optionally persists results as `.evalset_result.json`.
+
+#### AgentEvaluator Parameter List
+
+`evaluate()` and `get_executer()` accept the same parameters (`evaluate()` internally calls `get_executer()`):
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| eval_dataset_file_path_or_dir | str | Path to eval set file or directory (recursively scans `.evalset.json` / `.test.json`) |
+| agent_module | str \| None | Python module path of the Agent created by this framework; mutually exclusive with `call_agent`. Not needed when using `call_agent` or when all cases are Trace mode |
+| call_agent | CallAgent \| None | Async callable for Agents not created by this framework (`async def(str)->str`); mutually exclusive with `agent_module` / `runner` |
+| num_runs | int | Number of runs per eval set, default 1 |
+| agent_name | str \| None | Display name of the Agent |
+| print_detailed_results | bool | Whether to print per-case detail comparisons, default True |
+| eval_result_output_dir | str \| None | Directory for result persistence; omit for in-memory aggregation only |
+| runner | Runner \| None | Custom Runner instance; mutually exclusive with `call_agent` |
+| case_parallelism | int \| None | Max concurrent cases during inference |
+| case_eval_parallelism | int \| None | Max concurrent cases during scoring |
+| callbacks | Callbacks \| None | Lifecycle callbacks |
+| eval_metrics_file_path_or_dir | str \| None | Shared eval config file path (overrides same-directory `test_config.json`) |
 
 ---
 
@@ -457,6 +477,8 @@ Configuration keys support both snake_case (e.g., `metric_name`) and camelCase (
 | `llm_final_response` | LLMFinalResponseEvaluator | LLM judge determines whether the response is consistent with the reference | Response correctness is hard to measure with text matching; semantic assessment needed |
 | `llm_rubric_response` | LLMRubricResponseEvaluator | LLM judge scores item by item against rubrics | Need to evaluate response quality across multiple dimensions (correctness, relevance, compliance, etc.) |
 | `llm_rubric_knowledge_recall` | LLMRubricKnowledgeRecallEvaluator | LLM judge evaluates whether retrieved knowledge is sufficient to support the answer | RAG scenarios; need to verify that retrieved knowledge covers key facts |
+
+> Note: `call_agent` mode does not support `tool_trajectory_avg_score`. When evaluating external/black-box Agents, prefer `final_response_avg_score` or LLM Judge metrics.
 
 **Rubric** refers to evaluation rubrics: in the configuration, `rubrics` is an array listing multiple independently assessable clauses (e.g., "the answer must contain a conclusion," "must be relevant to the question"). The LLM judge gives a pass/fail for each rubric, then aggregates them into the metric's score.
 
@@ -819,70 +841,7 @@ LLM response quality with rubrics (llm_rubric_response or llm_rubric_knowledge_r
 
 It is recommended to use environment variable placeholders for `api_key` and `base_url` (e.g., `${TRPC_AGENT_API_KEY}`), which are replaced by the execution environment, to avoid writing plaintext in configuration files.
 
-**Multi-model judge (cross-model aggregation)**
-
-A single LLM-judge metric may use multiple judge models simultaneously and combine their verdicts via `models_aggregator`. Use `judge_models` instead of `judge_model`; the two fields are mutually exclusive. Per-model details are available on `PerInvocationResult.per_model_scores` (a list of `NamedScoreResult`).
-
-Built-in aggregators:
-
-| Name | Pass rule | Overall score |
-| --- | --- | --- |
-| `all_pass` (default) | all models pass | min of per-model scores |
-| `any_pass` | any model passes | max of per-model scores |
-| `majority_pass` | strict majority passes (`passed*2 > total`) | `passed_count / total` |
-| `avg` | mean ≥ threshold | mean of per-model scores |
-| `weighted_avg` | weighted mean ≥ threshold | `sum(w*s) / sum(w)` |
-| `weighted_majority` | weighted-passed share ≥ 0.5 | `sum(w where passed) / sum(w)` |
-
-If a single judge model raises during execution, that model is counted as a non-passing vote; if every model raises, the invocation is reported as `NOT_EVALUATED`.
-
-```json
-{
-  "metrics": [
-    {
-      "metric_name": "llm_final_response",
-      "threshold": 1,
-      "criterion": {
-        "llm_judge": {
-          "judge_models": [
-            {
-              "model_name": "glm-4.7",
-              "api_key": "${TRPC_AGENT_API_KEY}",
-              "base_url": "${TRPC_AGENT_BASE_URL}",
-              "weight": 2.0
-            },
-            {
-              "model_name": "gpt-4o",
-              "api_key": "${TRPC_AGENT_API_KEY}",
-              "base_url": "${TRPC_AGENT_BASE_URL}",
-              "weight": 1.0
-            }
-          ],
-          "models_aggregator": "weighted_avg",
-          "parallel": true
-        }
-      }
-    }
-  ]
-}
-```
-
-`parallel` controls how multiple judge models are executed: `true` (default) calls all models concurrently, with latency bounded by the slowest model; `false` calls them sequentially in the declared order. Only takes effect when `judge_models` contains more than one model.
-
-If a judge model has thinking enabled by default, consider setting `"think": false` on its `JudgeModelOptions`: the judge output is a structured JSON, thinking traces add no value to the final verdict, and disabling thinking significantly reduces token cost and latency. Each judge model has its own independent `think` flag.
-
-Custom aggregators can be registered at runtime and take precedence over the `models_aggregator` name written in the criterion:
-
-```python
-from trpc_agent_sdk.evaluation import LLM_EVALUATOR_REGISTRY, ScoreResult
-
-def my_aggregator(per_model, threshold, weights):
-    # per_model: list[ScoreResult]; weights: list[float]
-    score = sum(s.score or 0.0 for s in per_model) / len(per_model)
-    return ScoreResult(score=score, reason="custom aggregation")
-
-LLM_EVALUATOR_REGISTRY.register_models_aggregator("llm_final_response", my_aggregator)
-```
+> A single LLM judge metric can also use multiple judge models with aggregated results. See [Advanced Features - Multi-Model Judge (Cross-Model Aggregation)](#multi-model-judge-cross-model-aggregation).
 
 #### Custom Criteria
 
@@ -1822,9 +1781,154 @@ async def test_pass_at_k():
 
 For the complete example, see [examples/evaluation/pass_at_k/](../../../examples/evaluation/pass_at_k/).
 
+#### Evaluating Agents Not Created by This Framework (call_agent)
+
+If the Agent under test is not created or managed by this framework (e.g., deployed behind an HTTP/RPC service, invoked via CLI, or wrapped by another framework), and you cannot provide `agent_module` or `runner`, use the **`call_agent`** parameter instead: pass an async function, and the evaluator will call it each turn to obtain the actual response. The rest of the scoring flow remains unchanged.
+
+**Configuration**
+
+Pass `call_agent=your_async_fn` in **AgentEvaluator.evaluate()** or **get_executer()**, without passing `agent_module` or `runner`. The signature must be `async def call_agent(query: str) -> str`.
+
+**Applicable Scenarios**
+
+Evaluating any callable that cannot be instantiated as this framework's `BaseAgent`: HTTP/RPC remote services, CLI Agents, other frameworks (LangChain / AutoGen / custom), etc.
+
+**Constraints**
+
+- `call_agent` must be async (passing a sync function raises `ValueError`)
+- `call_agent` is mutually exclusive with `agent_module` / `runner` (passing both raises `ValueError`)
+- `call_agent` mode is mutually exclusive with Trace mode (eval set containing trace cases raises `ValueError`)
+- `call_agent` mode does not support `tool_trajectory_avg_score` (raises `ValueError`); use `final_response_avg_score`, `llm_final_response`, or `llm_rubric_response` instead
+- Multi-turn cases call `call_agent` sequentially per turn; each call corresponds to one `Invocation`
+
+**Example**: Using Claude Code CLI as an external Agent
+
+```python
+import asyncio
+import os
+from asyncio.subprocess import PIPE
+
+from trpc_agent_sdk.evaluation import AgentEvaluator
+
+
+async def call_agent(query: str) -> str:
+    """Call Claude Code CLI and return its text output."""
+    cli_bin = os.getenv("CLAUDE_CODE_BIN", "claude")
+    cli_args = [cli_bin, "-p", query]
+
+    model_name = os.getenv("CLAUDE_CODE_MODEL")
+    if model_name:
+        cli_args.extend(["--model", model_name])
+
+    proc = await asyncio.create_subprocess_exec(*cli_args, stdout=PIPE, stderr=PIPE)
+    stdout, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        raise RuntimeError(stderr.decode("utf-8", errors="ignore").strip())
+
+    output_text = stdout.decode("utf-8", errors="ignore").strip()
+    for line in output_text.splitlines():
+        if line.strip():
+            return line.strip()
+    return ""
+
+
+# Option A: pass/fail only
+await AgentEvaluator.evaluate(
+    eval_dataset_file_path_or_dir="agent/my_evalset.evalset.json",
+    call_agent=call_agent,
+)
+
+# Option B: structured results
+executer = AgentEvaluator.get_executer(
+    eval_dataset_file_path_or_dir="agent/my_evalset.evalset.json",
+    call_agent=call_agent,
+)
+await executer.evaluate()
+result = executer.get_result()  # EvaluateResult
+```
+
+> The example uses `claude` as the default command. If your executable name differs (e.g., `trpc-claudecode` or a custom wrapper), set the `CLAUDE_CODE_BIN` environment variable accordingly. For HTTP service scenarios, simply replace the `call_agent` function body with `aiohttp` / `httpx` calls while keeping the signature `async def call_agent(query: str) -> str`.
+
+#### Multi-Model Judge (Cross-Model Aggregation)
+
+A single LLM judge metric can use multiple judge models simultaneously, aggregating their verdicts via `models_aggregator` to reduce single-model variance. Use `judge_models` instead of `judge_model`; the two fields are mutually exclusive. Per-model details are available on `PerInvocationResult.per_model_scores` (a list of `NamedScoreResult`).
+
+**Configuration**
+
+In `test_config.json`, for any LLM judge metric's `criterion.llm_judge`, replace `judge_model` with `judge_models` (array), and set `models_aggregator` to choose the aggregation strategy. `parallel` controls execution: `true` (default) calls all models concurrently; `false` calls them sequentially.
+
+**Applicable Scenarios**
+
+When higher confidence in judge verdicts is needed (e.g., safety compliance, medical scenarios), or when comparing judgments across different models.
+
+**Built-in Aggregators**
+
+| Name | Pass Rule | Overall Score |
+| --- | --- | --- |
+| `all_pass` (default) | All models pass | min of per-model scores |
+| `any_pass` | Any model passes | max of per-model scores |
+| `majority_pass` | Strict majority passes (`passed*2 > total`) | `passed_count / total` |
+| `avg` | Mean ≥ threshold | mean of per-model scores |
+| `weighted_avg` | Weighted mean ≥ threshold | `sum(w*s) / sum(w)` |
+| `weighted_majority` | Weighted-passed share ≥ 0.5 | `sum(w where passed) / sum(w)` |
+
+If a single judge model raises during execution, that model is counted as a non-passing vote; if every model raises, the invocation is reported as `NOT_EVALUATED`.
+
+**Example**: Two judge models with weighted average aggregation
+
+```json
+{
+  "metrics": [
+    {
+      "metric_name": "llm_final_response",
+      "threshold": 1,
+      "criterion": {
+        "llm_judge": {
+          "judge_models": [
+            {
+              "model_name": "glm-4.7",
+              "api_key": "${TRPC_AGENT_API_KEY}",
+              "base_url": "${TRPC_AGENT_BASE_URL}",
+              "weight": 2.0
+            },
+            {
+              "model_name": "gpt-4o",
+              "api_key": "${TRPC_AGENT_API_KEY}",
+              "base_url": "${TRPC_AGENT_BASE_URL}",
+              "weight": 1.0
+            }
+          ],
+          "models_aggregator": "weighted_avg",
+          "parallel": true
+        }
+      }
+    }
+  ]
+}
+```
+
+If a judge model has thinking enabled by default, consider setting `"think": false` on its `JudgeModelOptions`: the judge output is structured JSON, and thinking traces add no value to the final verdict. Disabling thinking significantly reduces token cost and latency.
+
+**Custom Aggregators**
+
+Custom aggregators can be registered at runtime and take precedence over the `models_aggregator` name in the criterion:
+
+```python
+from trpc_agent_sdk.evaluation import LLM_EVALUATOR_REGISTRY, ScoreResult
+
+def my_aggregator(per_model, threshold, weights):
+    score = sum(s.score or 0.0 for s in per_model) / len(per_model)
+    return ScoreResult(score=score, reason="custom aggregation")
+
+LLM_EVALUATOR_REGISTRY.register_models_aggregator("llm_final_response", my_aggregator)
+```
+
 #### Trace Mode
 
 In default mode, the eval service actually calls the Agent for inference. If you already have pre-recorded conversation traces (e.g., production logs, historical sessions) and want to only "score" without repeating inference, you can use **Trace mode**: set **eval_mode: "trace"** on the case and provide **actual_conversation**; the eval service will skip inference and directly use that trace for scoring.
+
+> Note: Trace mode and `call_agent` mode are mutually exclusive; when `call_agent` is provided and the eval set contains trace cases, the framework raises `ValueError` at startup.
 
 **Configuration Methods**
 
