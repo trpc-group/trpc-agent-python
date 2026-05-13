@@ -49,6 +49,8 @@ from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.agents import BaseAgent
 
 from ._local_eval_service import LocalEvalService
+from ._remote_eval_service import CallAgent
+from ._remote_eval_service import RemoteEvalService
 from . import _utils
 from ._eval_callbacks import Callbacks
 from ._eval_case import EvalModeTrace
@@ -89,6 +91,7 @@ class _EvalExecuter:
         eval_dataset_file_path_or_dir: str,
         *,
         agent_module: Optional[str] = None,
+        call_agent: Optional[CallAgent] = None,
         num_runs: int = NUM_RUNS,
         agent_name: Optional[str] = None,
         print_detailed_results: bool = True,
@@ -100,6 +103,7 @@ class _EvalExecuter:
         eval_metrics_file_path_or_dir: Optional[str] = None,
     ):
         self._agent_module = agent_module
+        self._call_agent = call_agent
         self._eval_dataset_file_path_or_dir = eval_dataset_file_path_or_dir
         self._num_runs = num_runs
         self._agent_name = agent_name
@@ -115,6 +119,7 @@ class _EvalExecuter:
 
     async def _run(self) -> None:
         agent_module = self._agent_module
+        call_agent = self._call_agent
         eval_dataset_file_path_or_dir = self._eval_dataset_file_path_or_dir
         num_runs = self._num_runs
         agent_name = self._agent_name
@@ -163,6 +168,7 @@ class _EvalExecuter:
                 await AgentEvaluator.evaluate_eval_set(
                     eval_set,
                     agent_module=agent_module,
+                    call_agent=call_agent,
                     eval_config=eval_config,
                     num_runs=num_runs_for_set,
                     agent_name=agent_name,
@@ -187,7 +193,8 @@ class _EvalExecuter:
             _RESULT_HANDLER.print_evaluation_report(
                 all_details=all_details,
                 all_results=all_results,
-                display_agent_name=agent_name or agent_module or "trace-only",
+                display_agent_name=agent_name or agent_module
+                or ("call-agent" if call_agent is not None else "trace-only"),
                 num_runs=num_runs_for_set,
             )
         self._result = EvaluateResult(results_by_eval_set_id=results_by_eval_set_id)
@@ -282,6 +289,7 @@ class AgentEvaluator:
         eval_dataset_file_path_or_dir: str,
         *,
         agent_module: Optional[str] = None,
+        call_agent: Optional[CallAgent] = None,
         num_runs: int = NUM_RUNS,
         agent_name: Optional[str] = None,
         print_detailed_results: bool = True,
@@ -318,6 +326,7 @@ class AgentEvaluator:
         executer = AgentEvaluator.get_executer(
             eval_dataset_file_path_or_dir,
             agent_module=agent_module,
+            call_agent=call_agent,
             num_runs=num_runs,
             agent_name=agent_name,
             print_detailed_results=print_detailed_results,
@@ -335,6 +344,7 @@ class AgentEvaluator:
         eval_dataset_file_path_or_dir: str,
         *,
         agent_module: Optional[str] = None,
+        call_agent: Optional[CallAgent] = None,
         num_runs: int = NUM_RUNS,
         agent_name: Optional[str] = None,
         print_detailed_results: bool = True,
@@ -374,6 +384,7 @@ class AgentEvaluator:
         return _EvalExecuter(
             eval_dataset_file_path_or_dir,
             agent_module=agent_module,
+            call_agent=call_agent,
             num_runs=num_runs,
             agent_name=agent_name,
             print_detailed_results=print_detailed_results,
@@ -431,6 +442,7 @@ class AgentEvaluator:
         eval_set: EvalSet,
         *,
         agent_module: Optional[str] = None,
+        call_agent: Optional[CallAgent] = None,
         eval_config: Optional[EvalConfig] = None,
         num_runs: int = NUM_RUNS,
         agent_name: Optional[str] = None,
@@ -476,15 +488,20 @@ class AgentEvaluator:
         if eval_config is None:
             raise ValueError("`eval_config` is required.")
 
+        if call_agent is not None and agent_module is not None:
+            raise ValueError("call_agent is mutually exclusive with agent_module.")
+        if call_agent is not None and runner is not None:
+            raise ValueError("call_agent is mutually exclusive with runner.")
+
         trace_only = AgentEvaluator._is_trace_only(eval_set)
-        if agent_module is None and not trace_only:
+        if call_agent is None and agent_module is None and not trace_only:
             non_trace_ids = [case.eval_id for case in eval_set.eval_cases if case.eval_mode != EvalModeTrace]
             raise ValueError("`agent_module` is required unless every case in eval_set uses "
                              "eval_mode='trace'. Non-trace case ids: "
                              f"{non_trace_ids}")
 
         agent_for_eval: Optional[BaseAgent] = None
-        if agent_module is not None:
+        if agent_module is not None and call_agent is None:
             agent_for_eval = await AgentEvaluator._get_agent_for_eval(module_name=agent_module, agent_name=agent_name)
         eval_metrics = eval_config.get_eval_metrics()
 
@@ -502,11 +519,12 @@ class AgentEvaluator:
             case_parallelism=case_parallelism,
             case_eval_parallelism=case_eval_parallelism,
             callbacks=callbacks,
+            call_agent=call_agent,
         )
 
         # Step 2: Post-process the results
         failures: list[str] = []
-        display_agent_name = agent_name or agent_module or "trace-only"
+        display_agent_name = agent_name or agent_module or ("call-agent" if call_agent is not None else "trace-only")
         details_lines: list[str] = []
         result_lines: list[str] = []
 
@@ -771,6 +789,7 @@ class AgentEvaluator:
         eval_metrics: list,
         num_runs: int,
         user_simulator_provider,
+        call_agent: Optional[CallAgent] = None,
         eval_set_results_manager: Optional[Any] = None,
         runner: Optional[Runner] = None,
         case_parallelism: Optional[int] = None,
@@ -811,14 +830,23 @@ class AgentEvaluator:
         # app_name: evalset.app_name or configured default (case session_input.app_name overrides per case)
         request_app_name = eval_set.app_name or DEFAULT_EVAL_APP_NAME
 
-        eval_service = LocalEvalService(
-            root_agent=agent_for_eval,
-            eval_sets_manager=AgentEvaluator._get_eval_sets_manager(app_name=request_app_name, eval_set=eval_set),
-            user_simulator_provider=user_simulator_provider,
-            eval_set_results_manager=eval_set_results_manager,
-            runner=runner,
-            callbacks=callbacks,
-        )
+        eval_sets_manager = AgentEvaluator._get_eval_sets_manager(app_name=request_app_name, eval_set=eval_set)
+        if call_agent is not None:
+            eval_service = RemoteEvalService(
+                call_agent=call_agent,
+                eval_sets_manager=eval_sets_manager,
+                eval_set_results_manager=eval_set_results_manager,
+                callbacks=callbacks,
+            )
+        else:
+            eval_service = LocalEvalService(
+                root_agent=agent_for_eval,
+                eval_sets_manager=eval_sets_manager,
+                user_simulator_provider=user_simulator_provider,
+                eval_set_results_manager=eval_set_results_manager,
+                runner=runner,
+                callbacks=callbacks,
+            )
 
         inference_config = (InferenceConfig(
             parallelism=case_parallelism) if case_parallelism is not None else InferenceConfig())

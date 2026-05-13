@@ -166,6 +166,8 @@ from ._llm_judge import WeightedAverageModelsAggregator
 from ._llm_judge import WeightedMajorityModelsAggregator
 from ._llm_judge import get_builtin_models_aggregator
 from ._local_eval_service import LocalEvalService
+from ._remote_eval_service import CallAgent
+from ._remote_eval_service import RemoteEvalService
 from ._local_eval_set_results_manager import LocalEvalSetResultsManager
 from ._local_eval_sets_manager import LocalEvalSetsManager
 from ._local_eval_sets_manager import load_eval_set_from_file
@@ -297,6 +299,8 @@ __all__ = [
     "ResponseScorerFn",
     "SamplesAggregatorFn",
     "LocalEvalService",
+    "RemoteEvalService",
+    "CallAgent",
     "RougeEvaluator",
     "StaticUserSimulator",
     "TrajectoryEvaluator",
