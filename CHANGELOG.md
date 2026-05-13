@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.4](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.4) (2026-05-13)
+
+### Bug Fixes
+
+* Tools: Removed default `mempalace_tool` exports from `trpc_agent_sdk.tools` to avoid forcing MemPalace optional dependencies during base package import.
+
+
+
 ## [1.1.3](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.3) (2026-05-12)
 
 ### Features
