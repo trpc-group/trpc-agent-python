@@ -821,7 +821,7 @@ Suitable for scenarios requiring full control over data and infrastructure.
 **Example Code:**
 ```python
 from mem0 import AsyncMemory
-from trpc_agent_sdk.server.tools.mem0_tool import SearchMemoryTool, SaveMemoryTool
+from trpc_agent_sdk.tools.mem0_tool import SearchMemoryTool, SaveMemoryTool
 
 # Configure custom components
 config = {
@@ -851,7 +851,7 @@ Suitable for rapid deployment and production environment usage.
 **Example Code:**
 ```python
 from mem0 import AsyncMemoryClient
-from trpc_agent_sdk.server.tools.mem0_tool import SearchMemoryTool, SaveMemoryTool
+from trpc_agent_sdk.tools.mem0_tool import SearchMemoryTool, SaveMemoryTool
 
 # Create platform client
 client = AsyncMemoryClient(
@@ -887,7 +887,7 @@ pip install -e ".[mem0]"
 
 ```python
 from trpc_agent_sdk.agents import LlmAgent
-from trpc_agent_sdk.server.tools.mem0_tool import SearchMemoryTool, SaveMemoryTool
+from trpc_agent_sdk.tools.mem0_tool import SearchMemoryTool, SaveMemoryTool
 
 # Step 1: Instantiate tools, pass in Mem0 client (choose self-hosted or platform mode)
 search_memory_tool = SearchMemoryTool(client=your_mem0_client)

@@ -29,6 +29,7 @@ from trpc_agent_sdk.skills import loaded_order_state_key
 from trpc_agent_sdk.skills import loaded_scan_prefix
 from trpc_agent_sdk.skills import loaded_state_key
 from trpc_agent_sdk.skills import set_skill_config
+from trpc_agent_sdk.utils import json_loads_repair
 
 _SKILLS_LOADED_CONTEXT_HEADER = "Loaded skill context:"
 _SESSION_SUMMARY_PREFIX = "Here is a brief summary of your previous interactions:"
@@ -180,7 +181,7 @@ class SkillsToolResultRequestProcessor:
     def _get_arg_value(self, args: Any, key: str) -> str:
         if isinstance(args, str):
             try:
-                args = json.loads(args)
+                args = json_loads_repair(args)
             except json.JSONDecodeError:
                 return ""
         if isinstance(args, dict):
@@ -325,7 +326,7 @@ class SkillsToolResultRequestProcessor:
         if not isinstance(value, str):
             return []
         try:
-            arr = json.loads(value)
+            arr = json_loads_repair(value)
         except json.JSONDecodeError:
             return []
         if not isinstance(arr, list):

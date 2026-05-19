@@ -61,6 +61,7 @@ from trpc_agent_sdk.types import FunctionDeclaration
 from trpc_agent_sdk.types import Part
 from trpc_agent_sdk.types import Schema
 from trpc_agent_sdk.types import Type
+from trpc_agent_sdk.utils import json_repair_string
 
 from ._base_tool import BaseTool
 from .utils import build_function_declaration
@@ -203,7 +204,8 @@ class AgentTool(BaseTool):
                 return ''
             if isinstance(self.agent, LlmAgent) and self.agent.output_schema:
                 merged_text = '\n'.join([p.text for p in last_event.content.parts if p.text])
-                tool_result = self.agent.output_schema.model_validate_json(merged_text).model_dump(exclude_none=True)
+                repaired = json_repair_string(merged_text)
+                tool_result = self.agent.output_schema.model_validate_json(repaired).model_dump(exclude_none=True)
             else:
                 tool_result = '\n'.join([p.text for p in last_event.content.parts if p.text])
             return tool_result

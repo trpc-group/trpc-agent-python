@@ -34,6 +34,7 @@ from trpc_agent_sdk.types import GenerateContentResponseUsageMetadata
 from trpc_agent_sdk.types import Part
 from trpc_agent_sdk.types import Schema
 from trpc_agent_sdk.types import Tool
+from trpc_agent_sdk.utils import json_loads_repair
 
 from . import _constants as const
 from ._llm_model import LLMModel
@@ -801,9 +802,12 @@ class OpenAIModel(LLMModel):
 
             if has_name and has_arguments:
                 try:
-                    # Try to parse the arguments as JSON
+                    # Streaming tool-call accumulator: keep STRICT json.loads here.
+                    # Incomplete deltas (e.g. ``{"foo":``) must raise so the loop
+                    # can wait for the next chunk; using a repair-style parser
+                    # would prematurely emit half-formed tool calls.
                     arguments_str: str = function_map[ToolKey.ARGUMENTS].strip()
-                    if arguments_str:  # Only parse non-empty arguments
+                    if arguments_str:
                         arguments = json.loads(arguments_str)
                     else:
                         arguments = {}
@@ -946,11 +950,22 @@ class OpenAIModel(LLMModel):
                 thought_sig = tool_call.get(ToolKey.THOUGHT_SIGNATURE)
                 if not thought_sig and isinstance(tool_call.get(ToolKey.PROVIDER_SPECIFIC_FIELDS), dict):
                     thought_sig = tool_call[ToolKey.PROVIDER_SPECIFIC_FIELDS].get(ToolKey.THOUGHT_SIGNATURE)
+                arguments = json_loads_repair(tool_call[ToolKey.FUNCTION][ToolKey.ARGUMENTS])
+                if not isinstance(arguments, dict):
+                    # json_repair can turn unrecoverable text (e.g. "NOT_JSON")
+                    # into an empty string or list. Skip those so we never feed
+                    # ToolCall a non-dict ``arguments`` value.
+                    logger.warning(
+                        "Skipping tool call with non-dict repaired arguments: %s -> %r",
+                        tool_call,
+                        arguments,
+                    )
+                    continue
                 tool_calls.append(
                     ToolCall(
                         id=tool_call[ToolKey.ID],
                         name=tool_call[ToolKey.FUNCTION][ToolKey.NAME],
-                        arguments=json.loads(tool_call[ToolKey.FUNCTION][ToolKey.ARGUMENTS]),
+                        arguments=arguments,
                         thought_signature=thought_sig,
                     ))
             except (KeyError, json.JSONDecodeError, TypeError) as ex:

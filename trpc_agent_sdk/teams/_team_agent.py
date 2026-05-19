@@ -538,6 +538,22 @@ class TeamAgent(BaseAgent):
                 # Check if custom tools were executed (non-delegation)
                 custom_tool_executed = self._has_non_delegation_tool_calls(last_event)
                 if custom_tool_executed:
+                    # Honor skip_summarization on tool responses. The leader runs
+                    # with disable_react_tool=True, so LlmAgent never gets to
+                    # check skip_summarization itself. TeamAgent must do that
+                    # check here, otherwise tools that declare "my output IS the
+                    # final answer" (e.g. AgentTool(skip_summarization=True),
+                    # StreamingProgressTool(skip_summarization=True)) would
+                    # still be re-summarized by the leader.
+                    if self._any_skip_summarization(all_leader_events):
+                        logger.debug("TeamAgent: Tool returned skip_summarization=True, "
+                                     "exiting without leader follow-up")
+                        if leader_text_response.strip():
+                            team_run_context.add_leader_message('model', leader_text_response)
+                        if not is_member_mode:
+                            yield self._create_state_update_event(ctx, team_run_context)
+                        return
+
                     # Custom tool was executed, continue loop to let leader process result
                     logger.debug("TeamAgent: Custom tool executed, continuing loop for leader to process result")
 
@@ -873,6 +889,20 @@ class TeamAgent(BaseAgent):
             if member.name == name:
                 return member
         return None
+
+    @staticmethod
+    def _any_skip_summarization(events: List[Event]) -> bool:
+        """Return True if any event carries actions.skip_summarization=True.
+
+        Used to mirror :class:`LlmAgent`'s skip_summarization handling at the
+        TeamAgent layer. The leader runs with ``disable_react_tool=True``, so
+        LlmAgent itself never reaches its skip_summarization branch; the team
+        loop has to inspect the leader's emitted tool events directly.
+        """
+        for event in events:
+            if event and event.actions and event.actions.skip_summarization:
+                return True
+        return False
 
     def _has_non_delegation_tool_calls(self, event: Event) -> bool:
         """Check if event contains non-delegation and non-long-running tool calls.
