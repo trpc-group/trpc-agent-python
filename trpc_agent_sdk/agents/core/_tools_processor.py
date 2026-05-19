@@ -38,6 +38,7 @@ from trpc_agent_sdk.tools import convert_toolunion_to_tool_list
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import FunctionCall
 from trpc_agent_sdk.types import Part
+from trpc_agent_sdk.utils import json_loads_repair
 
 # Type aliases for tool definitions
 ToolUnion: TypeAlias = Union[BaseTool, BaseToolSet]
@@ -350,9 +351,29 @@ class ToolsProcessor:
             # Capture state before tool execution
             state_begin = dict(context.session.state)
 
-            # Parse arguments (FunctionCall uses 'args' field)
+            # Parse arguments (FunctionCall uses 'args' field).
+            # json_repair tolerates malformed JSON from models, but it can also
+            # silently turn plain text (e.g. "Beijing") into "" or wrap loose
+            # values into lists. Guard the result so downstream tools always
+            # receive a dict, falling back to {} when repair cannot recover a
+            # structured object.
             if isinstance(tool_call.args, str):
-                arguments = json.loads(tool_call.args)
+                try:
+                    arguments = json_loads_repair(tool_call.args)
+                except Exception as ex:  # pylint: disable=broad-except
+                    logger.warning(
+                        "Failed to repair string tool args for %s: %s",
+                        tool_call.name,
+                        ex,
+                    )
+                    arguments = {}
+                if not isinstance(arguments, dict):
+                    logger.warning(
+                        "Discarding non-dict repaired tool args for %s: %r",
+                        tool_call.name,
+                        arguments,
+                    )
+                    arguments = {}
             else:
                 arguments = tool_call.args or {}
 

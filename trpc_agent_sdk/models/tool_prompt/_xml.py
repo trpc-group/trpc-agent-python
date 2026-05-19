@@ -13,6 +13,7 @@ from typing_extensions import override
 
 from trpc_agent_sdk.types import FunctionCall
 from trpc_agent_sdk.types import Tool
+from trpc_agent_sdk.utils import json_loads_repair
 
 from ._base import ToolPrompt
 
@@ -205,7 +206,7 @@ class XmlToolPrompt(ToolPrompt):
                     param_value = param_value.strip()
                     try:
                         if param_value.startswith(("{", "[", '"')) or param_value in ("true", "false", "null"):
-                            parameters[param_name] = json.loads(param_value)
+                            parameters[param_name] = json_loads_repair(param_value)
                         else:
                             # Try to convert numbers
                             if param_value.isdigit():
