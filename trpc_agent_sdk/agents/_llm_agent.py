@@ -570,8 +570,11 @@ class LlmAgent(BaseAgent):
 
                         # Execute tools and yield results (Runner will store them automatically)
                         last_tool_event = None
+                        any_skip_summarization = False
                         async for tool_event in extended_tools_processor.execute_tools_async(collected_tool_calls, ctx):
                             last_tool_event = tool_event
+                            if tool_event.actions and tool_event.actions.skip_summarization:
+                                any_skip_summarization = True
 
                             # Check if this event contains responses from long-running tools
                             if tool_event.content and tool_event.content.parts:
@@ -635,6 +638,17 @@ class LlmAgent(BaseAgent):
                         # let the caller handle tool results and continue the loop.
                         if self.disable_react_tool:
                             logger.debug("disable_react_tool set, exiting after tool execution for external control")
+                            return
+
+                        # Honor skip_summarization on tool responses: when any tool
+                        # in this batch declares "the tool output IS the final
+                        # answer, do not ask the LLM to summarize it" (e.g.
+                        # `AgentTool(skip_summarization=True)` or
+                        # `StreamingProgressTool(skip_summarization=True)`),
+                        # end this agent without another LLM follow-up call.
+                        # See `EventActions.skip_summarization` docstring.
+                        if any_skip_summarization:
+                            logger.debug("Tool returned skip_summarization=True, exiting without LLM follow-up")
                             return
 
                         # Continue the multi-turn loop for next LLM call with tool results in history

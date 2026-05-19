@@ -253,10 +253,6 @@ class SessionSummarizer:
             if not event.content or not event.content.parts:
                 continue
 
-            # Skip events that should not be included in summary
-            if event.actions and event.actions.skip_summarization:
-                continue
-
             # Extract text、tool_call、tool_response from event parts
             event_text = ""
             for part in event.content.parts:
