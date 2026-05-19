@@ -129,6 +129,36 @@ async def test_reject_tool_trajectory_metric_raises_value_error():
 
 
 @pytest.mark.asyncio
+async def test_reject_llm_rubric_knowledge_recall_metric_raises_value_error():
+    """F-4: ``llm_rubric_knowledge_recall`` requires tool responses from
+    ``intermediate_data`` which RemoteEvalService never captures (always
+    ``None``); the judge would silently fall back to "No knowledge search
+    results were found." Treat it the same as ``tool_trajectory_avg_score``:
+    fail-fast at evaluate() entry instead of letting users score every
+    case as 0 and chase a phantom prompt regression.
+    """
+    case = EvalCase(eval_id="c1", conversation=[_invocation("hello", "world")])
+    eval_set = EvalSet(eval_set_id="s1", eval_cases=[case])
+    mgr = _make_manager(eval_set)
+
+    async def call_agent(query: str) -> str:
+        return "world"
+
+    service = RemoteEvalService(call_agent=call_agent, eval_sets_manager=mgr)
+    req = InferenceRequest(app_name="app", eval_set_id="s1", inference_config=InferenceConfig(parallelism=1))
+    inference_results = [r async for r in service.perform_inference(req)]
+    evaluate_req = EvaluateRequest(
+        inference_results=inference_results,
+        evaluate_config=EvaluateConfig(
+            eval_metrics=[EvalMetric(metric_name="llm_rubric_knowledge_recall", threshold=1.0)],
+        ),
+    )
+
+    with pytest.raises(ValueError, match="llm_rubric_knowledge_recall"):
+        _ = [r async for r in service.evaluate(evaluate_req)]
+
+
+@pytest.mark.asyncio
 async def test_case_fail_soft_when_call_agent_raises():
     case = EvalCase(eval_id="c1", conversation=[_invocation("hello", "world")])
     eval_set = EvalSet(eval_set_id="s1", eval_cases=[case])

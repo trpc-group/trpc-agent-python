@@ -1,0 +1,73 @@
+{
+  "eval_set_id": "advanced_strategies_val",
+  "name": "Address parsing - val",
+  "description": "6 case 验证集（>=5 满足 merge_val_overlap_floor 默认）：3 完整 + 3 缺信息。schema 与 train 完全一致。",
+  "eval_cases": [
+    {
+      "eval_id": "val_full_ca",
+      "conversation": [
+        {
+          "invocation_id": "v1",
+          "user_content": {"parts": [{"text": "100 Queen Street West, Toronto, ON M5H 2N2, Canada"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"Toronto\",\"country\":\"Canada\",\"postal_code\":\"M5H 2N2\",\"street\":\"100 Queen Street West\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "advanced_strategies_demo", "user_id": "parser", "state": {}}
+    },
+    {
+      "eval_id": "val_full_de",
+      "conversation": [
+        {
+          "invocation_id": "v2",
+          "user_content": {"parts": [{"text": "Marienplatz 1, Munich 80331, Germany"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"Munich\",\"country\":\"Germany\",\"postal_code\":\"80331\",\"street\":\"Marienplatz 1\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "advanced_strategies_demo", "user_id": "parser", "state": {}}
+    },
+    {
+      "eval_id": "val_full_sg",
+      "conversation": [
+        {
+          "invocation_id": "v3",
+          "user_content": {"parts": [{"text": "1 Marina Boulevard, Singapore 018989, Singapore"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"Singapore\",\"country\":\"Singapore\",\"postal_code\":\"018989\",\"street\":\"1 Marina Boulevard\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "advanced_strategies_demo", "user_id": "parser", "state": {}}
+    },
+    {
+      "eval_id": "val_missing_postal",
+      "conversation": [
+        {
+          "invocation_id": "v4",
+          "user_content": {"parts": [{"text": "Plaza Mayor, Madrid, Spain"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"Madrid\",\"country\":\"Spain\",\"postal_code\":null,\"street\":\"Plaza Mayor\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "advanced_strategies_demo", "user_id": "parser", "state": {}}
+    },
+    {
+      "eval_id": "val_missing_street",
+      "conversation": [
+        {
+          "invocation_id": "v5",
+          "user_content": {"parts": [{"text": "Rome 00184, Italy"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"Rome\",\"country\":\"Italy\",\"postal_code\":\"00184\",\"street\":null}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "advanced_strategies_demo", "user_id": "parser", "state": {}}
+    },
+    {
+      "eval_id": "val_missing_both",
+      "conversation": [
+        {
+          "invocation_id": "v6",
+          "user_content": {"parts": [{"text": "Cairo, Egypt"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"Cairo\",\"country\":\"Egypt\",\"postal_code\":null,\"street\":null}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "advanced_strategies_demo", "user_id": "parser", "state": {}}
+    }
+  ]
+}

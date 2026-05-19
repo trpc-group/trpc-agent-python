@@ -75,6 +75,24 @@ DEFAULT_EVAL_APP_NAME = "test_app"
 _RESULT_HANDLER = _utils.EvalResultHandler()
 
 
+class _EvaluationCasesFailed(AssertionError):
+    """Signal raised by ``_EvalExecuter._run`` when one or more eval cases fail.
+
+    Subclasses :class:`AssertionError` so direct ``AgentEvaluator.evaluate``
+    callers (CI pytest gates such as ``examples/optimization/ci_integration``)
+    keep working unchanged: ``except AssertionError`` and
+    ``isinstance(exc, AssertionError)`` both still match, and the formatted
+    message remains the JSON failure summary so pytest JUnit XML output is
+    byte-for-byte identical to the previous ``assert False, combined``.
+
+    Internal optimizer wrappers (``_optimize_evaluator_call.run_evaluator``)
+    catch this concrete subclass so unrelated ``AssertionError`` (e.g. numpy
+    ``assert allclose``) is no longer silently swallowed. Replacing the bare
+    ``assert`` statement also keeps the failure signal alive under
+    ``python -O`` where ``assert`` is stripped.
+    """
+
+
 @dataclass(frozen=True)
 class PassNC:
     """(n, c): n = runs, c = runs that all passed (for pass@k / pass^k)."""
@@ -101,6 +119,7 @@ class _EvalExecuter:
         case_eval_parallelism: Optional[int] = None,
         callbacks: Optional[Callbacks] = None,
         eval_metrics_file_path_or_dir: Optional[str] = None,
+        print_summary_report: bool = True,
     ):
         self._agent_module = agent_module
         self._call_agent = call_agent
@@ -108,6 +127,7 @@ class _EvalExecuter:
         self._num_runs = num_runs
         self._agent_name = agent_name
         self._print_detailed_results = print_detailed_results
+        self._print_summary_report = print_summary_report
         self._eval_result_output_dir = eval_result_output_dir
         self._runner = runner
         self._case_parallelism = case_parallelism
@@ -124,6 +144,7 @@ class _EvalExecuter:
         num_runs = self._num_runs
         agent_name = self._agent_name
         print_detailed_results = self._print_detailed_results
+        print_summary_report = self._print_summary_report
         eval_result_output_dir = self._eval_result_output_dir
         runner = self._runner
         case_parallelism = self._case_parallelism
@@ -189,7 +210,7 @@ class _EvalExecuter:
                 eval_results_by_eval_id=eval_results_by_eval_id,
                 num_runs=num_runs_for_set,
             )
-        if all_details or all_results:
+        if print_summary_report and (all_details or all_results):
             _RESULT_HANDLER.print_evaluation_report(
                 all_details=all_details,
                 all_results=all_results,
@@ -207,7 +228,7 @@ class _EvalExecuter:
                 indent=2,
                 ensure_ascii=False,
             )
-            assert False, combined
+            raise _EvaluationCasesFailed(combined)
 
     async def _ensure_run(self) -> None:
         if self._task is None:
@@ -354,6 +375,7 @@ class AgentEvaluator:
         case_eval_parallelism: Optional[int] = None,
         callbacks: Optional[Callbacks] = None,
         eval_metrics_file_path_or_dir: Optional[str] = None,
+        print_summary_report: bool = True,
     ) -> _EvalExecuter:
         """Return an executer (does not run). Await executer.evaluate() then executer.get_result() for result.
 
@@ -377,6 +399,12 @@ class AgentEvaluator:
                 evaluation config JSON (file) or directory containing a single
                 config JSON. When provided, overrides the dataset-local
                 ``test_config.json`` convention for ALL discovered datasets.
+            print_summary_report: When False, suppress the Execution Details and
+                Evaluation Result tables normally printed at the end of a run.
+                The result is still computed and returned by ``get_result()``.
+                Defaults to True for direct callers; tools that drive the
+                evaluator inside a larger workflow (e.g. ``AgentOptimizer``)
+                pass False to keep their own output unmixed.
 
         Returns:
             _EvalExecuter: Await .evaluate() to run, then .get_result() for EvaluateResult.
@@ -394,6 +422,7 @@ class AgentEvaluator:
             case_eval_parallelism=case_eval_parallelism,
             callbacks=callbacks,
             eval_metrics_file_path_or_dir=eval_metrics_file_path_or_dir,
+            print_summary_report=print_summary_report,
         )
 
     @staticmethod
