@@ -113,6 +113,27 @@ class BaseTool(ToolABC, FilterRunner):
         return False
 
     @property
+    def is_progress_streaming(self) -> bool:
+        """Whether this tool streams **its own execution progress** as events.
+
+        When True, the framework drives this tool via a dedicated streaming
+        path that emits one ``partial=True`` Event per ``yield`` from the
+        tool, plus a final ``function_response`` event built from the last
+        yielded value. Such tools are also pulled out of the normal
+        sequential / parallel execution batches and handled uniformly.
+
+        Subclasses that produce progress events (e.g.
+        :class:`StreamingProgressTool`) override this to return True.
+        Filter / batch logic should use this flag to skip or specially
+        handle progress-streaming tools.
+
+        Returns:
+            bool: True if the tool emits intermediate progress events,
+            False otherwise.
+        """
+        return False
+
+    @property
     def api_variant(self) -> str:
         """Get API variant."""
         return DEFAULT_API_VARIANT

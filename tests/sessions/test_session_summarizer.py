@@ -183,16 +183,23 @@ class TestExtractConversationText:
         assert "user: What is AI?" in text
         assert "agent: AI is artificial intelligence." in text
 
-    def test_skip_summarization_events(self):
+    def test_skip_summarization_events_are_still_included(self):
+        # ``skip_summarization=True`` means "the agent loop should not call
+        # the LLM again to summarize this tool response" (a control-flow
+        # concern). It must NOT cause the *session* summarizer to drop the
+        # event from the summary input, because these events usually carry
+        # the actual user-visible final answer (e.g. AgentTool /
+        # StreamingProgressTool outputs). Dropping them would strip the
+        # most informative content from the resulting session summary.
         model = _make_model_mock()
         summarizer = SessionSummarizer(model=model)
         events = [
             _make_event(author="user", text="Question"),
-            _make_event(author="agent", text="Skipped", skip_summarization=True),
+            _make_event(author="agent", text="FinalAnswerFromSubAgent", skip_summarization=True),
             _make_event(author="agent", text="Included"),
         ]
         text = summarizer._extract_conversation_text(events)
-        assert "Skipped" not in text
+        assert "FinalAnswerFromSubAgent" in text
         assert "Included" in text
 
     def test_empty_events(self):

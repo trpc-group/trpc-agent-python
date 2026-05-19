@@ -33,6 +33,7 @@ from ._registry import register_tool
 from ._registry import register_tool_set
 from ._set_model_response_tool import SetModelResponseTool
 from ._streaming_function_tool import StreamingFunctionTool
+from ._streaming_progress_tool import StreamingProgressTool
 from ._tool_adapter import convert_toolunion_to_tool_list
 from ._tool_adapter import create_tool
 from ._tool_adapter import create_toolset
@@ -91,6 +92,7 @@ __all__ = [
     "register_tool_set",
     "SetModelResponseTool",
     "StreamingFunctionTool",
+    "StreamingProgressTool",
     "convert_toolunion_to_tool_list",
     "create_tool",
     "create_toolset",
