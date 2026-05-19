@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.1.5](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.5) (2026-05-19)
+
+### Features
+
+* Tools: Added `StreamingProgressTool` with matching `ToolsProcessor` plumbing so tools can surface intermediate progress as `partial=True` events while still emitting a single final `function_response`; included `BaseTool` streaming hooks, the `llmagent_with_streaming_progress_tool` example and verification script.
+* Eval: Added `RemoteEvalService` to drive evaluations against agents exposed over remote interfaces, refactored `AgentEvaluator` to support remote agent calls, and expanded English/Chinese evaluation docs.
+* Model: Landed the OpenAI-compatible adapter layer (`models/openai_adapter/{_base,_deepseek,_hunyuan}.py`) that isolates provider-specific behavior from `OpenAIModel`, including DeepSeek v4 thinking / `response_format` / `reasoning_content` / token usage handling and hy3-preview ToolPrompt text parsing with streaming filter.
+* Examples: Added `examples/mempalace_mcp` (MemPalace via MCP) and updated `examples/llmagent_with_thinking` to enable `add_tools_to_prompt` only for hy3-preview and display thinking / tool calls / final answer separately.
+
+* Utils: Added `json_loads_repair` and `json_repair_string` helpers (backed by `json_repair`) under `trpc_agent_sdk.utils`, with full unit test coverage.
+* Model/Tools: Adopted `json_repair` only on JSON-tolerant paths — `JsonToolPrompt` / `XmlToolPrompt` parse_function, non-streaming OpenAI tool-call args, `AgentTool` structured-output validation, skills tool result parsing — while keeping strict `json.loads` for the streaming tool-call accumulator (to preserve "wait for next chunk" semantics) and Hunyuan plain-text `<arg_value>` parsing (to avoid silently coercing plain text into empty strings).
+* Model: Fixed ToolPrompt streaming parsing so multiple tool calls in a single response are all preserved instead of only the last one being kept.
+
+### Bug Fixes
+
+* Teams: TeamAgent now honors `actions.skip_summarization` from custom tool events, so tools like `AgentTool(skip_summarization=True)` and `StreamingProgressTool(skip_summarization=True)` end the leader loop without an extra summarization turn (previously masked by leader's `disable_react_tool=True`).
+
 ## [1.1.4](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.4) (2026-05-13)
 
 ### Bug Fixes
