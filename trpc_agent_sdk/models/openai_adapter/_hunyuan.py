@@ -73,6 +73,11 @@ class HunyuanHy3PreviewAdapter(ToolPromptTextFilterMixin, OpenAIAdapter):
         return {"value": parsed_value}
 
     def _parse_arg_value(self, value: str) -> Any:
+        # Keep STRICT json.loads here. Hunyuan's <arg_value> tags often contain
+        # plain text (e.g. "Beijing", "2025-01-01"). json_repair would silently
+        # coerce such plain text into "" and skip the fallback branch below,
+        # corrupting tool arguments. Real JSON-shaped values still parse, and
+        # the fallback preserves the original string for everything else.
         try:
             return json.loads(value)
         except json.JSONDecodeError:

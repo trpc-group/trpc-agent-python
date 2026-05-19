@@ -15,6 +15,7 @@ from typing_extensions import override
 
 from trpc_agent_sdk.types import FunctionCall
 from trpc_agent_sdk.types import Tool
+from trpc_agent_sdk.utils import json_loads_repair
 
 from ._base import ToolPrompt
 
@@ -194,7 +195,7 @@ class JsonToolPrompt(ToolPrompt):
             FunctionCall object or None if parsing fails
         """
         try:
-            data = json.loads(json_str.strip())
+            data = json_loads_repair(json_str.strip())
 
             if not isinstance(data, dict):
                 return None
@@ -208,7 +209,7 @@ class JsonToolPrompt(ToolPrompt):
                 # Try to parse arguments as JSON string
                 if isinstance(arguments, str):
                     try:
-                        arguments = json.loads(arguments)
+                        arguments = json_loads_repair(arguments)
                     except json.JSONDecodeError:
                         arguments = {}
                 else:

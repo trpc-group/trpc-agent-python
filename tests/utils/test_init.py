@@ -15,6 +15,8 @@ from trpc_agent_sdk.utils._context_utils import AsyncClosingContextManager as _A
 from trpc_agent_sdk.utils._execute_cmd import CommandExecResult as _CER
 from trpc_agent_sdk.utils._execute_cmd import async_execute_command as _aec
 from trpc_agent_sdk.utils._hash_key import user_key as _uk
+from trpc_agent_sdk.utils._json_repair import json_loads_repair as _jlr
+from trpc_agent_sdk.utils._json_repair import json_repair_string as _jrs
 from trpc_agent_sdk.utils._registry_factory import BaseRegistryFactory as _BRF
 from trpc_agent_sdk.utils._singleton import SingletonBase as _SB
 from trpc_agent_sdk.utils._singleton import SingletonMeta as _SM
@@ -29,6 +31,8 @@ class TestAllExports:
             "CommandExecResult",
             "async_execute_command",
             "user_key",
+            "json_loads_repair",
+            "json_repair_string",
             "BaseRegistryFactory",
             "SingletonBase",
             "SingletonMeta",
@@ -41,6 +45,8 @@ class TestAllExports:
         assert utils_pkg.CommandExecResult is _CER
         assert utils_pkg.async_execute_command is _aec
         assert utils_pkg.user_key is _uk
+        assert utils_pkg.json_loads_repair is _jlr
+        assert utils_pkg.json_repair_string is _jrs
         assert utils_pkg.BaseRegistryFactory is _BRF
         assert utils_pkg.SingletonBase is _SB
         assert utils_pkg.SingletonMeta is _SM
