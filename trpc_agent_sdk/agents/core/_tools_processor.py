@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from typing import Any
 from typing import AsyncGenerator
 from typing import List
 from typing import Optional
@@ -193,54 +194,100 @@ class ToolsProcessor:
 
         logger.debug("Starting execution of %s tool calls", len(tool_calls))
 
+        # Split the batch by execution model. Progress-streaming tools are
+        # **never** mixed into the legacy parallel/sequential path: they have
+        # a different control flow (one tool call -> many events) that does
+        # not compose with the "1 call -> 1 event, then merge" parallel
+        # design. The non-streaming bucket is fed through the legacy path
+        # *verbatim* so that we do not regress any existing behavior.
+        streaming_calls, non_streaming_calls = self._split_calls_by_streaming(tool_calls, resolved_tools)
+
         # Capture state before tool execution
         state_begin = dict(context.session.state)
 
-        parallel_tool_calls: bool = getattr(context.agent, "parallel_tool_calls", False)
-
-        if parallel_tool_calls:
-            # Parallel execution: collect all events and merge them
-            function_response_events: list[Event] = []
-            async with asyncio.TaskGroup() as tg:
-                for tool_call in tool_calls:
-                    tg.create_task(self.__invoke_tools(context, resolved_tools, tool_call, function_response_events))
-
-            # Handle merging and tracing based on number of events
-            if not function_response_events:
-                return
-
-            if len(function_response_events) == 1:
-                # Single tool call - yield the event directly
-                yield function_response_events[0]
-            else:
-                # Multiple tool calls - merge them and add merged tracing
-                merged_event = self._merge_parallel_function_response_events(function_response_events)
-
-                # Compute state after merged tool execution
-                state_end = dict(context.session.state)
-                if merged_event.actions and merged_event.actions.state_delta:
-                    state_end.update(merged_event.actions.state_delta)
-
-                # Add merged tool call tracing
-                with tracer.start_as_current_span(
-                        "execute_tool (merged)",
-                        attributes={"gen_ai.operation.name": "execute_tool"},
-                ):
-                    trace_merged_tool_calls(
-                        response_event_id=merged_event.id,
-                        function_response_event=merged_event,
-                        state_begin=state_begin,
-                        state_end=state_end,
-                    )
-
-                yield merged_event
-        else:
-            # Sequential execution: yield each event immediately after execution
-            for tool_call in tool_calls:
+        # ---- Phase 1: legacy path for non-streaming tools (unchanged) ----
+        if non_streaming_calls:
+            parallel_tool_calls: bool = getattr(context.agent, "parallel_tool_calls", False)
+            if parallel_tool_calls:
+                # Parallel execution: collect all events and merge them
                 function_response_events: list[Event] = []
-                result_event = await self.__invoke_tools(context, resolved_tools, tool_call, function_response_events)
-                if result_event:
-                    yield result_event
+                async with asyncio.TaskGroup() as tg:
+                    for tool_call in non_streaming_calls:
+                        tg.create_task(self.__invoke_tools(context, resolved_tools, tool_call,
+                                                           function_response_events))
+
+                # Handle merging and tracing based on number of events
+                if function_response_events:
+                    if len(function_response_events) == 1:
+                        yield function_response_events[0]
+                    else:
+                        merged_event = self._merge_parallel_function_response_events(function_response_events)
+                        state_end = dict(context.session.state)
+                        if merged_event.actions and merged_event.actions.state_delta:
+                            state_end.update(merged_event.actions.state_delta)
+                        with tracer.start_as_current_span(
+                                "execute_tool (merged)",
+                                attributes={"gen_ai.operation.name": "execute_tool"},
+                        ):
+                            trace_merged_tool_calls(
+                                response_event_id=merged_event.id,
+                                function_response_event=merged_event,
+                                state_begin=state_begin,
+                                state_end=state_end,
+                            )
+                        yield merged_event
+            else:
+                # Sequential execution: yield each event immediately after execution
+                for tool_call in non_streaming_calls:
+                    function_response_events: list[Event] = []
+                    result_event = await self.__invoke_tools(context, resolved_tools, tool_call,
+                                                             function_response_events)
+                    if result_event:
+                        yield result_event
+
+        # ---- Phase 2: uniform streaming path for progress-streaming tools ----
+        # Streaming tools are always executed **sequentially among themselves**.
+        # Interleaving their partials would force the consumer to demux events
+        # by tool_call_id; we deliberately keep ordering deterministic instead.
+        # See StreamingProgressTool docstring for the per-tool contract.
+        for tool_call in streaming_calls:
+            tool = await self._find_tool(tool_call, resolved_tools)
+            if tool is None:
+                yield self._create_error_event(
+                    context,
+                    "tool_not_found",
+                    f"Tool '{tool_call.name}' not found",
+                    tool_call.id,
+                    tool_call.name,
+                )
+                continue
+            async for ev in self._execute_progress_streaming_tool(tool_call, tool, context):
+                yield ev
+
+    @staticmethod
+    def _split_calls_by_streaming(
+        tool_calls: List[FunctionCall],
+        resolved_tools: List[BaseTool],
+    ) -> tuple[List[FunctionCall], List[FunctionCall]]:
+        """Partition ``tool_calls`` into ``(streaming, non_streaming)`` lists.
+
+        Calls whose target tool cannot be resolved (e.g. typo from the LLM)
+        are placed in the **non_streaming** bucket so that the legacy path
+        keeps producing the canonical ``tool_not_found`` error event.
+
+        Relative order within each list is preserved so downstream tracing
+        stays predictable.
+        """
+        by_name = {t.name: t for t in resolved_tools if isinstance(t, BaseTool)}
+        streaming: List[FunctionCall] = []
+        non_streaming: List[FunctionCall] = []
+        for tc in tool_calls:
+            tool = by_name.get(tc.name)
+            if tool is not None and tool.is_progress_streaming:
+                streaming.append(tc)
+            else:
+                non_streaming.append(tc)
+        return streaming, non_streaming
 
     async def find_tool(self, context: InvocationContext, tool_call: FunctionCall) -> Optional[BaseTool]:
         """Find the appropriate tool for a tool call.
@@ -402,6 +449,202 @@ class ToolsProcessor:
                 )
 
                 return error_event
+
+    async def _execute_progress_streaming_tool(
+        self,
+        tool_call: FunctionCall,
+        tool: BaseTool,
+        context: InvocationContext,
+    ) -> AsyncGenerator[Event, None]:
+        """Execute a progress-streaming tool, surfacing every yield as a partial event.
+
+        Contract with :class:`StreamingProgressTool`:
+
+        - Every value yielded by the tool's async generator becomes a
+          ``partial=True`` Event with ``custom_metadata.tool_progress=True``.
+          These events are *not* persisted into session history and are *not*
+          fed back to the LLM as tool responses.
+        - The **last** yielded value is additionally used to build the final
+          function_response event (``partial=False``, with a real
+          ``function_response`` Part) that closes this tool call.
+
+        Args:
+            tool_call: The LLM-issued FunctionCall to execute.
+            tool: The resolved StreamingProgressTool instance.
+            context: The invocation context.
+
+        Yields:
+            Event: zero or more partial progress events, followed by exactly
+            one final function_response event (or an error event).
+        """
+        with tracer.start_as_current_span(
+                f"execute_tool {tool.name} (streaming)",
+                attributes={
+                    "gen_ai.operation.name": "execute_tool",
+                    "gen_ai.tool.name": tool.name,
+                    "gen_ai.tool.description": tool.description or "",
+                },
+        ):
+            state_begin = dict(context.session.state)
+
+            if isinstance(tool_call.args, str):
+                arguments = json.loads(tool_call.args)
+            else:
+                arguments = tool_call.args or {}
+
+            context.function_call_id = tool_call.id
+            start_time = time.monotonic()
+
+            run_streaming = getattr(tool, "run_streaming", None)
+            if run_streaming is None:
+                # Defensive: a tool advertising is_progress_streaming=True
+                # without run_streaming() is broken. Fall back to non-streaming.
+                logger.warning(
+                    "Tool %s sets is_progress_streaming=True but exposes no run_streaming(); "
+                    "falling back to non-streaming execution.",
+                    tool.name,
+                )
+                final_event = await self._execute_tool(tool_call, tool, context)
+                yield final_event
+                return
+
+            last_value: Any = None
+            progress_count = 0
+            skip_summarization = bool(getattr(tool, "skip_summarization", False))
+
+            try:
+                # Drain the streaming generator. Buffer the previously-seen
+                # value and emit it as a partial event only when a *next*
+                # value arrives, so that the last value is reserved for the
+                # final function_response event.
+                async for value in run_streaming(tool_context=context, args=arguments):
+                    if last_value is not None:
+                        yield self._build_progress_event(context, tool_call, tool, last_value)
+                        progress_count += 1
+                    last_value = value
+
+                execution_time = time.monotonic() - start_time
+                report_execute_tool(
+                    context,
+                    tool,
+                    duration_s=execution_time,
+                    error_type=None,
+                )
+
+                final_result = last_value if last_value is not None else {}
+                if not isinstance(final_result, dict):
+                    final_result = {"result": final_result}
+
+                part_function_response = Part.from_function_response(name=tool_call.name, response=final_result)
+                part_function_response.function_response.id = tool_call.id
+
+                final_event = Event(
+                    invocation_id=context.invocation_id,
+                    author=context.agent.name,
+                    content=Content(role="user", parts=[part_function_response]),
+                    custom_metadata={
+                        "execution_time": execution_time,
+                        "progress_events": progress_count,
+                    },
+                    branch=context.branch,
+                )
+
+                if context.state.has_delta():
+                    final_event.actions.state_delta.update(context.state._delta)  # pylint: disable=protected-access
+                if context.event_actions.skip_summarization or skip_summarization:
+                    # Either the tool declared the streamed output as the final
+                    # answer at construction time, or it asked for it via the
+                    # event_actions context bag during execution.
+                    final_event.actions.skip_summarization = True
+                if context.event_actions.transfer_to_agent:
+                    final_event.actions.transfer_to_agent = context.event_actions.transfer_to_agent
+                if context.event_actions.artifact_delta:
+                    final_event.actions.artifact_delta.update(context.event_actions.artifact_delta)
+
+                state_end = dict(context.session.state)
+                if final_event.actions and final_event.actions.state_delta:
+                    state_end.update(final_event.actions.state_delta)
+
+                trace_tool_call(
+                    tool=tool,
+                    args=arguments,
+                    function_response_event=final_event,
+                    state_begin=state_begin,
+                    state_end=state_end,
+                )
+
+                yield final_event
+
+            except Exception as ex:  # pylint: disable=broad-except
+                report_execute_tool(
+                    context,
+                    tool,
+                    duration_s=time.monotonic() - start_time,
+                    error_type=type(ex).__name__,
+                )
+                error_event = self._create_error_event(
+                    context,
+                    "tool_execution_error",
+                    str(ex),
+                    tool_call.id,
+                    tool_call.name,
+                )
+                state_end = dict(context.session.state)
+                trace_tool_call(
+                    tool=tool,
+                    args=arguments,
+                    function_response_event=error_event,
+                    state_begin=state_begin,
+                    state_end=state_end,
+                )
+                logger.error("Error executing streaming tool %s: %s", tool_call.name, ex, exc_info=True)
+                yield error_event
+
+    @staticmethod
+    def _build_progress_event(
+        context: InvocationContext,
+        tool_call: FunctionCall,
+        tool: BaseTool,
+        value: Any,
+    ) -> Event:
+        """Wrap a single value yielded by a streaming tool into a partial Event.
+
+        Rules:
+        - ``str`` → rendered as a text Part directly.
+        - ``dict`` / anything else → rendered as JSON text Part; the raw
+          value is also attached under ``custom_metadata['payload']`` so
+          structured consumers can read it without re-parsing.
+        - The event is marked ``partial=True`` so session services skip
+          persisting it and the LLM never sees it as a tool response.
+        - ``custom_metadata`` carries ``tool_progress=True``, ``tool_name``,
+          ``tool_call_id`` to make filtering on the consumer side trivial.
+        """
+        if isinstance(value, str):
+            text = value
+            payload: Optional[Any] = None
+        else:
+            try:
+                text = json.dumps(value, ensure_ascii=False, default=str)
+            except (TypeError, ValueError):
+                text = str(value)
+            payload = value
+
+        custom_metadata = {
+            "tool_progress": True,
+            "tool_name": tool.name,
+            "tool_call_id": tool_call.id,
+        }
+        if payload is not None:
+            custom_metadata["payload"] = payload
+
+        return Event(
+            invocation_id=context.invocation_id,
+            author=context.agent.name,
+            content=Content(role="model", parts=[Part(text=text)]),
+            partial=True,
+            branch=context.branch,
+            custom_metadata=custom_metadata,
+        )
 
     def _merge_parallel_function_response_events(self, function_response_events: List[Event]) -> Event:
         """Merge multiple function response events into a single event.
