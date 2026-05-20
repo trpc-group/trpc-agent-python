@@ -136,6 +136,7 @@ class AgentTool(BaseTool):
     ) -> Any:
         try:
             from trpc_agent_sdk.agents import LlmAgent
+            from trpc_agent_sdk.dsl.graph import GraphAgent, STATE_KEY_LAST_RESPONSE
             if self.skip_summarization:
                 tool_context.event_actions.skip_summarization = True
             if isinstance(self.agent, LlmAgent) and self.agent.input_schema:
@@ -206,6 +207,8 @@ class AgentTool(BaseTool):
                 merged_text = '\n'.join([p.text for p in last_event.content.parts if p.text])
                 repaired = json_repair_string(merged_text)
                 tool_result = self.agent.output_schema.model_validate_json(repaired).model_dump(exclude_none=True)
+            elif isinstance(self.agent, GraphAgent):
+                tool_result = tool_context.state.get(STATE_KEY_LAST_RESPONSE, '')
             else:
                 tool_result = '\n'.join([p.text for p in last_event.content.parts if p.text])
             return tool_result
