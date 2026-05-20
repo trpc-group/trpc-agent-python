@@ -94,6 +94,11 @@ eval = [
     "tabulate",
 ]
 
+optimize = [
+    "gepa>=0.0.7",
+    "rich>=13.0.0",
+]
+
 mem0 = [
     "mem0ai>=1.0.3",
     "sentence-transformers",
@@ -151,6 +156,8 @@ all = [
     "wecom-aibot-sdk-python>=0.1.5",
     "a2a-sdk<1.0.0,>=0.3.22",
     "e2b-code-interpreter>=2.0.0",
+    "gepa>=0.0.7",
+    "rich>=13.0.0",
 ]
 
 [project.scripts]

@@ -1,0 +1,58 @@
+{
+  "eval_set_id": "multi_agent_pipeline_val",
+  "name": "Multi-agent pipeline demo - validation",
+  "description": "3 条混合 case：2 道事实题 + 1 道算术题。",
+  "eval_cases": [
+    {
+      "eval_id": "fact_great_wall",
+      "conversation": [
+        {
+          "invocation_id": "v1",
+          "user_content": {
+            "parts": [{"text": "中国的长城最早是哪个朝代修建的？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：春秋"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "multi_agent_pipeline_demo", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "fact_largest_ocean",
+      "conversation": [
+        {
+          "invocation_id": "v2",
+          "user_content": {
+            "parts": [{"text": "世界上最大的洋是哪个？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：太平洋"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "multi_agent_pipeline_demo", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "math_subtract",
+      "conversation": [
+        {
+          "invocation_id": "v3",
+          "user_content": {
+            "parts": [{"text": "100 减去 37 等于多少？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：63"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "multi_agent_pipeline_demo", "user_id": "validator", "state": {}}
+    }
+  ]
+}

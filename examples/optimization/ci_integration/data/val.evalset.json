@@ -1,0 +1,40 @@
+{
+  "eval_set_id": "ci_integration_val",
+  "name": "CI Integration - val",
+  "description": "PR 阶段 pytest 守门用例 + Optimize 阶段每轮验证用例（双用）。物理上是独立文件（SDK 校验 train != val 防泄漏），逻辑上属于同一套数据资产 → CI 流水线的「质量底线」就是 optimize 的「优化目标」。",
+  "eval_cases": [
+    {
+      "eval_id": "val_put_profile",
+      "conversation": [
+        {
+          "invocation_id": "v1",
+          "user_content": {"parts": [{"text": "PUT /users/{id}/profile updates the profile, requires Bearer token."}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"auth\":\"required\",\"method\":\"PUT\",\"path\":\"/users/{id}/profile\",\"summary\":\"Update user profile\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "ci_integration_demo", "user_id": "ci", "state": {}}
+    },
+    {
+      "eval_id": "val_get_health",
+      "conversation": [
+        {
+          "invocation_id": "v2",
+          "user_content": {"parts": [{"text": "GET /health returns service health, public endpoint."}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"auth\":\"none\",\"method\":\"GET\",\"path\":\"/health\",\"summary\":\"Service health check\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "ci_integration_demo", "user_id": "ci", "state": {}}
+    },
+    {
+      "eval_id": "val_post_register",
+      "conversation": [
+        {
+          "invocation_id": "v3",
+          "user_content": {"parts": [{"text": "POST /auth/register accepts new user info, no auth required."}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"auth\":\"none\",\"method\":\"POST\",\"path\":\"/auth/register\",\"summary\":\"Register new user\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "ci_integration_demo", "user_id": "ci", "state": {}}
+    }
+  ]
+}

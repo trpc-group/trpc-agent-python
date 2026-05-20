@@ -1,0 +1,239 @@
+{
+  "eval_set_id": "slo_runtime_train",
+  "name": "SLO runtime control demo - train",
+  "description": "8 客服工单。category in {account,billing,technical,feedback}; priority in {low,normal,high}. final_response 已规范化为紧凑 JSON 与 _normalize_response 输出格式一致，用 final_response_avg_score(text.match=exact) 做硬比对。混入 t5/t6/t8 三道边界混淆题让模型不易一次到 1.0，迫使其他 stopper（timeout/iterations/proposals）有机会先抢闸。",
+  "eval_cases": [
+    {
+      "eval_id": "ticket_t1",
+      "conversation": [
+        {
+          "invocation_id": "t1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "我忘记了登录密码，怎么找回？"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"category\":\"account\",\"priority\":\"normal\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "slo_runtime_control_agent",
+        "user_id": "trainer",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "ticket_t2",
+      "conversation": [
+        {
+          "invocation_id": "t2",
+          "user_content": {
+            "parts": [
+              {
+                "text": "上个月被多扣了 99 元话费，请退款。"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"category\":\"billing\",\"priority\":\"high\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "slo_runtime_control_agent",
+        "user_id": "trainer",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "ticket_t3",
+      "conversation": [
+        {
+          "invocation_id": "t3",
+          "user_content": {
+            "parts": [
+              {
+                "text": "App 启动后立刻闪退，已重装两次都不行。"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"category\":\"technical\",\"priority\":\"high\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "slo_runtime_control_agent",
+        "user_id": "trainer",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "ticket_t4",
+      "conversation": [
+        {
+          "invocation_id": "t4",
+          "user_content": {
+            "parts": [
+              {
+                "text": "希望增加深色模式，眼睛看亮屏太累。"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"category\":\"feedback\",\"priority\":\"low\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "slo_runtime_control_agent",
+        "user_id": "trainer",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "ticket_t5",
+      "conversation": [
+        {
+          "invocation_id": "t5",
+          "user_content": {
+            "parts": [
+              {
+                "text": "我账号被盗了，登录提示设备异常请求验证码也收不到。"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"category\":\"account\",\"priority\":\"high\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "slo_runtime_control_agent",
+        "user_id": "trainer",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "ticket_t6",
+      "conversation": [
+        {
+          "invocation_id": "t6",
+          "user_content": {
+            "parts": [
+              {
+                "text": "续费按钮点了没反应，但银行短信显示已扣款。"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"category\":\"billing\",\"priority\":\"high\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "slo_runtime_control_agent",
+        "user_id": "trainer",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "ticket_t7",
+      "conversation": [
+        {
+          "invocation_id": "t7",
+          "user_content": {
+            "parts": [
+              {
+                "text": "你们的客服态度很好，给个赞。"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"category\":\"feedback\",\"priority\":\"low\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "slo_runtime_control_agent",
+        "user_id": "trainer",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "ticket_t8",
+      "conversation": [
+        {
+          "invocation_id": "t8",
+          "user_content": {
+            "parts": [
+              {
+                "text": "扣费失败但客户说想取消账户，下个月还要继续吗？"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"category\":\"account\",\"priority\":\"normal\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "slo_runtime_control_agent",
+        "user_id": "trainer",
+        "state": {}
+      }
+    }
+  ]
+}
