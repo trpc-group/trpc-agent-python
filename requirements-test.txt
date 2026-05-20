@@ -10,6 +10,8 @@ unittest-xml-reporting
 rouge-score
 pandas
 tabulate
+gepa>=0.0.7
+rich>=13.0.0
 
 # Test DB
 greenlet

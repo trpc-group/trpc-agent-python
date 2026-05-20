@@ -1,0 +1,73 @@
+{
+  "eval_set_id": "advanced_strategies_train",
+  "name": "Address parsing - train",
+  "description": "6 case 混合：3 个完整地址（country/city/postal_code/street 全有）+ 3 个缺信息地址（部分字段需要输出 null）。GEPA 要同时学好这两类，是 use_merge 触发场景。",
+  "eval_cases": [
+    {
+      "eval_id": "train_full_us",
+      "conversation": [
+        {
+          "invocation_id": "t1",
+          "user_content": {"parts": [{"text": "1600 Amphitheatre Parkway, Mountain View, CA 94043, USA"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"Mountain View\",\"country\":\"USA\",\"postal_code\":\"94043\",\"street\":\"1600 Amphitheatre Parkway\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "advanced_strategies_demo", "user_id": "parser", "state": {}}
+    },
+    {
+      "eval_id": "train_full_uk",
+      "conversation": [
+        {
+          "invocation_id": "t2",
+          "user_content": {"parts": [{"text": "10 Downing Street, London SW1A 2AA, UK"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"London\",\"country\":\"UK\",\"postal_code\":\"SW1A 2AA\",\"street\":\"10 Downing Street\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "advanced_strategies_demo", "user_id": "parser", "state": {}}
+    },
+    {
+      "eval_id": "train_full_jp",
+      "conversation": [
+        {
+          "invocation_id": "t3",
+          "user_content": {"parts": [{"text": "1-1 Chiyoda, Chiyoda City, Tokyo 100-8111, Japan"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"Chiyoda City\",\"country\":\"Japan\",\"postal_code\":\"100-8111\",\"street\":\"1-1 Chiyoda\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "advanced_strategies_demo", "user_id": "parser", "state": {}}
+    },
+    {
+      "eval_id": "train_missing_postal",
+      "conversation": [
+        {
+          "invocation_id": "t4",
+          "user_content": {"parts": [{"text": "Avenue des Champs-Élysées, Paris, France"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"Paris\",\"country\":\"France\",\"postal_code\":null,\"street\":\"Avenue des Champs-Élysées\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "advanced_strategies_demo", "user_id": "parser", "state": {}}
+    },
+    {
+      "eval_id": "train_missing_street",
+      "conversation": [
+        {
+          "invocation_id": "t5",
+          "user_content": {"parts": [{"text": "Berlin 10115, Germany"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"Berlin\",\"country\":\"Germany\",\"postal_code\":\"10115\",\"street\":null}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "advanced_strategies_demo", "user_id": "parser", "state": {}}
+    },
+    {
+      "eval_id": "train_missing_both",
+      "conversation": [
+        {
+          "invocation_id": "t6",
+          "user_content": {"parts": [{"text": "Sydney, Australia"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"Sydney\",\"country\":\"Australia\",\"postal_code\":null,\"street\":null}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "advanced_strategies_demo", "user_id": "parser", "state": {}}
+    }
+  ]
+}

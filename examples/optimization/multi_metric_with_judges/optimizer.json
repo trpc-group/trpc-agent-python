@@ -1,0 +1,100 @@
+{
+  "evaluate": {
+    "metrics": [
+      {
+        "metric_name": "llm_final_response",
+        "threshold": 1.0,
+        "criterion": {
+          "llm_judge": {
+            "judge_models": [
+              {
+                "model_name": "${TRPC_AGENT_MODEL_NAME}",
+                "base_url": "${TRPC_AGENT_BASE_URL}",
+                "api_key": "${TRPC_AGENT_API_KEY}",
+                "generation_config": { "max_tokens": 512, "temperature": 0.0 }
+              },
+              {
+                "model_name": "${TRPC_AGENT_MODEL_NAME}",
+                "base_url": "${TRPC_AGENT_BASE_URL}",
+                "api_key": "${TRPC_AGENT_API_KEY}",
+                "generation_config": { "max_tokens": 512, "temperature": 0.3 }
+              },
+              {
+                "model_name": "${TRPC_AGENT_MODEL_NAME}",
+                "base_url": "${TRPC_AGENT_BASE_URL}",
+                "api_key": "${TRPC_AGENT_API_KEY}",
+                "generation_config": { "max_tokens": 512, "temperature": 0.6 }
+              }
+            ],
+            "models_aggregator": "all_pass",
+            "parallel": true
+          }
+        }
+      },
+      {
+        "metric_name": "llm_rubric_response",
+        "threshold": 0.75,
+        "criterion": {
+          "llm_judge": {
+            "judge_model": {
+              "model_name": "${TRPC_AGENT_MODEL_NAME}",
+              "base_url": "${TRPC_AGENT_BASE_URL}",
+              "api_key": "${TRPC_AGENT_API_KEY}",
+              "generation_config": { "max_tokens": 1024, "temperature": 0.2 }
+            },
+            "rubrics": [
+              {
+                "id": "no_emoji_or_slang",
+                "content": { "text": "回答中**不包含**任何 emoji（如 🎉、😊、💯、🚗 等图形字符），且**不使用**夸张俚语和娱乐化口吻（如「哇塞」「棒棒哒」「超厉害」「咋」「呀」「啦」等）。文字应当简洁、克制、专业。" },
+                "description": "回答严肃、不含 emoji 和俚语",
+                "type": "FINAL_RESPONSE_QUALITY"
+              },
+              {
+                "id": "numeric_correct",
+                "content": { "text": "最终给出的数字答案是否与参考答案一致（数值相同即视为通过）。" },
+                "description": "数字答案与参考答案一致",
+                "type": "FINAL_RESPONSE_QUALITY"
+              },
+              {
+                "id": "reasoning_clear",
+                "content": { "text": "回答中是否给出清晰、可追溯的推理或计算步骤。" },
+                "description": "推理步骤清晰",
+                "type": "FINAL_RESPONSE_QUALITY"
+              },
+              {
+                "id": "units_present",
+                "content": { "text": "最终数字答案是否带有正确的单位（例如：个、元、公里、千克、人 等）。" },
+                "description": "答案带正确单位",
+                "type": "FINAL_RESPONSE_QUALITY"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "num_runs": 2
+  },
+  "optimize": {
+    "eval_case_parallelism": 1,
+    "stop": {
+      "required_metrics": ["llm_final_response", "llm_rubric_response"]
+    },
+    "algorithm": {
+      "name": "gepa_reflective",
+      "seed": 42,
+      "reflection_lm": {
+        "model_name": "${TRPC_AGENT_MODEL_NAME}",
+        "base_url": "${TRPC_AGENT_BASE_URL}",
+        "api_key": "${TRPC_AGENT_API_KEY}",
+        "generation_config": { "max_tokens": 4096, "temperature": 0.6 }
+      },
+      "candidate_selection_strategy": "pareto",
+      "module_selector": "round_robin",
+      "frontier_type": "hybrid",
+      "reflection_minibatch_size": 3,
+      "skip_perfect_score": false,
+      "max_metric_calls": 30,
+      "max_iterations_without_improvement": 3
+    }
+  }
+}

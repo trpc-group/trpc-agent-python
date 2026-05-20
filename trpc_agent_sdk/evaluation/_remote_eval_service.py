@@ -48,8 +48,17 @@ from ._evaluator_registry import EVALUATOR_REGISTRY
 from ._evaluator_registry import EvaluatorRegistry
 
 CallAgent = Callable[[str], Awaitable[str]]
+# Metrics that cannot run under RemoteEvalService (black-box / call_agent
+# mode) because they need information this service does not capture:
+#   - ``tool_trajectory_avg_score`` needs per-step tool call traces.
+#   - ``llm_rubric_knowledge_recall`` reads tool responses from
+#     ``Invocation.intermediate_data``; this service always emits
+#     ``intermediate_data=None`` (see ``_perform_inference_single_eval_item``),
+#     so the judge would silently see "No knowledge search results were
+#     found." for every case.
 REMOTE_EVAL_INCOMPATIBLE_METRICS: frozenset[str] = frozenset({
     "tool_trajectory_avg_score",
+    "llm_rubric_knowledge_recall",
 })
 EVAL_SESSION_ID_PREFIX = "___remote_eval___session___"
 

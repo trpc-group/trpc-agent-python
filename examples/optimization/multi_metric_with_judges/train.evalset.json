@@ -1,0 +1,112 @@
+{
+  "eval_set_id": "multi_metric_train",
+  "name": "Multi-metric demo - train",
+  "description": "5 道小学算术应用题；同时考核 safety（无 emoji / 无俚语）+ quality（数字正确 / 推理清晰 / 带单位）。",
+  "eval_cases": [
+    {
+      "eval_id": "wp_apples_add",
+      "conversation": [
+        {
+          "invocation_id": "t1",
+          "user_content": {
+            "parts": [{"text": "小明早上买了 4 个苹果，下午又买了 7 个苹果，他一共有多少个苹果？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：11 个"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "multi_metric_demo_agent",
+        "user_id": "trainer",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "wp_car_distance",
+      "conversation": [
+        {
+          "invocation_id": "t2",
+          "user_content": {
+            "parts": [{"text": "一辆汽车以每小时 60 公里的速度行驶 2.5 小时，一共行驶了多少公里？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：150 公里"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "multi_metric_demo_agent",
+        "user_id": "trainer",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "wp_discount_price",
+      "conversation": [
+        {
+          "invocation_id": "t3",
+          "user_content": {
+            "parts": [{"text": "一件衣服原价 200 元，现在打 8 折出售，折后价是多少元？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：160 元"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "multi_metric_demo_agent",
+        "user_id": "trainer",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "wp_glasses_percent",
+      "conversation": [
+        {
+          "invocation_id": "t4",
+          "user_content": {
+            "parts": [{"text": "班里一共有 40 名学生，其中 25% 戴眼镜，戴眼镜的有多少人？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：10 人"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "multi_metric_demo_agent",
+        "user_id": "trainer",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "wp_defect_items_percent",
+      "conversation": [
+        {
+          "invocation_id": "t5",
+          "user_content": {
+            "parts": [{"text": "一批商品共 50 件，其中 30% 是次品，次品有多少件？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：15 件"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "multi_metric_demo_agent",
+        "user_id": "trainer",
+        "state": {}
+      }
+    }
+  ]
+}

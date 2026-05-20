@@ -1,0 +1,40 @@
+{
+  "eval_set_id": "ci_integration_train",
+  "name": "CI Integration - train",
+  "description": "Optimize 阶段反思 minibatch 来源。schema 与 val.evalset.json 完全一致；与 evaluate 阶段共用同一个 test_config.json（同目录约定）。",
+  "eval_cases": [
+    {
+      "eval_id": "train_get_user",
+      "conversation": [
+        {
+          "invocation_id": "t1",
+          "user_content": {"parts": [{"text": "GET /users/{id} returns user profile, requires Bearer token."}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"auth\":\"required\",\"method\":\"GET\",\"path\":\"/users/{id}\",\"summary\":\"Get user profile\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "ci_integration_demo", "user_id": "ci", "state": {}}
+    },
+    {
+      "eval_id": "train_post_login",
+      "conversation": [
+        {
+          "invocation_id": "t2",
+          "user_content": {"parts": [{"text": "POST /auth/login accepts username and password, no auth header needed."}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"auth\":\"none\",\"method\":\"POST\",\"path\":\"/auth/login\",\"summary\":\"Login with credentials\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "ci_integration_demo", "user_id": "ci", "state": {}}
+    },
+    {
+      "eval_id": "train_delete_order",
+      "conversation": [
+        {
+          "invocation_id": "t3",
+          "user_content": {"parts": [{"text": "DELETE /orders/{id} cancels an order, Bearer token required."}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"auth\":\"required\",\"method\":\"DELETE\",\"path\":\"/orders/{id}\",\"summary\":\"Cancel order\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "ci_integration_demo", "user_id": "ci", "state": {}}
+    }
+  ]
+}
