@@ -179,10 +179,72 @@ from ._user_simulator_base import NextUserMessage
 from ._user_simulator_base import Status
 from ._user_simulator_base import UserSimulator
 from ._user_simulator_provider import UserSimulatorProvider
+from ._agent_optimizer import AgentOptimizer
+from ._base_optimizer import BaseOptimizer
+from ._optimize_config import FrameworkStopConfig
+from ._optimize_config import GepaReflectiveAlgo
+from ._optimize_config import OptimizeConfig
+from ._optimize_config import OptimizeConfigFile
+from ._optimize_config import load_optimize_config
+from ._optimize_evaluator_call import EvaluationOutcome
+from ._optimize_evaluator_call import run_evaluator
+from ._optimize_evaluator_call import summarize_outcome
+from ._optimize_gepa_reflective import GepaReflectiveOptimizer
+from ._optimize_metric_info import build_metric_reference_doc
+from ._optimize_metric_info import build_metric_section
+from ._optimize_metric_info import build_reflection_prompt_template
+from ._optimize_model_callable import DEFAULT_OPTIMIZE_MAX_TOKENS
+from ._optimize_model_callable import DEFAULT_OPTIMIZE_TEMPERATURE
+from ._optimize_model_options import OptimizeModelOptions
+from ._optimize_registry import OPTIMIZER_REGISTRY
+from ._optimize_registry import OptimizerRegistry
+from ._optimize_reporter import OptimizeReporter
+from ._optimize_reporter import RoundView
+from ._optimize_reporter import RunHeader
+from ._optimize_reporter import create_reporter
+from ._optimize_result import FinishReason
+from ._optimize_result import OptimizeResult
+from ._optimize_result import RoundKind
+from ._optimize_result import RoundRecord
+from ._optimize_result import RunStatus
+from ._optimize_result import StopReason
+from ._target_prompt import TargetPrompt
 from ._utils import EvalResultHandler
 from ._utils import MetricRunRecord
 
+from . import _optimize_registrations  # noqa: F401  # triggers algorithm registrations
+
 __all__ = [
+    "AgentOptimizer",
+    "BaseOptimizer",
+    "DEFAULT_OPTIMIZE_MAX_TOKENS",
+    "DEFAULT_OPTIMIZE_TEMPERATURE",
+    "EvaluationOutcome",
+    "FinishReason",
+    "FrameworkStopConfig",
+    "GepaReflectiveAlgo",
+    "GepaReflectiveOptimizer",
+    "OPTIMIZER_REGISTRY",
+    "OptimizeConfig",
+    "OptimizeConfigFile",
+    "OptimizeModelOptions",
+    "OptimizeReporter",
+    "OptimizeResult",
+    "OptimizerRegistry",
+    "RoundKind",
+    "RoundRecord",
+    "RoundView",
+    "RunHeader",
+    "RunStatus",
+    "StopReason",
+    "build_metric_reference_doc",
+    "build_metric_section",
+    "build_reflection_prompt_template",
+    "create_reporter",
+    "run_evaluator",
+    "summarize_outcome",
+    "TargetPrompt",
+    "load_optimize_config",
     "CRITERION_REGISTRY",
     "CriterionRegistry",
     "CriterionType",

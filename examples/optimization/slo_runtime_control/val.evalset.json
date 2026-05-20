@@ -1,0 +1,123 @@
+{
+  "eval_set_id": "slo_runtime_val",
+  "name": "SLO runtime control demo - val",
+  "description": "4 道留出验证 case，含 1 道边界混淆（v1 billing vs technical）。",
+  "eval_cases": [
+    {
+      "eval_id": "ticket_v1",
+      "conversation": [
+        {
+          "invocation_id": "v1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "信用卡支付一直转圈最后失败，账单页面也打不开。"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"category\":\"technical\",\"priority\":\"high\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "slo_runtime_control_agent",
+        "user_id": "validator",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "ticket_v2",
+      "conversation": [
+        {
+          "invocation_id": "v2",
+          "user_content": {
+            "parts": [
+              {
+                "text": "希望支持微信和支付宝同时绑定。"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"category\":\"feedback\",\"priority\":\"low\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "slo_runtime_control_agent",
+        "user_id": "validator",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "ticket_v3",
+      "conversation": [
+        {
+          "invocation_id": "v3",
+          "user_content": {
+            "parts": [
+              {
+                "text": "如何修改我的注册手机号？"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"category\":\"account\",\"priority\":\"normal\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "slo_runtime_control_agent",
+        "user_id": "validator",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "ticket_v4",
+      "conversation": [
+        {
+          "invocation_id": "v4",
+          "user_content": {
+            "parts": [
+              {
+                "text": "12 月份发票怎么开？"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"category\":\"billing\",\"priority\":\"low\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "slo_runtime_control_agent",
+        "user_id": "validator",
+        "state": {}
+      }
+    }
+  ]
+}

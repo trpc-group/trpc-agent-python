@@ -1,0 +1,62 @@
+{
+  "eval_set_id": "blackbox_cli_train",
+  "name": "Black-box CLI demo - train",
+  "description": "5 个中国城市，要求 trpc-claudecode 黑盒输出严格 JSON {city,country,is_capital}。final_response 已规范化为 sort_keys+ensure_ascii=False+无空格的 JSON 字符串，与 call_agent 输出格式精确对齐，便于走 final_response_avg_score 的 exact match。",
+  "eval_cases": [
+    {
+      "eval_id": "city_beijing",
+      "conversation": [
+        {
+          "invocation_id": "t1",
+          "user_content": {"parts": [{"text": "北京"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"北京\",\"country\":\"中国\",\"is_capital\":true}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "blackbox_cli_demo", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "city_shanghai",
+      "conversation": [
+        {
+          "invocation_id": "t2",
+          "user_content": {"parts": [{"text": "上海"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"上海\",\"country\":\"中国\",\"is_capital\":false}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "blackbox_cli_demo", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "city_guangzhou",
+      "conversation": [
+        {
+          "invocation_id": "t3",
+          "user_content": {"parts": [{"text": "广州"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"广州\",\"country\":\"中国\",\"is_capital\":false}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "blackbox_cli_demo", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "city_chengdu",
+      "conversation": [
+        {
+          "invocation_id": "t4",
+          "user_content": {"parts": [{"text": "成都"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"成都\",\"country\":\"中国\",\"is_capital\":false}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "blackbox_cli_demo", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "city_shenzhen",
+      "conversation": [
+        {
+          "invocation_id": "t5",
+          "user_content": {"parts": [{"text": "深圳"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"city\":\"深圳\",\"country\":\"中国\",\"is_capital\":false}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "blackbox_cli_demo", "user_id": "trainer", "state": {}}
+    }
+  ]
+}

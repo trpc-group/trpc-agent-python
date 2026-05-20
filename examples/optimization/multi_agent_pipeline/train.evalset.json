@@ -1,0 +1,92 @@
+{
+  "eval_set_id": "multi_agent_pipeline_train",
+  "name": "Multi-agent pipeline demo - train",
+  "description": "5 条混合 case：3 道事实题 + 2 道算术题；考核整条 pipeline 的端到端效果（路由 + 分支应答 + 总结格式）。",
+  "eval_cases": [
+    {
+      "eval_id": "fact_capital_china",
+      "conversation": [
+        {
+          "invocation_id": "t1",
+          "user_content": {
+            "parts": [{"text": "中国的首都是哪里？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：北京"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "multi_agent_pipeline_demo", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "fact_water_boil",
+      "conversation": [
+        {
+          "invocation_id": "t2",
+          "user_content": {
+            "parts": [{"text": "在标准大气压下，水的沸点是多少摄氏度？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：100 摄氏度"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "multi_agent_pipeline_demo", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "fact_solar_planets",
+      "conversation": [
+        {
+          "invocation_id": "t3",
+          "user_content": {
+            "parts": [{"text": "太阳系有几大行星？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：8 颗"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "multi_agent_pipeline_demo", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "math_simple_add",
+      "conversation": [
+        {
+          "invocation_id": "t4",
+          "user_content": {
+            "parts": [{"text": "3 加 5 等于多少？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：8"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "multi_agent_pipeline_demo", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "math_multiply",
+      "conversation": [
+        {
+          "invocation_id": "t5",
+          "user_content": {
+            "parts": [{"text": "12 乘以 7 等于多少？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：84"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "multi_agent_pipeline_demo", "user_id": "trainer", "state": {}}
+    }
+  ]
+}
