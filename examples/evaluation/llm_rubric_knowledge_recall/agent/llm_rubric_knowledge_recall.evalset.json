@@ -1,0 +1,33 @@
+{
+  "eval_set_id": "llm_rubric_knowledge_recall",
+  "name": "LLM 细则知识库召回评估示例",
+  "description": "使用 llm_rubric_knowledge_recall 评估器判定检索到的知识是否支撑 rubrics",
+  "eval_cases": [
+    {
+      "eval_id": "case_001",
+      "conversation": [
+        {
+          "invocation_id": "inv-001",
+          "user_content": {
+            "parts": [{"text": "公司有哪些产品？请简单介绍"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "根据检索结果，公司有产品A（企业协作）、产品B（API/SDK）、产品C（个人笔记与待办）。"}],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {"id": "t1", "name": "knowledge_search", "args": {"query": "公司产品", "top_k": 3}}
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "llm_rubric_knowledge_recall_agent",
+        "user_id": "user",
+        "state": {}
+      }
+    }
+  ]
+}
