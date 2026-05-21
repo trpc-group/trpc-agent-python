@@ -1,0 +1,47 @@
+{
+  "eval_set_id": "weather_agent_quickstart",
+  "name": "天气 Agent 单用例",
+  "description": "Quickstart 单轮天气查询评测",
+  "eval_cases": [
+    {
+      "eval_id": "simple_weather_001",
+      "conversation": [
+        {
+          "invocation_id": "e-quick-001",
+          "user_content": {
+            "parts": [
+              {
+                "text": "上海天气怎么样"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "18°C"
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "t1",
+                "name": "get_weather",
+                "args": {
+                  "city": "上海"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "weather_agent",
+        "user_id": "user",
+        "state": {}
+      }
+    }
+  ]
+}
