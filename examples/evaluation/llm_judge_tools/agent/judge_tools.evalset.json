@@ -1,0 +1,31 @@
+{
+  "eval_set_id": "llm_judge_tools",
+  "name": "Judge 注册工具示例",
+  "description": "使用 llm_rubric_response，在 rubric 中规定裁判须先调用 get_eval_policy 再按返回条款判定",
+  "eval_cases": [
+    {
+      "eval_id": "case_001",
+      "conversation": [
+        {
+          "invocation_id": "inv-001",
+          "user_content": {
+            "parts": [{"text": "上海天气怎么样"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "上海当前天气多云，气温 18°C。"}],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [{"id": "t1", "name": "get_weather", "args": {"city": "上海"}}]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "llm_judge_tools_agent",
+        "user_id": "user",
+        "state": {}
+      }
+    }
+  ]
+}
