@@ -25,11 +25,17 @@
 
 from __future__ import annotations
 
+import asyncio
+import inspect
+import time
+from typing import cast
 from typing import List
 from typing import Optional
 from typing import Union
 from typing_extensions import override
 
+from mcp import ClientSession
+from mcp import types as mcp_types
 from mcp.types import ListToolsResult
 
 from trpc_agent_sdk.abc import ToolPredicate
@@ -81,7 +87,9 @@ class MCPToolset(BaseToolSet):
                  mcp_tool_cls=MCPTool,
                  filters_name: Optional[list[str]] = None,
                  filters: Optional[list[BaseFilter]] = None,
-                 session_group_params: Optional[dict] = None):
+                 session_group_params: Optional[dict] = None,
+                 cache_tools: bool = True,
+                 tools_cache_ttl: Optional[float] = 60.0):
         """Initializes the MCPToolset.
 
         Args:
@@ -103,9 +111,16 @@ class MCPToolset(BaseToolSet):
           filters_name: List of filter names to apply to the tools
           filters: List of filter instances to apply to the tools
           session_group_params: Optional parameters for session group management
+          cache_tools: Whether to cache the MCP server's list_tools response.
+          tools_cache_ttl: Cache lifetime in seconds for MCP servers that do not
+            support tools.listChanged notifications. Servers that support
+            listChanged use notification-driven invalidation instead.
         """
 
         super().__init__(tool_filter=tool_filter, is_include_all_tools=is_include_all_tools)
+
+        if tools_cache_ttl is not None and tools_cache_ttl < 0:
+            raise ValueError("tools_cache_ttl must be non-negative.")
 
         self._connection_params = connection_params
         self._mcp_tool_cls = mcp_tool_cls
@@ -114,6 +129,11 @@ class MCPToolset(BaseToolSet):
         self._filters = filters
         self._filters_name = filters_name
         self._session_group_params = session_group_params or {}
+        self._cache_tools = cache_tools
+        self._tools_cache_ttl = tools_cache_ttl
+        self._tools_cache_lock = asyncio.Lock()
+        self._tools_cache: ListToolsResult | None = None
+        self._tools_cache_updated_at: float | None = None
 
     def _checker_required_params(self):
         """Validates that all required parameters are properly initialized.
@@ -126,6 +146,81 @@ class MCPToolset(BaseToolSet):
         if not self._mcp_session_manager:
             raise ValueError("_mcp_session_manager is None.")
 
+    def clear_tools_cache(self) -> None:
+        """Clears the cached MCP tool definitions.
+
+        Call this when the MCP server's tool set is known to have changed and
+        the next get_tools call should re-query list_tools.
+        """
+        self._tools_cache = None
+        self._tools_cache_updated_at = None
+
+    def _server_supports_tool_list_changed(self, session: ClientSession) -> bool:
+        """Returns whether the server can notify client about tool list changes."""
+        try:
+            get_capabilities = getattr(session, "get_server_capabilities", None)
+            if get_capabilities is None:
+                return False
+            capabilities = get_capabilities()
+            if inspect.isawaitable(capabilities):
+                close = getattr(capabilities, "close", None)
+                if close is not None:
+                    close()
+                return False
+        except Exception:  # pylint: disable=broad-except
+            return False
+
+        tools_capability = getattr(capabilities, "tools", None)
+        return getattr(tools_capability, "listChanged", False) is True
+
+    def _is_tools_cache_valid(self, session: ClientSession) -> bool:
+        """Returns whether the cached list_tools response can be reused."""
+        if not self._cache_tools or self._tools_cache is None:
+            return False
+        if self._server_supports_tool_list_changed(session):
+            return True
+        if self._tools_cache_ttl is None:
+            return False
+        if self._tools_cache_updated_at is None:
+            return False
+        return time.monotonic() - self._tools_cache_updated_at < self._tools_cache_ttl
+
+    async def _get_tools_response(self, session: ClientSession) -> ListToolsResult:
+        """Returns MCP tool definitions, using cache when enabled."""
+        if not self._cache_tools:
+            return await session.list_tools()
+
+        if self._is_tools_cache_valid(session):
+            return cast(ListToolsResult, self._tools_cache)
+
+        async with self._tools_cache_lock:
+            if self._is_tools_cache_valid(session):
+                return cast(ListToolsResult, self._tools_cache)
+
+            tools_response: ListToolsResult = await session.list_tools()
+            self._tools_cache = tools_response
+            self._tools_cache_updated_at = time.monotonic()
+            return tools_response
+
+    def _build_session_group_params(self) -> dict:
+        """Builds ClientSession params with tool-change notification handling."""
+        params = dict(self._session_group_params)
+        if not self._cache_tools:
+            return params
+
+        user_message_handler = params.get("message_handler")
+
+        async def message_handler(message):
+            if (isinstance(message, mcp_types.ServerNotification)
+                    and isinstance(message.root, mcp_types.ToolListChangedNotification)):
+                self.clear_tools_cache()
+
+            if user_message_handler is not None:
+                await user_message_handler(message)
+
+        params["message_handler"] = message_handler
+        return params
+
     @override
     def initialize(self) -> None:
         """Initialize the toolset."""
@@ -135,7 +230,7 @@ class MCPToolset(BaseToolSet):
         self._connection_params = convert_conn_params(self._connection_params)
         self._mcp_session_manager = MCPSessionManager(
             connection_params=self._connection_params,
-            session_group_params=self._session_group_params,
+            session_group_params=self._build_session_group_params(),
         )
         self._checker_required_params()
 
@@ -159,7 +254,7 @@ class MCPToolset(BaseToolSet):
         session = await self._mcp_session_manager.create_session()
 
         # Fetch available tools from the MCP server
-        tools_response: ListToolsResult = await session.list_tools()
+        tools_response = await self._get_tools_response(session)
 
         # Apply filtering based on context and tool_filter
         tools = []
@@ -184,6 +279,7 @@ class MCPToolset(BaseToolSet):
         gracefully to avoid blocking application shutdown.
         """
         try:
+            self.clear_tools_cache()
             if self._mcp_session_manager is None:
                 return
             await self._mcp_session_manager.close()
