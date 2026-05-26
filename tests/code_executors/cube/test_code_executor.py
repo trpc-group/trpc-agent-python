@@ -125,7 +125,7 @@ class TestCreate:
         monkeypatch.setattr(
             CubeSandboxClient,
             "open_existing",
-            classmethod(lambda cls, sid, cfg: open_existing(sid, cfg)),
+            classmethod(lambda cls, cfg: open_existing(cfg)),
         )
         cfg = _cfg(sandbox_id=None)
         ex = await CubeCodeExecutor.create(cfg)
@@ -143,12 +143,12 @@ class TestCreate:
         monkeypatch.setattr(
             CubeSandboxClient,
             "open_existing",
-            classmethod(lambda cls, sid, cfg: open_existing(sid, cfg)),
+            classmethod(lambda cls, cfg: open_existing(cfg)),
         )
         cfg = _cfg(sandbox_id="sbx-42")
         await CubeCodeExecutor.create(cfg)
         open_new.assert_not_awaited()
-        open_existing.assert_awaited_once_with("sbx-42", cfg)
+        open_existing.assert_awaited_once_with(cfg)
 
 
 class TestAttach:
@@ -164,11 +164,11 @@ class TestAttach:
         monkeypatch.setattr(
             CubeSandboxClient,
             "open_existing",
-            classmethod(lambda cls, sid, cfg: called(sid, cfg)),
+            classmethod(lambda cls, cfg: called(cfg)),
         )
         cfg = _cfg(sandbox_id="sbx-1")
         ex = await CubeCodeExecutor.attach(cfg)
-        called.assert_awaited_once_with("sbx-1", cfg)
+        called.assert_awaited_once_with(cfg)
         assert ex.sandbox_client is mock_client
 
     @pytest.mark.asyncio
@@ -183,7 +183,7 @@ class TestAttach:
         monkeypatch.setattr(
             CubeSandboxClient,
             "open_existing",
-            classmethod(lambda cls, sid, cfg: on_existing(sid, cfg)),
+            classmethod(lambda cls, cfg: on_existing(cfg)),
         )
         with pytest.raises(RuntimeError, match="test stopper"):
             await CubeCodeExecutor.attach(_cfg(sandbox_id="sbx-1"))

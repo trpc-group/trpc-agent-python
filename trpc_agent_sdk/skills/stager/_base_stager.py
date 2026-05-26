@@ -79,7 +79,7 @@ class Stager:
         ctx = request.ctx
         ws = request.workspace
         root = request.repository.path(request.skill_name)
-        runtime = request.repository.workspace_runtime
+        runtime = request.repository.get_workspace_runtime(ctx)
         name = request.skill_name
         digest = compute_dir_digest(root)
         md = await self.load_workspace_metadata(ctx, runtime, ws)

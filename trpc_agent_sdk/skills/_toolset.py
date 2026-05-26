@@ -100,6 +100,7 @@ class SkillToolSet(ToolSetABC):
         self._repository = repository or FsSkillRepository(
             *(paths or []),
             enable_hot_reload=enable_hot_reload,
+            workspace_runtime_resolver=workspace_runtime_resolver,
         )
         self._skill_config = skill_config or DEFAULT_SKILL_CONFIG
         self._create_ws_name_cb = create_ws_name_cb or default_create_ws_name_callback
