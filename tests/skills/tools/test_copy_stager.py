@@ -128,6 +128,7 @@ class TestCopySkillStager:
         runtime.fs = MagicMock(return_value=fs)
         runtime.runner = MagicMock(return_value=runner)
         repo.workspace_runtime = runtime
+        repo.get_workspace_runtime = MagicMock(return_value=runtime)
 
         from trpc_agent_sdk.skills.stager._types import SkillStageRequest
         request = SkillStageRequest(

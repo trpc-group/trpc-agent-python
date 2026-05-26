@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -772,3 +773,45 @@ class TestCreateCubeWorkspaceRuntime:
         rt = create_cube_workspace_runtime(ex, provider=provider, enable_provider_env=True)
         assert rt._runner._run_env_provider is provider
         assert rt._runner._enable_provider_env is True
+
+
+class TestCubeWorkspaceRuntimeAutoRecover:
+
+    @pytest.mark.asyncio
+    async def test_recreates_and_retries_when_sandbox_is_missing(self, fake_e2b, monkeypatch):
+        cfg = CubeCodeExecutorConfig(template="tpl", api_url="url", api_key="key", auto_recover=True)
+        sandbox1 = MagicMock()
+        sandbox1.sandbox_id = "old"
+        sandbox1.kill = AsyncMock(return_value=None)
+        sandbox1.set_timeout = AsyncMock(return_value=None)
+        sandbox1.commands = MagicMock()
+        sandbox1.commands.run = AsyncMock(side_effect=fake_e2b.SandboxNotFoundException("gone"))
+        client1 = CubeSandboxClient(sandbox1, cfg)
+
+        sandbox2 = MagicMock()
+        sandbox2.sandbox_id = "new"
+        sandbox2.set_timeout = AsyncMock(return_value=None)
+        sandbox2.commands = MagicMock()
+        sandbox2.commands.run = AsyncMock(return_value=SimpleNamespace(stdout="", stderr="", exit_code=0))
+        client2 = CubeSandboxClient(sandbox2, cfg)
+
+        executor1 = MagicMock()
+        executor1.config = cfg
+        executor1.sandbox_id = "old"
+        executor1.sandbox_client = client1
+
+        open_new = AsyncMock(return_value=client2)
+        monkeypatch.setattr(rt_mod.CubeSandboxClient, "open_new", open_new)
+        monkeypatch.setattr(rt_mod.time, "time_ns", lambda: 123)
+
+        runtime = create_cube_workspace_runtime(
+            executor1,
+            workspace_cfg=CubeWorkspaceRuntimeConfig(),
+        )
+        info = await runtime.manager().create_workspace("id")
+
+        assert info.path == "/workspace/cube_agent/ws_id_123"
+        assert runtime.sandbox_id == "new"
+        open_new.assert_awaited_once_with(cfg)
+        sandbox1.kill.assert_awaited_once()
+        sandbox2.commands.run.assert_awaited_once()

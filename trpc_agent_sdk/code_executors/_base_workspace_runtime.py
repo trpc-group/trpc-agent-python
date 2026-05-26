@@ -536,3 +536,23 @@ def new_default_workspace_runtime(
 
 WorkspaceRuntimeResolver: TypeAlias = Callable[[InvocationContext], BaseWorkspaceRuntime]
 """Callback to resolve a workspace runtime."""
+
+
+def get_workspace_runtime_with_resolver(
+        ctx: InvocationContext,
+        resolver: Optional[WorkspaceRuntimeResolver] = None,
+        workspace_runtime: Optional[BaseWorkspaceRuntime] = None) -> BaseWorkspaceRuntime:
+    """
+    Get workspace runtime.
+    Args:
+        ctx: InvocationContext
+        resolver: WorkspaceRuntimeResolver
+        workspace_runtime: Optional[BaseWorkspaceRuntime]
+    Returns:
+        BaseWorkspaceRuntime
+    """
+    if resolver is not None:
+        workspace_runtime = resolver(ctx)
+    if workspace_runtime is None:
+        raise ValueError("Workspace runtime not found")
+    return workspace_runtime

@@ -64,6 +64,7 @@ def _make_repository(path="/skills/test-skill"):
     repo = MagicMock()
     repo.path = MagicMock(return_value=path)
     repo.workspace_runtime = _make_runtime()
+    repo.get_workspace_runtime = MagicMock(return_value=repo.workspace_runtime)
     return repo
 
 
@@ -269,6 +270,23 @@ class TestStageSkill:
 
         result = await stager.stage_skill(request)
         assert result.workspace_skill_dir == "skills/test-skill"
+
+    @patch("trpc_agent_sdk.skills.stager._base_stager.compute_dir_digest", return_value="new_digest")
+    async def test_stage_skill_uses_repository_runtime(self, mock_digest):
+        stager = Stager()
+        repo = _make_repository()
+        request = _make_request(repo=repo)
+        runtime = repo.get_workspace_runtime.return_value
+
+        mock_file = MagicMock()
+        mock_file.content = json.dumps({"version": 1, "skills": {}})
+        runtime.fs(request.ctx).collect = AsyncMock(return_value=[mock_file])
+
+        result = await stager.stage_skill(request)
+
+        assert result.workspace_skill_dir == "skills/test-skill"
+        repo.get_workspace_runtime.assert_called_once_with(request.ctx)
+        runtime.fs(request.ctx).stage_directory.assert_awaited_once()
 
     @patch("trpc_agent_sdk.skills.stager._base_stager.compute_dir_digest", return_value="same_digest")
     async def test_cached_staging_with_links(self, mock_digest):

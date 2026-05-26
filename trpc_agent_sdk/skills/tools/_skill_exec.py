@@ -419,7 +419,7 @@ class SkillExecTool(BaseTool):
         repository = self._run_tool._get_repository(tool_context)
 
         # Workspace creation
-        workspace_runtime = repository.workspace_runtime
+        workspace_runtime = repository.get_workspace_runtime(tool_context)
         manager = workspace_runtime.manager(tool_context)
         workspace_id = self._create_ws_name_cb(tool_context)
         ws = await manager.create_workspace(workspace_id, tool_context)

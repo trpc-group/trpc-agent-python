@@ -569,7 +569,8 @@ async def test_bug12_commands_run_translates_timeout_to_structured_result(
         side_effect=fake_e2b.TimeoutException()
     )
     client = CubeSandboxClient(
-        fake_async_sandbox, idle_timeout=60, execute_timeout=30.0,
+        fake_async_sandbox,
+        CubeCodeExecutorConfig(template="t", api_url="u", api_key="k", idle_timeout=60, execute_timeout=30.0),
     )
     result = await client.commands_run("sleep 9999", timeout=1.5)
     assert isinstance(result, CubeCommandResult)
@@ -608,13 +609,11 @@ async def test_bug12_execute_code_surfaces_deadline_exceeded_outcome(
     fake_async_sandbox.commands.run = AsyncMock(
         side_effect=fake_e2b.TimeoutException()
     )
-    client = CubeSandboxClient(
-        fake_async_sandbox, idle_timeout=60, execute_timeout=2.0,
-    )
     cfg = CubeCodeExecutorConfig(
         template="t", api_url="u", api_key="k",
         idle_timeout=60, execute_timeout=2.0,
     )
+    client = CubeSandboxClient(fake_async_sandbox, cfg)
     executor = CubeCodeExecutor(client, cfg)
 
     # execute_code MUST return a result, not raise.

@@ -54,6 +54,7 @@ from ._paths import normalize_remote_relative
 from ._paths import shell_quote
 from ._sandbox import CubeSandboxClient
 from ._types import CubeWorkspaceRuntimeConfig
+from ._types import DEFAULT_EXECUTE_TIMEOUT
 
 _RE_SAFE_ID = re.compile(r"[^a-zA-Z0-9_-]")
 
@@ -414,14 +415,27 @@ class CubeWorkspaceRuntime(BaseWorkspaceRuntime):
         enable_provider_env: bool = False,
     ):
         self._client = client
-        self._fs = CubeWorkspaceFS(client, execute_timeout)
-        self._manager = CubeWorkspaceManager(client, remote_workspace, execute_timeout)
+        self._fs = CubeWorkspaceFS(self._client, execute_timeout)
+        self._manager = CubeWorkspaceManager(self._client, remote_workspace, execute_timeout)
         self._runner = CubeProgramRunner(
-            client,
+            self._client,
             execute_timeout,
             provider=provider,
             enable_provider_env=enable_provider_env,
         )
+
+    @property
+    def sandbox_id(self) -> str | None:
+        """Current Cube sandbox id."""
+        return self._client.sandbox_id
+
+    async def recreate(self) -> None:
+        """Force sandbox recreation when the client supports it."""
+        await self._client.recreate()
+
+    async def destroy(self) -> None:
+        """Destroy the current Cube sandbox/client."""
+        await self._client.destroy()
 
     @override
     def manager(self, ctx: Optional[InvocationContext] = None) -> CubeWorkspaceManager:
@@ -446,8 +460,9 @@ class CubeWorkspaceRuntime(BaseWorkspaceRuntime):
 
 
 def create_cube_workspace_runtime(
-    executor: CubeCodeExecutor,
-    *,
+    executor: CubeCodeExecutor | None = None,
+    sandbox_client: CubeSandboxClient | None = None,
+    execute_timeout: float = DEFAULT_EXECUTE_TIMEOUT,
     workspace_cfg: Optional[CubeWorkspaceRuntimeConfig] = None,
     provider: Optional[RunEnvProvider] = None,
     enable_provider_env: bool = False,
@@ -466,13 +481,26 @@ def create_cube_workspace_runtime(
     For lower-level integrations, construct :class:`CubeWorkspaceRuntime`
     directly with an explicit client + ``remote_workspace`` +
     ``execute_timeout``.
+    Args:
+        executor: CubeCodeExecutor instance, will deprecated, will be removed in the future
+        sandbox_client: CubeSandboxClient instance, required
+        execute_timeout: execute timeout, default to DEFAULT_EXECUTE_TIMEOUT
+        workspace_cfg: workspace configuration, default to CubeWorkspaceRuntimeConfig()
+        provider: provider, default to None
+        enable_provider_env: enable provider environment, default to False
+    Returns:
+        CubeWorkspaceRuntime instance
     """
+    if executor:
+        sandbox_client = executor.sandbox_client
+        execute_timeout = executor.config.execute_timeout
+    if not sandbox_client:
+        raise ValueError("sandbox_client is required")
     ws_cfg = workspace_cfg or CubeWorkspaceRuntimeConfig()
-    exec_cfg = executor.config
     return CubeWorkspaceRuntime(
-        executor.sandbox_client,
+        sandbox_client,
         remote_workspace=ws_cfg.remote_workspace,
-        execute_timeout=exec_cfg.execute_timeout,
+        execute_timeout=execute_timeout,
         provider=provider,
         enable_provider_env=enable_provider_env,
     )

@@ -113,6 +113,19 @@ class TestSkillRunToolBasics:
         ctx = MagicMock()
         assert tool._get_repository(ctx) is repo
 
+    def test_repository_get_workspace_runtime_is_used(self):
+        repo_runtime = MagicMock()
+        repo = MagicMock()
+        repo.workspace_runtime = repo_runtime
+        resolved_runtime = MagicMock()
+        repo.get_workspace_runtime = MagicMock(return_value=resolved_runtime)
+        ctx = MagicMock()
+
+        tool = SkillRunTool(repository=repo)
+
+        assert tool._get_repository(ctx).get_workspace_runtime(ctx) is resolved_runtime
+        repo.get_workspace_runtime.assert_called_once_with(ctx)
+
     def test_is_skill_loaded(self):
         tool = _make_tool()
         ctx = MagicMock()
