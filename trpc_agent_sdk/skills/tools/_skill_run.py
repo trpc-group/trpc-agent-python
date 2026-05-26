@@ -18,6 +18,7 @@ from typing_extensions import override
 
 from pydantic import BaseModel
 from pydantic import Field
+from trpc_agent_sdk.code_executors import BaseWorkspaceRuntime
 from trpc_agent_sdk.code_executors import CodeFile
 from trpc_agent_sdk.code_executors import DIR_OUT
 from trpc_agent_sdk.code_executors import DIR_SKILLS
@@ -507,6 +508,7 @@ class SkillRunTool(BaseTool):
         self,
         ctx: InvocationContext,
         ws: WorkspaceInfo,
+        workspace_runtime: BaseWorkspaceRuntime,
         env: dict[str, str],
         editor_text: str,
     ) -> None:
@@ -526,7 +528,6 @@ class SkillRunTool(BaseTool):
         # Try using workspace FS (works for container runtimes too)
         try:
             script_content = _build_editor_wrapper_script(content_abs)
-            workspace_runtime = self._get_repository(ctx).workspace_runtime
             fs = workspace_runtime.fs(ctx)
             await fs.put_files(
                 ws,
@@ -619,10 +620,10 @@ class SkillRunTool(BaseTool):
         self,
         ctx: InvocationContext,
         ws: WorkspaceInfo,
+        workspace_runtime: BaseWorkspaceRuntime,
     ) -> list[CodeFile]:
         """Collect up to _AUTO_EXPORT_MAX files from out/** automatically."""
         try:
-            workspace_runtime = self._get_repository(ctx).workspace_runtime
             fs = workspace_runtime.fs(ctx)
             files = await fs.collect(ws, [_AUTO_EXPORT_PATTERN], ctx)
             if not files:
@@ -669,7 +670,7 @@ class SkillRunTool(BaseTool):
         repository = self._get_repository(tool_context)
 
         workspace_id = self._create_ws_name_cb(tool_context)
-        workspace_runtime = repository.workspace_runtime
+        workspace_runtime = repository.get_workspace_runtime(tool_context)
         manager = workspace_runtime.manager(tool_context)
         ws = await manager.create_workspace(workspace_id, tool_context)
 
@@ -695,15 +696,15 @@ class SkillRunTool(BaseTool):
             await fs.stage_inputs(ws, inputs.inputs, tool_context)
 
         cwd = self._resolve_cwd(inputs.cwd, workspace_skill_dir)
-        result = await self._run_program(tool_context, ws, cwd, inputs)
+        result = await self._run_program(tool_context, ws, workspace_runtime, cwd, inputs)
 
         # Collect explicit outputs
         files: list[SkillRunFile]
-        files, manifest = await self._prepare_outputs(tool_context, ws, inputs)
+        files, manifest = await self._prepare_outputs(tool_context, ws, workspace_runtime, inputs)
 
         # Auto-export out/** only when no explicit outputs requested
         if not files and manifest is None and not inputs.outputs and not inputs.output_files:
-            auto_raw = await self._auto_export_workspace_out(tool_context, ws)
+            auto_raw = await self._auto_export_workspace_out(tool_context, ws, workspace_runtime)
             if auto_raw:
                 files = self._to_run_files(auto_raw)
 
@@ -756,6 +757,7 @@ class SkillRunTool(BaseTool):
         self,
         ctx: InvocationContext,
         ws: WorkspaceInfo,
+        workspace_runtime: BaseWorkspaceRuntime,
         cwd: str,
         input_data: SkillRunInput,
     ) -> WorkspaceRunResult:
@@ -784,12 +786,11 @@ class SkillRunTool(BaseTool):
             pass
 
         # Stage editor helper if requested
-        await self._prepare_editor_env(ctx, ws, env, input_data.editor_text)
+        await self._prepare_editor_env(ctx, ws, workspace_runtime, env, input_data.editor_text)
 
         # Build command (with venv activation or command restrictions)
         cmd, cmd_args = self._build_command(input_data.command, ws.path, cwd)
 
-        workspace_runtime = repository.workspace_runtime
         runner = workspace_runtime.runner(ctx)
         ret = await runner.run_program(
             ws,
@@ -843,10 +844,10 @@ class SkillRunTool(BaseTool):
         self,
         ctx: InvocationContext,
         ws: WorkspaceInfo,
+        workspace_runtime: BaseWorkspaceRuntime,
         input_data: SkillRunInput,
     ) -> tuple[list[SkillRunFile], Optional[ManifestOutput]]:
         """Collect files via OutputSpec or legacy output_files patterns."""
-        workspace_runtime = self._get_repository(ctx).workspace_runtime
         fs = workspace_runtime.fs(ctx)
 
         if input_data.outputs and not input_data.output_files:

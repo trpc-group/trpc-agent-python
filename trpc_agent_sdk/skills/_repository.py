@@ -27,6 +27,8 @@ from typing_extensions import override
 import yaml
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.code_executors import BaseWorkspaceRuntime
+from trpc_agent_sdk.code_executors import WorkspaceRuntimeResolver
+from trpc_agent_sdk.code_executors import get_workspace_runtime_with_resolver
 from trpc_agent_sdk.code_executors import create_local_workspace_runtime
 from trpc_agent_sdk.log import logger
 
@@ -51,13 +53,20 @@ class BaseSkillRepository(abc.ABC):
     must satisfy.  Parsing internals are left entirely to subclasses.
     """
 
-    def __init__(self, workspace_runtime: BaseWorkspaceRuntime, visibility_filter: VisibilityFilter | None = None):
+    def __init__(self,
+                 workspace_runtime: BaseWorkspaceRuntime,
+                 visibility_filter: VisibilityFilter | None = None,
+                 workspace_runtime_resolver: Optional[WorkspaceRuntimeResolver] = None):
         self._workspace_runtime = workspace_runtime
         self._visibility_filter = visibility_filter
+        self._workspace_runtime_resolver = workspace_runtime_resolver
 
     @property
     def workspace_runtime(self) -> BaseWorkspaceRuntime:
         return self._workspace_runtime
+
+    def get_workspace_runtime(self, ctx: InvocationContext) -> BaseWorkspaceRuntime:
+        return get_workspace_runtime_with_resolver(ctx, self._workspace_runtime_resolver, self._workspace_runtime)
 
     @property
     def visibility_filter(self) -> VisibilityFilter | None:
@@ -136,6 +145,7 @@ class FsSkillRepository(BaseSkillRepository):
         self,
         *roots: str,
         workspace_runtime: Optional[BaseWorkspaceRuntime] = None,
+        workspace_runtime_resolver: Optional[WorkspaceRuntimeResolver] = None,
         resolver: Optional[SkillRootResolver] = None,
         enable_hot_reload: bool = False,
     ):
@@ -151,7 +161,7 @@ class FsSkillRepository(BaseSkillRepository):
         """
         if workspace_runtime is None:
             workspace_runtime = create_local_workspace_runtime()
-        super().__init__(workspace_runtime)
+        super().__init__(workspace_runtime, workspace_runtime_resolver=workspace_runtime_resolver)
         self._resolver = resolver or SkillRootResolver()
         self._skill_paths: dict[str, str] = {}  # name -> base dir
         self._all_descriptions: dict[str, str] = {}  # name -> description

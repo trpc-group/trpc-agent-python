@@ -15,6 +15,7 @@ it is now a hard import dependency of the cube subpackage.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -24,7 +25,7 @@ import pytest
 from trpc_agent_sdk.code_executors.cube import _sandbox
 from trpc_agent_sdk.code_executors.cube._sandbox import (
     CubeCommandResult,
-    CubeSandboxClient,
+    CubeSandboxClient as _CubeSandboxClient,
 )
 from trpc_agent_sdk.code_executors.cube._types import CubeCodeExecutorConfig
 
@@ -39,6 +40,24 @@ def _cfg(**overrides) -> CubeCodeExecutorConfig:
     )
     base.update(overrides)
     return CubeCodeExecutorConfig(**base)
+
+
+class CubeSandboxClient(_CubeSandboxClient):
+    """Test adapter for constructing clients from timeout kwargs."""
+
+    def __init__(self, sandbox, cfg=None, *, idle_timeout=None, execute_timeout=None):
+        if cfg is None:
+            cfg = _cfg(
+                idle_timeout=idle_timeout if idle_timeout is not None else 60,
+                execute_timeout=execute_timeout if execute_timeout is not None else 30.0,
+            )
+        super().__init__(sandbox, cfg)
+
+    @classmethod
+    async def open_existing(cls, sandbox_id_or_cfg, cfg=None):
+        if cfg is None:
+            return await super().open_existing(sandbox_id_or_cfg)
+        return await super().open_existing(replace(cfg, sandbox_id=sandbox_id_or_cfg))
 
 
 # ---------------------------------------------------------------------------

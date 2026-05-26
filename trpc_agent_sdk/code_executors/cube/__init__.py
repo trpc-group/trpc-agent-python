@@ -21,13 +21,17 @@ from ._runtime import CubeWorkspaceRuntime
 from ._runtime import create_cube_workspace_runtime
 from ._sandbox import CubeCommandResult
 from ._sandbox import CubeSandboxClient
+from ._sandbox import create_cube_sandbox_client
 from ._transfer import OnExisting
+from ._types import CubeClientConfig
 from ._types import CubeCodeExecutorConfig
 from ._types import CubeWorkspaceRuntimeConfig
 
 __all__ = [
     "CubeCodeExecutor",
+    "CubeClientConfig",
     "CubeCodeExecutorConfig",
+    "create_cube_sandbox_client",
     "CubeCommandResult",
     "CubeProgramRunner",
     "CubeSandboxClient",

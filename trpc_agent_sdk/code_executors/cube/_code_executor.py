@@ -29,6 +29,7 @@ from .._types import CodeExecutionResult
 from .._types import create_code_execution_result
 from ._sandbox import CubeCommandResult
 from ._sandbox import CubeSandboxClient
+from ._sandbox import create_cube_sandbox_client
 from ._types import CubeCodeExecutorConfig
 
 _PYTHON_LANGUAGES = frozenset({"python", "py", "python3", ""})
@@ -110,10 +111,7 @@ class CubeCodeExecutor(BaseCodeExecutor):
     @classmethod
     async def create(cls, cfg: CubeCodeExecutorConfig) -> "CubeCodeExecutor":
         """Strict factory. Attaches when ``cfg.sandbox_id`` is set, else creates."""
-        if cfg.sandbox_id:
-            client = await CubeSandboxClient.open_existing(cfg.sandbox_id, cfg)
-        else:
-            client = await CubeSandboxClient.open_new(cfg)
+        client = await create_cube_sandbox_client(cfg)
         return cls(client, cfg)
 
     @classmethod
@@ -126,7 +124,7 @@ class CubeCodeExecutor(BaseCodeExecutor):
         if not cfg.sandbox_id:
             raise ValueError("CubeCodeExecutor.attach requires cfg.sandbox_id to be set; "
                              "use CubeCodeExecutor.create(cfg) to create a fresh sandbox.")
-        client = await CubeSandboxClient.open_existing(cfg.sandbox_id, cfg)
+        client = await CubeSandboxClient.open_existing(cfg)
         return cls(client, cfg)
 
     @classmethod
@@ -144,14 +142,13 @@ class CubeCodeExecutor(BaseCodeExecutor):
         created. PAUSED state and other errors propagate unchanged so that
         operator-managed pauses are not silently overwritten.
         """
-        if not cfg.sandbox_id:
-            return await cls.create(cfg)
         try:
             return await cls.create(cfg)
         except e2b.SandboxNotFoundException:
             if on_stale is not None:
                 await on_stale()
-            return await cls.create(replace(cfg, sandbox_id=None))
+            cfg = replace(cfg, sandbox_id=None)
+            return await cls.create(cfg)
 
     @property
     def sandbox_id(self) -> str:

@@ -107,7 +107,7 @@ class SkillLoadTool(BaseTool):
 
     async def _ensure_staged(self, *, ctx: InvocationContext, skill_name: str) -> None:
         repository = self._get_repository(ctx)
-        runtime = repository.workspace_runtime
+        runtime = repository.get_workspace_runtime(ctx)
         manager = runtime.manager(ctx)
         ws_id = self._create_ws_name_cb(ctx)
         ws = await manager.create_workspace(ws_id, ctx)

@@ -21,17 +21,15 @@ ENV_TEMPLATE = "CUBE_TEMPLATE_ID"
 
 
 @dataclass
-class CubeCodeExecutorConfig:
-    """Configuration for :class:`CubeCodeExecutor`.
+class CubeClientConfig:
+    """Configuration for :class:`CubeSandboxClient`.
 
     Holds only the sandbox-lifecycle and command-execution settings the
-    bare code executor consumes. Workspace-runtime knobs (e.g. the
+    bare sandbox client consumes. Workspace-runtime knobs (e.g. the
     remote workspace root) live in :class:`CubeWorkspaceRuntimeConfig`
-    so executor-only callers never see fields they don't use (ISP).
+    so client-only callers never see fields they don't use (ISP).
 
-    The optional ``e2b-code-interpreter`` dependency must be installed
-    (it transitively pulls in ``e2b``). Credentials may be supplied here
-    or through ``E2B_API_URL`` / ``E2B_API_KEY``. The Cube template id
+    Credentials may be supplied here or through ``E2B_API_URL`` / ``E2B_API_KEY``. The Cube template id
     may be supplied here or through ``CUBE_TEMPLATE_ID``.
     """
 
@@ -46,6 +44,14 @@ class CubeCodeExecutorConfig:
 
     sandbox_id: Optional[str] = None
     """Existing remote sandbox id. When set, factories attach instead of create."""
+
+    auto_recover: bool = False
+    """Whether ``CubeSandboxClient`` should recreate expired sandboxes.
+
+    Disabled by default to preserve the original lifecycle contract. When
+    enabled, sandbox operations recreate a fresh sandbox after
+    ``SandboxNotFoundException`` and retry the failed operation once.
+    """
 
     execute_timeout: float = DEFAULT_EXECUTE_TIMEOUT
     """Default per-command timeout in seconds.
@@ -97,6 +103,10 @@ class CubeCodeExecutorConfig:
         if not value:
             raise ValueError(f"Cube sandbox requires `api_key` or {ENV_API_KEY} env.")
         return value
+
+
+# Deprecated, will be removed in the future
+CubeCodeExecutorConfig = CubeClientConfig
 
 
 @dataclass

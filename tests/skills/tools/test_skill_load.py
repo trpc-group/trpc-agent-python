@@ -31,6 +31,7 @@ from trpc_agent_sdk.skills._types import Skill, SkillSummary
 from trpc_agent_sdk.skills.tools._skill_load import (
     SkillLoadTool,
 )
+from trpc_agent_sdk.skills.stager import SkillStageResult
 
 
 def _make_ctx(repository=None):
@@ -113,6 +114,36 @@ class TestSetStateDeltaForSkillLoad:
         ctx.agent_name = ""
         _set_state_delta_for_skill_load(ctx, "test-skill", [], include_all_docs=True)
         assert ctx.actions.state_delta[docs_state_key(ctx, "test-skill")] == "*"
+
+
+class TestWorkspaceRuntimeResolver:
+    @pytest.mark.asyncio
+    async def test_ensure_staged_uses_repository_runtime(self):
+        repo_runtime = MagicMock()
+        repo = MagicMock()
+        repo.workspace_runtime = repo_runtime
+
+        resolved_runtime = MagicMock()
+        manager = MagicMock()
+        manager.create_workspace = AsyncMock(return_value=MagicMock())
+        resolved_runtime.manager = MagicMock(return_value=manager)
+        repo.get_workspace_runtime = MagicMock(return_value=resolved_runtime)
+
+        stager = MagicMock()
+        stager.stage_skill = AsyncMock(return_value=SkillStageResult(workspace_skill_dir="skills/test-skill"))
+
+        ctx = _make_ctx(repo)
+        tool = SkillLoadTool(
+            repository=repo,
+            skill_stager=stager,
+            create_ws_name_cb=lambda _: "ws",
+        )
+
+        await tool._ensure_staged(ctx=ctx, skill_name="test-skill")
+
+        resolved_runtime.manager.assert_called_once_with(ctx)
+        repo.get_workspace_runtime.assert_called_once_with(ctx)
+        repo_runtime.manager.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

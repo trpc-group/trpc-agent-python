@@ -20,6 +20,7 @@ from trpc_agent_sdk.code_executors import BaseCodeExecutor
 from trpc_agent_sdk.code_executors import BaseProgramSession
 from trpc_agent_sdk.code_executors import BaseWorkspaceRuntime
 from trpc_agent_sdk.code_executors import WorkspaceRuntimeResolver
+from trpc_agent_sdk.code_executors import get_workspace_runtime_with_resolver
 from trpc_agent_sdk.code_executors import DEFAULT_EXEC_YIELD_MS
 from trpc_agent_sdk.code_executors import DEFAULT_SESSION_KILL_SEC
 from trpc_agent_sdk.code_executors import DEFAULT_SESSION_TTL_SEC
@@ -192,9 +193,7 @@ class WorkspaceExecTool(BaseTool):
         self._sessions: dict[str, _ExecSession] = {}
 
     def _runtime(self, ctx: InvocationContext) -> BaseWorkspaceRuntime:
-        if self._workspace_runtime_resolver is not None:
-            return self._workspace_runtime_resolver(ctx)
-        return self._workspace_runtime
+        return get_workspace_runtime_with_resolver(ctx, self._workspace_runtime_resolver, self._workspace_runtime)
 
     async def _workspace(self, ctx: InvocationContext) -> tuple[BaseWorkspaceRuntime, WorkspaceInfo]:
         runtime = self._runtime(ctx)
