@@ -103,6 +103,25 @@ class SessionStorageBase(DeclarativeBase):
     pass
 
 
+def _storage_dialect_name(storage: SessionStorageBase) -> Optional[str]:
+    orm_session = inspect(storage).session
+    if orm_session is None or orm_session.bind is None:
+        return None
+    return orm_session.bind.dialect.name
+
+
+def _timestamp_tz(value: datetime, dialect_name: Optional[str]) -> float:
+    if dialect_name == "sqlite":
+        return value.replace(tzinfo=timezone.utc).timestamp()
+    return value.timestamp()
+
+
+def _expire_before(sql_session: SqlSession, ttl_seconds: int) -> datetime:
+    if sql_session.bind is not None and sql_session.bind.dialect.name == "sqlite":
+        return datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=ttl_seconds)
+    return datetime.now() - timedelta(seconds=ttl_seconds)
+
+
 class StorageSession(SessionStorageBase):
     """Represents a session stored in the database with TTL support.
 
@@ -135,14 +154,11 @@ class StorageSession(SessionStorageBase):
 
     @property
     def _dialect_name(self) -> Optional[str]:
-        session = inspect(self).session
-        return session.bind.dialect.name if session else None  # type: ignore
+        return _storage_dialect_name(self)
 
     @property
     def update_timestamp_tz(self) -> float:
-        if self._dialect_name == "sqlite":
-            return self.update_time.replace(tzinfo=timezone.utc).timestamp()
-        return self.update_time.timestamp()
+        return _timestamp_tz(self.update_time, self._dialect_name)
 
     def to_session(
         self,
@@ -306,6 +322,10 @@ class StorageAppState(SessionStorageBase):
     state: Mapped[MutableDict[str, Any]] = mapped_column(MutableDict.as_mutable(DynamicJSON), default={})
     update_time: Mapped[datetime] = mapped_column(PreciseTimestamp, default=func.now(), onupdate=func.now())
 
+    @property
+    def update_timestamp_tz(self) -> float:
+        return _timestamp_tz(self.update_time, _storage_dialect_name(self))
+
 
 class StorageUserState(SessionStorageBase):
     """Represents a user state stored in the database with TTL support.
@@ -318,6 +338,10 @@ class StorageUserState(SessionStorageBase):
     user_id: Mapped[str] = mapped_column(UTF8MB4String(DEFAULT_MAX_KEY_LENGTH), primary_key=True)
     state: Mapped[MutableDict[str, Any]] = mapped_column(MutableDict.as_mutable(DynamicJSON), default={})
     update_time: Mapped[datetime] = mapped_column(PreciseTimestamp, default=func.now(), onupdate=func.now())
+
+    @property
+    def update_timestamp_tz(self) -> float:
+        return _timestamp_tz(self.update_time, _storage_dialect_name(self))
 
 
 class SqlSessionService(BaseSessionService):
@@ -452,7 +476,7 @@ class SqlSessionService(BaseSessionService):
 
             sessions = []
             for storage_session in results:
-                if self._session_config.is_expired_by_timestamp(storage_session.update_time.timestamp()):
+                if self._session_config.is_expired_by_timestamp(storage_session.update_timestamp_tz):
                     logger.debug("Cleaned up expired session: %s/%s/%s", storage_session.app_name,
                                  storage_session.user_id, storage_session.id)
                     continue
@@ -593,7 +617,7 @@ class SqlSessionService(BaseSessionService):
             await self._sql_storage.add(sql_session, storage_app_state)
         else:
             storage_app_state.state = app_state  # type: ignore
-        storage_app_state.update_time = datetime.now()
+        storage_app_state.update_time = func.now()
 
         return app_state
 
@@ -621,9 +645,9 @@ class SqlSessionService(BaseSessionService):
 
         app_state = {}
         if storage_app_state:
-            if not self._session_config.is_expired_by_timestamp(storage_app_state.update_time.timestamp()):
+            if not self._session_config.is_expired_by_timestamp(storage_app_state.update_timestamp_tz):
                 app_state = storage_app_state.state
-                storage_app_state.update_time = datetime.now()
+                storage_app_state.update_time = func.now()
                 await self._sql_storage.commit(sql_session)
 
         return app_state
@@ -634,9 +658,9 @@ class SqlSessionService(BaseSessionService):
 
         user_state = {}
         if storage_user_state:
-            if not self._session_config.is_expired_by_timestamp(storage_user_state.update_time.timestamp()):
+            if not self._session_config.is_expired_by_timestamp(storage_user_state.update_timestamp_tz):
                 user_state = storage_user_state.state
-                storage_user_state.update_time = datetime.now()
+                storage_user_state.update_time = func.now()
                 await self._sql_storage.commit(sql_session)
 
         return user_state
@@ -648,11 +672,11 @@ class SqlSessionService(BaseSessionService):
         if storage_session is None:
             return None
 
-        if self._session_config.is_expired_by_timestamp(storage_session.update_time.timestamp()):
+        if self._session_config.is_expired_by_timestamp(storage_session.update_timestamp_tz):
             logger.debug("Session %s is expired", session_id)
             return None
 
-        storage_session.update_time = datetime.now()
+        storage_session.update_time = func.now()
         await self._sql_storage.commit(sql_session)
 
         return storage_session
@@ -665,7 +689,7 @@ class SqlSessionService(BaseSessionService):
         """
         async with self._sql_storage.create_db_session() as sql_session:
             # Calculate expiration threshold once in application time for cross-database compatibility.
-            expire_before = datetime.now() - timedelta(seconds=self._session_config.ttl.ttl_seconds)
+            expire_before = _expire_before(sql_session, self._session_config.ttl.ttl_seconds)
             total_deleted = 0
 
             # Batch delete expired sessions
