@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.6](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.6) (2026-06-03)
+
+### Features
+
+* Skill: Added a recoverable Cube sandbox runtime for skills, including `CubeClientConfig`, a unified `create_cube_sandbox_client` entry point, optional `auto_recover` support in `CubeSandboxClient`, sandbox lifecycle helpers, and direct `CubeWorkspaceRuntime` creation from the client.
+* Skill: Unified skill load/run/exec/stager paths around repository-level workspace runtime resolution via `repository.get_workspace_runtime(ctx)`, so tools under the same skill repository share one workspace runtime context.
+* MCP: Added MCP tool caching to avoid repeated network access.
+* Tools: Added `GraphAgent` support in `AgentTool`, allowing wrapped graph agents to return results from tool context state.
+* Examples/Eval: Restored evaluation examples that were previously removed during open-source cleanup.
+* Optimizer: Added support for the prompt self-optimization `AgentOptimizer`.
+
+### Bug Fixes
+
+* Storage: Fixed frequent sqlite warnings in `SqlSessionService` by consistently using database-side `func.now()` for update timestamps.
+
 ## [1.1.5](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.5) (2026-05-19)
 
 ### Features
@@ -22,8 +37,6 @@
 ### Bug Fixes
 
 * Tools: Removed default `mempalace_tool` exports from `trpc_agent_sdk.tools` to avoid forcing MemPalace optional dependencies during base package import.
-
-
 
 ## [1.1.3](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.3) (2026-05-12)
 
