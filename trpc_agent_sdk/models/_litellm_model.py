@@ -31,6 +31,47 @@ from ._openai_model import FinishReason
 from ._openai_model import OpenAIModel
 from ._registry import register_model
 
+# Cache families for LiteLLM provider routing.
+_ANTHROPIC_FAMILY = "anthropic"  # uses cache_control breakpoints
+_OPENAI_FAMILY = "openai_managed"  # uses provider-managed prefix caching
+
+# LiteLLM provider prefixes (``provider/model``) that use cache_control breakpoints.
+# Sources:
+#   - https://docs.litellm.ai/docs/tutorials/prompt_caching (official provider list)
+_CACHE_CONTROL_PREFIXES = (
+    "anthropic/",
+    "bedrock/",
+    "vertex_ai/",
+    "vertex_ai_beta/",
+    "gemini/",
+    "azure_ai/",
+    "openrouter/",
+    "databricks/",
+    "dashscope/",
+    "minimax/",
+    "zai/",
+)
+
+# LiteLLM provider prefixes that use provider-managed prefix caching.
+# Note: azure/ supports prompt_cache_key but NOT prompt_cache_retention —
+# Azure OpenAI does not expose a TTL retention control in its API.
+_MANAGED_PREFIXES = (
+    "openai/",
+    "azure/",
+    "deepseek/",
+    "xai/",
+)
+
+
+def _litellm_cache_family(model_name: str) -> Optional[str]:
+    lowered = model_name.lower()
+    if lowered.startswith(_CACHE_CONTROL_PREFIXES):
+        return _ANTHROPIC_FAMILY
+    if lowered.startswith(_MANAGED_PREFIXES):
+        return _OPENAI_FAMILY
+    return None
+
+
 _LITELLM_SUPPORTED_MODELS: List[str] = [
     r"openai/.*",
     r"anthropic/.*",
@@ -109,6 +150,10 @@ class _LiteLLMApiParamsKey(str, Enum):
     API_KEY = "api_key"
     API_BASE = "api_base"
     STREAM_OPTS = "stream_options"
+    EXTRA_BODY = "extra_body"
+    PROMPT_CACHE_KEY = "prompt_cache_key"
+    PROMPT_CACHE_RETENTION = "prompt_cache_retention"
+    CACHE_CONTROL_INJECTION_POINTS = "cache_control_injection_points"
 
 
 @register_model(model_name="LiteLLMModel", supported_models=_LITELLM_SUPPORTED_MODELS)
@@ -145,6 +190,135 @@ class LiteLLMModel(OpenAIModel):
                 "LiteLLM support requires: pip install trpc-agent-py[litellm] or pip install litellm>=1.75.5")
         os.environ.setdefault("LITELLM_MODE", "PRODUCTION")
         LiteLLMModel._litellm_imported = True
+
+    def _apply_prompt_cache(self, api_params: Dict[str, Any], ctx: InvocationContext | None) -> None:
+        """Apply prompt cache config to LiteLLM api_params (best-effort, in place)."""
+        cache_config = self._resolve_prompt_cache_config(ctx)
+        if not cache_config:
+            return
+
+        family = _litellm_cache_family(self._model_name)
+
+        if family is None:
+            logger.warning(
+                "prompt_cache_config is set but model %r has no recognized provider prefix; "
+                "cache config will be ignored. Use a 'provider/model' name (e.g. 'openai/gpt-4o') "
+                "so the SDK can select the correct cache mechanism.",
+                self._model_name,
+            )
+            return
+
+        if family == _ANTHROPIC_FAMILY:
+            if not cache_config.breakpoints:
+                return
+            ttl = cache_config.ttl
+            # tools breakpoint: stamp cache_control directly on the last tool
+            # (LiteLLM's _map_tool_helper transparently forwards it to Anthropic).
+            # Bedrock uses a separate tool_config cachePoint via injection_points.
+            if "tools" in cache_config.breakpoints:
+                self._apply_tools_cache_control(api_params, ttl)
+            points = self._build_cache_injection_points(
+                cache_config.breakpoints,
+                ttl,
+                api_params.get(_LiteLLMApiParamsKey.MESSAGES),
+            )
+            if points:
+                api_params[_LiteLLMApiParamsKey.CACHE_CONTROL_INJECTION_POINTS] = points
+        elif family == _OPENAI_FAMILY:
+            if cache_config.prompt_cache_key:
+                api_params[_LiteLLMApiParamsKey.PROMPT_CACHE_KEY] = cache_config.prompt_cache_key
+            if cache_config.ttl:
+                if not self._model_name.lower().startswith("azure/"):
+                    api_params[_LiteLLMApiParamsKey.PROMPT_CACHE_RETENTION] = cache_config.ttl
+
+    def _apply_tools_cache_control(self, api_params: Dict[str, Any], ttl: Optional[str]) -> None:
+        """Stamp cache_control on the last tool in api_params (in place).
+
+        For non-Bedrock Anthropic upstreams LiteLLM's _map_tool_helper forwards
+        a tool-level ``cache_control`` field directly to the Anthropic API, so we
+        mutate the tool list here rather than using cache_control_injection_points.
+        For Bedrock the injection_points mechanism handles tools via tool_config.
+        """
+        if self._model_name.lower().startswith("bedrock/"):
+            return
+        tools = api_params.get(_LiteLLMApiParamsKey.TOOLS)
+        if not tools:
+            return
+        cache_control: Dict[str, Any] = {"type": "ephemeral"}
+        if ttl:
+            cache_control["ttl"] = ttl
+        tools[-1]["cache_control"] = cache_control
+
+    def _build_cache_injection_points(
+        self,
+        breakpoints: List[str],
+        ttl: Optional[str],
+        messages: Any = None,
+    ) -> List[Dict[str, Any]]:
+        """Build LiteLLM ``cache_control_injection_points`` for system/messages/Bedrock-tools.
+
+        - ``system``   -> stamps cache_control on the system message (by role).
+        - ``messages`` -> stamps cache_control on the most recent assistant
+          message, matching the native Anthropic adapter.
+        - ``tools``    -> Bedrock only: tool_config cachePoint (no control/ttl field;
+          LiteLLM always emits {"cachePoint": {"type": "default"}} for this).
+          Non-Bedrock tools are handled separately by _apply_tools_cache_control.
+        """
+
+        def _make_cache_control() -> Dict[str, Any]:
+            cache_control: Dict[str, Any] = {"type": "ephemeral"}
+            if ttl:
+                cache_control["ttl"] = ttl
+            return cache_control
+
+        points: List[Dict[str, Any]] = []
+        if "system" in breakpoints:
+            points.append({"location": "message", "role": "system", "control": _make_cache_control()})
+        if "messages" in breakpoints:
+            assistant_index = self._last_assistant_message_index(messages)
+            if assistant_index is not None:
+                points.append({
+                    "location": "message",
+                    "index": assistant_index,
+                    "control": _make_cache_control(),
+                })
+        if "tools" in breakpoints and self._model_name.lower().startswith("bedrock/"):
+            # Bedrock's tool_config cachePoint has no control/ttl field —
+            # LiteLLM ignores any control dict here and always emits
+            # {"cachePoint": {"type": "default"}}.
+            points.append({"location": "tool_config"})
+        return points
+
+    @staticmethod
+    def _last_assistant_message_index(messages: Any) -> Optional[int]:
+        if not isinstance(messages, list):
+            return None
+        for index in range(len(messages) - 1, -1, -1):
+            message = messages[index]
+            if isinstance(message, dict) and message.get("role") == "assistant":
+                return index
+        return None
+
+    @staticmethod
+    def _set_extra_body(api_params: Dict[str, Any], key: str, value: Any) -> None:
+        """Set a key inside api_params' extra_body, reusing an existing dict if present.
+
+        If an existing ``extra_body`` is not a dict (e.g. a string or some other
+        type), it is replaced and a warning is emitted so the caller is aware
+        that prior extra-body data has been discarded.
+        """
+        current = api_params.get(_LiteLLMApiParamsKey.EXTRA_BODY)
+        if isinstance(current, dict):
+            current[key] = value
+        else:
+            if current is not None:
+                logger.warning(
+                    "api_params['extra_body'] has unexpected type %s (expected dict); "
+                    "replacing it to set %r. Existing extra_body content is lost.",
+                    type(current).__name__,
+                    key,
+                )
+            api_params[_LiteLLMApiParamsKey.EXTRA_BODY] = {key: value}
 
     def _get_message_content(self, message: Any) -> str:
         """Extract text from message.content (str or list of blocks). message: dict."""
@@ -308,6 +482,8 @@ class LiteLLMModel(OpenAIModel):
         except Exception as ex:  # pylint: disable=broad-except
             logger.error("Error in LiteLLM API parameters: %s", ex, exc_info=True)
             raise
+
+        self._apply_prompt_cache(api_params, ctx)
 
         try:
             if stream:

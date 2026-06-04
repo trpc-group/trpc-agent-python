@@ -597,3 +597,186 @@ class TestOpenAIModel:
 
             assert len(responses) == 1
             assert responses[0].content is not None
+
+
+# ===========================================================================
+# Prompt cache — request field injection
+# ===========================================================================
+
+
+class TestOpenAIPromptCacheRequestFields:
+    """Verify prompt cache fields are added to api_params when cache config is active."""
+
+    def _make_api_params(self) -> dict:
+        """Minimal api_params skeleton similar to what OpenAIModel builds."""
+        return {"model": "gpt-4", "messages": [{"role": "user", "content": "hi"}]}
+
+    def _simulate_cache_injection(self, model, api_params: dict) -> None:
+        """Replicate the inline cache injection logic from _generate_async_impl."""
+        from trpc_agent_sdk.models._openai_model import ApiParamsKey
+        cache_config = model._resolve_prompt_cache_config(None)
+        if cache_config:
+            if cache_config.prompt_cache_key:
+                api_params[ApiParamsKey.PROMPT_CACHE_KEY] = cache_config.prompt_cache_key
+            if cache_config.ttl:
+                api_params[ApiParamsKey.PROMPT_CACHE_RETENTION] = cache_config.ttl
+
+    def test_enabled_config_adds_cache_key_and_retention(self):
+        """Both prompt_cache_key and prompt_cache_retention are forwarded when set."""
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        model = OpenAIModel(
+            model_name="gpt-4",
+            api_key="k",
+            prompt_cache_config=PromptCacheConfig(
+                enabled=True,
+                prompt_cache_key="weather-v1",
+                ttl="24h",
+            ),
+        )
+        api_params = self._make_api_params()
+        self._simulate_cache_injection(model, api_params)
+        assert api_params.get("prompt_cache_key") == "weather-v1"
+        assert api_params.get("prompt_cache_retention") == "24h"
+
+    def test_ttl_in_memory_is_forwarded(self):
+        """'in_memory' is forwarded as prompt_cache_retention."""
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        model = OpenAIModel(
+            model_name="gpt-4",
+            api_key="k",
+            prompt_cache_config=PromptCacheConfig(enabled=True, ttl="in_memory"),
+        )
+        api_params = self._make_api_params()
+        self._simulate_cache_injection(model, api_params)
+        assert api_params.get("prompt_cache_retention") == "in_memory"
+
+    def test_custom_ttl_is_forwarded(self):
+        """TTL is provider-specific and should be forwarded without SDK validation."""
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        model = OpenAIModel(
+            model_name="gpt-4",
+            api_key="k",
+            prompt_cache_config=PromptCacheConfig(enabled=True, ttl="1h"),
+        )
+        api_params = self._make_api_params()
+        self._simulate_cache_injection(model, api_params)
+        assert api_params.get("prompt_cache_retention") == "1h"
+
+    def test_disabled_config_adds_no_cache_fields(self):
+        """Disabled PromptCacheConfig must not inject any cache-related keys."""
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        from trpc_agent_sdk.models._openai_model import ApiParamsKey
+        model = OpenAIModel(
+            model_name="gpt-4",
+            api_key="k",
+            prompt_cache_config=PromptCacheConfig(enabled=False, prompt_cache_key="k", ttl="24h"),
+        )
+        api_params = self._make_api_params()
+        self._simulate_cache_injection(model, api_params)
+        assert ApiParamsKey.PROMPT_CACHE_KEY not in api_params
+        assert ApiParamsKey.PROMPT_CACHE_RETENTION not in api_params
+
+    def test_no_config_adds_no_cache_fields(self):
+        """No model-level config means no cache keys are added."""
+        from trpc_agent_sdk.models._openai_model import ApiParamsKey
+        model = OpenAIModel(model_name="gpt-4", api_key="k")
+        api_params = self._make_api_params()
+        self._simulate_cache_injection(model, api_params)
+        assert ApiParamsKey.PROMPT_CACHE_KEY not in api_params
+        assert ApiParamsKey.PROMPT_CACHE_RETENTION not in api_params
+
+    def test_config_without_cache_key_omits_key_field(self):
+        """prompt_cache_key not in api_params when config has no prompt_cache_key."""
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        from trpc_agent_sdk.models._openai_model import ApiParamsKey
+        model = OpenAIModel(
+            model_name="gpt-4",
+            api_key="k",
+            prompt_cache_config=PromptCacheConfig(enabled=True, ttl="24h"),
+        )
+        api_params = self._make_api_params()
+        self._simulate_cache_injection(model, api_params)
+        assert ApiParamsKey.PROMPT_CACHE_KEY not in api_params
+        assert api_params.get("prompt_cache_retention") == "24h"
+
+
+# ===========================================================================
+# Prompt cache — usage metadata parsing
+# ===========================================================================
+
+
+class TestOpenAIBuildUsageMetadata:
+    """Tests for OpenAIModel._build_usage_metadata cache token normalization."""
+
+    def test_prompt_tokens_details_cached_tokens_mapped_to_cache_read(self):
+        """OpenAI prompt_tokens_details.cached_tokens maps to cache_read_input_tokens."""
+        usage_data = {
+            "prompt_tokens": 1000,
+            "completion_tokens": 50,
+            "total_tokens": 1050,
+            "prompt_tokens_details": {
+                "cached_tokens": 800
+            },
+        }
+        meta = OpenAIModel._build_usage_metadata(usage_data)
+        assert meta.cache_read_input_tokens == 800
+        assert meta.prompt_token_count == 1000
+        assert meta.candidates_token_count == 50
+
+    def test_top_level_cache_read_preferred_over_details(self):
+        """If top-level cache_read_input_tokens is set, it wins over prompt_tokens_details."""
+        usage_data = {
+            "prompt_tokens": 1000,
+            "completion_tokens": 50,
+            "total_tokens": 1050,
+            "cache_read_input_tokens": 600,
+            "prompt_tokens_details": {
+                "cached_tokens": 800
+            },
+        }
+        meta = OpenAIModel._build_usage_metadata(usage_data)
+        assert meta.cache_read_input_tokens == 600
+
+    def test_no_cache_fields_yields_none(self):
+        """When no cache fields are present, cache_read_input_tokens is None."""
+        usage_data = {
+            "prompt_tokens": 100,
+            "completion_tokens": 20,
+            "total_tokens": 120,
+        }
+        meta = OpenAIModel._build_usage_metadata(usage_data)
+        assert meta.cache_read_input_tokens is None
+        assert meta.cache_creation_input_tokens is None
+
+    def test_cache_creation_input_tokens_top_level(self):
+        """top-level cache_creation_input_tokens (LiteLLM-compatible) is forwarded."""
+        usage_data = {
+            "prompt_tokens": 100,
+            "completion_tokens": 10,
+            "total_tokens": 110,
+            "cache_creation_input_tokens": 90,
+        }
+        meta = OpenAIModel._build_usage_metadata(usage_data)
+        assert meta.cache_creation_input_tokens == 90
+
+    def test_empty_prompt_tokens_details_does_not_crash(self):
+        """Empty prompt_tokens_details dict is handled safely."""
+        usage_data = {
+            "prompt_tokens": 50,
+            "completion_tokens": 10,
+            "total_tokens": 60,
+            "prompt_tokens_details": {},
+        }
+        meta = OpenAIModel._build_usage_metadata(usage_data)
+        assert meta.cache_read_input_tokens is None
+
+    def test_null_prompt_tokens_details_does_not_crash(self):
+        """Explicit null prompt_tokens_details is handled safely."""
+        usage_data = {
+            "prompt_tokens": 50,
+            "completion_tokens": 10,
+            "total_tokens": 60,
+            "prompt_tokens_details": None,
+        }
+        meta = OpenAIModel._build_usage_metadata(usage_data)
+        assert meta.cache_read_input_tokens is None
