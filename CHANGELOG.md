@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.7](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.7) (2026-06-05)
+
+### Bug Fixes
+
+* Runner: Added `close_session_service_on_close` and `close_memory_service_on_close` controls so short-lived runners can skip closing externally managed session and memory services, such as shared Redis-backed services.
+* MCP: Updated Streamable HTTP session creation to prefer the non-deprecated `streamable_http_client` API, with fallback support for older MCP SDKs that only expose `streamablehttp_client`.
+* MCP: Moved Streamable HTTP headers and timeout configuration onto an owned `httpx.AsyncClient`, avoiding deprecated transport arguments while keeping the HTTP client lifecycle tied to the MCP session context.
+* Storage: Fixed frequent sqlite warnings in `SqlSessionService` by consistently using database-side `func.now()` for update timestamps.
+
+
 ## [1.1.6](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.6) (2026-06-03)
 
 ### Features
