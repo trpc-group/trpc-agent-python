@@ -26,18 +26,28 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import json
 import sys
 from contextlib import AsyncExitStack
+from contextlib import asynccontextmanager
 from datetime import timedelta
 from typing import Dict
 from typing import Optional
 from typing import Union
 
+# cSpell:ignore streamable
+
+import httpx
 from mcp import ClientSession
 from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
-from mcp.client.streamable_http import streamablehttp_client
+try:
+    from mcp.client.streamable_http import streamable_http_client
+except ImportError:  # pragma: no cover - compatibility with older mcp versions
+    from mcp.client.streamable_http import streamablehttp_client as streamable_http_client
+
+_STREAMABLE_HTTP_CLIENT_SUPPORTS_HTTP_CLIENT = "http_client" in inspect.signature(streamable_http_client).parameters
 
 from trpc_agent_sdk.log import logger
 
@@ -161,7 +171,7 @@ class MCPSessionManager:
         if isinstance(self._connection_params, StdioConnectionParams):
             client = stdio_client(
                 server=self._connection_params.server_params,
-                errlog=sys.stderr,
+                errlog=sys.stderr,  # cSpell:ignore errlog
             )
         elif isinstance(self._connection_params, SseConnectionParams):
             client = sse_client(
@@ -171,18 +181,46 @@ class MCPSessionManager:
                 sse_read_timeout=self._connection_params.sse_read_timeout,
             )
         elif isinstance(self._connection_params, StreamableHTTPConnectionParams):
-            client = streamablehttp_client(
+            client = self._create_streamable_http_client(merged_headers)
+        else:
+            raise ValueError('Unable to initialize connection. Connection should be'
+                             ' StdioConnectionParams or SseConnectionParams or StreamableHTTPConnectionParams, but got'
+                             f' {type(self._connection_params)}')
+        return client
+
+    def _create_streamable_http_client(self, merged_headers: Optional[Dict[str, str]] = None):
+        """Creates a Streamable HTTP client with compatibility for MCP SDK versions."""
+        if not _STREAMABLE_HTTP_CLIENT_SUPPORTS_HTTP_CLIENT:
+            return streamable_http_client(
                 url=self._connection_params.url,
                 headers=merged_headers,
                 timeout=self._connection_params.timeout,
                 sse_read_timeout=self._connection_params.sse_read_timeout,
                 terminate_on_close=self._connection_params.terminate_on_close,
             )
-        else:
-            raise ValueError('Unable to initialize connection. Connection should be'
-                             ' StdioConnectionParams or SseConnectionParams or StreamableHTTPConnectionParams, but got'
-                             f' {type(self._connection_params)}')
-        return client
+
+        return self._create_streamable_http_client_with_httpx(merged_headers)
+
+    @asynccontextmanager
+    async def _create_streamable_http_client_with_httpx(self, merged_headers: Optional[Dict[str, str]] = None):
+        """Creates a new-style Streamable HTTP client and owns its httpx client."""
+        timeout_seconds = self._connection_params.timeout
+        if isinstance(timeout_seconds, timedelta):
+            timeout_seconds = timeout_seconds.total_seconds()
+        sse_read_timeout_seconds = self._connection_params.sse_read_timeout
+        if isinstance(sse_read_timeout_seconds, timedelta):
+            sse_read_timeout_seconds = sse_read_timeout_seconds.total_seconds()
+
+        async with httpx.AsyncClient(
+                headers=merged_headers,
+                timeout=httpx.Timeout(timeout_seconds, read=sse_read_timeout_seconds),
+        ) as http_client:
+            async with streamable_http_client(
+                    url=self._connection_params.url,
+                    http_client=http_client,
+                    terminate_on_close=self._connection_params.terminate_on_close,
+            ) as transports:
+                yield transports
 
     async def create_session(self, headers: Optional[Dict[str, str]] = None) -> ClientSession | None:
         """Creates and initializes an MCP client session.

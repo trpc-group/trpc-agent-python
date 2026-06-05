@@ -107,6 +107,8 @@ class TestRunnerInit:
         assert runner.session_service == mock_session_service
         assert runner.artifact_service is None
         assert runner.memory_service is None
+        assert runner._close_session_service_on_close is True
+        assert runner._close_memory_service_on_close is True
 
     def test_init_with_all_params(self, mock_agent, mock_session_service):
         """Test Runner initialization with all parameters."""
@@ -119,10 +121,14 @@ class TestRunnerInit:
             session_service=mock_session_service,
             artifact_service=artifact_service,
             memory_service=memory_service,
+            close_session_service_on_close=False,
+            close_memory_service_on_close=False,
         )
 
         assert runner.artifact_service == artifact_service
         assert runner.memory_service == memory_service
+        assert runner._close_session_service_on_close is False
+        assert runner._close_memory_service_on_close is False
 
 
 # Tests for run_async method
@@ -617,6 +623,25 @@ class TestCleanup:
 
         mock_session_service.close.assert_called_once()
         memory_service.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_close_can_keep_external_services_open(self, mock_agent, mock_session_service):
+        """Test close skips externally managed session and memory services."""
+        memory_service = AsyncMock(spec=BaseMemoryService)
+        runner = Runner(
+            app_name="test_app",
+            agent=mock_agent,
+            session_service=mock_session_service,
+            memory_service=memory_service,
+            close_session_service_on_close=False,
+            close_memory_service_on_close=False,
+        )
+
+        with patch.object(runner, '_collect_toolset', return_value=set()):
+            await runner.close()
+
+        mock_session_service.close.assert_not_called()
+        memory_service.close.assert_not_called()
 
 
 # Tests for session history handling
