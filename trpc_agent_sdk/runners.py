@@ -194,6 +194,8 @@ class Runner:
         enable_post_turn_processing: bool = True,
         defer_post_turn_processing: bool = False,
         post_turn_queue_maxsize: int = 256,
+        close_session_service_on_close: bool = True,
+        close_memory_service_on_close: bool = True,
     ):
         """Initializes the Runner.
 
@@ -209,6 +211,13 @@ class Runner:
                 persistence run in a dedicated thread/event loop so request
                 completion is not blocked by post-turn I/O/LLM latency.
             post_turn_queue_maxsize: Max buffered post-turn jobs per runner.
+            close_session_service_on_close: Whether :meth:`close` should close
+                the session service. Set to False when the service is managed
+                outside the runner, e.g. an application-level Redis connection
+                pool shared by many short-lived runners.
+            close_memory_service_on_close: Whether :meth:`close` should close
+                the memory service. Set to False when the service is managed
+                outside the runner.
         """
         self.app_name = app_name
         self.agent = agent
@@ -219,6 +228,8 @@ class Runner:
         self._defer_post_turn_processing = defer_post_turn_processing
         self._post_turn_thread: _PostTurnWorkerThread | None = None
         self._post_turn_queue_maxsize = max(1, int(post_turn_queue_maxsize))
+        self._close_session_service_on_close = close_session_service_on_close
+        self._close_memory_service_on_close = close_memory_service_on_close
 
     async def _run_post_turn_processing(
         self,
@@ -823,7 +834,7 @@ class Runner:
         """
         await self._shutdown_post_turn_worker()
         await self._cleanup_toolsets(self._collect_toolset(self.agent))
-        if self.session_service:
+        if self.session_service and self._close_session_service_on_close:
             await self.session_service.close()
-        if self.memory_service:
+        if self.memory_service and self._close_memory_service_on_close:
             await self.memory_service.close()

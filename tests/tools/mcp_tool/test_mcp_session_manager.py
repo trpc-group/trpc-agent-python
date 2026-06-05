@@ -233,11 +233,11 @@ class TestCreateClient:
         call_kwargs = mock_sse.call_args
         assert call_kwargs.kwargs["headers"] == {"Auth": "token"}
 
-    @patch("trpc_agent_sdk.tools.mcp_tool._mcp_session_manager.streamablehttp_client")
+    @patch.object(MCPSessionManager, "_create_streamable_http_client")
     def test_streamable_client(self, mock_streamable):
         mgr = MCPSessionManager(connection_params=_streamable_conn())
         mgr._create_client({"Auth": "token"})
-        mock_streamable.assert_called_once()
+        mock_streamable.assert_called_once_with({"Auth": "token"})
 
     def test_unsupported_params_raises(self):
         mgr = MCPSessionManager(connection_params=_stdio_conn())
