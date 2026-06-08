@@ -260,9 +260,18 @@ class BaseAgent(AgentABC):
         from trpc_agent_sdk.telemetry._trace import tracer
         from trpc_agent_sdk.telemetry._trace import trace_agent
 
-        # Avoid start_as_current_span in async generators; cancellation may close
-        # the generator from another context and trigger detach token errors.
+        # Manually propagate span context using attach/detach instead of
+        # start_as_current_span. This ensures child spans (call_llm, execute_tool,
+        # etc.) can correctly resolve their parent.
+        # We use start_span + attach/detach rather than start_as_current_span
+        # because __aexit__ of the context manager is not guaranteed to run when
+        # an async generator is cancelled, but try/finally always executes
+        # even under CancelledError (PEP 492).
+        from opentelemetry import context as context_api
+        from opentelemetry.trace import set_span_in_context
+
         span = tracer.start_span(f"agent_run [{self.name}]")
+        _ctx_token = context_api.attach(set_span_in_context(span, context_api.get_current()))
         try:
             ctx = self._create_invocation_context(parent_context)
             if ctx.agent_context is None:
@@ -325,6 +334,7 @@ class BaseAgent(AgentABC):
                 # avoid memory leak
                 reset_invocation_ctx(token)
         finally:
+            context_api.detach(_ctx_token)
             span.end()
 
     @abstractmethod
