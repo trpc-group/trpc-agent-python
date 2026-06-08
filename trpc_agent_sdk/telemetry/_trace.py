@@ -26,6 +26,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from typing import Any
 from typing import Optional
 
@@ -231,7 +232,23 @@ def trace_agent(
         span.set_attribute(f"{_trpc_agent_span_name}.agent.user_id", invocation_context.session.user_id)
 
     input_str = ""
-    if invocation_context.user_content and invocation_context.user_content.parts:
+    # When override_messages is set (e.g., member agent delegated by TeamAgent),
+    # use override_messages as the actual input instead of user_content,
+    # because user_content still holds the original input to the leader agent.
+    # Use getattr + Sequence check to avoid false positives when the context
+    # is a MagicMock (e.g., in unit tests) where accessing an unset attribute
+    # returns a truthy MagicMock object (isinstance(m, Sequence) is False).
+    override_messages = getattr(invocation_context, "override_messages", None)
+    if (isinstance(override_messages, Sequence) and not isinstance(override_messages, (str, bytes))
+            and override_messages):
+        text_parts = []
+        for content in override_messages:
+            if content and content.parts:
+                for part in content.parts:
+                    if part.text and not part.thought:
+                        text_parts.append(part.text)
+        input_str = "\n".join(text_parts)
+    elif invocation_context.user_content and invocation_context.user_content.parts:
         input_str = "\n".join([part.text or "" for part in invocation_context.user_content.parts])
     span.set_attribute(f"{_trpc_agent_span_name}.agent.input", input_str)
 
