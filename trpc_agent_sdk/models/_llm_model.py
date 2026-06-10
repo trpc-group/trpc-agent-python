@@ -17,6 +17,7 @@ from typing import List
 from typing import Optional
 from typing import final
 
+from trpc_agent_sdk.configs import PromptCacheConfig
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.context import create_agent_context
 from trpc_agent_sdk.filter import BaseFilter
@@ -33,15 +34,49 @@ _VALID_ROLES: set[str] = {const.USER, const.ASSISTANT, const.MODEL, const.SYSTEM
 class LLMModel(FilterRunner):
     """Abstract base class for all model implementations."""
 
-    def __init__(self, model_name: str, filters_name: Optional[list[str]] = None, **kwargs):
+    def __init__(
+        self,
+        model_name: str,
+        filters_name: Optional[list[str]] = None,
+        prompt_cache_config: Optional[PromptCacheConfig] = None,
+        **kwargs,
+    ):
         filters: list = kwargs.get("filters", [])
         super().__init__(filters_name=filters_name, filters=filters)
         self._model_name = model_name
         self.config = kwargs
+        self.prompt_cache_config = prompt_cache_config
         self._type = FilterType.MODEL
         self._init_filters()
         self._api_key: str = kwargs.get(const.API_KEY, "")
         self._base_url: str = kwargs.get(const.BASE_URL, "")
+
+    def _resolve_prompt_cache_config(
+        self,
+        ctx: Optional[InvocationContext] = None,
+    ) -> Optional[PromptCacheConfig]:
+        """Resolve the effective prompt cache config for a call.
+
+        The model-level ``prompt_cache_config`` is the baseline; per-run
+        ``RunConfig.prompt_cache`` (via ``ctx``) overrides it field-by-field,
+        so a run can tweak just one field (e.g. ``cache_key``) without having to
+        re-declare the rest. Returns the merged config only when it is enabled,
+        otherwise ``None`` (callers treat ``None`` as "do nothing").
+        """
+        base = self.prompt_cache_config
+        run = ctx.run_config.prompt_cache if (ctx is not None and ctx.run_config is not None) else None
+
+        if run is None:
+            config = base
+        elif base is None:
+            config = run
+        else:
+            # Only fields explicitly set on the per-run config override the baseline.
+            config = base.model_copy(update=run.model_dump(exclude_unset=True))
+
+        if config is None or not config.enabled:
+            return None
+        return config
 
     def set_api_key(self, value: str) -> None:
         """Set the API key."""

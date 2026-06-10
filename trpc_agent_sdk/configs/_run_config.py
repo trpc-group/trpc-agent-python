@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sys
 from typing import Any
+from typing import Optional
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
@@ -16,6 +17,8 @@ from pydantic import Field
 from pydantic import field_validator
 
 from trpc_agent_sdk.log import logger
+
+from ._prompt_cache_config import PromptCacheConfig
 
 
 class RunConfig(BaseModel):
@@ -52,6 +55,14 @@ class RunConfig(BaseModel):
 
     save_history_enabled: bool = False
     """ Save history enabled."""
+
+    prompt_cache: Optional[PromptCacheConfig] = None
+    """Per-run prompt cache configuration override.
+
+    When set, this takes precedence over the model-level ``prompt_cache_config``
+    for the duration of the run. When ``None``, the model-level config (if any)
+    is used.
+    """
 
     start_from_last_agent: bool = False
     """

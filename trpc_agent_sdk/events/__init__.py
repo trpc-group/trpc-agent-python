@@ -8,6 +8,8 @@
 from trpc_agent_sdk.types import EventActions
 
 from ._agent_cancelled_event import AgentCancelledEvent
+from ._cache_analyzer import CacheMetrics
+from ._cache_analyzer import analyze_cache_performance
 from ._event import Event
 from ._event_translator import EventTranslatorBase
 from ._long_running_event import LongRunningEvent
@@ -16,6 +18,8 @@ from ._utils import create_text_event
 __all__ = [
     "EventActions",
     "AgentCancelledEvent",
+    "CacheMetrics",
+    "analyze_cache_performance",
     "Event",
     "EventTranslatorBase",
     "LongRunningEvent",

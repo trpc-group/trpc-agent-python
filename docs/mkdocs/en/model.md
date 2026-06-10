@@ -9,6 +9,7 @@ Models in tRPC-Agent have the following core features:
 - **Multi-protocol support**: Provides OpenAIModel, AnthropicModel, LiteLLMModel, etc., compatible with most OpenAI-like and Anthropic interfaces both internally and externally
 - **Streaming response support**: Supports streaming output for real-time interactive experiences
 - **Multimodal capabilities**: Supports multimodal content processing including text, images, etc. (e.g., Hunyuan multimodal models)
+- **Prompt Cache support**: Provides unified prompt cache configuration across OpenAI, Anthropic, and LiteLLM routes to reduce repeated input cost for long prompts and multi-turn conversations
 - **Extensible configuration**: Supports custom configuration options such as GenerateContentConfig, HttpOptions, client_args to meet various scenario requirements
 
 ## Quick Start
@@ -398,6 +399,120 @@ LlmAgent(
 )
 ```
 
+### Prompt Cache
+
+Prompt Cache is useful when system prompts are long, tool definitions are large, or multi-turn conversations share a stable prefix. Many providers, including OpenAI-compatible serving stacks such as `openai/sglang`, already support automatic prefix caching on the server side. `tRPC-Agent` does not replace the provider's cache implementation; instead, it provides unified management hints and normalized observability for prompt cache behavior.
+
+`tRPC-Agent` exposes these capabilities through `PromptCacheConfig`, which currently applies to `OpenAIModel`, `AnthropicModel`, and provider-prefixed `LiteLLMModel`. Because providers expose different cache controls and usage fields, the SDK maps management options and cache usage metrics to each provider protocol on a best-effort basis:
+
+| Provider | SDK Capability | Typical Usage Fields |
+|----------|----------------|----------------------|
+| Anthropic | Manages explicit `cache_control` breakpoints according to `breakpoints` | `cache_read_input_tokens`, `cache_creation_input_tokens` |
+| OpenAI / OpenAI-compatible endpoints | Passes cache hints such as `prompt_cache_key` / `prompt_cache_retention` when supported; provider-side automatic prefix caching still owns cache creation and lookup | Usually only `cache_read_input_tokens` |
+| LiteLLM | Chooses the Anthropic-style or OpenAI-style cache management path according to the `provider/model` prefix, while preserving provider-native automatic caching such as `openai/sglang` | Depends on the final provider route |
+
+#### Model-level configuration
+
+Model-level configuration becomes the default prompt-cache management and observability configuration for the model instance. Use it when all requests can share the same cache hints:
+
+```python
+from trpc_agent_sdk.configs import PromptCacheConfig
+from trpc_agent_sdk.models import OpenAIModel
+
+model = OpenAIModel(
+    model_name="gpt-4o",
+    api_key="your-api-key",
+    prompt_cache_config=PromptCacheConfig(
+        enabled=True,
+        ttl="24h",
+        prompt_cache_key="weather-concierge-v1",
+    ),
+)
+```
+
+#### Per-run override
+
+You can also override prompt-cache settings for a single `runner.run_async()` call through `RunConfig.prompt_cache`. The per-run config overrides model-level settings field by field, which is useful when setting different cache hints by user, tenant, or business scenario:
+
+```python
+from trpc_agent_sdk.configs import PromptCacheConfig
+from trpc_agent_sdk.configs import RunConfig
+
+async for event in runner.run_async(
+    user_id=user_id,
+    session_id=session_id,
+    new_message=user_content,
+    run_config=RunConfig(
+        prompt_cache=PromptCacheConfig(
+            enabled=True,
+            prompt_cache_key="weather-concierge-user-42",
+        ),
+    ),
+):
+    ...
+```
+
+#### Anthropic breakpoints
+
+Anthropic-style caching requires selecting breakpoint locations. `breakpoints` supports the following values:
+
+- `"system"`: cache the system prompt, suitable for long instructions
+- `"tools"`: cache the last tool definition, suitable when tools are numerous or tool schemas are large
+- `"messages"`: cache the most recent assistant message, suitable for growing stable history prefixes in multi-turn conversations
+
+```python
+from trpc_agent_sdk.configs import PromptCacheConfig
+from trpc_agent_sdk.models import AnthropicModel
+
+model = AnthropicModel(
+    model_name="claude-3-5-sonnet-20241022",
+    api_key="your-api-key",
+    prompt_cache_config=PromptCacheConfig(
+        enabled=True,
+        ttl="1h",
+        breakpoints=["tools", "system", "messages"],
+    ),
+)
+```
+
+A good starting point is `["tools", "system"]`; add `"messages"` when long multi-turn conversations need to cache a growing history prefix. Some Anthropic proxies or Bedrock routes require a minimum cache block size, so short prompts may not create cache entries.
+
+#### LiteLLM routes
+
+When using `LiteLLMModel`, the model name should include a `provider/model` prefix. The SDK uses that provider prefix to select the appropriate cache-management mapping. For example:
+
+```python
+from trpc_agent_sdk.configs import PromptCacheConfig
+from trpc_agent_sdk.models import LiteLLMModel
+
+model = LiteLLMModel(
+    model_name="openai/gpt-4o",
+    api_key="your-api-key",
+    prompt_cache_config=PromptCacheConfig(
+        enabled=True,
+        prompt_cache_key="shared-prefix-v1",
+    ),
+)
+```
+
+If the model name does not include a provider prefix, the SDK cannot determine which cache-management protocol to use, so SDK-managed cache hints may not take effect.
+
+#### Reading cache usage
+
+The model response's `usage_metadata` normalizes cache usage fields where possible:
+
+```python
+async for event in runner.run_async(...):
+    usage = getattr(event, "usage_metadata", None)
+    if usage:
+        print(usage.cache_read_input_tokens)      # Input tokens read from cache
+        print(usage.cache_creation_input_tokens)  # Input tokens written to cache, usually only reported by Anthropic
+        print(usage.prompt_token_count)           # Total input tokens
+```
+
+Different model services report different fields. OpenAI-compatible endpoints usually report cache reads but not cache writes. With load-balanced proxies, each backend instance may have its own KV cache and may not be warmed up at the same time, so cache hit rates can fluctuate during the first few runs.
+
+For a complete runnable example, see [examples/llmagent_with_prompt_cache](../../../examples/llmagent_with_prompt_cache/README.md).
 
 ### Custom HTTP Headers
 

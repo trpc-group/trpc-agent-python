@@ -61,9 +61,17 @@ class _StubLlmRequest:
 
 class _StubUsage:
 
-    def __init__(self, prompt: int, total: int):
+    def __init__(
+        self,
+        prompt: int,
+        total: int,
+        cache_read: Optional[int] = None,
+        cache_creation: Optional[int] = None,
+    ):
         self.prompt_token_count = prompt
         self.total_token_count = total
+        self.cache_read_input_tokens = cache_read
+        self.cache_creation_input_tokens = cache_creation
 
 
 class _StubLlmResponse:
@@ -97,6 +105,8 @@ def reader_provider(monkeypatch):
         "_time_to_first_token": tmetrics._time_to_first_token,
         "_usage_input_tokens": tmetrics._usage_input_tokens,
         "_usage_output_tokens": tmetrics._usage_output_tokens,
+        "_usage_cache_read_tokens": tmetrics._usage_cache_read_tokens,
+        "_usage_cache_creation_tokens": tmetrics._usage_cache_creation_tokens,
     }
     monkeypatch.setattr(
         tmetrics,
@@ -122,6 +132,16 @@ def reader_provider(monkeypatch):
         tmetrics,
         "_usage_output_tokens",
         meter.create_histogram("gen_ai.usage.output_tokens"),
+    )
+    monkeypatch.setattr(
+        tmetrics,
+        "_usage_cache_read_tokens",
+        meter.create_histogram("gen_ai.usage.cache_read_input_tokens"),
+    )
+    monkeypatch.setattr(
+        tmetrics,
+        "_usage_cache_creation_tokens",
+        meter.create_histogram("gen_ai.usage.cache_creation_input_tokens"),
     )
 
     yield reader, provider
@@ -275,6 +295,27 @@ class TestReportCallLlm:
         out = metrics["gen_ai.usage.output_tokens"][0]
         assert inp.sum == 120
         assert out.sum == 50
+
+    def test_cache_usage_tokens_emitted_when_present(self, reader_provider):
+        reader, _ = reader_provider
+        ctx = _make_ctx()
+        tmetrics.report_call_llm(
+            ctx,
+            _StubLlmRequest("claude-3-5-sonnet"),
+            _StubLlmResponse(
+                model="claude-3-5-sonnet",
+                usage=_StubUsage(prompt=120, total=170, cache_read=80, cache_creation=40),
+            ),
+            duration_s=2.0,
+            ttft_s=0.3,
+            is_stream=False,
+        )
+        metrics = _collect(reader)
+
+        cache_read = metrics["gen_ai.usage.cache_read_input_tokens"][0]
+        cache_creation = metrics["gen_ai.usage.cache_creation_input_tokens"][0]
+        assert cache_read.sum == 80
+        assert cache_creation.sum == 40
 
     def test_usage_tokens_skipped_when_missing(self, reader_provider):
         reader, _ = reader_provider

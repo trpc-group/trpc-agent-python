@@ -27,6 +27,7 @@ from trpc_agent_sdk.types import Part
 
 
 class TestLiteLLMModelInit:
+
     def test_init_valid_provider_model(self):
         model = LiteLLMModel(model_name="openai/gpt-4", api_key="key", base_url="https://api.example.com")
         assert model._model_name == "openai/gpt-4"
@@ -54,6 +55,7 @@ class TestLiteLLMModelInit:
 
 
 class TestGetMessageContent:
+
     def test_content_string(self):
         model = LiteLLMModel(model_name="openai/gpt-4")
         msg = {"content": "hello"}
@@ -76,11 +78,16 @@ class TestGetMessageContent:
 
 
 class TestCreateResponseWithContent:
+
     def test_no_choices_returns_usage_and_error_code(self):
         model = LiteLLMModel(model_name="openai/gpt-4")
         response_dict = {
             CHOICES: [],
-            USAGE: {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
+            USAGE: {
+                "prompt_tokens": 1,
+                "completion_tokens": 2,
+                "total_tokens": 3
+            },
         }
         r = model._create_response_with_content(response_dict, partial=False)
         assert r.content is None
@@ -94,7 +101,11 @@ class TestCreateResponseWithContent:
         model = LiteLLMModel(model_name="openai/gpt-4")
         response_dict = {
             CHOICES: [{}],
-            USAGE: {"prompt_tokens": 5, "completion_tokens": 0, "total_tokens": 5},
+            USAGE: {
+                "prompt_tokens": 5,
+                "completion_tokens": 0,
+                "total_tokens": 5
+            },
         }
         r = model._create_response_with_content(response_dict, partial=False)
         assert r.content is None
@@ -106,10 +117,17 @@ class TestCreateResponseWithContent:
         model = LiteLLMModel(model_name="openai/gpt-4")
         response_dict = {
             CHOICES: [{
-                MESSAGE: {"content": "Hi there", "role": "assistant"},
+                MESSAGE: {
+                    "content": "Hi there",
+                    "role": "assistant"
+                },
                 FINISH_REASON: "stop",
             }],
-            USAGE: {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12},
+            USAGE: {
+                "prompt_tokens": 10,
+                "completion_tokens": 2,
+                "total_tokens": 12
+            },
         }
         r = model._create_response_with_content(response_dict, partial=False)
         assert r.error_code is None
@@ -123,10 +141,17 @@ class TestCreateResponseWithContent:
         model = LiteLLMModel(model_name="openai/gpt-4")
         response_dict = {
             CHOICES: [{
-                MESSAGE: {"content": "x", "role": "assistant"},
+                MESSAGE: {
+                    "content": "x",
+                    "role": "assistant"
+                },
                 FINISH_REASON: "length",
             }],
-            USAGE: {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            USAGE: {
+                "prompt_tokens": 1,
+                "completion_tokens": 1,
+                "total_tokens": 2
+            },
         }
         r = model._create_response_with_content(response_dict, partial=False)
         assert r.error_code == "length"
@@ -138,17 +163,26 @@ class TestCreateResponseWithContent:
         response_dict = {
             CHOICES: [{
                 MESSAGE: {
-                    "content": None,
-                    "role": "assistant",
+                    "content":
+                    None,
+                    "role":
+                    "assistant",
                     TOOL_CALLS: [{
                         "id": "call_1",
                         "type": "function",
-                        "function": {"name": "get_weather", "arguments": '{"city": "NYC"}'},
+                        "function": {
+                            "name": "get_weather",
+                            "arguments": '{"city": "NYC"}'
+                        },
                     }],
                 },
                 FINISH_REASON: "tool_calls",
             }],
-            USAGE: {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5},
+            USAGE: {
+                "prompt_tokens": 2,
+                "completion_tokens": 3,
+                "total_tokens": 5
+            },
         }
         r = model._create_response_with_content(response_dict, partial=False)
         assert r.content is not None
@@ -162,7 +196,11 @@ class TestCreateResponseWithContent:
         model = LiteLLMModel(model_name="openai/gpt-4")
         response_dict = {
             CHOICES: [None],
-            USAGE: {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            USAGE: {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0
+            },
         }
         r = model._create_response_with_content(response_dict, partial=False)
         assert r.error_code == "NO_MESSAGE"
@@ -172,10 +210,17 @@ class TestCreateResponseWithContent:
         model = LiteLLMModel(model_name="openai/gpt-4")
         response_dict = {
             CHOICES: [{
-                MESSAGE: {"content": "", "role": "assistant"},
+                MESSAGE: {
+                    "content": "",
+                    "role": "assistant"
+                },
                 FINISH_REASON: "stop",
             }],
-            USAGE: {"prompt_tokens": 1, "completion_tokens": 0, "total_tokens": 1},
+            USAGE: {
+                "prompt_tokens": 1,
+                "completion_tokens": 0,
+                "total_tokens": 1
+            },
         }
         r = model._create_response_with_content(response_dict, partial=False)
         assert r.content is not None
@@ -185,6 +230,7 @@ class TestCreateResponseWithContent:
 
 
 class TestBuildResponseFormatForLitellm:
+
     def test_gemini_model_returns_response_schema(self):
         schema = {"type": "object", "properties": {"x": {"type": "string"}}}
         out = _build_response_format_for_litellm(schema, "gemini/gemini-1.5-pro")
@@ -215,12 +261,16 @@ class TestBuildResponseFormatForLitellm:
 
 
 class TestLogUnsupportedConfigOptions:
+
     @pytest.mark.filterwarnings("ignore:.*is not a valid.*:UserWarning")
     def test_logs_warning_when_unsupported_set(self):
         model = LiteLLMModel(model_name="openai/gpt-4")
         config = GenerateContentConfig(
             top_k=1,
-            safety_settings=[{"category": "HARM", "threshold": "BLOCK_MEDIUM"}],
+            safety_settings=[{
+                "category": "HARM",
+                "threshold": "BLOCK_MEDIUM"
+            }],
         )
         with patch("trpc_agent_sdk.models._litellm_model.logger") as mock_logger:
             model._log_unsupported_config_options(config)
@@ -239,6 +289,7 @@ class TestLogUnsupportedConfigOptions:
 
 
 class TestGenerateAsyncNonStream:
+
     @pytest.mark.asyncio
     async def test_generate_async_non_stream_success(self):
         model = LiteLLMModel(model_name="openai/gpt-4", api_key="key")
@@ -248,10 +299,17 @@ class TestGenerateAsyncNonStream:
         mock_response = Mock()
         mock_response.model_dump.return_value = {
             CHOICES: [{
-                MESSAGE: {"content": "Hi!", "role": "assistant"},
+                MESSAGE: {
+                    "content": "Hi!",
+                    "role": "assistant"
+                },
                 FINISH_REASON: "stop",
             }],
-            USAGE: {"prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3},
+            USAGE: {
+                "prompt_tokens": 2,
+                "completion_tokens": 1,
+                "total_tokens": 3
+            },
         }
 
         async def fake_acompletion(**kwargs):
@@ -261,10 +319,12 @@ class TestGenerateAsyncNonStream:
         real_import = builtins.__import__
         mock_litellm = Mock()
         mock_litellm.acompletion = AsyncMock(side_effect=fake_acompletion)
+
         def fake_import(name, *a, **k):
             if name == "litellm":
                 return mock_litellm
             return real_import(name, *a, **k)
+
         with patch.object(model, "_ensure_litellm_imported"):
             with patch("builtins.__import__", side_effect=fake_import):
                 responses = []
@@ -286,10 +346,12 @@ class TestGenerateAsyncNonStream:
         real_import = builtins.__import__
         mock_litellm = Mock()
         mock_litellm.acompletion = AsyncMock(side_effect=Exception("Connection refused"))
+
         def fake_import(name, *a, **k):
             if name == "litellm":
                 return mock_litellm
             return real_import(name, *a, **k)
+
         with patch.object(model, "_ensure_litellm_imported"):
             with patch("builtins.__import__", side_effect=fake_import):
 
@@ -305,20 +367,34 @@ class TestGenerateAsyncNonStream:
         import builtins
         real_import = builtins.__import__
         captured_kwargs = {}
+
         async def capture_acompletion(**kwargs):
             captured_kwargs.update(kwargs)
             mock_resp = Mock()
             mock_resp.model_dump.return_value = {
-                CHOICES: [{MESSAGE: {"content": "ok", "role": "assistant"}, FINISH_REASON: "stop"}],
-                USAGE: {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                CHOICES: [{
+                    MESSAGE: {
+                        "content": "ok",
+                        "role": "assistant"
+                    },
+                    FINISH_REASON: "stop"
+                }],
+                USAGE: {
+                    "prompt_tokens": 1,
+                    "completion_tokens": 1,
+                    "total_tokens": 2
+                },
             }
             return mock_resp
+
         mock_litellm = Mock()
         mock_litellm.acompletion = AsyncMock(side_effect=capture_acompletion)
+
         def fake_import(name, *a, **k):
             if name == "litellm":
                 return mock_litellm
             return real_import(name, *a, **k)
+
         model = LiteLLMModel(model_name="openai/gpt-4")
         schema = {"type": "object", "properties": {"answer": {"type": "string"}}}
         config = GenerateContentConfig(max_output_tokens=10)
@@ -340,20 +416,34 @@ class TestGenerateAsyncNonStream:
         import builtins
         real_import = builtins.__import__
         captured_kwargs = {}
+
         async def capture_acompletion(**kwargs):
             captured_kwargs.update(kwargs)
             mock_resp = Mock()
             mock_resp.model_dump.return_value = {
-                CHOICES: [{MESSAGE: {"content": "ok", "role": "assistant"}, FINISH_REASON: "stop"}],
-                USAGE: {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                CHOICES: [{
+                    MESSAGE: {
+                        "content": "ok",
+                        "role": "assistant"
+                    },
+                    FINISH_REASON: "stop"
+                }],
+                USAGE: {
+                    "prompt_tokens": 1,
+                    "completion_tokens": 1,
+                    "total_tokens": 2
+                },
             }
             return mock_resp
+
         mock_litellm = Mock()
         mock_litellm.acompletion = AsyncMock(side_effect=capture_acompletion)
+
         def fake_import(name, *a, **k):
             if name == "litellm":
                 return mock_litellm
             return real_import(name, *a, **k)
+
         model = LiteLLMModel(model_name="gemini/gemini-1.5-pro")
         schema = {"type": "object", "properties": {"x": {"type": "string"}}}
         config = GenerateContentConfig(max_output_tokens=10)
@@ -372,6 +462,7 @@ class TestGenerateAsyncNonStream:
 
 
 class TestGenerateAsyncStream:
+
     @pytest.mark.asyncio
     async def test_generate_async_stream_yields_partial_then_final(self):
         model = LiteLLMModel(model_name="openai/gpt-4")
@@ -380,18 +471,30 @@ class TestGenerateAsyncStream:
 
         chunk1 = Mock()
         chunk1.model_dump.return_value = {
-            CHOICES: [{DELTA: {CONTENT: "Hello "}}],
+            CHOICES: [{
+                DELTA: {
+                    CONTENT: "Hello "
+                }
+            }],
             USAGE: None,
         }
         chunk2 = Mock()
         chunk2.model_dump.return_value = {
-            CHOICES: [{DELTA: {CONTENT: "world"}}],
+            CHOICES: [{
+                DELTA: {
+                    CONTENT: "world"
+                }
+            }],
             USAGE: None,
         }
         chunk3 = Mock()
         chunk3.model_dump.return_value = {
             CHOICES: [],
-            USAGE: {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
+            USAGE: {
+                "prompt_tokens": 1,
+                "completion_tokens": 2,
+                "total_tokens": 3
+            },
         }
 
         async def fake_stream(**kwargs):
@@ -403,10 +506,12 @@ class TestGenerateAsyncStream:
         real_import = builtins.__import__
         mock_litellm = Mock()
         mock_litellm.acompletion = AsyncMock(return_value=fake_stream())
+
         def fake_import(name, *a, **k):
             if name == "litellm":
                 return mock_litellm
             return real_import(name, *a, **k)
+
         with patch.object(model, "_ensure_litellm_imported"):
             with patch("builtins.__import__", side_effect=fake_import):
                 responses = []
@@ -431,18 +536,22 @@ class TestGenerateAsyncStream:
 
         async def capture_acompletion(**kwargs):
             captured_kwargs.update(kwargs)
+
             async def empty_stream():
                 yield None
+
             return empty_stream()
 
         import builtins
         real_import = builtins.__import__
         mock_litellm = Mock()
         mock_litellm.acompletion = AsyncMock(side_effect=capture_acompletion)
+
         def fake_import(name, *a, **k):
             if name == "litellm":
                 return mock_litellm
             return real_import(name, *a, **k)
+
         with patch.object(model, "_ensure_litellm_imported"):
             with patch("builtins.__import__", side_effect=fake_import):
                 async for _ in model.generate_async(request, stream=True):
@@ -463,10 +572,12 @@ class TestGenerateAsyncStream:
         real_import = builtins.__import__
         mock_litellm = Mock()
         mock_litellm.acompletion = AsyncMock(side_effect=failing_stream)
+
         def fake_import(name, *a, **k):
             if name == "litellm":
                 return mock_litellm
             return real_import(name, *a, **k)
+
         with patch.object(model, "_ensure_litellm_imported"):
             with patch("builtins.__import__", side_effect=fake_import):
                 responses = []
@@ -478,6 +589,7 @@ class TestGenerateAsyncStream:
 
 
 class TestLiteLLMModelValidateRequest:
+
     def test_validate_request_empty_contents_raises(self):
         model = LiteLLMModel(model_name="openai/gpt-4")
         request = LlmRequest(contents=[], config=None, tools_dict={})
@@ -489,3 +601,404 @@ class TestLiteLLMModelValidateRequest:
         content = Content(parts=[Part.from_text(text="Hi")], role="user")
         request = LlmRequest(contents=[content], config=None, tools_dict={})
         model.validate_request(request)
+
+
+# ===========================================================================
+# Prompt cache — provider family classification
+# ===========================================================================
+
+
+class TestLiteLLMCacheFamily:
+    """_litellm_cache_family must route known prefixes to the correct family."""
+
+    def _family(self, model_name: str):
+        from trpc_agent_sdk.models._litellm_model import _litellm_cache_family
+        return _litellm_cache_family(model_name)
+
+    def test_anthropic_prefix_is_anthropic_family(self):
+        assert self._family("anthropic/claude-3-5-sonnet") == "anthropic"
+
+    def test_bedrock_prefix_is_anthropic_family(self):
+        assert self._family("bedrock/anthropic.claude-3-haiku") == "anthropic"
+
+    def test_vertex_ai_prefix_is_anthropic_family(self):
+        assert self._family("vertex_ai/claude-3-opus") == "anthropic"
+
+    def test_vertex_ai_beta_prefix_is_anthropic_family(self):
+        assert self._family("vertex_ai_beta/gemini-1.5") == "anthropic"
+
+    def test_gemini_prefix_is_anthropic_family(self):
+        assert self._family("gemini/gemini-1.5-flash") == "anthropic"
+
+    def test_openai_prefix_is_openai_managed_family(self):
+        assert self._family("openai/gpt-4o") == "openai_managed"
+
+    def test_azure_prefix_is_openai_managed_family(self):
+        assert self._family("azure/gpt-35-turbo") == "openai_managed"
+
+    def test_deepseek_prefix_is_openai_managed_family(self):
+        assert self._family("deepseek/deepseek-chat") == "openai_managed"
+
+    def test_xai_prefix_is_openai_managed_family(self):
+        assert self._family("xai/grok-1") == "openai_managed"
+
+    def test_unknown_prefix_returns_none(self):
+        assert self._family("unknown/some-model") is None
+
+    def test_groq_prefix_returns_none(self):
+        """groq is not in either cache family list."""
+        assert self._family("groq/llama-3") is None
+
+    def test_prefix_matching_is_case_insensitive(self):
+        assert self._family("ANTHROPIC/claude-3") == "anthropic"
+        assert self._family("OpenAI/gpt-4") == "openai_managed"
+
+
+# ===========================================================================
+# Prompt cache — Anthropic-family (non-Bedrock) request shaping
+# ===========================================================================
+
+
+class TestLiteLLMApplyPromptCacheAnthropicFamily:
+    """For anthropic-family non-Bedrock models, _apply_prompt_cache should:
+    - stamp cache_control on the last tool directly (not via injection_points),
+    - add cache_control_injection_points for system / messages breakpoints.
+    """
+
+    def _model(self, model_name: str = "anthropic/claude-3-5-sonnet", **kw):
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        kw.setdefault("prompt_cache_config",
+                      PromptCacheConfig(
+                          enabled=True,
+                          ttl="1h",
+                          breakpoints=["tools", "system", "messages"],
+                      ))
+        return LiteLLMModel(model_name=model_name, api_key="k", **kw)
+
+    def test_tools_breakpoint_stamps_last_tool_directly(self):
+        """Non-Bedrock anthropic provider stamps cache_control on tools[-1] directly."""
+        model = self._model()
+        api_params = {
+            "tools": [{
+                "name": "t1"
+            }, {
+                "name": "t2"
+            }],
+            "messages": [],
+        }
+        model._apply_prompt_cache(api_params, None)
+        assert "cache_control" not in api_params["tools"][0]
+        assert api_params["tools"][-1]["cache_control"]["type"] == "ephemeral"
+        assert api_params["tools"][-1]["cache_control"]["ttl"] == "1h"
+
+    def test_injection_points_added_for_system_and_messages(self):
+        """cache_control_injection_points contains entries for system and latest assistant message."""
+        model = self._model()
+        api_params = {
+            "tools": [],
+            "messages": [
+                {"role": "user", "content": "hi"},
+                {"role": "assistant", "content": "hello"},
+                {"role": "user", "content": "again"},
+            ],
+        }
+        model._apply_prompt_cache(api_params, None)
+        points = api_params.get("cache_control_injection_points", [])
+        locations = {p.get("location") for p in points}
+        roles = {p.get("role") for p in points if "role" in p}
+        assert "message" in locations
+        assert "system" in roles
+        index_points = [p for p in points if p.get("index") == 1]
+        assert len(index_points) == 1
+
+    def test_disabled_config_leaves_api_params_unchanged(self):
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        model = LiteLLMModel(
+            model_name="anthropic/claude-3-5-sonnet",
+            api_key="k",
+            prompt_cache_config=PromptCacheConfig(enabled=False),
+        )
+        api_params = {"tools": [{"name": "t1"}]}
+        model._apply_prompt_cache(api_params, None)
+        assert "cache_control" not in api_params["tools"][0]
+        assert "cache_control_injection_points" not in api_params
+
+    def test_empty_breakpoints_leaves_api_params_unchanged(self):
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        model = LiteLLMModel(
+            model_name="anthropic/claude-3-5-sonnet",
+            api_key="k",
+            prompt_cache_config=PromptCacheConfig(enabled=True, breakpoints=[]),
+        )
+        api_params = {"tools": [{"name": "t1"}]}
+        model._apply_prompt_cache(api_params, None)
+        assert "cache_control" not in api_params["tools"][0]
+        assert "cache_control_injection_points" not in api_params
+
+    def test_anthropic_family_ttl_is_forwarded_to_litellm(self):
+        """Anthropic-family LiteLLM routes pass TTL through for provider adapters to handle."""
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        model = LiteLLMModel(
+            model_name="anthropic/claude-3-5-sonnet",
+            api_key="k",
+            prompt_cache_config=PromptCacheConfig(enabled=True, ttl="in_memory", breakpoints=["tools"]),
+        )
+        api_params = {"tools": [{"name": "t1"}]}
+
+        model._apply_prompt_cache(api_params, None)
+
+        assert api_params["tools"][-1]["cache_control"] == {
+            "type": "ephemeral",
+            "ttl": "in_memory",
+        }
+
+
+# ===========================================================================
+# Prompt cache — Bedrock request shaping
+# ===========================================================================
+
+
+class TestLiteLLMApplyPromptCacheBedrock:
+    """For Bedrock models, tool-level cache_control must NOT be set directly;
+    instead a tool_config injection_point is added."""
+
+    def _model(self):
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        return LiteLLMModel(
+            model_name="bedrock/anthropic.claude-3-haiku",
+            api_key="k",
+            prompt_cache_config=PromptCacheConfig(
+                enabled=True,
+                breakpoints=["tools", "system"],
+            ),
+        )
+
+    def test_bedrock_does_not_stamp_tool_directly(self):
+        """Bedrock models must NOT get cache_control on the tool dict itself."""
+        model = self._model()
+        api_params = {"tools": [{"name": "t1"}], "messages": []}
+        model._apply_prompt_cache(api_params, None)
+        assert "cache_control" not in api_params["tools"][0]
+
+    def test_bedrock_adds_tool_config_injection_point(self):
+        """Bedrock tool cachePoint is expressed as {"location": "tool_config"}."""
+        model = self._model()
+        api_params = {"tools": [{"name": "t1"}], "messages": []}
+        model._apply_prompt_cache(api_params, None)
+        points = api_params.get("cache_control_injection_points", [])
+        tool_config_points = [p for p in points if p.get("location") == "tool_config"]
+        assert len(tool_config_points) == 1
+
+    def test_bedrock_system_injection_point_present(self):
+        """system injection point is added for Bedrock, same as non-Bedrock."""
+        model = self._model()
+        api_params = {"tools": [{"name": "t1"}], "messages": []}
+        model._apply_prompt_cache(api_params, None)
+        points = api_params.get("cache_control_injection_points", [])
+        system_points = [p for p in points if p.get("role") == "system"]
+        assert len(system_points) == 1
+
+
+# ===========================================================================
+# Prompt cache — OpenAI-managed family request shaping
+# ===========================================================================
+
+
+class TestLiteLLMApplyPromptCacheOpenAIFamily:
+    """For openai-managed-family models, cache config is routed as top-level LiteLLM params."""
+
+    def _model(self, model_name: str, **kw):
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        kw.setdefault("prompt_cache_config", PromptCacheConfig(
+            enabled=True,
+            prompt_cache_key="my-key",
+            ttl="24h",
+        ))
+        return LiteLLMModel(model_name=model_name, api_key="k", **kw)
+
+    def test_openai_cache_key_and_retention_written_to_top_level_params(self):
+        """prompt_cache_key and prompt_cache_retention are top-level LiteLLM params."""
+        model = self._model("openai/gpt-4o")
+        api_params: dict = {}
+        model._apply_prompt_cache(api_params, None)
+        assert api_params.get("prompt_cache_key") == "my-key"
+        assert api_params.get("prompt_cache_retention") == "24h"
+        assert "extra_body" not in api_params
+
+    def test_openai_existing_extra_body_is_preserved(self):
+        """Pre-existing extra_body dict entries are preserved when cache keys are added."""
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        model = LiteLLMModel(
+            model_name="openai/gpt-4o",
+            api_key="k",
+            prompt_cache_config=PromptCacheConfig(
+                enabled=True,
+                prompt_cache_key="new-key",
+            ),
+        )
+        api_params = {"extra_body": {"user": "alice"}}
+        model._apply_prompt_cache(api_params, None)
+        assert api_params["extra_body"] == {"user": "alice"}
+        assert api_params["prompt_cache_key"] == "new-key"
+
+    def test_openai_custom_ttl_is_forwarded(self):
+        """OpenAI-family LiteLLM routes pass TTL through for provider adapters to handle."""
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        model = LiteLLMModel(
+            model_name="openai/gpt-4o",
+            api_key="k",
+            prompt_cache_config=PromptCacheConfig(enabled=True, ttl="1h"),
+        )
+        api_params: dict = {}
+        model._apply_prompt_cache(api_params, None)
+        assert api_params.get("prompt_cache_retention") == "1h"
+
+
+# ===========================================================================
+# Prompt cache — Azure OpenAI (skips prompt_cache_retention)
+# ===========================================================================
+
+
+class TestLiteLLMApplyPromptCacheAzure:
+    """Azure OpenAI supports prompt_cache_key but not prompt_cache_retention."""
+
+    def _model(self):
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        return LiteLLMModel(
+            model_name="azure/gpt-35-turbo",
+            api_key="k",
+            prompt_cache_config=PromptCacheConfig(
+                enabled=True,
+                prompt_cache_key="az-key",
+                ttl="24h",
+            ),
+        )
+
+    def test_azure_sets_cache_key(self):
+        """prompt_cache_key is forwarded for Azure."""
+        model = self._model()
+        api_params: dict = {}
+        model._apply_prompt_cache(api_params, None)
+        assert api_params.get("prompt_cache_key") == "az-key"
+
+    def test_azure_does_not_set_prompt_cache_retention(self):
+        """prompt_cache_retention must NOT be set for Azure, even when TTL is provided."""
+        model = self._model()
+        api_params: dict = {}
+        model._apply_prompt_cache(api_params, None)
+        assert "prompt_cache_retention" not in api_params
+
+
+# ===========================================================================
+# Prompt cache — unknown provider family
+# ===========================================================================
+
+
+class TestLiteLLMApplyPromptCacheUnknownFamily:
+    """Unknown provider prefix with enabled cache config must warn and leave params clean."""
+
+    def test_unknown_prefix_logs_warning_and_leaves_params_unchanged(self):
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        model = LiteLLMModel(
+            model_name="groq/llama-3",
+            api_key="k",
+            prompt_cache_config=PromptCacheConfig(enabled=True, ttl="1h"),
+        )
+        api_params: dict = {"tools": [{"name": "t1"}]}
+        with patch("trpc_agent_sdk.models._litellm_model.logger") as mock_log:
+            model._apply_prompt_cache(api_params, None)
+        mock_log.warning.assert_called_once()
+        assert "cache_control" not in api_params.get("tools", [{}])[0]
+        assert "cache_control_injection_points" not in api_params
+        assert "extra_body" not in api_params
+
+
+# ===========================================================================
+# Prompt cache — _set_extra_body utility
+# ===========================================================================
+
+
+class TestLiteLLMSetExtraBody:
+    """_set_extra_body merges keys into api_params['extra_body'] correctly."""
+
+    def _set(self, api_params: dict, key: str, value) -> None:
+        LiteLLMModel._set_extra_body(api_params, key, value)
+
+    def test_creates_extra_body_dict_when_absent(self):
+        api_params: dict = {}
+        self._set(api_params, "foo", "bar")
+        assert api_params["extra_body"] == {"foo": "bar"}
+
+    def test_merges_into_existing_extra_body(self):
+        api_params = {"extra_body": {"x": 1}}
+        self._set(api_params, "y", 2)
+        assert api_params["extra_body"] == {"x": 1, "y": 2}
+
+    def test_replaces_non_dict_extra_body_with_warning(self):
+        api_params = {"extra_body": "invalid"}
+        with patch("trpc_agent_sdk.models._litellm_model.logger") as mock_log:
+            self._set(api_params, "k", "v")
+        mock_log.warning.assert_called_once()
+        assert api_params["extra_body"] == {"k": "v"}
+
+
+# ===========================================================================
+# Prompt cache — _build_cache_injection_points
+# ===========================================================================
+
+
+class TestLiteLLMBuildCacheInjectionPoints:
+    """_build_cache_injection_points returns the correct point descriptors."""
+
+    def _build(self, model_name: str, breakpoints: list, ttl=None, messages=None):
+        model = LiteLLMModel(model_name=model_name, api_key="k")
+        return model._build_cache_injection_points(breakpoints, ttl, messages)
+
+    def test_system_breakpoint_adds_message_role_system(self):
+        points = self._build("anthropic/claude-3", ["system"])
+        assert any(p.get("role") == "system" for p in points)
+
+    def test_messages_breakpoint_adds_latest_assistant_index(self):
+        messages = [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "hello"},
+            {"role": "user", "content": "again"},
+        ]
+        points = self._build("anthropic/claude-3", ["messages"], messages=messages)
+        assert any(p.get("index") == 1 for p in points)
+
+    def test_messages_breakpoint_without_assistant_adds_nothing(self):
+        messages = [{"role": "user", "content": "hi"}]
+        points = self._build("anthropic/claude-3", ["messages"], messages=messages)
+        assert points == []
+
+    def test_tools_breakpoint_bedrock_adds_tool_config(self):
+        points = self._build("bedrock/anthropic.claude", ["tools"])
+        assert any(p.get("location") == "tool_config" for p in points)
+
+    def test_tools_breakpoint_non_bedrock_adds_nothing(self):
+        """For non-Bedrock providers, tools are stamped directly on the tool; no injection point."""
+        points = self._build("anthropic/claude-3", ["tools"])
+        assert not any(p.get("location") == "tool_config" for p in points)
+
+    def test_ttl_is_included_in_control_dict(self):
+        points = self._build("anthropic/claude-3", ["system"], ttl="1h")
+        system_points = [p for p in points if p.get("role") == "system"]
+        assert len(system_points) == 1
+        assert system_points[0]["control"]["ttl"] == "1h"
+
+    def test_no_ttl_produces_ephemeral_only_control(self):
+        points = self._build("anthropic/claude-3", ["system"], ttl=None)
+        system_points = [p for p in points if p.get("role") == "system"]
+        assert system_points[0]["control"] == {"type": "ephemeral"}
+
+    def test_all_non_bedrock_breakpoints_no_tool_config_point(self):
+        """All three breakpoints for a non-Bedrock provider: no tool_config point."""
+        messages = [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "hello"},
+        ]
+        points = self._build("anthropic/claude-3", ["tools", "system", "messages"], messages=messages)
+        assert not any(p.get("location") == "tool_config" for p in points)
+        assert any(p.get("role") == "system" for p in points)
+        assert any(p.get("index") == 1 for p in points)

@@ -30,8 +30,9 @@ from typing import Optional
 
 from google.genai.types import Content
 from google.genai.types import GenerateContentResponse
-from google.genai.types import GenerateContentResponseUsageMetadata
 from google.genai.types import GroundingMetadata
+
+from trpc_agent_sdk.types import GenerateContentResponseUsageMetadata
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import alias_generators

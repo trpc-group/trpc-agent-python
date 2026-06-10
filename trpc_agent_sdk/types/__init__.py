@@ -10,6 +10,7 @@
 """Types module for TRPC Agent framework."""
 
 from google.genai.types import *  # noqa: F401,F403
+from ._usage import GenerateContentResponseUsageMetadata
 
 from ._agent_types import ActiveStreamingTool
 from ._agent_types import LiveRequest
@@ -25,6 +26,7 @@ from ._ttl import DEFAULT_TTL_SECONDS
 from ._ttl import Ttl
 
 __all__ = [
+    "GenerateContentResponseUsageMetadata",
     "ActiveStreamingTool",
     "LiveRequest",
     "LiveRequestQueue",

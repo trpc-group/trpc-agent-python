@@ -270,6 +270,7 @@ class TestPydanticModelBehavior:
             "agent_run_config",
             "custom_data",
             "save_history_enabled",
+            "prompt_cache",
             "start_from_last_agent",
         }
         assert set(d.keys()) == expected_keys

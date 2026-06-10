@@ -37,10 +37,10 @@ from trpc_agent_sdk.telemetry._trace import (
     trace_tool_call,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _mock_span():
     """Return a MagicMock that acts as an OpenTelemetry span."""
@@ -66,9 +66,13 @@ def _make_content(parts=None, role="user"):
     return content
 
 
-def _make_invocation_context(agent_name="test_agent", session_id="sess-1",
-                             user_id="user-1", user_content=None, branch=None,
-                             invocation_id="inv-1", session=None):
+def _make_invocation_context(agent_name="test_agent",
+                             session_id="sess-1",
+                             user_id="user-1",
+                             user_content=None,
+                             branch=None,
+                             invocation_id="inv-1",
+                             session=None):
     ctx = MagicMock()
     ctx.agent = MagicMock()
     ctx.agent.name = agent_name
@@ -104,7 +108,9 @@ def _make_function_response(resp_id="fc-1", response=None):
 # Tests: set/get span name
 # ---------------------------------------------------------------------------
 
+
 class TestSpanName:
+
     def setup_method(self):
         set_trpc_agent_span_name("trpc.python.agent")
 
@@ -127,7 +133,9 @@ class TestSpanName:
 # Tests: _safe_json_serialize
 # ---------------------------------------------------------------------------
 
+
 class TestSafeJsonSerialize:
+
     def test_serialize_dict(self):
         result = _safe_json_serialize({"key": "value"})
         assert json.loads(result) == {"key": "value"}
@@ -173,7 +181,9 @@ class TestSafeJsonSerialize:
 # Tests: trace_runner
 # ---------------------------------------------------------------------------
 
+
 class TestTraceRunner:
+
     def setup_method(self):
         set_trpc_agent_span_name("trpc.python.agent")
 
@@ -277,12 +287,8 @@ class TestTraceRunner:
 
         trace_runner("app", "u", "s", ctx, state_begin={"k": 1}, state_end={"k": 2})
 
-        span.set_attribute.assert_any_call(
-            "trpc.python.agent.state.begin", _safe_json_serialize({"k": 1})
-        )
-        span.set_attribute.assert_any_call(
-            "trpc.python.agent.state.end", _safe_json_serialize({"k": 2})
-        )
+        span.set_attribute.assert_any_call("trpc.python.agent.state.begin", _safe_json_serialize({"k": 1}))
+        span.set_attribute.assert_any_call("trpc.python.agent.state.end", _safe_json_serialize({"k": 2}))
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_state_none_not_set(self, mock_get_span):
@@ -327,7 +333,9 @@ class TestTraceRunner:
 # Tests: trace_cancellation
 # ---------------------------------------------------------------------------
 
+
 class TestTraceCancellation:
+
     def setup_method(self):
         set_trpc_agent_span_name("trpc.python.agent")
 
@@ -348,12 +356,8 @@ class TestTraceCancellation:
         from opentelemetry import trace as ot_trace
         span.set_status.assert_called_once_with(ot_trace.StatusCode.ERROR, "user_cancelled")
         span.set_attribute.assert_any_call("gen_ai.operation.name", "run_runner_cancelled")
-        span.set_attribute.assert_any_call(
-            "trpc.python.agent.cancellation.reason", "user_cancelled"
-        )
-        span.set_attribute.assert_any_call(
-            "trpc.python.agent.cancellation.agent_name", "test_agent"
-        )
+        span.set_attribute.assert_any_call("trpc.python.agent.cancellation.reason", "user_cancelled")
+        span.set_attribute.assert_any_call("trpc.python.agent.cancellation.agent_name", "test_agent")
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_with_partial_text(self, mock_get_span):
@@ -363,9 +367,7 @@ class TestTraceCancellation:
 
         trace_cancellation("app", "u", "s", ctx, reason="timeout", partial_text="partial output")
 
-        span.set_attribute.assert_any_call(
-            "trpc.python.agent.runner.output", "[CANCELLED]\npartial output"
-        )
+        span.set_attribute.assert_any_call("trpc.python.agent.runner.output", "[CANCELLED]\npartial output")
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_with_last_event_no_partial(self, mock_get_span):
@@ -379,9 +381,7 @@ class TestTraceCancellation:
 
         trace_cancellation("app", "u", "s", ctx, reason="err", last_event=last_event)
 
-        span.set_attribute.assert_any_call(
-            "trpc.python.agent.runner.output", "[CANCELLED]\nevent text"
-        )
+        span.set_attribute.assert_any_call("trpc.python.agent.runner.output", "[CANCELLED]\nevent text")
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_partial_text_takes_priority_over_last_event(self, mock_get_span):
@@ -394,15 +394,16 @@ class TestTraceCancellation:
         last_event = _make_event(content=event_content)
 
         trace_cancellation(
-            "app", "u", "s", ctx,
+            "app",
+            "u",
+            "s",
+            ctx,
             reason="err",
             partial_text="winner",
             last_event=last_event,
         )
 
-        span.set_attribute.assert_any_call(
-            "trpc.python.agent.runner.output", "[CANCELLED]\nwinner"
-        )
+        span.set_attribute.assert_any_call("trpc.python.agent.runner.output", "[CANCELLED]\nwinner")
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_with_branch(self, mock_get_span):
@@ -412,9 +413,7 @@ class TestTraceCancellation:
 
         trace_cancellation("app", "u", "s", ctx, reason="cancel")
 
-        span.set_attribute.assert_any_call(
-            "trpc.python.agent.cancellation.branch", "agent_a.agent_b"
-        )
+        span.set_attribute.assert_any_call("trpc.python.agent.cancellation.branch", "agent_a.agent_b")
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_no_branch(self, mock_get_span):
@@ -434,18 +433,17 @@ class TestTraceCancellation:
         ctx = _make_invocation_context()
 
         trace_cancellation(
-            "app", "u", "s", ctx,
+            "app",
+            "u",
+            "s",
+            ctx,
             reason="cancel",
             state_begin={"a": 1},
             state_partial={"a": 2},
         )
 
-        span.set_attribute.assert_any_call(
-            "trpc.python.agent.state.begin", _safe_json_serialize({"a": 1})
-        )
-        span.set_attribute.assert_any_call(
-            "trpc.python.agent.state.partial", _safe_json_serialize({"a": 2})
-        )
+        span.set_attribute.assert_any_call("trpc.python.agent.state.begin", _safe_json_serialize({"a": 1}))
+        span.set_attribute.assert_any_call("trpc.python.agent.state.partial", _safe_json_serialize({"a": 2}))
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_state_none_not_set(self, mock_get_span):
@@ -490,7 +488,9 @@ class TestTraceCancellation:
 # Tests: trace_agent
 # ---------------------------------------------------------------------------
 
+
 class TestTraceAgent:
+
     def setup_method(self):
         set_trpc_agent_span_name("trpc.python.agent")
 
@@ -562,12 +562,8 @@ class TestTraceAgent:
 
         trace_agent(ctx, state_begin={"x": 1}, state_end={"x": 2})
 
-        span.set_attribute.assert_any_call(
-            "trpc.python.agent.state.begin", _safe_json_serialize({"x": 1})
-        )
-        span.set_attribute.assert_any_call(
-            "trpc.python.agent.state.end", _safe_json_serialize({"x": 2})
-        )
+        span.set_attribute.assert_any_call("trpc.python.agent.state.begin", _safe_json_serialize({"x": 1}))
+        span.set_attribute.assert_any_call("trpc.python.agent.state.end", _safe_json_serialize({"x": 2}))
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_default_empty_action(self, mock_get_span):
@@ -587,7 +583,9 @@ class TestTraceAgent:
 # Tests: trace_tool_call
 # ---------------------------------------------------------------------------
 
+
 class TestTraceToolCall:
+
     def setup_method(self):
         set_trpc_agent_span_name("trpc.python.agent")
 
@@ -649,8 +647,7 @@ class TestTraceToolCall:
 
         # Should wrap in {"result": ...}
         tool_resp_calls = [
-            c for c in span.set_attribute.call_args_list
-            if c.args[0] == "trpc.python.agent.tool_response"
+            c for c in span.set_attribute.call_args_list if c.args[0] == "trpc.python.agent.tool_response"
         ]
         assert len(tool_resp_calls) == 1
         parsed = json.loads(tool_resp_calls[0].args[1])
@@ -679,8 +676,7 @@ class TestTraceToolCall:
         trace_tool_call(tool=tool, args={}, function_response_event=event)
 
         tool_resp_calls = [
-            c for c in span.set_attribute.call_args_list
-            if c.args[0] == "trpc.python.agent.tool_response"
+            c for c in span.set_attribute.call_args_list if c.args[0] == "trpc.python.agent.tool_response"
         ]
         assert len(tool_resp_calls) == 1
         parsed = json.loads(tool_resp_calls[0].args[1])
@@ -720,16 +716,15 @@ class TestTraceToolCall:
         event = _make_event(content=content)
 
         trace_tool_call(
-            tool=tool, args={}, function_response_event=event,
-            state_begin={"s": 0}, state_end={"s": 1},
+            tool=tool,
+            args={},
+            function_response_event=event,
+            state_begin={"s": 0},
+            state_end={"s": 1},
         )
 
-        span.set_attribute.assert_any_call(
-            "trpc.python.agent.state.begin", _safe_json_serialize({"s": 0})
-        )
-        span.set_attribute.assert_any_call(
-            "trpc.python.agent.state.end", _safe_json_serialize({"s": 1})
-        )
+        span.set_attribute.assert_any_call("trpc.python.agent.state.begin", _safe_json_serialize({"s": 0}))
+        span.set_attribute.assert_any_call("trpc.python.agent.state.end", _safe_json_serialize({"s": 1}))
 
     def teardown_method(self):
         set_trpc_agent_span_name("trpc.python.agent")
@@ -739,7 +734,9 @@ class TestTraceToolCall:
 # Tests: trace_merged_tool_calls
 # ---------------------------------------------------------------------------
 
+
 class TestTraceMergedToolCalls:
+
     def setup_method(self):
         set_trpc_agent_span_name("trpc.python.agent")
 
@@ -772,9 +769,7 @@ class TestTraceMergedToolCalls:
 
         trace_merged_tool_calls(response_event_id="re-1", function_response_event=event)
 
-        span.set_attribute.assert_any_call(
-            "trpc.python.agent.tool_response", "<not serializable>"
-        )
+        span.set_attribute.assert_any_call("trpc.python.agent.tool_response", "<not serializable>")
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_sets_empty_llm_request_and_response(self, mock_get_span):
@@ -804,12 +799,8 @@ class TestTraceMergedToolCalls:
             state_end={"a": 2},
         )
 
-        span.set_attribute.assert_any_call(
-            "trpc.python.agent.state.begin", _safe_json_serialize({"a": 1})
-        )
-        span.set_attribute.assert_any_call(
-            "trpc.python.agent.state.end", _safe_json_serialize({"a": 2})
-        )
+        span.set_attribute.assert_any_call("trpc.python.agent.state.begin", _safe_json_serialize({"a": 1}))
+        span.set_attribute.assert_any_call("trpc.python.agent.state.end", _safe_json_serialize({"a": 2}))
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_state_none_not_set(self, mock_get_span):
@@ -833,7 +824,9 @@ class TestTraceMergedToolCalls:
 # Tests: trace_call_llm
 # ---------------------------------------------------------------------------
 
+
 class TestTraceCallLlm:
+
     def setup_method(self):
         set_trpc_agent_span_name("trpc.python.agent")
 
@@ -929,15 +922,16 @@ class TestTraceCallLlm:
         ctx = _make_invocation_context()
 
         from trpc_agent_sdk.types import InstructionMetadata
-        metadata = InstructionMetadata(
-            name="my_instruction", version=3, labels=["prod", "v2"]
-        )
+        metadata = InstructionMetadata(name="my_instruction", version=3, labels=["prod", "v2"])
 
         req = self._make_llm_request()
         resp = self._make_llm_response()
 
         trace_call_llm(
-            ctx, event_id="e-1", llm_request=req, llm_response=resp,
+            ctx,
+            event_id="e-1",
+            llm_request=req,
+            llm_response=resp,
             instruction_metadata=metadata,
         )
 
@@ -971,10 +965,7 @@ class TestTraceCallLlm:
 
         trace_call_llm(ctx, event_id="e-1", llm_request=req, llm_response=resp)
 
-        llm_resp_calls = [
-            c for c in span.set_attribute.call_args_list
-            if c.args[0] == "trpc.python.agent.llm_response"
-        ]
+        llm_resp_calls = [c for c in span.set_attribute.call_args_list if c.args[0] == "trpc.python.agent.llm_response"]
         assert len(llm_resp_calls) == 1
         assert llm_resp_calls[0].args[1] == "<not serializable>"
 
@@ -991,11 +982,99 @@ class TestTraceCallLlm:
         resp = self._make_llm_response()
 
         trace_call_llm(
-            ctx, event_id="e-1", llm_request=req, llm_response=resp,
+            ctx,
+            event_id="e-1",
+            llm_request=req,
+            llm_response=resp,
             instruction_metadata=metadata,
         )
 
         span.set_attribute.assert_any_call("trpc.python.agent.instruction.labels", "")
+
+    # --- prompt cache token span attributes --------------------------------
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_cache_read_input_tokens_attribute_set_when_present(self, mock_get_span):
+        """cache_read_input_tokens is written as a span attribute when the field is not None."""
+        span = _mock_span()
+        mock_get_span.return_value = span
+        ctx = _make_invocation_context()
+
+        usage = MagicMock()
+        usage.prompt_token_count = 1000
+        usage.total_token_count = 1050
+        usage.cache_read_input_tokens = 800
+        usage.cache_creation_input_tokens = None
+
+        req = self._make_llm_request()
+        resp = self._make_llm_response(usage=usage)
+
+        trace_call_llm(ctx, event_id="e-1", llm_request=req, llm_response=resp)
+
+        span.set_attribute.assert_any_call("gen_ai.usage.cache_read_input_tokens", 800)
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_cache_creation_input_tokens_attribute_set_when_present(self, mock_get_span):
+        """cache_creation_input_tokens is written as a span attribute when the field is not None."""
+        span = _mock_span()
+        mock_get_span.return_value = span
+        ctx = _make_invocation_context()
+
+        usage = MagicMock()
+        usage.prompt_token_count = 1000
+        usage.total_token_count = 1100
+        usage.cache_read_input_tokens = None
+        usage.cache_creation_input_tokens = 200
+
+        req = self._make_llm_request()
+        resp = self._make_llm_response(usage=usage)
+
+        trace_call_llm(ctx, event_id="e-1", llm_request=req, llm_response=resp)
+
+        span.set_attribute.assert_any_call("gen_ai.usage.cache_creation_input_tokens", 200)
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_both_cache_token_attributes_set(self, mock_get_span):
+        """Both cache span attributes are emitted when both fields are non-None."""
+        span = _mock_span()
+        mock_get_span.return_value = span
+        ctx = _make_invocation_context()
+
+        usage = MagicMock()
+        usage.prompt_token_count = 1200
+        usage.total_token_count = 1250
+        usage.cache_read_input_tokens = 900
+        usage.cache_creation_input_tokens = 300
+
+        req = self._make_llm_request()
+        resp = self._make_llm_response(usage=usage)
+
+        trace_call_llm(ctx, event_id="e-1", llm_request=req, llm_response=resp)
+
+        span.set_attribute.assert_any_call("gen_ai.usage.cache_read_input_tokens", 900)
+        span.set_attribute.assert_any_call("gen_ai.usage.cache_creation_input_tokens", 300)
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_cache_token_attributes_absent_when_none(self, mock_get_span):
+        """Neither cache attribute is emitted when both fields are None."""
+        span = _mock_span()
+        mock_get_span.return_value = span
+        ctx = _make_invocation_context()
+
+        usage = MagicMock()
+        usage.prompt_token_count = 100
+        usage.total_token_count = 150
+        usage.cache_read_input_tokens = None
+        usage.cache_creation_input_tokens = None
+
+        req = self._make_llm_request()
+        resp = self._make_llm_response(usage=usage)
+
+        trace_call_llm(ctx, event_id="e-1", llm_request=req, llm_response=resp)
+
+        attr_keys = [call.args[0] for call in span.set_attribute.call_args_list]
+        assert "gen_ai.usage.cache_read_input_tokens" not in attr_keys
+        assert "gen_ai.usage.cache_creation_input_tokens" not in attr_keys
 
     def teardown_method(self):
         set_trpc_agent_span_name("trpc.python.agent")
@@ -1005,7 +1084,9 @@ class TestTraceCallLlm:
 # Tests: _build_llm_request_for_trace
 # ---------------------------------------------------------------------------
 
+
 class TestBuildLlmRequestForTrace:
+
     def test_basic_build(self):
         content = MagicMock()
         content.role = "user"
@@ -1022,9 +1103,7 @@ class TestBuildLlmRequestForTrace:
 
         with patch("trpc_agent_sdk.telemetry._trace.Content") as MockContent:
             mock_content_instance = MagicMock()
-            mock_content_instance.model_dump = MagicMock(
-                return_value={"role": "user", "parts": [{"text": "hello"}]}
-            )
+            mock_content_instance.model_dump = MagicMock(return_value={"role": "user", "parts": [{"text": "hello"}]})
             MockContent.return_value = mock_content_instance
 
             result = _build_llm_request_for_trace(req)
@@ -1053,9 +1132,7 @@ class TestBuildLlmRequestForTrace:
 
         with patch("trpc_agent_sdk.telemetry._trace.Content") as MockContent:
             mock_content_instance = MagicMock()
-            mock_content_instance.model_dump = MagicMock(
-                return_value={"role": "user", "parts": [{"text": "t"}]}
-            )
+            mock_content_instance.model_dump = MagicMock(return_value={"role": "user", "parts": [{"text": "t"}]})
             MockContent.return_value = mock_content_instance
 
             result = _build_llm_request_for_trace(req)
