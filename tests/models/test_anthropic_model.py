@@ -260,7 +260,12 @@ class TestAnthropicModelGeneration:
         # Mock the client and response
         mock_message = MagicMock(spec=anthropic_types.Message)
         mock_message.content = [anthropic_types.TextBlock(text="Hello! How can I help you?", type="text")]
-        mock_message.usage = MagicMock(input_tokens=10, output_tokens=7)
+        mock_message.usage = MagicMock(
+            input_tokens=10,
+            output_tokens=7,
+            cache_read_input_tokens=None,
+            cache_creation_input_tokens=None,
+        )
         mock_message.model_dump_json = MagicMock(return_value="{}")
 
         mock_client = AsyncMock()
@@ -405,7 +410,12 @@ class TestAnthropicModelStreaming:
 
         # Mock final message with content blocks
         mock_final_message = MagicMock()
-        mock_final_message.usage = MagicMock(input_tokens=5, output_tokens=3)
+        mock_final_message.usage = MagicMock(
+            input_tokens=5,
+            output_tokens=3,
+            cache_read_input_tokens=None,
+            cache_creation_input_tokens=None,
+        )
         mock_final_message.content = [anthropic_types.TextBlock(text="Hello world!", type="text")]
         mock_stream.get_final_message = AsyncMock(return_value=mock_final_message)
 
@@ -433,6 +443,311 @@ class TestAnthropicModelStreaming:
             assert final_response.usage_metadata is not None
             assert final_response.usage_metadata.prompt_token_count == 5
             assert final_response.usage_metadata.candidates_token_count == 3
+
+
+class TestAnthropicInjectCacheControl:
+    """Tests for the _inject_cache_control helper and its subordinate functions."""
+
+    # Re-import helpers inside each test to avoid polluting the module namespace.
+    @staticmethod
+    def _helpers():
+        from trpc_agent_sdk.models._anthropic_model import (
+            _inject_cache_control,
+            _apply_tools_cache_control,
+            _apply_system_cache_control,
+            _apply_messages_cache_control,
+        )
+        return _inject_cache_control, _apply_tools_cache_control, _apply_system_cache_control, _apply_messages_cache_control
+
+    # --- tools breakpoint -------------------------------------------------
+
+    def test_tools_stamps_last_tool_only(self):
+        """Only the last tool in the list receives cache_control."""
+        inject, *_ = self._helpers()
+        tools = [{"name": "a"}, {"name": "b"}]
+        api_params = {"tools": tools}
+        inject(api_params, ["tools"], None)
+        assert "cache_control" not in api_params["tools"][0]
+        assert api_params["tools"][1]["cache_control"] == {"type": "ephemeral"}
+
+    def test_tools_breakpoint_noop_when_no_tools(self):
+        """No mutation when tools list is empty."""
+        inject, *_ = self._helpers()
+        api_params = {"tools": []}
+        inject(api_params, ["tools"], None)
+        assert api_params["tools"] == []
+
+    def test_tools_breakpoint_noop_when_key_absent(self):
+        """No mutation when 'tools' key is absent."""
+        inject, *_ = self._helpers()
+        api_params = {}
+        inject(api_params, ["tools"], None)
+        assert "tools" not in api_params
+
+    # --- system breakpoint ------------------------------------------------
+
+    def test_system_converts_string_to_text_block_with_cache_control(self):
+        """system string is replaced by a text block list with cache_control."""
+        inject, *_ = self._helpers()
+        api_params = {"system": "You are helpful."}
+        inject(api_params, ["system"], None)
+        system = api_params["system"]
+        assert isinstance(system, list)
+        assert len(system) == 1
+        assert system[0]["type"] == "text"
+        assert system[0]["text"] == "You are helpful."
+        assert system[0]["cache_control"] == {"type": "ephemeral"}
+
+    def test_system_breakpoint_noop_when_key_absent(self):
+        """No mutation when 'system' key is absent."""
+        inject, *_ = self._helpers()
+        api_params = {}
+        inject(api_params, ["system"], None)
+        assert "system" not in api_params
+
+    def test_system_breakpoint_warns_and_skips_non_string_system(self):
+        """Non-string system values are left unchanged instead of being stringified."""
+        inject, *_ = self._helpers()
+        system = [{"type": "text", "text": "sys"}]
+        api_params = {"system": system}
+
+        with patch("trpc_agent_sdk.models._anthropic_model.logger") as mock_log:
+            inject(api_params, ["system"], None)
+
+        mock_log.warning.assert_called_once()
+        assert api_params["system"] is system
+        assert "cache_control" not in api_params["system"][0]
+
+    # --- messages breakpoint ----------------------------------------------
+
+    def test_messages_stamps_last_assistant_message_last_block(self):
+        """cache_control is applied to the last content block of the last assistant message."""
+        inject, *_ = self._helpers()
+        messages = [
+            {
+                "role": "user",
+                "content": [{
+                    "type": "text",
+                    "text": "hi"
+                }]
+            },
+            {
+                "role": "assistant",
+                "content": [{
+                    "type": "text",
+                    "text": "hello"
+                }, {
+                    "type": "text",
+                    "text": "bye"
+                }]
+            },
+        ]
+        api_params = {"messages": messages}
+        inject(api_params, ["messages"], None)
+        # last assistant message, last block should be stamped
+        stamped_block = messages[1]["content"][-1]
+        assert stamped_block["cache_control"] == {"type": "ephemeral"}
+        # first block of assistant message is NOT stamped
+        assert "cache_control" not in messages[1]["content"][0]
+        # user message is NOT stamped
+        assert "cache_control" not in messages[0]["content"][0]
+
+    def test_messages_skips_latest_user_message(self):
+        """When the last message is a user turn, the stamp lands on the prior assistant turn."""
+        inject, *_ = self._helpers()
+        messages = [
+            {
+                "role": "assistant",
+                "content": [{
+                    "type": "text",
+                    "text": "answer"
+                }]
+            },
+            {
+                "role": "user",
+                "content": [{
+                    "type": "text",
+                    "text": "next question"
+                }]
+            },
+        ]
+        api_params = {"messages": messages}
+        inject(api_params, ["messages"], None)
+        # assistant message is stamped
+        assert messages[0]["content"][0]["cache_control"] == {"type": "ephemeral"}
+        # user message is NOT stamped
+        assert "cache_control" not in messages[1]["content"][0]
+
+    def test_messages_noop_when_no_assistant_message(self):
+        """No mutation when there is no assistant message in history."""
+        inject, *_ = self._helpers()
+        messages = [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]
+        api_params = {"messages": messages}
+        inject(api_params, ["messages"], None)
+        assert "cache_control" not in messages[0]["content"][0]
+
+    def test_messages_noop_when_key_absent(self):
+        inject, *_ = self._helpers()
+        api_params = {}
+        inject(api_params, ["messages"], None)
+        assert api_params == {}
+
+    # --- TTL handling -----------------------------------------------------
+
+    def test_ttl_is_forwarded_in_cache_control(self):
+        """TTL is provider-specific and should be forwarded inside cache_control."""
+        inject, *_ = self._helpers()
+        tools = [{"name": "tool1"}]
+        api_params = {"tools": tools}
+        inject(api_params, ["tools"], "custom-ttl")
+        assert api_params["tools"][0]["cache_control"] == {
+            "type": "ephemeral",
+            "ttl": "custom-ttl",
+        }
+
+    def test_none_ttl_produces_minimal_cache_control(self):
+        """None TTL produces cache_control with only the type field."""
+        inject, *_ = self._helpers()
+        tools = [{"name": "tool1"}]
+        api_params = {"tools": tools}
+        inject(api_params, ["tools"], None)
+        assert api_params["tools"][0]["cache_control"] == {"type": "ephemeral"}
+
+    # --- empty breakpoints ------------------------------------------------
+
+    def test_empty_breakpoints_noop(self):
+        """No changes when breakpoints list is empty."""
+        inject, *_ = self._helpers()
+        tools = [{"name": "tool1"}]
+        api_params = {"tools": tools, "system": "sys", "messages": []}
+        original_tools = [dict(t) for t in tools]
+        inject(api_params, [], None)
+        assert api_params["tools"] == original_tools
+        assert api_params["system"] == "sys"
+
+
+class TestAnthropicApplyPromptCache:
+    """Tests for AnthropicModel._apply_prompt_cache delegation."""
+
+    def test_disabled_config_leaves_api_params_unchanged(self):
+        """Disabled PromptCacheConfig is a no-op."""
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        model = AnthropicModel(
+            model_name="claude-3-5-sonnet-20241022",
+            api_key="k",
+            prompt_cache_config=PromptCacheConfig(enabled=False),
+        )
+        api_params = {"tools": [{"name": "t1"}], "system": "sys"}
+        model._apply_prompt_cache(api_params, None)
+        assert "cache_control" not in api_params["tools"][0]
+        assert isinstance(api_params["system"], str)
+
+    def test_empty_breakpoints_leaves_api_params_unchanged(self):
+        """Enabled config with no breakpoints is a no-op."""
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        model = AnthropicModel(
+            model_name="claude-3-5-sonnet-20241022",
+            api_key="k",
+            prompt_cache_config=PromptCacheConfig(enabled=True, breakpoints=[]),
+        )
+        api_params = {"system": "sys", "tools": [{"name": "t1"}]}
+        model._apply_prompt_cache(api_params, None)
+        assert isinstance(api_params["system"], str)
+        assert "cache_control" not in api_params["tools"][0]
+
+    def test_all_breakpoints_inject_all_points(self):
+        """Enabled config with tools+system+messages injects all three breakpoints."""
+        from trpc_agent_sdk.configs import PromptCacheConfig
+        model = AnthropicModel(
+            model_name="claude-3-5-sonnet-20241022",
+            api_key="k",
+            prompt_cache_config=PromptCacheConfig(
+                enabled=True,
+                ttl="1h",
+                breakpoints=["tools", "system", "messages"],
+            ),
+        )
+        api_params = {
+            "tools": [{
+                "name": "t1"
+            }],
+            "system":
+            "You are helpful.",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "text",
+                        "text": "previous"
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [{
+                        "type": "text",
+                        "text": "new question"
+                    }]
+                },
+            ],
+        }
+        model._apply_prompt_cache(api_params, None)
+        # tools stamped
+        assert api_params["tools"][0]["cache_control"]["type"] == "ephemeral"
+        assert api_params["tools"][0]["cache_control"]["ttl"] == "1h"
+        # system converted to list
+        assert isinstance(api_params["system"], list)
+        assert api_params["system"][0]["cache_control"]["type"] == "ephemeral"
+        # assistant message stamped
+        assert api_params["messages"][0]["content"][0]["cache_control"]["type"] == "ephemeral"
+
+
+class TestAnthropicBuildUsageMetadata:
+    """Tests for AnthropicModel._build_usage_metadata cache-inclusive normalization."""
+
+    @staticmethod
+    def _usage(input_tokens=100, output_tokens=50, cache_read=None, cache_creation=None):
+        usage = MagicMock()
+        usage.input_tokens = input_tokens
+        usage.output_tokens = output_tokens
+        usage.cache_read_input_tokens = cache_read
+        usage.cache_creation_input_tokens = cache_creation
+        return usage
+
+    def test_cache_read_and_creation_folded_into_prompt_tokens(self):
+        """prompt_token_count = input_tokens + cache_read + cache_creation."""
+        usage = self._usage(input_tokens=100, output_tokens=50, cache_read=500, cache_creation=200)
+        meta = AnthropicModel._build_usage_metadata(usage)
+        assert meta.prompt_token_count == 100 + 500 + 200
+        assert meta.candidates_token_count == 50
+        assert meta.total_token_count == (100 + 500 + 200 + 50)
+
+    def test_cache_fields_preserved_on_metadata(self):
+        """cache_read_input_tokens and cache_creation_input_tokens are directly set."""
+        usage = self._usage(input_tokens=100, output_tokens=50, cache_read=500, cache_creation=200)
+        meta = AnthropicModel._build_usage_metadata(usage)
+        assert meta.cache_read_input_tokens == 500
+        assert meta.cache_creation_input_tokens == 200
+
+    def test_none_cache_tokens_treated_as_zero(self):
+        """When cache fields are None, prompt_token_count equals input_tokens only."""
+        usage = self._usage(input_tokens=100, output_tokens=50, cache_read=None, cache_creation=None)
+        meta = AnthropicModel._build_usage_metadata(usage)
+        assert meta.prompt_token_count == 100
+        assert meta.total_token_count == 150
+
+    def test_zero_cache_tokens(self):
+        """When both cache fields are 0, prompt_token_count equals input_tokens only."""
+        usage = self._usage(input_tokens=200, output_tokens=30, cache_read=0, cache_creation=0)
+        meta = AnthropicModel._build_usage_metadata(usage)
+        assert meta.prompt_token_count == 200
+
+    def test_only_cache_read_no_creation(self):
+        """Only cache_read; cache_creation is None."""
+        usage = self._usage(input_tokens=50, output_tokens=10, cache_read=300, cache_creation=None)
+        meta = AnthropicModel._build_usage_metadata(usage)
+        assert meta.prompt_token_count == 50 + 300
+        assert meta.cache_read_input_tokens == 300
+        assert meta.cache_creation_input_tokens is None
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ tRPC-Agent 内的模型具有以下核心特性：
 - **多协议支持**：提供 OpenAIModel、AnthropicModel、LiteLLMModel 等，兼容公司内外多数 OpenAI-like 及 Anthropic 接口
 - **流式响应支持**：支持流式输出，实现实时交互体验
 - **多模态能力**：支持文本、图像等多模态内容处理（如 hunyuan 多模态模型）
+- **Prompt Cache 支持**：支持跨 OpenAI、Anthropic 与 LiteLLM 路由的统一 prompt cache 配置，降低长提示词和多轮会话的重复输入成本
 - **可扩展配置**：支持 GenerateContentConfig、HttpOptions、client_args 等自定义配置项，满足不同场景需求
 
 ## 快速上手
@@ -398,6 +399,120 @@ LlmAgent(
 )
 ```
 
+### Prompt Cache
+
+Prompt Cache 适用于系统提示词较长、工具定义较多或多轮会话前缀高度稳定的场景。很多 provider（包括 `openai/sglang` 这类 OpenAI 兼容推理服务）本身已经支持服务端自动前缀缓存。`tRPC-Agent` 并不替代 provider 的缓存实现，而是提供统一的缓存管理提示与缓存观测能力。
+
+`tRPC-Agent` 通过 `PromptCacheConfig` 暴露这些能力，目前可用于 `OpenAIModel`、`AnthropicModel` 以及带 provider 前缀的 `LiteLLMModel`。不同供应商对缓存控制和统计字段的支持不完全相同，SDK 会尽量将管理选项和缓存用量指标映射到对应协议：
+
+| Provider | SDK 能力 | 典型统计字段 |
+|----------|----------|--------------|
+| Anthropic | 根据 `breakpoints` 管理显式 `cache_control` 断点 | `cache_read_input_tokens`、`cache_creation_input_tokens` |
+| OpenAI / OpenAI 兼容端点 | 在支持时传递 `prompt_cache_key` / `prompt_cache_retention` 等缓存提示；缓存创建和命中仍由 provider 侧自动前缀缓存负责 | 通常只有 `cache_read_input_tokens` |
+| LiteLLM | 根据 `provider/model` 前缀选择 Anthropic 风格或 OpenAI 风格的缓存管理路径 | 取决于最终路由的 provider |
+
+#### 模型级配置
+
+模型级配置会作为该模型实例默认的 prompt cache 管理与观测配置，适合在所有请求中复用同一套缓存提示：
+
+```python
+from trpc_agent_sdk.configs import PromptCacheConfig
+from trpc_agent_sdk.models import OpenAIModel
+
+model = OpenAIModel(
+    model_name="gpt-4o",
+    api_key="your-api-key",
+    prompt_cache_config=PromptCacheConfig(
+        enabled=True,
+        ttl="24h",
+        prompt_cache_key="weather-concierge-v1",
+    ),
+)
+```
+
+#### 单次运行覆盖
+
+也可以通过 `RunConfig.prompt_cache` 对单次 `runner.run_async()` 覆盖 prompt cache 配置。单次运行配置会按字段覆盖模型级配置，适合按用户、租户或业务场景设置不同的缓存提示：
+
+```python
+from trpc_agent_sdk.configs import PromptCacheConfig
+from trpc_agent_sdk.configs import RunConfig
+
+async for event in runner.run_async(
+    user_id=user_id,
+    session_id=session_id,
+    new_message=user_content,
+    run_config=RunConfig(
+        prompt_cache=PromptCacheConfig(
+            enabled=True,
+            prompt_cache_key="weather-concierge-user-42",
+        ),
+    ),
+):
+    ...
+```
+
+#### Anthropic 断点配置
+
+Anthropic 风格的缓存需要选择断点位置。`breakpoints` 支持以下值：
+
+- `"system"`：缓存系统提示词，适合长 instruction 场景
+- `"tools"`：缓存最后一个工具定义，适合工具较多或工具 schema 较大的场景
+- `"messages"`：缓存最近一条 assistant 消息，适合多轮会话中不断增长的稳定历史前缀
+
+```python
+from trpc_agent_sdk.configs import PromptCacheConfig
+from trpc_agent_sdk.models import AnthropicModel
+
+model = AnthropicModel(
+    model_name="claude-3-5-sonnet-20241022",
+    api_key="your-api-key",
+    prompt_cache_config=PromptCacheConfig(
+        enabled=True,
+        ttl="1h",
+        breakpoints=["tools", "system", "messages"],
+    ),
+)
+```
+
+建议从 `["tools", "system"]` 开始；当长多轮会话需要缓存不断增长的历史前缀时，再加入 `"messages"`。部分 Anthropic 代理或 Bedrock 路由对最小缓存块大小有要求，如果提示词过短，可能不会产生缓存写入。
+
+#### LiteLLM 路由
+
+使用 `LiteLLMModel` 时，模型名需要带 `provider/model` 前缀。SDK 会根据 provider 前缀选择对应的缓存管理映射，例如：
+
+```python
+from trpc_agent_sdk.configs import PromptCacheConfig
+from trpc_agent_sdk.models import LiteLLMModel
+
+model = LiteLLMModel(
+    model_name="openai/gpt-4o",
+    api_key="your-api-key",
+    prompt_cache_config=PromptCacheConfig(
+        enabled=True,
+        prompt_cache_key="shared-prefix-v1",
+    ),
+)
+```
+
+如果模型名缺少 provider 前缀，SDK 无法判断应使用哪类缓存管理协议，因此 SDK 管理的缓存提示可能不会生效。
+
+#### 读取缓存统计
+
+模型响应的 `usage_metadata` 中会尽量归一化缓存统计字段：
+
+```python
+async for event in runner.run_async(...):
+    usage = getattr(event, "usage_metadata", None)
+    if usage:
+        print(usage.cache_read_input_tokens)      # 从缓存读取的输入 token 数
+        print(usage.cache_creation_input_tokens)  # 写入缓存的输入 token 数，通常仅 Anthropic 上报
+        print(usage.prompt_token_count)           # 总输入 token 数
+```
+
+不同模型服务上报的字段并不完全一致。OpenAI 兼容端点通常只上报缓存读取，不上报缓存写入；负载均衡代理场景下，不同后端实例的 KV 缓存可能尚未全部预热，因此命中率可能在前几次运行中波动。
+
+完整可运行示例见 [examples/llmagent_with_prompt_cache](../../../examples/llmagent_with_prompt_cache/README.md)。
 
 ### 自定义 HTTP Header
 

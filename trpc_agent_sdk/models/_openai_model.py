@@ -102,6 +102,8 @@ class ApiParamsKey(str, Enum):
     MAX_COMPLETION_TOKENS = "max_completion_tokens"
     REASONING_EFFORT = "reasoning_effort"
     PARALLEL_TOOL_CALLS = "parallel_tool_calls"
+    PROMPT_CACHE_KEY = "prompt_cache_key"
+    PROMPT_CACHE_RETENTION = "prompt_cache_retention"
 
 
 @register_model(model_name="OpenAIModel", supported_models=[r"gpt-.*", r"o1-.*", r"deepseek-.*", r"hy3-.*"])
@@ -699,25 +701,31 @@ class OpenAIModel(LLMModel):
             if ToolKey.ARGUMENTS in function_delta and function_delta[ToolKey.ARGUMENTS] is not None:
                 accumulated_tool_calls[index][ToolKey.FUNCTION][ToolKey.ARGUMENTS] += function_delta[ToolKey.ARGUMENTS]
 
-    def _process_usage(self, chunk_dict: dict) -> Optional[GenerateContentResponseUsageMetadata]:
-        """Process usage information from a chunk.
+    @staticmethod
+    def _build_usage_metadata(usage_data: dict) -> GenerateContentResponseUsageMetadata:
+        """Build ``GenerateContentResponseUsageMetadata`` from a raw usage dict.
 
-        Args:
-            chunk_dict (`dict`): The chunk dictionary containing usage information
-
-        Returns:
-            `Optional[GenerateContentResponseUsageMetadata]`: The processed usage metadata or None if not available
+        ``cache_read_input_tokens`` prefers Anthropic/LiteLLM-style top-level fields;
+        falls back to OpenAI-style ``prompt_tokens_details.cached_tokens``.
         """
-        usage_data = chunk_dict.get(const.USAGE)
-        if usage_data is None:
-            return None
         completion_details = usage_data.get("completion_tokens_details") or {}
+        cache_read = usage_data.get("cache_read_input_tokens")
+        if cache_read is None:
+            details = usage_data.get("prompt_tokens_details")
+            cache_read = details.get("cached_tokens") if isinstance(details, dict) else None
         return GenerateContentResponseUsageMetadata(
             prompt_token_count=usage_data.get("prompt_tokens", 0),
             candidates_token_count=usage_data.get("completion_tokens", 0),
             thoughts_token_count=completion_details.get("reasoning_tokens"),
             total_token_count=usage_data.get("total_tokens", 0),
+            cache_read_input_tokens=cache_read,
+            cache_creation_input_tokens=usage_data.get("cache_creation_input_tokens"),
         )
+
+    def _process_usage(self, chunk_dict: dict) -> Optional[GenerateContentResponseUsageMetadata]:
+        """Extract usage metadata from a streaming chunk dict."""
+        usage_data = chunk_dict.get(const.USAGE)
+        return self._build_usage_metadata(usage_data) if usage_data is not None else None
 
     def _process_chunk_without_content(
         self, chunk_dict: dict, accumulated_tool_calls: list[dict]
@@ -975,25 +983,9 @@ class OpenAIModel(LLMModel):
         return tool_calls or None
 
     def _process_usage_from_response(self, response_dict: dict) -> Optional[GenerateContentResponseUsageMetadata]:
-        """Process usage information from a response.
-
-        Args:
-            response_dict (`dict`): The response dictionary containing usage information
-
-        Returns:
-            `Optional[GenerateContentResponseUsageMetadata]`: Processed usage metadata or None
-        """
-        if const.USAGE not in response_dict:
-            return None
-
-        usage_data: dict[str, int] = response_dict[const.USAGE]
-        completion_details = usage_data.get("completion_tokens_details") or {}
-        return GenerateContentResponseUsageMetadata(
-            prompt_token_count=usage_data.get("prompt_tokens", 0),
-            candidates_token_count=usage_data.get("completion_tokens", 0),
-            thoughts_token_count=completion_details.get("reasoning_tokens"),
-            total_token_count=usage_data.get("total_tokens", 0),
-        )
+        """Extract usage metadata from a non-streaming response dict."""
+        usage_data = response_dict.get(const.USAGE)
+        return self._build_usage_metadata(usage_data) if usage_data is not None else None
 
     def _create_response_without_content(self, response_dict: dict) -> LlmResponse:
         """Create a LlmResponse without content."""
@@ -1505,6 +1497,13 @@ class OpenAIModel(LLMModel):
             logger.error("Error in OpenAI API parameters: %s", ex, exc_info=True)
             raise ex
 
+        cache_config = self._resolve_prompt_cache_config(ctx)
+        if cache_config:
+            if cache_config.prompt_cache_key:
+                api_params[ApiParamsKey.PROMPT_CACHE_KEY] = cache_config.prompt_cache_key
+            if cache_config.ttl:
+                api_params[ApiParamsKey.PROMPT_CACHE_RETENTION] = cache_config.ttl
+
         # Extract HTTP options for API calls
         http_options = {}
         if request.config:
@@ -1554,6 +1553,8 @@ class OpenAIModel(LLMModel):
                 "content": self._adapter.create_streaming_text_filter_state(),
                 "reasoning": self._adapter.create_streaming_text_filter_state(),
             }
+
+        api_params[ApiParamsKey.STREAM_OPTS] = {ApiParamsKey.INCLUDE_USAGE: True}
 
         client = self._create_async_client()
         try:

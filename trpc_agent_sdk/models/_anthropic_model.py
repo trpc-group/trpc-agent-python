@@ -38,6 +38,45 @@ from ._llm_request import LlmRequest
 from ._llm_response import LlmResponse
 from ._registry import register_model
 
+_EPHEMERAL = "ephemeral"
+
+
+def _build_cache_control(ttl: Optional[str]) -> Dict[str, Any]:
+    cache_control: Dict[str, Any] = {"type": _EPHEMERAL}
+    if ttl:
+        cache_control["ttl"] = ttl
+    return cache_control
+
+
+def _stamp_last_block(blocks: List[Dict[str, Any]], cache_control: Dict[str, Any]) -> None:
+    for block in reversed(blocks):
+        block["cache_control"] = cache_control
+        return
+
+
+def _apply_tools_cache_control(tools: List[anthropic_types.ToolParam], cache_control: Dict[str, Any]) -> None:
+    if tools:
+        tools[-1]["cache_control"] = cache_control
+
+
+def _apply_system_cache_control(system: str, cache_control: Dict[str, Any]) -> List[Dict[str, Any]]:
+    return [{"type": "text", "text": system, "cache_control": cache_control}]
+
+
+def _apply_messages_cache_control(
+    messages: List[anthropic_types.MessageParam],
+    cache_control: Dict[str, Any],
+) -> None:
+    """Stamp a cache_control breakpoint on the last assistant message."""
+    for message in reversed(messages):
+        if message.get("role") != "assistant":
+            continue
+
+        content = message.get("content")
+        if isinstance(content, list) and content:
+            _stamp_last_block(content, cache_control)
+        return
+
 
 class _FinishReason(str, Enum):
     """Reasons why model generation finished."""
@@ -63,6 +102,29 @@ class _ApiParamsKey(str, Enum):
     TOOLS = "tools"
     TOOL_CHOICE = "tool_choice"
     THINKING = "thinking"
+
+
+def _inject_cache_control(
+    api_params: Dict[str, Any],
+    breakpoints: List[str],
+    ttl: Optional[str],
+) -> None:
+    """Inject Anthropic cache_control breakpoints into api_params in place."""
+    cache_control = _build_cache_control(ttl)
+    if "tools" in breakpoints and api_params.get(_ApiParamsKey.TOOLS):
+        _apply_tools_cache_control(api_params[_ApiParamsKey.TOOLS], cache_control)
+    if "system" in breakpoints and api_params.get(_ApiParamsKey.SYSTEM):
+        system = api_params[_ApiParamsKey.SYSTEM]
+        if isinstance(system, str):
+            api_params[_ApiParamsKey.SYSTEM] = _apply_system_cache_control(system, cache_control)
+        else:
+            logger.warning(
+                "Anthropic system cache_control injection expects a string system "
+                "prompt, got %s; skipping system cache_control injection.",
+                type(system).__name__,
+            )
+    if "messages" in breakpoints and api_params.get(_ApiParamsKey.MESSAGES):
+        _apply_messages_cache_control(api_params[_ApiParamsKey.MESSAGES], cache_control)
 
 
 @register_model(model_name="AnthropicModel", supported_models=[r"claude-.*"])
@@ -358,6 +420,27 @@ class AnthropicModel(LLMModel):
             return part
         raise NotImplementedError(f"Not supported yet: {type(content_block)}")
 
+    @staticmethod
+    def _build_usage_metadata(usage: anthropic_types.Usage) -> GenerateContentResponseUsageMetadata:
+        """Normalize Anthropic usage into a cache-inclusive shape.
+
+        Anthropic ``input_tokens`` only counts tokens after the last cache
+        breakpoint. To report the full prompt size, fold cache read/write tokens
+        back into ``prompt_token_count``:
+        ``input_tokens + cache_read_input_tokens + cache_creation_input_tokens``.
+        """
+        cache_read = usage.cache_read_input_tokens or 0
+        cache_creation = usage.cache_creation_input_tokens or 0
+        prompt_tokens = usage.input_tokens + cache_read + cache_creation
+        output_tokens = usage.output_tokens
+        return GenerateContentResponseUsageMetadata(
+            prompt_token_count=prompt_tokens,
+            candidates_token_count=output_tokens,
+            total_token_count=prompt_tokens + output_tokens,
+            cache_read_input_tokens=usage.cache_read_input_tokens,
+            cache_creation_input_tokens=usage.cache_creation_input_tokens,
+        )
+
     def _message_to_llm_response(self, message: anthropic_types.Message) -> LlmResponse:
         """Convert an Anthropic message to LlmResponse."""
         logger.info("Received response from Anthropic Claude.")
@@ -371,11 +454,7 @@ class AnthropicModel(LLMModel):
                 role=const.MODEL,
                 parts=[self._content_block_to_part(cb) for cb in message.content],
             ),
-            usage_metadata=GenerateContentResponseUsageMetadata(
-                prompt_token_count=message.usage.input_tokens,
-                candidates_token_count=message.usage.output_tokens,
-                total_token_count=(message.usage.input_tokens + message.usage.output_tokens),
-            ),
+            usage_metadata=self._build_usage_metadata(message.usage),
         )
 
     def _merge_configs(self, request_config: Optional[GenerateContentConfig]) -> GenerateContentConfig:
@@ -581,11 +660,7 @@ class AnthropicModel(LLMModel):
             if final_parts:
                 final_content = Content(parts=final_parts, role=const.MODEL)
 
-            final_usage = GenerateContentResponseUsageMetadata(
-                prompt_token_count=final_message.usage.input_tokens,
-                candidates_token_count=final_message.usage.output_tokens,
-                total_token_count=(final_message.usage.input_tokens + final_message.usage.output_tokens),
-            )
+            final_usage = self._build_usage_metadata(final_message.usage)
 
             yield LlmResponse(content=final_content,
                               usage_metadata=final_usage,
@@ -604,6 +679,13 @@ class AnthropicModel(LLMModel):
             )
         finally:
             await client.close()
+
+    def _apply_prompt_cache(self, api_params: Dict[str, Any], ctx: InvocationContext | None) -> None:
+        """Inject Anthropic native cache_control breakpoints (opt-in, no-op when disabled)."""
+        cache_config = self._resolve_prompt_cache_config(ctx)
+        if not cache_config or not cache_config.breakpoints:
+            return
+        _inject_cache_control(api_params, cache_config.breakpoints, cache_config.ttl)
 
     @override
     async def _generate_async_impl(self,
@@ -705,6 +787,8 @@ class AnthropicModel(LLMModel):
         except Exception as ex:  # pylint: disable=broad-except
             logger.error("Error in Anthropic API parameters: %s", ex, exc_info=True)
             raise ex
+
+        self._apply_prompt_cache(api_params, ctx)
 
         try:
             if stream:

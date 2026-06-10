@@ -445,6 +445,12 @@ def trace_call_llm(
                 "gen_ai.usage.output_tokens",
                 output_tokens,
             )
+        cache_read = usage.cache_read_input_tokens
+        if cache_read is not None:
+            span.set_attribute("gen_ai.usage.cache_read_input_tokens", cache_read)
+        cache_creation = usage.cache_creation_input_tokens
+        if cache_creation is not None:
+            span.set_attribute("gen_ai.usage.cache_creation_input_tokens", cache_creation)
 
     if instruction_metadata is not None:
         span.set_attribute(f"{_trpc_agent_span_name}.instruction.name", instruction_metadata.name)

@@ -50,6 +50,16 @@ _usage_output_tokens = _meter.create_histogram(
     description="Completion tokens produced by a gen_ai operation.",
     unit="{token}",
 )
+_usage_cache_read_tokens = _meter.create_histogram(
+    name="gen_ai.usage.cache_read_input_tokens",
+    description="Input tokens served from the prompt cache.",
+    unit="{token}",
+)
+_usage_cache_creation_tokens = _meter.create_histogram(
+    name="gen_ai.usage.cache_creation_input_tokens",
+    description="Input tokens written to the prompt cache (Anthropic only).",
+    unit="{token}",
+)
 
 # OTel GenAI semconv attribute keys.
 _ATTR_OPERATION_NAME = "gen_ai.operation.name"
@@ -153,11 +163,17 @@ def report_call_llm(
 
     if llm_response is not None and llm_response.usage_metadata is not None:
         usage = llm_response.usage_metadata
-        prompt = getattr(usage, "prompt_token_count", None) or 0
-        total = getattr(usage, "total_token_count", None) or 0
+        prompt = usage.prompt_token_count or 0
+        total = usage.total_token_count or 0
         if prompt and total:
             _usage_input_tokens.record(prompt, attrs)
             _usage_output_tokens.record(max(total - prompt, 0), attrs)
+        cache_read = usage.cache_read_input_tokens
+        if cache_read is not None:
+            _usage_cache_read_tokens.record(cache_read, attrs)
+        cache_creation = usage.cache_creation_input_tokens
+        if cache_creation is not None:
+            _usage_cache_creation_tokens.record(cache_creation, attrs)
 
 
 def report_execute_tool(
