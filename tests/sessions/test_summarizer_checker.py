@@ -55,6 +55,13 @@ def _make_event_with_usage(total_tokens: int) -> Event:
     return event
 
 
+def _make_summary_event() -> Event:
+    event = _make_event_with_text("Previous conversation summary")
+    event.set_summary_event(True)
+    event.set_model_visible(True)
+    return event
+
+
 def _make_event_with_text(text: str) -> Event:
     return Event(
         invocation_id="inv-1",
@@ -90,6 +97,29 @@ class TestTokenThreshold:
         session = _make_session(events=events)
         assert checker(session) is False
 
+    def test_ignores_tokens_before_latest_summary(self):
+        checker = set_summarizer_token_threshold(100)
+        old_event = _make_event_with_usage(1000)
+        summary_event = _make_summary_event()
+        new_event = _make_event_with_usage(10)
+        old_event.timestamp = 1.0
+        summary_event.timestamp = 2.0
+        new_event.timestamp = 3.0
+        session = _make_session(events=[old_event, summary_event, new_event])
+
+        assert checker(session) is False
+
+    def test_ignores_invisible_tokens_after_latest_summary(self):
+        checker = set_summarizer_token_threshold(100)
+        summary_event = _make_summary_event()
+        invisible_event = _make_event_with_usage(1000)
+        summary_event.timestamp = 1.0
+        invisible_event.timestamp = 2.0
+        invisible_event.set_model_visible(False)
+        session = _make_session(events=[summary_event, invisible_event])
+
+        assert checker(session) is False
+
 
 class TestEventsCountThreshold:
     """Test set_summarizer_events_count_threshold."""
@@ -118,6 +148,34 @@ class TestEventsCountThreshold:
         session = _make_session(events=events)
         assert checker(session) is True
 
+    def test_counts_only_visible_events_after_latest_summary(self):
+        checker = set_summarizer_events_count_threshold(2)
+        old_events = [_make_event_with_text(f"old{i}") for i in range(10)]
+        summary_event = _make_summary_event()
+        new_events = [_make_event_with_text("new1"), _make_event_with_text("new2")]
+        for idx, event in enumerate(old_events):
+            event.timestamp = float(idx)
+        summary_event.timestamp = 20.0
+        new_events[0].timestamp = 21.0
+        new_events[1].timestamp = 22.0
+        session = _make_session(events=[*old_events, summary_event, *new_events])
+
+        assert checker(session) is False
+
+    def test_counts_after_the_latest_summary_event(self):
+        checker = set_summarizer_events_count_threshold(1)
+        first_summary = _make_summary_event()
+        event_after_first_summary = _make_event_with_text("already summarized")
+        latest_summary = _make_summary_event()
+        new_event = _make_event_with_text("new")
+        first_summary.timestamp = 1.0
+        event_after_first_summary.timestamp = 2.0
+        latest_summary.timestamp = 3.0
+        new_event.timestamp = 4.0
+        session = _make_session(events=[first_summary, event_after_first_summary, latest_summary, new_event])
+
+        assert checker(session) is False
+
 
 class TestTimeIntervalThreshold:
     """Test set_summarizer_time_interval_threshold."""
@@ -141,6 +199,27 @@ class TestTimeIntervalThreshold:
         event = _make_event_with_text("recent")
         event.timestamp = time.time() - 1.0
         session = _make_session(events=[event])
+        assert checker(session) is False
+
+    def test_requires_visible_events_after_latest_summary(self):
+        checker = set_summarizer_time_interval_threshold(10.0)
+        old_event = _make_event_with_text("old")
+        summary_event = _make_summary_event()
+        old_event.timestamp = time.time() - 100.0
+        summary_event.timestamp = time.time() - 20.0
+        session = _make_session(events=[old_event, summary_event])
+
+        assert checker(session) is False
+
+    def test_ignores_invisible_events_after_latest_summary(self):
+        checker = set_summarizer_time_interval_threshold(10.0)
+        summary_event = _make_summary_event()
+        invisible_event = _make_event_with_text("invisible")
+        summary_event.timestamp = time.time() - 20.0
+        invisible_event.timestamp = time.time() - 20.0
+        invisible_event.set_model_visible(False)
+        session = _make_session(events=[summary_event, invisible_event])
+
         assert checker(session) is False
 
 
@@ -180,6 +259,29 @@ class TestImportantContentThreshold:
         checker = set_summarizer_important_content_threshold(5)
         events = [_make_event_with_text("   ")]
         session = _make_session(events=events)
+        assert checker(session) is False
+
+    def test_ignores_important_content_before_latest_summary(self):
+        checker = set_summarizer_important_content_threshold(5)
+        old_important_event = _make_event_with_text("This old content is important")
+        summary_event = _make_summary_event()
+        new_short_event = _make_event_with_text("short")
+        old_important_event.timestamp = 1.0
+        summary_event.timestamp = 2.0
+        new_short_event.timestamp = 3.0
+        session = _make_session(events=[old_important_event, summary_event, new_short_event])
+
+        assert checker(session) is False
+
+    def test_ignores_invisible_important_content_after_latest_summary(self):
+        checker = set_summarizer_important_content_threshold(5)
+        summary_event = _make_summary_event()
+        invisible_important_event = _make_event_with_text("This invisible content is important")
+        summary_event.timestamp = 1.0
+        invisible_important_event.timestamp = 2.0
+        invisible_important_event.set_model_visible(False)
+        session = _make_session(events=[summary_event, invisible_important_event])
+
         assert checker(session) is False
 
 

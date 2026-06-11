@@ -11,11 +11,32 @@ import time
 from typing import Callable
 from typing import List
 
+from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.log import logger
 
 from ._session import Session
 
 CheckSummarizerFunction = Callable[[Session], bool]
+
+
+def _latest_summary_event(session: Session) -> Event | None:
+    """Return the latest summary event in the session, if any."""
+    for event in reversed(session.events):
+        if event.is_summary_event():
+            return event
+    return None
+
+
+def _events_after_latest_summary(session: Session) -> List[Event]:
+    """Return visible events created after the latest summary event."""
+    latest_summary_event = _latest_summary_event(session)
+    if latest_summary_event is None:
+        return [event for event in session.events if event.is_model_visible()]
+
+    return [
+        event for event in session.events if event.is_model_visible() and not event.is_summary_event()
+        and event.timestamp > latest_summary_event.timestamp
+    ]
 
 
 def set_summarizer_token_threshold(token_count: int) -> CheckSummarizerFunction:
@@ -30,7 +51,9 @@ def set_summarizer_token_threshold(token_count: int) -> CheckSummarizerFunction:
 
     def _decorator(session: Session) -> bool:
         # Filter events with usage_metadata
-        events_with_metadata = [event for event in session.events if event.usage_metadata is not None]
+        events_with_metadata = [
+            event for event in _events_after_latest_summary(session) if event.usage_metadata is not None
+        ]
 
         # If no events have usage_metadata, log a warning and return False
         if not events_with_metadata:
@@ -60,7 +83,7 @@ def set_summarizer_events_count_threshold(event_count: int = 30) -> CheckSummari
 
     def _decorator(session: Session) -> bool:
         # Check if we have enough events to warrant summarization
-        return len(session.events) > event_count
+        return len(_events_after_latest_summary(session)) > event_count
 
     return _decorator
 
@@ -76,8 +99,17 @@ def set_summarizer_time_interval_threshold(time_interval: float = 300.0) -> Chec
     """
 
     def _decorator(session: Session) -> bool:
-        # Check if it's been long enough since the last summarization
-        return time.time() - session.events[-1].timestamp > time_interval
+        latest_summary_event = _latest_summary_event(session)
+        events_after_summary = _events_after_latest_summary(session)
+        if not events_after_summary:
+            return False
+
+        if latest_summary_event is not None:
+            # Only trigger after new visible events have accumulated past the latest summary.
+            return time.time() - latest_summary_event.timestamp > time_interval
+
+        # No summary exists yet; preserve the original inactivity-based behavior.
+        return time.time() - events_after_summary[-1].timestamp > time_interval
 
     return _decorator
 
@@ -94,7 +126,7 @@ def set_summarizer_important_content_threshold(important_content_count: int = 10
 
     def _decorator(session: Session) -> bool:
         # Check if there's important content to summarize
-        for event in session.events:
+        for event in _events_after_latest_summary(session):
             if event.content and event.content.parts:
                 for part in event.content.parts:
                     if part.text and len(part.text.strip()) > important_content_count:
