@@ -347,15 +347,13 @@ class TestCreateSessionSummaryByEvents:
         summary_text, result_events = await summarizer.create_session_summary_by_events(
             events, "s1", keep_recent_count=3)
         assert summary_text is not None
-        assert len(result_events) == 11  # preserve all original events + 1 summary
-        visible_events = [event for event in result_events if event.is_model_visible()]
-        assert len(visible_events) == 4  # 1 summary + 3 recent
+        assert len(result_events) == 4  # 1 summary + 3 recent
         assert any(event.is_summary_event() for event in result_events)
         summary_event = next(event for event in result_events if event.is_summary_event())
         assert summary_event.author == "system"
         assert summary_event.content.role == "user"
 
-    async def test_summary_traces_back_to_invisible_user_before_first_visible_event(self):
+    async def test_summary_starts_from_first_user_turn_before_recent_events(self):
         model = _make_model_mock()
         llm_response = MagicMock()
         llm_response.content = Content(parts=[Part.from_text(text="summary text")])
@@ -367,15 +365,13 @@ class TestCreateSessionSummaryByEvents:
 
         model.generate_async = mock_generate
         summarizer = SessionSummarizer(model=model, start_by_user_turn=True)
-        hidden_user = _make_event(author="user", text="hidden question")
-        hidden_user.set_model_visible(False)
-        old_answer = _make_event(author="agent", text="visible answer")
+        old_user = _make_event(author="user", text="old question")
+        old_answer = _make_event(author="agent", text="old answer")
         recent_user = _make_event(author="user", text="recent question")
         system_preamble = _make_event(author="system", text="system preamble")
-        system_preamble.set_model_visible(False)
         events = [
             system_preamble,
-            hidden_user,
+            old_user,
             old_answer,
             recent_user,
         ]
@@ -386,13 +382,12 @@ class TestCreateSessionSummaryByEvents:
         assert summary_text == "summary text"
         assert result_events is events
         assert captured_prompts
-        assert "hidden question" in captured_prompts[0]
-        assert "visible answer" in captured_prompts[0]
+        assert "old question" in captured_prompts[0]
+        assert "old answer" in captured_prompts[0]
         assert "system preamble" not in captured_prompts[0]
         assert "recent question" not in captured_prompts[0]
-        assert old_answer.is_model_visible() is False
-        assert recent_user.is_model_visible() is True
-        assert any(event.is_summary_event() for event in result_events)
+        assert result_events[0].is_summary_event()
+        assert result_events[1] is recent_user
 
     async def test_summary_can_start_from_existing_summary_event(self):
         model = _make_model_mock()
@@ -409,7 +404,6 @@ class TestCreateSessionSummaryByEvents:
         existing_summary = _make_event(author="system", text="previous summary")
         existing_summary.set_summary_event(True)
         system_preamble = _make_event(author="system", text="system preamble")
-        system_preamble.set_model_visible(False)
         events = [
             system_preamble,
             existing_summary,
@@ -424,7 +418,7 @@ class TestCreateSessionSummaryByEvents:
         assert "previous summary" in captured_prompts[0]
         assert "old answer" in captured_prompts[0]
         assert "system preamble" not in captured_prompts[0]
-        assert result_events[3].is_summary_event()
+        assert result_events[0].is_summary_event()
 
     async def test_summary_falls_back_to_first_visible_event_and_ignores_large_keep_recent(self):
         model = _make_model_mock()
@@ -449,9 +443,8 @@ class TestCreateSessionSummaryByEvents:
         assert summary_text == "summary text"
         assert "agent message 1" in captured_prompts[0]
         assert "agent message 2" in captured_prompts[0]
-        visible_events = [event for event in result_events if event.is_model_visible()]
-        assert len(visible_events) == 1
-        assert visible_events[0].is_summary_event()
+        assert len(result_events) == 1
+        assert result_events[0].is_summary_event()
 
     async def test_summary_inserted_before_recent_user_turn_and_hides_prior_events(self):
         model = _make_model_mock()
@@ -466,8 +459,6 @@ class TestCreateSessionSummaryByEvents:
         model.generate_async = mock_generate
         summarizer = SessionSummarizer(model=model, start_by_user_turn=True)
         events = [_make_event(author="user" if idx in (8, 80, 92) else "agent", text=f"msg {idx}") for idx in range(100)]
-        for idx, event in enumerate(events):
-            event.set_model_visible(10 <= idx < 99)
 
         summary_text, result_events = await summarizer.create_session_summary_by_events(
             events, "s1", keep_recent_count=10)
@@ -476,9 +467,8 @@ class TestCreateSessionSummaryByEvents:
         assert "msg 8" in captured_prompts[0]
         assert "msg 91" in captured_prompts[0]
         assert "msg 92" not in captured_prompts[0]
-        assert result_events[92].is_summary_event()
-        assert all(not event.is_model_visible() for event in result_events[:92])
-        assert result_events[93].is_model_visible()
+        assert result_events[0].is_summary_event()
+        assert result_events[1].content.parts[0].text == "msg 92"
 
     async def test_summary_with_zero_keep_recent(self):
         model = _make_model_mock()
@@ -494,11 +484,59 @@ class TestCreateSessionSummaryByEvents:
         summary_text, result_events = await summarizer.create_session_summary_by_events(
             events, "s1", keep_recent_count=0)
         assert summary_text is not None
-        assert len(result_events) == 6  # preserve all original events + 1 summary
-        visible_events = [event for event in result_events if event.is_model_visible()]
-        assert len(visible_events) == 1  # only summary event remains model-visible
-        assert visible_events[0].is_summary_event()
-        assert visible_events[0].content.role == "user"
+        assert len(result_events) == 1  # only summary event remains active
+        assert result_events[0].is_summary_event()
+        assert result_events[0].content.role == "user"
+
+    async def test_summary_can_store_historical_events_separately(self):
+        model = _make_model_mock()
+        llm_response = MagicMock()
+        llm_response.content = Content(parts=[Part.from_text(text="summary text")])
+
+        async def mock_generate(request, stream=False, ctx=None):
+            yield llm_response
+
+        model.generate_async = mock_generate
+        summarizer = SessionSummarizer(model=model)
+        events = [_make_event(text=f"msg{i}") for i in range(5)]
+        historical_events = []
+
+        summary_text, result_events = await summarizer.create_session_summary_by_events(
+            events, "s1", keep_recent_count=2, historical_events=historical_events, store_historical_events=True)
+
+        assert summary_text == "summary text"
+        assert len(result_events) == 3
+        assert len(historical_events) == 3
+        assert historical_events[0].content.parts[0].text == "msg0"
+
+    async def test_resummary_compresses_existing_summary_anchor(self):
+        model = _make_model_mock()
+        llm_response = MagicMock()
+        llm_response.content = Content(parts=[Part.from_text(text="new summary")])
+        captured_prompts = []
+
+        async def mock_generate(request, stream=False, ctx=None):
+            captured_prompts.append(request.contents[0].parts[0].text)
+            yield llm_response
+
+        model.generate_async = mock_generate
+        summarizer = SessionSummarizer(model=model, start_by_user_turn=True)
+        previous_summary = _make_event(author="system", text="Previous conversation summary: old summary")
+        previous_summary.set_summary_event(True)
+        events = [previous_summary] + [_make_event(text=f"msg{i}") for i in range(100, 181)]
+        historical_events = []
+
+        summary_text, result_events = await summarizer.create_session_summary_by_events(
+            events, "s1", keep_recent_count=20, historical_events=historical_events, store_historical_events=True)
+
+        assert summary_text == "new summary"
+        assert result_events[0].is_summary_event()
+        assert result_events[0] is not previous_summary
+        assert [event.get_text() for event in result_events[1:]] == [f"msg{i}" for i in range(161, 181)]
+        assert previous_summary in historical_events
+        assert "old summary" in captured_prompts[0]
+        assert "msg160" in captured_prompts[0]
+        assert "msg161" not in captured_prompts[0]
 
     async def test_summary_no_events(self):
         model = _make_model_mock()
@@ -539,12 +577,10 @@ class TestCreateSessionSummary:
         session = _make_session(events=[_make_event(text=f"msg{i}") for i in range(10)])
         result = await summarizer.create_session_summary(session)
         assert result is not None
-        assert len(session.events) == 11  # preserve all original events + 1 summary
-        visible_events = [event for event in session.events if event.is_model_visible()]
-        assert len(visible_events) == 3  # 1 summary + 2 recent
+        assert len(session.events) == 3  # 1 summary + 2 recent
         assert any(event.is_summary_event() for event in session.events)
 
-    async def test_summary_traces_back_to_invisible_user_before_visible_events(self):
+    async def test_summary_starts_from_first_user_turn_in_session(self):
         model = _make_model_mock()
         llm_response = MagicMock()
         llm_response.content = Content(parts=[Part.from_text(text="session summary")])
@@ -556,15 +592,13 @@ class TestCreateSessionSummary:
 
         model.generate_async = mock_generate
         summarizer = SessionSummarizer(model=model, keep_recent_count=1, start_by_user_turn=True)
-        hidden_user = _make_event(author="user", text="hidden question")
-        hidden_user.set_model_visible(False)
-        old_answer = _make_event(author="agent", text="visible answer")
+        old_user = _make_event(author="user", text="old question")
+        old_answer = _make_event(author="agent", text="old answer")
         recent_user = _make_event(author="user", text="recent question")
         system_preamble = _make_event(author="system", text="system preamble")
-        system_preamble.set_model_visible(False)
         session = _make_session(events=[
             system_preamble,
-            hidden_user,
+            old_user,
             old_answer,
             recent_user,
         ])
@@ -573,13 +607,12 @@ class TestCreateSessionSummary:
 
         assert result == "session summary"
         assert captured_prompts
-        assert "hidden question" in captured_prompts[0]
-        assert "visible answer" in captured_prompts[0]
+        assert "old question" in captured_prompts[0]
+        assert "old answer" in captured_prompts[0]
         assert "system preamble" not in captured_prompts[0]
         assert "recent question" not in captured_prompts[0]
-        assert old_answer.is_model_visible() is False
-        assert recent_user.is_model_visible() is True
-        assert any(event.is_summary_event() for event in session.events)
+        assert session.events[0].is_summary_event()
+        assert session.events[1] is recent_user
 
     async def test_summary_without_visible_user_falls_back_to_first_visible_event(self):
         model = _make_model_mock()
@@ -600,10 +633,8 @@ class TestCreateSessionSummary:
         result = await summarizer.create_session_summary(session)
 
         assert result == "session summary"
-        assert len(session.events) == 3
-        visible_events = [event for event in session.events if event.is_model_visible()]
-        assert len(visible_events) == 1
-        assert visible_events[0].is_summary_event()
+        assert len(session.events) == 1
+        assert session.events[0].is_summary_event()
 
     async def test_summary_no_update_on_failure(self):
         model = _make_model_mock()

@@ -86,39 +86,28 @@ def is_summary_anchor(event: Event) -> bool:
 def find_events_for_summary(events: list[Event],
                             keep_recent_count: int = 10,
                             start_by_user_turn: bool = True) -> tuple[list[Event], int]:
-    """Find events that should be summarized.
+    """Find active events that should be summarized without checking model-visible flags.
 
-    Args:
-        events: Source events to inspect.
-        keep_recent_count: Number of recent model-visible events to keep out of the summary window.
-        start_by_user_turn: Whether to align the summary window to user or summary events.
-
-    Returns:
-        A tuple of selected events and the summary insertion index in the original events.
-        Returns ([], -1) when no model-visible events can be selected.
+    The optimized summarizer keeps only model-facing events in Session.events and
+    moves compressed raw events to Session.historical_events, so the active list
+    itself is the source of truth.
     """
-    visible_event_indices = [idx for idx, event in enumerate(events) if event.is_model_visible()]
-    if not visible_event_indices:
+    if not events:
         return [], -1
 
-    first_visible_index = visible_event_indices[0]
-    last_visible_index = visible_event_indices[-1]
-    start_index = first_visible_index
-
+    start_index = 0
     if start_by_user_turn and not is_summary_anchor(events[start_index]):
-        for idx in range(first_visible_index - 1, -1, -1):
-            if is_summary_anchor(events[idx]):
+        for idx, event in enumerate(events):
+            if is_summary_anchor(event):
                 start_index = idx
                 break
 
-    window_end_index = last_visible_index + 1
-    visible_events_count = len(visible_event_indices)
-    if keep_recent_count <= 0 or keep_recent_count >= visible_events_count:
-        insert_index = window_end_index
+    if keep_recent_count <= 0 or keep_recent_count >= len(events):
+        insert_index = len(events)
     else:
-        insert_index = visible_event_indices[-keep_recent_count]
+        insert_index = len(events) - keep_recent_count
         if start_by_user_turn:
-            for idx in range(insert_index, window_end_index):
+            for idx in range(insert_index, len(events)):
                 if is_summary_anchor(events[idx]):
                     insert_index = idx
                     break

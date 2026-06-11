@@ -355,11 +355,14 @@ class SessionSummarizer:
         """
         return self._summarizer_prompt.format(conversation_text=conversation_text)
 
-    async def create_session_summary_by_events(self,
-                                               events: List[Event],
-                                               session_id: str,
-                                               keep_recent_count: int = 10,
-                                               ctx: InvocationContext | None = None) -> Optional[str]:
+    async def create_session_summary_by_events(
+            self,
+            events: List[Event],
+            session_id: str,
+            keep_recent_count: int = 10,
+            ctx: InvocationContext | None = None,
+            historical_events: Optional[List[Event]] = None,
+            store_historical_events: bool = False) -> tuple[Optional[str], List[Event]]:
         """Compress a session by summarizing old events.
 
         Args:
@@ -367,20 +370,22 @@ class SessionSummarizer:
             session_id: The session ID
             keep_recent_count: Number of recent events to keep after compression
             ctx: The invocation context
+            historical_events: Optional list to receive raw events replaced by the summary
+            store_historical_events: Whether to keep raw historical events
 
         Returns:
             Summary text if successful, None otherwise
             Events after compression
         """
         try:
-            original_count = sum(1 for event in events if event.is_model_visible())
-            old_visible_events, insert_index = find_events_for_summary(events, keep_recent_count,
+            original_count = len(events)
+            events_for_summary, insert_index = find_events_for_summary(events, keep_recent_count,
                                                                        self.__start_by_user_turn)
-            if not old_visible_events:
+            if not events_for_summary:
                 return None, events
 
             # Generate summary of old events
-            summary_text = await self._compress_session_to_summary(old_visible_events, session_id, ctx)
+            summary_text = await self._compress_session_to_summary(events_for_summary, session_id, ctx)
 
             if summary_text:
                 # Create summary event
@@ -391,16 +396,15 @@ class SessionSummarizer:
                                           role="user"),
                                       timestamp=time.time())
                 summary_event.set_summary_event(True)
-                summary_event.set_model_visible(True)
 
-                # Hide all events before the summary insertion point without dropping raw data.
-                for event in events[:insert_index]:
-                    event.set_model_visible(False)
+                summarized_events = events[:insert_index]
+                if store_historical_events and historical_events is not None:
+                    historical_events.extend(summarized_events)
 
-                # Insert summary before the recent complete conversation window.
-                events.insert(insert_index, summary_event)
+                # Keep only the summary and recent active events in the model-facing window.
+                events[:] = [summary_event] + events[insert_index:]
 
-                compressed_count = sum(1 for event in events if event.is_model_visible())
+                compressed_count = len(events)
                 logger.info("Compressed session %s: %s events -> %s events", session_id, original_count,
                             compressed_count)
 
@@ -409,19 +413,27 @@ class SessionSummarizer:
             logger.error("Failed to compress session %s: %s", session_id, ex, exc_info=True)
             return None, events
 
-    async def create_session_summary(self, session: Session, ctx: InvocationContext | None = None) -> Optional[str]:
+    async def create_session_summary(self,
+                                     session: Session,
+                                     ctx: InvocationContext | None = None,
+                                     store_historical_events: bool = False) -> Optional[str]:
         """Compress a session by summarizing old events.
 
         Args:
             session: The session to compress
             ctx: The invocation context
+            store_historical_events: Whether to keep raw historical events
 
         Returns:
             Summary text if successful, None otherwise
             Events after compression
         """
-        summary_text, _ = await self.create_session_summary_by_events(session.events, session.id,
-                                                                      self.__keep_recent_count, ctx)
+        summary_text, _ = await self.create_session_summary_by_events(session.events,
+                                                                      session.id,
+                                                                      self.__keep_recent_count,
+                                                                      ctx,
+                                                                      historical_events=session.historical_events,
+                                                                      store_historical_events=store_historical_events)
         return summary_text
 
     def get_summary_metadata(self) -> Dict[str, Any]:

@@ -11,11 +11,24 @@ import time
 from typing import Callable
 from typing import List
 
+from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.log import logger
 
 from ._session import Session
 
 CheckSummarizerFunction = Callable[[Session], bool]
+
+
+def _leading_summary_event(session: Session) -> Event | None:
+    """Return the summary anchor when the active event window starts with one."""
+    if session.events and session.events[0].is_summary_event():
+        return session.events[0]
+    return None
+
+
+def _events_after_summary_anchor(session: Session) -> list[Event]:
+    """Return active events after the leading summary anchor."""
+    return session.events[1:] if _leading_summary_event(session) else session.events
 
 
 def set_summarizer_token_threshold(token_count: int) -> CheckSummarizerFunction:
@@ -30,7 +43,9 @@ def set_summarizer_token_threshold(token_count: int) -> CheckSummarizerFunction:
 
     def _decorator(session: Session) -> bool:
         # Filter events with usage_metadata
-        events_with_metadata = [event for event in session.events if event.usage_metadata is not None]
+        events_with_metadata = [
+            event for event in _events_after_summary_anchor(session) if event.usage_metadata is not None
+        ]
 
         # If no events have usage_metadata, log a warning and return False
         if not events_with_metadata:
@@ -60,7 +75,7 @@ def set_summarizer_events_count_threshold(event_count: int = 30) -> CheckSummari
 
     def _decorator(session: Session) -> bool:
         # Check if we have enough events to warrant summarization
-        return len(session.events) > event_count
+        return len(_events_after_summary_anchor(session)) > event_count
 
     return _decorator
 
@@ -76,8 +91,15 @@ def set_summarizer_time_interval_threshold(time_interval: float = 300.0) -> Chec
     """
 
     def _decorator(session: Session) -> bool:
-        # Check if it's been long enough since the last summarization
-        return time.time() - session.events[-1].timestamp > time_interval
+        summary_event = _leading_summary_event(session)
+        events_after_summary = _events_after_summary_anchor(session)
+        if not events_after_summary:
+            return False
+
+        if summary_event is not None:
+            return time.time() - summary_event.timestamp > time_interval
+
+        return time.time() - events_after_summary[-1].timestamp > time_interval
 
     return _decorator
 
@@ -94,7 +116,7 @@ def set_summarizer_important_content_threshold(important_content_count: int = 10
 
     def _decorator(session: Session) -> bool:
         # Check if there's important content to summarize
-        for event in session.events:
+        for event in _events_after_summary_anchor(session):
             if event.content and event.content.parts:
                 for part in event.content.parts:
                     if part.text and len(part.text.strip()) > important_content_count:

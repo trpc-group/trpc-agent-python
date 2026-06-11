@@ -147,9 +147,7 @@ class Mem0MemoryService(BaseMemoryService):
         level-1 key: session.save_key -> user_id
         level-2 key: session.id -> metadata["session_id"]
         """
-        valid_events = [
-            event for event in session.events if event.content and event.content.parts and event.is_model_visible()
-        ]
+        valid_events = [event for event in session.events if event.content and event.content.parts]
         if not valid_events:
             return
 
