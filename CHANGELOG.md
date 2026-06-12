@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.8](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.8) (2026-06-12)
+
+### Features
+
+* Session: Reworked session history storage from `Event.model_flags`-based model visibility to an active/historical split, with `Session.events` holding the active model window and `Session.historical_events` optionally retaining events moved out by max-event filtering, TTL, or summarization.
+* Session: Added `SessionServiceConfig.store_historical_events`, updated Redis, SQL, and InMemory persistence semantics for active/historical events, and kept list APIs lightweight by omitting both active and historical events from `list_sessions()`.
+* Session: Optimized summarization by keeping `[summary_event, recent_events...]` as the new active window and checking only the leading summary anchor instead of repeatedly scanning the event list.
+* Model: Added configuration support for OpenAI/Anthropic APIs and LiteLLM prompt cache.
+
+### Bug Fixes
+
+* Telemetry: Propagated span context correctly in async generators by using `start_span` with context attach/detach, and fixed member-agent input tracing to prefer `override_messages` over `user_content`.
+
 ## [1.1.7](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.7) (2026-06-05)
 
 ### Bug Fixes
