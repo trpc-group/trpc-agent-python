@@ -420,7 +420,7 @@ class LangGraphAgent(BaseAgent):
         # Must use checkpointer to resume
         if not self.graph.checkpointer or len(events) == 0:
             return None
-        last_event = next((event for event in reversed(events) if event.is_model_visible()), None)
+        last_event = events[-1]
         if not last_event:
             return None
         if last_event.author == "user" and last_event.content and last_event.content.parts:
@@ -678,8 +678,6 @@ class LangGraphAgent(BaseAgent):
         """
         messages = []
         for event in reversed(events):
-            if not event.is_model_visible():
-                continue
             if messages and event.author != "user":
                 break
             if event.author == "user" and event.content and event.content.parts:
@@ -722,8 +720,6 @@ class LangGraphAgent(BaseAgent):
 
         messages = []
         for event in events:
-            if not event.is_model_visible():
-                continue
             if not event.content or not event.content.parts:
                 continue
 

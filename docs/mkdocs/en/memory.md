@@ -1248,7 +1248,6 @@ memory_service = MempalaceMemoryService(
     ),
     wing="my_app_user",
     room="conversations",
-    store_only_model_visible=True,
 )
 ```
 

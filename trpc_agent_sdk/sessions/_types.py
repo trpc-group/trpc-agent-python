@@ -25,6 +25,8 @@ class SessionServiceConfig(BaseModel):
     """Time-to-live in seconds for events. If 0, no TTL filtering is applied."""
     num_recent_events: int = Field(default=0, description="Number of recent events to keep")
     """Number of recent events to keep. If 0, no recent events are kept."""
+    store_historical_events: bool = Field(default=False, description="Whether to store historical events")
+    """Whether to keep events that were moved out of the active event window."""
     ttl: Ttl = Field(default_factory=Ttl, description="TTL configuration")
     """TTL configuration."""
 

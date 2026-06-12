@@ -105,10 +105,16 @@ class SummarizerSessionManager:
         if is_should_summarize:
             logger.debug("Summarizing session %s", session.id)
 
-            # Compress the session. Invisible events are treated as already
-            # compressed/deleted for summary metrics; raw events remain stored.
-            original_event_count = self._count_visible_events(session)
-            summary_text = await self._summarizer.create_session_summary(session, ctx)
+            # Compress the session so the active events list contains only
+            # model-visible summary/recent events. Raw events are retained only
+            # when the session service config requests it.
+            original_event_count = len(session.events)
+            base_config = getattr(self._base_service, "session_config", None)
+            store_historical_events = getattr(base_config, "store_historical_events", False)
+            if not isinstance(store_historical_events, bool):
+                store_historical_events = False
+            summary_text = await self._summarizer.create_session_summary(
+                session, ctx, store_historical_events=store_historical_events)
             if summary_text:
                 app_name = session.app_name
                 user_id = session.user_id
@@ -120,16 +126,12 @@ class SummarizerSessionManager:
                     session_id=session.id,
                     summary_text=summary_text,
                     original_event_count=original_event_count,
-                    compressed_event_count=self._count_visible_events(session),
+                    compressed_event_count=len(session.events),
                     summary_timestamp=time.time(),
                 )
             # Update the stored session
             if self._base_service:
                 await self._base_service.update_session(session)
-
-    @staticmethod
-    def _count_visible_events(session: Session) -> int:
-        return sum(1 for event in session.events if event.is_model_visible())
 
     async def get_session_summary(self, session: Session) -> Optional[SessionSummary]:
         """Get a summary of a session.

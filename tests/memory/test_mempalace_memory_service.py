@@ -91,7 +91,7 @@ class TestMempalaceStoreSession:
         assert "remember this" in events_to_store[0][1]
         assert events_to_store[0][2] in svc._stored_drawer_ids
 
-    async def test_store_session_skips_invisible_events(self, monkeypatch):
+    async def test_store_session_ignores_model_visible_flag(self, monkeypatch):
         calls = []
 
         def fake_store(session, events_to_store, wing, room):
@@ -99,17 +99,35 @@ class TestMempalaceStoreSession:
             return {drawer_id for _, _, drawer_id in events_to_store}
 
         visible_event = _make_event("visible")
-        invisible_event = _make_event("hidden")
-        invisible_event.set_model_visible(False)
+        flagged_event = _make_event("hidden")
+        flagged_event.set_model_visible(False)
         svc = MempalaceMemoryService(memory_service_config=_make_config())
         monkeypatch.setattr(svc, "_store_events", fake_store)
 
-        await svc.store_session(_make_session(events=[visible_event, invisible_event]))
+        await svc.store_session(_make_session(events=[visible_event, flagged_event]))
+        await svc.close()
+
+        assert len(calls) == 1
+        assert len(calls[0]) == 2
+        assert "visible" in calls[0][0][1]
+        assert "hidden" in calls[0][1][1]
+
+    async def test_store_only_model_visible_flag_is_compatibility_noop(self, monkeypatch):
+        calls = []
+
+        def fake_store(session, events_to_store, wing, room):
+            calls.append(events_to_store)
+            return {drawer_id for _, _, drawer_id in events_to_store}
+
+        svc = MempalaceMemoryService(memory_service_config=_make_config(), store_only_model_visible=False)
+        monkeypatch.setattr(svc, "_store_events", fake_store)
+
+        await svc.store_session(_make_session(events=[_make_event("active event")]))
         await svc.close()
 
         assert len(calls) == 1
         assert len(calls[0]) == 1
-        assert "visible" in calls[0][0][1]
+        assert "active event" in calls[0][0][1]
 
     async def test_store_session_is_incremental(self, monkeypatch):
         calls = []

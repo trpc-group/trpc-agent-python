@@ -41,6 +41,7 @@ from sqlalchemy import ForeignKeyConstraint
 from sqlalchemy import Text
 from sqlalchemy import func
 from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
@@ -94,6 +95,16 @@ def _event_object_from_storage(value: Optional[str]) -> Optional[str]:
     return value or Event.model_fields["object"].default
 
 
+def _events_to_storage(events: list[Event]) -> list[dict[str, Any]]:
+    """Serialize historical events into the sessions table JSON column."""
+    return [event.model_dump(exclude_none=True, mode="json") for event in events]
+
+
+def _events_from_storage(events: Optional[list[dict[str, Any]]]) -> list[Event]:
+    """Deserialize historical events from the sessions table JSON column."""
+    return [Event.model_validate(event) for event in (events or [])]
+
+
 class SessionStorageBase(DeclarativeBase):
     """Base class for SqlSessionService tables only.
 
@@ -139,6 +150,9 @@ class StorageSession(SessionStorageBase):
     )
 
     state: Mapped[MutableDict[str, Any]] = mapped_column(MutableDict.as_mutable(DynamicJSON), default={})
+    historical_events: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(MutableList.as_mutable(DynamicJSON),
+                                                                              default=list,
+                                                                              nullable=True)
     conversation_count: Mapped[int] = mapped_column(Integer, default=0)
 
     create_time: Mapped[datetime] = mapped_column(PreciseTimestamp, default=func.now())
@@ -164,17 +178,21 @@ class StorageSession(SessionStorageBase):
         self,
         state: dict[str, Any] | None = None,
         events: list[Event] | None = None,
+        historical_events: list[Event] | None = None,
     ) -> Session:
         if state is None:
             state = {}
         if events is None:
             events = []
+        if historical_events is None:
+            historical_events = []
         return Session(
             app_name=self.app_name,
             user_id=self.user_id,
             id=self.id,
             state=state,
             events=events,
+            historical_events=historical_events,
             conversation_count=self.conversation_count,
             last_update_time=self.update_timestamp_tz,
             save_key=user_key(self.app_name, self.user_id),
@@ -374,7 +392,11 @@ class SqlSessionService(BaseSessionService):
                  is_async: bool = False,
                  session_config: Optional[SessionServiceConfig] = None,
                  **kwargs: Any):
+        is_default_config = session_config is None
         super().__init__(summarizer_manager=summarizer_manager, session_config=session_config)
+        if is_default_config:
+            # Default to store historical events for persistent backends.
+            self._session_config.store_historical_events = True
         self._sql_storage = SqlStorage(is_async=is_async, db_url=db_url, metadata=SessionStorageBase.metadata, **kwargs)
         self.__cleanup_task: Optional[asyncio.Task] = None
         self.__cleanup_stop_event: Optional[asyncio.Event] = None
@@ -422,7 +444,9 @@ class SqlSessionService(BaseSessionService):
                 StateStorageEntry(app_state_delta=app_state,
                                   user_state_delta=user_state,
                                   session_state=state_deltas.session_state))
-            return storage_session.to_session(state=merged_state)
+            historical_events = (_events_from_storage(storage_session.historical_events)
+                                 if self._session_config.store_historical_events else [])
+            return storage_session.to_session(state=merged_state, historical_events=historical_events)
 
     @override
     async def get_session(
@@ -459,9 +483,10 @@ class SqlSessionService(BaseSessionService):
                                   session_state=storage_session.state))
 
             events = [e.to_event() for e in reversed(storage_events)]
-            session = storage_session.to_session(state=merged_state, events=events)
-            self.filter_events(session)
-            return session
+            historical_events = (_events_from_storage(storage_session.historical_events)
+                                 if self._session_config.store_historical_events else [])
+            session = storage_session.to_session(state=merged_state, events=events, historical_events=historical_events)
+            return self.filter_events(session)
 
     @override
     async def list_sessions(self, *, app_name: str, user_id: str) -> ListSessionsResponse:
@@ -507,7 +532,7 @@ class SqlSessionService(BaseSessionService):
         if event.partial:
             return event
 
-        await super().append_event(session=session, event=event)
+        event, filtered_events = self._append_event_to_session(session, event)
 
         app_name = session.app_name
         user_id = session.user_id
@@ -525,6 +550,12 @@ class SqlSessionService(BaseSessionService):
                 logger.warning(
                     "Session %s is stale (time diff: %ss). Reloading session from database to get latest state.",
                     session_id, time_diff)
+                # The event was already appended to the caller-provided
+                # session before this reload. If another writer concurrently
+                # changed the same session, filtered_events may no longer
+                # describe the exact database window. Full conflict resolution
+                # would require versioned writes/locking; keep the existing
+                # best-effort stale-session behavior here.
                 await self._sql_storage.refresh(sql_session, storage_session)
                 filters = [
                     SessionStorageEvent.app_name == app_name, SessionStorageEvent.session_id == session_id,
@@ -539,6 +570,8 @@ class SqlSessionService(BaseSessionService):
                 session.state = storage_session.state
                 session.conversation_count = storage_session.conversation_count
                 session.events = [e.to_event() for e in reversed(storage_events)]
+                session.historical_events = (_events_from_storage(storage_session.historical_events)
+                                             if self._session_config.store_historical_events else [])
 
             storage_session.conversation_count = session.conversation_count
 
@@ -556,7 +589,23 @@ class SqlSessionService(BaseSessionService):
                     session_state.update(state_entry.session_state)
                     storage_session.state = session_state  # type: ignore
 
-            await self._sql_storage.add(sql_session, SessionStorageEvent.from_event(session, event))
+            if filtered_events:
+                filtered_event_ids = [filtered_event.id for filtered_event in filtered_events]
+                storage_session.historical_events = (_events_to_storage(
+                    session.historical_events) if self._session_config.store_historical_events else [])  # type: ignore
+                filters = [
+                    SessionStorageEvent.app_name == app_name, SessionStorageEvent.user_id == user_id,
+                    SessionStorageEvent.session_id == session_id,
+                    SessionStorageEvent.id.in_(filtered_event_ids)
+                ]
+                conditions = SqlCondition(filters=filters)
+                event_key = SqlKey(key=(app_name, user_id, session_id), storage_cls=SessionStorageEvent)
+                await self._sql_storage.delete(sql_session, event_key, conditions)
+            else:
+                filtered_event_ids = []
+
+            if event.id not in filtered_event_ids:
+                await self._sql_storage.add(sql_session, SessionStorageEvent.from_event(session, event))
             await self._sql_storage.commit(sql_session)
             await self._sql_storage.refresh(sql_session, storage_session)
 
@@ -589,6 +638,9 @@ class SqlSessionService(BaseSessionService):
                 await self._sql_storage.add(sql_session, SessionStorageEvent.from_event(session, event))
 
             storage_session.state = session.state  # type: ignore
+            storage_session.historical_events = (
+                _events_to_storage(session.historical_events) if self._session_config.store_historical_events else []
+            )  # type: ignore
             storage_session.conversation_count = session.conversation_count
 
             await self._sql_storage.commit(sql_session)

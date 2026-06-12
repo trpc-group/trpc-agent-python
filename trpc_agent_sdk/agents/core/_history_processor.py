@@ -114,9 +114,6 @@ class HistoryProcessor:
 
         filtered_events = []
         for event in events:
-            # Step 0.5: Model visibility filtering
-            if not event.is_model_visible():
-                continue
 
             # Step 1: Timeline filtering
             if not self._should_include_event_by_timeline(event, self.timeline_filter_mode, ctx):
@@ -173,9 +170,6 @@ class HistoryProcessor:
             True if the event should be included, False otherwise
         """
         if timeline_filter_mode == TimelineFilterMode.ALL:
-            return True
-
-        if event.is_summary_event():
             return True
 
         # INVOCATION mode: Filter by invocation_id (which represents a single runner.run_async() call)
