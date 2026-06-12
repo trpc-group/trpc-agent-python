@@ -62,7 +62,11 @@ class RedisSessionService(BaseSessionService):
                  session_config: Optional[SessionServiceConfig] = None,
                  is_async: bool = False,
                  **kwargs: Any):
+        is_default_config = session_config is None
         super().__init__(summarizer_manager=summarizer_manager, session_config=session_config)
+        if is_default_config:
+            # Default to store historical events for persistent backends.
+            self._session_config.store_historical_events = True
         # Redis needs default TTL configuration
         self._redis_storage = RedisStorage(is_async=is_async, redis_url=db_url, **kwargs)
 
@@ -115,14 +119,14 @@ class RedisSessionService(BaseSessionService):
             if not storage_session:
                 return None
 
-            # Filter events based on configuration
-            self.filter_events(storage_session)
+            # Filter events for the returned view without mutating storage data.
+            session = self.filter_events(storage_session)
 
             # Get and merge state
             app_state = await self._get_app_state(redis_session, app_name)
             user_state = await self._get_user_state(redis_session, app_name, user_id)
 
-            return self._merge_state(app_state, user_state, storage_session)
+            return self._merge_state(app_state, user_state, session)
 
     @override
     async def list_sessions(self, *, app_name: str, user_id: str) -> ListSessionsResponse:
@@ -144,6 +148,7 @@ class RedisSessionService(BaseSessionService):
                 if storage_session:
                     # Clear events for list view
                     storage_session.events = []
+                    storage_session.historical_events = []
                     # Merge state
                     storage_session = self._merge_state(app_state, user_state, storage_session)
                     sessions_without_events.append(storage_session)
@@ -181,9 +186,6 @@ class RedisSessionService(BaseSessionService):
             if not storage_session:
                 _warning("session not found in Redis")
                 return event
-            # Add event to storage session
-            storage_session.events.append(event)
-
             # Extract and apply state changes to appropriate storage buckets
             if event.actions and event.actions.state_delta:
                 state_delta = extract_state_delta(event.actions.state_delta)
@@ -200,7 +202,8 @@ class RedisSessionService(BaseSessionService):
                 if state_delta.session_state:
                     storage_session.state.update(state_delta.session_state)
 
-            # Update conversation count
+            storage_session.events = session.events
+            storage_session.historical_events = session.historical_events
             storage_session.conversation_count = session.conversation_count
             await self._set_session(redis_session, storage_session)
 
@@ -316,7 +319,10 @@ class RedisSessionService(BaseSessionService):
             session: Session to set
         """
         key = session_key(session.app_name, session.user_id, session.id)
-        session_json = session.model_dump_json()
+        if self._session_config.store_historical_events:
+            session_json = session.model_dump_json()
+        else:
+            session_json = session.model_copy(update={"historical_events": []}).model_dump_json()
 
         # Use SET with TTL if TTL is configured, otherwise use SET
         command = RedisCommand(method='set',
@@ -378,7 +384,10 @@ class RedisSessionService(BaseSessionService):
         storage_session_data = await self._redis_storage.execute_command(redis_session, command)
         if storage_session_data:
             await self._refresh_ttl(redis_session, session_key)
-            return Session.model_validate_json(storage_session_data)
+            session = Session.model_validate_json(storage_session_data)
+            if not self._session_config.store_historical_events:
+                session.historical_events = []
+            return session
         return None
 
     def _merge_state(self, app_state: dict[str, Any], user_state: dict[str, Any], session: Session) -> Session:

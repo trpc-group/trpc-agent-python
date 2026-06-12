@@ -235,6 +235,7 @@ class TestInMemoryListSessions:
         result = await svc.list_sessions(app_name="app", user_id="user")
         assert len(result.sessions) == 1
         assert result.sessions[0].events == []
+        assert result.sessions[0].historical_events == []
         await svc.close()
 
     async def test_list_nonexistent_app(self):

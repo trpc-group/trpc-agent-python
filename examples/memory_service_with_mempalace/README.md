@@ -62,7 +62,6 @@ memory_service = MempalaceMemoryService(
     memory_service_config=memory_service_config,
     wing="trpc-agent",
     room="conversations",
-    store_only_model_visible=True,
 )
 ```
 
@@ -70,7 +69,6 @@ memory_service = MempalaceMemoryService(
 
 - `wing="trpc-agent"`：把示例记忆固定写入 `trpc-agent` 这个 wing。
 - `room="conversations"`：把普通对话记忆写入 `conversations` room。
-- `store_only_model_visible=True`：只存模型可见的事件。
 - `ttl_seconds=20`：超过 20 秒的记忆会被后台 cleanup 删除。
 - `cleanup_interval_seconds=20`：每 20 秒执行一次清理。
 

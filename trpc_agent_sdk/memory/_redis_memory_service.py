@@ -85,7 +85,7 @@ class RedisMemoryService(BaseMemoryService):
                     except Exception as ex:  # pylint: disable=broad-except
                         logger.error("Error parsing event JSON: %s", ex)
                         continue
-                    if not event or not event.content or not event.content.parts or not event.is_model_visible():
+                    if not event or not event.content or not event.content.parts:
                         continue
                     words_in_event = extract_words_lower(' '.join(
                         [part.text for part in event.content.parts if part.text]))

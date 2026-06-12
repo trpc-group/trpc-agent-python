@@ -86,14 +86,13 @@ class MempalaceMemoryService(BaseMemoryService):
         wing: Optional[str] = None,
         room: str = _DEFAULT_ROOM,
         added_by: str = _DEFAULT_ADDED_BY,
-        store_only_model_visible: bool = True,
+        **kwargs: Any,
     ) -> None:
         super().__init__(memory_service_config=memory_service_config)
         self._config = config or MempalaceConfig()
         self._wing = wing
         self._room = room
         self._added_by = added_by
-        self._store_only_model_visible = store_only_model_visible
         self._pending_tasks: set[asyncio.Task[None]] = set()
         self._scheduled_drawer_ids: set[str] = set()
         self._stored_drawer_ids: set[str] = set()
@@ -110,8 +109,6 @@ class MempalaceMemoryService(BaseMemoryService):
 
         events_to_store: list[tuple[Event, str, str]] = []
         for event in session.events:
-            if self._store_only_model_visible and not event.is_model_visible():
-                continue
             text = self._event_to_text(event)
             if not text:
                 continue

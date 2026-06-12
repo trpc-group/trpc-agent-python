@@ -181,7 +181,7 @@ class TestFindEventsForSummary:
 
         selected_events, insert_index = find_events_for_summary(events, keep_recent_count=1)
 
-        assert selected_events == events[:3]
+        assert selected_events == events[1:3]
         assert insert_index == 3
 
     def test_first_visible_summary_event_starts_summary_window(self):
@@ -209,16 +209,14 @@ class TestFindEventsForSummary:
         assert selected_events == events[:1]
         assert insert_index == 1
 
-    def test_traces_back_to_invisible_user_before_first_visible_event(self):
-        hidden_user = _make_event(author="user", text="hidden")
-        hidden_user.set_model_visible(False)
+    def test_starts_from_first_user_in_active_events(self):
+        old_user = _make_event(author="user", text="old question")
         events = [
-            _make_event(author="system", text="hidden preamble"),
-            hidden_user,
-            _make_event(author="agent", text="visible answer"),
-            _make_event(author="agent", text="visible answer"),
+            _make_event(author="system", text="system preamble"),
+            old_user,
+            _make_event(author="agent", text="answer 1"),
+            _make_event(author="agent", text="answer 2"),
         ]
-        events[0].set_model_visible(False)
 
         selected_events, insert_index = find_events_for_summary(events, keep_recent_count=10)
 
@@ -227,24 +225,20 @@ class TestFindEventsForSummary:
 
     def test_aligns_recent_window_to_next_user_turn(self):
         events = [_make_event(author="user" if idx in (8, 80, 92) else "agent", text=f"msg {idx}") for idx in range(100)]
-        for idx, event in enumerate(events):
-            event.set_model_visible(10 <= idx < 99)
 
         selected_events, insert_index = find_events_for_summary(events, keep_recent_count=10)
 
         assert selected_events == events[8:92]
         assert insert_index == 92
 
-    def test_keep_recent_count_uses_model_visible_events(self):
+    def test_keep_recent_count_uses_active_events(self):
         events = [_make_event(author="agent", text=f"msg {idx}") for idx in range(20)]
-        for idx, event in enumerate(events):
-            event.set_model_visible(idx in (0, 1, 2, 10, 15, 19))
 
         selected_events, insert_index = find_events_for_summary(
             events, keep_recent_count=3, start_by_user_turn=False)
 
-        assert selected_events == events[:10]
-        assert insert_index == 10
+        assert selected_events == events[:17]
+        assert insert_index == 17
 
     def test_ignores_keep_recent_when_it_would_empty_selection(self):
         events = [
@@ -266,14 +260,11 @@ class TestFindEventsForSummary:
 
         selected_events, insert_index = find_events_for_summary(events, keep_recent_count=0)
 
-        assert selected_events == events
+        assert selected_events == events[1:]
         assert insert_index == len(events)
 
-    def test_no_visible_events(self):
-        event = _make_event(author="user", text="hidden")
-        event.set_model_visible(False)
-
-        selected_events, insert_index = find_events_for_summary([event])
+    def test_no_events(self):
+        selected_events, insert_index = find_events_for_summary([])
 
         assert selected_events == []
         assert insert_index == -1

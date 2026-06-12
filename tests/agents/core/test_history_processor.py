@@ -116,7 +116,7 @@ class TestTimelineFiltering:
         assert len(events) == 1
         assert events[0].content.parts[0].text == "current"
 
-    def test_invocation_mode_includes_summary_events(self, invocation_context):
+    def test_invocation_mode_filters_summary_events_by_id(self, invocation_context):
         proc = HistoryProcessor(timeline_filter_mode=TimelineFilterMode.INVOCATION)
         summary_event = _make_event("system", "Previous conversation summary", invocation_id="summary")
         summary_event.set_summary_event(True)
@@ -124,9 +124,8 @@ class TestTimelineFiltering:
 
         events = proc.filter_events(invocation_context, [summary_event, current_event])
 
-        assert len(events) == 2
-        assert events[0].is_summary_event()
-        assert events[1].content.parts[0].text == "current"
+        assert len(events) == 1
+        assert events[0].content.parts[0].text == "current"
 
 
 # ---------------------------------------------------------------------------

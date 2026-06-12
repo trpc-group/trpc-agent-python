@@ -34,20 +34,40 @@ class Session(SessionABC):
     """
     events: List[Event] = Field(default_factory=list, description="The events of the session")
     """The events of the session, e.g. user input, model response, function call/response, etc."""
+    historical_events: List[Event] = Field(default_factory=list, description="Events replaced by session summaries")
+    """Raw events that have been compressed into summaries and removed from the model-visible event window."""
 
-    def add_event(self, event: Event, event_ttl_seconds: float = 0.0, max_events: int = 0) -> None:
+    def add_event(self,
+                  event: Event,
+                  event_ttl_seconds: float = 0.0,
+                  max_events: int = 0,
+                  store_filtered_events: bool = False) -> None:
         """Add an event to the session and update the last update time.
 
         Args:
             event: The event to add to the session.
             event_ttl_seconds: Time-to-live in seconds for events. If 0, no TTL filtering is applied.
             max_events: Maximum number of events to keep. If 0, no limit is applied.
+            store_filtered_events: Whether to move filtered events into historical_events.
         """
-        self.events.append(event)
-        self.apply_event_filtering(event_ttl_seconds, max_events)
-        self.last_update_time = event.timestamp
+        self._add_event_and_get_filtered_events(event, event_ttl_seconds, max_events, store_filtered_events)
 
-    def apply_event_filtering(self, event_ttl_seconds: float = 0.0, max_events: int = 0) -> None:
+    def _add_event_and_get_filtered_events(self,
+                                           event: Event,
+                                           event_ttl_seconds: float = 0.0,
+                                           max_events: int = 0,
+                                           store_filtered_events: bool = False) -> list[Event]:
+        """Add an event and return events removed from the active event window."""
+        self.events.append(event)
+        filtered_events = self._apply_event_filtering_and_get_filtered_events(event_ttl_seconds, max_events,
+                                                                              store_filtered_events)
+        self.last_update_time = event.timestamp
+        return filtered_events
+
+    def apply_event_filtering(self,
+                              event_ttl_seconds: float = 0.0,
+                              max_events: int = 0,
+                              store_filtered_events: bool = False) -> None:
         """Apply event filtering based on TTL and maximum event count.
 
         This method filters events in two steps:
@@ -60,21 +80,23 @@ class Session(SessionABC):
         Args:
             event_ttl_seconds: Time-to-live in seconds for events. If 0, no TTL filtering is applied.
             max_events: Maximum number of events to keep. If 0, no limit is applied.
+            store_filtered_events: Whether to move filtered events into historical_events.
         """
+        self._apply_event_filtering_and_get_filtered_events(event_ttl_seconds, max_events, store_filtered_events)
+
+    def _apply_event_filtering_and_get_filtered_events(self,
+                                                       event_ttl_seconds: float = 0.0,
+                                                       max_events: int = 0,
+                                                       store_filtered_events: bool = False) -> list[Event]:
+        """Apply event filtering and return events removed from the active event window."""
         if not self.events:
-            return
+            return []
 
         # If neither filter is configured, return early
         if event_ttl_seconds <= 0 and max_events <= 0:
-            return
+            return []
 
-        # Apply filtering only to the currently model-visible events.  Raw
-        # session events stay in place; events filtered out of this visible
-        # window are hidden from model history.
-        visible_events = [event for event in self.events if event.is_model_visible()]
-        if not visible_events:
-            return
-        retained_events = visible_events.copy()
+        retained_events = self.events.copy()
 
         # Step 1: Apply TTL filtering if configured
         if event_ttl_seconds > 0:
@@ -91,31 +113,26 @@ class Session(SessionABC):
                 retained_events = retained_events[i:]
                 break
         else:
-            # Step 3: If all visible events were filtered out, retain the
-            # first user message that the original behavior would have
-            # re-inserted, but only from the already-visible subset.
+            # Step 3: If all events were filtered out, retain the latest
+            # summary/user anchor so the next model request still has a
+            # coherent starting point.
             retained_events = []
-            for event in reversed(visible_events):
+            for event in reversed(self.events):
                 if is_summary_anchor(event):
                     retained_events.insert(0, event)
                     break
 
         retained_ids = {id(event) for event in retained_events}
-        for event in visible_events:
-            if id(event) not in retained_ids:
-                event.set_model_visible(False)
+        filtered_events = [event for event in self.events if id(event) not in retained_ids]
 
-    def get_first_visible_event_idx(self) -> int:
-        """Get the first visible event index in the session."""
-        first_visible_idx = 0
-        for idx, event in enumerate(self.events):
-            if event.is_model_visible():
-                first_visible_idx = idx
-                break
-        return first_visible_idx
+        if store_filtered_events:
+            self.historical_events.extend(filtered_events)
+
+        self.events = retained_events
+        return filtered_events
 
     def insert_events(self, events: List[Event], idx: Optional[int] = None) -> None:
         """Insert events at the given index, replacing the existing events."""
         if idx is None:
-            idx = self.get_first_visible_event_idx()
+            idx = 0
         self.events[idx:idx] = events

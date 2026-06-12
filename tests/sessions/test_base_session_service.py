@@ -141,6 +141,18 @@ class TestBaseSessionServiceAppendEvent:
         await svc.append_event(session, event)
         assert len(session.events) == 1
 
+    async def test_append_event_stores_filtered_events_when_configured(self):
+        config = SessionServiceConfig(max_events=2, store_historical_events=True)
+        svc = ConcreteSessionService(session_config=config)
+        session = _make_session()
+
+        for i in range(6):
+            event = _make_event(author="user" if i == 2 else "agent", text=f"msg{i}")
+            await svc.append_event(session, event)
+
+        assert [event.get_text() for event in session.events] == ["msg2", "msg5"]
+        assert [event.get_text() for event in session.historical_events] == ["msg0", "msg1", "msg3", "msg4"]
+
 
 class TestBaseSessionServiceTrimTempDeltaState:
     """Test _trim_temp_delta_state method."""
@@ -172,10 +184,23 @@ class TestBaseSessionServiceFilterEvents:
         for i in range(10):
             author = "user" if i == 7 else "agent"
             session.events.append(_make_event(author=author, text=f"msg{i}"))
-        svc.filter_events(session)
+        filtered_session = svc.filter_events(session)
+        assert filtered_session is session
+        assert [event.get_text() for event in session.events] == ["msg7", "msg8", "msg9"]
+
+    def test_filter_by_num_recent_events_with_copy(self):
+        config = SessionServiceConfig(num_recent_events=3)
+        svc = ConcreteSessionService(session_config=config)
+        session = _make_session()
+        for i in range(10):
+            author = "user" if i == 7 else "agent"
+            session.events.append(_make_event(author=author, text=f"msg{i}"))
+
+        filtered_session = svc.filter_events(session, need_copy=True)
+
+        assert filtered_session is not session
         assert len(session.events) == 10
-        visible_events = [event for event in session.events if event.is_model_visible()]
-        assert [event.get_text() for event in visible_events] == ["msg7", "msg8", "msg9"]
+        assert [event.get_text() for event in filtered_session.events] == ["msg7", "msg8", "msg9"]
 
     def test_filter_by_event_ttl(self):
         config = SessionServiceConfig(event_ttl_seconds=5.0)
@@ -190,18 +215,18 @@ class TestBaseSessionServiceFilterEvents:
         new_event.timestamp = time.time()
         session.events.append(new_event)
 
-        svc.filter_events(session)
-        assert len(session.events) == 2
-        visible_events = [event for event in session.events if event.is_model_visible()]
-        assert len(visible_events) == 1
-        assert visible_events[0].get_text() == "new"
+        filtered_session = svc.filter_events(session)
+        assert filtered_session is session
+        assert len(session.events) == 1
+        assert session.events[0].get_text() == "new"
 
     def test_filter_no_config(self):
         svc = ConcreteSessionService()
         session = _make_session()
         for i in range(5):
             session.events.append(_make_event(text=f"msg{i}"))
-        svc.filter_events(session)
+        filtered_session = svc.filter_events(session)
+        assert filtered_session is session
         assert len(session.events) == 5
 
     def test_filter_ttl_removes_all_old(self):
@@ -212,9 +237,9 @@ class TestBaseSessionServiceFilterEvents:
             e = _make_event(text=f"old{i}")
             e.timestamp = time.time() - 100
             session.events.append(e)
-        svc.filter_events(session)
-        assert len(session.events) == 5
-        assert all(not event.is_model_visible() for event in session.events)
+        filtered_session = svc.filter_events(session)
+        assert filtered_session is session
+        assert session.events == []
 
     def test_filter_by_num_recent_events_preserves_summary_anchor(self):
         config = SessionServiceConfig(num_recent_events=3)
@@ -227,11 +252,11 @@ class TestBaseSessionServiceFilterEvents:
         for i in range(5):
             session.events.append(_make_event(text=f"agent{i}"))
 
-        svc.filter_events(session)
+        filtered_session = svc.filter_events(session)
 
-        visible_events = [event for event in session.events if event.is_model_visible()]
-        assert len(visible_events) == 1
-        assert visible_events[0].is_summary_event()
+        assert filtered_session is session
+        assert len(session.events) == 1
+        assert session.events[0].is_summary_event()
 
 
 class TestBaseSessionServiceSetSummarizerManager:

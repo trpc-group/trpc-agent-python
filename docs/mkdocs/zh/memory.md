@@ -619,7 +619,6 @@ memory_service = MempalaceMemoryService(
     memory_service_config=memory_service_config,
     wing="my_app_user",        # 可选：记忆命名空间；不传则默认由 save_key 推导
     room="conversations",      # 可选：记忆类别；默认 conversations
-    store_only_model_visible=True,
 )
 ```
 

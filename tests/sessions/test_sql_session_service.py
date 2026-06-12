@@ -33,8 +33,15 @@ from trpc_agent_sdk.sessions._types import SessionServiceConfig
 from trpc_agent_sdk.types import Content, EventActions, FunctionCall, Part, State
 
 
-def _make_config(ttl_seconds=0, cleanup_interval=0.0, enable_ttl=False, num_recent_events=0):
-    config = SessionServiceConfig(num_recent_events=num_recent_events)
+def _make_config(ttl_seconds=0,
+                 cleanup_interval=0.0,
+                 enable_ttl=False,
+                 num_recent_events=0,
+                 max_events=0,
+                 store_historical_events=False):
+    config = SessionServiceConfig(num_recent_events=num_recent_events,
+                                  max_events=max_events,
+                                  store_historical_events=store_historical_events)
     if enable_ttl:
         config.ttl = SessionServiceConfig.create_ttl_config(
             enable=True, ttl_seconds=ttl_seconds, cleanup_interval_seconds=cleanup_interval)
@@ -276,6 +283,7 @@ class TestSqlListSessions:
         result = await svc.list_sessions(app_name="app", user_id="user")
         for s in result.sessions:
             assert s.events == []
+            assert s.historical_events == []
         await svc.close()
 
 
@@ -348,6 +356,30 @@ class TestSqlAppendEvent:
             await svc.append_event(session, event)
         stored = await svc.get_session(app_name="app", user_id="user", session_id="s1")
         assert len(stored.events) == 5
+        await svc.close()
+
+    async def test_append_without_filtering_does_not_delete_event_rows(self):
+        svc = await _create_service()
+        session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
+        delete_mock = AsyncMock(wraps=svc._sql_storage.delete)
+        svc._sql_storage.delete = delete_mock
+
+        await svc.append_event(session, _make_event(text="msg0"))
+
+        delete_mock.assert_not_awaited()
+        await svc.close()
+
+    async def test_append_persists_historical_events(self):
+        config = _make_config(max_events=2, store_historical_events=True)
+        svc = await _create_service(config)
+        session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
+
+        for i in range(4):
+            await svc.append_event(session, _make_event(author="user" if i == 2 else "agent", text=f"msg{i}"))
+
+        stored = await svc.get_session(app_name="app", user_id="user", session_id="s1")
+        assert [event.get_text() for event in stored.events] == ["msg2", "msg3"]
+        assert [event.get_text() for event in stored.historical_events] == ["msg0", "msg1"]
         await svc.close()
 
 

@@ -175,8 +175,7 @@ class InMemorySessionService(BaseSessionService):
         if session is None:
             return None
 
-        copied_session = copy.deepcopy(session)
-        self.filter_events(copied_session)
+        copied_session = self.filter_events(session, need_copy=True)
 
         app_state = self._get_app_state(app_name)
         user_state = self._get_user_state(app_name, user_id)
@@ -199,6 +198,7 @@ class InMemorySessionService(BaseSessionService):
 
             copied_session = copy.deepcopy(session)
             copied_session.events = []
+            copied_session.historical_events = []
             app_state = self._get_app_state(app_name)
             user_state = self._get_user_state(app_name, user_id)
             copied_session = self._merge_state(app_state, user_state, copied_session)
@@ -468,6 +468,9 @@ class InMemorySessionService(BaseSessionService):
             self._sessions[app_name] = {}
         if user_id not in self._sessions[app_name]:
             self._sessions[app_name][user_id] = {}
+
+        if not self._session_config.store_historical_events:
+            session = session.model_copy(update={"historical_events": []})
 
         # Store session with TTL
         session_with_ttl = SessionWithTTL(session=session, ttl=self._session_config.ttl)

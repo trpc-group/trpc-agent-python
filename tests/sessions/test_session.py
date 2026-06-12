@@ -81,12 +81,35 @@ class TestSession:
         # Apply filtering with max_events=5
         session.apply_event_filtering(max_events=5)
 
-        # Filtering hides model-invisible events instead of deleting them.
-        visible_events = [event for event in session.events if event.is_model_visible()]
-        assert len(session.events) == 10
-        assert len(visible_events) == 4
-        assert visible_events[0].get_text() == "Message 6"
-        assert visible_events[-1].get_text() == "Message 9"
+        assert len(session.events) == 4
+        assert session.events[0].get_text() == "Message 6"
+        assert session.events[-1].get_text() == "Message 9"
+
+    def test_apply_event_filtering_can_store_filtered_events(self):
+        """Test filtered events can be moved into historical_events."""
+        session = Session(
+            id="test-session",
+            app_name="test-app",
+            user_id="test-user",
+            save_key="test-key",
+        )
+
+        for i in range(6):
+            event = Event(author="user" if i == 2 else "agent",
+                          content=Content(parts=[Part.from_text(text=f"Message {i}")]))
+            session.events.append(event)
+
+        session.apply_event_filtering(max_events=2, store_filtered_events=True)
+
+        assert [event.get_text() for event in session.events] == ["Message 2"]
+        assert [event.get_text() for event in session.historical_events] == [
+            "Message 0",
+            "Message 1",
+            "Message 3",
+            "Message 4",
+            "Message 5",
+        ]
+        assert all(event.is_model_visible() for event in session.historical_events)
 
     def test_apply_event_filtering_ttl(self):
         """Test event filtering with TTL."""
@@ -119,12 +142,10 @@ class TestSession:
         # Apply TTL filtering with 2 seconds
         session.apply_event_filtering(event_ttl_seconds=2.0)
 
-        # TTL + user-anchor fallback keeps only the last user message visible.
-        visible_events = [event for event in session.events if event.is_model_visible()]
-        assert len(session.events) == 6
-        assert len(visible_events) == 1
-        assert visible_events[0].author == "user"
-        assert "Old user message 1" in visible_events[0].get_text()
+        # TTL + user-anchor fallback keeps only the last user message.
+        assert len(session.events) == 1
+        assert session.events[0].author == "user"
+        assert "Old user message 1" in session.events[0].get_text()
 
     def test_apply_event_filtering_ttl_and_max_events(self):
         """Test event filtering with both TTL and max_events."""
@@ -154,12 +175,9 @@ class TestSession:
         # Apply both filters
         session.apply_event_filtering(event_ttl_seconds=5.0, max_events=5)
 
-        # Filtering hides model-invisible events instead of deleting them.
-        visible_events = [event for event in session.events if event.is_model_visible()]
-        assert len(session.events) == 20
-        assert len(visible_events) == 4
-        assert visible_events[0].get_text() == "Recent 6"
-        assert visible_events[-1].get_text() == "Recent 9"
+        assert len(session.events) == 4
+        assert session.events[0].get_text() == "Recent 6"
+        assert session.events[-1].get_text() == "Recent 9"
 
     def test_apply_event_filtering_preserves_last_user_message(self):
         """Test that filtering preserves the last user message when all events are filtered."""
@@ -190,12 +208,10 @@ class TestSession:
         # Apply strict TTL filter that would remove all events
         session.apply_event_filtering(event_ttl_seconds=2.0)
 
-        # All events are old, but last user message remains model-visible.
-        visible_events = [event for event in session.events if event.is_model_visible()]
-        assert len(session.events) == 7
-        assert len(visible_events) == 1
-        assert visible_events[0].author == "user"
-        assert visible_events[0].get_text() == "Last user message"
+        # All events are old, but last user message remains as the anchor.
+        assert len(session.events) == 1
+        assert session.events[0].author == "user"
+        assert session.events[0].get_text() == "Last user message"
 
     def test_apply_event_filtering_empty_events(self):
         """Test event filtering with no events."""
@@ -230,10 +246,7 @@ class TestSession:
         # Apply strict TTL filter
         session.apply_event_filtering(event_ttl_seconds=2.0)
 
-        # All events are hidden from model history; raw events remain.
-        visible_events = [event for event in session.events if event.is_model_visible()]
-        assert len(session.events) == 5
-        assert len(visible_events) == 0
+        assert session.events == []
 
     def test_apply_event_filtering_case_insensitive_user(self):
         """Test that user detection is case-insensitive."""
@@ -260,12 +273,10 @@ class TestSession:
         # Apply strict TTL filter
         session.apply_event_filtering(event_ttl_seconds=2.0)
 
-        # Last user message is preserved as model-visible (case-insensitive).
-        visible_events = [event for event in session.events if event.is_model_visible()]
-        assert len(session.events) == 5
-        assert len(visible_events) == 1
-        assert visible_events[0].author.lower() == "user"
-        assert visible_events[0].get_text() == "Message from uSeR"
+        # Last user message is preserved as the anchor (case-insensitive).
+        assert len(session.events) == 1
+        assert session.events[0].author.lower() == "user"
+        assert session.events[0].get_text() == "Message from uSeR"
 
     def test_apply_event_filtering_max_events_less_than_one(self):
         """Test that max_events <= 0 is treated as no limit."""
@@ -325,12 +336,31 @@ class TestSession:
                           content=Content(parts=[Part.from_text(text=f"Message {i}")]))
             session.add_event(event, max_events=5)
 
-        # Raw events remain, while only the model-visible window is trimmed.
-        visible_events = [event for event in session.events if event.is_model_visible()]
-        assert len(session.events) == 10
-        assert len(visible_events) == 4
-        assert visible_events[0].get_text() == "Message 6"
-        assert visible_events[-1].get_text() == "Message 9"
+        assert len(session.events) == 4
+        assert session.events[0].get_text() == "Message 6"
+        assert session.events[-1].get_text() == "Message 9"
+
+    def test_add_event_with_filtering_can_store_filtered_events(self):
+        """Test add_event moves filtered events to historical_events when requested."""
+        session = Session(
+            id="test-session",
+            app_name="test-app",
+            user_id="test-user",
+            save_key="test-key",
+        )
+
+        for i in range(6):
+            event = Event(author="user" if i == 2 else "agent",
+                          content=Content(parts=[Part.from_text(text=f"Message {i}")]))
+            session.add_event(event, max_events=2, store_filtered_events=True)
+
+        assert [event.get_text() for event in session.events] == ["Message 2", "Message 5"]
+        assert [event.get_text() for event in session.historical_events] == [
+            "Message 0",
+            "Message 1",
+            "Message 3",
+            "Message 4",
+        ]
 
     def test_apply_event_filtering_keeps_first_user_message_and_after(self):
         """Test that filtering keeps the first user message and all events after it."""
@@ -364,8 +394,6 @@ class TestSession:
         session.apply_event_filtering(max_events=3)
 
         # When the retained tail has no user message, fallback keeps the last user message only.
-        visible_events = [event for event in session.events if event.is_model_visible()]
-        assert len(session.events) == 7
-        assert len(visible_events) == 1
-        assert visible_events[0].author == "user"
-        assert visible_events[0].get_text() == "User question"
+        assert len(session.events) == 1
+        assert session.events[0].author == "user"
+        assert session.events[0].get_text() == "User question"

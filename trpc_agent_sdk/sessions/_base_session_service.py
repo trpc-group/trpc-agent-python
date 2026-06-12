@@ -66,6 +66,11 @@ class BaseSessionService(SessionServiceABC):
         """Get the summarizer manager."""
         return self._summarizer_manager
 
+    @property
+    def session_config(self) -> SessionServiceConfig:
+        """Get the session service configuration."""
+        return self._session_config
+
     def set_summarizer_manager(self, summarizer_manager: SummarizerSessionManager, force: bool = False) -> None:
         """Set the summarizer manager to use.
 
@@ -82,15 +87,22 @@ class BaseSessionService(SessionServiceABC):
         """Appends an event to a session object."""
         if event.partial:
             return event
+        event, _ = self._append_event_to_session(session, event)
+        return event
+
+    def _append_event_to_session(self, session: Session, event: Event) -> tuple[Event, list[Event]]:
+        """Append an event to the in-memory session and return filtered events."""
         # Apply temp-scoped state to in-memory session before trimming event delta,
         # so same-invocation consumers can still read temp values.
         self._apply_temp_state(session, event)
         event = self._trim_temp_delta_state(event)
         self.__update_session_state(session, event)
-        session.add_event(event,
-                          event_ttl_seconds=self._session_config.event_ttl_seconds,
-                          max_events=self._session_config.max_events)
-        return event
+        filtered_events = session._add_event_and_get_filtered_events(
+            event,
+            event_ttl_seconds=self._session_config.event_ttl_seconds,
+            max_events=self._session_config.max_events,
+            store_filtered_events=self._session_config.store_historical_events)
+        return event, filtered_events
 
     def _apply_temp_state(self, session: Session, event: Event) -> None:
         """Apply temp-scoped state delta to in-memory session state only.
@@ -179,12 +191,22 @@ class BaseSessionService(SessionServiceABC):
                 return summary.summary_text
         return None
 
-    def filter_events(self, session: Session) -> None:
-        """Filter events based on the session config."""
-        session.apply_event_filtering(
+    def filter_events(self, session: Session, need_copy: bool = False) -> Session:
+        """Filter events based on the session config.
+
+        Args:
+            session: Session to filter.
+            need_copy: Whether to filter a deep copy instead of mutating the input session.
+        """
+        filtered_session = session.model_copy(deep=True) if need_copy else session
+        # This is a read-view trim. Do not pass store_historical_events here:
+        # repeated get_session calls must not move view-trimmed events into
+        # historical_events or turn a read into a persistent state change.
+        filtered_session.apply_event_filtering(
             event_ttl_seconds=self._session_config.event_ttl_seconds,
             max_events=self._session_config.num_recent_events,
         )
+        return filtered_session
 
     @override
     async def close(self) -> None:

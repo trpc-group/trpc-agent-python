@@ -44,7 +44,6 @@ def create_memory_service():
         memory_service_config=memory_service_config,
         wing="trpc-agent",
         room="conversations",
-        store_only_model_visible=True,
     )
     return memory_service
 

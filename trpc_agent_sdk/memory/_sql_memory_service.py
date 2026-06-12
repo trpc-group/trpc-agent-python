@@ -198,8 +198,6 @@ class SqlMemoryService(BaseMemoryService):
         async with self._sql_storage.create_db_session() as sql_session:
             is_exist = False
             for event in session.events:
-                if not event.is_model_visible():
-                    continue
                 if not event.content or not event.content.parts:
                     continue
                 content = sanitize_content_json(event.content.model_dump(exclude_none=True, mode="json"))

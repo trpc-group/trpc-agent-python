@@ -111,8 +111,6 @@ class InMemoryMemoryService(BaseMemoryService):
         count = 0
         for session_events in self._session_events[key].values():
             for event_ttl in session_events:
-                if not event_ttl.event.is_model_visible():
-                    continue
                 if not event_ttl.event.content or not event_ttl.event.content.parts:
                     continue
                 words_in_event = extract_words_lower(' '.join(

@@ -832,8 +832,6 @@ class ClaudeAgent(BaseAgent):
 
         # Look through events in reverse to find latest user message
         for event in reversed(ctx.session.events):
-            if not event.is_model_visible():
-                continue
             if event.author == "user" and event.content and event.content.parts:
                 for part in event.content.parts:
                     if part.text:
@@ -904,8 +902,6 @@ class ClaudeAgent(BaseAgent):
 
         # Iterate through events to build conversation history
         for event in ctx.session.events:
-            if not event.is_model_visible():
-                continue
             if not event.content or not event.content.parts:
                 continue
 
