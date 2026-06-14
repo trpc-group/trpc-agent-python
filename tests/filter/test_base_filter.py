@@ -107,6 +107,23 @@ class AfterEveryStreamRecorder(BaseFilter):
         self.stream_events.append(rsp)
 
 
+class AfterEveryStreamRaisesFilter(BaseFilter):
+    """Filter whose _after_every_stream fails."""
+
+    def __init__(self):
+        super().__init__()
+        self.handle_error_called = False
+
+    async def _after_every_stream(self, ctx, req, rsp):
+        raise RuntimeError("after every boom")
+
+    async def _handle_error(self, ctx, req, rsp):
+        self.handle_error_called = True
+        rsp.rsp = "recovered"
+        rsp.error = None
+        rsp.is_continue = True
+
+
 class BeforeStopsContinueFilter(BaseFilter):
     """Filter whose _before sets is_continue=False on rsp (coroutine path)."""
 
@@ -114,6 +131,21 @@ class BeforeStopsContinueFilter(BaseFilter):
         rsp.rsp = "stopped_before"
         rsp.is_continue = False
         rsp.error = RuntimeError("stopped")
+
+
+class BeforeStopsWithoutResponseFilter(BaseFilter):
+    """Filter whose _before stops without a response payload."""
+
+    async def _before(self, ctx, req, rsp):
+        rsp.is_continue = False
+
+
+class BeforeErrorsWithoutResponseFilter(BaseFilter):
+    """Filter whose _before sets an error without a response payload."""
+
+    async def _before(self, ctx, req, rsp):
+        rsp.error = RuntimeError("before failed")
+        rsp.is_continue = False
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +198,7 @@ class TestHandleCoAsyncGen:
             yield FilterResult(rsp="b", is_continue=True)
 
         results = []
-        async for event in f._handle_co(FilterResult(), gen(), "test"):
+        async for event in f._handle_stream_co(FilterResult(), gen(), "test"):
             results.append(event)
 
         assert len(results) == 2
@@ -181,7 +213,7 @@ class TestHandleCoAsyncGen:
             yield FilterResult(rsp="should_not_reach")
 
         results = []
-        async for event in f._handle_co(FilterResult(), gen(), "test"):
+        async for event in f._handle_stream_co(FilterResult(), gen(), "test"):
             results.append(event)
 
         assert len(results) == 1
@@ -194,7 +226,7 @@ class TestHandleCoAsyncGen:
             yield FilterResult(rsp=None, error=RuntimeError("oops"), is_continue=True)
 
         results = []
-        async for event in f._handle_co(FilterResult(), gen(), "test"):
+        async for event in f._handle_stream_co(FilterResult(), gen(), "test"):
             results.append(event)
 
         assert len(results) == 1
@@ -208,7 +240,7 @@ class TestHandleCoAsyncGen:
             yield "bad"
 
         events = []
-        async for event in f._handle_co(FilterResult(), gen(), "test"):
+        async for event in f._handle_stream_co(FilterResult(), gen(), "test"):
             events.append(event)
 
         assert len(events) == 1
@@ -222,7 +254,7 @@ class TestHandleCoAsyncGen:
         async def gen():
             yield FilterResult(rsp="x", is_continue=True)
 
-        async for _ in f._handle_co(FilterResult(), gen(), "test", handle_event=callback):
+        async for _ in f._handle_stream_co(FilterResult(), gen(), "test", handle_event=callback):
             pass
 
         callback.assert_awaited_once()
@@ -242,7 +274,7 @@ class TestHandleCoCoro:
 
         result = FilterResult()
         events = []
-        async for event in f._handle_co(result, coro(), "test"):
+        async for event in f._handle_stream_co(result, coro(), "test"):
             events.append(event)
 
         assert len(events) == 1
@@ -256,13 +288,13 @@ class TestHandleCoCoro:
 
         result = FilterResult()
         events = []
-        async for event in f._handle_co(result, coro(), "test"):
+        async for event in f._handle_stream_co(result, coro(), "test"):
             events.append(event)
 
         assert len(events) == 1
         assert events[0].rsp == "val"
         assert isinstance(events[0].error, RuntimeError)
-        assert not events[0].is_continue
+        assert events[0].is_continue is True
 
     async def test_coroutine_returns_none(self, mock_ctx):
         f = NoopFilter()
@@ -272,7 +304,7 @@ class TestHandleCoCoro:
 
         result = FilterResult()
         events = []
-        async for event in f._handle_co(result, coro(), "test"):
+        async for event in f._handle_stream_co(result, coro(), "test"):
             events.append(event)
 
         assert len(events) == 0
@@ -285,13 +317,43 @@ class TestHandleCoCoro:
 
         result = FilterResult()
         events = []
-        async for event in f._handle_co(result, coro(), "test"):
+        async for event in f._handle_stream_co(result, coro(), "test"):
             events.append(event)
 
         assert len(events) == 1
         assert events[0].rsp == "ok_val"
         assert events[0].error is None
         assert events[0].is_continue is True
+
+    async def test_coroutine_returns_falsy_value(self, mock_ctx):
+        f = NoopFilter()
+
+        async def coro():
+            return False
+
+        result = FilterResult()
+        events = []
+        async for event in f._handle_stream_co(result, coro(), "test"):
+            events.append(event)
+
+        assert len(events) == 1
+        assert events[0].rsp is False
+
+    async def test_coroutine_yields_mutated_error_without_response(self, mock_ctx):
+        f = NoopFilter()
+
+        async def coro():
+            result.error = RuntimeError("mutated")
+            result.is_continue = False
+
+        result = FilterResult()
+        events = []
+        async for event in f._handle_stream_co(result, coro(), "test"):
+            events.append(event)
+
+        assert len(events) == 1
+        assert isinstance(events[0].error, RuntimeError)
+        assert not events[0].is_continue
 
 
 # ---------------------------------------------------------------------------
@@ -307,7 +369,7 @@ class TestHandleCoExceptions:
             raise RunCancelledException("stop")
 
         with pytest.raises(RunCancelledException):
-            async for _ in f._handle_co(FilterResult(), coro(), "test"):
+            async for _ in f._handle_stream_co(FilterResult(), coro(), "test"):
                 pass
 
     async def test_generic_exception_yields_error_result(self, mock_ctx):
@@ -317,7 +379,7 @@ class TestHandleCoExceptions:
             raise ValueError("oops")
 
         events = []
-        async for event in f._handle_co(FilterResult(), coro(), "test"):
+        async for event in f._handle_stream_co(FilterResult(), coro(), "test"):
             events.append(event)
 
         assert len(events) == 1
@@ -332,7 +394,7 @@ class TestHandleCoExceptions:
             yield  # noqa: unreachable
 
         with pytest.raises(RunCancelledException):
-            async for _ in f._handle_co(FilterResult(), gen(), "test"):
+            async for _ in f._handle_stream_co(FilterResult(), gen(), "test"):
                 pass
 
     async def test_async_gen_generic_exception_yields_error(self, mock_ctx):
@@ -343,7 +405,7 @@ class TestHandleCoExceptions:
             yield  # noqa: unreachable
 
         events = []
-        async for event in f._handle_co(FilterResult(), gen(), "test"):
+        async for event in f._handle_stream_co(FilterResult(), gen(), "test"):
             events.append(event)
 
         assert len(events) == 1
@@ -426,6 +488,20 @@ class TestRunStream:
 
         assert len(f.stream_events) == 2
 
+    async def test_after_every_stream_error_propagates_without_handle_error(self, mock_ctx, mock_req):
+        f = AfterEveryStreamRaisesFilter()
+
+        async def handle():
+            yield FilterResult(rsp="handle_data", is_continue=True)
+
+        events = []
+        with pytest.raises(RuntimeError, match="after every boom"):
+            async for event in f.run_stream(mock_ctx, mock_req, handle):
+                events.append(event)
+
+        assert events == []
+        assert not f.handle_error_called
+
     async def test_before_raises_exception(self, mock_ctx, mock_req):
         f = BeforeRaisesFilter()
 
@@ -439,6 +515,44 @@ class TestRunStream:
         assert len(events) == 1
         assert isinstance(events[0].error, RuntimeError)
         assert not events[0].is_continue
+
+    async def test_before_stop_without_response_skips_handle(self, mock_ctx, mock_req):
+        f = BeforeStopsWithoutResponseFilter()
+        handle_called = False
+
+        async def handle():
+            nonlocal handle_called
+            handle_called = True
+            yield FilterResult(rsp="never")
+
+        events = []
+        async for event in f.run_stream(mock_ctx, mock_req, handle):
+            events.append(event)
+
+        assert len(events) == 1
+        assert events[0].rsp is None
+        assert events[0].error is None
+        assert not events[0].is_continue
+        assert not handle_called
+
+    async def test_before_error_without_response_skips_handle(self, mock_ctx, mock_req):
+        f = BeforeErrorsWithoutResponseFilter()
+        handle_called = False
+
+        async def handle():
+            nonlocal handle_called
+            handle_called = True
+            yield FilterResult(rsp="never")
+
+        events = []
+        async for event in f.run_stream(mock_ctx, mock_req, handle):
+            events.append(event)
+
+        assert len(events) == 1
+        assert events[0].rsp is None
+        assert isinstance(events[0].error, RuntimeError)
+        assert not events[0].is_continue
+        assert not handle_called
 
 
 # ---------------------------------------------------------------------------
@@ -489,7 +603,7 @@ class TestRun:
         assert isinstance(result, FilterResult)
         assert result.rsp == "val"
         assert isinstance(result.error, RuntimeError)
-        assert not result.is_continue
+        assert result.is_continue is True
 
     async def test_handle_returns_plain_value(self, mock_ctx, mock_req):
         f = NoopFilter()

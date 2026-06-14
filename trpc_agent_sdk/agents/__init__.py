@@ -21,8 +21,12 @@ from ._callback import AgentCallbackFilter
 from ._callback import CallbackFilter
 from ._callback import ModelCallback
 from ._callback import ModelCallbackFilter
+from ._callback import ModelErrorCallback
+from ._callback import ModelErrorCallbackFilter
 from ._callback import ToolCallback
 from ._callback import ToolCallbackFilter
+from ._callback import ToolErrorCallback
+from ._callback import ToolErrorCallbackFilter
 from ._chain_agent import ChainAgent
 from ._cycle_agent import CycleAgent
 from ._langgraph_agent import LangGraphAgent
@@ -47,8 +51,12 @@ __all__ = [
     "AgentCallbackFilter",
     "ModelCallback",
     "ModelCallbackFilter",
+    "ModelErrorCallback",
+    "ModelErrorCallbackFilter",
     "ToolCallback",
     "ToolCallbackFilter",
+    "ToolErrorCallback",
+    "ToolErrorCallbackFilter",
     "ChainAgent",
     "CycleAgent",
     "LangGraphAgent",

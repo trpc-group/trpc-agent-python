@@ -79,6 +79,7 @@ Constraints
 from __future__ import annotations
 
 import inspect
+from functools import partial
 from typing import Any
 from typing import AsyncIterator
 from typing import Callable
@@ -89,10 +90,13 @@ from typing_extensions import override
 from pydantic import BaseModel
 
 from trpc_agent_sdk.context import InvocationContext
+from trpc_agent_sdk.context import create_agent_context
 from trpc_agent_sdk.filter import BaseFilter
 
 from ._constants import TOOL_CONTEXT
 from ._function_tool import FunctionTool
+from ._context_var import reset_tool_var
+from ._context_var import set_tool_var
 from .utils import convert_pydantic_args
 from .utils import get_mandatory_args
 
@@ -190,6 +194,10 @@ class StreamingProgressTool(FunctionTool):
         Mandatory-argument validation, ``tool_context`` injection and
         pydantic-arg coercion mirror :class:`FunctionTool`.
         """
+        agent_context = tool_context.agent_context
+        if agent_context is None:
+            agent_context = create_agent_context()
+            tool_context.agent_context = agent_context
         args_to_call = args.copy()
         signature = inspect.signature(self.func)
 
@@ -207,7 +215,20 @@ class StreamingProgressTool(FunctionTool):
             }
             return
 
-        async for value in self.func(**args_to_call):
-            if isinstance(value, BaseModel):
-                value = value.model_dump()
-            yield value
+        before_tool_callback = getattr(tool_context.agent, "before_tool_callback", None)
+        after_tool_callback = getattr(tool_context.agent, "after_tool_callback", None)
+        on_tool_error_callback = getattr(tool_context.agent, "on_tool_error_callback", None)
+        # Import here to avoid circular import
+        from trpc_agent_sdk.agents import ToolCallbackFilter
+        from trpc_agent_sdk.agents import ToolErrorCallbackFilter
+        extra_filters = [
+            ToolCallbackFilter(before_tool_callback, after_tool_callback),
+            ToolErrorCallbackFilter(on_tool_error_callback),
+        ]
+        token = set_tool_var(self)
+        handler = partial(self.func, **args_to_call)
+        try:
+            async for event in self._run_stream_filters(agent_context, args, handler, extra_filters):  # type: ignore
+                yield event
+        finally:
+            reset_tool_var(token)

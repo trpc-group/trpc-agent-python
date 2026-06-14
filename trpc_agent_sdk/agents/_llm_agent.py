@@ -47,7 +47,9 @@ from trpc_agent_sdk.types import GenerateContentConfig
 from ..exceptions import RunCancelledException
 from ._base_agent import BaseAgent
 from ._callback import ModelCallback
+from ._callback import ModelErrorCallback
 from ._callback import ToolCallback
+from ._callback import ToolErrorCallback
 from ._constants import TRPC_AGENT_RUNNING_KEY
 from .core import BranchFilterMode
 from .core import CodeExecutionRequestProcessor
@@ -232,11 +234,17 @@ class LlmAgent(BaseAgent):
     after_model_callback: Optional[ModelCallback] = None
     """Callback after model is called."""
 
+    on_model_error_callback: Optional[ModelErrorCallback] = None
+    """Callback when model execution raises an exception."""
+
     before_tool_callback: Optional[ToolCallback] = None
     """Callback before tool is called."""
 
     after_tool_callback: Optional[ToolCallback] = None
     """Callback after tool is called."""
+
+    on_tool_error_callback: Optional[ToolErrorCallback] = None
+    """Callback when tool execution raises an exception."""
 
     add_name_to_instruction: bool = True
     """Controls whether agent name is added to instruction.

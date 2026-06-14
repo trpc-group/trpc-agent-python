@@ -51,11 +51,17 @@ AgentCallback: TypeAlias = Union[SingleAgentCallback, list[SingleAgentCallback]]
 SingleModelCallback: TypeAlias = Callable[[InvocationContext, Union[LlmRequest, LlmResponse]],
                                           Union[Awaitable[Optional[LlmResponse]], Optional[LlmResponse]]]
 ModelCallback: TypeAlias = Union[SingleModelCallback, list[SingleModelCallback]]
+SingleModelErrorCallback: TypeAlias = Callable[[InvocationContext, LlmRequest, Exception],
+                                               Union[Awaitable[Optional[LlmResponse]], Optional[LlmResponse]]]
+ModelErrorCallback: TypeAlias = Union[SingleModelErrorCallback, list[SingleModelErrorCallback]]
 
 # Type aliases for tool callback types
 SingleToolCallback: TypeAlias = Callable[[InvocationContext, BaseTool, dict[str, Any], dict],
                                          Union[Awaitable[Optional[dict]], Optional[dict]]]
 ToolCallback: TypeAlias = Union[SingleToolCallback, list[SingleToolCallback]]
+SingleToolErrorCallback: TypeAlias = Callable[[InvocationContext, BaseTool, dict[str, Any], Exception],
+                                              Union[Awaitable[Optional[dict]], Optional[dict]]]
+ToolErrorCallback: TypeAlias = Union[SingleToolErrorCallback, list[SingleToolErrorCallback]]
 
 # Define template type variables for callback types
 TCallback = TypeVar('TCallback')
@@ -258,6 +264,28 @@ class ModelCallbackFilter(CallbackFilter[SingleModelCallback]):
                 return
 
 
+class ModelErrorCallbackFilter(CallbackFilter[SingleModelErrorCallback]):
+    """Filter for handling model error callbacks."""
+
+    def __init__(self, error_callback: Union[SingleModelErrorCallback, list[SingleModelErrorCallback]]):
+        super().__init__(FilterType.MODEL, "model_error_callback", None, error_callback)
+
+    async def _handle_error(self, ctx: AgentContext, req: LlmRequest, rsp: FilterResult) -> None:
+        """Execute model error callbacks."""
+        if not self._after_callback or rsp.error is None:
+            return
+        invocation_ctx: InvocationContext = get_invocation_ctx()
+        for callback in self._after_callback:
+            error_callback_content = callback(invocation_ctx, req, rsp.error)  # type: ignore
+            if inspect.isawaitable(error_callback_content):
+                error_callback_content = await error_callback_content
+            if error_callback_content is not None:
+                rsp.rsp = error_callback_content
+                rsp.error = None
+                rsp.is_continue = True
+                return
+
+
 class ToolCallbackFilter(CallbackFilter[SingleToolCallback]):
     """Filter for handling tool callback operations.
 
@@ -318,4 +346,27 @@ class ToolCallbackFilter(CallbackFilter[SingleToolCallback]):
                 after_tool_callback_content = await after_tool_callback_content
             if after_tool_callback_content:
                 rsp.rsp = after_tool_callback_content
+                return
+
+
+class ToolErrorCallbackFilter(CallbackFilter[SingleToolErrorCallback]):
+    """Filter for handling tool error callbacks."""
+
+    def __init__(self, error_callback: Union[SingleToolErrorCallback, list[SingleToolErrorCallback]]):
+        super().__init__(FilterType.TOOL, "tool_error_callback", None, error_callback)
+
+    async def _handle_error(self, ctx: AgentContext, req: Any, rsp: FilterResult) -> None:
+        """Execute tool error callbacks."""
+        if not self._after_callback or rsp.error is None:
+            return
+        invocation_ctx: InvocationContext = get_invocation_ctx()
+        tool = get_tool_var()
+        for callback in self._after_callback:
+            error_callback_content = callback(invocation_ctx, tool, req, rsp.error)  # type: ignore
+            if inspect.isawaitable(error_callback_content):
+                error_callback_content = await error_callback_content
+            if error_callback_content is not None:
+                rsp.rsp = error_callback_content
+                rsp.error = None
+                rsp.is_continue = True
                 return

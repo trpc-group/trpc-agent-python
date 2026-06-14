@@ -38,3 +38,9 @@ def after_tool_callback(context: InvocationContext, tool: BaseTool, args: dict, 
     print(
         f'@after_tool_callback context: {type(context)}, tool: {type(tool)}, args: {type(args)}, response: {type(response)}'
     )
+
+def on_tool_error_callback(context: InvocationContext, tool: BaseTool, args: dict, error: Exception):
+    print(
+        f'@on_tool_error_callback context: {type(context)}, tool: {type(tool)}, args: {type(args)}, error: {error}'
+    )
+    return {"status": "failed", "message": str(error)}

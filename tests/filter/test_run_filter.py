@@ -187,10 +187,8 @@ class TestCoroutineHandlerAdapter:
         async def handle():
             raise ValueError("boom")
 
-        result = await coroutine_handler_adapter(handle)
-        assert isinstance(result, FilterResult)
-        assert isinstance(result.error, ValueError)
-        assert not result.is_continue
+        with pytest.raises(ValueError, match="boom"):
+            await coroutine_handler_adapter(handle)
 
     async def test_wraps_tuple_no_error(self):
         async def handle():
@@ -215,7 +213,7 @@ class TestRunFilters:
         assert result == "direct_result"
 
     async def test_handle_none_raises(self, mock_ctx):
-        with pytest.raises(ValueError, match="handle must be provided"):
+        with pytest.raises(TypeError):
             await run_filters(mock_ctx, "req", [], None)
 
     async def test_single_filter_lifecycle(self, mock_ctx):
@@ -279,7 +277,7 @@ class TestRunStreamFilters:
         assert results == ["a", "b"]
 
     async def test_handle_none_raises(self, mock_ctx):
-        with pytest.raises(ValueError, match="handle must be provided"):
+        with pytest.raises(TypeError):
             async for _ in run_stream_filters(mock_ctx, "req", [], None):
                 pass
 
@@ -337,3 +335,14 @@ class TestRunStreamFilters:
             results.append(event)
 
         assert results == ["e1", "e2", "e3"]
+
+    async def test_yields_rsp_before_raising_error(self, mock_ctx):
+        async def handle():
+            yield FilterResult(rsp="partial", error=RuntimeError("stream_err"), is_continue=False)
+
+        results = []
+        with pytest.raises(RuntimeError, match="stream_err"):
+            async for event in run_stream_filters(mock_ctx, "req", [], handle):
+                results.append(event)
+
+        assert results == ["partial"]

@@ -46,7 +46,8 @@ assistant (LlmAgent)
 ### 2) Callback 钩子定义与绑定（`agent/filter.py` + `agent/agent.py`）
 
 - `before_tool_callback(context, tool, args, response)`：工具调用前触发，可用于参数校验、日志记录
-- `after_tool_callback(context, tool, args, response)`：工具调用后触发，`response` 此时包含工具返回值
+- `after_tool_callback(context, tool, args, response)`：工具调用成功返回后触发，`response` 此时包含工具返回值
+- `on_tool_error_callback(context, tool, args, error)`：工具抛异常时触发，callback 返回非 `None` 的 dict 可接管异常并作为工具结果继续传递；返回 `None` 则继续抛出原异常
 - 在 `LlmAgent` 构造时通过 `before_tool_callback` / `after_tool_callback` 参数绑定
 
 ### 3) FunctionTool 挂载 Filter（`agent/agent.py`）
@@ -115,6 +116,7 @@ The current weather in Beijing is sunny with a temperature of 25°C and humidity
 
 - **Filter 拦截正确**：第 2 轮调用工具时，`ToolFilter.run` 的前置/后置日志均正常输出
 - **Callback 触发正确**：`before_tool_callback` 在工具执行前打印，`response` 为 `NoneType`；`after_tool_callback` 在工具执行后打印，`response` 为 `dict`
+- **异常路径可处理**：工具抛异常时会触发 `on_tool_error_callback`，用于更新前端状态、记录 trace 或释放资源；若 callback 返回非 `None`，该返回值会作为工具结果继续传递
 - **拦截链不影响工具调用**：工具正常返回天气数据，Agent 正确消费结果并生成回答
 - **无工具调用时不触发**：第 1 轮未触发工具调用，Filter 和 Callback 均未执行，符合预期
 

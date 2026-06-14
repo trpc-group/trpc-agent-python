@@ -24,7 +24,17 @@ AgentFilterAsyncGenHandleType = Callable[[], AsyncGenerator[Any, None]]  # type:
 
 
 async def stream_handler_adapter(func: AgentFilterAsyncGenHandleType) -> FilterAsyncGenReturnType:
-    """Adapter for agent filter async gen handle."""
+    """Adapter for agent filter async gen handle.
+    
+    Args:
+        func: Agent filter async gen handle
+    
+    Returns:
+        FilterAsyncGenReturnType
+    
+    Notes:
+        Non-FilterResult values are wrapped as ``FilterResult.rsp``.
+    """
     async for event in func():
         if isinstance(event, FilterResult):
             yield event
@@ -45,27 +55,36 @@ async def run_stream_filters(ctx: AgentContext, req: Any, filters: list[BaseFilt
     Returns:
         Result of the filter chain execution
 
-    Raises:
-        ValueError: If handle is not provided
+    Notes:
+        This function is intended for internal framework use. The caller must
+        provide a valid async generator handler.
     """
-    if handle is None:
-        raise ValueError("handle must be provided")
     current_handle = partial(stream_handler_adapter, handle)
     for filter in reversed(filters):
         current_handle = partial(filter.run_stream, ctx, req, current_handle)
     async for event in current_handle():
-        yield event.rsp
+        if event.rsp:
+            yield event.rsp
+        if event.error:
+            logger.error("run_stream_filters error: %s", event.error)
+            raise event.error
 
 
 async def coroutine_handler_adapter(func: AgentFilterHandleType) -> FilterResult:
-    """Adapter for agent filter handle."""
-    try:
-        result = await func()
-    except Exception as ex:  # pylint: disable=broad-except
-        return FilterResult(error=ex, is_continue=False)
-
+    """Adapter for agent filter handle.
+    
+    Args:
+        func: Agent filter handle
+    
+    Returns:
+        FilterResult
+    
+    Notes:
+        Non-FilterResult values are wrapped as ``FilterResult.rsp``.
+    """
     rsp = None
     error = None
+    result = await func()
     if isinstance(result, FilterResult):
         return result
     if isinstance(result, tuple) and len(result) == 2:
@@ -89,11 +108,10 @@ async def run_filters(ctx: AgentContext, req: Any, filters: list[BaseFilter],
     Returns:
         Result of the filter chain execution
 
-    Raises:
-        ValueError: If handle is not provided
+    Notes:
+        This function is intended for internal framework use. The caller must
+        provide a valid coroutine handler.
     """
-    if handle is None:
-        raise ValueError("handle must be provided")
     current_handle = partial(coroutine_handler_adapter, handle)
     for filter in reversed(filters):
         current_handle = partial(filter.run, ctx, req, current_handle)

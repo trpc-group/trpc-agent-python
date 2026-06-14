@@ -105,45 +105,60 @@ class BaseFilter(FilterABC):
         """
         return None
 
-    async def _handle_co(self,
-                         result: FilterResult,
-                         co: Union[CoroutineType, AsyncGeneratorType],
-                         msg: str,
-                         handle_event: Callable[[FilterResult], Awaitable[None]] = None) -> FilterAsyncGenReturnType:
+    async def _handle_error(self, ctx: AgentContext, req: Any, rsp: FilterResult) -> None:
+        """Handle errors raised by the wrapped handler.
+
+        Subclasses can mutate ``rsp`` to convert an error into a normal
+        response. Leave ``rsp.error`` unchanged to propagate the original error.
+        """
+        return None
+
+    async def _run_handle_error(self, ctx: AgentContext, req: Any, rsp: FilterResult) -> FilterResult:
+        """Run the error hook while preserving unhandled errors."""
+        if not rsp.error:
+            return rsp
+        try:
+            await self._handle_error(ctx, req, rsp)
+        except Exception as ex:  # pylint: disable=broad-except
+            logger.error(self._create_err_str(f"run _handle_error error: {ex}"))
+            rsp.error = ex
+            rsp.is_continue = False
+        return rsp
+
+    async def _handle_stream_co(self, result: FilterResult, co: Union[CoroutineType, AsyncGeneratorType], msg: str,
+                                is_async_gen: bool) -> FilterAsyncGenReturnType:
         """Execute the before lifecycle.
 
         Args:
-            ctx: Execution context
-            req: Request data
-            handle: Next handler in the chain
+            result: FilterResult
+            co: Coroutine or AsyncGenerator
+            msg: Message
+            is_async_gen: Whether the coroutine is an async generator
+        
+        Returns:
+            FilterAsyncGenReturnType
         """
         try:
-            if inspect.isasyncgen(co):
+            if is_async_gen:
                 async for event in co:
                     if not isinstance(event, FilterResult):
                         raise TypeError(f"{msg} result must be a FilterResult, got {type(event)}")
-                    if handle_event:
-                        await handle_event(event)
                     yield event
-                    if event.error:
-                        # Error passed from upper layer, use debug mode
-                        logger.debug(self._create_err_str(f"{msg} error: {event.error}"))
                     if not event.is_continue:
                         return
             else:
                 rsp = await co
-                if rsp:
-                    if isinstance(rsp, tuple) and len(rsp) == 2:
-                        result.rsp, result.error = rsp
-                        if result.error:
-                            result.is_continue = False
-                    else:
-                        result.rsp = rsp
-                if result.rsp:
-                    yield result
+                if isinstance(rsp, FilterResult):
+                    result.error = rsp.error
+                    result.is_continue = rsp.is_continue
+                    result.rsp = rsp.rsp
+                elif isinstance(rsp, tuple) and len(rsp) == 2:
+                    result.rsp, result.error = rsp
                     if result.error:
-                        # Error passed from upper layer, use debug mode
-                        logger.debug(self._create_err_str(f"{msg} error: {result.error}"))
+                        result.is_continue = False
+                elif rsp is not None:
+                    result.rsp = rsp
+                yield result
                 if not result.is_continue:
                     return
         except RunCancelledException:
@@ -175,23 +190,65 @@ class BaseFilter(FilterABC):
         result = FilterResult()
 
         # run before in current filter
-        async for event in self._handle_co(result, self._before(ctx, req, result), "before"):
+        before_co = self._before(ctx, req, result)
+        is_async_gen = inspect.isasyncgen(before_co)
+        async for event in self._handle_stream_co(result, before_co, "before", is_async_gen):
             yield event
             if not event.is_continue:
                 return
 
         # run last filter
-        handle_event = partial(self._after_every_stream, ctx, req)
-        async for event in self._handle_co(result, handle(), "handle", handle_event):
+        handler_co = handle()
+        is_async_gen = inspect.isasyncgen(handler_co)
+        async for event in self._handle_stream_co(result, handler_co, "handle", is_async_gen):
+            event = await self._run_handle_error(ctx, req, event)
+            # 兼容之前的处理方式
+            if is_async_gen:
+                await self._after_every_stream(ctx, req, event)
             yield event
             if not event.is_continue:
                 return
 
         # run after in current filter
-        async for event in self._handle_co(result, self._after(ctx, req, result), "after"):
+        after_co = self._after(ctx, req, result)
+        is_async_gen = inspect.isasyncgen(after_co)
+        async for event in self._handle_stream_co(result, after_co, "after", is_async_gen):
             yield event
             if not event.is_continue:
                 return
+
+    async def _handle_co(self, result: FilterResult, co: CoroutineType, msg: str) -> FilterResult:
+        """Execute the full filter lifecycle (before -> handle -> after).
+
+        Args:
+            result: FilterResult
+            co: Coroutine
+            msg: Message
+        
+        Returns:
+            FilterResult
+        """
+        try:
+            rsp = await co
+            if isinstance(rsp, FilterResult):
+                result.error = rsp.error
+                result.is_continue = rsp.is_continue
+                result.rsp = rsp.rsp
+            elif isinstance(rsp, tuple) and len(rsp) == 2:
+                result.rsp, result.error = rsp
+                if result.error:
+                    result.is_continue = False
+            elif rsp is not None:
+                result.rsp = rsp
+        except RunCancelledException:
+            # raise to runner to handle
+            raise
+        except Exception as ex:  # pylint: disable=broad-except
+            logger.error(self._create_err_str(f"run {msg} error: {ex}"))
+            result.error = ex
+            result.is_continue = False
+            return result
+        return result
 
     @override
     async def run(self, ctx: AgentContext, req: Any, handle: FilterHandleType) -> FilterResult:
@@ -207,33 +264,15 @@ class BaseFilter(FilterABC):
         """
         result = FilterResult()
         # 1. before
-        try:
-            await self._before(ctx, req, result)
-        except Exception as ex:  # pylint: disable=broad-except
-            logger.error(self._create_err_str(f"run before error: {ex}"))
-            return None, ex
-        if result.error or not result.is_continue:
+        result = await self._handle_co(result, self._before(ctx, req, result), "before")
+        if not result.is_continue:
             return result
 
         # 2.last handle
-        rsp = await handle()
-        if isinstance(rsp, FilterResult):
-            result = rsp
-        elif isinstance(rsp, tuple) and len(rsp) == 2:
-            result.rsp, result.error = rsp
-            if result.error:
-                result.is_continue = False
-        else:
-            result.rsp = rsp
-        if result.error or not result.is_continue:
+        result = await self._handle_co(result, handle(), "handle")
+        result = await self._run_handle_error(ctx, req, result)
+        if not result.is_continue:
             return result
 
         # 3. after
-        try:
-            await self._after(ctx, req, result)
-        except Exception as ex:  # pylint: disable=broad-except
-            logger.error(self._create_err_str(f"run after error: {ex}"))
-            result.error = ex
-            result.is_continue = False
-
-        return result
+        return await self._handle_co(result, self._after(ctx, req, result), "after")

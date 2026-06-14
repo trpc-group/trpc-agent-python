@@ -182,18 +182,27 @@ async def after_model_callback(context: InvocationContext, llm_response: LlmResp
   return None
 
 
+async def on_model_error_callback(context: InvocationContext, llm_request: LlmRequest, error: Exception):
+  print(f'@on_model_error_callback context: {type(context)}, llm_request: {type(llm_request)}, error: {error}')
+  # 返回 LlmResponse 表示接管异常，并作为模型结果继续传递。
+  # 返回 None 表示继续抛出原异常。
+  return LlmResponse(content=Content(parts=[Part(text=f"模型调用失败：{error}")]))
+
+
 agent = LlmAgent(
     # ...
     before_model_callback=before_model_callback,
     after_model_callback=after_model_callback,
+    on_model_error_callback=on_model_error_callback,
 )
 ```
 表示每次运行用户的模型调用之前和之后执行的回调函数
 
 - before_model_callback: 每次运行 model 之前执行的回调函数，若该返回值不为空，模型函数不会继续被调用, 模型调用一次该函数被调用一次
 - after_model_callback: 每次运行 model 流式结果会被调用一次，若流式数据比较多，一次流式结果被调用一次
+- on_model_error_callback: model 抛出异常时执行的回调函数。若返回非 `None` 的 `LlmResponse`，该响应会作为模型结果继续传递，原异常视为已接管；若返回 `None`，原异常会继续抛出
 
-目前只有 `LlmAgent` 存在 before_model_callback 和 after_model_callback 方法
+目前只有 `LlmAgent` 存在 before_model_callback、after_model_callback 和 on_model_error_callback 方法
 
 
 ### Tool Callback 使用
@@ -207,18 +216,135 @@ def after_tool_callback(context: InvocationContext, tool: BaseTool, args: dict, 
   print(f'@after_tool_callback context: {type(context)}, tool: {type(tool)}, args: {type(args)}, response: {type(response)}')
 
 
+def on_tool_error_callback(context: InvocationContext, tool: BaseTool, args: dict, error: Exception):
+  print(f'@on_tool_error_callback context: {type(context)}, tool: {type(tool)}, args: {type(args)}, error: {error}')
+  # 返回 dict 表示接管异常，并作为工具结果继续传递。
+  # 返回 None 表示继续抛出原异常。
+  return {"status": "failed", "message": str(error)}
+
+
 agent = LlmAgent(
     # ...
     before_tool_callback=before_tool_callback,
     after_tool_callback=after_tool_callback,
+    on_tool_error_callback=on_tool_error_callback,
 )
 ```
 表示每次运行用户的tool之前和之后执行的回调函数
 
 - before_tool_callback: 每次运行用户的 tool 之前执行的回调函数，若该返回值不为空，工具不会被调用，工具调用一次该函数被调用一次
-- after_tool_callback: 每次运行用户的tool之后执行的回调函数, 工具调用一次该函数被调用一次
+- after_tool_callback: 每次运行用户的 tool 并返回结果之后执行的回调函数，工具完成一次该函数被调用一次
+- on_tool_error_callback: 工具抛出异常时执行的回调函数。若返回非 `None` 的 dict，该 dict 会作为工具结果继续传递，原异常视为已接管；若返回 `None`，原异常会继续抛出
 
-目前只有 `LlmAgent` 存在 before_tool_callback 和 after_tool_callback 方法
+目前只有 `LlmAgent` 存在 before_tool_callback、after_tool_callback 和 on_tool_error_callback 方法
+
+
+### Model / Tool Error Callback 设计说明
+
+#### 场景
+
+在 Agent 调用模型或工具时，底层可能直接抛出 Python 异常。例如：
+
+- 模型服务调用失败，如网络异常、鉴权失败、连接中断或服务端错误
+- 工具访问外部系统失败，如 HTTP、数据库、缓存或第三方服务异常
+- 工具参数校验通过了 callback，但业务执行阶段失败
+- 模型或工具执行过程中需要释放资源、更新 trace 或通知前端状态
+
+这类异常如果只沿着普通异常链路向外抛出，业务侧很难在“模型失败”或“工具失败”这个明确语义上做统一收尾。典型影响包括：
+
+- 前端等待模型或工具结果，异常路径没有机会主动写入失败状态，可能出现 UI 挂起
+- trace、日志、埋点只能依赖外层兜底，缺少 request/tool、args、error 等关键上下文
+- 临时资源、锁、任务状态等清理逻辑需要分散在每个模型调用或工具内部处理
+
+#### 修改原因
+
+原有 callback 只有成功路径的 before/after：
+
+- `before_model_callback`：模型执行前触发，可短路模型调用
+- `after_model_callback`：模型正常返回结果后触发，可改写模型结果
+- `before_tool_callback`：工具执行前触发，可短路工具调用
+- `after_tool_callback`：工具正常返回结果后触发，可改写工具结果
+
+问题在于：模型或工具抛出异常时，基础 Filter 生命周期会把异常标记到 `FilterResult.error` 并停止继续执行，`after_model_callback` / `after_tool_callback` 不会稳定执行。直接强行让 after callback 在异常路径也执行虽然可以解决“能收尾”的问题，但会改变 after 的语义：after 原本表示“已有正常结果之后的后处理”，如果同时承载成功和失败，会让 callback 使用方必须判断 `response` 到底是真实结果还是异常包装结果。
+
+因此本次修改保持 after 机制不变，新增独立的 error callback，让成功路径和异常路径语义分离：
+
+- 模型成功路径：`after_model_callback(context, llm_response)`
+- 模型异常路径：`on_model_error_callback(context, llm_request, error)`
+- 工具成功路径：`after_tool_callback(context, tool, args, response)`
+- 工具异常路径：`on_tool_error_callback(context, tool, args, error)`
+
+#### 解决方式
+
+本次改动新增了 `ModelErrorCallback` / `ModelErrorCallbackFilter` 和 `ToolErrorCallback` / `ToolErrorCallbackFilter`：
+
+- `BaseFilter.handle_error` 作为统一的异常处理阶段，在 `run` / `run_stream` 的 handle 阶段出现 `FilterResult.error` 时触发
+- `LLMModel.generate_async` 将 `ModelErrorCallbackFilter` 加入模型调用的 filter 链
+- `BaseTool.run_async` 将 `ToolErrorCallbackFilter` 加入工具调用的 filter 链
+
+执行规则如下：
+
+模型执行规则：
+
+1. 模型正常返回：继续走原来的 `after_model_callback`
+2. 模型抛出异常：进入 `on_model_error_callback`
+3. `on_model_error_callback` 返回非 `None` 的 `LlmResponse`：表示业务接管异常，该响应会继续进入现有模型响应处理流程，包括 `after_model_callback`
+4. `on_model_error_callback` 返回 `None`：表示不接管异常，框架继续抛出原始异常
+
+工具执行规则：
+
+1. 工具正常返回：继续走原来的 `after_tool_callback`
+2. 工具抛出异常：进入 `on_tool_error_callback`
+3. `on_tool_error_callback` 返回非 `None` 的 `dict`：表示业务接管异常，该 `dict` 会作为工具结果继续传递给后续流程
+4. `on_tool_error_callback` 返回 `None`：表示不接管异常，框架继续抛出原始异常
+
+示例：
+
+```python
+def on_model_error_callback(context: InvocationContext, llm_request: LlmRequest, error: Exception):
+    return LlmResponse(content=Content(parts=[Part(text=f"模型调用失败：{error}")]))
+
+
+def on_tool_error_callback(context: InvocationContext, tool: BaseTool, args: dict, error: Exception):
+    # 可在这里更新前端状态、记录 trace、释放资源或构造结构化失败结果
+    return {
+        "status": "failed",
+        "success": False,
+        "message": str(error),
+    }
+
+
+agent = LlmAgent(
+    # ...
+    on_model_error_callback=on_model_error_callback,
+    on_tool_error_callback=on_tool_error_callback,
+)
+```
+
+如果希望保留原始异常行为，只做日志或清理，可以返回 `None`：
+
+```python
+def on_tool_error_callback(context: InvocationContext, tool: BaseTool, args: dict, error: Exception):
+    logger.exception("tool %s failed with args=%s", tool.name, args)
+    return None
+```
+
+#### 涉及代码
+
+- `trpc_agent_sdk/filter/_base_filter.py`：新增 `handle_error` 生命周期阶段，并在 `run` / `run_stream` 的 handle 阶段统一调用
+- `trpc_agent_sdk/agents/_callback.py`：新增 `ModelErrorCallback` / `ModelErrorCallbackFilter` 和 `ToolErrorCallback` / `ToolErrorCallbackFilter`
+- `trpc_agent_sdk/models/_llm_model.py`：把 `ModelErrorCallbackFilter` 加入模型 filter 链
+- `trpc_agent_sdk/filter/_run_filter.py`：流式 Filter 遇到 `FilterResult.error` 时重新抛出异常，避免模型异常被吞成空响应
+- `trpc_agent_sdk/tools/_base_tool.py`：把 `ToolErrorCallbackFilter` 加入工具 filter 链
+- `trpc_agent_sdk/agents/_llm_agent.py`：新增 `on_model_error_callback` 和 `on_tool_error_callback` 配置项
+- `trpc_agent_sdk/agents/__init__.py`：导出 `ModelErrorCallback`、`ModelErrorCallbackFilter`、`ToolErrorCallback` 和 `ToolErrorCallbackFilter`
+- `tests/models/test_llm_model.py`：覆盖 model error callback 被调用、可接管异常、接管后仍触发 after_model_callback
+- `tests/tools/test_base_tool.py`：覆盖 error callback 被调用、可接管异常两类场景
+- `tests/agents/test_callback.py`：覆盖 `ModelErrorCallbackFilter` 和 `ToolErrorCallbackFilter` 初始化
+
+#### 与 agent/model callback 的关系
+
+当前对齐 ADK 支持了 model/tool 维度的 error callback。agent 维度目前仍只有 before/after callback，没有独立的 `on_agent_error_callback`。
 
 
 ## Filter 生命周期

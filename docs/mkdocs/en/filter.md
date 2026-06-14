@@ -182,18 +182,27 @@ async def after_model_callback(context: InvocationContext, llm_response: LlmResp
   return None
 
 
+async def on_model_error_callback(context: InvocationContext, llm_request: LlmRequest, error: Exception):
+  print(f'@on_model_error_callback context: {type(context)}, llm_request: {type(llm_request)}, error: {error}')
+  # Return LlmResponse to handle the exception and use it as the model result.
+  # Return None to re-raise the original exception.
+  return LlmResponse(content=Content(parts=[Part(text=f"Model call failed: {error}")]))
+
+
 agent = LlmAgent(
     # ...
     before_model_callback=before_model_callback,
     after_model_callback=after_model_callback,
+    on_model_error_callback=on_model_error_callback,
 )
 ```
 Represents callback functions executed before and after each model invocation.
 
 - before_model_callback: Callback function executed before each model run. If the return value is non-null, the model function will not be invoked. This function is called once per model invocation.
 - after_model_callback: Called once per streaming result of each model run. If there are many streaming data chunks, this function is called once per streaming result.
+- on_model_error_callback: Callback function executed when a model raises an exception. If it returns a non-`None` `LlmResponse`, that response is used as the model result and the original exception is considered handled. If it returns `None`, the original exception is re-raised.
 
-Currently, only `LlmAgent` has the before_model_callback and after_model_callback methods.
+Currently, only `LlmAgent` has the before_model_callback, after_model_callback, and on_model_error_callback methods.
 
 
 ### Tool Callback Usage
@@ -207,18 +216,27 @@ def after_tool_callback(context: InvocationContext, tool: BaseTool, args: dict, 
   print(f'@after_tool_callback context: {type(context)}, tool: {type(tool)}, args: {type(args)}, response: {type(response)}')
 
 
+def on_tool_error_callback(context: InvocationContext, tool: BaseTool, args: dict, error: Exception):
+  print(f'@on_tool_error_callback context: {type(context)}, tool: {type(tool)}, args: {type(args)}, error: {error}')
+  # Return a dict to handle the exception and use it as the tool result.
+  # Return None to re-raise the original exception.
+  return {"status": "failed", "message": str(error)}
+
+
 agent = LlmAgent(
     # ...
     before_tool_callback=before_tool_callback,
     after_tool_callback=after_tool_callback,
+    on_tool_error_callback=on_tool_error_callback,
 )
 ```
 Represents callback functions executed before and after each tool run.
 
 - before_tool_callback: Callback function executed before each tool run. If the return value is non-null, the tool will not be invoked. This function is called once per tool invocation.
-- after_tool_callback: Callback function executed after each tool run. This function is called once per tool invocation.
+- after_tool_callback: Callback function executed after each tool run when the tool returns a response. This function is called once per completed tool invocation.
+- on_tool_error_callback: Callback function executed when a tool raises an exception. If it returns a non-`None` dict, that dict is used as the tool result and the original exception is considered handled. If it returns `None`, the original exception is re-raised.
 
-Currently, only `LlmAgent` has the before_tool_callback and after_tool_callback methods.
+Currently, only `LlmAgent` has the before_tool_callback, after_tool_callback, and on_tool_error_callback methods.
 
 
 ## Filter Lifecycle

@@ -175,9 +175,14 @@ class BaseTool(ToolABC, FilterRunner):
 
         before_tool_callback = getattr(tool_context.agent, "before_tool_callback", None)
         after_tool_callback = getattr(tool_context.agent, "after_tool_callback", None)
+        on_tool_error_callback = getattr(tool_context.agent, "on_tool_error_callback", None)
         # Import here to avoid circular import
         from trpc_agent_sdk.agents import ToolCallbackFilter
-        extra_filters = [ToolCallbackFilter(before_tool_callback, after_tool_callback)]
+        from trpc_agent_sdk.agents import ToolErrorCallbackFilter
+        extra_filters = [
+            ToolCallbackFilter(before_tool_callback, after_tool_callback),
+            ToolErrorCallbackFilter(on_tool_error_callback),
+        ]
 
         token = set_tool_var(self)
         handler = partial(self._run_async_impl, tool_context=tool_context, args=args)

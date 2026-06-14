@@ -117,8 +117,11 @@ class LLMModel(FilterRunner):
             agent_context = ctx.agent_context
             before_model_callback = getattr(ctx.agent, "before_model_callback", None)
             after_model_callback = getattr(ctx.agent, "after_model_callback", None)
+            on_model_error_callback = getattr(ctx.agent, "on_model_error_callback", None)
             from trpc_agent_sdk.agents import ModelCallbackFilter
+            from trpc_agent_sdk.agents import ModelErrorCallbackFilter
             extra_filters.append(ModelCallbackFilter(before_model_callback, after_model_callback))
+            extra_filters.append(ModelErrorCallbackFilter(on_model_error_callback))
         else:
             agent_context = create_agent_context()
 

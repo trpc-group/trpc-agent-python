@@ -33,6 +33,7 @@ def create_agent() -> LlmAgent:
         tools=[FunctionTool(get_weather_report, filters_name=["tool_filter"])],
         before_tool_callback=before_tool_callback,
         after_tool_callback=after_tool_callback,
+        on_tool_error_callback=on_tool_error_callback,
     )
     return agent
 

@@ -26,4 +26,6 @@ def get_weather_report(city: str) -> dict:
             "humidity": "85%"
         },
     }
-    return weather_data.get(city, {"temperature": "Unknown", "condition": "Data not available", "humidity": "Unknown"})
+    if city not in weather_data:
+        raise ValueError(f"City {city} not found")
+    return weather_data[city]
