@@ -17,16 +17,19 @@ from typing import List
 from typing import Optional
 from typing import final
 
+from trpc_agent_sdk.configs import ModelRetryConfig
 from trpc_agent_sdk.configs import PromptCacheConfig
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.context import create_agent_context
 from trpc_agent_sdk.filter import BaseFilter
 from trpc_agent_sdk.filter import FilterRunner
 from trpc_agent_sdk.filter import FilterType
-
 from . import _constants as const
 from ._llm_request import LlmRequest
 from ._llm_response import LlmResponse
+from ._retry import ModelRetryInfo
+from ._retry import _model_retry_info_from_exception
+from ._retry import retry_model_call
 
 _VALID_ROLES: set[str] = {const.USER, const.ASSISTANT, const.MODEL, const.SYSTEM}
 
@@ -39,6 +42,7 @@ class LLMModel(FilterRunner):
         model_name: str,
         filters_name: Optional[list[str]] = None,
         prompt_cache_config: Optional[PromptCacheConfig] = None,
+        model_retry_config: Optional[ModelRetryConfig] = None,
         **kwargs,
     ):
         filters: list = kwargs.get("filters", [])
@@ -46,6 +50,7 @@ class LLMModel(FilterRunner):
         self._model_name = model_name
         self.config = kwargs
         self.prompt_cache_config = prompt_cache_config
+        self.model_retry_config = model_retry_config
         self._type = FilterType.MODEL
         self._init_filters()
         self._api_key: str = kwargs.get(const.API_KEY, "")
@@ -90,6 +95,31 @@ class LLMModel(FilterRunner):
         """Set the model name."""
         self._model_name = value
 
+    def is_retriable_status_code(self, status_code: int) -> Optional[bool]:
+        """Map an HTTP status code to a retry decision.
+
+        Return ``True``/``False`` for codes the provider has an opinion on, or
+        ``None`` to defer to :meth:`is_retriable_exception`.
+        """
+        return None
+
+    def is_retriable_exception(self, ex: Exception) -> bool:
+        """Fallback retry decision when no status code or header hint applies."""
+        return False
+
+    @final
+    def _get_model_retry_info(self, ex: Exception) -> ModelRetryInfo:
+        """Build retry info from headers/status, then the provider hooks.
+
+        Providers customize behavior by overriding :meth:`is_retriable_status_code`
+        and :meth:`is_retriable_exception`, never this orchestration method.
+        """
+        return _model_retry_info_from_exception(
+            ex,
+            self.is_retriable_status_code,
+            self.is_retriable_exception,
+        )
+
     @classmethod
     @abstractmethod
     def supported_models(cls) -> List[str]:
@@ -111,7 +141,15 @@ class LLMModel(FilterRunner):
             For streaming, yields multiple partial responses.
             Error responses should have error_code and error_message set.
         """
-        handle = partial(self._generate_async_impl, request, stream, ctx)  # type: ignore
+        call_model = partial(self._generate_async_impl, request, stream, ctx)  # type: ignore
+        error_code = "STREAMING_ERROR" if stream else "API_ERROR"
+        run_with_retry = partial(
+            retry_model_call,
+            call_model,
+            self.model_retry_config,
+            error_code=error_code,
+            get_retry_info=self._get_model_retry_info,
+        )
         extra_filters: list[BaseFilter] = []
         if ctx:
             agent_context = ctx.agent_context
@@ -122,7 +160,8 @@ class LLMModel(FilterRunner):
         else:
             agent_context = create_agent_context()
 
-        async for event in self._run_stream_filters(agent_context, request, handle, extra_filters):  # type: ignore
+        async for event in self._run_stream_filters(agent_context, request, run_with_retry,
+                                                    extra_filters):  # type: ignore
             yield event  # type: ignore
 
     @abstractmethod

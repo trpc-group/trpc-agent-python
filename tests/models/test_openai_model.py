@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock
 from unittest.mock import Mock
 from unittest.mock import patch
 
+import httpx
+import openai
 import pytest
 from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.models import OpenAIModel
@@ -352,15 +354,15 @@ class TestOpenAIModel:
 
     @pytest.mark.asyncio
     async def test_generate_async_validation_failure(self):
-        """Test generate_async raises ValueError on invalid request."""
+        """Test generate_async converts validation failures to error responses."""
         model = OpenAIModel(model_name="gpt-4", api_key="test_key")
 
-        # Empty contents
         request = LlmRequest(contents=[], config=None, tools_dict={})
 
-        with pytest.raises(ValueError, match="At least one content is required"):
-            async for _ in model.generate_async(request, stream=False):
-                pass
+        responses = [response async for response in model.generate_async(request, stream=False)]
+        assert len(responses) == 1
+        assert responses[0].error_code == "API_ERROR"
+        assert "At least one content is required" in (responses[0].error_message or "")
 
     @pytest.mark.asyncio
     async def test_generate_async_with_config_parameters(self):
@@ -847,3 +849,47 @@ class TestOpenAIBuildUsageMetadata:
         }
         meta = OpenAIModel._build_usage_metadata(usage_data)
         assert meta.cache_read_input_tokens is None
+
+
+class _RetryTestError(Exception):
+
+    def __init__(self, status_code=None, headers=None):
+        super().__init__(f"status {status_code}" if status_code is not None else "retry test")
+        if status_code is not None:
+            self.status_code = status_code
+        if headers is not None:
+            self.response = type("Resp", (), {"headers": headers})()
+
+
+class TestOpenAIModelRetryHooks:
+
+    def _model(self):
+        return OpenAIModel(model_name="gpt-4", api_key="test_key")
+
+    def test_x_should_retry_header_has_priority(self):
+        model = self._model()
+        assert model._get_model_retry_info(_RetryTestError(400, {"x-should-retry": "true"})).should_retry is True
+        assert model._get_model_retry_info(_RetryTestError(500, {"x-should-retry": "false"})).should_retry is False
+
+    @pytest.mark.parametrize("status_code", [408, 409, 429, 500, 503])
+    def test_retryable_status_codes(self, status_code):
+        assert self._model()._get_model_retry_info(_RetryTestError(status_code)).should_retry is True
+
+    @pytest.mark.parametrize("status_code", [400, 401, 403, 404, 499])
+    def test_non_retryable_status_codes(self, status_code):
+        assert self._model()._get_model_retry_info(_RetryTestError(status_code)).should_retry is False
+
+    def test_timeout_exception_retried(self):
+        request = httpx.Request("GET", "https://example.com")
+        assert self._model()._get_model_retry_info(httpx.TimeoutException("timeout", request=request)).should_retry is True
+
+    def test_openai_error_not_retried_without_status_decision(self):
+        assert self._model()._get_model_retry_info(openai.OpenAIError("boom")).should_retry is False
+
+    def test_other_exception_retried(self):
+        assert self._model()._get_model_retry_info(ValueError("boom")).should_retry is True
+
+    def test_retry_after_extracted_from_headers(self):
+        info = self._model()._get_model_retry_info(_RetryTestError(429, {"retry-after": "3"}))
+        assert info.should_retry is True
+        assert info.retry_after == 3.0

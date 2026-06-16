@@ -22,8 +22,8 @@ from typing import Optional
 from typing import Callable
 from typing_extensions import override
 
-import openai
 import httpx
+import openai
 from pydantic import BaseModel
 
 from trpc_agent_sdk.common import check_enum
@@ -216,6 +216,16 @@ class OpenAIModel(LLMModel):
     def _refresh_adapter(self) -> None:
         """Refresh provider adapter after model or endpoint changes."""
         self._adapter = get_openai_adapter(self._model_name, self._base_url)
+
+    def is_retriable_status_code(self, status_code: int) -> Optional[bool]:
+        return status_code in {408, 409, 429} or status_code >= 500
+
+    def is_retriable_exception(self, ex: Exception) -> bool:
+        if isinstance(ex, httpx.TimeoutException):
+            return True
+        if isinstance(ex, openai.OpenAIError):
+            return False
+        return True
 
     @override
     def set_base_url(self, value: str) -> None:
@@ -1531,20 +1541,12 @@ class OpenAIModel(LLMModel):
         # set thinking params
         self._set_thinking(request, http_options)
 
-        try:
-            if stream:
-                async for response in self._generate_stream(api_params, request, http_options, ctx):
-                    yield response
-            else:
-                response = await self._generate_single(api_params, request, http_options, ctx)
+        if stream:
+            async for response in self._generate_stream(api_params, request, http_options, ctx):
                 yield response
-        except Exception as ex:  # pylint: disable=broad-except
-            logger.error("OpenAI API error: %s", ex)
-            # Create error response using LlmResponse fields
-            yield LlmResponse(content=None,
-                              error_code="API_ERROR",
-                              error_message=str(ex),
-                              custom_metadata={"error": str(ex)})
+        else:
+            response = await self._generate_single(api_params, request, http_options, ctx)
+            yield response
 
     async def _generate_stream(self,
                                api_params: Dict,
@@ -1577,217 +1579,200 @@ class OpenAIModel(LLMModel):
         api_params[ApiParamsKey.STREAM_OPTS] = {ApiParamsKey.INCLUDE_USAGE: True}
 
         client = self._create_async_client()
-        try:
-            logger.debug("openai invoke with params: %s", api_params)
-            response = await client.chat.completions.create(**api_params, **http_options)
-            if response is None:
-                raise ValueError("Empty response from API")
+        logger.debug("openai invoke with params: %s", api_params)
+        response = await client.chat.completions.create(**api_params, **http_options)
+        if response is None:
+            raise ValueError("Empty response from API")
 
-            async for chunk in response:
-                if chunk is None:
-                    continue
+        async for chunk in response:
+            if chunk is None:
+                continue
 
-                chunk_dict: dict = chunk.model_dump()
-                logger.debug("🔥 RAW LLM CHUNK: %s", json.dumps(chunk_dict, ensure_ascii=False))
+            chunk_dict: dict = chunk.model_dump()
+            logger.debug("🔥 RAW LLM CHUNK: %s", json.dumps(chunk_dict, ensure_ascii=False))
 
-                # Capture response ID from chunk (only set once from first chunk that has it)
-                if response_id is None and chunk_dict.get("id"):
-                    response_id = chunk_dict.get("id")
+            # Capture response ID from chunk (only set once from first chunk that has it)
+            if response_id is None and chunk_dict.get("id"):
+                response_id = chunk_dict.get("id")
 
-                # Check for thinking events first
-                if self._is_thinking_event(chunk_dict):
-                    thinking_state = self._get_thinking_state(chunk_dict)
-                    if thinking_state == 0:
-                        # Start thinking
-                        is_thinking = True
-                    elif thinking_state == 2:
-                        # End thinking
-                        is_thinking = False
-                    # Handle thinking events - these are metadata about thinking state
-                    # We can log them but don't need to yield them as content
-                    continue
+            # Check for thinking events first
+            if self._is_thinking_event(chunk_dict):
+                thinking_state = self._get_thinking_state(chunk_dict)
+                if thinking_state == 0:
+                    # Start thinking
+                    is_thinking = True
+                elif thinking_state == 2:
+                    # End thinking
+                    is_thinking = False
+                # Handle thinking events - these are metadata about thinking state
+                # We can log them but don't need to yield them as content
+                continue
 
-                # Verify if the chunk contains valid text content
-                if not self._verify_text_content_in_delta_response(chunk_dict):
-                    # Process chunk without content (this is where tool calls are streamed)
-                    _, usage, delta_arguments = self._process_chunk_without_content(chunk_dict, accumulated_tool_calls)
+            # Verify if the chunk contains valid text content
+            if not self._verify_text_content_in_delta_response(chunk_dict):
+                # Process chunk without content (this is where tool calls are streamed)
+                _, usage, delta_arguments = self._process_chunk_without_content(chunk_dict, accumulated_tool_calls)
 
-                    if usage:
-                        last_usage = usage
-
-                    # If streaming tool call arguments is enabled, yield partial tool call events
-                    # delta_arguments being non-empty means tool calls were processed
-                    if streaming_tool_names and delta_arguments and accumulated_tool_calls:
-                        # Yield streaming tool call event with delta arguments
-                        # Only for tools in streaming_tool_names
-                        streaming_event = self._create_streaming_tool_call_response(accumulated_tool_calls,
-                                                                                    delta_arguments,
-                                                                                    streaming_tool_names)
-                        if streaming_event:
-                            yield streaming_event
-
-                    continue
-
-                # Process chunk with valid content
-                choices = chunk_dict.get(const.CHOICES, [])
-                if not choices:
-                    continue  # Skip if no choices available
-                choice: dict[str, dict] = choices[0]
-                delta = choice[const.DELTA]
-
-                # Handle reasoning content (thinking content) first
-                if delta.get(const.REASONING_CONTENT):
-                    reasoning_content = delta.get(const.REASONING_CONTENT)
-                    if reasoning_content is not None:
-                        partial_text = reasoning_content
-                        if (tool_prompt and streaming_text_filter_state is not None
-                                and self._adapter.should_filter_reasoning_text()):
-                            reasoning_filter_state = streaming_text_filter_state["reasoning"]
-                            partial_text = self._adapter.filter_streaming_text(reasoning_content,
-                                                                               reasoning_filter_state)
-                        if not partial_text:
-                            continue
-
-                        # Reasoning content is always thinking content
-                        thought_content += partial_text
-
-                        # Set thought flag to True for reasoning content
-                        content_part = Part.from_text(text=partial_text)
-                        content_part.thought = True
-
-                        partial_content = Content(parts=[content_part], role=const.MODEL)
-                        yield LlmResponse(content=partial_content,
-                                          partial=True,
-                                          response_id=response_id,
-                                          custom_metadata={const.CHUNK: chunk_dict})
-
-                # Handle regular content
-                if delta.get(const.CONTENT):
-                    content = delta.get(const.CONTENT)
-                    if content is not None:
-                        if not is_thinking:
-                            accumulated_content += content
-                        else:
-                            thought_content += content
-
-                        partial_text = content
-                        if tool_prompt and streaming_text_filter_state is not None:
-                            content_filter_state = streaming_text_filter_state["content"]
-                            partial_text = self._adapter.filter_streaming_text(content, content_filter_state)
-                        if not partial_text:
-                            continue
-
-                        # Set thought flag based on current thinking state
-                        content_part = Part.from_text(text=partial_text)
-                        content_part.thought = is_thinking
-
-                        partial_content = Content(parts=[content_part], role=const.MODEL)
-                        yield LlmResponse(content=partial_content,
-                                          partial=True,
-                                          response_id=response_id,
-                                          custom_metadata={const.CHUNK: chunk_dict})
-
-                # Handle usage
-                usage = self._process_usage(chunk_dict)
                 if usage:
                     last_usage = usage
 
-            if tool_prompt and streaming_text_filter_state is not None:
-                if self._adapter.should_filter_reasoning_text():
-                    flushed_reasoning_text = self._adapter.flush_streaming_text(
-                        streaming_text_filter_state["reasoning"])
-                    if flushed_reasoning_text:
-                        thought_content += flushed_reasoning_text
-                        content_part = Part.from_text(text=flushed_reasoning_text)
-                        content_part.thought = True
-                        partial_content = Content(parts=[content_part], role=const.MODEL)
-                        yield LlmResponse(content=partial_content,
-                                          partial=True,
-                                          response_id=response_id,
-                                          custom_metadata={"stream_filter_flushed": "reasoning"})
+                # If streaming tool call arguments is enabled, yield partial tool call events
+                # delta_arguments being non-empty means tool calls were processed
+                if streaming_tool_names and delta_arguments and accumulated_tool_calls:
+                    # Yield streaming tool call event with delta arguments
+                    # Only for tools in streaming_tool_names
+                    streaming_event = self._create_streaming_tool_call_response(accumulated_tool_calls, delta_arguments,
+                                                                                streaming_tool_names)
+                    if streaming_event:
+                        yield streaming_event
 
-                flushed_content_text = self._adapter.flush_streaming_text(streaming_text_filter_state["content"])
-                if flushed_content_text:
-                    content_part = Part.from_text(text=flushed_content_text)
-                    content_part.thought = is_thinking
+                continue
+
+            # Process chunk with valid content
+            choices = chunk_dict.get(const.CHOICES, [])
+            if not choices:
+                continue  # Skip if no choices available
+            choice: dict[str, dict] = choices[0]
+            delta = choice[const.DELTA]
+
+            # Handle reasoning content (thinking content) first
+            if delta.get(const.REASONING_CONTENT):
+                reasoning_content = delta.get(const.REASONING_CONTENT)
+                if reasoning_content is not None:
+                    partial_text = reasoning_content
+                    if (tool_prompt and streaming_text_filter_state is not None
+                            and self._adapter.should_filter_reasoning_text()):
+                        reasoning_filter_state = streaming_text_filter_state["reasoning"]
+                        partial_text = self._adapter.filter_streaming_text(reasoning_content, reasoning_filter_state)
+                    if not partial_text:
+                        continue
+
+                    # Reasoning content is always thinking content
+                    thought_content += partial_text
+
+                    # Set thought flag to True for reasoning content
+                    content_part = Part.from_text(text=partial_text)
+                    content_part.thought = True
+
                     partial_content = Content(parts=[content_part], role=const.MODEL)
                     yield LlmResponse(content=partial_content,
                                       partial=True,
                                       response_id=response_id,
-                                      custom_metadata={"stream_filter_flushed": "content"})
+                                      custom_metadata={const.CHUNK: chunk_dict})
 
-            # Yield final complete response
-            final_content = None
+            # Handle regular content
+            if delta.get(const.CONTENT):
+                content = delta.get(const.CONTENT)
+                if content is not None:
+                    if not is_thinking:
+                        accumulated_content += content
+                    else:
+                        thought_content += content
 
-            parts = []
+                    partial_text = content
+                    if tool_prompt and streaming_text_filter_state is not None:
+                        content_filter_state = streaming_text_filter_state["content"]
+                        partial_text = self._adapter.filter_streaming_text(content, content_filter_state)
+                    if not partial_text:
+                        continue
 
-            if thought_content:
-                logger.debug("Final accumulated thought content: %s...", thought_content[:200])
-                content_part = Part.from_text(text=thought_content)
-                content_part.thought = True
-                parts.append(content_part)
+                    # Set thought flag based on current thinking state
+                    content_part = Part.from_text(text=partial_text)
+                    content_part.thought = is_thinking
 
-            # Parse function calls from final accumulated content if add_tools_to_prompt is enabled
-            complete_tool_calls = self._create_complete_tool_calls(accumulated_tool_calls)
-            if tool_prompt and accumulated_content and not complete_tool_calls:
-                try:
-                    parsed_function_calls = self._adapter.parse_tool_prompt_function_calls(
-                        accumulated_content, tool_prompt)
-                    if parsed_function_calls:
-                        # Convert FunctionCall objects to ToolCall objects
-                        complete_tool_calls = []
-                        for func_call in parsed_function_calls:
-                            tool_call = ToolCall(id=f"call_{uuid.uuid4().hex[:24]}",
-                                                 name=func_call.name,
-                                                 arguments=func_call.args)
-                            complete_tool_calls.append(tool_call)
-                        logger.debug("Parsed %s function calls from final accumulated content",
-                                     len(complete_tool_calls))
-                except Exception as ex:  # pylint: disable=broad-except
-                    logger.warning("Failed to parse function calls from final accumulated content: %s", ex)
+                    partial_content = Content(parts=[content_part], role=const.MODEL)
+                    yield LlmResponse(content=partial_content,
+                                      partial=True,
+                                      response_id=response_id,
+                                      custom_metadata={const.CHUNK: chunk_dict})
 
-            # Add text content if present
-            if accumulated_content and not complete_tool_calls:
-                logger.debug("Final accumulated regular content: %s...", accumulated_content[:200])
-                content_part = Part.from_text(text=accumulated_content)
-                content_part.thought = False  # Final accumulated content represents the answer, not thinking
-                parts.append(content_part)
+            # Handle usage
+            usage = self._process_usage(chunk_dict)
+            if usage:
+                last_usage = usage
 
-            if complete_tool_calls:
-                for tool_call in complete_tool_calls:
-                    # Create Part with function_call using the from_function_call method
-                    function_part = Part.from_function_call(name=tool_call.name, args=tool_call.arguments)
-                    # Set the id if available
-                    if tool_call.id:
-                        function_part.function_call.id = tool_call.id  # type: ignore
-                    self._set_part_thought_signature(function_part, tool_call.thought_signature)
-                    parts.append(function_part)
+        if tool_prompt and streaming_text_filter_state is not None:
+            if self._adapter.should_filter_reasoning_text():
+                flushed_reasoning_text = self._adapter.flush_streaming_text(streaming_text_filter_state["reasoning"])
+                if flushed_reasoning_text:
+                    thought_content += flushed_reasoning_text
+                    content_part = Part.from_text(text=flushed_reasoning_text)
+                    content_part.thought = True
+                    partial_content = Content(parts=[content_part], role=const.MODEL)
+                    yield LlmResponse(content=partial_content,
+                                      partial=True,
+                                      response_id=response_id,
+                                      custom_metadata={"stream_filter_flushed": "reasoning"})
 
-            # Create final content with parts
-            if parts:
-                final_content = Content(parts=parts, role=const.MODEL)
+            flushed_content_text = self._adapter.flush_streaming_text(streaming_text_filter_state["content"])
+            if flushed_content_text:
+                content_part = Part.from_text(text=flushed_content_text)
+                content_part.thought = is_thinking
+                partial_content = Content(parts=[content_part], role=const.MODEL)
+                yield LlmResponse(content=partial_content,
+                                  partial=True,
+                                  response_id=response_id,
+                                  custom_metadata={"stream_filter_flushed": "content"})
 
-            # Convert usage to the expected format for LlmResponse
-            final_usage = None
-            if last_usage:
-                # Create a compatible usage metadata object
-                final_usage = last_usage  # Use the existing usage object for now
+        # Yield final complete response
+        final_content = None
 
-            yield LlmResponse(
-                content=final_content,
-                usage_metadata=final_usage,
-                partial=False,
-                response_id=response_id,
-                custom_metadata={"stream_complete": True},
-            )
+        parts = []
 
-        except Exception as ex:  # pylint: disable=broad-except
-            logger.error("Error in streaming response: %s", ex, exc_info=True)
-            # Create error response using LlmResponse fields
-            yield LlmResponse(
-                content=None,
-                error_code="STREAMING_ERROR",
-                error_message=f"Error in streaming: {str(ex)}",
-                partial=False,
-                custom_metadata={"error": str(ex)},
-            )
+        if thought_content:
+            logger.debug("Final accumulated thought content: %s...", thought_content[:200])
+            content_part = Part.from_text(text=thought_content)
+            content_part.thought = True
+            parts.append(content_part)
+
+        # Parse function calls from final accumulated content if add_tools_to_prompt is enabled
+        complete_tool_calls = self._create_complete_tool_calls(accumulated_tool_calls)
+        if tool_prompt and accumulated_content and not complete_tool_calls:
+            try:
+                parsed_function_calls = self._adapter.parse_tool_prompt_function_calls(accumulated_content, tool_prompt)
+                if parsed_function_calls:
+                    # Convert FunctionCall objects to ToolCall objects
+                    complete_tool_calls = []
+                    for func_call in parsed_function_calls:
+                        tool_call = ToolCall(id=f"call_{uuid.uuid4().hex[:24]}",
+                                             name=func_call.name,
+                                             arguments=func_call.args)
+                        complete_tool_calls.append(tool_call)
+                    logger.debug("Parsed %s function calls from final accumulated content", len(complete_tool_calls))
+            except Exception as ex:  # pylint: disable=broad-except
+                logger.warning("Failed to parse function calls from final accumulated content: %s", ex)
+
+        # Add text content if present
+        if accumulated_content and not complete_tool_calls:
+            logger.debug("Final accumulated regular content: %s...", accumulated_content[:200])
+            content_part = Part.from_text(text=accumulated_content)
+            content_part.thought = False  # Final accumulated content represents the answer, not thinking
+            parts.append(content_part)
+
+        if complete_tool_calls:
+            for tool_call in complete_tool_calls:
+                # Create Part with function_call using the from_function_call method
+                function_part = Part.from_function_call(name=tool_call.name, args=tool_call.arguments)
+                # Set the id if available
+                if tool_call.id:
+                    function_part.function_call.id = tool_call.id  # type: ignore
+                self._set_part_thought_signature(function_part, tool_call.thought_signature)
+                parts.append(function_part)
+
+        # Create final content with parts
+        if parts:
+            final_content = Content(parts=parts, role=const.MODEL)
+
+        # Convert usage to the expected format for LlmResponse
+        final_usage = None
+        if last_usage:
+            # Create a compatible usage metadata object
+            final_usage = last_usage  # Use the existing usage object for now
+
+        yield LlmResponse(
+            content=final_content,
+            usage_metadata=final_usage,
+            partial=False,
+            response_id=response_id,
+            custom_metadata={"stream_complete": True},
+        )
