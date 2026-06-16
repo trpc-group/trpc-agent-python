@@ -21,6 +21,8 @@ from typing import Literal
 from typing import Optional
 from typing_extensions import override
 
+import anthropic
+import httpx
 from anthropic import AsyncAnthropic
 from anthropic import types as anthropic_types
 
@@ -176,6 +178,24 @@ class AnthropicModel(LLMModel):
             base_url=self._base_url if self._base_url else None,
             **self.client_args,
         )
+
+    def is_retriable_status_code(self, status_code: int) -> Optional[bool]:
+        return status_code in {408, 409, 429} or status_code >= 500
+
+    def is_retriable_exception(self, ex: Exception) -> bool:
+        if isinstance(ex, httpx.TimeoutException):
+            return True
+
+        retryable_error = getattr(anthropic, "RetryableError", None)
+        if retryable_error is not None and isinstance(ex, retryable_error):
+            return True
+        if isinstance(ex, anthropic.APIConnectionError):
+            return True
+        if isinstance(ex, anthropic.APIStatusError):
+            return False
+        if isinstance(ex, anthropic.AnthropicError):
+            return False
+        return True
 
     def _to_claude_role(self, role: Optional[str]) -> Literal["user", "assistant"]:
         """Convert role to Claude format."""
@@ -533,14 +553,7 @@ class AnthropicModel(LLMModel):
         client = self._create_async_client()
         try:
             response = await client.messages.create(**api_params)
-
             return self._message_to_llm_response(response)
-        except Exception as ex:  # pylint: disable=broad-except
-            logger.error("Anthropic API error: %s", ex)
-            return LlmResponse(content=None,
-                               error_code="API_ERROR",
-                               error_message=str(ex),
-                               custom_metadata={"error": str(ex)})
         finally:
             await client.close()
 
@@ -564,7 +577,6 @@ class AnthropicModel(LLMModel):
 
         client = self._create_async_client()
         try:
-            logger.debug("Anthropic invoke with params: %s", api_params)
             logger.debug("Anthropic invoke with params: %s", api_params)
 
             async with client.messages.stream(**api_params) as stream:
@@ -667,16 +679,9 @@ class AnthropicModel(LLMModel):
                               partial=False,
                               custom_metadata={"stream_complete": True})
 
-        except Exception as ex:  # pylint: disable=broad-except
-            logger.error("Error in streaming response: %s", ex, exc_info=True)
-            logger.error("Error in streaming response: %s", ex, exc_info=True)
-            yield LlmResponse(
-                content=None,
-                error_code="STREAMING_ERROR",
-                error_message=f"Error in streaming: {str(ex)}",
-                partial=False,
-                custom_metadata={"error": str(ex)},
-            )
+        except Exception:
+            logger.error("Error in streaming response", exc_info=True)
+            raise
         finally:
             await client.close()
 
@@ -790,17 +795,9 @@ class AnthropicModel(LLMModel):
 
         self._apply_prompt_cache(api_params, ctx)
 
-        try:
-            if stream:
-                async for response in self._generate_stream(api_params, request, ctx):
-                    yield response
-            else:
-                response = await self._generate_single(api_params, request, ctx)
+        if stream:
+            async for response in self._generate_stream(api_params, request, ctx):
                 yield response
-        except Exception as ex:  # pylint: disable=broad-except
-            logger.error("Anthropic API error: %s", ex)
-            # Create error response
-            yield LlmResponse(content=None,
-                              error_code="API_ERROR",
-                              error_message=str(ex),
-                              custom_metadata={"error": str(ex)})
+        else:
+            response = await self._generate_single(api_params, request, ctx)
+            yield response

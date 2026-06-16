@@ -1,0 +1,40 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
+"""Tools for the model retry example agent."""
+
+
+def get_weather_report(city: str) -> dict:
+    """Get weather information for the specified city."""
+    weather_data = {
+        "Beijing": {
+            "temperature": "25°C",
+            "condition": "Sunny",
+            "humidity": "60%",
+        },
+        "Shanghai": {
+            "temperature": "28°C",
+            "condition": "Cloudy",
+            "humidity": "70%",
+        },
+        "Guangzhou": {
+            "temperature": "32°C",
+            "condition": "Thunderstorm",
+            "humidity": "85%",
+        },
+        "Shenzhen": {
+            "temperature": "30°C",
+            "condition": "Light rain",
+            "humidity": "78%",
+        },
+    }
+    return weather_data.get(
+        city,
+        {
+            "temperature": "Unknown",
+            "condition": "Data not available",
+            "humidity": "Unknown",
+        },
+    )

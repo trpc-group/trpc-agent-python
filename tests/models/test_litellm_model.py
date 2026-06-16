@@ -361,6 +361,7 @@ class TestGenerateAsyncNonStream:
                 assert len(responses) == 1
                 assert responses[0].error_code == "API_ERROR"
                 assert "Connection refused" in (responses[0].error_message or "")
+                assert responses[0].custom_metadata == {"error": responses[0].error_message}
 
     @pytest.mark.asyncio
     async def test_generate_async_passes_response_format_for_openai_model(self):
@@ -586,6 +587,7 @@ class TestGenerateAsyncStream:
                 assert len(responses) == 1
                 assert responses[0].error_code == "STREAMING_ERROR"
                 assert "Stream broken" in (responses[0].error_message or "")
+                assert responses[0].custom_metadata == {"error": responses[0].error_message}
 
 
 class TestLiteLLMModelValidateRequest:
@@ -697,9 +699,18 @@ class TestLiteLLMApplyPromptCacheAnthropicFamily:
         api_params = {
             "tools": [],
             "messages": [
-                {"role": "user", "content": "hi"},
-                {"role": "assistant", "content": "hello"},
-                {"role": "user", "content": "again"},
+                {
+                    "role": "user",
+                    "content": "hi"
+                },
+                {
+                    "role": "assistant",
+                    "content": "hello"
+                },
+                {
+                    "role": "user",
+                    "content": "again"
+                },
             ],
         }
         model._apply_prompt_cache(api_params, None)
@@ -914,6 +925,48 @@ class TestLiteLLMApplyPromptCacheUnknownFamily:
 
 
 # ===========================================================================
+# Model retry hooks
+# ===========================================================================
+
+
+class _LiteLLMRetryTestError(Exception):
+
+    def __init__(self, status_code=None, headers=None):
+        super().__init__(f"status {status_code}" if status_code is not None else "retry test")
+        if status_code is not None:
+            self.status_code = status_code
+        if headers is not None:
+            self.litellm_response_headers = headers
+
+
+class TestLiteLLMRetryHooks:
+
+    def _model(self):
+        return LiteLLMModel(model_name="openai/gpt-4", api_key="k")
+
+    def test_x_should_retry_header_has_priority(self):
+        model = self._model()
+        assert model._get_model_retry_info(_LiteLLMRetryTestError(400, {"x-should-retry": "true"})).should_retry is True
+        assert model._get_model_retry_info(_LiteLLMRetryTestError(500, {"x-should-retry": "false"})).should_retry is False
+
+    @pytest.mark.parametrize("status_code", [408, 409, 429, 500, 503])
+    def test_retryable_status_codes(self, status_code):
+        assert self._model()._get_model_retry_info(_LiteLLMRetryTestError(status_code)).should_retry is True
+
+    @pytest.mark.parametrize("status_code", [400, 401, 403, 404, 499])
+    def test_non_retryable_status_codes(self, status_code):
+        assert self._model()._get_model_retry_info(_LiteLLMRetryTestError(status_code)).should_retry is False
+
+    def test_missing_response_status_not_retried(self):
+        assert self._model()._get_model_retry_info(ValueError("boom")).should_retry is False
+
+    def test_retry_after_extracted_from_litellm_headers(self):
+        info = self._model()._get_model_retry_info(_LiteLLMRetryTestError(429, {"retry-after": "3"}))
+        assert info.should_retry is True
+        assert info.retry_after == 3.0
+
+
+# ===========================================================================
 # Prompt cache — _set_extra_body utility
 # ===========================================================================
 
@@ -960,9 +1013,18 @@ class TestLiteLLMBuildCacheInjectionPoints:
 
     def test_messages_breakpoint_adds_latest_assistant_index(self):
         messages = [
-            {"role": "user", "content": "hi"},
-            {"role": "assistant", "content": "hello"},
-            {"role": "user", "content": "again"},
+            {
+                "role": "user",
+                "content": "hi"
+            },
+            {
+                "role": "assistant",
+                "content": "hello"
+            },
+            {
+                "role": "user",
+                "content": "again"
+            },
         ]
         points = self._build("anthropic/claude-3", ["messages"], messages=messages)
         assert any(p.get("index") == 1 for p in points)
@@ -995,8 +1057,14 @@ class TestLiteLLMBuildCacheInjectionPoints:
     def test_all_non_bedrock_breakpoints_no_tool_config_point(self):
         """All three breakpoints for a non-Bedrock provider: no tool_config point."""
         messages = [
-            {"role": "user", "content": "hi"},
-            {"role": "assistant", "content": "hello"},
+            {
+                "role": "user",
+                "content": "hi"
+            },
+            {
+                "role": "assistant",
+                "content": "hello"
+            },
         ]
         points = self._build("anthropic/claude-3", ["tools", "system", "messages"], messages=messages)
         assert not any(p.get("location") == "tool_config" for p in points)

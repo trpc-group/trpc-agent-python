@@ -467,16 +467,15 @@ class TestLogUnsupportedConfigOptions:
 
 class TestGenerateSingleError:
     @pytest.mark.asyncio
-    async def test_api_error_returns_error_response(self):
-        """API error during single generation returns error LlmResponse."""
+    async def test_api_error_raises_and_closes_client(self):
+        """API error during single generation is raised to the retry layer."""
         model = _model()
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(side_effect=RuntimeError("timeout"))
         mock_client.close = AsyncMock()
         with patch.object(model, "_create_async_client", return_value=mock_client):
-            resp = await model._generate_single({}, LlmRequest(contents=[]))
-            assert resp.error_code == "API_ERROR"
-            assert "timeout" in resp.error_message
+            with pytest.raises(RuntimeError, match="timeout"):
+                await model._generate_single({}, LlmRequest(contents=[]))
             mock_client.close.assert_awaited_once()
 
 

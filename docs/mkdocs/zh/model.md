@@ -10,6 +10,7 @@ tRPC-Agent 内的模型具有以下核心特性：
 - **流式响应支持**：支持流式输出，实现实时交互体验
 - **多模态能力**：支持文本、图像等多模态内容处理（如 hunyuan 多模态模型）
 - **Prompt Cache 支持**：支持跨 OpenAI、Anthropic 与 LiteLLM 路由的统一 prompt cache 配置，降低长提示词和多轮会话的重复输入成本
+- **模型重试支持**：支持在模型层配置重试，SDK 将在限流等异常发生时自动重试，并按指数退避策略进行退避
 - **可扩展配置**：支持 GenerateContentConfig、HttpOptions、client_args 等自定义配置项，满足不同场景需求
 
 ## 快速上手
@@ -513,6 +514,63 @@ async for event in runner.run_async(...):
 不同模型服务上报的字段并不完全一致。OpenAI 兼容端点通常只上报缓存读取，不上报缓存写入；负载均衡代理场景下，不同后端实例的 KV 缓存可能尚未全部预热，因此命中率可能在前几次运行中波动。
 
 完整可运行示例见 [examples/llmagent_with_prompt_cache](../../../examples/llmagent_with_prompt_cache/README.md)。
+
+### 模型重试
+
+模型重试适用于 LLM 请求遇到限流、超时、网络抖动、临时服务不可用等瞬时错误的场景。通过在模型构造时传入 `ModelRetryConfig`，可以让 SDK 在模型层统一处理重试，业务代码和 Runner 调用无需自己实现重试循环。
+
+目前 `OpenAIModel`、`AnthropicModel` 和 `LiteLLMModel` 均支持模型重试。该能力默认关闭，只有显式传入 `model_retry_config` 时才会启用。
+
+#### 基本用法
+
+```python
+from trpc_agent_sdk.configs import ExponentialBackoffConfig
+from trpc_agent_sdk.configs import ModelRetryConfig
+from trpc_agent_sdk.models import OpenAIModel
+
+model = OpenAIModel(
+    model_name="deepseek-chat",
+    api_key="your-api-key",
+    base_url="https://api.deepseek.com/v1",
+    model_retry_config=ModelRetryConfig(
+        num_retries=2,  # 初始请求失败后的额外重试次数，不包含第一次请求
+        backoff=ExponentialBackoffConfig(
+            initial_backoff=1.0,  # 第一次重试前的基础等待时间，单位秒
+            max_backoff=8.0,  # 单次重试等待时间上限，单位秒
+            multiplier=2.0,  # 指数退避倍数
+            jitter=True,  # 是否启用 full jitter，避免并发请求同时重试
+        ),
+    ),
+)
+```
+
+#### 配置项
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `num_retries` | `2` | 初始请求失败后的额外重试次数，不包含第一次请求；设置为 `0` 表示不额外重试 |
+| `backoff.initial_backoff` | `1.0` | 第一次重试前的基础等待时间，单位秒 |
+| `backoff.max_backoff` | `10.0` | 单次重试等待时间上限，单位秒 |
+| `backoff.multiplier` | `2.0` | 指数退避倍数，例如第 1、2、3 次重试前分别按 `initial_backoff * multiplier^attempt` 计算 |
+| `backoff.jitter` | `True` | 是否启用 full jitter；开启后会在 `0` 到当前退避时间之间随机等待，避免并发请求同时重试 |
+
+如果 provider 返回 `Retry-After` 或 `retry-after-ms`，且等待时间在合理范围内，SDK 会优先使用服务端建议的等待时间；否则使用指数退避配置计算等待时间。
+
+#### 重试判定
+
+SDK 会结合响应 header、HTTP status 和 provider SDK 的异常语义判断是否重试。通用优先级如下：
+
+- `x-should-retry: true` 会强制视为可重试，`x-should-retry: false` 会强制视为不可重试。
+- HTTP status `408`、`409`、`429` 和 `>=500` 通常视为可重试。
+- 其他 `4xx` 错误（如 `400`、`401`、`403`、`404`）通常不会重试。
+- OpenAI / Anthropic 的超时、连接类异常通常视为可重试。
+- `LiteLLMModel` 优先使用 LiteLLM 归一化异常上的 header 和 status 信息做判断。
+
+#### 流式输出注意事项
+
+为了避免重复输出内容，模型重试只会发生在本次模型调用尚未产出用户可见内容（文本或工具调用）之前。如果流式响应已经产出部分内容后又发生异常，SDK 会直接返回最终错误响应，而不会重放整个请求。
+
+完整可运行示例见 [examples/llmagent_with_model_retry](../../../examples/llmagent_with_model_retry/README.md)。
 
 ### 自定义 HTTP Header
 
