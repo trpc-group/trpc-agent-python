@@ -10,6 +10,7 @@ Models in tRPC-Agent have the following core features:
 - **Streaming response support**: Supports streaming output for real-time interactive experiences
 - **Multimodal capabilities**: Supports multimodal content processing including text, images, etc. (e.g., Hunyuan multimodal models)
 - **Prompt Cache support**: Provides unified prompt cache configuration across OpenAI, Anthropic, and LiteLLM routes to reduce repeated input cost for long prompts and multi-turn conversations
+- **Model retry support**: Supports configuring retry at the model layer. The SDK automatically retries when exceptions such as rate limits occur, and backs off using an exponential backoff strategy
 - **Extensible configuration**: Supports custom configuration options such as GenerateContentConfig, HttpOptions, client_args to meet various scenario requirements
 
 ## Quick Start
@@ -513,6 +514,76 @@ async for event in runner.run_async(...):
 Different model services report different fields. OpenAI-compatible endpoints usually report cache reads but not cache writes. With load-balanced proxies, each backend instance may have its own KV cache and may not be warmed up at the same time, so cache hit rates can fluctuate during the first few runs.
 
 For a complete runnable example, see [examples/llmagent_with_prompt_cache](../../../examples/llmagent_with_prompt_cache/README.md).
+
+### Model Retry
+
+Model retry is useful when LLM requests encounter transient failures such as rate limits, timeouts, network fluctuations, or temporary service unavailability. By passing `ModelRetryConfig` when constructing a model, you can configure retry behavior at the model layer. When retryable exceptions occur, the SDK automatically retries the request and backs off according to the configured exponential backoff strategy.
+
+`OpenAIModel`, `AnthropicModel`, and `LiteLLMModel` all support model retry. This capability is disabled by default and is enabled only when `model_retry_config` is explicitly provided.
+
+#### Basic usage
+
+```python
+from trpc_agent_sdk.configs import ExponentialBackoffConfig
+from trpc_agent_sdk.configs import ModelRetryConfig
+from trpc_agent_sdk.models import OpenAIModel
+
+model = OpenAIModel(
+    model_name="deepseek-chat",
+    api_key="your-api-key",
+    base_url="https://api.deepseek.com/v1",
+    model_retry_config=ModelRetryConfig(
+        num_retries=2,  # Additional retry attempts after the initial request fails
+        backoff=ExponentialBackoffConfig(
+            initial_backoff=1.0,  # Base delay in seconds before the first retry
+            max_backoff=8.0,  # Upper bound in seconds for a single retry delay
+            multiplier=2.0,  # Exponential backoff multiplier
+            jitter=True,  # Whether to apply full jitter to avoid synchronized retries
+        ),
+    ),
+)
+```
+
+#### Configuration fields
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `num_retries` | `2` | Additional retry attempts after the initial request fails; does not include the initial request. Set to `0` to disable additional retries |
+| `backoff.initial_backoff` | `1.0` | Base delay in seconds before the first retry |
+| `backoff.max_backoff` | `10.0` | Upper bound in seconds for a single retry delay |
+| `backoff.multiplier` | `2.0` | Exponential backoff multiplier, e.g. retry delays are computed as `initial_backoff * multiplier^attempt` |
+| `backoff.jitter` | `True` | Whether to apply full jitter. When enabled, the SDK waits for a random duration between `0` and the current backoff delay to avoid synchronized retries |
+
+If the provider returns `Retry-After` or `retry-after-ms`, and the suggested delay is within a reasonable range, the SDK uses the server-suggested delay first. Otherwise, it computes the delay from the exponential backoff configuration.
+
+#### Retry decisions
+
+The SDK combines response headers, HTTP status codes, and provider SDK exception semantics to decide whether to retry. The general precedence is:
+
+- `x-should-retry: true` forces the error to be treated as retryable, while `x-should-retry: false` forces it to be treated as non-retryable.
+- HTTP status `408`, `409`, `429`, and `>=500` are generally retryable.
+- Other `4xx` errors such as `400`, `401`, `403`, and `404` are generally not retried.
+- Timeout and connection-related OpenAI / Anthropic exceptions are generally retryable.
+- `LiteLLMModel` primarily uses the header and status information on LiteLLM-normalized exceptions.
+
+#### Streaming behavior
+
+To avoid duplicated output, model retry only happens before the current model call has produced user-visible content (text or tool calls). If a streaming response has already emitted partial content and then fails, the SDK returns a final error response directly instead of replaying the whole request.
+
+Runner code does not need additional retry handling:
+
+```python
+async for event in runner.run_async(
+    user_id=user_id,
+    session_id=session_id,
+    new_message=user_content,
+):
+    ...
+```
+
+If the model call encounters a retryable error before producing content, the SDK retries according to `ModelRetryConfig`. If the retry budget is exhausted or the error is non-retryable, the SDK surfaces an `LlmResponse` with `error_code` / `error_message`.
+
+For a complete runnable example, see [examples/llmagent_with_model_retry](../../../examples/llmagent_with_model_retry/README.md).
 
 ### Custom HTTP Headers
 

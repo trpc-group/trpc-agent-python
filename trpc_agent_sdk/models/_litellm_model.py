@@ -30,7 +30,6 @@ from ._llm_response import LlmResponse
 from ._openai_model import FinishReason
 from ._openai_model import OpenAIModel
 from ._registry import register_model
-
 # Cache families for LiteLLM provider routing.
 _ANTHROPIC_FAMILY = "anthropic"  # uses cache_control breakpoints
 _OPENAI_FAMILY = "openai_managed"  # uses provider-managed prefix caching
@@ -180,6 +179,11 @@ class LiteLLMModel(OpenAIModel):
             generate_content_config=generate_content_config,
             **kwargs,
         )
+
+    def is_retriable_exception(self, ex: Exception) -> bool:
+        # LiteLLM normalizes provider errors and attaches status/headers, so the
+        # header/status path decides; class-based fallback would be unreliable.
+        return False
 
     def _ensure_litellm_imported(self) -> None:
         """Lazy-import litellm; set LITELLM_MODE=PRODUCTION. Raises ImportError if not installed."""
@@ -485,21 +489,12 @@ class LiteLLMModel(OpenAIModel):
 
         self._apply_prompt_cache(api_params, ctx)
 
-        try:
-            if stream:
-                async for response in self._generate_stream(api_params, request, ctx):
-                    yield response
-            else:
-                response = await self._generate_single(api_params, request, ctx)
+        if stream:
+            async for response in self._generate_stream(api_params, request, ctx):
                 yield response
-        except Exception as ex:  # pylint: disable=broad-except
-            logger.error("LiteLLM API error: %s", ex)
-            yield LlmResponse(
-                content=None,
-                error_code="API_ERROR",
-                error_message=str(ex),
-                custom_metadata={"error": str(ex)},
-            )
+        else:
+            response = await self._generate_single(api_params, request, ctx)
+            yield response
 
     async def _generate_single(
         self,
@@ -508,20 +503,11 @@ class LiteLLMModel(OpenAIModel):
         ctx: InvocationContext | None = None,
     ) -> LlmResponse:
         """One-shot acompletion → LlmResponse."""
-        try:
-            litellm = __import__("litellm")
-            acompletion = getattr(litellm, "acompletion")
-            response = await acompletion(**api_params)
-            response_dict: Dict[str, Any] = (response.model_dump() if hasattr(response, "model_dump") else response)
-            return self._create_response_with_content(response_dict, partial=False)
-        except Exception as ex:  # pylint: disable=broad-except
-            logger.error("LiteLLM API error: %s", ex)
-            return LlmResponse(
-                content=None,
-                error_code="API_ERROR",
-                error_message=str(ex),
-                custom_metadata={"error": str(ex)},
-            )
+        litellm = __import__("litellm")
+        acompletion = getattr(litellm, "acompletion")
+        response = await acompletion(**api_params)
+        response_dict: Dict[str, Any] = (response.model_dump() if hasattr(response, "model_dump") else response)
+        return self._create_response_with_content(response_dict, partial=False)
 
     async def _generate_stream(
         self,
@@ -589,11 +575,6 @@ class LiteLLMModel(OpenAIModel):
                 partial=False,
                 custom_metadata={"stream_complete": True},
             )
-        except Exception as ex:  # pylint: disable=broad-except
-            logger.error("Error in streaming response: %s", ex, exc_info=True)
-            yield LlmResponse(
-                content=None,
-                error_code="STREAMING_ERROR",
-                error_message=str(ex),
-                custom_metadata={"error": str(ex)},
-            )
+        except Exception:
+            logger.error("Error in streaming response", exc_info=True)
+            raise

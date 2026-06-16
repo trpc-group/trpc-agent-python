@@ -14,9 +14,16 @@ from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.models import LlmResponse
 from trpc_agent_sdk.models import ModelRegistry
 from trpc_agent_sdk.models import register_model
+from trpc_agent_sdk.models._retry import ModelRetryInfo
 
 
-class TestModelBase(LLMModel):
+class _TestRetryMixin:
+
+    def _get_model_retry_info(self, ex: Exception) -> ModelRetryInfo:
+        return ModelRetryInfo(should_retry=False)
+
+
+class TestModelBase(_TestRetryMixin, LLMModel):
     """Base test model for testing."""
 
     @classmethod
@@ -35,7 +42,7 @@ class TestModelBase(LLMModel):
         pass
 
 
-class AnotherTestModel(LLMModel):
+class AnotherTestModel(_TestRetryMixin, LLMModel):
     """Another test model."""
 
     @classmethod
@@ -84,7 +91,7 @@ class TestModelRegistry:
         """Test using register as a decorator."""
 
         @ModelRegistry.register
-        class DecoratedModel(LLMModel):
+        class DecoratedModel(_TestRetryMixin, LLMModel):
 
             @classmethod
             def supported_models(cls) -> List[str]:
@@ -202,7 +209,7 @@ class TestModelRegistry:
         """Test register_model decorator function."""
 
         @register_model(model_name="CustomModel", supported_models=[r"custom-.*", r"special-.*"])
-        class CustomModel(LLMModel):
+        class CustomModel(_TestRetryMixin, LLMModel):
 
             async def _generate_async_impl(self,
                                            request: LlmRequest,
@@ -229,7 +236,7 @@ class TestModelRegistry:
         """Test register_model decorator with single pattern."""
 
         @register_model(model_name="SingleModel", supported_models=[r"single-.*"])
-        class SingleModel(LLMModel):
+        class SingleModel(_TestRetryMixin, LLMModel):
 
             async def _generate_async_impl(self,
                                            request: LlmRequest,
@@ -251,7 +258,7 @@ class TestModelRegistry:
 
         # Register another model with same pattern
         @register_model(model_name="NewModel", supported_models=[r"test-.*"])
-        class NewTestModel(LLMModel):
+        class NewTestModel(_TestRetryMixin, LLMModel):
 
             async def _generate_async_impl(self,
                                            request: LlmRequest,
