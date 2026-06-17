@@ -282,7 +282,7 @@ def convert_message_content_to_parts(content: Optional[Union[str, List[Any]]]) -
                 parts.append(part)
         else:
             item_type_name = item.get("type") if isinstance(item, dict) else type(item).__name__
-            logger.debug("Ignoring unknown multimodal content item: %s", item_type_name)
+            logger.debug("Ignoring unknown multi-model content item: %s", item_type_name)
     return parts
 
 
