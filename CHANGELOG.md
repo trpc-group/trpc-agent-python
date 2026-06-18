@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.10](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.10) (2026-06-18)
+
+### Bug Fixes
+
+* Model: fix error about pickle of OpenAIModel.
+
+
 ## [1.1.9](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.9) (2026-06-18)
 
 ### Features
