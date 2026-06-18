@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.9](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.9) (2026-06-18)
+
+### Features
+
+* Model: Added `http_client_factory` support to `OpenAIModel`, allowing callers to inject a custom `httpx.AsyncClient` factory to control HTTP connection lifecycle and pool settings such as keepalive expiry (#83).
+
+### Bug Fixes
+
+* Telemetry: Switched `agent_run` and `invocation` spans back to `start_as_current_span` so child spans such as `call_llm` inherit the correct parent context, restoring complete trace attributes (including system instructions and tools) in Langfuse reporting.
+
 ## [1.1.8](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.8) (2026-06-12)
 
 ### Features
