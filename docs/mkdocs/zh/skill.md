@@ -100,6 +100,7 @@ from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.models import OpenAIModel
 from trpc_agent_sdk.skills import SkillToolSet
 from trpc_agent_sdk.skills import create_default_skill_repository
+from trpc_agent_sdk.skills.tools import LinkSkillStager
 from trpc_agent_sdk.code_executors import create_local_workspace_runtime
 from trpc_agent_sdk.code_executors import create_container_workspace_runtime
 # Cube 是可选 extra（`pip install 'trpc-agent-py[cube]'`），按需引入。
@@ -114,11 +115,12 @@ workspace_runtime = create_local_workspace_runtime()
 #   workspace_runtime = create_cube_workspace_runtime(executor)
 
 # 创建技能仓库
-repository = create_default_skill_repository("./skills", workspace_runtime=workspace_runtime)
+repository = create_default_skill_repository("./skills", workspace_runtime=workspace_runtime, use_cached_repository=True)
 
 # 创建技能工具集，可配置工件保存选项
 skill_tool_set = SkillToolSet(
     repository=repository,
+    skill_stager=LinkSkillStager(),
     # run_tool_kwargs 属于工具可选参数
     run_tool_kwargs={
         "save_as_artifacts": True,  # 是否存储为制品文件
@@ -136,6 +138,8 @@ agent = LlmAgent(
         skill_repository=repository,
     )
 ```
+
+*注意：在版本 1.1.10（不包含）之后，优化了 skill 的加载和注入机制，支持缓存 skill 内容和本地沙箱环境软连的方式来避免拷贝*
 
 **提示词示例**：
 

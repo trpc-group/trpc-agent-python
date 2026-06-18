@@ -56,6 +56,7 @@ from ._constants import SkillToolsNames
 from ._dynamic_toolset import DynamicSkillToolSet
 from ._registry import SkillRegistry
 from ._repository import BaseSkillRepository
+from ._repository import CachedFsSkillRepository
 from ._repository import FsSkillRepository
 from ._repository import VisibilityFilter
 from ._repository import create_default_skill_repository
@@ -135,6 +136,7 @@ __all__ = [
     "DynamicSkillToolSet",
     "SkillRegistry",
     "BaseSkillRepository",
+    "CachedFsSkillRepository",
     "FsSkillRepository",
     "VisibilityFilter",
     "create_default_skill_repository",

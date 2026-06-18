@@ -294,10 +294,11 @@ class TestWorkspaceStageOptions:
 
     def test_create_workspace_stage_options(self):
         """Test creating workspace stage options."""
-        options = WorkspaceStageOptions(read_only=True, allow_mount=True)
+        options = WorkspaceStageOptions(read_only=True, allow_mount=True, mode="link")
 
         assert options.read_only is True
         assert options.allow_mount is True
+        assert options.mode == "link"
 
     def test_create_workspace_stage_options_defaults(self):
         """Test creating workspace stage options with defaults."""
@@ -305,6 +306,7 @@ class TestWorkspaceStageOptions:
 
         assert options.read_only is False
         assert options.allow_mount is False
+        assert options.mode == "link"
 
 
 class TestWorkspaceCapabilities:

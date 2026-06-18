@@ -26,6 +26,7 @@ import pytest
 from trpc_agent_sdk.skills._repository import (
     BASE_DIR_PLACEHOLDER,
     BaseSkillRepository,
+    CachedFsSkillRepository,
     FsSkillRepository,
     create_default_skill_repository,
 )
@@ -203,6 +204,65 @@ class TestFsSkillRepository:
         assert "a-skill" in names
         assert "b-skill" in names
 
+    def test_base_repository_reads_body_for_summaries(self, tmp_path):
+        _create_skill_dir(tmp_path, "summary-baseline", "Summary", body="# Large Body\n")
+        repo = FsSkillRepository(str(tmp_path))
+        original_read_text = Path.read_text
+
+        with patch.object(Path, "read_text", autospec=True, side_effect=original_read_text) as mock_read_text:
+            summaries = repo.summaries()
+
+        assert [summary.name for summary in summaries] == ["summary-baseline"]
+        assert mock_read_text.call_count == 1
+
+    def test_cached_repository_summaries_do_not_read_skill_body(self, tmp_path):
+        _create_skill_dir(tmp_path, "summary-only", "Summary", body="# Large Body\n")
+
+        with patch.object(Path, "read_text", side_effect=AssertionError("body should not be read")):
+            repo = CachedFsSkillRepository(str(tmp_path))
+            summaries = repo.summaries()
+
+        assert [summary.name for summary in summaries] == ["summary-only"]
+        assert summaries[0].description == "Summary"
+
+    def test_base_repository_does_not_reuse_skill_body(self, tmp_path):
+        _create_skill_dir(tmp_path, "uncached-skill", "Uncached", body="# Uncached Body\n")
+        repo = FsSkillRepository(str(tmp_path))
+        original_read_text = Path.read_text
+
+        with patch.object(Path, "read_text", autospec=True, side_effect=original_read_text) as mock_read_text:
+            repo.get("uncached-skill")
+            repo.get("uncached-skill")
+
+        assert mock_read_text.call_count == 2
+
+    def test_cached_repository_get_reuses_cached_skill_body(self, tmp_path):
+        _create_skill_dir(tmp_path, "cached-skill", "Cached", body="# Cached Body\n")
+        repo = CachedFsSkillRepository(str(tmp_path))
+        original_read_text = Path.read_text
+
+        with patch.object(Path, "read_text", autospec=True, side_effect=original_read_text) as mock_read_text:
+            first = repo.get("cached-skill")
+            second = repo.get("cached-skill")
+
+        assert first.body == second.body
+        assert mock_read_text.call_count == 1
+
+    def test_cached_repository_get_refreshes_cached_body_when_skill_file_changes(self, tmp_path):
+        skill_dir = _create_skill_dir(tmp_path, "mutable-skill", "Before", body="# Before\n")
+        skill_file = skill_dir / "SKILL.md"
+        repo = CachedFsSkillRepository(str(tmp_path))
+        first = repo.get("mutable-skill")
+
+        skill_file.write_text("---\nname: mutable-skill\ndescription: After\n---\n# After changed body\n",
+                              encoding="utf-8")
+
+        second = repo.get("mutable-skill")
+
+        assert "Before" in first.body
+        assert "After changed body" in second.body
+        assert second.summary.description == "After"
+
     def test_refresh(self, tmp_path):
         repo = FsSkillRepository(str(tmp_path))
         assert repo.skill_list() == []
@@ -311,6 +371,7 @@ class TestCreateDefaultSkillRepository:
     def test_creates_repository(self, tmp_path):
         _create_skill_dir(tmp_path, "test")
         repo = create_default_skill_repository(str(tmp_path))
+        assert isinstance(repo, CachedFsSkillRepository)
         assert isinstance(repo, FsSkillRepository)
         assert "test" in repo.skill_list()
 

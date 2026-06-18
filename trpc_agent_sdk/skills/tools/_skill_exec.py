@@ -86,7 +86,7 @@ from ._common import cleanup_expired_sessions
 from ._common import default_create_ws_name_callback
 from ._common import inline_json_schema_refs
 from ._common import require_non_empty
-from ._copy_stager import SkillStageRequest
+from ._file_stager import SkillStageRequest
 from ._skill_run import SkillRunInput
 from ._skill_run import SkillRunOutput
 from ._skill_run import SkillRunTool
