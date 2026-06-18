@@ -235,14 +235,15 @@ class OpenAIModel(LLMModel):
 
         logging.getLogger("httpx").setLevel(logging.WARNING)
 
-        self.client_args['http_client'] = self._http_client_factory()
+        client_args = self.client_args.copy()
+        client_args['http_client'] = self._http_client_factory()
 
         return openai.AsyncOpenAI(
             api_key=self._api_key,
             max_retries=0,  # disable retries
             organization=self.organization,
             base_url=self._base_url,
-            **self.client_args,
+            **client_args,
         )
 
     def _create_tool_prompt(self) -> ToolPrompt:
