@@ -387,12 +387,7 @@ class Runner:
         # because __aexit__ of the context manager is not guaranteed to run when
         # an async generator is cancelled, but try/finally always executes
         # even under CancelledError (PEP 492).
-        from opentelemetry import context as context_api
-        from opentelemetry.trace import set_span_in_context
-
-        span = tracer.start_span("invocation")
-        _ctx_token = context_api.attach(set_span_in_context(span, context_api.get_current()))
-        try:
+        with tracer.start_as_current_span("invocation"):
             # Create default agent context if not provided
             if agent_context is None:
                 agent_context = new_agent_context()
@@ -629,9 +624,6 @@ class Runner:
                     user_id=user_id,
                     session_id=session_id,
                 )
-        finally:
-            context_api.detach(_ctx_token)
-            span.end()
 
     async def _append_new_message_to_session(
         self,

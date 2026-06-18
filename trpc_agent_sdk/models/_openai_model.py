@@ -19,9 +19,11 @@ from typing import AsyncGenerator
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Callable
 from typing_extensions import override
 
 import openai
+import httpx
 from pydantic import BaseModel
 
 from trpc_agent_sdk.common import check_enum
@@ -106,6 +108,19 @@ class ApiParamsKey(str, Enum):
     PROMPT_CACHE_RETENTION = "prompt_cache_retention"
 
 
+HttpClientFactory = Callable[[], httpx.AsyncClient]
+
+_shared_http_client: httpx.AsyncClient | None = None
+
+
+def default_http_client_factory() -> httpx.AsyncClient:
+    """Create a default HTTP client."""
+    global _shared_http_client
+    if _shared_http_client is None:
+        _shared_http_client = httpx.AsyncClient()
+    return _shared_http_client
+
+
 @register_model(model_name="OpenAIModel", supported_models=[r"gpt-.*", r"o1-.*", r"deepseek-.*", r"hy3-.*"])
 class OpenAIModel(LLMModel):
     """OpenAI model implementation using the abstract model interface.
@@ -171,6 +186,11 @@ class OpenAIModel(LLMModel):
         # Extract OpenAI-specific config
         self.organization: str = kwargs.get(const.ORGANIZATION, "")
         self.client_args = kwargs.get(const.CLIENT_ARGS, {})
+        # Allow callers to inject a tuned httpx client so the underlying openai.AsyncOpenAI honors connection-pool
+        # settings such as keepalive_expiry / max_keepalive_connections (avoids reusing stale
+        # keep-alive sockets that gateways close earlier than httpx).
+        self._http_client_factory: HttpClientFactory = kwargs.pop("http_client_factory", None)
+        self._http_client_factory = self._http_client_factory or default_http_client_factory
 
         # Tool prompt configuration
         self.add_tools_to_prompt = add_tools_to_prompt
@@ -178,8 +198,8 @@ class OpenAIModel(LLMModel):
 
         # Default generation config that can be overridden per request
         self.generate_content_config = generate_content_config
-        # Optional hard cap for tool-response payload injected into model
-        # context. Disabled by default; callers (e.g. OpenClaw) can opt in.
+        # Optional hard cap for tool-response payload injected into model context.
+        # Disabled by default; callers can opt in.
         self._tool_response_clip_chars = int(kwargs.get("tool_response_clip_chars", 0) or 0)
 
         # Validate tool_prompt parameter
@@ -207,13 +227,15 @@ class OpenAIModel(LLMModel):
         super().set_model_name(value)
         self._refresh_adapter()
 
-    def _create_async_client(self):
+    def _create_async_client(self) -> openai.AsyncOpenAI:
         """Create a new async client instance."""
 
         # Disable httpx logging to prevent HTTP request logs
         import logging
 
         logging.getLogger("httpx").setLevel(logging.WARNING)
+
+        self.client_args['http_client'] = self._http_client_factory()
 
         return openai.AsyncOpenAI(
             api_key=self._api_key,
@@ -1090,26 +1112,23 @@ class OpenAIModel(LLMModel):
         if http_options is None:
             http_options = {}
         client = self._create_async_client()
-        try:
-            response = await client.chat.completions.create(**api_params, **http_options)
-            response_dict: dict = response.model_dump()
+        response = await client.chat.completions.create(**api_params, **http_options)
+        response_dict: dict = response.model_dump()
 
-            # Check if the response contains valid text content or tool calls
-            has_text_content = self._verify_text_content_in_openai_message_response(response_dict)
-            has_tool_calls = False
+        # Check if the response contains valid text content or tool calls
+        has_text_content = self._verify_text_content_in_openai_message_response(response_dict)
+        has_tool_calls = False
 
-            # Check for tool calls
-            choices: list[dict] = response_dict.get(const.CHOICES, [{}])
-            if choices and choices[0].get(const.MESSAGE, {}).get(const.TOOL_CALLS):
-                has_tool_calls = True
+        # Check for tool calls
+        choices: list[dict] = response_dict.get(const.CHOICES, [{}])
+        if choices and choices[0].get(const.MESSAGE, {}).get(const.TOOL_CALLS):
+            has_tool_calls = True
 
-            # Create response with content if we have text or tool calls
-            if has_text_content or has_tool_calls:
-                return self._create_response_with_content(response_dict)
-            else:
-                return self._create_response_without_content(response_dict)
-        finally:
-            await client.close()
+        # Create response with content if we have text or tool calls
+        if has_text_content or has_tool_calls:
+            return self._create_response_with_content(response_dict)
+        else:
+            return self._create_response_without_content(response_dict)
 
     def _convert_tools_to_openai_format(self, tools: List[Tool]) -> List[Dict[str, Any]]:
         """Convert Google GenAI tools format to OpenAI tools format.
@@ -1771,5 +1790,3 @@ class OpenAIModel(LLMModel):
                 partial=False,
                 custom_metadata={"error": str(ex)},
             )
-        finally:
-            await client.close()

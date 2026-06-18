@@ -240,6 +240,73 @@ class TestOpenAIModel:
 
         assert model._type == FilterType.MODEL
 
+    def test_create_async_client_uses_custom_http_client_factory(self):
+        """A custom http_client_factory is passed through to AsyncOpenAI."""
+        shared_http_client = Mock()
+        http_client_factory = Mock(return_value=shared_http_client)
+        model = OpenAIModel(
+            model_name="gpt-4",
+            api_key="test_key",
+            base_url="https://custom.api.com",
+            client_args={"timeout": 30},
+            http_client_factory=http_client_factory,
+        )
+
+        with patch("trpc_agent_sdk.models._openai_model.openai.AsyncOpenAI") as mock_async_openai:
+            client = model._create_async_client()
+
+        assert client is mock_async_openai.return_value
+        http_client_factory.assert_called_once_with()
+        mock_async_openai.assert_called_once_with(
+            api_key="test_key",
+            max_retries=0,
+            organization="",
+            base_url="https://custom.api.com",
+            timeout=30,
+            http_client=shared_http_client,
+        )
+
+    def test_create_async_client_default_factory_reuses_shared_http_client(self):
+        """Default factory should reuse one shared httpx.AsyncClient across model calls."""
+        from trpc_agent_sdk.models import _openai_model
+
+        _openai_model._shared_http_client = None
+        shared_http_client = Mock()
+        model = OpenAIModel(model_name="gpt-4", api_key="test_key")
+
+        try:
+            with patch("trpc_agent_sdk.models._openai_model.httpx.AsyncClient",
+                       return_value=shared_http_client) as mock_httpx_client:
+                with patch("trpc_agent_sdk.models._openai_model.openai.AsyncOpenAI") as mock_async_openai:
+                    model._create_async_client()
+                    model._create_async_client()
+        finally:
+            _openai_model._shared_http_client = None
+
+        mock_httpx_client.assert_called_once_with()
+        first_call_kwargs = mock_async_openai.call_args_list[0].kwargs
+        second_call_kwargs = mock_async_openai.call_args_list[1].kwargs
+        assert first_call_kwargs["http_client"] is shared_http_client
+        assert second_call_kwargs["http_client"] is shared_http_client
+
+    def test_create_async_client_overwrites_stale_client_args_http_client(self):
+        """Factory owns http_client injection even if client_args already has one."""
+        stale_http_client = Mock()
+        fresh_http_client = Mock()
+        http_client_factory = Mock(return_value=fresh_http_client)
+        model = OpenAIModel(
+            model_name="gpt-4",
+            api_key="test_key",
+            client_args={"http_client": stale_http_client, "timeout": 30},
+            http_client_factory=http_client_factory,
+        )
+
+        with patch("trpc_agent_sdk.models._openai_model.openai.AsyncOpenAI") as mock_async_openai:
+            model._create_async_client()
+
+        assert mock_async_openai.call_args.kwargs["http_client"] is fresh_http_client
+        assert mock_async_openai.call_args.kwargs["timeout"] == 30
+
     # ==================== Tests for generate_async method ====================
 
     @pytest.mark.asyncio

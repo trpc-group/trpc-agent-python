@@ -267,12 +267,7 @@ class BaseAgent(AgentABC):
         # because __aexit__ of the context manager is not guaranteed to run when
         # an async generator is cancelled, but try/finally always executes
         # even under CancelledError (PEP 492).
-        from opentelemetry import context as context_api
-        from opentelemetry.trace import set_span_in_context
-
-        span = tracer.start_span(f"agent_run [{self.name}]")
-        _ctx_token = context_api.attach(set_span_in_context(span, context_api.get_current()))
-        try:
+        with tracer.start_as_current_span(f"agent_run [{self.name}]"):
             ctx = self._create_invocation_context(parent_context)
             if ctx.agent_context is None:
                 ctx.agent_context = create_agent_context()
@@ -333,9 +328,6 @@ class BaseAgent(AgentABC):
 
                 # avoid memory leak
                 reset_invocation_ctx(token)
-        finally:
-            context_api.detach(_ctx_token)
-            span.end()
 
     @abstractmethod
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
