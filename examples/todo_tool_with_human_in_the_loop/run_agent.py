@@ -3,15 +3,25 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Demo entry point for the TodoWriteTool example.
+"""Demo entry point for TodoWriteTool with Human-in-the-Loop approval.
 
-The script drives a multi-turn conversation in ONE session so it exercises
-the most important property of ``TodoWriteTool``: the checklist lives in
-session-level state and survives across ``Runner.run_async`` invocations.
+The script drives a multi-turn conversation in ONE session so it exercises:
 
-After each ``todo_write`` the demo renders the current checklist (``✅`` /
-``🔄`` / ``⬜``). At the end of each turn it reads the persisted list back
-from the session with :func:`get_todos` to prove cross-turn persistence.
+- ``request_todo_plan_approval`` (``LongRunningFunctionTool``) pauses the
+  agent until a human approves the initial plan.
+- ``todo_write`` persists the checklist in session-level state across turns.
+- ``Bash`` / ``Write`` / ``Read`` execute and verify file operations.
+
+Flow (4 turns):
+
+1. Turn 1 — scaffold a multi-file static site under ``demo/``; plan goes
+   through HITL approval first, then the agent executes step by step.
+2. Turn 2 — add an interactive button + live clock; verify with ``Read``.
+3. Turn 3 — rename the heading and expand ``README.md``.
+4. Turn 4 — run ``ls`` / ``find`` sanity checks and confirm all todos done.
+
+After each turn the demo reads the PERSISTED list back from the session
+with :func:`get_todos` and renders it as an ASCII checklist.
 
 Set TRPC_AGENT_API_KEY / TRPC_AGENT_BASE_URL / TRPC_AGENT_MODEL_NAME (see
 .env) before running.
@@ -22,21 +32,25 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+import time
 import uuid
+from typing import Optional
 
 from dotenv import load_dotenv
 from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.events import LongRunningEvent
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.tools import get_todos
 from trpc_agent_sdk.tools import render_todos
 from trpc_agent_sdk.tools import TodoItem
 from trpc_agent_sdk.types import Content
+from trpc_agent_sdk.types import FunctionResponse
 from trpc_agent_sdk.types import Part
 
 load_dotenv()
 
-APP_NAME = "todo_agent_demo"
+APP_NAME = "todo_hitl_demo"
 USER_ID = "demo_user"
 
 TURNS = [
@@ -44,16 +58,11 @@ TURNS = [
         "搭建静态站点",
         "请帮我在当前目录搭建一个 demo 静态站点，要求：\n"
         "1) 创建 demo/ 及子目录 css/、js/\n"
-        "2) demo/index.html：title 和 h1 均为「Todo Demo」\n"
-        "3) 生成 demo/README.md 文件，内容为「Todo Demo」\n"
-    ),
-    (
-        "优化静态站点",
-        "请优化静态站点，引入 css/style.css 与 js/app.js，要求：\n"
-        "1) demo/css/style.css：body 居中、浅灰背景、无衬线字体\n"
-        "2) demo/js/app.js：DOMContentLoaded 时在 console 打印「Todo HITL demo loaded」\n"
-        "3) 更新 demo/README.md 文件，内容为「Todo Demo with css and js」\n"
-    ),
+        "2) demo/index.html：title 和 h1 均为「Todo HITL Demo」，引入 css/style.css 与 js/app.js\n"
+        "3) demo/css/style.css：body 居中、浅灰背景、无衬线字体\n"
+        "4) demo/js/app.js：DOMContentLoaded 时在 console 打印「Todo HITL demo loaded」\n"
+        "请先提交完整计划等我审批；审批通过后逐步执行",
+    )
 ]
 
 
@@ -76,6 +85,10 @@ def _summarise_tool_response(name: str, resp) -> tuple[str, str | None]:
         case "todo_write":
             old = resp.get("oldTodos") or []
             return f"items={len(resp.get('todos') or [])} old_items={len(old)}", message
+        case "request_todo_plan_approval":
+            todos = resp.get("todos") or []
+            preview = resp.get("preview") or ""
+            return f"pending_approval items={len(todos)} preview={preview!r}", message
         case _:
             return str(resp), message
 
@@ -119,21 +132,102 @@ def _print_event_parts(event, *, final_text_parts: list[str]) -> None:
             final_text_parts.append(part.text)
 
 
-async def _run_turn(runner: Runner, agent: LlmAgent, *, session_id: str, label: str, query: str) -> None:
-    """Drive a single user turn through ``runner`` and pretty-print events."""
-    print(f"\n========== {label} ==========")
-    print(f"📝 User: {query}")
-
+async def _consume_run(
+    runner: Runner,
+    *,
+    session_id: str,
+    content: Content,
+) -> tuple[list[str], Optional[LongRunningEvent]]:
+    """Run one ``runner.run_async`` invocation; capture text and HITL events."""
     final_text_parts: list[str] = []
-    user_content = Content(parts=[Part.from_text(text=query)])
+    long_running_event: Optional[LongRunningEvent] = None
+
     async for event in runner.run_async(
             user_id=USER_ID,
             session_id=session_id,
-            new_message=user_content,
+            new_message=content,
     ):
-        if not event.content or not event.content.parts:
+        if isinstance(event, LongRunningEvent):
+            long_running_event = event
+            resp = event.function_response.response
+            print("\n🔄 [Long-running operation detected — waiting for human approval]")
+            print(f"   Function: {event.function_call.name}")
+            print(f"   Args: {event.function_call.args}")
+            if isinstance(resp, dict) and resp.get("preview"):
+                print("   Proposed checklist:")
+                for line in str(resp["preview"]).splitlines():
+                    print(f"     {line}")
             continue
         _print_event_parts(event, final_text_parts=final_text_parts)
+
+    return final_text_parts, long_running_event
+
+
+def _build_approval_resume(long_running_event: LongRunningEvent) -> Content:
+    """Simulate human approval with a plan edit: inject an extra todo."""
+    response_data = dict(long_running_event.function_response.response)
+    if response_data.get("status") != "pending_approval":
+        raise ValueError(f"Expected pending_approval, got {response_data.get('status')!r}")
+
+    todos = list(response_data.get("todos") or [])
+    todos.append({
+        "content": "生成 README 文件",
+        "activeForm": "正在生成 README 文件",
+        "status": "pending",
+    })
+    response_data["todos"] = todos
+    response_data["preview"] = render_todos([TodoItem.model_validate(t) for t in todos])
+
+    response_data["status"] = "approved"
+    response_data["message"] = (
+        "APPROVED with edit: added todo「生成 README 文件」— proceed with todo_write using the updated list."
+    )
+    response_data["approved_by"] = USER_ID
+    response_data["timestamp"] = time.time()
+
+    print("\n👤 [Human approval with plan edit]")
+    print(f"   Decision: approved by {response_data['approved_by']}")
+    print("   Edit: added todo → 生成 README 文件")
+    print("   Updated checklist:")
+    for line in str(response_data["preview"]).splitlines():
+        print(f"     {line}")
+
+    resume_function_response = FunctionResponse(
+        id=long_running_event.function_response.id,
+        name=long_running_event.function_response.name,
+        response=response_data,
+    )
+    return Content(role="user", parts=[Part(function_response=resume_function_response)])
+
+
+async def _run_turn(
+    runner: Runner,
+    agent: LlmAgent,
+    *,
+    session_id: str,
+    label: str,
+    query: str,
+) -> None:
+    """Drive a user turn, including optional HITL resume within the same turn."""
+    print(f"\n========== {label} ==========")
+    print(f"📝 User: {query}")
+
+    user_content = Content(parts=[Part.from_text(text=query)])
+    final_text_parts, long_running_event = await _consume_run(
+        runner,
+        session_id=session_id,
+        content=user_content,
+    )
+
+    if long_running_event:
+        resume_content = _build_approval_resume(long_running_event)
+        print("\n🔄 Resuming agent after human approval...")
+        resume_text_parts, _ = await _consume_run(
+            runner,
+            session_id=session_id,
+            content=resume_content,
+        )
+        final_text_parts.extend(resume_text_parts)
 
     if final_text_parts:
         print(f"🤖 Assistant: {''.join(final_text_parts)}")
@@ -159,6 +253,7 @@ async def main() -> None:
         print(f"🧹 Cleaned previous {demo_dir}")
 
     todo_agent = create_todo_agent(work_dir=work_dir)
+
     runner = Runner(
         app_name=APP_NAME,
         agent=todo_agent,

@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Agent module for the TodoWriteTool example."""
+"""Agent module for the TodoWriteTool + Human-in-the-Loop example."""
 
 import os
 from typing import List
@@ -12,6 +12,7 @@ from typing import Optional
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.tools import LongRunningFunctionTool
 from trpc_agent_sdk.tools import TodoItem
 from trpc_agent_sdk.tools import TodoStatus
 from trpc_agent_sdk.tools import TodoWriteTool
@@ -21,6 +22,7 @@ from trpc_agent_sdk.tools.file_tools import WriteTool
 
 from .config import get_model_config
 from .prompts import INSTRUCTION
+from .tools import request_todo_plan_approval
 
 
 def _create_model() -> LLMModel:
@@ -44,7 +46,7 @@ def _all_done_nudge_hook(old: List[TodoItem], new: List[TodoItem]) -> Optional[s
 
 
 def create_todo_agent(work_dir: str | None = None) -> LlmAgent:
-    """Build an agent that plans, tracks, and executes multi-step work.
+    """Build an agent with HITL todo planning plus file/shell execution tools.
 
     Args:
         work_dir: Working directory for ``Bash`` / ``Write`` / ``Read``. Defaults to ``os.getcwd()``.
@@ -58,6 +60,7 @@ def create_todo_agent(work_dir: str | None = None) -> LlmAgent:
         clear_on_all_done=False,
         nudge_hooks=[_all_done_nudge_hook],
     )
+    plan_approval_tool = LongRunningFunctionTool(request_todo_plan_approval)
     bash_tool = BashTool(cwd=cwd)
     write_tool = WriteTool(cwd=cwd)
     read_tool = ReadTool(cwd=cwd)
@@ -67,7 +70,7 @@ def create_todo_agent(work_dir: str | None = None) -> LlmAgent:
         description="Engineering assistant that plans and tracks multi-step tasks.",
         model=_create_model(),
         instruction=INSTRUCTION,
-        tools=[todo_tool, bash_tool, write_tool, read_tool],
+        tools=[plan_approval_tool, todo_tool, bash_tool, write_tool, read_tool],
     )
 
 

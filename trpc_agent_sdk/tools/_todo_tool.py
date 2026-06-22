@@ -205,20 +205,20 @@ def get_todos(
 
 
 def render_todos(todos: List[TodoItem]) -> str:
-    """Render a plain-text checklist (``[x]`` / ``[>]`` / ``[ ]``).
+    """Render a plain-text checklist (``✅`` / ``🔄`` / ``⬜``).
 
     Convenience for CLIs / logs; the tool itself never calls this.
     """
     glyph = {
-        TodoStatus.COMPLETED: "x",
-        TodoStatus.IN_PROGRESS: ">",
-        TodoStatus.PENDING: " ",
+        TodoStatus.COMPLETED: "✅",
+        TodoStatus.IN_PROGRESS: "🔄",
+        TodoStatus.PENDING: "⬜",
     }
     lines = []
     for item in todos:
-        mark = glyph.get(item.status, " ")
+        mark = glyph.get(item.status, "⬜")
         text = item.active_form if item.status == TodoStatus.IN_PROGRESS else item.content
-        lines.append(f"[{mark}] {text}")
+        lines.append(f"{mark} {text}")
     return "\n".join(lines)
 
 

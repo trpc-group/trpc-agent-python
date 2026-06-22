@@ -48,6 +48,18 @@ from ._todo_tool import validate_todos
 from ._tool_adapter import convert_toolunion_to_tool_list
 from ._tool_adapter import create_tool
 from ._tool_adapter import create_toolset
+from .task_tools import DEFAULT_TASK_PROMPT
+from .task_tools import TaskCreateTool
+from .task_tools import TaskGetTool
+from .task_tools import TaskListSummary
+from .task_tools import TaskListTool
+from .task_tools import TaskRecord
+from .task_tools import TaskStatus
+from .task_tools import TaskStore
+from .task_tools import TaskToolSet
+from .task_tools import TaskUpdateTool
+from .task_tools import get_task_store
+from .task_tools import render_task_list
 from ._transfer_to_agent_tool import transfer_to_agent
 from ._webfetch_tool import FetchResult
 from ._webfetch_tool import WebFetchTool
@@ -119,6 +131,18 @@ __all__ = [
     "DEFAULT_TODO_DESCRIPTION",
     "DEFAULT_NUDGE_MESSAGE",
     "DEFAULT_STATE_KEY_PREFIX",
+    "TaskCreateTool",
+    "TaskUpdateTool",
+    "TaskGetTool",
+    "TaskListTool",
+    "TaskToolSet",
+    "TaskStatus",
+    "TaskRecord",
+    "TaskStore",
+    "TaskListSummary",
+    "get_task_store",
+    "render_task_list",
+    "DEFAULT_TASK_PROMPT",
     "FetchResult",
     "WebFetchTool",
     "SearchHit",

@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Prompts for the TodoWrite demo agent."""
+"""Prompts for the TodoWrite + Human-in-the-Loop demo agent."""
 
 # Demo-specific persona only. ``DEFAULT_TODO_PROMPT`` is injected automatically
 # by ``TodoWriteTool.process_request`` when the tool is registered on the agent.

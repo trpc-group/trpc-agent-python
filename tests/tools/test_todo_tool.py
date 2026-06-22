@@ -206,6 +206,6 @@ class TestRenderTodos:
             TodoItem(content="Pending task", activeForm="Doing pending", status=TodoStatus.PENDING),
         ]
         rendered = render_todos(items)
-        assert "[x] Done task" in rendered
-        assert "[>] Doing active" in rendered
-        assert "[ ] Pending task" in rendered
+        assert "✅ Done task" in rendered
+        assert "🔄 Doing active" in rendered
+        assert "⬜ Pending task" in rendered

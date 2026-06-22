@@ -40,7 +40,7 @@ todo_planner (LlmAgent)
 
 - `TodoWriteTool()` 即可直接用，工具名默认 `todo_write`（snake_case，满足部分 provider 的 `^[a-zA-Z0-9_-]+$` 命名约束）。
 - 构造参数：
-  - `clear_on_all_done`（默认 `True`）：全部完成时清空列表；本 demo 设为 `False` 以便看到最终「全部 `[x]`」的清单。
+  - `clear_on_all_done`（默认 `True`）：全部完成时清空列表；本 demo 设为 `False` 以便看到最终「全部 ✅」的清单。
   - `state_key_prefix`（默认 `todos`）：状态 key 前缀；勿用 `temp:`，该前缀不会被 SessionService 持久化。
   - `default_nudge`：每次成功响应追加的基础提醒。
   - `nudge_hooks`：只读策略回调列表。
@@ -65,9 +65,9 @@ def _all_done_nudge_hook(old, new):
 - 所有轮次共用同一个 `session_id`，每轮一次 `runner.run_async`。
 - 工具把清单写进 `todos:<branch>`，随事件 state delta 落库。
 - 每轮结束后用 `get_todos(session, branch=agent.name)` 把**持久化后的清单**读回来，证明它跨轮存活，再用 `render_todos` 渲染：
-  - `[x]` 已完成（completed）
-  - `[>]` 进行中（in_progress，显示 `activeForm`）
-  - `[ ]` 待办（pending）
+  - `✅` 已完成（completed）
+  - `🔄` 进行中（in_progress，显示 `activeForm`）
+  - `⬜` 待办（pending）
 
 ### 4) 硬契约 vs Prompt 引导
 
@@ -120,9 +120,9 @@ python3 run_agent.py
 我已经把任务拆成三步，现在开始第一步：初始化项目骨架。
 
 📋 Persisted checklist:
-[>] 正在初始化项目骨架
-[ ] 实现核心业务逻辑
-[ ] 编写并跑通单元测试
+🔄 正在初始化项目骨架
+⬜ 实现核心业务逻辑
+⬜ 编写并跑通单元测试
 ----------------------------------------
 
 ========== 完成第 1 步 ==========
@@ -133,12 +133,12 @@ python3 run_agent.py
 第一步已完成，现在进行第二步：实现核心业务逻辑。
 
 📋 Persisted checklist:
-[x] 初始化项目骨架
-[>] 正在实现核心业务逻辑
-[ ] 编写并跑通单元测试
+✅ 初始化项目骨架
+🔄 正在实现核心业务逻辑
+⬜ 编写并跑通单元测试
 ----------------------------------------
 
-... (第 2、3 步依次翻转，最终全部 [x] 完成)
+... (第 2、3 步依次翻转，最终全部 ✅ 完成)
 ```
 
 ## 适用场景建议

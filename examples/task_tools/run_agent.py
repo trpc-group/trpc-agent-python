@@ -3,15 +3,17 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Demo entry point for the TodoWriteTool example.
+"""Demo entry point for the Task tools example.
 
 The script drives a multi-turn conversation in ONE session so it exercises
-the most important property of ``TodoWriteTool``: the checklist lives in
-session-level state and survives across ``Runner.run_async`` invocations.
+the most important properties of the Task toolset: the board lives in
+session-level state and survives across ``Runner.run_async`` invocations,
+tasks carry server-assigned ids, and dependencies are enforced.
 
-After each ``todo_write`` the demo renders the current checklist (``✅`` /
-``🔄`` / ``⬜``). At the end of each turn it reads the persisted list back
-from the session with :func:`get_todos` to prove cross-turn persistence.
+After each ``task_update`` that sets ``status`` to ``in_progress`` or
+``completed``, the demo renders the current board (``✅`` / ``🔄`` / ``⬜``).
+At the end of each turn it reads the persisted board back from the session
+with :func:`get_task_store` to prove cross-turn persistence.
 
 Set TRPC_AGENT_API_KEY / TRPC_AGENT_BASE_URL / TRPC_AGENT_MODEL_NAME (see
 .env) before running.
@@ -28,31 +30,32 @@ from dotenv import load_dotenv
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import InMemorySessionService
-from trpc_agent_sdk.tools import get_todos
-from trpc_agent_sdk.tools import render_todos
-from trpc_agent_sdk.tools import TodoItem
+from trpc_agent_sdk.tools import get_task_store
+from trpc_agent_sdk.tools import render_task_list
+from trpc_agent_sdk.tools.task_tools._models import TaskStore
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
 
 load_dotenv()
 
-APP_NAME = "todo_agent_demo"
+APP_NAME = "task_agent_demo"
 USER_ID = "demo_user"
 
 TURNS = [
     (
         "搭建静态站点",
-        "请帮我在当前目录搭建一个 demo 静态站点，要求：\n"
+        "请帮我在当前目录搭建 demo 静态站点。先规划任务并逐步执行：\n"
         "1) 创建 demo/ 及子目录 css/、js/\n"
-        "2) demo/index.html：title 和 h1 均为「Todo Demo」\n"
-        "3) 生成 demo/README.md 文件，内容为「Todo Demo」\n"
+        "2) demo/index.html：title 和 h1 均为「Task Demo」\n"
+        "3) demo/README.md，内容为「Task Demo」\n"
     ),
     (
         "优化静态站点",
-        "请优化静态站点，引入 css/style.css 与 js/app.js，要求：\n"
+        "请优化静态站点，引入 css/style.css 与 js/app.js。用规划任务并逐步执行：\n"
         "1) demo/css/style.css：body 居中、浅灰背景、无衬线字体\n"
-        "2) demo/js/app.js：DOMContentLoaded 时在 console 打印「Todo HITL demo loaded」\n"
-        "3) 更新 demo/README.md 文件，内容为「Todo Demo with css and js」\n"
+        "2) demo/js/app.js：DOMContentLoaded 时在 console 打印「Task demo loaded」\n"
+        "3) 更新 demo/index.html，引入 css/style.css 与 js/app.js\n"
+        "4) 更新 demo/README.md, 描述 index.html的内容\n"
     ),
 ]
 
@@ -73,29 +76,50 @@ def _summarise_tool_response(name: str, resp) -> tuple[str, str | None]:
             return f"path={resp.get('path')!r} success={resp.get('success')}", message
         case "Read":
             return f"path={resp.get('path')!r} lines={resp.get('total_lines')}", None
-        case "todo_write":
-            old = resp.get("oldTodos") or []
-            return f"items={len(resp.get('todos') or [])} old_items={len(old)}", message
+        case "task_create":
+            task = resp.get("task") or {}
+            return f"created id={task.get('id')} subject={task.get('subject')!r}", message
+        case "task_update":
+            task = resp.get("task") or {}
+            unblocked = resp.get("unblocked") or []
+            extra = f" unblocked={unblocked}" if unblocked else ""
+            return f"updated id={task.get('id')} status={task.get('status')}{extra}", message
+        case "task_list":
+            tasks = resp.get("tasks") or []
+            return f"list items={len(tasks)} stats={resp.get('stats')}", None
+        case "task_get":
+            task = resp.get("task") or {}
+            return f"get id={task.get('id')} status={task.get('status')}", None
         case _:
             return str(resp), message
 
 
-def _print_todo_checklist(resp: dict, *, indent: str = "   ") -> None:
-    """Render todo_write response as a checklist (same format as end-of-turn summary)."""
-    raw = resp.get("todos") or []
-    if not raw:
+def _print_task_board(store: TaskStore, *, indent: str = "   ") -> None:
+    """Render the persisted task board (same glyphs as render_task_list)."""
+    if not store.tasks:
         print(f"{indent}(empty)")
         return
-    try:
-        items = [TodoItem.model_validate(t) for t in raw]
-    except Exception:
-        return
-    print("📋 Current checklist:")
-    for line in render_todos(items).splitlines():
+    print("\n📋 Current task board:")
+    for line in render_task_list(store).splitlines():
         print(f"{indent}{line}")
+    print("\n")
+
+def _should_print_task_board(name: str, resp: dict) -> bool:
+    """Print board after task_update sets in_progress or completed."""
+    if name != "task_update" or "error" in resp:
+        return False
+    status = (resp.get("task") or {}).get("status")
+    return status in ("in_progress", "completed")
 
 
-def _print_event_parts(event, *, final_text_parts: list[str]) -> None:
+async def _print_event_parts(
+        event,
+        *,
+        final_text_parts: list[str],
+        runner: Runner,
+        session_id: str,
+        agent_name: str,
+) -> None:
     """Pretty-print non-partial assistant / tool events."""
     if not event.content or not event.content.parts:
         return
@@ -113,8 +137,16 @@ def _print_event_parts(event, *, final_text_parts: list[str]) -> None:
             print(f"📊 [Tool Result: {summary}]")
             if message:
                 print(f"💬 [Tool Message: {message}]")
-            if name == "todo_write" and isinstance(resp, dict) and "error" not in resp:
-                _print_todo_checklist(resp)
+            if isinstance(resp, dict) and _should_print_task_board(name, resp):
+                session = await runner.session_service.get_session(
+                    app_name=APP_NAME,
+                    user_id=USER_ID,
+                    session_id=session_id,
+                )
+                store = get_task_store(session, branch=agent_name)
+                if not store.tasks:
+                    store = get_task_store(session, branch="")
+                _print_task_board(store)
         elif part.text:
             final_text_parts.append(part.text)
 
@@ -133,7 +165,13 @@ async def _run_turn(runner: Runner, agent: LlmAgent, *, session_id: str, label: 
     ):
         if not event.content or not event.content.parts:
             continue
-        _print_event_parts(event, final_text_parts=final_text_parts)
+        await _print_event_parts(
+            event,
+            final_text_parts=final_text_parts,
+            runner=runner,
+            session_id=session_id,
+            agent_name=agent.name,
+        )
 
     if final_text_parts:
         print(f"🤖 Assistant: {''.join(final_text_parts)}")
@@ -143,14 +181,16 @@ async def _run_turn(runner: Runner, agent: LlmAgent, *, session_id: str, label: 
         user_id=USER_ID,
         session_id=session_id,
     )
-    todos = get_todos(session, branch=agent.name) or get_todos(session, branch="")
-    print("\n📋 Persisted checklist:")
-    print(render_todos(todos) if todos else "  (empty)")
+    store = get_task_store(session, branch=agent.name)
+    if not store.tasks:
+        store = get_task_store(session, branch="")
+    print("\n📋 Persisted task board:")
+    print(render_task_list(store) if store.tasks else "  (empty)")
     print("-" * 40)
 
 
 async def main() -> None:
-    from agent.agent import create_todo_agent
+    from agent.agent import create_task_agent
 
     work_dir = os.getcwd()
     demo_dir = os.path.join(work_dir, "demo")
@@ -158,10 +198,10 @@ async def main() -> None:
         shutil.rmtree(demo_dir)
         print(f"🧹 Cleaned previous {demo_dir}")
 
-    todo_agent = create_todo_agent(work_dir=work_dir)
+    task_agent = create_task_agent(work_dir=work_dir)
     runner = Runner(
         app_name=APP_NAME,
-        agent=todo_agent,
+        agent=task_agent,
         session_service=InMemorySessionService(),
     )
 
@@ -176,7 +216,7 @@ async def main() -> None:
     print(f"📂 Work dir: {work_dir}")
 
     for label, query in TURNS:
-        await _run_turn(runner, todo_agent, session_id=session_id, label=label, query=query)
+        await _run_turn(runner, task_agent, session_id=session_id, label=label, query=query)
 
     await runner.close()
 
