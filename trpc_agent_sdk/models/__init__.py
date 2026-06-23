@@ -45,6 +45,10 @@ from ._openai_model import FinishReason
 from ._openai_model import OpenAIModel
 from ._openai_model import ToolCall
 from ._openai_model import ToolKey
+from ._httpx_client import close_shared_http_clients
+from ._httpx_client import temporary_http_client_provider_factory
+from ._httpx_client import shared_http_client_provider_factory
+from ._httpx_client import HttpClientProviderFactory
 from ._registry import ModelRegistry
 from ._registry import register_model
 
@@ -85,6 +89,10 @@ __all__ = [
     "OpenAIModel",
     "ToolCall",
     "ToolKey",
+    "close_shared_http_clients",
+    "temporary_http_client_provider_factory",
+    "shared_http_client_provider_factory",
+    "HttpClientProviderFactory",
     "ModelRegistry",
     "register_model",
 ]

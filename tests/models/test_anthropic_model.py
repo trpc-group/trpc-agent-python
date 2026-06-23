@@ -710,13 +710,13 @@ class TestAnthropicModelRetryErrors:
         model = AnthropicModel(model_name="claude-3-5-sonnet-20241022", api_key="test-key")
         client = MagicMock()
         client.messages.create = AsyncMock(side_effect=TimeoutError("timeout"))
-        client.close = AsyncMock()
+        model._http_client_provider.close_http_client = AsyncMock()
 
         with patch.object(model, "_create_async_client", return_value=client):
             with pytest.raises(TimeoutError):
                 await model._generate_single({}, LlmRequest(contents=[]))
 
-        client.close.assert_awaited_once()
+        model._http_client_provider.close_http_client.assert_awaited_once_with(client)
 
     @pytest.mark.asyncio
     async def test_generate_async_converts_provider_exception_to_retry_error_response(self):

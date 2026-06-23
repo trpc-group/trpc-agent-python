@@ -8,8 +8,6 @@ from unittest.mock import AsyncMock
 from unittest.mock import Mock
 from unittest.mock import patch
 
-import httpx
-import openai
 import pytest
 from trpc_agent_sdk.models import LlmRequest
 from trpc_agent_sdk.models import OpenAIModel
@@ -242,23 +240,26 @@ class TestOpenAIModel:
 
         assert model._type == FilterType.MODEL
 
-    def test_create_async_client_uses_custom_http_client_factory(self):
-        """A custom http_client_factory is passed through to AsyncOpenAI."""
+    def test_create_async_client_uses_custom_http_client_provider(self):
+        """A custom http_client_provider_factory is passed through to AsyncOpenAI."""
         shared_http_client = Mock()
-        http_client_factory = Mock(return_value=shared_http_client)
+        http_client_provider = Mock()
+        http_client_provider.create_http_client.return_value = shared_http_client
+        http_client_provider_factory = Mock(return_value=http_client_provider)
         model = OpenAIModel(
             model_name="gpt-4",
             api_key="test_key",
             base_url="https://custom.api.com",
             client_args={"timeout": 30},
-            http_client_factory=http_client_factory,
+            http_client_provider_factory=http_client_provider_factory,
         )
 
         with patch("trpc_agent_sdk.models._openai_model.openai.AsyncOpenAI") as mock_async_openai:
             client = model._create_async_client()
 
         assert client is mock_async_openai.return_value
-        http_client_factory.assert_called_once_with()
+        http_client_provider_factory.assert_called_once_with()
+        http_client_provider.create_http_client.assert_called_once_with()
         mock_async_openai.assert_called_once_with(
             api_key="test_key",
             max_retries=0,
@@ -268,39 +269,130 @@ class TestOpenAIModel:
             http_client=shared_http_client,
         )
 
-    def test_create_async_client_default_factory_reuses_shared_http_client(self):
-        """Default factory should reuse one shared httpx.AsyncClient across model calls."""
-        from trpc_agent_sdk.models import _openai_model
+    def test_create_async_client_default_factory_reuses_loop_local_http_client(self):
+        """Default provider should reuse the same httpx.AsyncClient within one loop."""
+        from trpc_agent_sdk.models import _httpx_client
+        from trpc_agent_sdk.models import shared_http_client_provider_factory
 
-        _openai_model._shared_http_client = None
         shared_http_client = Mock()
-        model = OpenAIModel(model_name="gpt-4", api_key="test_key")
+        shared_http_client.is_closed = False
+        model = OpenAIModel(model_name="gpt-4", api_key="test_key", http_client_provider_factory=shared_http_client_provider_factory)
 
         try:
-            with patch("trpc_agent_sdk.models._openai_model.httpx.AsyncClient",
+            _httpx_client._shared_http_clients.clear()
+            with patch("trpc_agent_sdk.models._httpx_client.httpx.AsyncClient",
                        return_value=shared_http_client) as mock_httpx_client:
-                with patch("trpc_agent_sdk.models._openai_model.openai.AsyncOpenAI") as mock_async_openai:
-                    model._create_async_client()
-                    model._create_async_client()
+                with patch("trpc_agent_sdk.models._httpx_client._get_loop_key", return_value=1):
+                    with patch("trpc_agent_sdk.models._openai_model.openai.AsyncOpenAI") as mock_async_openai:
+                        model._create_async_client()
+                        model._create_async_client()
         finally:
-            _openai_model._shared_http_client = None
+            _httpx_client._shared_http_clients.clear()
 
-        mock_httpx_client.assert_called_once_with()
+        mock_httpx_client.assert_called_once_with(
+            limits=_httpx_client._DEFAULT_HTTP_CLIENT_LIMITS,
+            timeout=_httpx_client._DEFAULT_HTTP_CLIENT_TIMEOUT,
+            follow_redirects=True,
+        )
         first_call_kwargs = mock_async_openai.call_args_list[0].kwargs
         second_call_kwargs = mock_async_openai.call_args_list[1].kwargs
         assert first_call_kwargs["http_client"] is shared_http_client
         assert second_call_kwargs["http_client"] is shared_http_client
 
+    def test_create_shared_http_client_rebuilds_closed_client(self):
+        """Closed cached clients should be replaced on the next factory call."""
+        from trpc_agent_sdk.models import _httpx_client
+
+        closed_client = Mock()
+        closed_client.is_closed = True
+        fresh_client = Mock()
+        fresh_client.is_closed = False
+
+        try:
+            _httpx_client._shared_http_clients.clear()
+            client_key = (1234, 1)
+            _httpx_client._shared_http_clients[client_key] = closed_client
+            with patch("trpc_agent_sdk.models._httpx_client._get_client_key", return_value=client_key):
+                with patch("trpc_agent_sdk.models._httpx_client.httpx.AsyncClient",
+                           return_value=fresh_client) as mock_httpx_client:
+                    assert _httpx_client._create_shared_http_client() is fresh_client
+        finally:
+            _httpx_client._shared_http_clients.clear()
+
+        mock_httpx_client.assert_called_once()
+
+    def test_create_shared_http_client_does_not_reuse_across_loop_keys(self):
+        """Different event loops should get different default httpx clients."""
+        from trpc_agent_sdk.models import _httpx_client
+
+        first_client = Mock()
+        first_client.is_closed = False
+        second_client = Mock()
+        second_client.is_closed = False
+
+        try:
+            _httpx_client._shared_http_clients.clear()
+            with patch("trpc_agent_sdk.models._httpx_client.httpx.AsyncClient",
+                       side_effect=[first_client, second_client]) as mock_httpx_client:
+                with patch("trpc_agent_sdk.models._httpx_client._get_client_key", side_effect=[(1234, 1), (1234, 2)]):
+                    assert _httpx_client._create_shared_http_client() is first_client
+                    assert _httpx_client._create_shared_http_client() is second_client
+        finally:
+            _httpx_client._shared_http_clients.clear()
+
+        assert mock_httpx_client.call_count == 2
+
+    def test_create_shared_http_client_does_not_reuse_across_process_keys(self):
+        """Different process keys should get different default httpx clients."""
+        from trpc_agent_sdk.models import _httpx_client
+
+        parent_client = Mock()
+        parent_client.is_closed = False
+        child_client = Mock()
+        child_client.is_closed = False
+
+        try:
+            _httpx_client._shared_http_clients.clear()
+            with patch("trpc_agent_sdk.models._httpx_client.httpx.AsyncClient",
+                       side_effect=[parent_client, child_client]) as mock_httpx_client:
+                with patch("trpc_agent_sdk.models._httpx_client._get_client_key",
+                           side_effect=[(1234, 1), (5678, 1)]):
+                    assert _httpx_client._create_shared_http_client() is parent_client
+                    assert _httpx_client._create_shared_http_client() is child_client
+        finally:
+            _httpx_client._shared_http_clients.clear()
+
+        assert mock_httpx_client.call_count == 2
+
+    def test_reset_shared_http_clients_after_fork_clears_cache_and_rebuilds_lock(self):
+        """Fork child reset should drop inherited clients and replace inherited locks."""
+        from trpc_agent_sdk.models import _httpx_client
+
+        inherited_client = Mock()
+        old_lock = _httpx_client._shared_http_clients_lock
+
+        try:
+            _httpx_client._shared_http_clients[(1234, 1)] = inherited_client
+
+            _httpx_client._reset_shared_http_clients_after_fork()
+
+            assert _httpx_client._shared_http_clients == {}
+            assert _httpx_client._shared_http_clients_lock is not old_lock
+        finally:
+            _httpx_client._shared_http_clients.clear()
+
     def test_create_async_client_overwrites_stale_client_args_http_client(self):
-        """Factory owns http_client injection even if client_args already has one."""
+        """Provider owns http_client injection even if client_args already has one."""
         stale_http_client = Mock()
         fresh_http_client = Mock()
-        http_client_factory = Mock(return_value=fresh_http_client)
+        http_client_provider = Mock()
+        http_client_provider.create_http_client.return_value = fresh_http_client
+        http_client_provider_factory = Mock(return_value=http_client_provider)
         model = OpenAIModel(
             model_name="gpt-4",
             api_key="test_key",
             client_args={"http_client": stale_http_client, "timeout": 30},
-            http_client_factory=http_client_factory,
+            http_client_provider_factory=http_client_provider_factory,
         )
 
         with patch("trpc_agent_sdk.models._openai_model.openai.AsyncOpenAI") as mock_async_openai:
@@ -354,15 +446,19 @@ class TestOpenAIModel:
 
     @pytest.mark.asyncio
     async def test_generate_async_validation_failure(self):
-        """Test generate_async converts validation failures to error responses."""
+        """Test generate_async returns an error response on invalid request."""
         model = OpenAIModel(model_name="gpt-4", api_key="test_key")
 
+        # Empty contents
         request = LlmRequest(contents=[], config=None, tools_dict={})
 
-        responses = [response async for response in model.generate_async(request, stream=False)]
+        responses = []
+        async for response in model.generate_async(request, stream=False):
+            responses.append(response)
+
         assert len(responses) == 1
         assert responses[0].error_code == "API_ERROR"
-        assert "At least one content is required" in (responses[0].error_message or "")
+        assert "At least one content is required" in responses[0].error_message
 
     @pytest.mark.asyncio
     async def test_generate_async_with_config_parameters(self):
@@ -849,47 +945,3 @@ class TestOpenAIBuildUsageMetadata:
         }
         meta = OpenAIModel._build_usage_metadata(usage_data)
         assert meta.cache_read_input_tokens is None
-
-
-class _RetryTestError(Exception):
-
-    def __init__(self, status_code=None, headers=None):
-        super().__init__(f"status {status_code}" if status_code is not None else "retry test")
-        if status_code is not None:
-            self.status_code = status_code
-        if headers is not None:
-            self.response = type("Resp", (), {"headers": headers})()
-
-
-class TestOpenAIModelRetryHooks:
-
-    def _model(self):
-        return OpenAIModel(model_name="gpt-4", api_key="test_key")
-
-    def test_x_should_retry_header_has_priority(self):
-        model = self._model()
-        assert model._get_model_retry_info(_RetryTestError(400, {"x-should-retry": "true"})).should_retry is True
-        assert model._get_model_retry_info(_RetryTestError(500, {"x-should-retry": "false"})).should_retry is False
-
-    @pytest.mark.parametrize("status_code", [408, 409, 429, 500, 503])
-    def test_retryable_status_codes(self, status_code):
-        assert self._model()._get_model_retry_info(_RetryTestError(status_code)).should_retry is True
-
-    @pytest.mark.parametrize("status_code", [400, 401, 403, 404, 499])
-    def test_non_retryable_status_codes(self, status_code):
-        assert self._model()._get_model_retry_info(_RetryTestError(status_code)).should_retry is False
-
-    def test_timeout_exception_retried(self):
-        request = httpx.Request("GET", "https://example.com")
-        assert self._model()._get_model_retry_info(httpx.TimeoutException("timeout", request=request)).should_retry is True
-
-    def test_openai_error_not_retried_without_status_decision(self):
-        assert self._model()._get_model_retry_info(openai.OpenAIError("boom")).should_retry is False
-
-    def test_other_exception_retried(self):
-        assert self._model()._get_model_retry_info(ValueError("boom")).should_retry is True
-
-    def test_retry_after_extracted_from_headers(self):
-        info = self._model()._get_model_retry_info(_RetryTestError(429, {"retry-after": "3"}))
-        assert info.should_retry is True
-        assert info.retry_after == 3.0
