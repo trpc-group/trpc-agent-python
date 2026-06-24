@@ -33,6 +33,8 @@ Agent 通过以下步骤动态使用工具：
 | [Streaming Tools（流式工具）](#streaming-tools流式工具) | 实时预览长文本生成 | 使用 StreamingFunctionTool | 代码生成、文档写作 |
 | [WebFetchTool](#webfetchtool) | 抓取并文本化单个公网 URL | 实例化 WebFetchTool 并加入 tools | 阅读文档页、RFC、changelog、新闻 |
 | [WebSearchTool](#websearchtool) | 公网搜索引擎检索 | 实例化 WebSearchTool 并加入 tools | 实时资讯、版本发布、事实/定义查询 |
+| [TodoWriteTool](#todowritetool-任务清单工具) | 多步任务规划与进度跟踪（整表替换） | 挂载 `TodoWriteTool` | 短清单、无依赖编排、token 不敏感 |
+| [Task 工具族](#task-工具族结构化任务看板) | 结构化任务看板（按 id 增量更新 + 依赖） | 挂载 `TaskToolSet` | 长任务板、跨轮跟踪、blockedBy 依赖 |
 | [Agent Code Executor](./code_executor.md) | 自动生成并执行代码场景、数据处理场景 | 配置 CodeExecutor | API 自动调用、表格数据处理 |
 ---
 
@@ -2845,3 +2847,196 @@ DuckDuckGo provider 在命中 instant answer 时，`summary` 字段会包含 DDG
 - **DuckDuckGo 原始命中**（`ddg_raw_agent`，`dedup_urls=False`）：保留 provider 原始召回列表，便于下游处理
 - **Google 基线**（`google_agent`，`safe=active`）：真实公网搜索 + 服务端单域 `siteSearch` + 客户端多域过滤 + 黑名单 + per-call `lang` 覆盖
 - **Google 时效性 Agent**（`google_raw_agent`，`dateRestrict=m6` + `dedup_urls=False`）：只保留过去 6 个月索引的结果，适合"最新/what's new"类查询
+
+---
+
+## TodoWriteTool（任务清单工具）
+
+`TodoWriteTool` 是框架内置的**结构化任务清单工具**，对齐 Claude Code / DeepAgents 的 `TodoWrite` 语义：模型通过单次 `todo_write` 调用发送**完整、更新后的清单**，工具校验后整体替换上一份清单，并将会话级 state 持久化，从而在多轮 `Runner.run_async` 之间保持计划与进度。
+
+适合**步骤较少、无显式依赖边、希望实现简单**的场景。若需要服务端分配 id、按 `taskId` 增量 patch、或 `blockedBy` / `blocks` 依赖编排，请改用下文 [Task 工具族](#task-工具族结构化任务看板)。
+
+### 功能特性
+
+- **整表替换**：每次调用传入完整 `todos` 数组，新列表**完全覆盖**旧列表（不做智能 merge）；唯一合法的清空方式是显式传入 `todos: []`
+- **会话级持久化**：清单序列化为 JSON 写入 `tool_context.state["todos[:<branch>]"]`（默认前缀 `todos`，**勿用** `temp:`——该前缀会被 `BaseSessionService` 剥离且不持久化）
+- **子 Agent 隔离**：state key 追加 `:<branch>`，父 / 子 Agent 各自维护独立清单
+- **硬契约校验（代码强制）**：`content` / `activeForm` 非空、至多一个 `in_progress`、`content` 全局唯一；违反时返回 `INVALID_ARGS` / `INVALID_TODOS`
+- **Prompt 引导分层**：`DEFAULT_TODO_PROMPT` 经 `process_request` 自动注入 system instruction，描述使用时机与写法；与硬契约分离
+- **响应带回 diff**：成功时返回 `{message, todos, oldTodos}`，便于前端 / CLI 直接渲染当前清单与变更
+- **可选策略钩子**：`nudge_hooks` 只读回调，可在成功响应 `message` 末尾追加策略提示（不得修改清单）
+- **全部完成后自动清空**：`clear_on_all_done=True`（默认）时，若传入列表全部为 `completed`，持久化为空列表，避免历史项堆积
+
+### TodoWriteTool 参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `state_key_prefix` | `str` | `"todos"` | state key 前缀；勿使用 `temp:` |
+| `clear_on_all_done` | `bool` | `True` | 全部为 `completed` 时是否清空持久化列表 |
+| `default_nudge` | `str` | 内置文案 | 每次成功响应的基础提示语 |
+| `nudge_hooks` | `Optional[List[NudgeHook]]` | `None` | 只读策略钩子列表 |
+| `filters_name` / `filters` | — | `None` | 透传给 `BaseTool` 的 Filter |
+
+**LLM 调用参数**（`todo_write`）：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `todos` | `array` | 是 | 完整清单；每项含 `content`（祈使句）、`activeForm`（进行时）、`status`（`pending` / `in_progress` / `completed`） |
+
+**成功响应字段**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `message` | `str` | 基础 nudge + 钩子追加文案 |
+| `todos` | `array` | 持久化后的当前清单 |
+| `oldTodos` | `array \| null` | 更新前的清单（首次写入为 `null`） |
+
+### 使用方式
+
+```python
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.tools import TodoWriteTool
+
+agent = LlmAgent(
+    name="todo_planner",
+    model=OpenAIModel(model_name="...", api_key="...", base_url="..."),
+    instruction="你是规划型助手，多步任务请用 todo_write 维护清单。",
+    tools=[TodoWriteTool()],
+)
+```
+
+服务端 / 审计读取当前清单：
+
+```python
+from trpc_agent_sdk.tools import get_todos, render_todos
+
+todos = get_todos(session, branch=agent.name)
+print(render_todos(todos))  # ✅ / 🔄 / ⬜ 纯文本 checklist
+```
+
+### TodoWriteTool 与 Task 工具族对比
+
+| 维度 | `TodoWriteTool` | `TaskToolSet` |
+| --- | --- | --- |
+| 工具数量 | 1（`todo_write`） | 4（`task_create` / `task_update` / `task_get` / `task_list`） |
+| 更新方式 | 整表替换 | 按 `taskId` 增量 patch |
+| 单项标识 | `content`（唯一键） | `id`（服务端分配） |
+| 依赖编排 | 无 | `blockedBy` / `blocks`，完成上游自动 unblock |
+| state key | `todos[:branch]` | `tasks[:branch]` |
+| 并行 tool 调用 | 整表覆盖，天然 last-write-wins | 内置 `task_store_lock` 串行化 RMW |
+
+> **建议二选一挂载**；同时挂载易让模型混用两套语义。
+
+### TodoWriteTool 完整示例
+
+见 [examples/todo_tool/run_agent.py](../../../examples/todo_tool/run_agent.py)：同一 session 内多轮「规划 → 逐项完成」，每轮用 `get_todos` 读回持久化清单。
+
+---
+
+## Task 工具族（结构化任务看板）
+
+`TaskToolSet` 暴露四个工具——`task_create`、`task_update`、`task_get`、`task_list`——对齐 Claude Code v2.1.142+ 的结构化 Task 能力。与 `TodoWriteTool` 的整表替换不同，Task 工具族采用**按服务端分配的 `id` 增量更新**：创建时返回 id，后续用 `task_update` 局部修改状态、字段或依赖边。
+
+整个看板序列化为**单个 JSON blob** 写入 `tool_context.state["tasks[:<branch>]"]`，跨轮存活；`highwatermark` 记录曾分配的最高 id，软删除（`status: deleted`）后**不会复用 id**。
+
+### 功能特性
+
+- **增量更新**：`task_create` 分配 id；`task_update` 按 `taskId` patch，无需重传整板
+- **依赖编排**：`addBlockedBy` / `removeBlockedBy`（及 `addBlocks` / `removeBlocks`）维护双向边；上游 `completed` 时自动从下游 `blockedBy` 移除并返回 `unblocked`
+- **Token 优化**：`task_list` 只返回摘要（省略 `description`）；完整详情用 `task_get`
+- **硬契约校验**：`subject` 非空、状态合法、依赖存在、**无环**（`detect_cycle`）、默认**至多一个 `in_progress`**（`enforce_single_in_progress`，可关）
+- **并发安全**：`_TaskToolBase` 在 load → mutate → save 外包 `task_store_lock`（按 session + branch），兼容 `parallel_tool_calls=True` 下同批并行调用
+- **Prompt 自动注入**：`DEFAULT_TASK_PROMPT` 多工具挂载时只注入一次
+
+### TaskToolSet 构造参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `state_key_prefix` | `str` | `"tasks"` | state key 前缀；勿使用 `temp:` |
+| `enforce_single_in_progress` | `bool` | `True` | 设置某任务 `in_progress` 时，若已有其他 `in_progress` 则拒绝 |
+| `inject_prompt` | `bool` | `True` | 是否向 system instruction 注入 `DEFAULT_TASK_PROMPT` |
+
+### 四个工具的 LLM 参数概要
+
+**`task_create`**
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `subject` | 是 | 短标题（祈使句） |
+| `description` | 否 | 自由文本详情 |
+| `activeForm` | 否 | 进行时文案 |
+| `metadata` | 否 | 扩展键值 |
+
+返回 `{task: {id, subject}, message}`。
+
+**`task_update`**
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `taskId` | 是 | 要更新的任务 id |
+| `status` | 否 | `pending` / `in_progress` / `completed` / `deleted` |
+| `subject` / `description` / `activeForm` / `owner` / `metadata` | 否 | 标量字段 patch |
+| `addBlockedBy` / `removeBlockedBy` | 否 | 上游依赖 id 列表 |
+| `addBlocks` / `removeBlocks` | 否 | 下游阻塞 id 列表 |
+
+返回 `{task, unblocked, message}`；`unblocked` 为因本次完成而解除阻塞的 pending 任务 id 列表。
+
+**`task_get`**：`taskId`（必填）→ 含 `description` 的完整记录。
+
+**`task_list`**：可选 `includeDeleted`；返回 `{tasks, stats}`，摘要不含 `description`。
+
+**常见错误码**：`INVALID_ARGS`、`INVALID_DEPENDENCY`、`INVALID_STATUS`、`NOT_FOUND`。
+
+### 使用方式
+
+```python
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.tools import TaskToolSet
+
+agent = LlmAgent(
+    name="task_planner",
+    model=OpenAIModel(model_name="...", api_key="...", base_url="..."),
+    instruction="多步项目请用 task_create / task_update 维护看板。",
+    tools=[TaskToolSet()],
+    # parallel_tool_calls=True 时，同批多个 task 工具由 task_store_lock 保护 store 一致性
+)
+```
+
+读回持久化看板（REST / 审计 / demo 收尾）：
+
+```python
+from trpc_agent_sdk.tools import get_task_store, render_task_list
+
+store = get_task_store(session, branch=agent.name)
+print(render_task_list(store))
+# ✅ #1 已完成
+# 🔄 #2 进行中
+# ⬜ #3 待办 (blocked by: 2)
+```
+
+### 依赖与解锁示例
+
+```text
+#1 设计表结构
+ ├──→ #2 实现 API ──→ #3 单元测试
+ └──→ #4 编写文档
+
+#1 completed  →  unblocked: ['2', '4']
+#2 completed  →  unblocked: ['3']
+```
+
+### Task 工具族最佳实践
+
+- **规划与执行分离**：先 `task_create` 建板并 `addBlockedBy`，再逐项 `in_progress` → `completed`
+- **不要编造 id**：只使用 `task_create` 返回的 id
+- **并行调用**：开启 `parallel_tool_calls=True` 时，同 board 上的并发 `task_create` / `task_update` 由锁串行化；不同 `branch` 仍并行
+- **与 TodoWrite 二选一**：长板 + 依赖用 Task；短清单用 TodoWrite
+
+### Task 工具族完整示例
+
+| 示例 | 说明 |
+| --- | --- |
+| [examples/task_tools](../../../examples/task_tools/) | 多轮对话：依赖编排、逐项完成、跨轮 `get_task_store` 读回看板 |
+| [examples/task_tools_parallel](../../../examples/task_tools_parallel/) | 验证 `parallel_tool_calls` 与 `task_store_lock`（Phase 1–2 无需 API Key） |
