@@ -5,7 +5,8 @@
 
 from ._common import CreateWorkspaceNameCallback
 from ._common import default_create_ws_name_callback
-from ._copy_stager import CopySkillStager
+from ._file_stager import CopySkillStager
+from ._file_stager import LinkSkillStager
 from ._save_artifact import SaveArtifactTool
 from ._skill_exec import SkillExecTool
 from ._skill_list import skill_list
@@ -24,6 +25,7 @@ __all__ = [
     "CreateWorkspaceNameCallback",
     "default_create_ws_name_callback",
     "CopySkillStager",
+    "LinkSkillStager",
     "SaveArtifactTool",
     "SkillExecTool",
     "skill_list",

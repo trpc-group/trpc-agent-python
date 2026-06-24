@@ -3,10 +3,13 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Skill staging interface and default copy-based implementation.
+"""Skill staging interface implementation using file system.
 
 This module provides the CopySkillStager class which is responsible for staging
-skills to the workspace.
+skills to the workspace using file system.
+
+The actual filesystem work — digest check, ``stage_directory``, symlink
+creation, read-only chmod — is delegated to :class:`~trpc_agent.skills.stager.Stager`.
 """
 
 from __future__ import annotations
@@ -36,7 +39,7 @@ def normalize_workspace_skill_dir(raw: str) -> str:
     """Normalize and validate a workspace-relative skill directory.
 
     Mirrors Go's ``normalizeWorkspaceSkillDir``.  Strips leading slashes,
-    normalises path separators, and ensures the result stays within a
+    normalizes path separators, and ensures the result stays within a
     known workspace root.
 
     Raises:
@@ -60,7 +63,7 @@ def normalize_workspace_skill_dir(raw: str) -> str:
 
 
 def _normalize_skill_stage_result(result: SkillStageResult) -> SkillStageResult:
-    """Return *result* with :attr:`workspace_skill_dir` normalised.
+    """Return *result* with :attr:`workspace_skill_dir` normalized.
 
     Mirrors Go's ``normalizeSkillStageResult``.
 
@@ -71,17 +74,29 @@ def _normalize_skill_stage_result(result: SkillStageResult) -> SkillStageResult:
 
 
 class CopySkillStager(Stager):
-    """Default stager: copies the skill directory into ``skills/<name>``.
+    """Stager: copies the skill directory into ``skills/<name>``.
 
     The actual filesystem work — digest check, ``stage_directory``, symlink
     creation, read-only chmod — is delegated to :class:`~trpc_agent.skills.stager.Stager`.
     """
 
+    def __init__(self) -> None:
+        super().__init__()
+        self._stage_mode: str = "copy"
+
     async def stage_skill(self, request: SkillStageRequest) -> SkillStageResult:
-        """Stage the skill and return the normalised workspace skill dir."""
+        """Stage the skill and return the normalized workspace skill dir."""
         if request.repository is None:
             raise ValueError(_ERR_REPO_NOT_CONFIGURED)
 
         result = await super().stage_skill(request)
 
         return _normalize_skill_stage_result(result)
+
+
+class LinkSkillStager(CopySkillStager):
+    """Stager: links the skill directory into ``skills/<name>`` and links the shared workspace dirs."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._stage_mode: str = "link"

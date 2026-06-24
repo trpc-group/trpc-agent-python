@@ -53,13 +53,24 @@
 2. 执行旧状态迁移（兼容历史 key）与 turn 模式清理
 3. 注入 skill 概览（始终执行）
 4. 读取 loaded skills 并按 `max_loaded_skills` 裁剪
-5. `load_mode=session` 在 temp-only 设计下与 `turn` 读取语义一致
+5. 按 `load_mode` 解析状态键并读取（见下文 **temp-only**）
 6. 根据 `tool_result_mode` 分流：
    - `False`：直接向 system instruction 注入 `[Loaded]`、`Docs loaded`、`[Doc]`
    - `True`：跳过注入，交给 `SkillsToolResultRequestProcessor` 处理
 7. `load_mode=once` 时清理 loaded/docs/tools/order 状态（offload）
 
 ### 2.3 状态语义
+
+**temp-only 状态模型**：技能 loaded/docs/tools 状态不再维护 `temp:skill:*` 与 `user:skill:*` 两套键，也不再做 temp → user 的 promote（`_maybe_promote_skill_state_for_session` 为 no-op）。统一由 `loaded_state_key()` 等函数（[`_state_keys.py`](../../skills/_state_keys.py)）按 `load_mode` 决定键名：
+
+| `load_mode` | 键名 | 生命周期 |
+|-------------|------|----------|
+| `turn` / `once` | 带 `temp:` 前缀，如 `temp:skill:loaded_by_agent:<agent>/<skill>` | `turn` 每轮 invocation 清空；`once` 注入后 offload |
+| `session` | 去掉 `temp:` 前缀，如 `skill:loaded_by_agent:<agent>/<skill>` | 整个 session 内保留 |
+
+读取一律走 `session_state + state_delta` 合并视图（`_snapshot_state`），`turn` 与 `session` 共用同一套解析函数，仅键前缀与清理策略不同。
+
+各模式清理策略：
 
 - `turn`
   - 每次 invocation 开始清理一次技能状态
@@ -68,10 +79,7 @@
   - 本轮用完后清理，避免持续占用上下文
   - 对应：`_maybe_offload_loaded_skills`
 - `session`
-  - 在 temp-only 状态模型下，不再维护 `user:skill:*` 双键
-  - 对应：`_maybe_promote_skill_state_for_session`（当前为 no-op）
-
-读取策略为单一 temp key 读取（`session_state + state_delta` 视图）。
+  - 不做 turn 级清空，也不做 once 级 offload；状态写入无 `temp:` 前缀的键
 
 ### 2.4 关键参数
 
@@ -247,3 +255,152 @@
    - 是否注入了 guidance
    - 是否注入了 loaded context
    - 是否发生了 offload/clear
+
+## 附录
+
+### A. `turn` 与 `once` 的区别
+
+二者都属于**临时状态**（键名带 `temp:` 前缀），差异在于**何时清空 loaded 状态**，以及**同一 invocation 内是否会反复注入 skill 正文**。
+
+> **术语（避免与后文「轮」混淆）**
+>
+> | 术语 | 含义 |
+> |------|------|
+> | **invocation** | 用户发**一条消息**后，Runner 从开始处理到结束的整段流程（其间可有多次 LLM 调用、多次 tool 调用） |
+> | **LLM 调用** | 每次调用模型前执行一次 `process_llm_request`（下文记为 LLM #1、#2、#3 …） |
+> | **用户消息 #N** | 第 N 条用户输入，通常对应第 N 个 invocation |
+>
+> `turn` 的清空发生在**新 invocation 开始时**（仅一次），不是每次 LLM 调用前。因此：
+> - **同一 invocation 内**（同一条用户消息、多次 LLM）：`skill_load` 写入的 state **会保留**，故 LLM #2、#3 都能读到并重复注入；
+> - **跨 invocation**（用户消息 #1 → 用户消息 #2）：消息 #2 开始时 **会清空** 消息 #1 留下的 state。
+>
+> 下文「同一轮内」= 同一 invocation；「下一轮」= 下一条用户消息（新 invocation）。二者不矛盾。
+
+#### 对比一览
+
+| | `turn` | `once` |
+|---|--------|--------|
+| **清空时机** | 每次新 invocation（用户新发一条消息）**开始时**清空 | 每次将 skill 内容注入请求**之后**清空（offload） |
+| **同一 invocation 内多步 Agent 循环** | `skill_load` 后的状态会保留，**每一步 LLM 调用都会重新注入** skill 正文 | 注入 loaded 后 offload；**后续 LLM 不再从 state 注入**（除非再次 `skill_load`） |
+| **跨用户消息** | 下一条用户消息（新 invocation）开始时清空 | 不在 invocation 开始时统一清空；靠「注入后 offload」释放 state |
+| **典型用途** | 一轮内多步工具调用都需要完整 skill 上下文 | 控制 token：skill 正文只进一次 prompt，之后靠历史 / tool result |
+| **对应函数** | `_maybe_clear_skill_state_for_turn` | `_maybe_offload_loaded_skills` |
+
+#### 清空边界（常见误解）
+
+下文「清」均指清除 **skill loaded/docs/tools 的 session state**，不是清除聊天历史。
+
+**`turn`：跨 invocation（用户消息）清，同一 invocation 内不清**
+
+- **一次请求** = 用户发一条消息 → 一次 `run_async(..., new_message=...)` → 一个 invocation。
+- **一次请求里的多轮** = 同一条消息内 Agent 循环（LLM #1 → 工具 → LLM #2 → …，多次 `process_llm_request`）。
+- `turn` 只在**新 invocation 的第一次** `process_llm_request` 时清空（`processor:skills:turn_init` 保证同一条消息内后续 LLM 不再清）。
+
+```text
+用户消息 #1（invocation A）
+  开始 → [清] 只清「更早 invocation」留下的 state
+  LLM #1 → skill_load → LLM #2 → skill_run → LLM #3   ← 中间不再清
+
+用户消息 #2（invocation B）
+  开始 → [清] 清掉消息 #1 结束时残留的 loaded 标记
+```
+
+归纳：**同一条用户消息内的多次 LLM 不清；下一条用户消息（新 invocation）开始时清。**
+
+**`once`：注入 loaded 之后清，不是每个 LLM 轮次都清**
+
+- offload 仅在 `_maybe_offload_loaded_skills` 中触发，且要求本次 `process_llm_request` 读到的 `loaded` **非空**（见 `_skill_processor.py`）。
+- 尚未 `skill_load` 的 LLM 调用（`loaded` 为空）**不会**触发 offload。
+
+```text
+用户消息 #1（一个 invocation）
+  LLM #1：尚无 loaded → 不 offload
+  skill_load → 写入 state
+  LLM #2：注入 [Loaded] ... → [offload 清 state]
+  skill_run
+  LLM #3：state 已空 → 不再从 state 注入（除非再次 skill_load）
+```
+
+归纳：**不是「一次请求里每一轮 LLM 都清」，而是「有 loaded 且本次请求完成注入后清」。**
+
+**一句话对比**
+
+| 模式 | 清空边界 | 同一条用户消息内多次 LLM |
+|------|----------|--------------------------|
+| `turn` | **新用户消息**开始时清 | state **保留**，每步 LLM 都可能重复注入 skill 正文 |
+| `once` | **每次注入 loaded 内容之后**清 | 通常只在 `skill_load` 后的那一次 LLM 从 state 注入正文 |
+| `session` | 不做 turn 级开头清、不做 once 级注入后清 | 键名去掉 `temp:`，可跨多条用户消息保留 |
+
+#### 举例：一轮内先 `skill_load` 再 `skill_run`
+
+用户问：「用 data-analysis 分析 CSV」。Agent 在同一 invocation 内通常会经历多次 LLM 调用：
+
+1. 第 1 次 LLM → 决定调用 `skill_load`
+2. 执行 `skill_load` → 写入 state
+3. 第 2 次 LLM → 构建请求、注入 skill 内容
+4. 决定调用 `skill_run`
+5. 第 3 次 LLM → 继续推理
+
+**`turn` 模式**
+
+```text
+用户消息 #1 开始
+  → [清空] 上一轮 skill 状态
+  → LLM #1：只有 skill 概览，尚无 loaded 正文
+  → skill_load("data-analysis")          // 写入 state
+  → LLM #2：system 里注入 [Loaded] ...   // 同一 invocation 内 state 仍在
+  → skill_run(...)
+  → LLM #3：再次注入 [Loaded] ...        // 同一 invocation 内重复注入（尚未跨用户消息）
+```
+
+特点：同一轮内每一步 LLM 请求都能看到完整 skill 正文，适合多步推理时上下文需持续「在线」；代价是 token 重复消耗。
+
+**`once` 模式**
+
+```text
+用户消息 #1
+  → LLM #1：概览
+  → skill_load("data-analysis")
+  → LLM #2：注入 [Loaded] ... → [offload 清空 state]
+  → skill_run(...)
+  → LLM #3：state 已空，不再从 state 注入 skill 正文
+        （若开启 tool_result_mode，正文可能在 history 的 function_response 里）
+```
+
+特点：skill 正文只在 `skill_load` 后的**那一次**请求里注入，随后从 session state 删除，避免后续每步 LLM 重复塞入 SKILL.md；适合省 token，后续步骤依赖对话历史或 `SkillsToolResultRequestProcessor` 物化结果。
+
+#### 举例：连续两条用户消息
+
+**`turn`**
+
+```text
+用户消息 #1：skill_load + 完成任务
+  → 结束时 state 里可能仍有 loaded 标记
+
+用户消息 #2 开始（新 invocation）
+  → [清空] 消息 #1 的 skill 状态
+  → 若本条消息要再用 skill，需重新 skill_load
+```
+
+**跨 invocation**（用户消息 #1 → 用户消息 #2）时，消息 #1 的 skill state **不会**带到消息 #2；这与消息 #1 **内部** LLM #2、#3 之间 state 仍保留并不冲突。
+
+**`once`**
+
+```text
+用户消息 #1
+  → 每次注入后 offload，通常不会长期保留 loaded state
+
+用户消息 #2
+  → 不会在 invocation 开始时主动统一 wipe
+  → 一般仍需重新 skill_load；重点在于「单次注入后立即释放 state」
+```
+
+#### 与 `session` 对比（选型参考）
+
+| 场景 | 建议 |
+|------|------|
+| 一轮内多次 LLM + 工具，每步都要完整 skill 文档 | `turn`（默认） |
+| skill 正文很大，只想注入一次，后续靠历史 | `once` |
+| 同一会话多轮对话都要复用已加载 skill | `session` |
+
+`examples/skills` 未显式配置 `load_mode` 时一般为 **`turn`**。若 skill 文档较大且一轮内会多次调 LLM，可尝试 `once` 配合 `tool_result_mode=True`，将正文物化进 tool result，而不是每步重复写入 system instruction。

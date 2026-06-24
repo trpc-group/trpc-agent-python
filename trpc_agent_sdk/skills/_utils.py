@@ -107,6 +107,11 @@ def ensure_layout(root: Union[Path, str]) -> dict[str, Path]:
         if not path.exists():
             os.makedirs(path, mode=0o755, exist_ok=True)
 
+    # Host/user files are staged under work/inputs before skill_load links them.
+    inputs_dir = root / DIR_WORK / "inputs"
+    if not inputs_dir.exists():
+        os.makedirs(inputs_dir, mode=0o755, exist_ok=True)
+
     # Initialize metadata if missing
     metadata_file = root / META_FILE_NAME
     if not metadata_file.exists():

@@ -25,7 +25,7 @@ def create_agent():
     """Create a skill run agent to demonstrate the various capabilities of an LLM agent."""
 
     # Create tools
-    skill_tool_set, skill_repository = create_skill_tool_set()
+    skill_tool_set, skill_repository = create_skill_tool_set(is_link_stager=True, use_cached_repository=True)
 
     return LlmAgent(
         name="skill_run_agent",

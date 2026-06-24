@@ -130,6 +130,7 @@ class TestEnsureLayout:
         assert len(paths) == 4
         for p in paths.values():
             assert p.exists()
+        assert (tmp_path / "work" / "inputs").is_dir()
 
     def test_creates_metadata_file(self, tmp_path):
         from trpc_agent_sdk.code_executors import META_FILE_NAME

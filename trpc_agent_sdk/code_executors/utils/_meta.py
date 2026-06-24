@@ -105,6 +105,9 @@ def ensure_layout(root: Path | str) -> dict[str, Path]:
     for p in paths.values():
         Path(p).mkdir(parents=True, exist_ok=True)
 
+    # Host/user files are staged under work/inputs before skill_load links them.
+    (root / DIR_WORK / "inputs").mkdir(parents=True, exist_ok=True)
+
     # Initialize metadata if missing
     meta_file = root / META_FILE_NAME
     if not meta_file.exists():

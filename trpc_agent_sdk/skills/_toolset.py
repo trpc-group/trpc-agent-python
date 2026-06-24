@@ -50,7 +50,7 @@ from .tools import WorkspaceWriteStdinTool
 from .tools import WorkspaceKillSessionTool
 from .tools import CreateWorkspaceNameCallback
 from .tools import default_create_ws_name_callback
-from .tools import CopySkillStager
+from .tools import LinkSkillStager
 from .stager import Stager
 
 
@@ -104,7 +104,7 @@ class SkillToolSet(ToolSetABC):
         )
         self._skill_config = skill_config or DEFAULT_SKILL_CONFIG
         self._create_ws_name_cb = create_ws_name_cb or default_create_ws_name_callback
-        self._skill_stager = skill_stager or CopySkillStager()
+        self._skill_stager = skill_stager or LinkSkillStager()
         self._load_tool = SkillLoadTool(repository=self._repository,
                                         repo_resolver=repo_resolver,
                                         skill_stager=self._skill_stager,

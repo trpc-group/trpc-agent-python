@@ -184,6 +184,7 @@ class TestEnsureLayout:
                 assert (Path(tmpdir) / name).is_dir()
                 assert name in paths
                 assert paths[name] == Path(tmpdir) / name
+            assert (Path(tmpdir) / DIR_WORK / "inputs").is_dir()
 
     def test_creates_metadata_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
