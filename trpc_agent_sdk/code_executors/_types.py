@@ -184,6 +184,9 @@ class WorkspaceStageOptions(BaseModel):
     allow_mount: bool = False
     """ whether to allow mount"""
 
+    mode: str = "link"
+    """ staging mode hint, e.g. 'copy' or 'link'. Default is 'link'."""
+
 
 class WorkspaceCapabilities(BaseModel):
     """

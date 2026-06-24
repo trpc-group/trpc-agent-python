@@ -35,7 +35,7 @@ from ..stager import Stager
 from ._common import CreateWorkspaceNameCallback
 from ._common import default_create_ws_name_callback
 from ._common import set_staged_workspace_dir
-from ._copy_stager import CopySkillStager
+from ._file_stager import CopySkillStager
 from .._repository import SkillRepositoryResolver
 
 

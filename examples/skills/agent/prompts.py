@@ -23,6 +23,9 @@ out/ (or $OUTPUT_DIR) and write new files back to out/. Prefer using
 skill_run inputs/outputs fields to map files instead of shell commands
 like cp or mv where possible.
 
+When a task needs host files inside the workspace, call skill_load first so
+shared work/inputs links are ready, then copy or map files into work/inputs/.
+
 When using a skill, follow this workflow:
 1. First call skill_load to load the skill documentation
 2. Always call skill_list_docs immediately after skill_load to verify what documents have been loaded,

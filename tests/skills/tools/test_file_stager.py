@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Unit tests for trpc_agent_sdk.skills.tools._copy_stager.
+"""Unit tests for trpc_agent_sdk.skills.tools._file_stager.
 
 Covers:
 - normalize_workspace_skill_dir: valid paths, edge cases, rejected paths
@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from trpc_agent_sdk.skills.tools._copy_stager import (
+from trpc_agent_sdk.skills.tools._file_stager import (
     CopySkillStager,
     normalize_workspace_skill_dir,
     _normalize_skill_stage_result,

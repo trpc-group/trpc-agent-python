@@ -54,6 +54,7 @@ class Stager:
         # Deduplicate noisy link warnings within one process lifetime.
         # Key format: "<invocation_id>|<skill_name>|<stderr>".
         self._link_error_warned_keys: set[str] = set()
+        self._stage_mode: str = "link"
 
     # ------------------------------------------------------------------
     # Public API
@@ -93,7 +94,7 @@ class Stager:
         await self.remove_workspace_path(ctx, runtime, ws, dest)
 
         fs = runtime.fs(ctx)
-        await fs.stage_directory(ws, root, dest, WorkspaceStageOptions(), ctx)
+        await fs.stage_directory(ws, root, dest, WorkspaceStageOptions(mode=self._stage_mode), ctx)
 
         await self._link_workspace_dirs(ctx, runtime, ws, name)
         await self._read_only_except_symlinks(ctx, runtime, ws, dest)

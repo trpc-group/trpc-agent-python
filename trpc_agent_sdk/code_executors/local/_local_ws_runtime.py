@@ -152,6 +152,13 @@ class LocalWorkspaceFS(BaseWorkspaceFS):
     def __init__(self, read_only_staged_skill: bool = False):
         self.read_only_staged_skill = read_only_staged_skill
 
+    @staticmethod
+    def _normalize_stage_mode(mode: str) -> str:
+        mode = (mode or "copy").strip().lower()
+        if mode not in {"copy", "link"}:
+            raise ValueError(f"unsupported local workspace stage mode: {mode!r}")
+        return mode
+
     @override
     async def put_files(
         self,
@@ -189,11 +196,15 @@ class LocalWorkspaceFS(BaseWorkspaceFS):
             to: Destination path relative to workspace
             opt: Staging options
         """
-        self._put_directory(ws, src, dst)
+        mode = self._normalize_stage_mode(opt.mode)
+        self._put_directory(ws, src, dst, mode=mode)
 
         # Make tree read-only if requested
         ro = opt.read_only or self.read_only_staged_skill
-        if ro:
+        # Link mode uses symlinks to host files. chmod would follow symlinks on
+        # many platforms and mutate the source skill tree, so leave protection
+        # to the skill stager's symlink-aware chmod pass.
+        if ro and mode != "link":
             if dst:
                 dst = Path(ws.path) / Path(dst)
             else:
@@ -205,9 +216,10 @@ class LocalWorkspaceFS(BaseWorkspaceFS):
         ws: WorkspaceInfo,
         src: str,
         dst: str,
+        mode: str = "copy",
     ) -> None:
         """
-        Copy an entire directory from host into workspace.
+        Put a host path into workspace using copy or link mode.
 
         Args:
             ctx: Context for the operation
@@ -217,31 +229,44 @@ class LocalWorkspaceFS(BaseWorkspaceFS):
         """
         src = os.path.abspath(src)
         dst = path_join(ws.path, dst)
-        self._copy_directory(src, dst)
+        src_path = Path(src)
+        if mode == "link" and src_path.is_dir():
+            self._link_directory(src, dst)
+        elif mode == "link":
+            make_symlink(ws.path, os.path.relpath(dst, ws.path), src)
+        else:
+            copy_path(src, dst)
 
-    def _copy_directory(
+    def _link_directory(
         self,
         src: str,
         dst: str,
     ) -> None:
-        """Copy directory recursively.
+        """Stage a directory by symlinking its direct children.
 
-        Args:
-            src: Source directory path
-            dst: Destination directory path
+        The destination root is a real directory so later staging logic can add
+        workspace-local links such as ``out`` / ``work`` without mutating the
+        original skill directory. Direct child directories such as ``scripts``
+        or ``references`` are linked as directories to avoid walking large
+        skill trees.
         """
         src_path = Path(src)
         dst_path = Path(dst)
+        if dst_path.exists() or dst_path.is_symlink():
+            if dst_path.is_symlink() or dst_path.is_file():
+                dst_path.unlink()
+            elif not dst_path.is_dir():
+                raise ValueError(f"cannot stage into non-directory path: {dst}")
         dst_path.mkdir(parents=True, exist_ok=True)
 
-        for item in src_path.rglob("*"):
-            rel_path = item.relative_to(src)
-            target = dst_path / rel_path
-            if item.is_dir():
-                target.mkdir(parents=True, exist_ok=True)
-            else:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(item, target)
+        for item in src_path.iterdir():
+            target = dst_path / item.name
+            if target.exists() or target.is_symlink():
+                if target.is_dir() and not target.is_symlink():
+                    shutil.rmtree(target)
+                else:
+                    target.unlink()
+            target.symlink_to(item.resolve(strict=False), target_is_directory=item.is_dir())
 
     def _make_tree_read_only(
         self,
@@ -401,31 +426,20 @@ class LocalWorkspaceFS(BaseWorkspaceFS):
                 # Handle host inputs
                 host_path = spec.src[len("host://"):]
                 resolved = host_path
-                if mode == "link":
-                    make_symlink(ws.path, dst.as_posix(), host_path)
-                else:
-                    self._put_directory(ws, host_path, dst.parent.as_posix())
+                self._put_directory(ws, host_path, dst.as_posix(), mode=mode)
             elif spec.src.startswith("workspace://"):
                 # Handle workspace inputs
                 rel = spec.src[len("workspace://"):]
                 src = path_join(ws.path, rel)
                 resolved = rel
-
-                if mode == "link":
-                    make_symlink(ws.path, dst.as_posix(), src)
-                else:
-                    copy_path(src, path_join(ws.path, dst.as_posix()))
+                self._put_directory(ws, src, dst.as_posix(), mode=mode)
             elif spec.src.startswith("skill://"):
                 # Handle skill inputs
                 rest = spec.src[len("skill://"):]
                 src_base = Path(ws.path) / DIR_SKILLS
                 src = path_join(src_base.as_posix(), rest)
                 resolved = src
-
-                if mode == "link":
-                    make_symlink(ws.path, dst.as_posix(), src)
-                else:
-                    copy_path(src, path_join(ws.path, dst.as_posix()))
+                self._put_directory(ws, src, dst.as_posix(), mode=mode)
             else:
                 raise ValueError(f"unsupported input: {spec.src}")
 

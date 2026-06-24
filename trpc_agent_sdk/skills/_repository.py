@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import abc
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 from typing import List
@@ -43,6 +44,16 @@ from ._utils import is_script_file
 
 BASE_DIR_PLACEHOLDER = "__BASE_DIR__"
 VisibilityFilter = Callable[[SkillSummary], bool]
+
+
+@dataclass
+class _SkillFileCacheEntry:
+    """Cached parse result for a SKILL.md file."""
+
+    mtime_ns: int
+    size: int
+    front_matter: dict[str, str]
+    body: str | None = None
 
 
 class BaseSkillRepository(abc.ABC):
@@ -278,7 +289,7 @@ class FsSkillRepository(BaseSkillRepository):
             return False
         self._discovered_skill_files.add(skill_file_key)
 
-        front_matter, _ = self._read_skill_file(skill_file_path)
+        front_matter = self._read_skill_front_matter(skill_file_path)
         name = front_matter.get("name", "").strip()
         if not name:
             name = Path(dirpath).name.strip()
@@ -345,11 +356,39 @@ class FsSkillRepository(BaseSkillRepository):
         if stale_files:
             self._discovered_skill_files.difference_update(stale_files)
 
+    def _read_skill_front_matter(self, path: Path) -> dict[str, str]:
+        """Read front matter for indexing/summary paths.
+
+        The base repository intentionally keeps the original no-cache behavior
+        so it can be used as a performance baseline against
+        CachedFsSkillRepository.
+        """
+        front_matter, _ = self._read_skill_file(path)
+        return front_matter
+
     @classmethod
-    def _read_skill_file(cls, path: Path) -> tuple[dict[str, str], str]:
+    def _parse_front_matter_yaml(cls, raw_yaml: str) -> dict[str, str]:
+        try:
+            parsed = yaml.safe_load(raw_yaml) or {}
+            if not isinstance(parsed, dict):
+                return {}
+        except Exception:
+            return {}
+        out: dict[str, str] = {}
+        for k, v in parsed.items():
+            key = str(k).strip()
+            if not key:
+                continue
+            if v is None:
+                out[key] = ""
+            else:
+                out[key] = str(v)
+        return out
+
+    def _read_skill_file(self, path: Path) -> tuple[dict[str, str], str]:
         """Read the skill file and return the front matter and body."""
         content = path.read_text(encoding="utf-8")
-        return cls.from_markdown(content)
+        return self.from_markdown(content)
 
     # ------------------------------------------------------------------
     # Public API
@@ -381,7 +420,7 @@ class FsSkillRepository(BaseSkillRepository):
         for name in sorted(self._skill_paths):
             skill_file_path = Path(self._skill_paths[name]) / SKILL_FILE
             try:
-                front_matter, _ = self._read_skill_file(skill_file_path)
+                front_matter = self._read_skill_front_matter(skill_file_path)
                 summary = SkillSummary(
                     name=front_matter.get("name", "").strip(),
                     description=front_matter.get("description", "").strip(),
@@ -526,27 +565,151 @@ class FsSkillRepository(BaseSkillRepository):
         return tool_names
 
 
+class CachedFsSkillRepository(FsSkillRepository):
+    """Filesystem skill repository with SKILL.md frontmatter/body caching.
+
+    Cache entries are keyed by the resolved SKILL.md path and invalidated when
+    the file's ``mtime_ns`` or size changes, or when the file is deleted.
+    Summary/index paths read only front matter; full body is read lazily by
+    :meth:`get`.
+    """
+
+    def __init__(self, *roots: str, **kwargs):
+        self._skill_file_cache: dict[str, _SkillFileCacheEntry] = {}
+        super().__init__(*roots, **kwargs)
+
+    @override
+    def _index(self) -> None:
+        self._prune_skill_file_cache()
+        super()._index()
+
+    @override
+    def _prune_deleted_skills(self) -> None:
+        super()._prune_deleted_skills()
+        self._prune_skill_file_cache()
+
+    @staticmethod
+    def _skill_file_cache_key(path: Path) -> str:
+        return str(path.resolve(strict=False))
+
+    @staticmethod
+    def _safe_file_signature(path: Path) -> tuple[int, int] | None:
+        try:
+            stat = path.stat()
+            return stat.st_mtime_ns, stat.st_size
+        except OSError:
+            return None
+
+    def _get_cached_skill_file(self, path: Path) -> _SkillFileCacheEntry | None:
+        """Return a valid cache entry, or clear it when the file changed/deleted."""
+        cache_key = self._skill_file_cache_key(path)
+        signature = self._safe_file_signature(path)
+        if signature is None:
+            self._skill_file_cache.pop(cache_key, None)
+            return None
+        cached = self._skill_file_cache.get(cache_key)
+        if cached and (cached.mtime_ns, cached.size) == signature:
+            return cached
+        self._skill_file_cache.pop(cache_key, None)
+        return None
+
+    def _set_cached_skill_file(
+        self,
+        path: Path,
+        *,
+        front_matter: dict[str, str],
+        body: str | None,
+    ) -> _SkillFileCacheEntry:
+        signature = self._safe_file_signature(path)
+        if signature is None:
+            raise FileNotFoundError(str(path))
+        cache_key = self._skill_file_cache_key(path)
+        entry = _SkillFileCacheEntry(
+            mtime_ns=signature[0],
+            size=signature[1],
+            front_matter=front_matter,
+            body=body,
+        )
+        self._skill_file_cache[cache_key] = entry
+        return entry
+
+    def _prune_skill_file_cache(self) -> None:
+        """Drop cache entries for deleted SKILL.md files."""
+        stale_keys = [cache_key for cache_key in self._skill_file_cache if not Path(cache_key).is_file()]
+        for cache_key in stale_keys:
+            self._skill_file_cache.pop(cache_key, None)
+
+    @override
+    def _read_skill_front_matter(self, path: Path) -> dict[str, str]:
+        """Read only the SKILL.md front matter, avoiding body I/O for summaries."""
+        cached = self._get_cached_skill_file(path)
+        if cached is not None:
+            return dict(cached.front_matter)
+
+        front_matter = self._read_front_matter_only(path)
+        self._set_cached_skill_file(path, front_matter=front_matter, body=None)
+        return dict(front_matter)
+
+    @classmethod
+    def _read_front_matter_only(cls, path: Path) -> dict[str, str]:
+        """Parse YAML front matter without reading the Markdown body."""
+        with path.open("r", encoding="utf-8", newline=None) as file:
+            first_line = file.readline()
+            if first_line != "---\n":
+                return {}
+
+            yaml_lines: list[str] = []
+            for line in file:
+                if line == "---\n":
+                    return cls._parse_front_matter_yaml("".join(yaml_lines))
+                yaml_lines.append(line)
+
+        # Match from_markdown's behavior for an unclosed front matter block.
+        return {}
+
+    @override
+    def _read_skill_file(self, path: Path) -> tuple[dict[str, str], str]:
+        """Read full SKILL.md content, using cached body when valid."""
+        cached = self._get_cached_skill_file(path)
+        if cached is not None and cached.body is not None:
+            return dict(cached.front_matter), cached.body
+
+        content = path.read_text(encoding="utf-8")
+        front_matter, body = self.from_markdown(content)
+        self._set_cached_skill_file(path, front_matter=front_matter, body=body)
+        return dict(front_matter), body
+
+
 def create_default_skill_repository(
     *roots: str,
     workspace_runtime: Optional[BaseWorkspaceRuntime] = None,
     enable_hot_reload: bool = True,
-) -> FsSkillRepository:
+    use_cached_repository: bool = True,
+) -> BaseSkillRepository:
     """Create a new filesystem skill repository.
 
     Args:
         roots: Root directories (or URLs) to scan for skills.
         workspace_runtime: Optional workspace runtime.
         enable_hot_reload: Whether to enable skill hot reload checks.
+        use_cached_repository: Whether to use cached repository.
     Returns:
         A configured :class:`FsSkillRepository`.
     """
     if workspace_runtime is None:
         workspace_runtime = create_local_workspace_runtime()
-    return FsSkillRepository(
-        *roots,
-        workspace_runtime=workspace_runtime,
-        enable_hot_reload=enable_hot_reload,
-    )
+    if use_cached_repository:
+        return CachedFsSkillRepository(
+            *roots,
+            workspace_runtime=workspace_runtime,
+            enable_hot_reload=enable_hot_reload,
+        )
+    else:
+        return FsSkillRepository(
+            *roots,
+            workspace_runtime=workspace_runtime,
+            enable_hot_reload=enable_hot_reload,
+        )
 
 
 SkillRepositoryResolver: TypeAlias = Callable[[InvocationContext], BaseSkillRepository]

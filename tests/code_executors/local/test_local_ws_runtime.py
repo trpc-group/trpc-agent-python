@@ -242,12 +242,42 @@ class TestLocalWorkspaceFS:
         assert (dest / "sub" / "nested.txt").read_text() == "nested"
 
     @pytest.mark.asyncio
+    async def test_stage_directory_link_mode(self):
+        src_dir = Path(self.tmpdir) / "source_link"
+        src_dir.mkdir()
+        (src_dir / "file.txt").write_text("content")
+        (src_dir / "sub").mkdir()
+        (src_dir / "sub" / "nested.txt").write_text("nested")
+
+        await self.fs.stage_directory(self.ws, str(src_dir), "dest_link", WorkspaceStageOptions(mode="link"))
+
+        dest = Path(self.tmpdir) / "dest_link"
+        assert dest.is_dir()
+        assert (dest / "file.txt").is_symlink()
+        assert (dest / "sub").is_symlink()
+        assert (dest / "file.txt").read_text() == "content"
+        assert (dest / "sub" / "nested.txt").read_text() == "nested"
+
+    @pytest.mark.asyncio
+    async def test_stage_directory_link_mode_keeps_root_mutable_for_stager_links(self):
+        src_dir = Path(self.tmpdir) / "source_link_root"
+        src_dir.mkdir()
+        (src_dir / "file.txt").write_text("content")
+
+        await self.fs.stage_directory(self.ws, str(src_dir), "dest_link_root", WorkspaceStageOptions(mode="link"))
+
+        dest = Path(self.tmpdir) / "dest_link_root"
+        (dest / "out").symlink_to("../out")
+        assert (dest / "out").is_symlink()
+        assert not (src_dir / "out").exists()
+
+    @pytest.mark.asyncio
     async def test_stage_directory_read_only(self):
         src_dir = Path(self.tmpdir) / "src_ro"
         src_dir.mkdir()
         (src_dir / "file.txt").write_text("readonly")
 
-        await self.fs.stage_directory(self.ws, str(src_dir), "dest_ro", WorkspaceStageOptions(read_only=True))
+        await self.fs.stage_directory(self.ws, str(src_dir), "dest_ro", WorkspaceStageOptions(read_only=True, mode="copy"))
         dest_file = Path(self.tmpdir) / "dest_ro" / "file.txt"
         mode = dest_file.stat().st_mode
         assert not (mode & 0o222)  # no write bits
@@ -259,7 +289,7 @@ class TestLocalWorkspaceFS:
         (src_dir / "file.txt").write_text("fs_readonly")
 
         fs_ro = LocalWorkspaceFS(read_only_staged_skill=True)
-        await fs_ro.stage_directory(self.ws, str(src_dir), "dest_fs_ro", WorkspaceStageOptions())
+        await fs_ro.stage_directory(self.ws, str(src_dir), "dest_fs_ro", WorkspaceStageOptions(mode="copy"))
         dest_file = Path(self.tmpdir) / "dest_fs_ro" / "file.txt"
         mode = dest_file.stat().st_mode
         assert not (mode & 0o222)
@@ -462,8 +492,8 @@ class TestLocalWorkspaceFS:
         assert data == b"hello world"
         assert raw == 11
 
-    # --- _copy_directory ---
-    def test_copy_directory(self):
+    # --- _put_directory ---
+    def test_put_directory_copy_mode(self):
         src = Path(self.tmpdir) / "copy_src"
         src.mkdir()
         (src / "a.txt").write_text("a")
@@ -471,16 +501,16 @@ class TestLocalWorkspaceFS:
         (src / "sub" / "b.txt").write_text("b")
 
         dst = Path(self.tmpdir) / "copy_dst"
-        self.fs._copy_directory(str(src), str(dst))
+        self.fs._put_directory(self.ws, str(src), "copy_dst", mode="copy")
 
         assert (dst / "a.txt").read_text() == "a"
         assert (dst / "sub" / "b.txt").read_text() == "b"
 
-    def test_copy_directory_empty(self):
+    def test_put_directory_copy_mode_empty(self):
         src = Path(self.tmpdir) / "empty_src"
         src.mkdir()
         dst = Path(self.tmpdir) / "empty_dst"
-        self.fs._copy_directory(str(src), str(dst))
+        self.fs._put_directory(self.ws, str(src), "empty_dst", mode="copy")
         assert dst.exists()
 
     # --- _make_tree_read_only ---
@@ -551,8 +581,9 @@ class TestLocalWorkspaceFS:
         specs = [WorkspaceInputSpec(src=f"host://{host_dir}", dst="work/inputs/data", mode="copy")]
         await self.fs.stage_inputs(self.ws, specs)
 
-        copied = Path(self.tmpdir) / "work" / "inputs"
-        assert copied.exists()
+        copied = Path(self.tmpdir) / "work" / "inputs" / "data"
+        assert copied.is_dir()
+        assert (copied / "data.txt").read_text() == "host data"
 
     @pytest.mark.asyncio
     async def test_stage_inputs_host_link(self):
@@ -564,7 +595,9 @@ class TestLocalWorkspaceFS:
         await self.fs.stage_inputs(self.ws, specs)
 
         linked = Path(self.tmpdir) / "work" / "inputs" / "linked"
-        assert linked.is_symlink() or linked.exists()
+        assert linked.is_dir()
+        assert (linked / "link.txt").is_symlink()
+        assert (linked / "link.txt").read_text() == "link data"
 
     @pytest.mark.asyncio
     async def test_stage_inputs_workspace(self):

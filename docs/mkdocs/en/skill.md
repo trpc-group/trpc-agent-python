@@ -100,6 +100,7 @@ from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.models import OpenAIModel
 from trpc_agent_sdk.skills import SkillToolSet
 from trpc_agent_sdk.skills import create_default_skill_repository
+from trpc_agent_sdk.skills.tools import LinkSkillStager
 from trpc_agent_sdk.code_executors import create_local_workspace_runtime
 from trpc_agent_sdk.code_executors import create_container_workspace_runtime
 # Cube is an optional extra (`pip install 'trpc-agent-py[cube]'`); import lazily.
@@ -114,11 +115,12 @@ workspace_runtime = create_local_workspace_runtime()
 #   workspace_runtime = create_cube_workspace_runtime(executor)
 
 # Create skill repository
-repository = create_default_skill_repository("./skills", workspace_runtime=workspace_runtime)
+repository = create_default_skill_repository("./skills", workspace_runtime=workspace_runtime, use_cached_repository=True)
 
 # Create skill tool set with optional artifact save options
 skill_tool_set = SkillToolSet(
     repository=repository,
+    skill_stager=LinkSkillStager(),
     # run_tool_kwargs is an optional tool parameter
     run_tool_kwargs={
         "save_as_artifacts": True,  # Whether to save as artifact files
@@ -136,6 +138,8 @@ agent = LlmAgent(
         skill_repository=repository,
     )
 ```
+
+*Note: Starting after version 1.1.10, skill loading and injection were optimized to support caching skill content and symlink-based staging in the local sandbox, avoiding full directory copies.*
 
 **Prompt example**:
 
