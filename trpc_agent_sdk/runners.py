@@ -35,8 +35,8 @@ from trpc_agent_sdk.memory import BaseMemoryService
 from trpc_agent_sdk.sessions import BaseSessionService
 from trpc_agent_sdk.sessions import Session
 from trpc_agent_sdk.telemetry import tracer
-from trpc_agent_sdk.telemetry._trace import trace_cancellation
-from trpc_agent_sdk.telemetry._trace import trace_runner
+from trpc_agent_sdk.telemetry import trace_cancellation
+from trpc_agent_sdk.telemetry import trace_runner
 from trpc_agent_sdk.tools import BaseToolSet
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part

@@ -121,6 +121,27 @@ model = OpenAIModel(
 )
 ```
 
+#### Advanced Usage
+
+Since version `1.1.10`, `OpenAIModel` supports passing a shared HTTP client provider to enable connection reuse. By default, `OpenAIModel` creates a temporary HTTP client for each model-service request. If you want to reuse connections, use the following configuration:
+
+```python
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.models import shared_http_client_provider_factory
+# from trpc_agent_sdk.models import close_shared_http_clients
+
+model = OpenAIModel(
+    model_name="deepseek-chat",
+    api_key="your-api-key",
+    base_url="https://api.deepseek.com/v1",
+    http_client_provider_factory=shared_http_client_provider_factory,
+)
+# ...
+
+# If you need to force-close the shared HTTP clients, use:
+# await close_shared_http_clients()
+```
+
 ### Integration with Various Platform Model Services:
 
 #### Hunyuan Model Invocation
@@ -203,6 +224,10 @@ LlmAgent(
     ),
 )
 ```
+
+#### Advanced Usage
+
+Since version `1.1.10`, `AnthropicModel` supports passing a shared HTTP client provider to enable connection reuse. By default, `AnthropicModel` creates a temporary HTTP client for each model-service request. See the Advanced Usage section under `OpenAIModel` for an example.
 
 ## LiteLLMModel
 As multiple LLM providers have emerged, some have defined their own API specifications. Currently, the framework has integrated OpenAI and Anthropic APIs as described above. However, differences in instantiation methods and configuration options across providers mean that developers often need to modify substantial amounts of code when switching providers, increasing the switching cost.

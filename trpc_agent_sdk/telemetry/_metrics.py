@@ -5,7 +5,7 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """OTel-native ``gen_ai.*`` metrics for the TRPC Agent framework.
 
-Mirrors :mod:`trpc_agent_sdk.telemetry._trace`: module-level instruments plus
+Mirrors :mod:`trpc_agent_sdk.telemetry`: module-level instruments plus
 ``report_*`` free functions. Backends fan out via the installed
 ``MeterProvider`` and route by ``gen_ai.operation.name``.
 """

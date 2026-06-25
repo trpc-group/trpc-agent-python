@@ -472,11 +472,11 @@ class TestGenerateSingleError:
         model = _model()
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(side_effect=RuntimeError("timeout"))
-        mock_client.close = AsyncMock()
+        model._http_client_provider.close_http_client = AsyncMock()
         with patch.object(model, "_create_async_client", return_value=mock_client):
             with pytest.raises(RuntimeError, match="timeout"):
                 await model._generate_single({}, LlmRequest(contents=[]))
-            mock_client.close.assert_awaited_once()
+            model._http_client_provider.close_http_client.assert_awaited_once_with(mock_client)
 
 
 # ---------------------------------------------------------------------------

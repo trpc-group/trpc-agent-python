@@ -257,8 +257,8 @@ class BaseAgent(AgentABC):
                 - Actions
         """
         from trpc_agent_sdk.telemetry import report_invoke_agent
-        from trpc_agent_sdk.telemetry._trace import tracer
-        from trpc_agent_sdk.telemetry._trace import trace_agent
+        from trpc_agent_sdk.telemetry import tracer
+        from trpc_agent_sdk.telemetry import trace_agent
 
         # Manually propagate span context using attach/detach instead of
         # start_as_current_span. This ensures child spans (call_llm, execute_tool,

@@ -121,6 +121,27 @@ model = OpenAIModel(
 )
 ```
 
+#### 高级用法
+
+从版本 `1.1.10`之后 OpenAIModel 支持传入共享的 http client 来解决连接复用的场景，当前的 OpenAIModel 默认每次都会创建临时的 http client 去访问模型服务；如果期望连接复用可以使用如下的方式
+
+```python
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.models import shared_http_client_provider_factory
+#from trpc_agent_sdk.models import close_shared_http_clients
+
+model = OpenAIModel(
+    model_name="deepseek-chat",
+    api_key="your-api-key",
+    base_url="https://api.deepseek.com/v1",
+    http_client_provider_factory=shared_http_client_provider_factory
+)
+# ...
+
+# 如果需要强制关闭共享的 http client 可以采用如下方式
+# await close_shared_http_clients()
+```
+
 ### 各个平台模型服务的对接方式：
 
 #### hunyuan模型调用方式
@@ -203,6 +224,10 @@ LlmAgent(
     ),
 )
 ```
+
+#### 高级用法
+
+从版本 `1.1.10`之后 AnthropicModel 支持传入共享的 http client 来解决连接复用的场景，当前的 OpenAIModel 默认每次都会创建临时的 http client 去访问模型服务；参考：OpenAIModel 章节中的高级用法
 
 ## LiteLLMModel
 随着多个大模型供应商的出现，一些供应商定义了各自的 API 规范。目前，框架已接入 OpenAI 和 Anthropic 的 API（如上文所述），然而，不同供应商在实例化方式和配置项上存在差异，开发者在切换供应商时往往需要修改大量代码，增加了切换成本。

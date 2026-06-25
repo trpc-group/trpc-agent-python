@@ -38,6 +38,9 @@ from . import _constants as const
 from ._llm_model import LLMModel
 from ._llm_request import LlmRequest
 from ._llm_response import LlmResponse
+from ._httpx_client import BaseHttpClientProvider
+from ._httpx_client import HttpClientProviderFactory
+from ._httpx_client import shared_http_client_provider_factory
 from ._registry import register_model
 
 _EPHEMERAL = "ephemeral"
@@ -154,29 +157,36 @@ class AnthropicModel(LLMModel):
         model_name: str,
         filters_name: Optional[list[str]] = None,
         generate_content_config: Optional[GenerateContentConfig] = None,
+        http_client_provider_factory: HttpClientProviderFactory = shared_http_client_provider_factory,
         **kwargs,
     ):
         super().__init__(model_name, filters_name, **kwargs)
 
         # Extract Anthropic-specific config
         self.client_args = kwargs.get(const.CLIENT_ARGS, {})
-
+        # Allow callers to inject a tuned httpx client so the underlying openai.AsyncOpenAI honors connection-pool
+        # settings such as keepalive_expiry / max_keepalive_connections (avoids reusing stale
+        # keep-alive sockets that gateways close earlier than httpx).
+        http_client_provider_factory = http_client_provider_factory or shared_http_client_provider_factory
+        self._http_client_provider: BaseHttpClientProvider = http_client_provider_factory()
         # Default generation config that can be overridden per request
         self.generate_content_config = generate_content_config
 
-    def _create_async_client(self):
+    def _create_async_client(self) -> AsyncAnthropic:
         """Create a new async client instance."""
 
         # Disable httpx logging to prevent HTTP request logs
         import logging
 
         logging.getLogger("httpx").setLevel(logging.WARNING)
+        client_args = self.client_args.copy()
+        client_args['http_client'] = self._http_client_provider.create_http_client()
 
         return AsyncAnthropic(
             api_key=self._api_key,
             max_retries=0,  # disable retries
             base_url=self._base_url if self._base_url else None,
-            **self.client_args,
+            **client_args,
         )
 
     def is_retriable_status_code(self, status_code: int) -> Optional[bool]:
@@ -555,7 +565,7 @@ class AnthropicModel(LLMModel):
             response = await client.messages.create(**api_params)
             return self._message_to_llm_response(response)
         finally:
-            await client.close()
+            await self._http_client_provider.close_http_client(client)
 
     async def _generate_stream(
         self,
@@ -683,7 +693,7 @@ class AnthropicModel(LLMModel):
             logger.error("Error in streaming response", exc_info=True)
             raise
         finally:
-            await client.close()
+            await self._http_client_provider.close_http_client(client)
 
     def _apply_prompt_cache(self, api_params: Dict[str, Any], ctx: InvocationContext | None) -> None:
         """Inject Anthropic native cache_control breakpoints (opt-in, no-op when disabled)."""
