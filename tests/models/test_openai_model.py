@@ -625,6 +625,103 @@ class TestOpenAIModel:
             # Should have multiple partial responses plus final response
             assert len(responses) > 1
 
+    async def test_generate_async_streaming_preserves_text_with_native_tool_call(self):
+        """Final streaming response keeps regular text alongside native tool calls."""
+        model = OpenAIModel(model_name="gpt-4", api_key="test_key")
+        content = Content(parts=[Part.from_text(text="What's the weather?")], role="user")
+        request = LlmRequest(contents=[content], config=None, tools_dict={})
+        text_chunk = Mock()
+        text_chunk.model_dump.return_value = {
+            "choices": [{
+                "delta": {
+                    "content": "I'll check the weather first."
+                },
+                "finish_reason": None,
+                "index": 0,
+            }],
+            "usage": None,
+        }
+        tool_chunk = Mock()
+        tool_chunk.model_dump.return_value = {
+            "choices": [{
+                "delta": {
+                    "tool_calls": [{
+                        "index": 0,
+                        "id": "call_weather",
+                        "type": "function",
+                        "function": {
+                            "name": "get_weather",
+                            "arguments": '{"city": "Beijing"}',
+                        },
+                    }]
+                },
+                "finish_reason": "tool_calls",
+                "index": 0,
+            }],
+            "usage": None,
+        }
+        async def mock_stream():
+            yield text_chunk
+            yield tool_chunk
+        with patch.object(model, '_create_async_client') as mock_client_factory:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_stream())
+            mock_client.close = AsyncMock()
+            mock_client_factory.return_value = mock_client
+            responses = []
+            async for response in model.generate_async(request, stream=True):
+                responses.append(response)
+        final_response = responses[-1]
+        assert final_response.partial is False
+        assert final_response.content is not None
+        text_parts = [part.text for part in final_response.content.parts if part.text]
+        function_parts = [part.function_call for part in final_response.content.parts if part.function_call]
+        assert text_parts == ["I'll check the weather first."]
+        assert len(function_parts) == 1
+        assert function_parts[0].name == "get_weather"
+        assert function_parts[0].args == {"city": "Beijing"}
+
+    @pytest.mark.asyncio
+    async def test_generate_async_streaming_suppresses_tool_prompt_markup_but_keeps_visible_text(self):
+        """Provider tool-prompt markup is hidden from final text while visible text is preserved."""
+        model = OpenAIModel(model_name="hy3-preview", api_key="test_key", add_tools_to_prompt=True)
+        content = Content(parts=[Part.from_text(text="What's the weather?")], role="user")
+        request = LlmRequest(contents=[content], config=None, tools_dict={})
+        tool_prompt_chunk = Mock()
+        tool_prompt_chunk.model_dump.return_value = {
+            "choices": [{
+                "delta": {
+                    "content": ("I'll check the weather first. "
+                                "<tool_call>get_weather<tool_sep>"
+                                "<arg_key>city</arg_key><arg_value>Beijing</arg_value>"
+                                "</tool_call>")
+                },
+                "finish_reason": "stop",
+                "index": 0,
+            }],
+            "usage": None,
+        }
+        async def mock_stream():
+            yield tool_prompt_chunk
+        with patch.object(model, '_create_async_client') as mock_client_factory:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_stream())
+            mock_client.close = AsyncMock()
+            mock_client_factory.return_value = mock_client
+            responses = []
+            async for response in model.generate_async(request, stream=True):
+                responses.append(response)
+        final_response = responses[-1]
+        assert final_response.partial is False
+        assert final_response.content is not None
+        text = "".join(part.text for part in final_response.content.parts if part.text)
+        function_parts = [part.function_call for part in final_response.content.parts if part.function_call]
+        assert text == "I'll check the weather first. "
+        assert "<tool_call>" not in text
+        assert len(function_parts) == 1
+        assert function_parts[0].name == "get_weather"
+        assert function_parts[0].args == {"city": "Beijing"}
+
     @pytest.mark.asyncio
     async def test_generate_async_error_handling(self):
         """Test generate_async handles API errors gracefully."""

@@ -1548,6 +1548,7 @@ class OpenAIModel(LLMModel):
             http_options = {}
         thought_content = ""
         accumulated_content = ""
+        visible_content = ""
         last_usage = None
         accumulated_tool_calls: list[dict] = []
         is_thinking = False  # Track whether we're currently in thinking mode
@@ -1668,6 +1669,8 @@ class OpenAIModel(LLMModel):
                             partial_text = self._adapter.filter_streaming_text(content, content_filter_state)
                         if not partial_text:
                             continue
+                        if not is_thinking:
+                            visible_content += partial_text
 
                         # Set thought flag based on current thinking state
                         content_part = Part.from_text(text=partial_text)
@@ -1700,6 +1703,8 @@ class OpenAIModel(LLMModel):
 
                 flushed_content_text = self._adapter.flush_streaming_text(streaming_text_filter_state["content"])
                 if flushed_content_text:
+                    if not is_thinking:
+                        visible_content += flushed_content_text
                     content_part = Part.from_text(text=flushed_content_text)
                     content_part.thought = is_thinking
                     partial_content = Content(parts=[content_part], role=const.MODEL)
@@ -1739,9 +1744,12 @@ class OpenAIModel(LLMModel):
                     logger.warning("Failed to parse function calls from final accumulated content: %s", ex)
 
             # Add text content if present
-            if accumulated_content and not complete_tool_calls:
-                logger.debug("Final accumulated regular content: %s...", accumulated_content[:200])
-                content_part = Part.from_text(text=accumulated_content)
+            final_text_content = accumulated_content
+            if complete_tool_calls and self._adapter.should_suppress_tool_prompt_text():
+                final_text_content = visible_content
+            if final_text_content:
+                logger.debug("Final accumulated regular content: %s...", final_text_content[:200])
+                content_part = Part.from_text(text=final_text_content)
                 content_part.thought = False  # Final accumulated content represents the answer, not thinking
                 parts.append(content_part)
 
