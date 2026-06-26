@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.1.11](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.11) (2026-06-26)
+
+### Features
+
+* Model: Added SDK-managed model retry support for `OpenAIModel`, `AnthropicModel`, and `LiteLLMModel`, including `ModelRetryConfig`, `ExponentialBackoffConfig`, provider-aware retry decisions from headers / HTTP status / SDK exceptions, `Retry-After` and `retry-after-ms` handling, and full-jitter exponential backoff. Streaming retries are guarded so the SDK only replays a model call before any user-visible content has been emitted, avoiding duplicated partial text or tool calls.
+* Model: Refactored HTTP client lifecycle management around `http_client_provider_factory`, adding explicit temporary and shared HTTP client providers plus `close_shared_http_clients()` so callers can choose per-request clients by default or opt in to connection reuse with bounded `httpx.AsyncClient` pooling. OpenAI and Anthropic model tests and documentation were updated to cover provider-owned client injection and cleanup behavior.
+* Tools: Added a Claude Code-style `TodoWriteTool` that lets agents maintain a structured todo list in branch-scoped session state, with validation for complete-list replacement, unique items, and at most one `in_progress` item. Added examples for normal todo usage and human-in-the-loop todo workflows.
+* Tools: Added `TaskToolSet` with `task_create`, `task_update`, `task_get`, and `task_list` tools, providing persistent structured task boards with server-assigned task ids, status updates, dependency edges, and single-in-progress enforcement. Added task tool examples and unit coverage for task lifecycle behavior.
+* Skill: Added `LinkSkillStager` and renamed the file-system stager module from copy-oriented naming to file-oriented naming, allowing skills to be staged into workspaces through links while preserving the shared workspace directories required by code execution and skill artifacts.
+* Skill: Added cached filesystem skill repositories via `CachedFsSkillRepository` and `use_cached_repository=True` in `create_default_skill_repository()`, caching `SKILL.md` front matter and body by file signature to reduce repeated skill scanning and loading overhead while still invalidating entries when files change or are deleted.
+* Code Execution: Extended workspace staging and runtime metadata to support link-mode staging, explicit workspace stage options, TTY flags, and `work/inputs` layout initialization so skill-provided files can be prepared before skill loading and code execution steps run.
+* Examples/Docs: Added runnable examples and documentation for model retry, todo tools, task tools, shared HTTP client configuration, skill link staging, cached skill repositories, and tool usage updates across English and Chinese docs.
+
+### Bug Fixes
+
+* Model: Fixed loss of normal assistant text when a streaming OpenAI-compatible response contains both text and a tool call. The final non-partial response now keeps user-visible text while still converting parsed tool calls into structured `function_call` parts, preventing text that appeared in the stream from being dropped from session history and later model context.
+* Model: Updated LiteLLM retry and error handling so normalized LiteLLM exception headers and status codes participate in the same retry decisions as OpenAI and Anthropic, and so failures after partial streaming output are surfaced as final errors instead of replayed.
+* Skill: Ensured workspace layout creates `work/inputs` up front, avoiding races where code or skill commands attempt to copy input files before `skill_load` has linked or initialized the input directory.
+* Telemetry: Updated model metrics reporting to align with the retry wrapper and renamed metric attributes so model calls report consistent retry-aware execution data.
+
 ## [1.1.10](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.10) (2026-06-18)
 
 ### Bug Fixes
