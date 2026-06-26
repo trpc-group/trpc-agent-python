@@ -470,5 +470,5 @@ class TestBaseSkillRepositoryAbstract:
                 return None
 
         repo = _Repo(workspace_runtime=MagicMock())
-        result = BaseSkillRepository.skill_run_env(repo, "skill")
+        result = repo.skill_run_env("skill")
         assert result == {}

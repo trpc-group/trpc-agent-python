@@ -770,7 +770,7 @@ class SkillRunTool(BaseTool):
         # Inject skill-specific env from repository (e.g. api_key → primary_env)
         repository = self._get_repository(ctx)
         try:
-            skill_env: dict[str, str] = repository.skill_run_env(ctx, input_data.skill)
+            skill_env: dict[str, str] = repository.skill_run_env(input_data.skill)
             for k, v in skill_env.items():
                 k = k.strip()
                 if not k or not v.strip():
