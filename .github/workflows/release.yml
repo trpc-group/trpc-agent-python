@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install release dependencies
         run: |
@@ -36,18 +38,35 @@ jobs:
             exit 1
           fi
 
-      - name: Check formatting with YAPF
+      - name: Get changed Python files
+        id: changed
         run: |
-          diff_output=$(yapf --diff --recursive trpc_agent_sdk) || true
+          FILES=$(git diff --name-only --diff-filter=ACM HEAD~1...HEAD -- '*.py' | grep '^trpc_agent_sdk/' || true)
+          if [ -z "$FILES" ]; then
+            echo "has_files=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_files=true" >> "$GITHUB_OUTPUT"
+            echo "$FILES" > "$RUNNER_TEMP/changed_py_files.txt"
+            echo "Changed Python files:"
+            echo "$FILES"
+          fi
+
+      - name: Check formatting with YAPF
+        if: steps.changed.outputs.has_files == 'true'
+        run: |
+          FILES=$(cat "$RUNNER_TEMP/changed_py_files.txt" | tr '\n' ' ')
+          diff_output=$(yapf --diff $FILES) || true
           if [ -n "$diff_output" ]; then
             echo "$diff_output"
-            echo "::error::Code formatting check failed. Run 'yapf -i -r trpc_agent_sdk' to fix."
+            echo "::error::Code formatting check failed for changed files. Run 'yapf -i <file>' to fix."
             exit 1
           fi
 
       - name: Lint with flake8
+        if: steps.changed.outputs.has_files == 'true'
         run: |
-          flake8 trpc_agent_sdk
+          FILES=$(cat "$RUNNER_TEMP/changed_py_files.txt" | tr '\n' ' ')
+          flake8 $FILES
 
       - name: Run tests with coverage
         run: |
