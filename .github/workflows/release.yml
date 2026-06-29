@@ -5,13 +5,10 @@ on:
       - 'v*'
       - 'test/v*'
 
-# 同一个workflow + ref 只跑一份
-# 如果一个tag的release已经在跑了，再来一个同组任务不会取消当前任务，保持发版不会中断
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
-# 只读权限
 permissions:
   contents: read
 
@@ -23,14 +20,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 安装发布依赖
       - name: Install release dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-test.txt
           pip install build twine flake8 yapf
 
-      # 验证tag版本和包版本是否一致
       - name: Validate tag version
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#test/v}"
@@ -41,7 +36,6 @@ jobs:
             exit 1
           fi
 
-      # 检查整个release内容的代码格式
       - name: Check formatting with YAPF
         run: |
           diff_output=$(yapf --diff --recursive trpc_agent_sdk) || true
@@ -51,27 +45,22 @@ jobs:
             exit 1
           fi
 
-      # 检查整个release内容的代码风格
       - name: Lint with flake8
         run: |
           flake8 trpc_agent_sdk
 
-      # 运行测试  
       - name: Run tests with coverage
         run: |
           pytest --cov=trpc_agent_sdk --cov-report=xml --cov-report=term --cov-fail-under=80 tests/
 
-      # 打包
       - name: Build package
         run: |
           python -m build
 
-      # 检查打包结果  
       - name: Check package
         run: |
           twine check dist/*
 
-      # 发布到PyPI
       - name: Publish to PyPI
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
