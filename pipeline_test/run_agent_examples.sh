@@ -5,8 +5,6 @@ set -euo pipefail
 export DISABLE_TRPC_AGENT_REPORT="${DISABLE_TRPC_AGENT_REPORT:-true}"
 
 CORE_AGENT_EXAMPLES=(
-    "examples/quickstart/"
-    "examples/llmagent/"
     "examples/llmagent_with_schema/"
 )
 
@@ -94,7 +92,7 @@ show_usage() {
     echo "Usage: $0 [core|graph|multi_agent|team_agent|all]"
     echo ""
     echo "Suites:"
-    echo "  core         Run quickstart and basic LlmAgent examples."
+    echo "  core         Run one basic LlmAgent example that calls the configured model."
     echo "  graph        Run the minimal GraphAgent example."
     echo "  multi_agent  Run basic multi-agent orchestration examples."
     echo "  team_agent   Run basic TeamAgent examples."

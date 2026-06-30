@@ -31,6 +31,9 @@ jobs:
     timeout-minutes: 45
     env:
       DISABLE_TRPC_AGENT_REPORT: true
+      OTEL_SDK_DISABLED: true
+      OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
       TRPC_AGENT_API_KEY: ${{ secrets.TRPC_AGENT_API_KEY }}
       TRPC_AGENT_BASE_URL: http://03-llm.woa.com/glm5/v1
       TRPC_AGENT_MODEL_NAME: glm-5.0-w4afp8
