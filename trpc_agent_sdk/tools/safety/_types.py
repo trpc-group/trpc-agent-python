@@ -69,7 +69,8 @@ class SafetyPolicy(BaseModel):
     block_on_review: bool = True
     allowed_domains: list[str] = Field(default_factory=list)
     allowed_commands: list[str] = Field(default_factory=list)
-    denied_paths: list[str] = Field(default_factory=lambda: ["~/.ssh", ".env", "/etc", "/var/secrets"])
+    denied_paths: list[str] = Field(
+        default_factory=lambda: ["~/.ssh", ".env", "/etc", "/var/secrets"])
     max_timeout_seconds: int = 300
     max_output_bytes: int = 10_000
     audit_log_path: Optional[str] = "tool_safety_audit.jsonl"
@@ -124,4 +125,3 @@ class SafetyAuditEvent(BaseModel):
     language: ScriptLanguage = ScriptLanguage.UNKNOWN
     cwd: str = ""
     metadata: dict[str, Any] = Field(default_factory=dict)
-
