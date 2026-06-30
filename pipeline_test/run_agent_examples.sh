@@ -5,7 +5,7 @@ set -euo pipefail
 export DISABLE_TRPC_AGENT_REPORT="${DISABLE_TRPC_AGENT_REPORT:-true}"
 
 CORE_AGENT_EXAMPLES=(
-    "examples/llmagent_with_schema/"
+    "examples/quickstart/"
 )
 
 GRAPH_EXAMPLES=(
