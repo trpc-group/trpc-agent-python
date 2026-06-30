@@ -1,0 +1,47 @@
+{
+  "mode": "fake",
+  "seed": 42,
+  "inputs": {
+    "train_evalset": "train.evalset.json",
+    "val_evalset": "val.evalset.json",
+    "case_meta": "case_meta.json"
+  },
+  "target_prompt": {
+    "name": "support_assistant_system",
+    "path": "prompts/system.md",
+    "kind": "system_prompt"
+  },
+  "evaluate": {
+    "fake_model": true,
+    "fake_judge": true,
+    "trace_mode": true,
+    "pass_threshold": 0.8,
+    "metrics": [
+      {"name": "final_response", "weight": 0.45, "threshold": 0.8},
+      {"name": "tool_trajectory", "weight": 0.35, "threshold": 0.8},
+      {"name": "rubric", "weight": 0.20, "threshold": 0.8}
+    ]
+  },
+  "optimize": {
+    "sdk_config": "optimizer.sdk.json",
+    "update_source": false,
+    "verbose": 1,
+    "fake_candidate_patch": [
+      "Optimization candidate:",
+      "- USE_CATALOG_LOOKUP: use lookup_order for order status and search_policy for policy/warranty questions before answering.",
+      "- AGGRESSIVE_LOOKUP: when uncertain, prefer looking up supporting data even for short or already-answerable requests."
+    ]
+  },
+  "gate": {
+    "min_val_score_gain": 0.1,
+    "reject_on_new_hard_fail": true,
+    "hard_fail_threshold": 0.6,
+    "reject_on_critical_regression": true,
+    "reject_overfit_train_up_val_down": true,
+    "max_cost_usd": 0.05
+  },
+  "audit": {
+    "record_case_traces": true,
+    "record_prompt_snapshots": true
+  }
+}

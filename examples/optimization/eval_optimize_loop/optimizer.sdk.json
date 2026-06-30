@@ -1,0 +1,70 @@
+{
+  "_comment": "SDK-format config consumed only by AgentOptimizer.optimize in live mode. Tool-trajectory metrics are intentionally excluded because call_agent mode returns final text, not full session traces.",
+  "evaluate": {
+    "metrics": [
+      {
+        "metric_name": "final_response_avg_score",
+        "threshold": 0.6,
+        "criterion": {
+          "final_response": {
+            "text": {"match": "contains", "case_insensitive": true}
+          }
+        }
+      },
+      {
+        "metric_name": "llm_rubric_response",
+        "threshold": 0.66,
+        "criterion": {
+          "llm_judge": {
+            "judge_model": {
+              "model_name": "${TRPC_AGENT_MODEL_NAME}",
+              "base_url": "${TRPC_AGENT_BASE_URL}",
+              "api_key": "${TRPC_AGENT_API_KEY}",
+              "num_samples": 1,
+              "generation_config": {"max_tokens": 1024, "temperature": 0.2}
+            },
+            "rubrics": [
+              {
+                "id": "answers_with_evidence",
+                "content": {
+                  "text": "The answer directly satisfies the user request and uses available support data instead of guessing when order, refund, or warranty facts are needed."
+                },
+                "description": "Direct answer grounded in available support data",
+                "type": "FINAL_RESPONSE_QUALITY"
+              },
+              {
+                "id": "concise_and_actionable",
+                "content": {
+                  "text": "The answer is concise, actionable, and avoids unnecessary extra explanation."
+                },
+                "description": "Concise actionable response",
+                "type": "FINAL_RESPONSE_QUALITY"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "num_runs": 1
+  },
+  "optimize": {
+    "eval_case_parallelism": 2,
+    "stop": {"required_metrics": "all"},
+    "algorithm": {
+      "name": "gepa_reflective",
+      "seed": 42,
+      "reflection_lm": {
+        "model_name": "${TRPC_AGENT_MODEL_NAME}",
+        "base_url": "${TRPC_AGENT_BASE_URL}",
+        "api_key": "${TRPC_AGENT_API_KEY}",
+        "generation_config": {"max_tokens": 4096, "temperature": 0.6}
+      },
+      "candidate_selection_strategy": "pareto",
+      "module_selector": "round_robin",
+      "reflection_minibatch_size": 3,
+      "skip_perfect_score": false,
+      "max_metric_calls": 60,
+      "max_iterations_without_improvement": 8
+    }
+  }
+}

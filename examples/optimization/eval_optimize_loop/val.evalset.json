@@ -1,0 +1,83 @@
+{
+  "eval_set_id": "eval_optimize_loop_val",
+  "name": "Evaluation optimization loop validation set",
+  "description": "Three validation cases: one new pass, one hard regression, and one soft degradation.",
+  "eval_cases": [
+    {
+      "eval_id": "val_warranty_new_pass",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "invocation_id": "actual-1",
+          "user_content": {"role": "user", "parts": [{"text": "What is the warranty period for Model Z?"}]},
+          "final_response": {"role": "model", "parts": [{"text": "I am not sure about the Model Z warranty."}]},
+          "intermediate_data": {
+            "tool_uses": [
+              {"id": "tool-1", "name": "web_search", "args": {"query": "Model Z warranty"}}
+            ]
+          }
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "expected-1",
+          "user_content": {"role": "user", "parts": [{"text": "What is the warranty period for Model Z?"}]},
+          "final_response": {"role": "model", "parts": [{"text": "24-month warranty"}]},
+          "intermediate_data": {
+            "tool_uses": [
+              {"id": "tool-1", "name": "search_policy", "args": {"topic": "Model Z warranty"}}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "val_smalltalk_regression",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "invocation_id": "actual-2",
+          "user_content": {"role": "user", "parts": [{"text": "Thanks"}]},
+          "final_response": {"role": "model", "parts": [{"text": "You are welcome."}]},
+          "intermediate_data": {"tool_uses": []}
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "expected-2",
+          "user_content": {"role": "user", "parts": [{"text": "Thanks"}]},
+          "final_response": {"role": "model", "parts": [{"text": "welcome"}]},
+          "intermediate_data": {"tool_uses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "val_order_soft_degradation",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "invocation_id": "actual-3",
+          "user_content": {"role": "user", "parts": [{"text": "Check order A200."}]},
+          "final_response": {"role": "model", "parts": [{"text": "Order A200 is delivered."}]},
+          "intermediate_data": {
+            "tool_uses": [
+              {"id": "tool-1", "name": "lookup_order", "args": {"order_id": "A200"}}
+            ]
+          }
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "expected-3",
+          "user_content": {"role": "user", "parts": [{"text": "Check order A200."}]},
+          "final_response": {"role": "model", "parts": [{"text": "delivered"}]},
+          "intermediate_data": {
+            "tool_uses": [
+              {"id": "tool-1", "name": "lookup_order", "args": {"order_id": "A200"}}
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

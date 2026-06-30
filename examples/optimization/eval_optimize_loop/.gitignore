@@ -1,0 +1,5 @@
+# Runtime side-effects (regenerated on every run); the audited report and the
+# runs/latest prompt snapshots are kept in VCS as example deliverables.
+__pycache__/
+_sdk_eval_metrics.json
+runs/latest/agent_optimizer/

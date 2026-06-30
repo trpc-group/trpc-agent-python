@@ -1,0 +1,660 @@
+{
+  "run": {
+    "timestamp": "2026-06-30T14:58:30.101980+00:00",
+    "mode": "fake",
+    "seed": 42,
+    "sdk_bridge": {
+      "agent_evaluator_available": true,
+      "agent_optimizer_available": true,
+      "evalset_validated_with_trpc_sdk": true,
+      "sdk_import_error": null,
+      "agent_evaluator_trace_runs": {
+        "train": {
+          "status": "FAILED_EXPECTED",
+          "reason": "[\n  {\n    \"evalSetId\": \"eval_optimize_loop_train\",\n    \"summary\": {\n      \"agentName\": \"trace-only\",\n      \"evalSetId\": \"eval_optimize_loop_train\",\n      \"overallStatus\": \"failed\",\n      \"runs\": 1,\n      \"evalCases\": [\n        {\n          \"evalCaseId\": \"train_json_format_ineffective\",\n          \"overallStatus\": \"failed\",\n          \"metricResults\": [\n            {\n              \"metricName\": \"final_response_avg_score\",\n              \"score\": 0.0,\n              \"threshold\": 0.1,\n              \"eva",
+          "evalset": "train.evalset.json",
+          "has_result": true,
+          "metrics_file": "_sdk_eval_metrics.json"
+        },
+        "val": {
+          "status": "FAILED_EXPECTED",
+          "reason": "[\n  {\n    \"evalSetId\": \"eval_optimize_loop_val\",\n    \"summary\": {\n      \"agentName\": \"trace-only\",\n      \"evalSetId\": \"eval_optimize_loop_val\",\n      \"overallStatus\": \"failed\",\n      \"runs\": 1,\n      \"evalCases\": [\n        {\n          \"evalCaseId\": \"val_order_soft_degradation\",\n          \"overallStatus\": \"passed\",\n          \"metricResults\": [\n            {\n              \"metricName\": \"final_response_avg_score\",\n              \"score\": 1.0,\n              \"threshold\": 0.1,\n              \"evalStatus",
+          "evalset": "val.evalset.json",
+          "has_result": true,
+          "metrics_file": "_sdk_eval_metrics.json"
+        }
+      }
+    },
+    "repro": {
+      "train_evalset": "train.evalset.json",
+      "val_evalset": "val.evalset.json",
+      "case_meta": "case_meta.json",
+      "prompt_source": "prompts/system.md",
+      "optimizer_config": "optimizer.json",
+      "sdk_optimizer_config": "optimizer.sdk.json"
+    }
+  },
+  "prompt_audit": {
+    "target": {
+      "name": "support_assistant_system",
+      "path": "prompts/system.md",
+      "kind": "system_prompt"
+    },
+    "baseline_sha256": "30b490452eeb916fd25950797f0cbe1f9bac2a7b9f738775365c066b43924b88",
+    "candidate_sha256": "5d3271e9ab855a1bdf0d6af54e6f8521d35a4bd5727e89d632486f826f5f52b9",
+    "baseline_snapshot": "runs/latest/baseline_prompt.md",
+    "candidate_snapshot": "runs/latest/candidate_prompt.md"
+  },
+  "baseline": {
+    "train": {
+      "eval_set_id": "eval_optimize_loop_train",
+      "mean_score": 0.25,
+      "pass_rate": 0.0,
+      "cases": {
+        "train_order_lookup_optimizable": {
+          "case_id": "train_order_lookup_optimizable",
+          "score": 0.2,
+          "passed": false,
+          "hard_fail": true,
+          "key": false,
+          "metrics": {
+            "final_response": 0.0,
+            "tool_trajectory": 0.0,
+            "rubric": 1.0
+          },
+          "failure_types": [
+            "final_response_mismatch",
+            "tool_call_error"
+          ],
+          "reason": "final_response_mismatch; tool_call_error",
+          "trace": {
+            "query": "What is the shipping status for order A100?",
+            "expected_text": "in transit",
+            "actual_text": "I do not have enough order data.",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "lookup_order",
+                "args": {
+                  "order_id": "A100"
+                }
+              }
+            ],
+            "actual_tools": []
+          }
+        },
+        "train_refund_policy_optimizable": {
+          "case_id": "train_refund_policy_optimizable",
+          "score": 0.2,
+          "passed": false,
+          "hard_fail": true,
+          "key": false,
+          "metrics": {
+            "final_response": 0.0,
+            "tool_trajectory": 0.0,
+            "rubric": 1.0
+          },
+          "failure_types": [
+            "final_response_mismatch",
+            "knowledge_recall_insufficient"
+          ],
+          "reason": "final_response_mismatch; knowledge_recall_insufficient",
+          "trace": {
+            "query": "What is the refund policy for damaged items?",
+            "expected_text": "full refund within 30 days",
+            "actual_text": "You may be eligible, but I cannot confirm the policy.",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "search_policy",
+                "args": {
+                  "topic": "damaged item refund"
+                }
+              }
+            ],
+            "actual_tools": []
+          }
+        },
+        "train_json_format_ineffective": {
+          "case_id": "train_json_format_ineffective",
+          "score": 0.35,
+          "passed": false,
+          "hard_fail": true,
+          "key": false,
+          "metrics": {
+            "final_response": 0.0,
+            "tool_trajectory": 1.0,
+            "rubric": 0.0
+          },
+          "failure_types": [
+            "final_response_mismatch",
+            "format_error"
+          ],
+          "reason": "final_response_mismatch; format_error",
+          "trace": {
+            "query": "Return only JSON: status ok",
+            "expected_text": "{\"status\":\"ok\"}",
+            "actual_text": "status ok",
+            "expected_tools": [],
+            "actual_tools": []
+          }
+        }
+      }
+    },
+    "val": {
+      "eval_set_id": "eval_optimize_loop_val",
+      "mean_score": 0.7333,
+      "pass_rate": 0.6667,
+      "cases": {
+        "val_warranty_new_pass": {
+          "case_id": "val_warranty_new_pass",
+          "score": 0.2,
+          "passed": false,
+          "hard_fail": true,
+          "key": false,
+          "metrics": {
+            "final_response": 0.0,
+            "tool_trajectory": 0.0,
+            "rubric": 1.0
+          },
+          "failure_types": [
+            "final_response_mismatch",
+            "knowledge_recall_insufficient"
+          ],
+          "reason": "final_response_mismatch; knowledge_recall_insufficient",
+          "trace": {
+            "query": "What is the warranty period for Model Z?",
+            "expected_text": "24-month warranty",
+            "actual_text": "I am not sure about the Model Z warranty.",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "search_policy",
+                "args": {
+                  "topic": "Model Z warranty"
+                }
+              }
+            ],
+            "actual_tools": [
+              {
+                "name": "web_search",
+                "args": {
+                  "query": "Model Z warranty"
+                }
+              }
+            ]
+          }
+        },
+        "val_smalltalk_regression": {
+          "case_id": "val_smalltalk_regression",
+          "score": 1.0,
+          "passed": true,
+          "hard_fail": false,
+          "key": true,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 1.0,
+            "rubric": 1.0
+          },
+          "failure_types": [],
+          "reason": "pass",
+          "trace": {
+            "query": "Thanks",
+            "expected_text": "welcome",
+            "actual_text": "You are welcome.",
+            "expected_tools": [],
+            "actual_tools": []
+          }
+        },
+        "val_order_soft_degradation": {
+          "case_id": "val_order_soft_degradation",
+          "score": 1.0,
+          "passed": true,
+          "hard_fail": false,
+          "key": true,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 1.0,
+            "rubric": 1.0
+          },
+          "failure_types": [],
+          "reason": "pass",
+          "trace": {
+            "query": "Check order A200.",
+            "expected_text": "delivered",
+            "actual_text": "Order A200 is delivered.",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "lookup_order",
+                "args": {
+                  "order_id": "A200"
+                }
+              }
+            ],
+            "actual_tools": [
+              {
+                "name": "lookup_order",
+                "args": {
+                  "order_id": "A200"
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "candidate": {
+    "train": {
+      "eval_set_id": "eval_optimize_loop_train",
+      "mean_score": 0.7833,
+      "pass_rate": 0.6667,
+      "cases": {
+        "train_order_lookup_optimizable": {
+          "case_id": "train_order_lookup_optimizable",
+          "score": 1.0,
+          "passed": true,
+          "hard_fail": false,
+          "key": false,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 1.0,
+            "rubric": 1.0
+          },
+          "failure_types": [],
+          "reason": "pass",
+          "trace": {
+            "query": "What is the shipping status for order A100?",
+            "expected_text": "in transit",
+            "actual_text": "Order A100 is in transit and arrives on Friday.",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "lookup_order",
+                "args": {
+                  "order_id": "A100"
+                }
+              }
+            ],
+            "actual_tools": [
+              {
+                "name": "lookup_order",
+                "args": {
+                  "order_id": "A100"
+                }
+              }
+            ]
+          }
+        },
+        "train_refund_policy_optimizable": {
+          "case_id": "train_refund_policy_optimizable",
+          "score": 1.0,
+          "passed": true,
+          "hard_fail": false,
+          "key": false,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 1.0,
+            "rubric": 1.0
+          },
+          "failure_types": [],
+          "reason": "pass",
+          "trace": {
+            "query": "What is the refund policy for damaged items?",
+            "expected_text": "full refund within 30 days",
+            "actual_text": "Damaged items are eligible for a full refund within 30 days.",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "search_policy",
+                "args": {
+                  "topic": "damaged item refund"
+                }
+              }
+            ],
+            "actual_tools": [
+              {
+                "name": "search_policy",
+                "args": {
+                  "topic": "damaged item refund"
+                }
+              }
+            ]
+          }
+        },
+        "train_json_format_ineffective": {
+          "case_id": "train_json_format_ineffective",
+          "score": 0.35,
+          "passed": false,
+          "hard_fail": true,
+          "key": false,
+          "metrics": {
+            "final_response": 0.0,
+            "tool_trajectory": 1.0,
+            "rubric": 0.0
+          },
+          "failure_types": [
+            "final_response_mismatch",
+            "format_error"
+          ],
+          "reason": "final_response_mismatch; format_error",
+          "trace": {
+            "query": "Return only JSON: status ok",
+            "expected_text": "{\"status\":\"ok\"}",
+            "actual_text": "status ok",
+            "expected_tools": [],
+            "actual_tools": []
+          }
+        }
+      }
+    },
+    "val": {
+      "eval_set_id": "eval_optimize_loop_val",
+      "mean_score": 0.6667,
+      "pass_rate": 0.3333,
+      "cases": {
+        "val_warranty_new_pass": {
+          "case_id": "val_warranty_new_pass",
+          "score": 1.0,
+          "passed": true,
+          "hard_fail": false,
+          "key": false,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 1.0,
+            "rubric": 1.0
+          },
+          "failure_types": [],
+          "reason": "pass",
+          "trace": {
+            "query": "What is the warranty period for Model Z?",
+            "expected_text": "24-month warranty",
+            "actual_text": "Model Z has a 24-month warranty.",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "search_policy",
+                "args": {
+                  "topic": "Model Z warranty"
+                }
+              }
+            ],
+            "actual_tools": [
+              {
+                "name": "search_policy",
+                "args": {
+                  "topic": "Model Z warranty"
+                }
+              }
+            ]
+          }
+        },
+        "val_smalltalk_regression": {
+          "case_id": "val_smalltalk_regression",
+          "score": 0.45,
+          "passed": false,
+          "hard_fail": true,
+          "key": true,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 0.0,
+            "rubric": 0.0
+          },
+          "failure_types": [
+            "spurious_tool_call",
+            "llm_rubric_not_met"
+          ],
+          "reason": "spurious_tool_call; llm_rubric_not_met",
+          "trace": {
+            "query": "Thanks",
+            "expected_text": "welcome",
+            "actual_text": "You are welcome.",
+            "expected_tools": [],
+            "actual_tools": [
+              {
+                "name": "search_policy",
+                "args": {
+                  "topic": "thanks"
+                }
+              }
+            ]
+          }
+        },
+        "val_order_soft_degradation": {
+          "case_id": "val_order_soft_degradation",
+          "score": 0.55,
+          "passed": false,
+          "hard_fail": true,
+          "key": true,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 0.0,
+            "rubric": 0.5
+          },
+          "failure_types": [
+            "spurious_tool_call",
+            "llm_rubric_not_met"
+          ],
+          "reason": "spurious_tool_call; llm_rubric_not_met",
+          "trace": {
+            "query": "Check order A200.",
+            "expected_text": "delivered",
+            "actual_text": "Order A200 is delivered.",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "lookup_order",
+                "args": {
+                  "order_id": "A200"
+                }
+              }
+            ],
+            "actual_tools": [
+              {
+                "name": "lookup_order",
+                "args": {
+                  "order_id": "A200"
+                }
+              },
+              {
+                "name": "search_policy",
+                "args": {
+                  "topic": "order A200"
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "delta": {
+    "train": {
+      "train_order_lookup_optimizable": {
+        "kind": "new_pass",
+        "baseline_score": 0.2,
+        "candidate_score": 1.0,
+        "delta": 0.8,
+        "baseline_passed": false,
+        "candidate_passed": true
+      },
+      "train_refund_policy_optimizable": {
+        "kind": "new_pass",
+        "baseline_score": 0.2,
+        "candidate_score": 1.0,
+        "delta": 0.8,
+        "baseline_passed": false,
+        "candidate_passed": true
+      },
+      "train_json_format_ineffective": {
+        "kind": "same",
+        "baseline_score": 0.35,
+        "candidate_score": 0.35,
+        "delta": 0.0,
+        "baseline_passed": false,
+        "candidate_passed": false
+      }
+    },
+    "val": {
+      "val_warranty_new_pass": {
+        "kind": "new_pass",
+        "baseline_score": 0.2,
+        "candidate_score": 1.0,
+        "delta": 0.8,
+        "baseline_passed": false,
+        "candidate_passed": true
+      },
+      "val_smalltalk_regression": {
+        "kind": "new_fail",
+        "baseline_score": 1.0,
+        "candidate_score": 0.45,
+        "delta": -0.55,
+        "baseline_passed": true,
+        "candidate_passed": false
+      },
+      "val_order_soft_degradation": {
+        "kind": "new_fail",
+        "baseline_score": 1.0,
+        "candidate_score": 0.55,
+        "delta": -0.45,
+        "baseline_passed": true,
+        "candidate_passed": false
+      }
+    }
+  },
+  "failure_attribution": {
+    "counts": {
+      "final_response_mismatch": 4,
+      "tool_call_error": 1,
+      "knowledge_recall_insufficient": 2,
+      "format_error": 1
+    },
+    "by_case": {
+      "train_order_lookup_optimizable": [
+        "final_response_mismatch",
+        "tool_call_error"
+      ],
+      "train_refund_policy_optimizable": [
+        "final_response_mismatch",
+        "knowledge_recall_insufficient"
+      ],
+      "train_json_format_ineffective": [
+        "final_response_mismatch",
+        "format_error"
+      ],
+      "val_warranty_new_pass": [
+        "final_response_mismatch",
+        "knowledge_recall_insufficient"
+      ]
+    }
+  },
+  "optimizer": {
+    "mode": "fake",
+    "status": "SCRIPTED_CANDIDATE",
+    "agent_optimizer_available": true,
+    "agent_optimizer_invoked": false,
+    "candidate_prompt_path": "runs/latest/candidate_prompt.md",
+    "cost_usd": 0.0,
+    "tokens": 0,
+    "rounds": 1
+  },
+  "gate": {
+    "accepted": false,
+    "decision": "REJECT",
+    "reason": "validation_gain_threshold; no_new_hard_fail; no_critical_regression; not_overfit_train_up_val_down",
+    "train_gain": 0.5333,
+    "val_gain": -0.0666,
+    "checks": [
+      {
+        "name": "validation_gain_threshold",
+        "passed": false,
+        "detail": "val_gain=-0.0666, required>=+0.1000"
+      },
+      {
+        "name": "no_new_hard_fail",
+        "passed": false,
+        "detail": "new_hard_fails=['val_smalltalk_regression', 'val_order_soft_degradation']"
+      },
+      {
+        "name": "no_critical_regression",
+        "passed": false,
+        "detail": "critical_regressions=['val_smalltalk_regression', 'val_order_soft_degradation']"
+      },
+      {
+        "name": "not_overfit_train_up_val_down",
+        "passed": false,
+        "detail": "train_gain=+0.5333, val_gain=-0.0666"
+      },
+      {
+        "name": "cost_budget",
+        "passed": true,
+        "detail": "cost_usd=0.000000, budget=0.050000"
+      }
+    ]
+  },
+  "audit": {
+    "duration_seconds": 0.0176,
+    "cost_usd": 0.0,
+    "tokens": 0,
+    "config_snapshot": {
+      "mode": "fake",
+      "seed": 42,
+      "inputs": {
+        "train_evalset": "train.evalset.json",
+        "val_evalset": "val.evalset.json",
+        "case_meta": "case_meta.json"
+      },
+      "target_prompt": {
+        "name": "support_assistant_system",
+        "path": "prompts/system.md",
+        "kind": "system_prompt"
+      },
+      "evaluate": {
+        "fake_model": true,
+        "fake_judge": true,
+        "trace_mode": true,
+        "pass_threshold": 0.8,
+        "metrics": [
+          {
+            "name": "final_response",
+            "weight": 0.45,
+            "threshold": 0.8
+          },
+          {
+            "name": "tool_trajectory",
+            "weight": 0.35,
+            "threshold": 0.8
+          },
+          {
+            "name": "rubric",
+            "weight": 0.2,
+            "threshold": 0.8
+          }
+        ]
+      },
+      "optimize": {
+        "sdk_config": "optimizer.sdk.json",
+        "update_source": false,
+        "verbose": 1,
+        "fake_candidate_patch": [
+          "Optimization candidate:",
+          "- USE_CATALOG_LOOKUP: use lookup_order for order status and search_policy for policy/warranty questions before answering.",
+          "- AGGRESSIVE_LOOKUP: when uncertain, prefer looking up supporting data even for short or already-answerable requests."
+        ]
+      },
+      "gate": {
+        "min_val_score_gain": 0.1,
+        "reject_on_new_hard_fail": true,
+        "hard_fail_threshold": 0.6,
+        "reject_on_critical_regression": true,
+        "reject_overfit_train_up_val_down": true,
+        "max_cost_usd": 0.05
+      },
+      "audit": {
+        "record_case_traces": true,
+        "record_prompt_snapshots": true
+      }
+    }
+  }
+}
