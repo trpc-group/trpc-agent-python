@@ -59,6 +59,22 @@ jobs:
           pip3 install -r requirements-test.txt
           pip3 install -r pipeline_test/requirements.txt
 
+      - name: Debug model raw response
+        run: |
+          curl -sS -w "\nHTTP_STATUS=%{http_code}\n" "$TRPC_AGENT_BASE_URL/chat/completions" \
+            -H "Authorization: Bearer $TRPC_AGENT_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "model": "'"$TRPC_AGENT_MODEL_NAME"'",
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Say hello in one short English sentence."
+                }
+              ],
+              "stream": false
+            }'
+
       - name: Run example smoke suite
         run: |
           bash pipeline_test/run_agent_examples.sh "${{ inputs.suite }}"
