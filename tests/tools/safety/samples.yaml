@@ -1,0 +1,89 @@
+- name: safe_python
+  language: python
+  expected_decision: allow
+  expected_rule_ids: []
+  content: |
+    total = sum([1, 2, 3])
+    print(total)
+- name: dangerous_delete
+  language: bash
+  expected_decision: deny
+  expected_rule_ids:
+    - FILE_RECURSIVE_DELETE
+  content: |
+    rm -rf /tmp/build-output
+- name: read_secrets
+  language: python
+  expected_decision: deny
+  expected_rule_ids:
+    - FILE_SECRET_READ
+  content: |
+    with open(".env") as f:
+        print(f.read())
+- name: network_egress
+  language: python
+  expected_decision: deny
+  expected_rule_ids:
+    - NET_NON_WHITELIST_EGRESS
+  content: |
+    import requests
+    requests.get("https://evil.example/data")
+- name: whitelist_network
+  language: bash
+  expected_decision: allow
+  expected_rule_ids: []
+  content: |
+    curl https://api.example.com/status
+- name: subprocess_call
+  language: python
+  expected_decision: needs_human_review
+  expected_rule_ids:
+    - PROC_SUBPROCESS
+  content: |
+    import subprocess
+    subprocess.run(["ls", "-la"])
+- name: shell_injection
+  language: bash
+  expected_decision: needs_human_review
+  expected_rule_ids:
+    - SHELL_INJECTION
+  content: |
+    echo $(cat user_input.txt)
+- name: dependency_install
+  language: bash
+  expected_decision: needs_human_review
+  expected_rule_ids:
+    - DEPENDENCY_INSTALL
+  content: |
+    pip install suspicious-package
+- name: infinite_loop
+  language: python
+  expected_decision: needs_human_review
+  expected_rule_ids:
+    - RESOURCE_INFINITE_LOOP
+  content: |
+    while True:
+        pass
+- name: sensitive_output
+  language: python
+  expected_decision: deny
+  expected_rule_ids:
+    - SENSITIVE_OUTPUT
+  content: |
+    api_key = "sk-test-secret-value"
+    print(api_key)
+- name: bash_pipeline
+  language: bash
+  expected_decision: needs_human_review
+  expected_rule_ids:
+    - SHELL_PIPELINE
+  content: |
+    cat access.log | grep token
+- name: human_review_mixed
+  language: python
+  expected_decision: needs_human_review
+  expected_rule_ids:
+    - NET_CLIENT_USAGE
+  content: |
+    import socket
+    socket.create_connection((host, 443))

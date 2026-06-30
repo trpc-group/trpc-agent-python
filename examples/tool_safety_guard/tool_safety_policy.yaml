@@ -1,0 +1,27 @@
+mode: standard
+fail_closed: false
+block_on_review: true
+allowed_domains:
+  - api.example.com
+  - "*.trusted.internal"
+allowed_commands:
+  - curl
+  - wget
+  - echo
+  - cat
+  - grep
+  - python
+  - python3
+  - pip
+denied_paths:
+  - "~/.ssh"
+  - ".env"
+  - "/etc"
+  - "/var/secrets"
+max_timeout_seconds: 300
+max_output_bytes: 10000
+audit_log_path: tool_safety_audit.jsonl
+rules:
+  DEPENDENCY_INSTALL:
+    enabled: true
+    decision: needs_human_review
