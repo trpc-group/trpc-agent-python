@@ -1,0 +1,14 @@
+{
+  "01_safe_compute.py": "allow",
+  "02_dangerous_delete.py": "deny",
+  "03_read_secret.py": "deny",
+  "04_network_egress.py": "deny",
+  "05_allowlisted_request.py": "allow",
+  "06_subprocess_call.py": "needs_human_review",
+  "07_shell_injection.py": "deny",
+  "08_dependency_install.py": "needs_human_review",
+  "09_infinite_loop.py": "needs_human_review",
+  "10_secret_leak_output.py": "deny",
+  "11_curl_pipe_bash.sh": "deny",
+  "12_mixed_review.py": "needs_human_review"
+}

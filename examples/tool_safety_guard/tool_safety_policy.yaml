@@ -1,0 +1,100 @@
+# Tool Script Safety Guard - example policy
+#
+# Everything in this file is hot-reloadable: editing it changes the guard's
+# behaviour with NO code changes (acceptance requirement 6). Point the guard at
+# this file via load_policy(path=...) or the TOOL_SAFETY_POLICY_PATH env var.
+
+# --------------------------------------------------------------------------- #
+# Network egress allow-list (host or sub-domain match, case-insensitive).
+# A network call to any host NOT on this list is treated as non-allow-listed
+# egress and denied. Sample #5 uses api.example.com, which is allow-listed here.
+# --------------------------------------------------------------------------- #
+allow_domains:
+  - api.example.com
+  - localhost
+  - 127.0.0.1
+
+# --------------------------------------------------------------------------- #
+# Commands considered acceptable. Bash base-commands outside this list are
+# flagged. (Dependency installers like pip/npm are handled by dedicated rules.)
+# --------------------------------------------------------------------------- #
+allowed_commands:
+  - ls
+  - pwd
+  - cat
+  - grep
+  - find
+  - head
+  - tail
+  - wc
+  - echo
+  - python
+  - python3
+  - pytest
+  - git
+
+# --------------------------------------------------------------------------- #
+# Paths that must never be read or written. Supports ~ expansion at match time.
+# --------------------------------------------------------------------------- #
+forbidden_paths:
+  - /
+  - /etc
+  - /dev
+  - /boot
+  - /sys
+  - /proc
+  - ~/.ssh
+  - ~/.aws
+  - ~/.config/gcloud
+
+# Runtime budgets surfaced in the report (enforcement itself is the sandbox's job).
+max_timeout: 300
+max_output_size: 1000000
+
+# --------------------------------------------------------------------------- #
+# Map a RiskLevel to the decision it escalates to. Retune severity here without
+# touching code. e.g. set "high: needs_human_review" to soften HIGH findings.
+# --------------------------------------------------------------------------- #
+decision_thresholds:
+  critical: deny
+  high: deny
+  medium: needs_human_review
+  low: allow
+
+# --------------------------------------------------------------------------- #
+# Which tool argument keys hold the payload, and which scanner to use.
+# Matched by case-insensitive substring against the tool name.
+# Unmatched tools fall back to scanning every string arg with shared patterns.
+# --------------------------------------------------------------------------- #
+param_keys:
+  bash:
+    keys: [command]
+    language: bash
+  shell:
+    keys: [command]
+    language: bash
+  code:
+    keys: [code, source]
+    language: python
+  python:
+    keys: [code, source]
+    language: python
+  exec:
+    keys: [code, source, command]
+    language: python
+
+# --------------------------------------------------------------------------- #
+# Evidence redaction so the audit log never leaks the secrets it caught.
+# --------------------------------------------------------------------------- #
+redact:
+  enabled: true
+  mask: "***REDACTED***"
+  patterns: []
+
+# --------------------------------------------------------------------------- #
+# Bounds that keep the scanner itself safe (ReDoS / memory). Clamped to hard
+# internal ceilings regardless of the values here.
+# --------------------------------------------------------------------------- #
+scan_limits:
+  max_input_size: 1000000
+  max_line_length: 4000
