@@ -1,6 +1,9 @@
 name: Example Pipeline Tests
 
 on:
+  push:
+    branches:
+      - dev/release-workflow
   workflow_dispatch:
     inputs:
       suite:
