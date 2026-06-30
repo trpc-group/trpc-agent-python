@@ -1,63 +1,63 @@
 {
   "eval_set_id": "eval_optimize_loop_train",
   "name": "Evaluation optimization loop train set",
-  "description": "Three trace-mode training cases: two optimizable failures and one intentionally ineffective optimization case.",
+  "description": "Three training cases: two optimizable failures and one intentionally ineffective JSON-format failure.",
   "eval_cases": [
     {
-      "eval_id": "train_ip_lookup_optimizable",
+      "eval_id": "train_order_lookup_optimizable",
       "eval_mode": "trace",
       "actual_conversation": [
         {
           "invocation_id": "actual-1",
-          "user_content": {"role": "user", "parts": [{"text": "查询我的公网 IP"}]},
-          "final_response": {"role": "model", "parts": [{"text": "我无法确定你的公网 IP。"}]},
+          "user_content": {"role": "user", "parts": [{"text": "What is the shipping status for order A100?"}]},
+          "final_response": {"role": "model", "parts": [{"text": "I do not have enough order data."}]},
           "intermediate_data": {"tool_uses": []}
         }
       ],
       "conversation": [
         {
           "invocation_id": "expected-1",
-          "user_content": {"role": "user", "parts": [{"text": "查询我的公网 IP"}]},
-          "final_response": {"role": "model", "parts": [{"text": "203.0.113.10"}]},
+          "user_content": {"role": "user", "parts": [{"text": "What is the shipping status for order A100?"}]},
+          "final_response": {"role": "model", "parts": [{"text": "in transit"}]},
           "intermediate_data": {
             "tool_uses": [
-              {"id": "tool-1", "name": "get_my_public_ip", "args": {"source": "commercial"}}
+              {"id": "tool-1", "name": "lookup_order", "args": {"order_id": "A100"}}
             ]
           }
         }
       ]
     },
     {
-      "eval_id": "train_calendar_optimizable",
+      "eval_id": "train_refund_policy_optimizable",
       "eval_mode": "trace",
       "actual_conversation": [
         {
           "invocation_id": "actual-2",
-          "user_content": {"role": "user", "parts": [{"text": "2026-10-01 是不是休息日？"}]},
-          "final_response": {"role": "model", "parts": [{"text": "这天大概率是节日，但我没有查询。"}]},
+          "user_content": {"role": "user", "parts": [{"text": "What is the refund policy for damaged items?"}]},
+          "final_response": {"role": "model", "parts": [{"text": "You may be eligible, but I cannot confirm the policy."}]},
           "intermediate_data": {"tool_uses": []}
         }
       ],
       "conversation": [
         {
           "invocation_id": "expected-2",
-          "user_content": {"role": "user", "parts": [{"text": "2026-10-01 是不是休息日？"}]},
-          "final_response": {"role": "model", "parts": [{"text": "休息日"}]},
+          "user_content": {"role": "user", "parts": [{"text": "What is the refund policy for damaged items?"}]},
+          "final_response": {"role": "model", "parts": [{"text": "full refund within 30 days"}]},
           "intermediate_data": {
             "tool_uses": [
-              {"id": "tool-1", "name": "query_holiday_calendar", "args": {"date": "2026-10-01", "holiday_type": "legal"}}
+              {"id": "tool-1", "name": "search_policy", "args": {"topic": "damaged item refund"}}
             ]
           }
         }
       ]
     },
     {
-      "eval_id": "train_strict_json_ineffective",
+      "eval_id": "train_json_format_ineffective",
       "eval_mode": "trace",
       "actual_conversation": [
         {
           "invocation_id": "actual-3",
-          "user_content": {"role": "user", "parts": [{"text": "只返回 JSON：status ok"}]},
+          "user_content": {"role": "user", "parts": [{"text": "Return only JSON: status ok"}]},
           "final_response": {"role": "model", "parts": [{"text": "status ok"}]},
           "intermediate_data": {"tool_uses": []}
         }
@@ -65,7 +65,7 @@
       "conversation": [
         {
           "invocation_id": "expected-3",
-          "user_content": {"role": "user", "parts": [{"text": "只返回 JSON：status ok"}]},
+          "user_content": {"role": "user", "parts": [{"text": "Return only JSON: status ok"}]},
           "final_response": {"role": "model", "parts": [{"text": "{\"status\":\"ok\"}"}]},
           "intermediate_data": {"tool_uses": []}
         }

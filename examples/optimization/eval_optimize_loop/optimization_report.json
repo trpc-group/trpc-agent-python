@@ -1,35 +1,47 @@
 {
   "run": {
-    "timestamp": "2026-06-30T02:04:57.404739+00:00",
-    "mode": "fake_trace",
+    "timestamp": "2026-06-30T14:58:30.101980+00:00",
+    "mode": "fake",
     "seed": 42,
     "sdk_bridge": {
-      "evalset_validated_with_trpc_sdk": true,
       "agent_evaluator_available": true,
       "agent_optimizer_available": true,
-      "agent_evaluator_trace_smoke": {
-        "status": "FAILED_EXPECTED",
-        "reason": "[\n  {\n    \"evalSetId\": \"eval_optimize_loop_train\",\n    \"summary\": {\n      \"agentName\": \"trace-only\",\n      \"evalSetId\": \"eval_optimize_loop_train\",\n      \"overallStatus\": \"failed\",\n      \"runs\": 1,\n      \"evalCases\": [\n        {\n          \"evalCaseId\": \"train_calendar_optimizable\",\n          \"overallStatus\": \"failed\",\n          \"metricResults\": [\n            {\n              \"metricName\": \"final_response_avg_score\",\n              \"score\": 0.0,\n              \"threshold\": 0.1,\n              \"evalSt",
-        "has_result": true,
-        "metrics_file": "_sdk_eval_metrics.json"
+      "evalset_validated_with_trpc_sdk": true,
+      "sdk_import_error": null,
+      "agent_evaluator_trace_runs": {
+        "train": {
+          "status": "FAILED_EXPECTED",
+          "reason": "[\n  {\n    \"evalSetId\": \"eval_optimize_loop_train\",\n    \"summary\": {\n      \"agentName\": \"trace-only\",\n      \"evalSetId\": \"eval_optimize_loop_train\",\n      \"overallStatus\": \"failed\",\n      \"runs\": 1,\n      \"evalCases\": [\n        {\n          \"evalCaseId\": \"train_json_format_ineffective\",\n          \"overallStatus\": \"failed\",\n          \"metricResults\": [\n            {\n              \"metricName\": \"final_response_avg_score\",\n              \"score\": 0.0,\n              \"threshold\": 0.1,\n              \"eva",
+          "evalset": "train.evalset.json",
+          "has_result": true,
+          "metrics_file": "_sdk_eval_metrics.json"
+        },
+        "val": {
+          "status": "FAILED_EXPECTED",
+          "reason": "[\n  {\n    \"evalSetId\": \"eval_optimize_loop_val\",\n    \"summary\": {\n      \"agentName\": \"trace-only\",\n      \"evalSetId\": \"eval_optimize_loop_val\",\n      \"overallStatus\": \"failed\",\n      \"runs\": 1,\n      \"evalCases\": [\n        {\n          \"evalCaseId\": \"val_order_soft_degradation\",\n          \"overallStatus\": \"passed\",\n          \"metricResults\": [\n            {\n              \"metricName\": \"final_response_avg_score\",\n              \"score\": 1.0,\n              \"threshold\": 0.1,\n              \"evalStatus",
+          "evalset": "val.evalset.json",
+          "has_result": true,
+          "metrics_file": "_sdk_eval_metrics.json"
+        }
       }
     },
     "repro": {
       "train_evalset": "train.evalset.json",
       "val_evalset": "val.evalset.json",
       "case_meta": "case_meta.json",
+      "prompt_source": "prompts/system.md",
       "optimizer_config": "optimizer.json",
-      "prompt_source": "prompts/baseline_system.md"
+      "sdk_optimizer_config": "optimizer.sdk.json"
     }
   },
   "prompt_audit": {
     "target": {
-      "name": "life_assistant_system",
-      "path": "prompts/baseline_system.md",
+      "name": "support_assistant_system",
+      "path": "prompts/system.md",
       "kind": "system_prompt"
     },
-    "baseline_sha256": "0f876750c9acd5d6ded115427aa96d3bcfe9148e90e449a0be41804c02838f72",
-    "candidate_sha256": "19a1743c5b1694b2b0860ecedc2697ce2247e3dea1f45169db7c853d6f5959bc",
+    "baseline_sha256": "30b490452eeb916fd25950797f0cbe1f9bac2a7b9f738775365c066b43924b88",
+    "candidate_sha256": "5d3271e9ab855a1bdf0d6af54e6f8521d35a4bd5727e89d632486f826f5f52b9",
     "baseline_snapshot": "runs/latest/baseline_prompt.md",
     "candidate_snapshot": "runs/latest/candidate_prompt.md"
   },
@@ -39,8 +51,8 @@
       "mean_score": 0.25,
       "pass_rate": 0.0,
       "cases": {
-        "train_ip_lookup_optimizable": {
-          "case_id": "train_ip_lookup_optimizable",
+        "train_order_lookup_optimizable": {
+          "case_id": "train_order_lookup_optimizable",
           "score": 0.2,
           "passed": false,
           "hard_fail": true,
@@ -56,87 +68,23 @@
           ],
           "reason": "final_response_mismatch; tool_call_error",
           "trace": {
-            "query": "查询我的公网 IP",
-            "expected_text": "203.0.113.10",
-            "actual_text": "我无法确定你的公网 IP。",
+            "query": "What is the shipping status for order A100?",
+            "expected_text": "in transit",
+            "actual_text": "I do not have enough order data.",
             "expected_tools": [
               {
                 "id": "tool-1",
-                "name": "get_my_public_ip",
+                "name": "lookup_order",
                 "args": {
-                  "source": "commercial"
+                  "order_id": "A100"
                 }
               }
             ],
             "actual_tools": []
           }
         },
-        "train_calendar_optimizable": {
-          "case_id": "train_calendar_optimizable",
-          "score": 0.2,
-          "passed": false,
-          "hard_fail": true,
-          "key": false,
-          "metrics": {
-            "final_response": 0.0,
-            "tool_trajectory": 0.0,
-            "rubric": 1.0
-          },
-          "failure_types": [
-            "final_response_mismatch",
-            "tool_call_error"
-          ],
-          "reason": "final_response_mismatch; tool_call_error",
-          "trace": {
-            "query": "2026-10-01 是不是休息日？",
-            "expected_text": "休息日",
-            "actual_text": "这天大概率是节日，但我没有查询。",
-            "expected_tools": [
-              {
-                "id": "tool-1",
-                "name": "query_holiday_calendar",
-                "args": {
-                  "date": "2026-10-01",
-                  "holiday_type": "legal"
-                }
-              }
-            ],
-            "actual_tools": []
-          }
-        },
-        "train_strict_json_ineffective": {
-          "case_id": "train_strict_json_ineffective",
-          "score": 0.35,
-          "passed": false,
-          "hard_fail": true,
-          "key": false,
-          "metrics": {
-            "final_response": 0.0,
-            "tool_trajectory": 1.0,
-            "rubric": 0.0
-          },
-          "failure_types": [
-            "final_response_mismatch",
-            "format_error"
-          ],
-          "reason": "final_response_mismatch; format_error",
-          "trace": {
-            "query": "只返回 JSON：status ok",
-            "expected_text": "{\"status\":\"ok\"}",
-            "actual_text": "status ok",
-            "expected_tools": [],
-            "actual_tools": []
-          }
-        }
-      }
-    },
-    "val": {
-      "eval_set_id": "eval_optimize_loop_val",
-      "mean_score": 0.7333,
-      "pass_rate": 0.6667,
-      "cases": {
-        "val_search_fallback_new_pass": {
-          "case_id": "val_search_fallback_new_pass",
+        "train_refund_policy_optimizable": {
+          "case_id": "train_refund_policy_optimizable",
           "score": 0.2,
           "passed": false,
           "hard_fail": true,
@@ -152,170 +100,23 @@
           ],
           "reason": "final_response_mismatch; knowledge_recall_insufficient",
           "trace": {
-            "query": "默认搜索不够时，查一下 Go 最新版本",
-            "expected_text": "Go 1.26",
-            "actual_text": "Go 有新版本，但我没有足够信息确认。",
+            "query": "What is the refund policy for damaged items?",
+            "expected_text": "full refund within 30 days",
+            "actual_text": "You may be eligible, but I cannot confirm the policy.",
             "expected_tools": [
               {
                 "id": "tool-1",
-                "name": "uapi_search",
+                "name": "search_policy",
                 "args": {
-                  "query": "Go 最新版本"
+                  "topic": "damaged item refund"
                 }
               }
             ],
-            "actual_tools": [
-              {
-                "name": "websearch",
-                "args": {
-                  "query": "Go 最新版本"
-                }
-              }
-            ]
-          }
-        },
-        "val_smalltalk_no_tool_regression": {
-          "case_id": "val_smalltalk_no_tool_regression",
-          "score": 1.0,
-          "passed": true,
-          "hard_fail": false,
-          "key": true,
-          "metrics": {
-            "final_response": 1.0,
-            "tool_trajectory": 1.0,
-            "rubric": 1.0
-          },
-          "failure_types": [],
-          "reason": "pass",
-          "trace": {
-            "query": "在吗",
-            "expected_text": "在",
-            "actual_text": "在。",
-            "expected_tools": [],
             "actual_tools": []
           }
         },
-        "val_weather_soft_degradation": {
-          "case_id": "val_weather_soft_degradation",
-          "score": 1.0,
-          "passed": true,
-          "hard_fail": false,
-          "key": true,
-          "metrics": {
-            "final_response": 1.0,
-            "tool_trajectory": 1.0,
-            "rubric": 1.0
-          },
-          "failure_types": [],
-          "reason": "pass",
-          "trace": {
-            "query": "北京天气怎么样？",
-            "expected_text": "北京",
-            "actual_text": "北京今天有天气信息。",
-            "expected_tools": [
-              {
-                "id": "tool-1",
-                "name": "get_current_weather",
-                "args": {
-                  "city": "北京"
-                }
-              }
-            ],
-            "actual_tools": [
-              {
-                "name": "get_current_weather",
-                "args": {
-                  "city": "北京"
-                }
-              }
-            ]
-          }
-        }
-      }
-    }
-  },
-  "candidate": {
-    "train": {
-      "eval_set_id": "eval_optimize_loop_train",
-      "mean_score": 0.7833,
-      "pass_rate": 0.6667,
-      "cases": {
-        "train_ip_lookup_optimizable": {
-          "case_id": "train_ip_lookup_optimizable",
-          "score": 1.0,
-          "passed": true,
-          "hard_fail": false,
-          "key": false,
-          "metrics": {
-            "final_response": 1.0,
-            "tool_trajectory": 1.0,
-            "rubric": 1.0
-          },
-          "failure_types": [],
-          "reason": "pass",
-          "trace": {
-            "query": "查询我的公网 IP",
-            "expected_text": "203.0.113.10",
-            "actual_text": "你的公网 IP 是 203.0.113.10。",
-            "expected_tools": [
-              {
-                "id": "tool-1",
-                "name": "get_my_public_ip",
-                "args": {
-                  "source": "commercial"
-                }
-              }
-            ],
-            "actual_tools": [
-              {
-                "name": "get_my_public_ip",
-                "args": {
-                  "source": "commercial"
-                }
-              }
-            ]
-          }
-        },
-        "train_calendar_optimizable": {
-          "case_id": "train_calendar_optimizable",
-          "score": 1.0,
-          "passed": true,
-          "hard_fail": false,
-          "key": false,
-          "metrics": {
-            "final_response": 1.0,
-            "tool_trajectory": 1.0,
-            "rubric": 1.0
-          },
-          "failure_types": [],
-          "reason": "pass",
-          "trace": {
-            "query": "2026-10-01 是不是休息日？",
-            "expected_text": "休息日",
-            "actual_text": "2026-10-01 是法定休息日。",
-            "expected_tools": [
-              {
-                "id": "tool-1",
-                "name": "query_holiday_calendar",
-                "args": {
-                  "date": "2026-10-01",
-                  "holiday_type": "legal"
-                }
-              }
-            ],
-            "actual_tools": [
-              {
-                "name": "query_holiday_calendar",
-                "args": {
-                  "date": "2026-10-01",
-                  "holiday_type": "legal"
-                }
-              }
-            ]
-          }
-        },
-        "train_strict_json_ineffective": {
-          "case_id": "train_strict_json_ineffective",
+        "train_json_format_ineffective": {
+          "case_id": "train_json_format_ineffective",
           "score": 0.35,
           "passed": false,
           "hard_fail": true,
@@ -331,7 +132,215 @@
           ],
           "reason": "final_response_mismatch; format_error",
           "trace": {
-            "query": "只返回 JSON：status ok",
+            "query": "Return only JSON: status ok",
+            "expected_text": "{\"status\":\"ok\"}",
+            "actual_text": "status ok",
+            "expected_tools": [],
+            "actual_tools": []
+          }
+        }
+      }
+    },
+    "val": {
+      "eval_set_id": "eval_optimize_loop_val",
+      "mean_score": 0.7333,
+      "pass_rate": 0.6667,
+      "cases": {
+        "val_warranty_new_pass": {
+          "case_id": "val_warranty_new_pass",
+          "score": 0.2,
+          "passed": false,
+          "hard_fail": true,
+          "key": false,
+          "metrics": {
+            "final_response": 0.0,
+            "tool_trajectory": 0.0,
+            "rubric": 1.0
+          },
+          "failure_types": [
+            "final_response_mismatch",
+            "knowledge_recall_insufficient"
+          ],
+          "reason": "final_response_mismatch; knowledge_recall_insufficient",
+          "trace": {
+            "query": "What is the warranty period for Model Z?",
+            "expected_text": "24-month warranty",
+            "actual_text": "I am not sure about the Model Z warranty.",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "search_policy",
+                "args": {
+                  "topic": "Model Z warranty"
+                }
+              }
+            ],
+            "actual_tools": [
+              {
+                "name": "web_search",
+                "args": {
+                  "query": "Model Z warranty"
+                }
+              }
+            ]
+          }
+        },
+        "val_smalltalk_regression": {
+          "case_id": "val_smalltalk_regression",
+          "score": 1.0,
+          "passed": true,
+          "hard_fail": false,
+          "key": true,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 1.0,
+            "rubric": 1.0
+          },
+          "failure_types": [],
+          "reason": "pass",
+          "trace": {
+            "query": "Thanks",
+            "expected_text": "welcome",
+            "actual_text": "You are welcome.",
+            "expected_tools": [],
+            "actual_tools": []
+          }
+        },
+        "val_order_soft_degradation": {
+          "case_id": "val_order_soft_degradation",
+          "score": 1.0,
+          "passed": true,
+          "hard_fail": false,
+          "key": true,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 1.0,
+            "rubric": 1.0
+          },
+          "failure_types": [],
+          "reason": "pass",
+          "trace": {
+            "query": "Check order A200.",
+            "expected_text": "delivered",
+            "actual_text": "Order A200 is delivered.",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "lookup_order",
+                "args": {
+                  "order_id": "A200"
+                }
+              }
+            ],
+            "actual_tools": [
+              {
+                "name": "lookup_order",
+                "args": {
+                  "order_id": "A200"
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "candidate": {
+    "train": {
+      "eval_set_id": "eval_optimize_loop_train",
+      "mean_score": 0.7833,
+      "pass_rate": 0.6667,
+      "cases": {
+        "train_order_lookup_optimizable": {
+          "case_id": "train_order_lookup_optimizable",
+          "score": 1.0,
+          "passed": true,
+          "hard_fail": false,
+          "key": false,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 1.0,
+            "rubric": 1.0
+          },
+          "failure_types": [],
+          "reason": "pass",
+          "trace": {
+            "query": "What is the shipping status for order A100?",
+            "expected_text": "in transit",
+            "actual_text": "Order A100 is in transit and arrives on Friday.",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "lookup_order",
+                "args": {
+                  "order_id": "A100"
+                }
+              }
+            ],
+            "actual_tools": [
+              {
+                "name": "lookup_order",
+                "args": {
+                  "order_id": "A100"
+                }
+              }
+            ]
+          }
+        },
+        "train_refund_policy_optimizable": {
+          "case_id": "train_refund_policy_optimizable",
+          "score": 1.0,
+          "passed": true,
+          "hard_fail": false,
+          "key": false,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 1.0,
+            "rubric": 1.0
+          },
+          "failure_types": [],
+          "reason": "pass",
+          "trace": {
+            "query": "What is the refund policy for damaged items?",
+            "expected_text": "full refund within 30 days",
+            "actual_text": "Damaged items are eligible for a full refund within 30 days.",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "search_policy",
+                "args": {
+                  "topic": "damaged item refund"
+                }
+              }
+            ],
+            "actual_tools": [
+              {
+                "name": "search_policy",
+                "args": {
+                  "topic": "damaged item refund"
+                }
+              }
+            ]
+          }
+        },
+        "train_json_format_ineffective": {
+          "case_id": "train_json_format_ineffective",
+          "score": 0.35,
+          "passed": false,
+          "hard_fail": true,
+          "key": false,
+          "metrics": {
+            "final_response": 0.0,
+            "tool_trajectory": 1.0,
+            "rubric": 0.0
+          },
+          "failure_types": [
+            "final_response_mismatch",
+            "format_error"
+          ],
+          "reason": "final_response_mismatch; format_error",
+          "trace": {
+            "query": "Return only JSON: status ok",
             "expected_text": "{\"status\":\"ok\"}",
             "actual_text": "status ok",
             "expected_tools": [],
@@ -345,8 +354,8 @@
       "mean_score": 0.6667,
       "pass_rate": 0.3333,
       "cases": {
-        "val_search_fallback_new_pass": {
-          "case_id": "val_search_fallback_new_pass",
+        "val_warranty_new_pass": {
+          "case_id": "val_warranty_new_pass",
           "score": 1.0,
           "passed": true,
           "hard_fail": false,
@@ -359,30 +368,30 @@
           "failure_types": [],
           "reason": "pass",
           "trace": {
-            "query": "默认搜索不够时，查一下 Go 最新版本",
-            "expected_text": "Go 1.26",
-            "actual_text": "Go 1.26 是当前查询到的最新版本。",
+            "query": "What is the warranty period for Model Z?",
+            "expected_text": "24-month warranty",
+            "actual_text": "Model Z has a 24-month warranty.",
             "expected_tools": [
               {
                 "id": "tool-1",
-                "name": "uapi_search",
+                "name": "search_policy",
                 "args": {
-                  "query": "Go 最新版本"
+                  "topic": "Model Z warranty"
                 }
               }
             ],
             "actual_tools": [
               {
-                "name": "uapi_search",
+                "name": "search_policy",
                 "args": {
-                  "query": "Go 最新版本"
+                  "topic": "Model Z warranty"
                 }
               }
             ]
           }
         },
-        "val_smalltalk_no_tool_regression": {
-          "case_id": "val_smalltalk_no_tool_regression",
+        "val_smalltalk_regression": {
+          "case_id": "val_smalltalk_regression",
           "score": 0.45,
           "passed": false,
           "hard_fail": true,
@@ -398,22 +407,22 @@
           ],
           "reason": "spurious_tool_call; llm_rubric_not_met",
           "trace": {
-            "query": "在吗",
-            "expected_text": "在",
-            "actual_text": "我查了一下网页：在。",
+            "query": "Thanks",
+            "expected_text": "welcome",
+            "actual_text": "You are welcome.",
             "expected_tools": [],
             "actual_tools": [
               {
-                "name": "uapi_search",
+                "name": "search_policy",
                 "args": {
-                  "query": "在吗"
+                  "topic": "thanks"
                 }
               }
             ]
           }
         },
-        "val_weather_soft_degradation": {
-          "case_id": "val_weather_soft_degradation",
+        "val_order_soft_degradation": {
+          "case_id": "val_order_soft_degradation",
           "score": 0.55,
           "passed": false,
           "hard_fail": true,
@@ -429,29 +438,29 @@
           ],
           "reason": "spurious_tool_call; llm_rubric_not_met",
           "trace": {
-            "query": "北京天气怎么样？",
-            "expected_text": "北京",
-            "actual_text": "北京今天有天气信息。",
+            "query": "Check order A200.",
+            "expected_text": "delivered",
+            "actual_text": "Order A200 is delivered.",
             "expected_tools": [
               {
                 "id": "tool-1",
-                "name": "get_current_weather",
+                "name": "lookup_order",
                 "args": {
-                  "city": "北京"
+                  "order_id": "A200"
                 }
               }
             ],
             "actual_tools": [
               {
-                "name": "get_current_weather",
+                "name": "lookup_order",
                 "args": {
-                  "city": "北京"
+                  "order_id": "A200"
                 }
               },
               {
-                "name": "uapi_search",
+                "name": "search_policy",
                 "args": {
-                  "query": "北京天气"
+                  "topic": "order A200"
                 }
               }
             ]
@@ -462,7 +471,7 @@
   },
   "delta": {
     "train": {
-      "train_ip_lookup_optimizable": {
+      "train_order_lookup_optimizable": {
         "kind": "new_pass",
         "baseline_score": 0.2,
         "candidate_score": 1.0,
@@ -470,7 +479,7 @@
         "baseline_passed": false,
         "candidate_passed": true
       },
-      "train_calendar_optimizable": {
+      "train_refund_policy_optimizable": {
         "kind": "new_pass",
         "baseline_score": 0.2,
         "candidate_score": 1.0,
@@ -478,7 +487,7 @@
         "baseline_passed": false,
         "candidate_passed": true
       },
-      "train_strict_json_ineffective": {
+      "train_json_format_ineffective": {
         "kind": "same",
         "baseline_score": 0.35,
         "candidate_score": 0.35,
@@ -488,7 +497,7 @@
       }
     },
     "val": {
-      "val_search_fallback_new_pass": {
+      "val_warranty_new_pass": {
         "kind": "new_pass",
         "baseline_score": 0.2,
         "candidate_score": 1.0,
@@ -496,7 +505,7 @@
         "baseline_passed": false,
         "candidate_passed": true
       },
-      "val_smalltalk_no_tool_regression": {
+      "val_smalltalk_regression": {
         "kind": "new_fail",
         "baseline_score": 1.0,
         "candidate_score": 0.45,
@@ -504,7 +513,7 @@
         "baseline_passed": true,
         "candidate_passed": false
       },
-      "val_weather_soft_degradation": {
+      "val_order_soft_degradation": {
         "kind": "new_fail",
         "baseline_score": 1.0,
         "candidate_score": 0.55,
@@ -517,38 +526,38 @@
   "failure_attribution": {
     "counts": {
       "final_response_mismatch": 4,
-      "tool_call_error": 2,
-      "format_error": 1,
-      "knowledge_recall_insufficient": 1
+      "tool_call_error": 1,
+      "knowledge_recall_insufficient": 2,
+      "format_error": 1
     },
     "by_case": {
-      "train_ip_lookup_optimizable": [
+      "train_order_lookup_optimizable": [
         "final_response_mismatch",
         "tool_call_error"
       ],
-      "train_calendar_optimizable": [
+      "train_refund_policy_optimizable": [
         "final_response_mismatch",
-        "tool_call_error"
+        "knowledge_recall_insufficient"
       ],
-      "train_strict_json_ineffective": [
+      "train_json_format_ineffective": [
         "final_response_mismatch",
         "format_error"
       ],
-      "val_search_fallback_new_pass": [
+      "val_warranty_new_pass": [
         "final_response_mismatch",
         "knowledge_recall_insufficient"
       ]
     }
   },
   "optimizer": {
+    "mode": "fake",
     "status": "SCRIPTED_CANDIDATE",
-    "algorithm": "scripted_agent_optimizer_bridge",
     "agent_optimizer_available": true,
     "agent_optimizer_invoked": false,
-    "note": "fake/trace mode applies a deterministic patch; see examples/optimization/quickstart for a live GEPA run.",
     "candidate_prompt_path": "runs/latest/candidate_prompt.md",
     "cost_usd": 0.0,
-    "tokens": 0
+    "tokens": 0,
+    "rounds": 1
   },
   "gate": {
     "accepted": false,
@@ -565,12 +574,12 @@
       {
         "name": "no_new_hard_fail",
         "passed": false,
-        "detail": "new_hard_fails=['val_smalltalk_no_tool_regression', 'val_weather_soft_degradation']"
+        "detail": "new_hard_fails=['val_smalltalk_regression', 'val_order_soft_degradation']"
       },
       {
         "name": "no_critical_regression",
         "passed": false,
-        "detail": "critical_regressions=['val_smalltalk_no_tool_regression', 'val_weather_soft_degradation']"
+        "detail": "critical_regressions=['val_smalltalk_regression', 'val_order_soft_degradation']"
       },
       {
         "name": "not_overfit_train_up_val_down",
@@ -580,27 +589,32 @@
       {
         "name": "cost_budget",
         "passed": true,
-        "detail": "cost_usd=0.0000, budget=0.0100"
+        "detail": "cost_usd=0.000000, budget=0.050000"
       }
     ]
   },
   "audit": {
-    "duration_seconds": 0.0125,
+    "duration_seconds": 0.0176,
     "cost_usd": 0.0,
     "tokens": 0,
     "config_snapshot": {
-      "mode": "fake_trace",
+      "mode": "fake",
       "seed": 42,
+      "inputs": {
+        "train_evalset": "train.evalset.json",
+        "val_evalset": "val.evalset.json",
+        "case_meta": "case_meta.json"
+      },
       "target_prompt": {
-        "name": "life_assistant_system",
-        "path": "prompts/baseline_system.md",
+        "name": "support_assistant_system",
+        "path": "prompts/system.md",
         "kind": "system_prompt"
       },
-      "case_meta": "case_meta.json",
       "evaluate": {
         "fake_model": true,
         "fake_judge": true,
         "trace_mode": true,
+        "pass_threshold": 0.8,
         "metrics": [
           {
             "name": "final_response",
@@ -620,15 +634,13 @@
         ]
       },
       "optimize": {
-        "algorithm": "scripted_agent_optimizer_bridge",
-        "note": "fake/trace mode applies a deterministic prompt patch instead of invoking AgentOptimizer, so the example stays reproducible without an API key. For a live AgentOptimizer (GEPA) run see examples/optimization/quickstart.",
-        "max_rounds": 1,
+        "sdk_config": "optimizer.sdk.json",
         "update_source": false,
-        "candidate_patch": [
-          "",
+        "verbose": 1,
+        "fake_candidate_patch": [
           "Optimization candidate:",
-          "- USE_UAPI_TOOLS: use get_my_public_ip, uapi_search, and query_holiday_calendar for IP/search/calendar questions.",
-          "- AGGRESSIVE_SEARCH: prefer uapi_search whenever a query looks underspecified."
+          "- USE_CATALOG_LOOKUP: use lookup_order for order status and search_policy for policy/warranty questions before answering.",
+          "- AGGRESSIVE_LOOKUP: when uncertain, prefer looking up supporting data even for short or already-answerable requests."
         ]
       },
       "gate": {
@@ -637,10 +649,9 @@
         "hard_fail_threshold": 0.6,
         "reject_on_critical_regression": true,
         "reject_overfit_train_up_val_down": true,
-        "max_cost_usd": 0.01
+        "max_cost_usd": 0.05
       },
       "audit": {
-        "output_dir": ".",
         "record_case_traces": true,
         "record_prompt_snapshots": true
       }

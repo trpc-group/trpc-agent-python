@@ -1,71 +1,110 @@
-# eval_optimize_loop
+# Evaluation + Optimization Loop
 
-> Part of the `examples/optimization` series. Where [`quickstart`](../quickstart)
-> drives a live `AgentOptimizer` (GEPA) against a real agent, this example focuses
-> on the **closed loop around** optimization — baseline evaluation, failure
-> attribution, candidate validation, an acceptance gate, and an auditable report —
-> and runs fully reproducibly in fake/trace mode **without an API key**.
+## 1. Purpose
 
-This example implements a reproducible Evaluation + Optimization closed loop:
+This example implements the issue requirement for a reproducible Evaluation + Optimization pipeline. It is not only an `AgentOptimizer` quickstart: it wraps optimization with baseline evaluation, failure attribution, validation regression, gate decisions, and audit artifacts.
+
+The default `fake` mode runs without model credentials. The `live` mode uses a real `LlmAgent` bridge and invokes `AgentOptimizer.optimize` against a `TargetPrompt`.
+
+## 2. Pipeline Stages
+
+The pipeline runs six stages:
+
+1. Baseline evaluation: score train and validation sets separately, including metric scores, pass/fail, reasons, and key trace fields.
+2. Failure attribution: cluster failures into `final_response_mismatch`, `tool_call_error`, `parameter_error`, `llm_rubric_not_met`, `knowledge_recall_insufficient`, and `format_error`.
+3. Optimization execution: fake mode applies a deterministic candidate; live mode calls `AgentOptimizer.optimize` with `TargetPrompt.add_path("system_prompt", ...)`.
+4. Candidate validation: rerun train and validation sets and compute per-case deltas such as `new_pass`, `new_fail`, `score_up`, and `score_down`.
+5. Acceptance gate: require validation gain, no new hard fail, no key-case regression, no train-up/validation-down overfit, and cost within budget.
+6. Audit persistence: write prompt snapshots, scores, deltas, gate reasons, cost, duration, seed, and config snapshots.
+
+## 3. Directory Layout
 
 ```text
-baseline evaluation
-  -> failure attribution
-  -> prompt candidate generation
-  -> validation regression
-  -> acceptance gate
-  -> auditable JSON/Markdown report
+examples/optimization/eval_optimize_loop/
+├── agent/
+│   ├── __init__.py
+│   └── agent.py
+├── prompts/
+│   └── system.md
+├── train.evalset.json
+├── val.evalset.json
+├── case_meta.json
+├── optimizer.json
+├── optimizer.sdk.json
+├── run.py
+├── optimization_report.json
+└── optimization_report.md
 ```
 
-Run without API keys:
+## 4. Inputs
+
+- `train.evalset.json`: training evaluation set.
+- `val.evalset.json`: validation evaluation set; it must be a different file from train.
+- `optimizer.json`: outer-loop configuration for mode, metrics, fake candidate patch, and gate thresholds.
+- `prompts/system.md`: baseline prompt source registered as the optimization target.
+- `case_meta.json`: out-of-schema metadata for key cases, rubric kinds, and attribution hints.
+- `optimizer.sdk.json`: live-only SDK optimizer config passed to `AgentOptimizer.optimize`.
+
+## 5. Outputs
+
+- `optimization_report.json`: machine-readable audit report with baseline, candidate, delta, gate, attribution, optimizer status, cost, duration, seed, and config snapshot.
+- `optimization_report.md`: human-readable decision summary.
+- `runs/latest/baseline_prompt.md`: exact baseline prompt snapshot.
+- `runs/latest/candidate_prompt.md`: candidate prompt snapshot.
+- `runs/latest/agent_optimizer/`: live-only raw SDK artifacts, including `RoundRecord`-backed round files, `result.json`, `summary.txt`, and `best_prompts/`.
+
+## 6. Run Modes
+
+Fake mode:
 
 ```bash
-# First run may spend time on a one-off `uv sync`; the loop itself is ~seconds.
-uv run python examples/optimization/eval_optimize_loop/run.py
+python examples/optimization/eval_optimize_loop/run.py --mode fake
 ```
 
-Set `YUN_LOG_LEVEL=DEBUG` for more verbose logs (default `INFO`).
+Live mode:
 
-Inputs:
+```bash
+set TRPC_AGENT_API_KEY=...
+set TRPC_AGENT_BASE_URL=...
+set TRPC_AGENT_MODEL_NAME=...
+python examples/optimization/eval_optimize_loop/run.py --mode live
+```
 
-- `prompts/baseline_system.md` — target prompt being optimized.
-- `train.evalset.json` / `val.evalset.json` — SDK-clean evalsets (trace mode).
-- `case_meta.json` — per-case `key` / `rubric` / `tool_intent` (kept out of the
-  evalset so `EvalSet` stays schema-clean).
-- `optimizer.json` — metric weights, scripted candidate patch, and gate thresholds.
+`fake` mode uses a deterministic fake model, fake judge, and scripted candidate so the full loop runs without API keys. `live` mode uses `agent/agent.py`, creates a fresh `LlmAgent` for each call, and invokes `AgentOptimizer.optimize`.
 
-Outputs:
+## 7. Customizing The Agent
 
-- `optimization_report.json` / `optimization_report.md`
-- `runs/latest/baseline_prompt.md` / `runs/latest/candidate_prompt.md`
+Edit `agent/agent.py` when connecting a real business agent.
 
-The sample has 6 cases:
+Key constraints:
 
-- train: two optimizable failures and one optimization-ineffective format case.
-- validation: one new pass, one hard regression, and one soft degradation.
+- `make_call_agent(prompt_path)` must return an async function with the exact optimizer contract `async (query: str) -> str`.
+- `create_agent(prompt_path)` must re-read the prompt file every time so candidates written by `AgentOptimizer` take effect immediately.
+- `TargetPrompt.add_path("system_prompt", path)` must point to the same prompt file that the agent actually reads.
+- For HTTP, CLI, remote config, or multi-agent pipelines, keep the outer contract the same and replace only the bridge implementation.
 
-## 设计说明（四支柱）
+The outer report still computes richer trace-style scoring. The SDK optimizer itself receives final-text responses through `call_agent`, so `optimizer.sdk.json` intentionally avoids metrics that require full session traces.
 
-**失败归因（阶段 2）。** 归因完全基于结构化评测信号，不依赖 case 命名。每条 case
-记录三项 metric 子分（final_response / tool_trajectory / rubric）与关键轨迹（query、
-expected/actual 工具与回复）。`classify_tool_failure` 据「期望轨迹 vs 实际轨迹」判类：
-期望调用权威检索工具却没调用 → `knowledge_recall_insufficient`；调全了期望工具又多调
-→ `spurious_tool_call`；首工具名对但参数不同 → `parameter_error`；否则 `tool_call_error`。
-rubric 维度由 `case_meta.json` 显式声明（`json_format`/`no_tool`/`single_tool`），失败时
-映射为 `format_error` 或 `llm_rubric_not_met`。归因只统计 baseline 失败。
+## 8. Design And Validation
 
-**接受策略（阶段 5）。** Gate 以验证集为先，五项可配置约束全过才 ACCEPT：① 验证集均分
-提升 ≥ `min_val_score_gain`；② 无新增 hard fail；③ 无「关键 case」退化（关键性由
-`case_meta.json` 的 `key=true` 标记，而非把所有验证 case 一概视为关键）；④ 非过拟合
-（训练涨而验证跌）；⑤ 优化成本 ≤ `max_cost_usd`。各检查相互独立，便于定位拒绝原因。
+Failure attribution is rule-based over structured signals, not case ids. Each case records final response, tool trajectory, rubric sub-scores, and expected/actual tool calls. Rubric failures map to `format_error` or `llm_rubric_not_met`; tool mismatches map to tool, parameter, spurious-call, or knowledge-recall categories.
 
-**防过拟合。** 第 ④ 项专门拦截「训练大幅提升、验证退化」：本例候选给 baseline 注入
-激进检索行为，训练集 +0.53 但验证集回落，gate 据此 REJECT。关键 case 退化（③）与新增
-hard fail（②）提供正交的二次保险，即便总分变化很小也能拦住有害候选。
+The gate is validation-first. A candidate is accepted only if validation mean improves by the configured threshold, no new hard fail appears, key validation cases do not regress, train improvement does not coincide with validation loss, and cost is within budget.
 
-**产物审计（阶段 6）。** `optimization_report.json` 持久化 baseline/candidate 逐 case 分数与
-轨迹、逐 case delta、失败归因、gate 各检查、决策理由、成本/耗时/seed、prompt 的 SHA-256 与
-config 快照；`runs/latest/` 留存 baseline 与候选 prompt 全文。`.md` 顶部由 `narrate_report`
-依据 gate/delta 数据生成「人话总结」，确定性、无需模型，换输入也不会失真。SDK 桥接通过
-`EvalSet.model_validate_json` 校验评测集，并用 trace-only `AgentEvaluator` 跑一次冒烟，证明
-管线确实接到真实 SDK 评测器；fake/trace 模式仅在评分/优化处用确定性替身以保证无 key 可复现。
+The bundled fake candidate intentionally improves two train cases and one validation case while damaging two key validation cases. The expected sample decision is `REJECT`, demonstrating overfit rejection.
+
+Verified fake command:
+
+```bash
+C:\Users\27303\PycharmProjects\Yun\.venv\Scripts\python.exe examples\optimization\eval_optimize_loop\run.py --mode fake
+```
+
+Observed sample result:
+
+```text
+train: 0.25 -> 0.7833
+validation: 0.7333 -> 0.6667
+decision: REJECT
+```
+
+Known limits: live mode requires SDK dependencies plus `TRPC_AGENT_API_KEY`, `TRPC_AGENT_BASE_URL`, and `TRPC_AGENT_MODEL_NAME`; no-key environments should use `--mode fake`.

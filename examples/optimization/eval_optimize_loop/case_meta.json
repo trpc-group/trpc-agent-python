@@ -1,9 +1,35 @@
 {
-  "_comment": "Per-case metadata kept out of the SDK evalset so EvalSet stays schema-clean. 'key' marks cases that must not regress (gate uses it for critical-regression). 'rubric' selects the rubric dimension scored by run.score_case. 'tool_intent' is a trace-level attribution hint: 'authoritative_search' means the expected trajectory relies on the authoritative search tool, so a wrong tool is attributed to knowledge-recall insufficiency rather than a generic tool error.",
-  "train_ip_lookup_optimizable": {"key": false, "rubric": "none"},
-  "train_calendar_optimizable": {"key": false, "rubric": "none"},
-  "train_strict_json_ineffective": {"key": false, "rubric": "json_format"},
-  "val_search_fallback_new_pass": {"key": false, "rubric": "none", "tool_intent": "authoritative_search"},
-  "val_smalltalk_no_tool_regression": {"key": true, "rubric": "no_tool"},
-  "val_weather_soft_degradation": {"key": true, "rubric": "single_tool"}
+  "_comment": "Per-case metadata for attribution, gate checks, and fake/live trace scoring. It is kept outside evalsets so EvalSet schema validation remains clean.",
+  "train_order_lookup_optimizable": {
+    "category": "tool_call_error",
+    "key": false,
+    "rubric": "none"
+  },
+  "train_refund_policy_optimizable": {
+    "category": "knowledge_recall_insufficient",
+    "key": false,
+    "rubric": "none",
+    "authoritative_tool": "search_policy"
+  },
+  "train_json_format_ineffective": {
+    "category": "format_error",
+    "key": false,
+    "rubric": "json_format"
+  },
+  "val_warranty_new_pass": {
+    "category": "knowledge_recall_insufficient",
+    "key": false,
+    "rubric": "none",
+    "authoritative_tool": "search_policy"
+  },
+  "val_smalltalk_regression": {
+    "category": "spurious_tool_call",
+    "key": true,
+    "rubric": "no_tool"
+  },
+  "val_order_soft_degradation": {
+    "category": "spurious_tool_call",
+    "key": true,
+    "rubric": "single_tool"
+  }
 }

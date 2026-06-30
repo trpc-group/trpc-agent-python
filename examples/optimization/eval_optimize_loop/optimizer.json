@@ -1,16 +1,21 @@
 {
-  "mode": "fake_trace",
+  "mode": "fake",
   "seed": 42,
+  "inputs": {
+    "train_evalset": "train.evalset.json",
+    "val_evalset": "val.evalset.json",
+    "case_meta": "case_meta.json"
+  },
   "target_prompt": {
-    "name": "life_assistant_system",
-    "path": "prompts/baseline_system.md",
+    "name": "support_assistant_system",
+    "path": "prompts/system.md",
     "kind": "system_prompt"
   },
-  "case_meta": "case_meta.json",
   "evaluate": {
     "fake_model": true,
     "fake_judge": true,
     "trace_mode": true,
+    "pass_threshold": 0.8,
     "metrics": [
       {"name": "final_response", "weight": 0.45, "threshold": 0.8},
       {"name": "tool_trajectory", "weight": 0.35, "threshold": 0.8},
@@ -18,15 +23,13 @@
     ]
   },
   "optimize": {
-    "algorithm": "scripted_agent_optimizer_bridge",
-    "note": "fake/trace mode applies a deterministic prompt patch instead of invoking AgentOptimizer, so the example stays reproducible without an API key. For a live AgentOptimizer (GEPA) run see examples/optimization/quickstart.",
-    "max_rounds": 1,
+    "sdk_config": "optimizer.sdk.json",
     "update_source": false,
-    "candidate_patch": [
-      "",
+    "verbose": 1,
+    "fake_candidate_patch": [
       "Optimization candidate:",
-      "- USE_UAPI_TOOLS: use get_my_public_ip, uapi_search, and query_holiday_calendar for IP/search/calendar questions.",
-      "- AGGRESSIVE_SEARCH: prefer uapi_search whenever a query looks underspecified."
+      "- USE_CATALOG_LOOKUP: use lookup_order for order status and search_policy for policy/warranty questions before answering.",
+      "- AGGRESSIVE_LOOKUP: when uncertain, prefer looking up supporting data even for short or already-answerable requests."
     ]
   },
   "gate": {
@@ -35,10 +38,9 @@
     "hard_fail_threshold": 0.6,
     "reject_on_critical_regression": true,
     "reject_overfit_train_up_val_down": true,
-    "max_cost_usd": 0.01
+    "max_cost_usd": 0.05
   },
   "audit": {
-    "output_dir": ".",
     "record_case_traces": true,
     "record_prompt_snapshots": true
   }
