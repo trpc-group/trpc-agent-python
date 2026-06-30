@@ -311,6 +311,10 @@ Coordinator Agent (Main Entry Point)
 | `disallow_transfer_to_peers` | `False` | Set to `True` to prevent a child Agent from transferring control to peer Agents |
 | `default_transfer_message` | `None` | Custom transfer instruction that overrides the default transfer prompt |
 
+#### Dynamic Sub-Agent
+
+If you need the LLM to decide *at run time* which type of specialist to spawn (rather than pre-declaring `sub_agents` at construction time), see [Dynamic Sub-Agent](dynamic_subagent.md).
+
 ## Compose Patterns (Compose Agents)
 
 Different orchestration patterns can be flexibly combined, connecting results of different stages via `output_key` to create more complex workflows:
