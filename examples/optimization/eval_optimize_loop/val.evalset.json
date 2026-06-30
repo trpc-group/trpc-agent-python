@@ -1,0 +1,83 @@
+{
+  "eval_set_id": "eval_optimize_loop_val",
+  "name": "Evaluation optimization loop validation set",
+  "description": "Three trace-mode validation cases: one new pass, one hard regression, and one soft degradation.",
+  "eval_cases": [
+    {
+      "eval_id": "val_search_fallback_new_pass",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "invocation_id": "actual-1",
+          "user_content": {"role": "user", "parts": [{"text": "默认搜索不够时，查一下 Go 最新版本"}]},
+          "final_response": {"role": "model", "parts": [{"text": "Go 有新版本，但我没有足够信息确认。"}]},
+          "intermediate_data": {
+            "tool_uses": [
+              {"id": "tool-1", "name": "websearch", "args": {"query": "Go 最新版本"}}
+            ]
+          }
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "expected-1",
+          "user_content": {"role": "user", "parts": [{"text": "默认搜索不够时，查一下 Go 最新版本"}]},
+          "final_response": {"role": "model", "parts": [{"text": "Go 1.26"}]},
+          "intermediate_data": {
+            "tool_uses": [
+              {"id": "tool-1", "name": "uapi_search", "args": {"query": "Go 最新版本"}}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "val_smalltalk_no_tool_regression",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "invocation_id": "actual-2",
+          "user_content": {"role": "user", "parts": [{"text": "在吗"}]},
+          "final_response": {"role": "model", "parts": [{"text": "在。"}]},
+          "intermediate_data": {"tool_uses": []}
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "expected-2",
+          "user_content": {"role": "user", "parts": [{"text": "在吗"}]},
+          "final_response": {"role": "model", "parts": [{"text": "在"}]},
+          "intermediate_data": {"tool_uses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "val_weather_soft_degradation",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "invocation_id": "actual-3",
+          "user_content": {"role": "user", "parts": [{"text": "北京天气怎么样？"}]},
+          "final_response": {"role": "model", "parts": [{"text": "北京今天有天气信息。"}]},
+          "intermediate_data": {
+            "tool_uses": [
+              {"id": "tool-1", "name": "get_current_weather", "args": {"city": "北京"}}
+            ]
+          }
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "expected-3",
+          "user_content": {"role": "user", "parts": [{"text": "北京天气怎么样？"}]},
+          "final_response": {"role": "model", "parts": [{"text": "北京"}]},
+          "intermediate_data": {
+            "tool_uses": [
+              {"id": "tool-1", "name": "get_current_weather", "args": {"city": "北京"}}
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

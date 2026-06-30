@@ -1,0 +1,649 @@
+{
+  "run": {
+    "timestamp": "2026-06-30T02:04:57.404739+00:00",
+    "mode": "fake_trace",
+    "seed": 42,
+    "sdk_bridge": {
+      "evalset_validated_with_trpc_sdk": true,
+      "agent_evaluator_available": true,
+      "agent_optimizer_available": true,
+      "agent_evaluator_trace_smoke": {
+        "status": "FAILED_EXPECTED",
+        "reason": "[\n  {\n    \"evalSetId\": \"eval_optimize_loop_train\",\n    \"summary\": {\n      \"agentName\": \"trace-only\",\n      \"evalSetId\": \"eval_optimize_loop_train\",\n      \"overallStatus\": \"failed\",\n      \"runs\": 1,\n      \"evalCases\": [\n        {\n          \"evalCaseId\": \"train_calendar_optimizable\",\n          \"overallStatus\": \"failed\",\n          \"metricResults\": [\n            {\n              \"metricName\": \"final_response_avg_score\",\n              \"score\": 0.0,\n              \"threshold\": 0.1,\n              \"evalSt",
+        "has_result": true,
+        "metrics_file": "_sdk_eval_metrics.json"
+      }
+    },
+    "repro": {
+      "train_evalset": "train.evalset.json",
+      "val_evalset": "val.evalset.json",
+      "case_meta": "case_meta.json",
+      "optimizer_config": "optimizer.json",
+      "prompt_source": "prompts/baseline_system.md"
+    }
+  },
+  "prompt_audit": {
+    "target": {
+      "name": "life_assistant_system",
+      "path": "prompts/baseline_system.md",
+      "kind": "system_prompt"
+    },
+    "baseline_sha256": "0f876750c9acd5d6ded115427aa96d3bcfe9148e90e449a0be41804c02838f72",
+    "candidate_sha256": "19a1743c5b1694b2b0860ecedc2697ce2247e3dea1f45169db7c853d6f5959bc",
+    "baseline_snapshot": "runs/latest/baseline_prompt.md",
+    "candidate_snapshot": "runs/latest/candidate_prompt.md"
+  },
+  "baseline": {
+    "train": {
+      "eval_set_id": "eval_optimize_loop_train",
+      "mean_score": 0.25,
+      "pass_rate": 0.0,
+      "cases": {
+        "train_ip_lookup_optimizable": {
+          "case_id": "train_ip_lookup_optimizable",
+          "score": 0.2,
+          "passed": false,
+          "hard_fail": true,
+          "key": false,
+          "metrics": {
+            "final_response": 0.0,
+            "tool_trajectory": 0.0,
+            "rubric": 1.0
+          },
+          "failure_types": [
+            "final_response_mismatch",
+            "tool_call_error"
+          ],
+          "reason": "final_response_mismatch; tool_call_error",
+          "trace": {
+            "query": "查询我的公网 IP",
+            "expected_text": "203.0.113.10",
+            "actual_text": "我无法确定你的公网 IP。",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "get_my_public_ip",
+                "args": {
+                  "source": "commercial"
+                }
+              }
+            ],
+            "actual_tools": []
+          }
+        },
+        "train_calendar_optimizable": {
+          "case_id": "train_calendar_optimizable",
+          "score": 0.2,
+          "passed": false,
+          "hard_fail": true,
+          "key": false,
+          "metrics": {
+            "final_response": 0.0,
+            "tool_trajectory": 0.0,
+            "rubric": 1.0
+          },
+          "failure_types": [
+            "final_response_mismatch",
+            "tool_call_error"
+          ],
+          "reason": "final_response_mismatch; tool_call_error",
+          "trace": {
+            "query": "2026-10-01 是不是休息日？",
+            "expected_text": "休息日",
+            "actual_text": "这天大概率是节日，但我没有查询。",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "query_holiday_calendar",
+                "args": {
+                  "date": "2026-10-01",
+                  "holiday_type": "legal"
+                }
+              }
+            ],
+            "actual_tools": []
+          }
+        },
+        "train_strict_json_ineffective": {
+          "case_id": "train_strict_json_ineffective",
+          "score": 0.35,
+          "passed": false,
+          "hard_fail": true,
+          "key": false,
+          "metrics": {
+            "final_response": 0.0,
+            "tool_trajectory": 1.0,
+            "rubric": 0.0
+          },
+          "failure_types": [
+            "final_response_mismatch",
+            "format_error"
+          ],
+          "reason": "final_response_mismatch; format_error",
+          "trace": {
+            "query": "只返回 JSON：status ok",
+            "expected_text": "{\"status\":\"ok\"}",
+            "actual_text": "status ok",
+            "expected_tools": [],
+            "actual_tools": []
+          }
+        }
+      }
+    },
+    "val": {
+      "eval_set_id": "eval_optimize_loop_val",
+      "mean_score": 0.7333,
+      "pass_rate": 0.6667,
+      "cases": {
+        "val_search_fallback_new_pass": {
+          "case_id": "val_search_fallback_new_pass",
+          "score": 0.2,
+          "passed": false,
+          "hard_fail": true,
+          "key": false,
+          "metrics": {
+            "final_response": 0.0,
+            "tool_trajectory": 0.0,
+            "rubric": 1.0
+          },
+          "failure_types": [
+            "final_response_mismatch",
+            "knowledge_recall_insufficient"
+          ],
+          "reason": "final_response_mismatch; knowledge_recall_insufficient",
+          "trace": {
+            "query": "默认搜索不够时，查一下 Go 最新版本",
+            "expected_text": "Go 1.26",
+            "actual_text": "Go 有新版本，但我没有足够信息确认。",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "uapi_search",
+                "args": {
+                  "query": "Go 最新版本"
+                }
+              }
+            ],
+            "actual_tools": [
+              {
+                "name": "websearch",
+                "args": {
+                  "query": "Go 最新版本"
+                }
+              }
+            ]
+          }
+        },
+        "val_smalltalk_no_tool_regression": {
+          "case_id": "val_smalltalk_no_tool_regression",
+          "score": 1.0,
+          "passed": true,
+          "hard_fail": false,
+          "key": true,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 1.0,
+            "rubric": 1.0
+          },
+          "failure_types": [],
+          "reason": "pass",
+          "trace": {
+            "query": "在吗",
+            "expected_text": "在",
+            "actual_text": "在。",
+            "expected_tools": [],
+            "actual_tools": []
+          }
+        },
+        "val_weather_soft_degradation": {
+          "case_id": "val_weather_soft_degradation",
+          "score": 1.0,
+          "passed": true,
+          "hard_fail": false,
+          "key": true,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 1.0,
+            "rubric": 1.0
+          },
+          "failure_types": [],
+          "reason": "pass",
+          "trace": {
+            "query": "北京天气怎么样？",
+            "expected_text": "北京",
+            "actual_text": "北京今天有天气信息。",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "get_current_weather",
+                "args": {
+                  "city": "北京"
+                }
+              }
+            ],
+            "actual_tools": [
+              {
+                "name": "get_current_weather",
+                "args": {
+                  "city": "北京"
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "candidate": {
+    "train": {
+      "eval_set_id": "eval_optimize_loop_train",
+      "mean_score": 0.7833,
+      "pass_rate": 0.6667,
+      "cases": {
+        "train_ip_lookup_optimizable": {
+          "case_id": "train_ip_lookup_optimizable",
+          "score": 1.0,
+          "passed": true,
+          "hard_fail": false,
+          "key": false,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 1.0,
+            "rubric": 1.0
+          },
+          "failure_types": [],
+          "reason": "pass",
+          "trace": {
+            "query": "查询我的公网 IP",
+            "expected_text": "203.0.113.10",
+            "actual_text": "你的公网 IP 是 203.0.113.10。",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "get_my_public_ip",
+                "args": {
+                  "source": "commercial"
+                }
+              }
+            ],
+            "actual_tools": [
+              {
+                "name": "get_my_public_ip",
+                "args": {
+                  "source": "commercial"
+                }
+              }
+            ]
+          }
+        },
+        "train_calendar_optimizable": {
+          "case_id": "train_calendar_optimizable",
+          "score": 1.0,
+          "passed": true,
+          "hard_fail": false,
+          "key": false,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 1.0,
+            "rubric": 1.0
+          },
+          "failure_types": [],
+          "reason": "pass",
+          "trace": {
+            "query": "2026-10-01 是不是休息日？",
+            "expected_text": "休息日",
+            "actual_text": "2026-10-01 是法定休息日。",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "query_holiday_calendar",
+                "args": {
+                  "date": "2026-10-01",
+                  "holiday_type": "legal"
+                }
+              }
+            ],
+            "actual_tools": [
+              {
+                "name": "query_holiday_calendar",
+                "args": {
+                  "date": "2026-10-01",
+                  "holiday_type": "legal"
+                }
+              }
+            ]
+          }
+        },
+        "train_strict_json_ineffective": {
+          "case_id": "train_strict_json_ineffective",
+          "score": 0.35,
+          "passed": false,
+          "hard_fail": true,
+          "key": false,
+          "metrics": {
+            "final_response": 0.0,
+            "tool_trajectory": 1.0,
+            "rubric": 0.0
+          },
+          "failure_types": [
+            "final_response_mismatch",
+            "format_error"
+          ],
+          "reason": "final_response_mismatch; format_error",
+          "trace": {
+            "query": "只返回 JSON：status ok",
+            "expected_text": "{\"status\":\"ok\"}",
+            "actual_text": "status ok",
+            "expected_tools": [],
+            "actual_tools": []
+          }
+        }
+      }
+    },
+    "val": {
+      "eval_set_id": "eval_optimize_loop_val",
+      "mean_score": 0.6667,
+      "pass_rate": 0.3333,
+      "cases": {
+        "val_search_fallback_new_pass": {
+          "case_id": "val_search_fallback_new_pass",
+          "score": 1.0,
+          "passed": true,
+          "hard_fail": false,
+          "key": false,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 1.0,
+            "rubric": 1.0
+          },
+          "failure_types": [],
+          "reason": "pass",
+          "trace": {
+            "query": "默认搜索不够时，查一下 Go 最新版本",
+            "expected_text": "Go 1.26",
+            "actual_text": "Go 1.26 是当前查询到的最新版本。",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "uapi_search",
+                "args": {
+                  "query": "Go 最新版本"
+                }
+              }
+            ],
+            "actual_tools": [
+              {
+                "name": "uapi_search",
+                "args": {
+                  "query": "Go 最新版本"
+                }
+              }
+            ]
+          }
+        },
+        "val_smalltalk_no_tool_regression": {
+          "case_id": "val_smalltalk_no_tool_regression",
+          "score": 0.45,
+          "passed": false,
+          "hard_fail": true,
+          "key": true,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 0.0,
+            "rubric": 0.0
+          },
+          "failure_types": [
+            "spurious_tool_call",
+            "llm_rubric_not_met"
+          ],
+          "reason": "spurious_tool_call; llm_rubric_not_met",
+          "trace": {
+            "query": "在吗",
+            "expected_text": "在",
+            "actual_text": "我查了一下网页：在。",
+            "expected_tools": [],
+            "actual_tools": [
+              {
+                "name": "uapi_search",
+                "args": {
+                  "query": "在吗"
+                }
+              }
+            ]
+          }
+        },
+        "val_weather_soft_degradation": {
+          "case_id": "val_weather_soft_degradation",
+          "score": 0.55,
+          "passed": false,
+          "hard_fail": true,
+          "key": true,
+          "metrics": {
+            "final_response": 1.0,
+            "tool_trajectory": 0.0,
+            "rubric": 0.5
+          },
+          "failure_types": [
+            "spurious_tool_call",
+            "llm_rubric_not_met"
+          ],
+          "reason": "spurious_tool_call; llm_rubric_not_met",
+          "trace": {
+            "query": "北京天气怎么样？",
+            "expected_text": "北京",
+            "actual_text": "北京今天有天气信息。",
+            "expected_tools": [
+              {
+                "id": "tool-1",
+                "name": "get_current_weather",
+                "args": {
+                  "city": "北京"
+                }
+              }
+            ],
+            "actual_tools": [
+              {
+                "name": "get_current_weather",
+                "args": {
+                  "city": "北京"
+                }
+              },
+              {
+                "name": "uapi_search",
+                "args": {
+                  "query": "北京天气"
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "delta": {
+    "train": {
+      "train_ip_lookup_optimizable": {
+        "kind": "new_pass",
+        "baseline_score": 0.2,
+        "candidate_score": 1.0,
+        "delta": 0.8,
+        "baseline_passed": false,
+        "candidate_passed": true
+      },
+      "train_calendar_optimizable": {
+        "kind": "new_pass",
+        "baseline_score": 0.2,
+        "candidate_score": 1.0,
+        "delta": 0.8,
+        "baseline_passed": false,
+        "candidate_passed": true
+      },
+      "train_strict_json_ineffective": {
+        "kind": "same",
+        "baseline_score": 0.35,
+        "candidate_score": 0.35,
+        "delta": 0.0,
+        "baseline_passed": false,
+        "candidate_passed": false
+      }
+    },
+    "val": {
+      "val_search_fallback_new_pass": {
+        "kind": "new_pass",
+        "baseline_score": 0.2,
+        "candidate_score": 1.0,
+        "delta": 0.8,
+        "baseline_passed": false,
+        "candidate_passed": true
+      },
+      "val_smalltalk_no_tool_regression": {
+        "kind": "new_fail",
+        "baseline_score": 1.0,
+        "candidate_score": 0.45,
+        "delta": -0.55,
+        "baseline_passed": true,
+        "candidate_passed": false
+      },
+      "val_weather_soft_degradation": {
+        "kind": "new_fail",
+        "baseline_score": 1.0,
+        "candidate_score": 0.55,
+        "delta": -0.45,
+        "baseline_passed": true,
+        "candidate_passed": false
+      }
+    }
+  },
+  "failure_attribution": {
+    "counts": {
+      "final_response_mismatch": 4,
+      "tool_call_error": 2,
+      "format_error": 1,
+      "knowledge_recall_insufficient": 1
+    },
+    "by_case": {
+      "train_ip_lookup_optimizable": [
+        "final_response_mismatch",
+        "tool_call_error"
+      ],
+      "train_calendar_optimizable": [
+        "final_response_mismatch",
+        "tool_call_error"
+      ],
+      "train_strict_json_ineffective": [
+        "final_response_mismatch",
+        "format_error"
+      ],
+      "val_search_fallback_new_pass": [
+        "final_response_mismatch",
+        "knowledge_recall_insufficient"
+      ]
+    }
+  },
+  "optimizer": {
+    "status": "SCRIPTED_CANDIDATE",
+    "algorithm": "scripted_agent_optimizer_bridge",
+    "agent_optimizer_available": true,
+    "agent_optimizer_invoked": false,
+    "note": "fake/trace mode applies a deterministic patch; see examples/optimization/quickstart for a live GEPA run.",
+    "candidate_prompt_path": "runs/latest/candidate_prompt.md",
+    "cost_usd": 0.0,
+    "tokens": 0
+  },
+  "gate": {
+    "accepted": false,
+    "decision": "REJECT",
+    "reason": "validation_gain_threshold; no_new_hard_fail; no_critical_regression; not_overfit_train_up_val_down",
+    "train_gain": 0.5333,
+    "val_gain": -0.0666,
+    "checks": [
+      {
+        "name": "validation_gain_threshold",
+        "passed": false,
+        "detail": "val_gain=-0.0666, required>=+0.1000"
+      },
+      {
+        "name": "no_new_hard_fail",
+        "passed": false,
+        "detail": "new_hard_fails=['val_smalltalk_no_tool_regression', 'val_weather_soft_degradation']"
+      },
+      {
+        "name": "no_critical_regression",
+        "passed": false,
+        "detail": "critical_regressions=['val_smalltalk_no_tool_regression', 'val_weather_soft_degradation']"
+      },
+      {
+        "name": "not_overfit_train_up_val_down",
+        "passed": false,
+        "detail": "train_gain=+0.5333, val_gain=-0.0666"
+      },
+      {
+        "name": "cost_budget",
+        "passed": true,
+        "detail": "cost_usd=0.0000, budget=0.0100"
+      }
+    ]
+  },
+  "audit": {
+    "duration_seconds": 0.0125,
+    "cost_usd": 0.0,
+    "tokens": 0,
+    "config_snapshot": {
+      "mode": "fake_trace",
+      "seed": 42,
+      "target_prompt": {
+        "name": "life_assistant_system",
+        "path": "prompts/baseline_system.md",
+        "kind": "system_prompt"
+      },
+      "case_meta": "case_meta.json",
+      "evaluate": {
+        "fake_model": true,
+        "fake_judge": true,
+        "trace_mode": true,
+        "metrics": [
+          {
+            "name": "final_response",
+            "weight": 0.45,
+            "threshold": 0.8
+          },
+          {
+            "name": "tool_trajectory",
+            "weight": 0.35,
+            "threshold": 0.8
+          },
+          {
+            "name": "rubric",
+            "weight": 0.2,
+            "threshold": 0.8
+          }
+        ]
+      },
+      "optimize": {
+        "algorithm": "scripted_agent_optimizer_bridge",
+        "note": "fake/trace mode applies a deterministic prompt patch instead of invoking AgentOptimizer, so the example stays reproducible without an API key. For a live AgentOptimizer (GEPA) run see examples/optimization/quickstart.",
+        "max_rounds": 1,
+        "update_source": false,
+        "candidate_patch": [
+          "",
+          "Optimization candidate:",
+          "- USE_UAPI_TOOLS: use get_my_public_ip, uapi_search, and query_holiday_calendar for IP/search/calendar questions.",
+          "- AGGRESSIVE_SEARCH: prefer uapi_search whenever a query looks underspecified."
+        ]
+      },
+      "gate": {
+        "min_val_score_gain": 0.1,
+        "reject_on_new_hard_fail": true,
+        "hard_fail_threshold": 0.6,
+        "reject_on_critical_regression": true,
+        "reject_overfit_train_up_val_down": true,
+        "max_cost_usd": 0.01
+      },
+      "audit": {
+        "output_dir": ".",
+        "record_case_traces": true,
+        "record_prompt_snapshots": true
+      }
+    }
+  }
+}
