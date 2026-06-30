@@ -1,0 +1,58 @@
+name: Example Pipeline Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "Example suite to run"
+        required: true
+        default: "core"
+        type: choice
+        options:
+          - core
+          - graph
+          - multi_agent
+          - team_agent
+          - all
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  example-smoke:
+    runs-on: [self-hosted, trpc-agent-python-ci]
+    timeout-minutes: 45
+    env:
+      DISABLE_TRPC_AGENT_REPORT: true
+      TRPC_AGENT_API_KEY: ${{ secrets.TRPC_AGENT_API_KEY }}
+      TRPC_AGENT_BASE_URL: http://03-llm.woa.com/glm5/v1
+      TRPC_AGENT_MODEL_NAME: glm-5.0-w4afp8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate model secrets
+        run: |
+          missing=0
+          for name in TRPC_AGENT_API_KEY TRPC_AGENT_BASE_URL TRPC_AGENT_MODEL_NAME; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required secret or env: ${name}"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Install package and example dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip3 install -e .
+          pip3 install -r requirements-test.txt
+          pip3 install -r pipeline_test/requirements.txt
+
+      - name: Run example smoke suite
+        run: |
+          bash pipeline_test/run_agent_examples.sh "${{ inputs.suite }}"

@@ -1,0 +1,2 @@
+# Dependencies used only by example pipeline smoke tests.
+python-dotenv
