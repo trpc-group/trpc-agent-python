@@ -42,10 +42,10 @@ from ._types import SafetyScanInput
 from ._types import SafetyScanReport
 from ._types import ScriptType
 
-
 # ---------------------------------------------------------------------------
 # Scanner
 # ---------------------------------------------------------------------------
+
 
 class SafetyScanner:
     """Orchestrates safety rules against a script and produces a structured report.
@@ -115,8 +115,7 @@ class SafetyScanner:
                             recommendation="Do not pass sensitive environment variables to tools.",
                             line_number=0,
                             matched_pattern=blocked_var,
-                        )
-                    )
+                        ))
 
         # Derive aggregate risk level
         if all_findings:
@@ -155,8 +154,7 @@ class SafetyScanner:
                     recommendation="Split the script or increase max_script_lines in policy.",
                     line_number=0,
                     matched_pattern="",
-                )
-            )
+                ))
 
         duration_ms = (time.perf_counter() - t0) * 1000.0
 
@@ -169,10 +167,8 @@ class SafetyScanner:
         else:
             denied = sum(1 for f in all_findings if f.risk_level in (RiskLevel.CRITICAL, RiskLevel.HIGH))
             total = len(all_findings)
-            summary = (
-                f"Scan of '{scan_input.tool_name or 'unnamed tool'}' found {total} issue(s) "
-                f"({denied} high/critical). Decision: {decision.value}."
-            )
+            summary = (f"Scan of '{scan_input.tool_name or 'unnamed tool'}' found {total} issue(s) "
+                       f"({denied} high/critical). Decision: {decision.value}.")
 
         return SafetyScanReport(
             tool_name=scan_input.tool_name,
@@ -290,5 +286,4 @@ def quick_scan(
             script_content=script_content,
             script_type=script_type or ScriptType.UNKNOWN,
             tool_name=tool_name,
-        )
-    )
+        ))

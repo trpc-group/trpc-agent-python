@@ -38,6 +38,7 @@ def _env_policy_path() -> str:
 # Policy model
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SafetyPolicy:
     """Deserialised and validated safety policy configuration."""
@@ -117,6 +118,7 @@ class SafetyPolicy:
 # Loader
 # ---------------------------------------------------------------------------
 
+
 class PolicyLoader:
     """Loads and validates a ``SafetyPolicy`` from a YAML file."""
 
@@ -177,10 +179,7 @@ class PolicyLoader:
         # --- Decision thresholds ---
         dt = raw.get("decision_thresholds", {})
         if dt:
-            policy.decision_thresholds = {
-                k: v for k, v in dt.items()
-                if k in {r.value for r in RiskLevel}
-            }
+            policy.decision_thresholds = {k: v for k, v in dt.items() if k in {r.value for r in RiskLevel}}
 
         # --- Whitelists ---
         wl = raw.get("whitelists", {})
