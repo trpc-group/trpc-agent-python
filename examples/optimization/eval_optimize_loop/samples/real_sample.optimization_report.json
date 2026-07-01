@@ -1,0 +1,397 @@
+{
+  "schema_version": "eol-v1",
+  "run": {
+    "mode": "real",
+    "seed": 42,
+    "started_at": "2026-07-01T20:17:13",
+    "finished_at": "2026-07-01T20:17:21",
+    "elapsed_seconds": 8.4,
+    "train_dataset": "data/train.evalset.json",
+    "val_dataset": "data/val.evalset.json",
+    "target_fields": [
+      "router",
+      "system_prompt",
+      "skill"
+    ],
+    "gate_config": {
+      "min_val_score_delta": 0.05,
+      "forbid_new_hard_fail": true,
+      "key_case_ids": [
+        "val_add_class"
+      ],
+      "cost_budget_usd": 1.0
+    }
+  },
+  "baseline": {
+    "train": {
+      "set_id": "train.evalset",
+      "pass_count": 2,
+      "total": 3,
+      "avg_score": 0.6667,
+      "cases": {
+        "train_add_apple": {
+          "passed": true,
+          "score": 1.0,
+          "expected": "答案：11 个",
+          "actual": "答案：11 个",
+          "error": "",
+          "metrics": [
+            {
+              "name": "final_response_avg_score",
+              "score": 1.0,
+              "passed": true,
+              "threshold": 1.0,
+              "reason": ""
+            }
+          ],
+          "trajectory": [
+            "final_response:答案：11 个"
+          ]
+        },
+        "train_discount_shirt": {
+          "passed": false,
+          "score": 0.0,
+          "expected": "答案：160 元",
+          "actual": "抱歉，我暂时无法解答这道题。",
+          "error": "",
+          "metrics": [
+            {
+              "name": "final_response_avg_score",
+              "score": 0.0,
+              "passed": false,
+              "threshold": 1.0,
+              "reason": ""
+            }
+          ],
+          "trajectory": [
+            "final_response:抱歉，我暂时无法解答这道题。"
+          ]
+        },
+        "train_mul_car": {
+          "passed": true,
+          "score": 1.0,
+          "expected": "答案：150 公里",
+          "actual": "答案：150 公里",
+          "error": "",
+          "metrics": [
+            {
+              "name": "final_response_avg_score",
+              "score": 1.0,
+              "passed": true,
+              "threshold": 1.0,
+              "reason": ""
+            }
+          ],
+          "trajectory": [
+            "final_response:答案：150 公里"
+          ]
+        }
+      }
+    },
+    "val": {
+      "set_id": "val.evalset",
+      "pass_count": 3,
+      "total": 3,
+      "avg_score": 1.0,
+      "cases": {
+        "val_add_class": {
+          "passed": true,
+          "score": 1.0,
+          "expected": "答案：35 人",
+          "actual": "答案：35 人",
+          "error": "",
+          "metrics": [
+            {
+              "name": "final_response_avg_score",
+              "score": 1.0,
+              "passed": true,
+              "threshold": 1.0,
+              "reason": ""
+            }
+          ],
+          "trajectory": [
+            "final_response:答案：35 人"
+          ]
+        },
+        "val_mul_box": {
+          "passed": true,
+          "score": 1.0,
+          "expected": "答案：60 个",
+          "actual": "答案：60 个",
+          "error": "",
+          "metrics": [
+            {
+              "name": "final_response_avg_score",
+              "score": 1.0,
+              "passed": true,
+              "threshold": 1.0,
+              "reason": ""
+            }
+          ],
+          "trajectory": [
+            "final_response:答案：60 个"
+          ]
+        },
+        "val_add_orange": {
+          "passed": true,
+          "score": 1.0,
+          "expected": "答案：8 个",
+          "actual": "答案：8 个",
+          "error": "",
+          "metrics": [
+            {
+              "name": "final_response_avg_score",
+              "score": 1.0,
+              "passed": true,
+              "threshold": 1.0,
+              "reason": ""
+            }
+          ],
+          "trajectory": [
+            "final_response:答案：8 个"
+          ]
+        }
+      }
+    }
+  },
+  "failure_attribution": {
+    "train": {
+      "clusters": {
+        "最终回复不匹配": 1
+      },
+      "cases": {
+        "train_discount_shirt": {
+          "category": "final_response_mismatch",
+          "category_label": "最终回复不匹配",
+          "reason": "agent 未给出正确计算结果，直接拒绝回答，与期望答案不符。",
+          "source": "llm"
+        }
+      }
+    },
+    "val": {
+      "clusters": {},
+      "cases": {}
+    }
+  },
+  "candidate": {
+    "status": "SUCCEEDED",
+    "stop_reason": "required_metrics_passing",
+    "optimized_fields": [],
+    "rounds": 0,
+    "cost_usd": 0.0,
+    "duration_seconds": 2.0019,
+    "meta": {
+      "backend": "real",
+      "algorithm": "gepa_reflective",
+      "baseline_pass_rate": 1.0,
+      "best_pass_rate": 1.0
+    },
+    "prompts": {
+      "router": "# 路由器 Prompt\n\n你是算术应用题助手的路由器。判断用户问题属于哪类运算，并把问题转交给解题 agent。\n\n- 认真读题，识别是加法、乘法还是折扣问题。\n- 把控制权交给下游解题 agent。\n\n<!-- 能力标记：fake / trace 模式下解析这些标记决定确定性行为；真实模式下它们只是普通注释。 -->\n<!-- @cap: route-ok -->\n",
+      "system_prompt": "# 解题 Agent · System Prompt\n\n你是一名严谨的小学算术老师，负责把解题结果整理成最终答复。\n\n## 输出格式要求\n- 最终答复必须以「答案：」开头，后面紧跟计算得到的数字。\n- 数字后必须带上正确的单位（个 / 公里 / 元 / 人 等）。\n- 示例：`答案：11 个`\n\n<!-- 能力标记 -->\n<!-- @cap: fmt-answer-prefix -->\n<!-- @cap: fmt-unit-suffix -->\n",
+      "skill": "# 解题技能 · Skill Prompt\n\n这里描述你会做哪些类型的算术题。只有列出的题型你才能解答；遇到未掌握的题型，\n如实回答「抱歉，我暂时无法解答这道题。」，不要瞎猜。\n\n## 已掌握题型\n- 加法：把题目中的两个数量相加。\n\n<!-- 能力标记：每一行 @cap 对应 fake 求解器的一种运算能力。 -->\n<!-- @cap: op-add -->\n"
+    },
+    "rounds_detail": []
+  },
+  "candidate_train": {
+    "set_id": "train.evalset",
+    "pass_count": 2,
+    "total": 3,
+    "avg_score": 0.6667,
+    "cases": {
+      "train_mul_car": {
+        "passed": true,
+        "score": 1.0,
+        "expected": "答案：150 公里",
+        "actual": "答案：150 公里",
+        "error": "",
+        "metrics": [
+          {
+            "name": "final_response_avg_score",
+            "score": 1.0,
+            "passed": true,
+            "threshold": 1.0,
+            "reason": ""
+          }
+        ],
+        "trajectory": [
+          "final_response:答案：150 公里"
+        ]
+      },
+      "train_add_apple": {
+        "passed": true,
+        "score": 1.0,
+        "expected": "答案：11 个",
+        "actual": "答案：11 个",
+        "error": "",
+        "metrics": [
+          {
+            "name": "final_response_avg_score",
+            "score": 1.0,
+            "passed": true,
+            "threshold": 1.0,
+            "reason": ""
+          }
+        ],
+        "trajectory": [
+          "final_response:答案：11 个"
+        ]
+      },
+      "train_discount_shirt": {
+        "passed": false,
+        "score": 0.0,
+        "expected": "答案：160 元",
+        "actual": "我暂时无法解答这道题。因为题目涉及“打折扣”的计算，而我的技能只包括加法，无法处理乘法或百分比相关的运算。请提供加法类题目，我会很乐意为您解答！",
+        "error": "",
+        "metrics": [
+          {
+            "name": "final_response_avg_score",
+            "score": 0.0,
+            "passed": false,
+            "threshold": 1.0,
+            "reason": ""
+          }
+        ],
+        "trajectory": [
+          "final_response:我暂时无法解答这道题。因为题目涉及“打折扣”的计算，而我的技能只包括加法，无法处理乘法或百分比相关的运算。请提供加法类题目，我会很乐意为您解答！"
+        ]
+      }
+    }
+  },
+  "candidate_val": {
+    "set_id": "val.evalset",
+    "pass_count": 3,
+    "total": 3,
+    "avg_score": 1.0,
+    "cases": {
+      "val_add_class": {
+        "passed": true,
+        "score": 1.0,
+        "expected": "答案：35 人",
+        "actual": "答案：35 人",
+        "error": "",
+        "metrics": [
+          {
+            "name": "final_response_avg_score",
+            "score": 1.0,
+            "passed": true,
+            "threshold": 1.0,
+            "reason": ""
+          }
+        ],
+        "trajectory": [
+          "final_response:答案：35 人"
+        ]
+      },
+      "val_add_orange": {
+        "passed": true,
+        "score": 1.0,
+        "expected": "答案：8 个",
+        "actual": "答案：8 个",
+        "error": "",
+        "metrics": [
+          {
+            "name": "final_response_avg_score",
+            "score": 1.0,
+            "passed": true,
+            "threshold": 1.0,
+            "reason": ""
+          }
+        ],
+        "trajectory": [
+          "final_response:答案：8 个"
+        ]
+      },
+      "val_mul_box": {
+        "passed": true,
+        "score": 1.0,
+        "expected": "答案：60 个",
+        "actual": "答案：60 个",
+        "error": "",
+        "metrics": [
+          {
+            "name": "final_response_avg_score",
+            "score": 1.0,
+            "passed": true,
+            "threshold": 1.0,
+            "reason": ""
+          }
+        ],
+        "trajectory": [
+          "final_response:答案：60 个"
+        ]
+      }
+    }
+  },
+  "overfitting_signal": {
+    "train_score_delta": 0.0,
+    "val_score_delta": 0.0,
+    "train_up_val_down": false
+  },
+  "delta": {
+    "val_score_delta": 0.0,
+    "train_score_delta": 0.0,
+    "baseline_val_pass": "3/3",
+    "candidate_val_pass": "3/3",
+    "baseline_train_pass": "2/3",
+    "candidate_train_pass": "2/3",
+    "per_case": [
+      {
+        "eval_id": "val_add_class",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "baseline_score": 1.0,
+        "candidate_score": 1.0,
+        "score_delta": 0.0,
+        "status": "unchanged"
+      },
+      {
+        "eval_id": "val_mul_box",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "baseline_score": 1.0,
+        "candidate_score": 1.0,
+        "score_delta": 0.0,
+        "status": "unchanged"
+      },
+      {
+        "eval_id": "val_add_orange",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "baseline_score": 1.0,
+        "candidate_score": 1.0,
+        "score_delta": 0.0,
+        "status": "unchanged"
+      }
+    ],
+    "newly_passed": [],
+    "newly_failed": [],
+    "regressed": []
+  },
+  "gate_decision": {
+    "accepted": false,
+    "summary": "拒绝候选：命中规则 ['min_val_score_delta']。",
+    "rules": [
+      {
+        "name": "min_val_score_delta",
+        "passed": false,
+        "detail": "验证集平均分 delta=+0.0000，阈值 ≥ +0.0500"
+      },
+      {
+        "name": "forbid_new_hard_fail",
+        "passed": true,
+        "detail": "新增失败 case=无"
+      },
+      {
+        "name": "key_cases_no_regression",
+        "passed": true,
+        "detail": "关键 case=['val_add_class']，其中退化=无"
+      },
+      {
+        "name": "cost_within_budget",
+        "passed": true,
+        "detail": "候选成本=$0.0000，预算 ≤ $1.0000"
+      }
+    ]
+  }
+}

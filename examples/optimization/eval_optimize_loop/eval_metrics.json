@@ -1,0 +1,14 @@
+{
+  "metrics": [
+    {
+      "metric_name": "final_response_avg_score",
+      "threshold": 1.0,
+      "criterion": {
+        "final_response": {
+          "text": {"match": "contains", "case_insensitive": true}
+        }
+      }
+    }
+  ],
+  "num_runs": 1
+}

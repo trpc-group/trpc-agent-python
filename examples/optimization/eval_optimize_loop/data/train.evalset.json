@@ -1,0 +1,58 @@
+{
+  "eval_set_id": "eol_train",
+  "name": "评测-优化闭环 · 训练集",
+  "description": "3 道小学算术应用题，用于反思归因与优化。final_response 中的『答案：X 单位』既作为 contains 匹配的参考答案，也作为失败归因时的期望答案。三条覆盖：baseline 已通过(加法) / 可优化成功(乘法) / 优化无效(折扣)。",
+  "eval_cases": [
+    {
+      "eval_id": "train_add_apple",
+      "conversation": [
+        {
+          "invocation_id": "tr1",
+          "user_content": {
+            "parts": [{"text": "小明早上买了 4 个苹果，下午又买了 7 个苹果，他一共有多少个苹果？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：11 个"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "train_mul_car",
+      "conversation": [
+        {
+          "invocation_id": "tr2",
+          "user_content": {
+            "parts": [{"text": "一辆汽车以每小时 60 公里的速度行驶了 2.5 小时，一共行驶了多少公里？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：150 公里"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "train_discount_shirt",
+      "conversation": [
+        {
+          "invocation_id": "tr3",
+          "user_content": {
+            "parts": [{"text": "一件衣服原价 200 元，现在打 8 折出售，折后价是多少元？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：160 元"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "trainer", "state": {}}
+    }
+  ]
+}
