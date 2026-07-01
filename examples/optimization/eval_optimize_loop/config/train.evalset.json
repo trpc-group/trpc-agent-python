@@ -1,0 +1,43 @@
+{
+  "_description": "???",
+  "version": "1.0.0",
+  "cases": [
+    {
+      "case_id": "train_001",
+      "image": "plate_001.jpg",
+      "ground_truth": "\u4eacA12345",
+      "conditions": {
+        "type": "clear"
+      },
+      "expected_behavior": "should_pass",
+      "description": "????"
+    },
+    {
+      "case_id": "train_002",
+      "image": "plate_028.jpg",
+      "ground_truth": "\u4eacA12345",
+      "conditions": {
+        "type": "noise",
+        "noise_level": 0.15
+      },
+      "expected_behavior": "may_fail",
+      "description": "????"
+    },
+    {
+      "case_id": "train_003",
+      "image": "plate_012.jpg",
+      "ground_truth": "\u82cfA88U88",
+      "conditions": {
+        "type": "blur",
+        "blur_kernel": 5
+      },
+      "expected_behavior": "may_fail",
+      "description": "????"
+    }
+  ],
+  "stats": {
+    "total": 3,
+    "should_pass": 1,
+    "may_fail": 2
+  }
+}
