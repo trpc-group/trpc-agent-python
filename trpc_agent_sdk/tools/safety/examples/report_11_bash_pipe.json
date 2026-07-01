@@ -1,0 +1,26 @@
+{
+  "scan_id": "eec6a94a9f174ffba426f8f37e941988",
+  "timestamp": 1782915392.8009355,
+  "tool_name": "11_bash_pipe",
+  "script_type": "bash",
+  "script_size_lines": 1,
+  "decision": "needs_human_review",
+  "risk_level": "medium",
+  "summary": "Scan of '11_bash_pipe' found 1 issue(s) (0 high/critical). Decision: needs_human_review.",
+  "scan_duration_ms": 0.18,
+  "policy_version": "5c4aa1d614dc",
+  "sanitized": true,
+  "execution_blocked": false,
+  "findings": [
+    {
+      "rule_id": "PROC-002",
+      "category": "process_and_system",
+      "risk_level": "medium",
+      "message": "Potentially dangerous shell pattern: |",
+      "evidence": "cat /var/log/syslog | grep ERROR | wc -l",
+      "recommendation": "Use safe alternatives or explicitly whitelist the command in the policy.",
+      "line_number": 1,
+      "matched_pattern": "|"
+    }
+  ]
+}

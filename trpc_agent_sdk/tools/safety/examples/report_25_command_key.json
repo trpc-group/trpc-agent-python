@@ -1,0 +1,36 @@
+{
+  "scan_id": "70fa1cd069124e638c6d246741e00d74",
+  "timestamp": 1782915392.8048346,
+  "tool_name": "25_command_key",
+  "script_type": "bash",
+  "script_size_lines": 1,
+  "decision": "deny",
+  "risk_level": "critical",
+  "summary": "Scan of '25_command_key' found 2 issue(s) (2 high/critical). Decision: deny.",
+  "scan_duration_ms": 0.11,
+  "policy_version": "5c4aa1d614dc",
+  "sanitized": true,
+  "execution_blocked": true,
+  "findings": [
+    {
+      "rule_id": "FILE-002",
+      "category": "dangerous_file_ops",
+      "risk_level": "critical",
+      "message": "Destructive blocklisted pattern matched: rm\\s+-rf\\s+/",
+      "evidence": "rm -rf /",
+      "recommendation": "Remove the destructive operation from the script.",
+      "line_number": 1,
+      "matched_pattern": "rm\\s+-rf\\s+/"
+    },
+    {
+      "rule_id": "FILE-005",
+      "category": "dangerous_file_ops",
+      "risk_level": "critical",
+      "message": "Destructive file operation detected: rm -rf /",
+      "evidence": "rm -rf /",
+      "recommendation": "Avoid destructive operations. Use temporary directories and clean up explicitly.",
+      "line_number": 1,
+      "matched_pattern": "rm\\s+-rf"
+    }
+  ]
+}

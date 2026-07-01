@@ -1,0 +1,15 @@
+{
+  "scan_id": "286af85b68cd4495bcf7b42d9ae37fd6",
+  "timestamp": 1782915392.8029134,
+  "tool_name": "17_eval_injection",
+  "script_type": "python",
+  "script_size_lines": 1,
+  "decision": "allow",
+  "risk_level": "info",
+  "summary": "No risks found in 17_eval_injection. Safe to proceed.",
+  "scan_duration_ms": 0.17,
+  "policy_version": "5c4aa1d614dc",
+  "sanitized": false,
+  "execution_blocked": false,
+  "findings": []
+}

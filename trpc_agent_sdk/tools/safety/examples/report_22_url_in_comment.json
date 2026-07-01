@@ -1,0 +1,15 @@
+{
+  "scan_id": "17ca601b706c404a8fcc6453a08b08ba",
+  "timestamp": 1782915392.8042006,
+  "tool_name": "22_url_in_comment",
+  "script_type": "unknown",
+  "script_size_lines": 1,
+  "decision": "allow",
+  "risk_level": "info",
+  "summary": "No risks found in 22_url_in_comment. Safe to proceed.",
+  "scan_duration_ms": 0.19,
+  "policy_version": "5c4aa1d614dc",
+  "sanitized": false,
+  "execution_blocked": false,
+  "findings": []
+}
