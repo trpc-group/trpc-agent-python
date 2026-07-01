@@ -109,9 +109,7 @@ class AuditLogger:
     @staticmethod
     def _build_event(report: SafetyScanReport) -> SafetyAuditEvent:
         return SafetyAuditEvent(
-            timestamp=datetime.datetime.fromtimestamp(
-                report.timestamp, tz=datetime.timezone.utc
-            ).isoformat(),
+            timestamp=datetime.datetime.fromtimestamp(report.timestamp, tz=datetime.timezone.utc).isoformat(),
             tool_name=report.tool_name,
             decision=report.decision.value,
             risk_level=report.risk_level.value,

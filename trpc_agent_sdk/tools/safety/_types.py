@@ -20,7 +20,6 @@ from dataclasses import field
 from typing import Any
 from typing import Optional
 
-
 # ---------------------------------------------------------------------------
 # Helpers — must be defined before RiskLevel class
 # ---------------------------------------------------------------------------
@@ -33,10 +32,10 @@ _RISK_SEVERITY_MAP: dict[str, int] = {
     "critical": 4,
 }
 
-
 # ---------------------------------------------------------------------------
 # Enumerations
 # ---------------------------------------------------------------------------
+
 
 class RiskLevel(str, enum.Enum):
     """Severity of a detected risk.
@@ -115,6 +114,7 @@ class ScriptType(str, enum.Enum):
 # Input model
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SafetyScanInput:
     """All information needed to perform a safety scan.
@@ -142,6 +142,7 @@ class SafetyScanInput:
 # ---------------------------------------------------------------------------
 # Finding model
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class SafetyFinding:
@@ -172,6 +173,7 @@ class SafetyFinding:
 # ---------------------------------------------------------------------------
 # Report model
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class SafetyScanReport:
@@ -209,37 +211,47 @@ class SafetyScanReport:
     def to_dict(self) -> dict[str, Any]:
         """Serialize the report to a JSON-compatible dictionary."""
         return {
-            "scan_id": self.scan_id,
-            "timestamp": self.timestamp,
-            "tool_name": self.tool_name,
-            "script_type": self.script_type.value,
-            "script_size_lines": self.script_size_lines,
-            "decision": self.decision.value,
-            "risk_level": self.risk_level.value,
-            "summary": self.summary,
-            "scan_duration_ms": self.scan_duration_ms,
-            "policy_version": self.policy_version,
-            "sanitized": self.sanitized,
-            "execution_blocked": self.execution_blocked,
-            "findings": [
-                {
-                    "rule_id": f.rule_id,
-                    "category": f.category.value,
-                    "risk_level": f.risk_level.value,
-                    "message": f.message,
-                    "evidence": f.evidence,
-                    "recommendation": f.recommendation,
-                    "line_number": f.line_number,
-                    "matched_pattern": f.matched_pattern,
-                }
-                for f in self.findings
-            ],
+            "scan_id":
+            self.scan_id,
+            "timestamp":
+            self.timestamp,
+            "tool_name":
+            self.tool_name,
+            "script_type":
+            self.script_type.value,
+            "script_size_lines":
+            self.script_size_lines,
+            "decision":
+            self.decision.value,
+            "risk_level":
+            self.risk_level.value,
+            "summary":
+            self.summary,
+            "scan_duration_ms":
+            self.scan_duration_ms,
+            "policy_version":
+            self.policy_version,
+            "sanitized":
+            self.sanitized,
+            "execution_blocked":
+            self.execution_blocked,
+            "findings": [{
+                "rule_id": f.rule_id,
+                "category": f.category.value,
+                "risk_level": f.risk_level.value,
+                "message": f.message,
+                "evidence": f.evidence,
+                "recommendation": f.recommendation,
+                "line_number": f.line_number,
+                "matched_pattern": f.matched_pattern,
+            } for f in self.findings],
         }
 
 
 # ---------------------------------------------------------------------------
 # Audit event model
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class SafetyAuditEvent:

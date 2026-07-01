@@ -60,6 +60,7 @@ def get_extra_rules() -> list[RuleCallable]:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _find_lines(script: str, pattern: str) -> list[tuple[int, str]]:
     """Return (line_number, line_text) for every line matching *pattern* (regex)."""
     hits: list[tuple[int, str]] = []
@@ -124,6 +125,7 @@ def _matches_any(script: str, patterns: list[str]) -> bool:
 # Rule 1 — Dangerous File Operations
 # ========================================================================
 
+
 class DangerousFileOpsRule:
     """Detects dangerous file operations: recursive delete, credential access, etc."""
 
@@ -156,8 +158,7 @@ class DangerousFileOpsRule:
                         f"add the path to the policy whitelist.",
                         line_number=line_no,
                         matched_pattern=blocked,
-                    )
-                )
+                    ))
 
         # 1b. Blocklisted patterns
         for blocked_pat in policy.blocklist_patterns:
@@ -173,8 +174,7 @@ class DangerousFileOpsRule:
                             recommendation="Remove the destructive operation from the script.",
                             line_number=line_no,
                             matched_pattern=blocked_pat,
-                        )
-                    )
+                        ))
 
         # 1c. Sensitive paths
         sensitive = cfg.get("sensitive_paths", [])
@@ -192,8 +192,7 @@ class DangerousFileOpsRule:
                         f"Consider using a dedicated secrets manager instead.",
                         line_number=line_no,
                         matched_pattern=sens_path,
-                    )
-                )
+                    ))
 
         # 1d. Credential file patterns
         cred_patterns = cfg.get("credential_file_patterns", [])
@@ -210,8 +209,7 @@ class DangerousFileOpsRule:
                         "Use environment variables or a secrets manager.",
                         line_number=line_no,
                         matched_pattern=cred_pat,
-                    )
-                )
+                    ))
 
         # 1e. Destructive operations
         destructive = cfg.get("destructive_patterns", [])
@@ -228,8 +226,7 @@ class DangerousFileOpsRule:
                         "directories and clean up explicitly.",
                         line_number=line_no,
                         matched_pattern=dest_pat,
-                    )
-                )
+                    ))
 
         return findings
 
@@ -237,6 +234,7 @@ class DangerousFileOpsRule:
 # ========================================================================
 # Rule 2 — Network Egress
 # ========================================================================
+
 
 class NetworkEgressRule:
     """Detects outbound network requests to non-whitelisted destinations."""
@@ -273,8 +271,7 @@ class NetworkEgressRule:
                                 recommendation="No action needed — domain is whitelisted.",
                                 line_number=line_no,
                                 matched_pattern=func_pat,
-                            )
-                        )
+                            ))
                     else:
                         findings.append(
                             _build_finding(
@@ -287,8 +284,7 @@ class NetworkEgressRule:
                                 "Restrict outbound network access at the network/firewall level.",
                                 line_number=line_no,
                                 matched_pattern=func_pat,
-                            )
-                        )
+                            ))
 
         if scan_input.script_type in (ScriptType.BASH, ScriptType.UNKNOWN):
             for cmd in bash_cmds:
@@ -308,8 +304,7 @@ class NetworkEgressRule:
                                 recommendation="No action needed — domain is whitelisted.",
                                 line_number=line_no,
                                 matched_pattern=cmd,
-                            )
-                        )
+                            ))
                     else:
                         findings.append(
                             _build_finding(
@@ -322,8 +317,7 @@ class NetworkEgressRule:
                                 "the policy whitelist domains.",
                                 line_number=line_no,
                                 matched_pattern=cmd,
-                            )
-                        )
+                            ))
 
         return findings
 
@@ -331,6 +325,7 @@ class NetworkEgressRule:
 # ========================================================================
 # Rule 3 — Process & System Commands
 # ========================================================================
+
 
 class ProcessAndSystemRule:
     """Detects subprocess calls, shell pipes, privilege escalation, etc."""
@@ -357,9 +352,8 @@ class ProcessAndSystemRule:
                     # Privilege escalation is critical
                     if any(kw in func_pat.lower() for kw in ("setuid", "setgid", "seteuid", "setegid")):
                         risk = RiskLevel.CRITICAL
-                    elif any(kw in func_pat.lower() for kw in ("system", "popen", "subprocess",
-                                                                 "eval", "exec", "__import__",
-                                                                 "compile")):
+                    elif any(kw in func_pat.lower()
+                             for kw in ("system", "popen", "subprocess", "eval", "exec", "__import__", "compile")):
                         risk = RiskLevel.HIGH
                     else:
                         risk = RiskLevel.MEDIUM
@@ -375,16 +369,15 @@ class ProcessAndSystemRule:
                             "agent tools. Prefer library-based implementations.",
                             line_number=line_no,
                             matched_pattern=func_pat,
-                        )
-                    )
+                        ))
 
         if scan_input.script_type in (ScriptType.BASH, ScriptType.UNKNOWN):
             for bash_pat in bash_patterns:
                 for line_no, line_text in _find_literal(script, bash_pat):
                     # Privilege escalation
-                    if bash_pat.strip() in ("sudo ", "su ", "chroot "):
+                    if bash_pat.strip() in ("sudo", "su", "chroot"):
                         risk = RiskLevel.CRITICAL
-                    elif bash_pat.strip() in ("mount ", "umount ", "systemctl ", "kill -9"):
+                    elif bash_pat.strip() in ("mount", "umount", "systemctl", "kill -9"):
                         risk = RiskLevel.HIGH
                     elif bash_pat.strip() in ("|", "$(", "`"):
                         risk = RiskLevel.MEDIUM
@@ -402,8 +395,7 @@ class ProcessAndSystemRule:
                             "the command in the policy.",
                             line_number=line_no,
                             matched_pattern=bash_pat.strip(),
-                        )
-                    )
+                        ))
 
         return findings
 
@@ -411,6 +403,7 @@ class ProcessAndSystemRule:
 # ========================================================================
 # Rule 4 — Dependency Installation
 # ========================================================================
+
 
 class DependencyInstallRule:
     """Detects package / dependency installation commands."""
@@ -445,8 +438,7 @@ class DependencyInstallRule:
                             "or environment rather than at runtime.",
                             line_number=line_no,
                             matched_pattern=func_pat,
-                        )
-                    )
+                        ))
 
         if scan_input.script_type in (ScriptType.BASH, ScriptType.UNKNOWN):
             for cmd in bash_cmds:
@@ -463,8 +455,7 @@ class DependencyInstallRule:
                             "installed at tool execution time.",
                             line_number=line_no,
                             matched_pattern=cmd,
-                        )
-                    )
+                        ))
 
         return findings
 
@@ -472,6 +463,7 @@ class DependencyInstallRule:
 # ========================================================================
 # Rule 5 — Resource Abuse
 # ========================================================================
+
 
 class ResourceAbuseRule:
     """Detects infinite loops, fork bombs, large writes, long sleeps, etc."""
@@ -503,8 +495,7 @@ class ResourceAbuseRule:
                         recommendation="Add a timeout, iteration limit, or exit condition.",
                         line_number=line_no,
                         matched_pattern=loop_pat,
-                    )
-                )
+                    ))
 
         # 5b. Fork bombs
         fork_patterns = cfg.get("fork_bomb_patterns", [])
@@ -520,8 +511,7 @@ class ResourceAbuseRule:
                         recommendation="Fork bombs can crash the host. Remove immediately.",
                         line_number=line_no,
                         matched_pattern=fork_pat,
-                    )
-                )
+                    ))
 
         # 5c. Resource-heavy patterns
         heavy_patterns = cfg.get("resource_heavy_patterns", [])
@@ -538,8 +528,7 @@ class ResourceAbuseRule:
                         "Use streaming or chunked writes.",
                         line_number=line_no,
                         matched_pattern=heavy_pat,
-                    )
-                )
+                    ))
 
         # 5d. Long sleeps
         threshold = cfg.get("long_sleep_threshold_seconds", 60)
@@ -558,8 +547,7 @@ class ResourceAbuseRule:
                         recommendation="Reduce sleep duration or use a task scheduler.",
                         line_number=line_no,
                         matched_pattern=m.group(0),
-                    )
-                )
+                    ))
 
         # 5e. Concurrent task spawning
         max_concurrent = cfg.get("max_concurrent_tasks", 20)
@@ -583,8 +571,7 @@ class ResourceAbuseRule:
                         "tasks. Use a task queue for larger workloads.",
                         line_number=line_no,
                         matched_pattern=conc_pat,
-                    )
-                )
+                    ))
 
         return findings
 
@@ -592,6 +579,7 @@ class ResourceAbuseRule:
 # ========================================================================
 # Rule 6 — Sensitive Information Leakage
 # ========================================================================
+
 
 class SensitiveInfoLeakRule:
     """Detects API keys, tokens, passwords, and private keys in script output."""
@@ -625,8 +613,7 @@ class SensitiveInfoLeakRule:
                         "AWS Secrets Manager).",
                         line_number=line_no,
                         matched_pattern=secret_pat,
-                    )
-                )
+                    ))
 
         # 6b. Output / logging of secrets
         output_commands = cfg.get("output_commands", [])
@@ -643,8 +630,7 @@ class SensitiveInfoLeakRule:
                         "Use structured logging with automatic PII redaction.",
                         line_number=line_no,
                         matched_pattern=out_cmd,
-                    )
-                )
+                    ))
 
         # 6c. File writes of secrets
         file_writes = cfg.get("sensitive_file_writes", [])
@@ -661,8 +647,7 @@ class SensitiveInfoLeakRule:
                         "Use in-memory or ephemeral storage.",
                         line_number=line_no,
                         matched_pattern=fw_pat,
-                    )
-                )
+                    ))
 
         # 6d. Environment variable leakage (blocklisted env vars)
         for env_var in policy.blocklist_env_vars:
@@ -679,8 +664,7 @@ class SensitiveInfoLeakRule:
                         "If needed, ensure they are not echoed or written out.",
                         line_number=line_no,
                         matched_pattern=env_var,
-                    )
-                )
+                    ))
 
         return findings
 
@@ -688,6 +672,7 @@ class SensitiveInfoLeakRule:
 # ========================================================================
 # Helpers
 # ========================================================================
+
 
 def _extract_url(text: str) -> Optional[str]:
     """Naive domain extractor from a line of text — used for whitelist checks."""

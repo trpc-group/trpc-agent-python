@@ -176,8 +176,8 @@ def _extract_script_content(req: Any) -> Optional[str]:
                 if isinstance(val, str) and val.strip():
                     return val
         # Check for keyword arguments
-        kwargs = req.get("kwargs", {})
-        if isinstance(kwargs, dict):
+        kwargs = req.get("kwargs")
+        if isinstance(kwargs, dict) and kwargs:
             return _extract_script_content(kwargs)
     # Try to get 'args' attribute from an object
     if hasattr(req, "args") and isinstance(getattr(req, "args"), dict):
