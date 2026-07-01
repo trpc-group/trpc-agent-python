@@ -24,7 +24,6 @@ Rules are **pluggable** — you can register additional rules via
 from __future__ import annotations
 
 import re
-from typing import Any
 from typing import Callable
 from typing import Optional
 
@@ -532,7 +531,7 @@ class ResourceAbuseRule:
 
         # 5d. Long sleeps
         threshold = cfg.get("long_sleep_threshold_seconds", 60)
-        sleep_pattern = rf"sleep\s+(\d+)"
+        sleep_pattern = r"sleep\s+(\d+)"
         for m in re.finditer(sleep_pattern, script, re.IGNORECASE):
             duration = int(m.group(1))
             if duration > threshold:
@@ -607,7 +606,7 @@ class SensitiveInfoLeakRule:
                         category=RiskCategory.SENSITIVE_INFO_LEAK,
                         risk_level=RiskLevel.CRITICAL,
                         evidence=line_text,
-                        message=f"Hard-coded secret / credential detected",
+                        message="Hard-coded secret / credential detected",
                         recommendation="Never hard-code secrets. Use environment "
                         "variables or a secrets manager (e.g., HashiCorp Vault, "
                         "AWS Secrets Manager).",
