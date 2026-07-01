@@ -1,0 +1,87 @@
+{
+    "_description": "Evaluation + Optimization 自动回归闭环配置",
+    "pipeline": {
+        "name": "PlateAgent Eval-Optimize Loop",
+        "version": "1.0.0",
+        "max_iterations": 5,
+        "random_seed": 42
+    },
+    "gate": {
+        "rules": {
+            "total_score_improvement": {
+                "enabled": true,
+                "threshold": 0.03,
+                "description": "验证集总分提升 ≥ 3%"
+            },
+            "no_new_hard_fail": {
+                "enabled": true,
+                "max_new_fails": 0,
+                "description": "不允许新增 hard fail"
+            },
+            "critical_case_no_regress": {
+                "enabled": true,
+                "critical_case_ids": [],
+                "description": "关键 case 不退步"
+            },
+            "cost_within_budget": {
+                "enabled": true,
+                "max_cost_ratio": 1.2,
+                "description": "成本不超过 baseline 的 120%"
+            },
+            "overfit_detection": {
+                "enabled": true,
+                "description": "训练集提升 + 验证集退化 → 拒绝候选"
+            }
+        },
+        "acceptance_strategy": "all_must_pass",
+        "description": "all_must_pass: 所有启用的规则都通过才接受; majority: 多数通过即可"
+    },
+    "attribution": {
+        "categories": [
+            "final_answer_mismatch",
+            "tool_call_error",
+            "param_error",
+            "llm_rubric_fail",
+            "knowledge_recall_insufficient",
+            "format_invalid"
+        ],
+        "rules": {
+            "final_answer_mismatch": {
+                "trigger": "predicted != ground_truth",
+                "priority": 1
+            },
+            "tool_call_error": {
+                "trigger": "tool execution failed or timeout",
+                "priority": 2
+            },
+            "param_error": {
+                "trigger": "tool parameter invalid",
+                "priority": 3
+            },
+            "llm_rubric_fail": {
+                "trigger": "LLM Judge score below threshold",
+                "threshold": 0.6,
+                "priority": 4
+            },
+            "knowledge_recall_insufficient": {
+                "trigger": "blacklist miss or confusion char not recalled",
+                "priority": 5
+            },
+            "format_invalid": {
+                "trigger": "output does not match expected JSON schema",
+                "priority": 6
+            }
+        }
+    },
+    "optimizer": {
+        "target_prompts": ["system_prompt", "skill_prompt"],
+        "strategy": "failure_driven",
+        "description": "根据归因结果，优先优化失败率最高的类别对应的 prompt 片段"
+    },
+    "output": {
+        "dir": "output",
+        "formats": ["json", "markdown"],
+        "retain_audit_trail": true,
+        "max_audit_entries": 50
+    }
+}

@@ -1,0 +1,444 @@
+"""Phase 3: ???????
+
+?? Phase 2 ?????? TargetPrompt?system_prompt / skill_prompt???
+????????? prompt ??????
+
+???????
+- fake: ??????????? prompt ???? API ???
+- real: ?? trpc_agent.optimization.AgentOptimizer API
+
+?????
+- failure_driven: ??????????????????????? prompt ??
+- iterative: ???????? max_iterations ???
+"""
+
+from __future__ import annotations
+
+import json
+import hashlib
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Optional
+
+from src.attribution import AttributionReport, AttributionCluster, CATEGORY_META
+
+
+# ============================================================================
+# ?? Prompt ????? PlateAgent ??? prompt ???
+# ============================================================================
+
+BASE_PROMPTS: dict[str, str] = {
+    "system_prompt": (
+        "??????????????\n"
+        "???????????????????????????????????"
+        "???????????????????????\n\n"
+        "## ????\n"
+        "1. ???????????????\n"
+        "2. ??????\n"
+        "3. ????\n"
+        "4. ??????\n"
+        "5. ????????\n"
+        "6. ???????\n\n"
+        "## ????\n"
+        "?? JSON ?????\n"
+        '{"plate_number": "?A12345", "confidence": 0.95, "blacklist_hit": false, "blacklist_info": {}}\n\n'
+        "## ????\n"
+        "- ??????????????????B/8, 0/O, S/5, 2/Z?\n"
+        "- ???????????????\n"
+        "- ????? < 0.5????????\n"
+    ),
+    "skill_prompt": (
+        "## ???????\n"
+        "??????????????? ? ??? ? ??? ? Canny ???? ? ?????????\n"
+        "?????????????????????????????\n\n"
+        "## ??????\n"
+        "??????????????????????? HSV ?????????\n"
+        "??????????????????\n\n"
+        "## ??????\n"
+        "??????????????????????\n"
+        "????????????? '?'?\n\n"
+        "## ??????\n"
+        "?? SVM ??????????? LLM ?????????\n"
+        "???????????B/8, 0/O/D, 2/Z, 5/S, 1/I, 7/T, C/G, E/F, A/4, 6/G, 9/P, 3/B, D/P, K/X?\n"
+        "?????????/?, ?/?, ?/?, ?/??\n\n"
+        "## ???????\n"
+        "?????????????????\n"
+        "???????????????????????????????\n"
+        "??????????????????\n"
+    ),
+}
+
+# ???? ? ??????
+CATEGORY_OPTIMIZATION_HINTS: dict[str, dict] = {
+    "final_answer_mismatch": {
+        "target_section": "?????????",
+        "strategy": (
+            "??????????\n"
+            "- ???????????????\n"
+            "- ??????????? LLM ????\n"
+            "- ??????????????"
+        ),
+    },
+    "tool_call_error": {
+        "target_section": "??????",
+        "strategy": (
+            "??????????\n"
+            "- ???????????????\n"
+            "- ????????????????\n"
+            "- ??????????????"
+        ),
+    },
+    "param_error": {
+        "target_section": "??????",
+        "strategy": (
+            "?????????\n"
+            "- ???????????????????????\n"
+            "- ????????\n"
+            "- ??????????????"
+        ),
+    },
+    "llm_rubric_fail": {
+        "target_section": "??????",
+        "strategy": (
+            "???????\n"
+            "- ??????????????\n"
+            "- ?????????????????\n"
+            "- ?? JSON schema ??????????"
+        ),
+    },
+    "knowledge_recall_insufficient": {
+        "target_section": "?????",
+        "strategy": (
+            "???????\n"
+            "- ??????????????????\n"
+            "- ?????????????A12345 ??? ?A12345?\n"
+            "- ????????? '???' ?????"
+        ),
+    },
+    "format_invalid": {
+        "target_section": "??????",
+        "strategy": (
+            "???????\n"
+            "- ?? JSON schema ???????\n"
+            "- ??????? JSON ?????\n"
+            "- ??????????"
+        ),
+    },
+}
+
+
+# ============================================================================
+# ????
+# ============================================================================
+
+@dataclass
+class PromptCandidate:
+    """??????? prompt?"""
+    candidate_id: str                    # ????????? hash + ????
+    iteration: int                       # ??????0-based?
+    target_prompt_type: str              # "system_prompt" | "skill_prompt" | "router_prompt"
+    prompt_before: str                   # ?????
+    prompt_after: str                    # ?????
+    change_log: list[str] = field(default_factory=list)  # ??????
+    failure_category: str = ""           # ?????????
+    attribution_confidence: float = 0.0  # ?????
+    estimated_cost: float = 0.0          # ??????
+
+    def to_dict(self) -> dict:
+        return {
+            "candidate_id": self.candidate_id,
+            "iteration": self.iteration,
+            "target_prompt_type": self.target_prompt_type,
+            "prompt_before": self.prompt_before,
+            "prompt_after": self.prompt_after,
+            "change_log": self.change_log,
+            "failure_category": self.failure_category,
+            "attribution_confidence": round(self.attribution_confidence, 3),
+            "estimated_cost": round(self.estimated_cost, 6),
+        }
+
+
+@dataclass
+class OptimizationResult:
+    """???????"""
+    candidates: list[PromptCandidate] = field(default_factory=list)
+    total_iterations: int = 0
+    strategy: str = "failure_driven"
+    attribution_summary: dict = field(default_factory=dict)  # ????
+
+    @property
+    def latest_candidate(self) -> Optional[PromptCandidate]:
+        return self.candidates[-1] if self.candidates else None
+
+    @property
+    def optimized_prompt(self) -> Optional[str]:
+        """???????? prompt?? validator ??????"""
+        c = self.latest_candidate
+        return c.prompt_after if c else None
+
+    @property
+    def optimized_prompt_type(self) -> Optional[str]:
+        c = self.latest_candidate
+        return c.target_prompt_type if c else None
+
+    def to_dict(self) -> dict:
+        return {
+            "candidates": [c.to_dict() for c in self.candidates],
+            "total_iterations": self.total_iterations,
+            "strategy": self.strategy,
+            "attribution_summary": self.attribution_summary,
+        }
+
+
+# ============================================================================
+# FakeOptimizer
+# ============================================================================
+
+class FakeOptimizer:
+    """????????? Prompt ????
+
+    ???????????????????? prompt ?????????
+    ??? API ?????????????????
+
+    ????:
+        opt = FakeOptimizer()
+        result = opt.optimize(attribution_report)
+        print(result.latest_candidate.prompt_after)
+    """
+
+    def __init__(self, seed: int = 42):
+        self.seed = seed
+        self._iteration = 0
+
+    def optimize(
+        self,
+        attribution_report: AttributionReport,
+        max_iterations: int = 3,
+    ) -> OptimizationResult:
+        """???????? prompt ???
+
+        Args:
+            attribution_report: Phase 2 ????
+            max_iterations: ??????
+
+        Returns:
+            OptimizationResult: ?????? prompt ?????
+        """
+        candidates: list[PromptCandidate] = []
+
+        if not attribution_report.clusters:
+            return OptimizationResult(
+                candidates=candidates,
+                total_iterations=0,
+                attribution_summary={"note": "no failures to optimize"},
+            )
+
+        # ???????????
+        priority_queue = self._build_priority_queue(attribution_report)
+
+        for iteration, target in enumerate(priority_queue[:max_iterations]):
+            self._iteration = iteration
+            category = target["category"]
+            prompt_type = target["prompt_target"]
+            confidence = target["confidence"]
+
+            # ???????
+            prompt_before = self._get_base_prompt(prompt_type)
+
+            # ???????
+            prompt_after, change_log = self._generate_optimization(
+                prompt_type, category, prompt_before, confidence
+            )
+
+            # ???? ID
+            candidate_id = self._make_candidate_id(prompt_after, iteration)
+
+            candidate = PromptCandidate(
+                candidate_id=candidate_id,
+                iteration=iteration,
+                target_prompt_type=prompt_type,
+                prompt_before=prompt_before,
+                prompt_after=prompt_after,
+                change_log=change_log,
+                failure_category=category,
+                attribution_confidence=confidence,
+                estimated_cost=0.0005,  # fake ????????
+            )
+            candidates.append(candidate)
+
+        attr_summary = {
+            "primary_failure": attribution_report.primary_failure_category.category
+            if attribution_report.primary_failure_category else "none",
+            "total_failures": attribution_report.total_failures,
+            "optimization_priority": attribution_report.optimization_priority,
+        }
+
+        return OptimizationResult(
+            candidates=candidates,
+            total_iterations=len(candidates),
+            strategy="failure_driven",
+            attribution_summary=attr_summary,
+        )
+
+    # ?? ???? ????????????????????????????????????????
+
+    def _build_priority_queue(
+        self, report: AttributionReport
+    ) -> list[dict]:
+        """??????????
+
+        ?????????????????? prompt_target?
+        """
+        queue = []
+        for cluster in sorted(report.clusters, key=lambda c: -c.count):
+            if cluster.count == 0:
+                continue
+            queue.append({
+                "category": cluster.category,
+                "prompt_target": cluster.prompt_target,
+                "confidence": cluster.avg_confidence,
+                "count": cluster.count,
+            })
+        return queue
+
+    def _get_base_prompt(self, prompt_type: str) -> str:
+        """????????? prompt?"""
+        return BASE_PROMPTS.get(prompt_type, f"# {prompt_type} prompt placeholder")
+
+    def _generate_optimization(
+        self,
+        prompt_type: str,
+        category: str,
+        prompt_before: str,
+        confidence: float,
+    ) -> tuple[str, list[str]]:
+        """???????????? prompt ???
+
+        Returns:
+            (prompt_after, change_log)
+        """
+        hints = CATEGORY_OPTIMIZATION_HINTS.get(category, {})
+        strategy = hints.get("strategy", "????")
+
+        change_log = [
+            f"[{category}] confidence={confidence:.2f}",
+            f"target: {prompt_type} ? {hints.get('target_section', 'general')}",
+        ]
+
+        # ????????? prompt ????? LLM ?????
+        optimization_header = (
+            f"\n\n<!-- ???? {self._iteration + 1} -->\n"
+            f"## ????????????{category}?\n"
+            f"{strategy}\n"
+        )
+
+        prompt_after = prompt_before + optimization_header
+
+        # ??????
+        for line in strategy.strip().split("\n"):
+            line = line.strip().lstrip("- ")
+            if line and not line.startswith("#"):
+                change_log.append(f"  + {line}")
+
+        return prompt_after, change_log
+
+    @staticmethod
+    def _make_candidate_id(prompt_text: str, iteration: int) -> str:
+        """???? ID????? + ????"""
+        content_hash = hashlib.sha256(prompt_text.encode()).hexdigest()[:12]
+        ts = int(time.time() * 1000)
+        return f"cand_{iteration}_{content_hash}_{ts}"
+
+
+# ============================================================================
+# OptimizationRunner?????
+# ============================================================================
+
+class OptimizationRunner:
+    """????????
+
+    ?? fake ? real ?????
+
+    ????:
+        runner = OptimizationRunner(mode="fake")
+        result = runner.run(attribution_report)
+        print(result.optimized_prompt)
+    """
+
+    def __init__(self, mode: str = "fake", config: Optional[dict] = None, **kwargs):
+        if mode not in ("fake", "real"):
+            raise ValueError(f"Unknown mode: {mode}. Must be 'fake' or 'real'.")
+        self.mode = mode
+        self.config = config or {}
+        self.kwargs = kwargs
+        self.max_iterations = self.config.get("max_iterations", 3)
+
+        if mode == "fake":
+            seed = self.config.get("random_seed", 42)
+            self._optimizer = FakeOptimizer(seed=seed)
+
+    def run(
+        self,
+        attribution_report: AttributionReport,
+    ) -> OptimizationResult:
+        """?????
+
+        Args:
+            attribution_report: Phase 2 ????
+
+        Returns:
+            OptimizationResult
+        """
+        if self.mode == "fake":
+            return self._optimizer.optimize(
+                attribution_report,
+                max_iterations=self.max_iterations,
+            )
+        else:
+            return self._run_real(attribution_report)
+
+    def _run_real(
+        self, attribution_report: AttributionReport
+    ) -> OptimizationResult:
+        """Real ????? trpc_agent.optimization.AgentOptimizer?"""
+        try:
+            from trpc_agent.optimization import AgentOptimizer
+        except ImportError:
+            raise ImportError(
+                "Real mode requires trpc_agent.optimization. "
+                "Install trpc-agent package or use mode='fake'."
+            )
+        # TODO: AgentOptimizer ???? tRPC-Agent SDK?
+        raise NotImplementedError(
+            "Real mode AgentOptimizer integration pending. Use fake mode."
+        )
+
+
+# ============================================================================
+# ????
+# ============================================================================
+
+def run_optimization(
+    attribution_report: AttributionReport,
+    mode: str = "fake",
+    config_path: Optional[str | Path] = None,
+) -> OptimizationResult:
+    """???????
+
+    Args:
+        attribution_report: Phase 2 ????
+        mode: "fake" | "real"
+        config_path: optimizer.json ??
+
+    Returns:
+        OptimizationResult
+    """
+    config = None
+    if config_path:
+        with open(config_path, "r", encoding="utf-8") as f:
+            full = json.load(f)
+        config = full.get("pipeline", {})
+
+    runner = OptimizationRunner(mode=mode, config=config)
+    return runner.run(attribution_report)
