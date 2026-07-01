@@ -1,0 +1,9 @@
+{
+  "seed": 42,
+  "gate": {
+    "min_val_score_delta": 0.05,
+    "forbid_new_hard_fail": true,
+    "key_case_ids": ["val_add_class"],
+    "cost_budget_usd": 1.0
+  }
+}
