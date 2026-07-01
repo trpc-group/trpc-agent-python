@@ -37,8 +37,6 @@ from typing import AsyncIterator
 from typing import Callable
 from typing import Optional
 
-from trpc_agent_sdk.log import logger
-
 from ._audit import AuditLogger
 from ._policy import SafetyPolicy
 from ._policy import get_policy
