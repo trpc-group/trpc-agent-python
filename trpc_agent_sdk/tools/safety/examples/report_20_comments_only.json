@@ -1,0 +1,15 @@
+{
+  "scan_id": "224010b5dd7a469fb40444449f90a319",
+  "timestamp": 1782915392.8036783,
+  "tool_name": "20_comments_only",
+  "script_type": "unknown",
+  "script_size_lines": 2,
+  "decision": "allow",
+  "risk_level": "info",
+  "summary": "No risks found in 20_comments_only. Safe to proceed.",
+  "scan_duration_ms": 0.16,
+  "policy_version": "5c4aa1d614dc",
+  "sanitized": false,
+  "execution_blocked": false,
+  "findings": []
+}

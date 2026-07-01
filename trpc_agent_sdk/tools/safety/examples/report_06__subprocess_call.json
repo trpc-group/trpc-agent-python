@@ -1,0 +1,26 @@
+{
+  "scan_id": "1fc207d5aec54028a5f1a6284ff3a870",
+  "timestamp": 1782915392.7995877,
+  "tool_name": "06_subprocess_call",
+  "script_type": "python",
+  "script_size_lines": 1,
+  "decision": "deny",
+  "risk_level": "high",
+  "summary": "Scan of '06_subprocess_call' found 1 issue(s) (1 high/critical). Decision: deny.",
+  "scan_duration_ms": 0.18,
+  "policy_version": "5c4aa1d614dc",
+  "sanitized": true,
+  "execution_blocked": true,
+  "findings": [
+    {
+      "rule_id": "PROC-001",
+      "category": "process_and_system",
+      "risk_level": "high",
+      "message": "Process execution call detected: subprocess\\.",
+      "evidence": "import subprocess; subprocess.run(['ls'])",
+      "recommendation": "Avoid spawning child processes from within agent tools. Prefer library-based implementations.",
+      "line_number": 1,
+      "matched_pattern": "subprocess\\."
+    }
+  ]
+}

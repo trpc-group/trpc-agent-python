@@ -1,0 +1,26 @@
+{
+  "scan_id": "e239fef02c8f45a9a0fc55883792d410",
+  "timestamp": 1782915392.8026583,
+  "tool_name": "16_os_system",
+  "script_type": "python",
+  "script_size_lines": 1,
+  "decision": "deny",
+  "risk_level": "high",
+  "summary": "Scan of '16_os_system' found 1 issue(s) (1 high/critical). Decision: deny.",
+  "scan_duration_ms": 0.17,
+  "policy_version": "5c4aa1d614dc",
+  "sanitized": true,
+  "execution_blocked": true,
+  "findings": [
+    {
+      "rule_id": "PROC-001",
+      "category": "process_and_system",
+      "risk_level": "high",
+      "message": "Process execution call detected: os\\.system",
+      "evidence": "import os; os.system('cat /etc/hosts')",
+      "recommendation": "Avoid spawning child processes from within agent tools. Prefer library-based implementations.",
+      "line_number": 1,
+      "matched_pattern": "os\\.system"
+    }
+  ]
+}

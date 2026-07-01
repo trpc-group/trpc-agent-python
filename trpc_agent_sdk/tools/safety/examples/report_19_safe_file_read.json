@@ -1,0 +1,15 @@
+{
+  "scan_id": "9b8a810e772245b5bd77d182aeb837d0",
+  "timestamp": 1782915392.803429,
+  "tool_name": "19_safe_file_read",
+  "script_type": "python",
+  "script_size_lines": 1,
+  "decision": "allow",
+  "risk_level": "info",
+  "summary": "No risks found in 19_safe_file_read. Safe to proceed.",
+  "scan_duration_ms": 0.22,
+  "policy_version": "5c4aa1d614dc",
+  "sanitized": false,
+  "execution_blocked": false,
+  "findings": []
+}

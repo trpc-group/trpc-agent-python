@@ -1,0 +1,36 @@
+{
+  "scan_id": "d8dd06aa4dcd4f2cb409e49b9768fb45",
+  "timestamp": 1782915392.8006375,
+  "tool_name": "10_sensitive_info",
+  "script_type": "unknown",
+  "script_size_lines": 1,
+  "decision": "deny",
+  "risk_level": "critical",
+  "summary": "Scan of '10_sensitive_info' found 2 issue(s) (2 high/critical). Decision: deny.",
+  "scan_duration_ms": 0.16,
+  "policy_version": "5c4aa1d614dc",
+  "sanitized": true,
+  "execution_blocked": true,
+  "findings": [
+    {
+      "rule_id": "LEAK-001",
+      "category": "sensitive_info_leak",
+      "risk_level": "critical",
+      "message": "Hard-coded secret / credential detected",
+      "evidence": "api_key=***REDACTED***",
+      "recommendation": "Never hard-code secrets. Use environment variables or a secrets manager (e.g., HashiCorp Vault, AWS Secrets Manager).",
+      "line_number": 1,
+      "matched_pattern": "api_key\\s*=\\s*['\"]"
+    },
+    {
+      "rule_id": "LEAK-001",
+      "category": "sensitive_info_leak",
+      "risk_level": "critical",
+      "message": "Hard-coded secret / credential detected",
+      "evidence": "api_key=***REDACTED***",
+      "recommendation": "Never hard-code secrets. Use environment variables or a secrets manager (e.g., HashiCorp Vault, AWS Secrets Manager).",
+      "line_number": 1,
+      "matched_pattern": "api[_-]?key\\s*[:=]\\s*['\"]"
+    }
+  ]
+}
