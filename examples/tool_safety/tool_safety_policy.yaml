@@ -1,0 +1,82 @@
+# Tool Script Safety Guard policy
+#
+# Edit this file to change scanner behavior WITHOUT touching code.
+# Reload via PolicyConfig.from_yaml(...) at runtime (hot reload).
+#
+# Decision thresholds (risk levels): none < low < medium < high < critical
+#   deny_risk_level   : findings at or above this level -> DENY
+#   review_risk_level : findings at or above this level (below deny) -> NEEDS_HUMAN_REVIEW
+
+# Domains that tool scripts are allowed to contact. Suffix match.
+# Empty list => ALL network egress is flagged (fail-closed).
+whitelisted_domains:
+  - localhost
+  - 127.0.0.1
+  - api.github.com
+  - pypi.org
+  - files.pythonhosted.org
+  - registry.npmjs.org
+  - httpbin.org
+
+# Path substrings/regex that must never be touched by scripts.
+forbidden_paths:
+  - /etc
+  - /usr
+  - /bin
+  - /sbin
+  - /boot
+  - ~/.ssh
+  - ~/.aws
+  - .env
+  - .netrc
+  - id_rsa
+  - id_ed25519
+
+# Bash commands permitted without further scrutiny (used by wrapper allow-list).
+# Note: safety scanner still scans arguments even for allowed commands.
+allowed_commands:
+  - ls
+  - pwd
+  - cat
+  - grep
+  - find
+  - head
+  - tail
+  - wc
+  - echo
+  - git
+  - python
+  - python3
+  - pytest
+  - pip
+  - npm
+
+# Hard caps on execution behavior.
+max_timeout_seconds: 300
+max_output_bytes: 10485760        # 10 MiB
+max_file_write_bytes: 104857600   # 100 MiB
+
+# Decision boundaries.
+deny_risk_level: high             # high and critical -> DENY
+review_risk_level: medium         # medium -> NEEDS_HUMAN_REVIEW
+
+# Additional secret regexes to detect (compiled at load time).
+# Augment the built-in defaults (AWS keys, bearer tokens, JWTs, etc.).
+secret_patterns:
+  - '(?i)sk-[A-Za-z0-9]{20,}'              # OpenAI-style key
+  - '(?i)ghp_[A-Za-z0-9]{36}'              # GitHub PAT
+  - '(?i)xox[baprs]-[A-Za-z0-9-]{10,}'     # Slack token
+  - '(?i)-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----'
+
+# Rule ids to skip entirely. Comment out to keep all rules enabled.
+# Available rule ids:
+#   R001_dangerous_files
+#   R002_network_egress
+#   R003_process_system
+#   R004_dependency_install
+#   R005_resource_abuse
+#   R006_secret_leak
+disabled_rules: []
+
+# Free-form per-rule overrides (read by rules as needed).
+extra: {}
