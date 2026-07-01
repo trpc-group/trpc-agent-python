@@ -1,0 +1,15 @@
+{
+  "scan_id": "a4058312c98e4f6e9633c59a21174b11",
+  "timestamp": 1782915392.8039181,
+  "tool_name": "21_import_only",
+  "script_type": "python",
+  "script_size_lines": 1,
+  "decision": "allow",
+  "risk_level": "info",
+  "summary": "No risks found in 21_import_only. Safe to proceed.",
+  "scan_duration_ms": 0.16,
+  "policy_version": "5c4aa1d614dc",
+  "sanitized": false,
+  "execution_blocked": false,
+  "findings": []
+}

@@ -1,0 +1,26 @@
+{
+  "scan_id": "ee84cc56c74744f7bd2107fdc0ac4b52",
+  "timestamp": 1782911746.8994896,
+  "tool_name": "05_whitelisted_network",
+  "script_type": "bash",
+  "script_size_lines": 1,
+  "decision": "allow",
+  "risk_level": "info",
+  "summary": "Scan of '05_whitelisted_network' found 1 issue(s) (0 high/critical). Decision: allow.",
+  "scan_duration_ms": 0.18,
+  "policy_version": "5c4aa1d614dc",
+  "sanitized": true,
+  "execution_blocked": false,
+  "findings": [
+    {
+      "rule_id": "NET-002",
+      "category": "network_egress",
+      "risk_level": "info",
+      "message": "Network command 'curl' targeting whitelisted domain 'localhost'.",
+      "evidence": "curl http://localhost:8080/health",
+      "recommendation": "No action needed \u2014 domain is whitelisted.",
+      "line_number": 1,
+      "matched_pattern": "curl"
+    }
+  ]
+}

@@ -1,0 +1,378 @@
+# ============================================================================
+# tRPC-Agent Tool Script Safety Guard — Policy Configuration
+# ============================================================================
+# This file controls the behaviour of the safety scanner.
+# Changes take effect on the next scan without requiring code modifications.
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# Global settings
+# ---------------------------------------------------------------------------
+global:
+  # Max script size in lines (scripts exceeding this trigger needs_human_review)
+  max_script_lines: 500
+  # Max script size in bytes
+  max_script_bytes: 524288  # 512 KiB
+  # Max execution timeout in seconds
+  max_timeout_seconds: 300
+  # Max stdout / stderr output size in bytes
+  max_output_bytes: 10485760  # 10 MiB
+
+# ---------------------------------------------------------------------------
+# Decision thresholds
+# ---------------------------------------------------------------------------
+# Risk level  → default decision mapping (can be overridden per rule)
+decision_thresholds:
+  critical: deny
+  high: deny
+  medium: needs_human_review
+  low: allow
+  info: allow
+
+# ---------------------------------------------------------------------------
+# Whitelists — entries here override rules and always result in allow
+# ---------------------------------------------------------------------------
+whitelists:
+  # Domains that network operations may contact without triggering a warning
+  domains:
+    - "localhost"
+    - "127.0.0.1"
+    - "::1"
+    - "0.0.0.0"
+    - "api.openai.com"
+    - "api.anthropic.com"
+    - "api.deepseek.com"
+    - "generativelanguage.googleapis.com"
+    - "*.trpc.tencent.com"
+    - "*.woa.com"
+
+  # Shell commands that are always allowed
+  commands:
+    - "echo"
+    - "printf"
+    - "ls"
+    - "cat"
+    - "head"
+    - "tail"
+    - "wc"
+    - "sort"
+    - "uniq"
+    - "grep"
+    - "find"
+    - "xargs"
+    - "date"
+    - "env"
+    - "printenv"
+    - "pwd"
+    - "which"
+    - "type"
+    - "basename"
+    - "dirname"
+    - "realpath"
+    - "readlink"
+    - "test"
+    - "["
+    - "true"
+    - "false"
+    - "sleep"  # short sleeps are ok; risk rule checks duration
+
+  # Patterns (regex) that mark a script as safe
+  patterns: []
+
+# ---------------------------------------------------------------------------
+# Blocklists — entries here always result in deny
+# ---------------------------------------------------------------------------
+blocklists:
+  # File-system paths whose access is always blocked
+  paths:
+    - "/etc/shadow"
+    - "/etc/passwd"
+    - "~/.ssh"
+    - "~/.gnupg"
+    - "/root/.ssh"
+    - "/home/*/.ssh"
+    - "~/.aws"
+    - "~/.gcloud"
+    - "~/.azure"
+    - "~/.config/gcloud"
+
+  # Environment variable names that must not be read
+  env_vars:
+    - "AWS_ACCESS_KEY_ID"
+    - "AWS_SECRET_ACCESS_KEY"
+    - "AWS_SESSION_TOKEN"
+    - "GCLOUD_ACCESS_TOKEN"
+    - "AZURE_CLIENT_SECRET"
+    - "DOCKER_PASSWORD"
+    - "GITHUB_TOKEN"
+    - "NPM_TOKEN"
+    - "PYPI_TOKEN"
+
+  # Commands that are unconditionally denied
+  commands:
+    - "rm -rf /"
+    - "rm -rf --no-preserve-root"
+    - "dd if=/dev/zero"
+    - "mkfs."
+    - ":(){ :|:& };:"
+    - "chmod 777 /"
+    - "chown -R"
+
+  # Patterns (regex) that always result in deny
+  patterns:
+    - "rm\\s+-rf\\s+/"                    # recursive root delete
+    - "mkfs\\.\\w+\\s+/dev/"             # formatting a block device
+    - "dd\\s+if=/dev/zero\\s+of=/dev/"   # zero-fill a block device
+    - ":\\s*\\(\\s*\\)\\s*\\{\\s*:\\s*\\|\\s*:.*\\}"  # fork bomb
+    - ">\\s*/dev/sda"                     # overwrite block device
+
+# ---------------------------------------------------------------------------
+# Rule-specific configuration
+# ---------------------------------------------------------------------------
+rules:
+  # ---- 1. Dangerous file operations ---------------------------------------
+  dangerous_file_ops:
+    enabled: true
+    risk_level: critical
+    # Paths whose access (read/write/delete) triggers at least high
+    sensitive_paths:
+      - "~/.ssh"
+      - "~/.gnupg"
+      - "/etc/shadow"
+      - "/etc/passwd"
+      - "~/.aws/credentials"
+      - "~/.aws/config"
+      - "~/.gcloud/credentials.db"
+      - "~/.azure/accessTokens.json"
+      - ".env"
+      - "*.pem"
+      - "*.key"
+      - "id_rsa"
+      - "id_ed25519"
+      - "id_ecdsa"
+    # Patterns that indicate credential files
+    credential_file_patterns:
+      - ".*\\.pem$"
+      - ".*\\.key$"
+      - ".*\\.p12$"
+      - ".*\\.pfx$"
+      - ".*id_rsa.*"
+      - ".*id_ed25519.*"
+      - ".*id_ecdsa.*"
+      - ".*credentials.*"
+      - ".*secrets.*"
+    # Patterns indicating destructive operations
+    destructive_patterns:
+      - "rm\\s+-rf"
+      - "rm\\s+-r\\s+/"
+      - "shutil\\.rmtree"
+      - "os\\.remove\\(.*\\)"
+      - "os\\.unlink"
+      - ">\\s*/dev/"
+      - "mkfs\\."
+
+  # ---- 2. Network egress ---------------------------------------------------
+  network_egress:
+    enabled: true
+    risk_level: high
+    # Known network clients / libraries
+    python_functions:
+      - "requests\\."
+      - "aiohttp\\."
+      - "httpx\\."
+      - "urllib\\.request"
+      - "urllib3\\."
+      - "socket\\."
+      - "http\\.client"
+      - "ftplib\\."
+      - "smtplib\\."
+      - "imaplib\\."
+      - "poplib\\."
+      - "telnetlib\\."
+      - "websockets?\\."
+      - "paramiko\\."
+      - "fabric\\."
+      - "scp\\."
+    bash_commands:
+      - "curl"
+      - "wget"
+      - "nc "
+      - "ncat"
+      - "netcat"
+      - "telnet"
+      - "ssh "
+      - "scp "
+      - "sftp"
+      - "rsync"
+      - "ftp "
+      - "socat"
+      - "aria2c"
+      - "axel"
+
+  # ---- 3. Process & system commands ----------------------------------------
+  process_and_system:
+    enabled: true
+    risk_level: high
+    python_functions:
+      - "subprocess\\."
+      - "os\\.system"
+      - "os\\.popen"
+      - "os\\.execv"
+      - "os\\.execl"
+      - "os\\.spawn"
+      - "popen\\."
+      - "pty\\.spawn"
+      - "signal\\.pthread_kill"
+      - "ctypes\\."
+      - "cffi\\."
+      - "_winreg"
+      - "shutil\\.which"
+      # Privilege escalation
+      - "os\\.setuid"
+      - "os\\.setgid"
+      - "os\\.seteuid"
+      - "os\\.setegid"
+      - "os\\.chown"
+      - "os\\.chmod"
+      # Dynamic code execution (code injection)
+      - "\\beval\\s*\\("
+      - "\\bexec\\s*\\("
+      - "\\b__import__\\s*\\("
+      - "\\bcompile\\s*\\("
+    bash_patterns:
+      - "sudo "
+      - "su "
+      - "chown "
+      - "chmod "
+      - "chroot "
+      - "mount "
+      - "umount "
+      - "systemctl "
+      - "service "
+      - "kill -9"
+      - "killall"
+      - "pkill"
+      - "reboot"
+      - "shutdown"
+      - "init "
+      - "nohup"
+      - "disown"
+      - "&>"
+      - "|"
+      - "`"
+      - "$("
+
+  # ---- 4. Dependency installation ------------------------------------------
+  dependency_install:
+    enabled: true
+    risk_level: high
+    python_functions:
+      - "pip\\s+install"
+      - "pip3\\s+install"
+      - "python.*-m\\s+pip\\s+install"
+      - "easy_install"
+      - "conda\\s+install"
+      - "poetry\\s+add"
+      - "pipenv\\s+install"
+    bash_commands:
+      - "pip install"
+      - "pip3 install"
+      - "pipx install"
+      - "npm install"
+      - "npm i "
+      - "yarn add"
+      - "pnpm add"
+      - "apt install"
+      - "apt-get install"
+      - "yum install"
+      - "dnf install"
+      - "brew install"
+      - "zypper install"
+      - "pacman -S"
+      - "cargo install"
+      - "go install"
+      - "gem install"
+
+  # ---- 5. Resource abuse ----------------------------------------------------
+  resource_abuse:
+    enabled: true
+    risk_level: high
+    # Patterns indicating infinite loops
+    infinite_loop_patterns:
+      - "while\\s+True\\s*:"
+      - "while\\s+1\\s*:"
+      - "for\\s*\\(\\s*;\\s*;\\s*\\)"
+      - "loop\\s+do"
+      - "while\\s*\\(\\s*1\\s*\\)"
+      - "while\\s*\\(\\s*true\\s*\\)"
+      - "goto\\s+\\w+\\s*;"
+    # Fork bomb
+    fork_bomb_patterns:
+      - ":\\s*\\(\\s*\\)\\s*\\{\\s*:\\s*\\|\\s*:"
+      - "fork\\s*\\(\\)\\s*&&\\s*fork\\s*\\(\\)"
+      - "os\\.fork\\(\\)"
+      - "multiprocessing\\.Process"
+    # Resource-heavy patterns
+    resource_heavy_patterns:
+      - "dd\\s+if="
+      - "/dev/urandom"
+      - "/dev/zero"
+      - "yes\\s+>"
+      - "split\\s+-b"
+      - "fallocate"
+      - "truncate\\s+-s"
+    # Long sleeps (seconds)
+    long_sleep_threshold_seconds: 60
+    # Concurrent task threshold
+    max_concurrent_tasks: 20
+
+  # ---- 6. Sensitive info leakage -------------------------------------------
+  sensitive_info_leak:
+    enabled: true
+    risk_level: critical
+    # Patterns matching secrets / tokens / keys
+    secret_patterns:
+      - "api_key\\s*=\\s*['\"]"
+      - "api[_-]?key\\s*[:=]\\s*['\"]"
+      - "secret\\s*=\\s*['\"]"
+      - "password\\s*=\\s*['\"]"
+      - "passwd\\s*=\\s*['\"]"
+      - "token\\s*=\\s*['\"]"
+      - "bearer\\s*['\"]"
+      - "authorization\\s*[:=]\\s*['\"]"
+      - "private[_-]?key\\s*[:=]\\s*['\"]"
+      - "-----BEGIN\\s+(RSA|DSA|EC|OPENSSH|PGP)\\s+PRIVATE\\s+KEY"
+      - "-----BEGIN\\s+CERTIFICATE"
+      - "sk-[a-zA-Z0-9]{20,}"
+      - "ghp_[a-zA-Z0-9]{20,}"
+      - "xox[baprs]-[a-zA-Z0-9-]+"
+      - "AIza[0-9A-Za-z\\-_]{35}"
+      - "AKIA[0-9A-Z]{16}"
+      - "eyJ[a-zA-Z0-9_-]{10,}\\.[a-zA-Z0-9_-]{10,}\\.[a-zA-Z0-9_-]{10,}"
+    # Beware: logging / print / echo of sensitive patterns
+    output_commands:
+      - "print\\s*\\(.*(api_key|secret|password|token)"
+      - "echo\\s+.*\\$?(API_KEY|SECRET|PASSWORD|TOKEN)"
+      - "logger\\."
+      - "logging\\."
+      - "console\\.log"
+      - "System\\.out\\.println"
+    # File write of sensitive content
+    sensitive_file_writes:
+      - "open\\s*\\(.*['\"]w.*api_key|secret|password|token"
+      - "write\\s*\\(.*api_key|secret|password|token"
+      - "echo\\s+.*(api_key|secret|password|token)\\s*>"
+
+# ---------------------------------------------------------------------------
+# Code pattern allow-list (safety hatches for specific known-safe patterns)
+# ---------------------------------------------------------------------------
+allow_patterns: []
+
+# ---------------------------------------------------------------------------
+# Output sanitization
+# ---------------------------------------------------------------------------
+sanitization:
+  # Whether to mask secrets in scan reports
+  mask_secrets_in_reports: true
+  # Replacement string
+  mask_string: "***REDACTED***"
