@@ -1,0 +1,39 @@
+{
+  "generated_by": "SafetyReviewer + scripts/tool_safety_check.py report schema",
+  "reports": [
+    {
+      "action_type": "python",
+      "case": "allow_python",
+      "decision": "allow",
+      "evidence": "",
+      "finding": "No risky code or command patterns detected.",
+      "path": "examples/tool_safety/samples/allow.py",
+      "recommendation": "Proceed with normal execution.",
+      "risk_level": "none",
+      "rule_id": "safe_python"
+    },
+    {
+      "action_type": "bash",
+      "case": "deny_bash",
+      "decision": "deny",
+      "evidence": "rm -rf",
+      "finding": "Destructive delete operation detected.",
+      "path": "examples/tool_safety/samples/deny.sh",
+      "recommendation": "Do not run destructive deletes without explicit user approval and scoped paths.",
+      "risk_level": "critical",
+      "rule_id": "dangerous_delete"
+    },
+    {
+      "action_type": "bash",
+      "case": "needs_human_review_bash",
+      "decision": "needs_human_review",
+      "evidence": "npm install",
+      "finding": "NPM package installation command detected.",
+      "path": "examples/tool_safety/samples/needs_human_review.sh",
+      "recommendation": "Send npm dependency installation through human review before mutating the environment.",
+      "risk_level": "medium",
+      "rule_id": "npm_install"
+    }
+  ],
+  "schema_version": 1
+}
