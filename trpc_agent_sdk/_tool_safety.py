@@ -347,6 +347,9 @@ class SafetyReviewer:
         source_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()
         blocked = decision in {"deny", "needs_human_review"}
         latency = time.perf_counter() - started_at
+        rules_evaluated = ["safe_python", "network_allowlist", "network_not_allowlisted"]
+        rules_evaluated.extend(_PATH_RULES)
+        rules_evaluated.extend(rule.rule_id for rule in _RULES)
         report = {
             "decision": decision,
             "rule_id": rule_id,
@@ -360,28 +363,17 @@ class SafetyReviewer:
             "evidence": evidence,
         }
         audit = {
-            "decision":
-            decision,
-            "rule_id":
-            rule_id,
-            "risk_level":
-            risk_level,
-            "tool_name":
-            tool_name,
-            "blocked":
-            blocked,
-            "latency":
-            latency,
-            "desensitized":
-            desensitized,
-            "action_type":
-            action_type,
-            "input_sha256":
-            source_hash,
-            "allowed_domains":
-            list(self.policy.allowed_domains),
-            "rules_evaluated": ["safe_python", "network_allowlist", "network_not_allowlisted"] + list(_PATH_RULES) +
-            [rule.rule_id for rule in _RULES],
+            "decision": decision,
+            "rule_id": rule_id,
+            "risk_level": risk_level,
+            "tool_name": tool_name,
+            "blocked": blocked,
+            "latency": latency,
+            "desensitized": desensitized,
+            "action_type": action_type,
+            "input_sha256": source_hash,
+            "allowed_domains": list(self.policy.allowed_domains),
+            "rules_evaluated": rules_evaluated,
         }
         return SafetyReview(
             decision=decision,

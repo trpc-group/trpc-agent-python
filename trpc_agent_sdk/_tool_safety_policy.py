@@ -10,7 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
 from typing import Iterable
 from typing import Mapping
 

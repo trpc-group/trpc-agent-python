@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from typing import Optional
 
 from .audit import risk_level
 from .models import Finding
