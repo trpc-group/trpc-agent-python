@@ -15,20 +15,20 @@ _EXAMPLE_CASES = {
         "source": "print('hello from tool safety')\n",
     },
     "deny_bash": {
-        "path": Path("examples/tool_safety/samples/deny.sh"),
-        "action_type": "bash",
-        "source": (
-            "# Inert sample: rm -rf /tmp/demo\n"
-            "printf '%s\\n' 'destructive delete sample is intentionally not executed'\n"
-        ),
+        "path":
+        Path("examples/tool_safety/samples/deny.sh"),
+        "action_type":
+        "bash",
+        "source": ("# Inert sample: rm -rf /tmp/demo\n"
+                   "printf '%s\\n' 'destructive delete sample is intentionally not executed'\n"),
     },
     "needs_human_review_bash": {
-        "path": Path("examples/tool_safety/samples/needs_human_review.sh"),
-        "action_type": "bash",
-        "source": (
-            "# Inert sample: npm install left-pad\n"
-            "printf '%s\\n' 'dependency install sample is intentionally not executed'\n"
-        ),
+        "path":
+        Path("examples/tool_safety/samples/needs_human_review.sh"),
+        "action_type":
+        "bash",
+        "source": ("# Inert sample: npm install left-pad\n"
+                   "printf '%s\\n' 'dependency install sample is intentionally not executed'\n"),
     },
 }
 
@@ -64,14 +64,14 @@ def test_example_audit_jsonl_lines_are_valid_json() -> None:
     assert {record["decision"] for record in records} >= {"allow", "deny", "needs_human_review"}
     for record in records:
         for key in {
-            "tool_name",
-            "decision",
-            "risk_level",
-            "rule_id",
-            "blocked",
-            "latency",
-            "timestamp",
-            "input_sha256",
+                "tool_name",
+                "decision",
+                "risk_level",
+                "rule_id",
+                "blocked",
+                "latency",
+                "timestamp",
+                "input_sha256",
         }:
             assert key in record
         assert isinstance(record["blocked"], bool)
@@ -94,16 +94,16 @@ def test_example_audit_matches_current_reviewer_stable_fields() -> None:
         )
         record = records_by_case[case_name]
         for key in {
-            "tool_name",
-            "decision",
-            "risk_level",
-            "rule_id",
-            "blocked",
-            "desensitized",
-            "action_type",
-            "input_sha256",
-            "allowed_domains",
-            "rules_evaluated",
+                "tool_name",
+                "decision",
+                "risk_level",
+                "rule_id",
+                "blocked",
+                "desensitized",
+                "action_type",
+                "input_sha256",
+                "allowed_domains",
+                "rules_evaluated",
         }:
             assert record[key] == review.audit[key]
 

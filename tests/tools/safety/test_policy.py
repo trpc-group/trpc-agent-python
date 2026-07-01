@@ -33,10 +33,10 @@ risk_levels:
 
     policy = load_tool_safety_policy(policy_file)
 
-    assert policy.allowed_domains == ("api.example.com",)
-    assert policy.blocked_paths_for("read_dotenv") == (".env",)
-    assert policy.blocked_paths_for("read_ssh") == ("~/.ssh",)
-    assert policy.allowed_commands == ("python3",)
+    assert policy.allowed_domains == ("api.example.com", )
+    assert policy.blocked_paths_for("read_dotenv") == (".env", )
+    assert policy.blocked_paths_for("read_ssh") == ("~/.ssh", )
+    assert policy.allowed_commands == ("python3", )
     assert policy.max_timeout == 30
     assert policy.max_output_size == 4096
     assert policy.risk_level_for("network_not_allowlisted") == "critical"
@@ -56,7 +56,7 @@ allowed_domains:
     policy = load_tool_safety_policy(policy_file)
     default_policy = ToolSafetyPolicy.default()
 
-    assert policy.allowed_domains == ("api.example.com",)
+    assert policy.allowed_domains == ("api.example.com", )
     assert policy.blocked_paths == default_policy.blocked_paths
     assert policy.allowed_commands == default_policy.allowed_commands
     assert policy.max_timeout == default_policy.max_timeout
@@ -114,7 +114,7 @@ allowed_domains:
 
 
 def test_allowed_domains_policy_does_not_short_circuit_other_rules() -> None:
-    policy = ToolSafetyPolicy(allowed_domains=("api.example.com",))
+    policy = ToolSafetyPolicy(allowed_domains=("api.example.com", ))
 
     review = SafetyReviewer(policy=policy).review(
         "curl https://api.example.com/download && rm -rf /tmp/demo",

@@ -8,15 +8,15 @@ from trpc_agent_sdk.server.openclaw import SafetyReviewer
 
 
 def _assert_review(
-    *,
-    source: str,
-    action_type: str,
-    decision: str,
-    rule_id: str,
-    finding: str,
-    risk_level: str,
-    tool_name: str = "test_tool",
-    allowed_domains: tuple[str, ...] = ("api.example.com",),
+        *,
+        source: str,
+        action_type: str,
+        decision: str,
+        rule_id: str,
+        finding: str,
+        risk_level: str,
+        tool_name: str = "test_tool",
+        allowed_domains: tuple[str, ...] = ("api.example.com", ),
 ) -> None:
     reviewer = SafetyReviewer(allowed_domains=allowed_domains)
 
@@ -173,7 +173,7 @@ def test_infinite_loop_blocks_with_rule_finding_report_and_audit() -> None:
 def test_sensitive_information_output_blocks_with_rule_finding_report_and_audit() -> None:
     source = "api_key = 'sk-live-secret'\nprint(api_key)"
 
-    reviewer = SafetyReviewer(allowed_domains=("api.example.com",))
+    reviewer = SafetyReviewer(allowed_domains=("api.example.com", ))
     review = reviewer.review(source, action_type="python", tool_name="secret_tool")
 
     assert review.decision == "deny"

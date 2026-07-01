@@ -31,7 +31,7 @@ from .telemetry import record_safety_attributes
 
 _SCRIPT_ARG_KEYS = ("script", "code", "command", "cmd", "python_code", "bash_code")
 _LANGUAGE_ARG_KEYS = ("language", "lang")
-_PYTHON_TOOL_HINTS = ("python",)
+_PYTHON_TOOL_HINTS = ("python", )
 _BASH_TOOL_HINTS = ("bash", "shell", "sh")
 
 

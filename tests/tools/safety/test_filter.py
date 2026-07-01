@@ -73,7 +73,7 @@ async def test_filter_blocks_needs_human_review_by_default() -> None:
 
 
 async def test_filter_policy_allows_allowlisted_network_request() -> None:
-    safety_filter = ToolSafetyFilter(policy=ToolSafetyPolicy(allowed_domains=("api.example.com",)))
+    safety_filter = ToolSafetyFilter(policy=ToolSafetyPolicy(allowed_domains=("api.example.com", )))
     rsp = FilterResult()
 
     with patch("trpc_agent_sdk.tools.safety._filter.get_tool_var", return_value=SimpleNamespace(name="web_fetch")):
@@ -92,7 +92,7 @@ async def test_filter_can_allow_human_review_decisions_when_configured(mock_tool
         called = True
         return {"accepted": command}
 
-    tool = FunctionTool(install_tool, filters=[ToolSafetyFilter(block_decisions=("deny",))])
+    tool = FunctionTool(install_tool, filters=[ToolSafetyFilter(block_decisions=("deny", ))])
 
     result = await tool.run_async(tool_context=mock_tool_context, args={"command": "npm install left-pad"})
 

@@ -17,11 +17,17 @@ def test_tool_safety_check_subprocess_exit_codes(tmp_path) -> None:
     deny_script.write_text("rm -rf /tmp/demo\n", encoding="utf-8")
     review_script.write_text("pip install demo\n", encoding="utf-8")
 
-    safe = subprocess.run([sys.executable, str(script_path), str(safe_script)], check=False, capture_output=True,
+    safe = subprocess.run([sys.executable, str(script_path), str(safe_script)],
+                          check=False,
+                          capture_output=True,
                           text=True)
-    deny = subprocess.run([sys.executable, str(script_path), str(deny_script)], check=False, capture_output=True,
+    deny = subprocess.run([sys.executable, str(script_path), str(deny_script)],
+                          check=False,
+                          capture_output=True,
                           text=True)
-    review = subprocess.run([sys.executable, str(script_path), str(review_script)], check=False, capture_output=True,
+    review = subprocess.run([sys.executable, str(script_path), str(review_script)],
+                            check=False,
+                            capture_output=True,
                             text=True)
 
     assert safe.returncode == 0

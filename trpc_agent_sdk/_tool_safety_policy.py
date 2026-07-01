@@ -23,7 +23,7 @@ class SafetyPolicyError(ValueError):
 
 _DEFAULT_ALLOWED_DOMAINS: tuple[str, ...] = ()
 _DEFAULT_BLOCKED_PATHS: dict[str, tuple[str, ...]] = {
-    "read_dotenv": (".env",),
+    "read_dotenv": (".env", ),
     "read_ssh": ("~/.ssh", ".ssh/"),
 }
 _DEFAULT_ALLOWED_COMMANDS: tuple[str, ...] = ()
@@ -67,16 +67,18 @@ class ToolSafetyPolicy:
     risk_levels: Mapping[str, str] | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "allowed_domains", tuple(sorted(_coerce_string_tuple(
-            self.allowed_domains,
-            "allowed_domains",
-        ))))
+        object.__setattr__(self, "allowed_domains",
+                           tuple(sorted(_coerce_string_tuple(
+                               self.allowed_domains,
+                               "allowed_domains",
+                           ))))
         blocked_paths = self.blocked_paths if self.blocked_paths is not None else _DEFAULT_BLOCKED_PATHS
         object.__setattr__(self, "blocked_paths", _coerce_blocked_paths(blocked_paths))
-        object.__setattr__(self, "allowed_commands", tuple(sorted(_coerce_string_tuple(
-            self.allowed_commands,
-            "allowed_commands",
-        ))))
+        object.__setattr__(self, "allowed_commands",
+                           tuple(sorted(_coerce_string_tuple(
+                               self.allowed_commands,
+                               "allowed_commands",
+                           ))))
         object.__setattr__(self, "max_timeout", _coerce_positive_int(self.max_timeout, "max_timeout"))
         object.__setattr__(self, "max_output_size", _coerce_positive_int(
             self.max_output_size,

@@ -105,10 +105,7 @@ def _request_record(request: ToolExecutionRequest) -> dict[str, Any]:
 
 
 def _desensitize_args(args: dict[str, Any]) -> dict[str, Any]:
-    return {
-        str(key): _desensitize_arg_value(str(key), value)
-        for key, value in args.items()
-    }
+    return {str(key): _desensitize_arg_value(str(key), value) for key, value in args.items()}
 
 
 def _desensitize_arg_value(key: str, value: Any) -> Any:

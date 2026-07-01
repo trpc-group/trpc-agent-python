@@ -44,9 +44,15 @@ class RecordingSkillTool:
 @pytest.mark.parametrize(
     ("args", "decision", "risk_level", "rule_id"),
     [
-        ({"query": "hello"}, "allow", "none", "safe_python"),
-        ({"command": "rm -rf /tmp/demo"}, "deny", "critical", "dangerous_delete"),
-        ({"command": "npm install left-pad"}, "needs_human_review", "medium", "npm_install"),
+        ({
+            "query": "hello"
+        }, "allow", "none", "safe_python"),
+        ({
+            "command": "rm -rf /tmp/demo"
+        }, "deny", "critical", "dangerous_delete"),
+        ({
+            "command": "npm install left-pad"
+        }, "needs_human_review", "medium", "npm_install"),
     ],
 )
 async def test_tool_safety_filter_traces_review_attributes(args, decision, risk_level, rule_id) -> None:
@@ -91,9 +97,18 @@ async def test_code_executor_wrapper_traces_review_attributes(code_input, decisi
 @pytest.mark.parametrize(
     ("args", "decision", "risk_level", "rule_id"),
     [
-        ({"skill": "demo", "command": "python scripts/run.py"}, "allow", "none", "safe_python"),
-        ({"skill": "demo", "command": "rm -rf /tmp/demo"}, "deny", "critical", "dangerous_delete"),
-        ({"skill": "demo", "command": "npm install left-pad"}, "needs_human_review", "medium", "npm_install"),
+        ({
+            "skill": "demo",
+            "command": "python scripts/run.py"
+        }, "allow", "none", "safe_python"),
+        ({
+            "skill": "demo",
+            "command": "rm -rf /tmp/demo"
+        }, "deny", "critical", "dangerous_delete"),
+        ({
+            "skill": "demo",
+            "command": "npm install left-pad"
+        }, "needs_human_review", "medium", "npm_install"),
     ],
 )
 async def test_skill_wrapper_traces_review_attributes(args, decision, risk_level, rule_id) -> None:

@@ -22,10 +22,9 @@ from .bash_scanner import ShellPipeRule
 from .bash_scanner import SudoRule
 from .bash_scanner import WgetRule
 from .bash_scanner import create_bash_rules
-from .checker import Rule
-from .checker import SafetyChecker
+from .checker import Rule as ScannerRule
+from .checker import SafetyChecker as ScriptSafetyChecker
 from .decision import DecisionEngine
-from .filter import ToolSafetyFilter
 from .models import Finding
 from .models import SafetyDecision
 from .models import SafetyResult
@@ -51,6 +50,14 @@ from .report import build_report
 from .telemetry import record_safety_attributes
 from .wrapper import SafetyExecutionWrapper
 from .wrapper import SafetyViolationError
+from ._filter import ToolSafetyFilter
+from trpc_agent_sdk._tool_safety import Rule
+from trpc_agent_sdk._tool_safety import SafetyChecker
+from trpc_agent_sdk._tool_safety import SafetyReview
+from trpc_agent_sdk._tool_safety import SafetyReviewer
+from trpc_agent_sdk._tool_safety_policy import SafetyPolicyError
+from trpc_agent_sdk._tool_safety_policy import ToolSafetyPolicy
+from trpc_agent_sdk._tool_safety_policy import load_tool_safety_policy
 
 __all__ = [
     "DEFAULT_AUDIT_LOG_FILE",
@@ -71,9 +78,16 @@ __all__ = [
     "WgetRule",
     "create_bash_rules",
     "Rule",
+    "ScannerRule",
     "SafetyChecker",
+    "ScriptSafetyChecker",
+    "SafetyReview",
+    "SafetyReviewer",
     "DecisionEngine",
     "ToolSafetyFilter",
+    "SafetyPolicyError",
+    "ToolSafetyPolicy",
+    "load_tool_safety_policy",
     "Finding",
     "SafetyDecision",
     "SafetyResult",

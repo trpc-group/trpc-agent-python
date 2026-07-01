@@ -214,7 +214,8 @@ class ForkBombRule(BashRule):
         findings: list[Finding] = []
         for line in context.lines:
             if _is_fork_bomb(line.text):
-                findings.append(self._finding("Bash code contains a fork bomb pattern.", line, policy, line.text.strip()))
+                findings.append(
+                    self._finding("Bash code contains a fork bomb pattern.", line, policy, line.text.strip()))
         return findings
 
 

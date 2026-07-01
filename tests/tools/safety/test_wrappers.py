@@ -92,7 +92,7 @@ async def test_code_executor_wrapper_returns_human_review_result() -> None:
 
 
 async def test_code_executor_wrapper_uses_provided_reviewer() -> None:
-    reviewer = SafetyReviewer(allowed_domains=("api.example.com",))
+    reviewer = SafetyReviewer(allowed_domains=("api.example.com", ))
     inner = RecordingCodeExecutor()
     wrapper = SafetyReviewedCodeExecutor(inner, reviewer=reviewer)
 
@@ -143,7 +143,7 @@ async def test_skill_wrapper_returns_human_review_result() -> None:
 
 
 async def test_skill_wrapper_can_wrap_callable_and_reuse_reviewer() -> None:
-    reviewer = SafetyReviewer(allowed_domains=("api.example.com",))
+    reviewer = SafetyReviewer(allowed_domains=("api.example.com", ))
     called = False
 
     async def runner(tool_context: InvocationContext, args: dict) -> dict:

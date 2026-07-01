@@ -273,8 +273,7 @@ class SafetyReviewer:
         started_at: float,
     ) -> SafetyReview | None:
         disallowed_hosts = [
-            _normalize_host(urlparse(url).hostname or "")
-            for url in urls
+            _normalize_host(urlparse(url).hostname or "") for url in urls
             if not _host_allowed(_normalize_host(urlparse(url).hostname or ""), self.policy.allowed_domains)
         ]
         if disallowed_hosts:
@@ -361,18 +360,28 @@ class SafetyReviewer:
             "evidence": evidence,
         }
         audit = {
-            "decision": decision,
-            "rule_id": rule_id,
-            "risk_level": risk_level,
-            "tool_name": tool_name,
-            "blocked": blocked,
-            "latency": latency,
-            "desensitized": desensitized,
-            "action_type": action_type,
-            "input_sha256": source_hash,
-            "allowed_domains": list(self.policy.allowed_domains),
-            "rules_evaluated": ["safe_python", "network_allowlist", "network_not_allowlisted"] +
-            list(_PATH_RULES) + [rule.rule_id for rule in _RULES],
+            "decision":
+            decision,
+            "rule_id":
+            rule_id,
+            "risk_level":
+            risk_level,
+            "tool_name":
+            tool_name,
+            "blocked":
+            blocked,
+            "latency":
+            latency,
+            "desensitized":
+            desensitized,
+            "action_type":
+            action_type,
+            "input_sha256":
+            source_hash,
+            "allowed_domains":
+            list(self.policy.allowed_domains),
+            "rules_evaluated": ["safe_python", "network_allowlist", "network_not_allowlisted"] + list(_PATH_RULES) +
+            [rule.rule_id for rule in _RULES],
         }
         return SafetyReview(
             decision=decision,

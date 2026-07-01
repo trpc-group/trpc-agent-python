@@ -403,4 +403,3 @@ def _domain_from_string(value: str) -> str:
         return parsed.hostname.lower()
     host = value.split("/", 1)[0].split(":", 1)[0].strip()
     return host.lower()
-
