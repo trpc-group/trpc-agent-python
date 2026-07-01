@@ -77,20 +77,23 @@ def test_telemetry_sets_span_attributes_when_recording():
 
     from opentelemetry import trace
 
+    # Use a dedicated provider with an in-memory exporter. We do NOT call
+    # set_tracer_provider: the global provider may already be set by the SDK
+    # and OTel silently ignores subsequent calls. Instead we build a tracer
+    # directly from our provider so span export is self-contained.
     exporter = InMemorySpanExporter()
     provider = TracerProvider()
     provider.add_span_processor(SimpleSpanProcessor(exporter))
-    trace.set_tracer_provider(provider)
-    tracer = trace.get_tracer("test")
+    tracer = provider.get_tracer("safety-test")
 
     scanner = SafetyScanner(PolicyConfig())
     inp = ScanInput(script="rm -rf /", language="bash")
-    with tracer.start_as_current_span("safety-test"):
+    with tracer.start_as_current_span("safety-test") as span:
         report = scanner.scan(inp)
         _emit_telemetry(report)
 
     spans = exporter.get_finished_spans()
-    assert spans
+    assert spans, "no spans exported — provider not wired"
     attrs = spans[-1].attributes
     assert attrs.get("tool.safety.decision") == "deny"
     assert attrs.get("tool.safety.risk_level") in ("high", "critical")
