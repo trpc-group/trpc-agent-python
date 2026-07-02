@@ -1,0 +1,7 @@
+{"name": "case_03_tool_call", "description": "Tool call conversation: user request triggers function_call and function_response"}
+{"action": "create_session", "kwargs": {"app_name": "test_app", "user_id": "test_user", "session_id": "session_03"}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "What is the weather in Shanghai?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "function_call", "name": "get_weather", "args": {"location": "Shanghai"}}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "function_response", "name": "get_weather", "response": {"temperature": 28, "condition": "cloudy"}}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "The weather in Shanghai is currently cloudy with a temperature of 28 degrees Celsius."}], "state_delta": {}}}
+{"action": "get_session", "expected": {"events_count": 4}, "expected_events": 4}

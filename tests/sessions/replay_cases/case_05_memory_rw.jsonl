@@ -1,0 +1,9 @@
+{"name": "case_05_memory_rw", "description": "Memory read/write: store session with user preferences, then search and verify recall"}
+{"action": "create_session", "kwargs": {"app_name": "test_app", "user_id": "test_user", "session_id": "session_05", "initial_state": {"user_name": "Alice"}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "I love cats and have two Persian cats at home"}], "state_delta": {"pets": "cats"}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "That is wonderful! Persian cats are beautiful."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "My favorite food is sushi"}], "state_delta": {"favorite_food": "sushi"}}}
+{"action": "get_session", "expected_events": 4}
+{"action": "store_memory", "kwargs": {"save_key": "test_app/test_user", "session_id": "session_05"}}
+{"action": "search_memory", "kwargs": {"key": "test_app/test_user", "query": "cat", "expected_count": 1}}
+{"action": "search_memory", "kwargs": {"key": "test_app/test_user", "query": "sushi", "expected_count": 1}}
