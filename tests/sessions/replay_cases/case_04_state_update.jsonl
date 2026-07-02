@@ -1,0 +1,8 @@
+{"name": "case_04_state_update", "description": "State update: multiple state_delta writes and overwrites within a single session"}
+{"action": "create_session", "kwargs": {"app_name": "test_app", "user_id": "test_user", "session_id": "session_04"}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "My name is Alice"}], "state_delta": {"user_name": "Alice"}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Nice to meet you, Alice!"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "I like programming in Python"}], "state_delta": {"language": "Python"}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Python is a great language!"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Actually, I also use Rust"}], "state_delta": {"language": "Rust, Python"}}}
+{"action": "get_session", "expected": {"events_count": 5, "state": {"user_name": "Alice", "language": "Rust, Python"}}}

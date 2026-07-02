@@ -1,0 +1,185 @@
+{
+  "generated_at": 1782985748.3901637,
+  "total_cases": 10,
+  "cases_passed": 6,
+  "backends": {
+    "a": "InMemorySessionService",
+    "b": "SqlSessionService (SQLite :memory:)"
+  },
+  "reports": [
+    {
+      "case_name": "case_01_single_turn",
+      "passed": true,
+      "backend_a": "InMemory",
+      "backend_b": "Sql",
+      "inconsistencies": [],
+      "allowed_diffs": []
+    },
+    {
+      "case_name": "case_02_multi_turn",
+      "passed": true,
+      "backend_a": "InMemory",
+      "backend_b": "Sql",
+      "inconsistencies": [],
+      "allowed_diffs": []
+    },
+    {
+      "case_name": "case_03_tool_call",
+      "passed": true,
+      "backend_a": "InMemory",
+      "backend_b": "Sql",
+      "inconsistencies": [],
+      "allowed_diffs": []
+    },
+    {
+      "case_name": "case_04_state_update",
+      "passed": true,
+      "backend_a": "InMemory",
+      "backend_b": "Sql",
+      "inconsistencies": [],
+      "allowed_diffs": []
+    },
+    {
+      "case_name": "case_05_memory_rw",
+      "passed": true,
+      "backend_a": "InMemory",
+      "backend_b": "Sql",
+      "inconsistencies": [],
+      "allowed_diffs": []
+    },
+    {
+      "case_name": "case_06_summary_gen",
+      "passed": true,
+      "backend_a": "InMemory",
+      "backend_b": "Sql",
+      "inconsistencies": [],
+      "allowed_diffs": []
+    },
+    {
+      "case_name": "case_07_summary_truncate",
+      "passed": false,
+      "backend_a": "InMemory",
+      "backend_b": "Sql",
+      "inconsistencies": [
+        {
+          "category": "event",
+          "session_id": "session_07",
+          "field_path": "events[1].parts[0].text",
+          "value_a": "What to see in Osaka?",
+          "value_b": "Is March a good time to see cherry blossoms?",
+          "type": "inconsistency",
+          "message": "Field events[1].parts[0].text differs"
+        },
+        {
+          "category": "event",
+          "session_id": "session_07",
+          "field_path": "events[2].parts[0].text",
+          "value_a": "Osaka Castle, Dotonbori, Universal Studios.",
+          "value_b": "Yes, late March to early April is peak cherry blossom season in Tokyo and Kyoto.",
+          "type": "inconsistency",
+          "message": "Field events[2].parts[0].text differs"
+        },
+        {
+          "category": "event",
+          "session_id": "session_07",
+          "field_path": "events[3].parts[0].text",
+          "value_a": "How to travel between cities?",
+          "value_b": "Any specific cherry blossom spots you recommend?",
+          "type": "inconsistency",
+          "message": "Field events[3].parts[0].text differs"
+        },
+        {
+          "category": "event",
+          "session_id": "session_07",
+          "field_path": "events[4].parts[0].text",
+          "value_a": "Shinkansen bullet train, about 2.5 hours Tokyo to Kyoto.",
+          "value_b": "Ueno Park in Tokyo, Philosopher's Path in Kyoto, and Osaka Castle Park.",
+          "type": "inconsistency",
+          "message": "Field events[4].parts[0].text differs"
+        }
+      ],
+      "allowed_diffs": []
+    },
+    {
+      "case_name": "case_08_exception_recovery",
+      "passed": false,
+      "backend_a": "InMemory",
+      "backend_b": "Sql",
+      "inconsistencies": [
+        {
+          "category": "event",
+          "session_id": "session_08",
+          "field_path": "events.count",
+          "value_a": 4,
+          "value_b": 3,
+          "type": "inconsistency",
+          "message": "Event count mismatch: 4 vs 3"
+        }
+      ],
+      "allowed_diffs": []
+    },
+    {
+      "case_name": "case_09_injected_event_order",
+      "passed": false,
+      "backend_a": "InMemory",
+      "backend_b": "Sql",
+      "inconsistencies": [
+        {
+          "category": "event",
+          "session_id": "session_09",
+          "field_path": "events[1].author",
+          "value_a": "agent",
+          "value_b": "user",
+          "type": "inconsistency",
+          "message": "Field events[1].author differs"
+        },
+        {
+          "category": "event",
+          "session_id": "session_09",
+          "field_path": "events[1].parts[0].text",
+          "value_a": "The capital of France is Paris.",
+          "value_b": "What is the population?",
+          "type": "inconsistency",
+          "message": "Field events[1].parts[0].text differs"
+        },
+        {
+          "category": "event",
+          "session_id": "session_09",
+          "field_path": "events[2].author",
+          "value_a": "user",
+          "value_b": "agent",
+          "type": "inconsistency",
+          "message": "Field events[2].author differs"
+        },
+        {
+          "category": "event",
+          "session_id": "session_09",
+          "field_path": "events[2].parts[0].text",
+          "value_a": "What is the population?",
+          "value_b": "The capital of France is Paris.",
+          "type": "inconsistency",
+          "message": "Field events[2].parts[0].text differs"
+        }
+      ],
+      "allowed_diffs": []
+    },
+    {
+      "case_name": "case_10_injected_summary_session",
+      "passed": false,
+      "backend_a": "InMemory",
+      "backend_b": "Sql",
+      "inconsistencies": [
+        {
+          "category": "summary",
+          "session_id": "session_10",
+          "field_path": "summary.session_id",
+          "value_a": "session_10",
+          "value_b": "session_99",
+          "type": "inconsistency",
+          "message": "SUMMARY_OWNERSHIP: summary session_id mismatch"
+        }
+      ],
+      "allowed_diffs": []
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{"name": "case_07_summary_truncate", "description": "Summary truncation: long conversation is summarized, then new events are appended; verify that summary + retained events + new events together reconstruct context"}
+{"action": "create_session", "kwargs": {"app_name": "test_app", "user_id": "test_user", "session_id": "session_07"}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Help me plan a trip to Japan"}], "state_delta": {"topic": "japan_trip"}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "I would be happy to help! When do you plan to travel?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "March next year"}], "state_delta": {"travel_month": "March"}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "March is cherry blossom season, a wonderful time to visit!"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "I want to visit Tokyo, Kyoto, and Osaka"}], "state_delta": {"cities": "Tokyo, Kyoto, Osaka"}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Those three cities are the classic Japan itinerary. How many days?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "10 days"}], "state_delta": {"days": 10}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "I suggest 4 days in Tokyo, 3 in Kyoto, and 3 in Osaka."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "What to see in Tokyo?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Sensoji, Shibuya, Meiji Shrine, Akihabara."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "What to see in Kyoto?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Fushimi Inari, Kinkakuji, Arashiyama, Kiyomizudera."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "What to see in Osaka?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Osaka Castle, Dotonbori, Universal Studios."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "How to travel between cities?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Shinkansen bullet train, about 2.5 hours Tokyo to Kyoto."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "What about accommodation?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Shinjuku in Tokyo, near Kyoto Station, and Namba in Osaka."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Do I need a JR Pass?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "A 7-day JR Pass will save you money on inter-city travel."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "What is the budget for this trip?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "A moderate budget would be around $3000-4000 per person including flights."}], "state_delta": {}}}
+{"action": "create_session_summary", "kwargs": {"force": true}}
+{"action": "get_session_summary", "expected": {"has_summary": true}}
+{"action": "get_session", "expected_events": 0}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Is March a good time to see cherry blossoms?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Yes, late March to early April is peak cherry blossom season in Tokyo and Kyoto."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Any specific cherry blossom spots you recommend?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Ueno Park in Tokyo, Philosopher's Path in Kyoto, and Osaka Castle Park."}], "state_delta": {}}}
+{"action": "get_session", "expected_events": 0}

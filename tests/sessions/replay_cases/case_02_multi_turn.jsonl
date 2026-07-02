@@ -1,0 +1,9 @@
+{"name": "case_02_multi_turn", "description": "Multi-turn conversation: 3 rounds of user/agent exchange"}
+{"action": "create_session", "kwargs": {"app_name": "test_app", "user_id": "test_user", "session_id": "session_02"}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "What is the weather like?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "I can check that for you. Where are you located?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "I am in Beijing"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "The weather in Beijing is sunny, 25 degrees Celsius."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Thanks! What about tomorrow?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Tomorrow will be cloudy with a chance of rain, around 22 degrees."}], "state_delta": {}}}
+{"action": "get_session", "expected": {"events_count": 6}, "expected_events": 6}
