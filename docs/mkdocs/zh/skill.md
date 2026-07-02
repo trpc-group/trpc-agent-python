@@ -2141,17 +2141,104 @@ Tools:
 - ❌ 所有工具都需要同时可用
 - ❌ Token 成本不是主要考虑因素
 
-## 参考和示例
+## Skill Hub —— 从远程来源发现并获取 Skill
 
-- 背景：
-  - 博客：
-    https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills
-  - 开放仓库：https://github.com/anthropics/skills
-- 本仓库：
-  - 交互式演示：[examples/skills/run_agent.py](../../../examples/skills/run_agent.py)
-  - 动态工具选择完整示例：[examples/skills_with_dynamic_tools/run_agent.py](../../../examples/skills_with_dynamic_tools/run_agent.py)
-  - 示例结构说明：[examples/skills/README.md](../../../examples/skills/README.md)
-  - 示例技能：
-    - [examples/skills/skills/python-math/SKILL.md](../../../examples/skills/skills/python-math/SKILL.md)
-    - [examples/skills/skills/file_tools/SKILL.md](../../../examples/skills/skills/file_tools/SKILL.md)
-    - [examples/skills/skills/user_file_ops/SKILL.md](../../../examples/skills/skills/user_file_ops/SKILL.md)
+**Skill Hub**（`trpc_agent_sdk.skills.hub`）是一组用于从远程来源发现和获取 skill 的适配器（`SkillSource`）。它能做三件事：搜索某个来源（GitHub、ClawHub、skills.sh 等）上有哪些 skill、查看某个 skill 的元信息、下载它的完整文件内容。用户也可以实现SkillSource 接口来对接自己的skill source. 
+
+### `SkillSource` 契约
+
+每个适配器都实现同样的四方法接口：
+
+```python
+from trpc_agent_sdk.skills.hub import SkillSource, SkillMeta, SkillBundle
+
+class SkillSource(ABC):
+    def source_id(self) -> str: ...
+    def search(self, query: str, limit: int = 10) -> list[SkillMeta]: ...
+    def inspect(self, identifier: str) -> SkillMeta | None: ...
+    def fetch(self, identifier: str) -> SkillBundle | None: ...
+```
+
+- `SkillMeta` —— 轻量的 search/inspect 结果（`name`、`description`、`source`、`identifier`，以及可选的 `repo`/`path`/`tags`/`extra`）
+- `SkillBundle` —— 下载到的 skill（`name`、`files: dict[str, str | bytes]`、`source`、`identifier`、`metadata`）
+
+`fetch()` 只会返回内存中的 `SkillBundle`。如果要使用远程 skill，需要先安装到本地目录。SDK 提供了 `SkillSpec`、`SkillSpecsConfig` 和 `create_default_skill_repository(additional_skill_specs=...)` 的联动入口：把要下载的 `SkillSpec` 列表和 `install_path` 打包成一个 `SkillSpecsConfig`，构造 repository 时先原子写入 `install_path`，再像普通本地 skill 一样扫描索引。`install_path` 可省略，默认落到系统临时目录下的 `trpc_agent_skills`。SDK 也导出了三个路径校验函数，供自定义安装逻辑复用：
+
+```python
+from trpc_agent_sdk.skills.hub import validate_skill_name, validate_category_name, validate_bundle_rel_path
+```
+
+### 内置适配器
+
+| 适配器 | 来源 | 标识符格式 |
+| --- | --- | --- |
+| `GitHubSource` | GitHub 仓库，如 https://github.com/anthropics/skills | `owner/repo/path/to/skill-dir`，例如 `"anthropics/skills/skills/skill-creator"` |
+| `WellKnownSkillSource` | 暴露 `/.well-known/skills/index.json` 的站点，如 https://www.mintlify.com/docs/.well-known/skills/index.json | HTTPS URL，例如 `"https://example.com/.well-known/skills/plan"` |
+| `HermesIndexSource` | [Hermes Skills Index](https://hermes-agent.nousresearch.com/docs/api/skills-index.json) | `owner/repo/path`，例如 `"anthropics/skills/skills/skill-creator"` |
+| `SkillsShSource` | [skills.sh](https://skills.sh) | `skills-sh/{owner}/{repo}/{skill_path}`，例如 `"skills-sh/owner/repo/plan"` |
+| `ClawHubSource` | [ClawHub](https://clawhub.ai) | `{slug}`，例如 `notion` |
+| `ClaudeMarketplaceSource` | 含 `.claude-plugin/marketplace.json` 的 GitHub marketplace 仓库，如 https://github.com/anthropics/skills | `owner/repo/path`，例如 `"anthropics/skills/plugins/docx"` |
+| `LobeHubSource` | [LobeHub agent marketplace](https://chat-agents.lobehub.com/index.json) | `lobehub/{agent_id}`，例如 `lobehub/writer-bot` |
+
+### 用法
+下面介绍一下 Skill Hub 的基础用法:
+
+```python
+from trpc_agent_sdk.skills.hub import GitHubAuth, GitHubSource
+
+# GitHubAuth 不传 token 时按未认证方式访问（限流 60 次/时，仅公开仓库）。
+# search 需要 taps 声明"搜哪些仓库"；fetch/inspect 直接吃完整 identifier，无需 taps。
+source = GitHubSource(
+    GitHubAuth(),
+    taps=[{"repo": "anthropics/skills", "path": "skills/"}],
+)
+
+# 1) 搜索：在 taps 里匹配关键词，返回一组轻量的 SkillMeta
+for meta in source.search("skill", limit=5):
+    print(meta.name, "-", meta.identifier)
+
+# 2) 查看元信息：只取某个 skill 的 SKILL.md 元数据用于预览
+meta = source.inspect("anthropics/skills/skills/skill-creator")
+print(meta.name, meta.description)
+
+# 3) 下载：把完整文件内容拉到内存里的 SkillBundle（不落盘）
+bundle = source.fetch("anthropics/skills/skills/skill-creator")
+if bundle is not None:
+    print(bundle.name, "共", len(bundle.files), "个文件")
+    print(bundle.files["SKILL.md"][:200])  # files 是 {相对路径: 内容}
+```
+
+`fetch()` 拿到的只是内存里的 `SkillBundle`。要把它接到 agent 用，下面介绍如何把 Skill Hub 和现有的 skill repository 连接起来：
+
+```python
+from trpc_agent_sdk.skills import SkillSpec
+from trpc_agent_sdk.skills import SkillSpecsConfig
+from trpc_agent_sdk.skills import SkillToolSet
+from trpc_agent_sdk.skills import create_default_skill_repository
+from trpc_agent_sdk.skills.hub import ClawHubSource, GitHubAuth, GitHubSource
+
+repository = create_default_skill_repository(
+    additional_skill_specs=SkillSpecsConfig(
+        specs=[
+            # 每个 SkillSpec 对应一个来源；要从多个来源各取一个 skill，
+            # 就在 specs 里多放几个 SkillSpec。
+            SkillSpec(
+                source=GitHubSource(GitHubAuth()),
+                identifier="anthropics/skills/skills/skill-creator",
+                name="skill-creator",
+            ),
+            SkillSpec(
+                source=ClawHubSource(),
+                identifier="notion",
+                name="notion",
+            ),
+        ],
+        install_path="data/skills/.downloaded",  # 省略则默认落到系统临时目录: <system-temp>/trpc_agent_skills/
+    ),
+)
+skill_toolset = SkillToolSet(repository=repository)
+```
+
+### 完整示例
+
+查看完整的 Skill Hub 使用示例：[examples/skills_hub/run_agent.py](../../../examples/skills_hub/run_agent.py)
