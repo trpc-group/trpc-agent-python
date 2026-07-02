@@ -31,6 +31,11 @@ Agents dynamically use tools through the following steps:
 | [File Tools](#file-tools) | File operations and text processing | Use FileToolSet or individual tools | Read/write files, search, command execution |
 | [LangChain Tools](#langchain-tools) | Reuse tools from the LangChain ecosystem | Wrap as async functions and package as FunctionTool | Web search (Tavily), etc. |
 | [Streaming Tools](#streaming-tools) | Real-time preview of long text generation | Use StreamingFunctionTool | Code generation, document writing |
+| [WebFetchTool](#webfetchtool) | Fetch and textify a single public URL | Instantiate WebFetchTool and add to tools | Documentation pages, RFCs, changelogs, news |
+| [WebSearchTool](#websearchtool) | Public web search engine retrieval | Instantiate WebSearchTool and add to tools | Real-time news, releases, fact/definition lookups |
+| [TodoWriteTool](#todowritetool-task-checklist-tool) | Multi-step task planning and progress tracking (full-list replace) | Mount `TodoWriteTool` | Short checklists, no dependency graph, token-insensitive |
+| [Task Tool Family](#task-tool-family-structured-task-board) | Structured task board (incremental updates by id + dependencies) | Mount `TaskToolSet` | Long boards, cross-turn tracking, `blockedBy` dependencies |
+| [Goal Tool Family](#goal-tool-family-persistent-session-goal) | Single persistent session goal + enforced completion | `setup_goal(agent)` | Cross-turn objectives, host-set goals, no premature finals |
 | [Agent Code Executor](./code_executor.md) | Automatic code generation and execution scenarios, data processing scenarios | Configure CodeExecutor | Automatic API invocation, tabular data processing |
 ---
 
@@ -2841,3 +2846,356 @@ The example builds four independent Agents and covers the following scenarios:
 - **DuckDuckGo raw-hit mode** (`ddg_raw_agent`, `dedup_urls=False`): preserves the provider's raw recall list for downstream processing
 - **Google baseline** (`google_agent`, `safe=active`): real public web search + server-side single-domain `siteSearch` + client-side multi-domain filtering + blocklist + per-call `lang` override
 - **Google freshness Agent** (`google_raw_agent`, `dateRestrict=m6` + `dedup_urls=False`): keeps only results indexed within the last 6 months, suitable for "latest / what's new" queries
+
+---
+
+## TodoWriteTool (Task Checklist Tool)
+
+`TodoWriteTool` is the framework's built-in **structured task checklist tool**, aligned with Claude Code / DeepAgents `TodoWrite` semantics: the model sends the **complete, updated list** in a single `todo_write` call; the tool validates it, fully replaces the previous list, and persists it to session-level state so plans and progress survive across `Runner.run_async` invocations.
+
+Best for **fewer steps, no explicit dependency edges, and simple implementation**. If you need server-assigned ids, incremental `taskId` patches, or `blockedBy` / `blocks` dependency orchestration, use the [Task Tool Family](#task-tool-family-structured-task-board) below instead.
+
+### Features
+
+- **Full-list replace**: each call passes the complete `todos` array; the new list **fully overwrites** the old one (no smart merge). The only valid way to clear is an explicit `todos: []`
+- **Session-level persistence**: the checklist is serialized to JSON in `tool_context.state["todos[:<branch>]"]` (default prefix `todos`; **do not** use `temp:` — that prefix is stripped by `BaseSessionService` and is not persisted)
+- **Sub-agent isolation**: the state key appends `:<branch>` so parent / child agents maintain separate lists
+- **Hard contract validation (code-enforced)**: non-empty `content` / `activeForm`, at most one `in_progress`, globally unique `content`; violations return `INVALID_ARGS` / `INVALID_TODOS`
+- **Layered prompt guidance**: `DEFAULT_TODO_PROMPT` is auto-injected into the system instruction via `process_request`, separate from hard contracts
+- **Structured diff in responses**: on success returns `{message, todos, oldTodos}` for front-end / CLI rendering
+- **Optional policy hooks**: read-only `nudge_hooks` can append strategy hints to `message` (must not modify the list)
+- **Auto-clear when all done**: with `clear_on_all_done=True` (default), an all-`completed` list is persisted as empty to avoid stale accumulation
+
+### TodoWriteTool Parameters
+
+| Parameter | Type | Default | Description |
+|------|------|--------|------|
+| `state_key_prefix` | `str` | `"todos"` | State key prefix; do not use `temp:` |
+| `clear_on_all_done` | `bool` | `True` | Clear persisted list when all items are `completed` |
+| `default_nudge` | `str` | built-in text | Base hint appended on every successful response |
+| `nudge_hooks` | `Optional[List[NudgeHook]]` | `None` | Read-only policy hook list |
+| `filters_name` / `filters` | — | `None` | Filters forwarded to `BaseTool` |
+
+**LLM call parameters** (`todo_write`):
+
+| Parameter | Type | Required | Description |
+|------|------|------|------|
+| `todos` | `array` | Yes | Full list; each item has `content` (imperative), `activeForm` (in-progress label), `status` (`pending` / `in_progress` / `completed`) |
+
+**Successful response fields**:
+
+| Field | Type | Description |
+|------|------|------|
+| `message` | `str` | Base nudge + hook-appended text |
+| `todos` | `array` | Persisted current list |
+| `oldTodos` | `array \| null` | Previous list (`null` on first write) |
+
+### Usage
+
+```python
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.tools import TodoWriteTool
+
+agent = LlmAgent(
+    name="todo_planner",
+    model=OpenAIModel(model_name="...", api_key="...", base_url="..."),
+    instruction="You are a planning assistant; use todo_write for multi-step tasks.",
+    tools=[TodoWriteTool()],
+)
+```
+
+Read back the persisted checklist (REST / audit):
+
+```python
+from trpc_agent_sdk.tools import get_todos, render_todos
+
+todos = get_todos(session, branch=agent.name)
+print(render_todos(todos))  # ✅ / 🔄 / ⬜ plain-text checklist
+```
+
+### TodoWriteTool vs Task Tool Family
+
+| Dimension | `TodoWriteTool` | `TaskToolSet` |
+| --- | --- | --- |
+| Tool count | 1 (`todo_write`) | 4 (`task_create` / `task_update` / `task_get` / `task_list`) |
+| Update style | Full-list replace | Incremental patch by `taskId` |
+| Item identity | `content` (unique key) | `id` (server-assigned) |
+| Dependencies | None | `blockedBy` / `blocks`; upstream `completed` auto-unblocks |
+| State key | `todos[:branch]` | `tasks[:branch]` |
+| Parallel tool calls | Full-list overwrite, natural last-write-wins | `task_store_lock` serializes RMW |
+
+> **Mount one or the other**; mounting both tends to confuse the model.
+
+### TodoWriteTool Complete Example
+
+See [examples/todo_tool/run_agent.py](../../../examples/todo_tool/run_agent.py): multiple turns in one session — plan → complete items step by step — with `get_todos` reading back the persisted list after each turn.
+
+---
+
+## Task Tool Family (Structured Task Board)
+
+`TaskToolSet` exposes four tools — `task_create`, `task_update`, `task_get`, `task_list` — aligned with Claude Code v2.1.142+ structured Task capabilities. Unlike `TodoWriteTool`'s full-list replace, the Task family uses **incremental updates by server-assigned `id`**: creation returns an id; later `task_update` patches status, fields, or dependency edges locally.
+
+The entire board is serialized as a **single JSON blob** in `tool_context.state["tasks[:<branch>]"]`, surviving across turns. `highwatermark` records the highest id ever assigned; soft-deleted tasks (`status: deleted`) **never reuse ids**.
+
+### Features
+
+- **Incremental updates**: `task_create` assigns ids; `task_update` patches by `taskId` without resending the whole board
+- **Dependency orchestration**: `addBlockedBy` / `removeBlockedBy` (and `addBlocks` / `removeBlocks`) maintain bidirectional edges; upstream `completed` removes ids from downstream `blockedBy` and returns `unblocked`
+- **Token optimization**: `task_list` returns summaries only (omits `description`); use `task_get` for full detail
+- **Hard contract validation**: non-empty `subject`, valid status, existing dependency refs, **acyclic** graph (`detect_cycle`), default **at most one `in_progress`** (`enforce_single_in_progress`, can disable)
+- **Concurrency safety**: `_TaskToolBase` wraps load → mutate → save in `task_store_lock` (per session + branch), compatible with `parallel_tool_calls=True`
+- **Auto prompt injection**: `DEFAULT_TASK_PROMPT` injected once when multiple tools are mounted
+
+### TaskToolSet Constructor Parameters
+
+| Parameter | Type | Default | Description |
+|------|------|--------|------|
+| `state_key_prefix` | `str` | `"tasks"` | State key prefix; do not use `temp:` |
+| `enforce_single_in_progress` | `bool` | `True` | Reject a second `in_progress` when one already exists |
+| `inject_prompt` | `bool` | `True` | Inject `DEFAULT_TASK_PROMPT` into system instruction |
+
+### LLM Parameters for the Four Tools
+
+**`task_create`**
+
+| Parameter | Required | Description |
+|------|------|------|
+| `subject` | Yes | Short imperative title |
+| `description` | No | Free-text detail |
+| `activeForm` | No | In-progress label |
+| `metadata` | No | Extension key-value map |
+
+Returns `{task: {id, subject}, message}`.
+
+**`task_update`**
+
+| Parameter | Required | Description |
+|------|------|------|
+| `taskId` | Yes | Task id to update |
+| `status` | No | `pending` / `in_progress` / `completed` / `deleted` |
+| `subject` / `description` / `activeForm` / `owner` / `metadata` | No | Scalar field patches |
+| `addBlockedBy` / `removeBlockedBy` | No | Upstream dependency id lists |
+| `addBlocks` / `removeBlocks` | No | Downstream blocked-id lists |
+
+Returns `{task, unblocked, message}`; `unblocked` lists pending task ids unblocked by this completion.
+
+**`task_get`**: `taskId` (required) → full record including `description`.
+
+**`task_list`**: optional `includeDeleted`; returns `{tasks, stats}` with summaries (no `description`).
+
+**Common error codes**: `INVALID_ARGS`, `INVALID_DEPENDENCY`, `INVALID_STATUS`, `NOT_FOUND`.
+
+### Usage
+
+```python
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.tools import TaskToolSet
+
+agent = LlmAgent(
+    name="task_planner",
+    model=OpenAIModel(model_name="...", api_key="...", base_url="..."),
+    instruction="Use task_create / task_update to maintain the board for multi-step projects.",
+    tools=[TaskToolSet()],
+    # With parallel_tool_calls=True, concurrent task tools on the same board are serialized by task_store_lock
+)
+```
+
+Read back the persisted board (REST / audit / demo wrap-up):
+
+```python
+from trpc_agent_sdk.tools import get_task_store, render_task_list
+
+store = get_task_store(session, branch=agent.name)
+print(render_task_list(store))
+# ✅ #1 completed
+# 🔄 #2 in progress
+# ⬜ #3 pending (blocked by: 2)
+```
+
+### Dependency and Unblock Example
+
+```text
+#1 Design schema
+ ├──→ #2 Implement API ──→ #3 Unit tests
+ └──→ #4 Write docs
+
+#1 completed  →  unblocked: ['2', '4']
+#2 completed  →  unblocked: ['3']
+```
+
+### Task Tool Family Best Practices
+
+- **Separate planning from execution**: `task_create` + `addBlockedBy` first, then `in_progress` → `completed` item by item
+- **Do not invent ids**: use only ids returned by `task_create`
+- **Parallel calls**: with `parallel_tool_calls=True`, concurrent `task_create` / `task_update` on the same board are serialized by the lock; different `branch` values still run in parallel
+- **Pick TodoWrite or Task**: long boards + dependencies → Task; short checklists → TodoWrite
+
+### Task Tool Family Complete Examples
+
+| Example | Description |
+| --- | --- |
+| [examples/task_tools](../../../examples/task_tools/) | Multi-turn dialog: dependency graph, step-by-step completion, `get_task_store` across turns |
+| [examples/task_tools_parallel](../../../examples/task_tools_parallel/) | Validates `parallel_tool_calls` + `task_store_lock` (Phase 1–2 needs no API key) |
+
+---
+
+## Goal Tool Family (Persistent Session Goal)
+
+`GoalToolSet` exposes three tools — `create_goal`, `get_goal`, `update_goal` — aligned with Claude Code **Session Goal** capabilities. Unlike `TodoWriteTool` (multi-item checklist) and `TaskToolSet` (multi-task board), Goal maintains **at most one** persistent objective per session branch: while status is `active`, a response that **looks like a final answer** does **not** mean the work is done — the model must keep working or explicitly call `update_goal('complete' | 'blocked')`.
+
+The goal is serialized as a **single JSON blob** (`GoalRecord`) in `tool_context.state["goal[:<branch>]"]`, surviving across `Runner.run_async` calls. Beyond the three model tools, the full capability requires `setup_goal()` to mount **enforcement callbacks** (`before_model` / `after_model`) that intercept premature final responses and re-run within the **same invocation**.
+
+### Features
+
+- **Single-goal contract**: one `GoalRecord` per branch (`objective` + three states `active` / `complete` / `blocked`); `complete` / `blocked` are **irreversible** terminal states
+- **Cross-turn persistence**: persisted via function-response state deltas; **do not** use the `temp:` prefix
+- **Sub-agent isolation**: state key appends `:<branch>`
+- **Enforced completion**: while `active`, `after_model` detects premature finals (no tool call, visible text, non-partial), suppresses them, and re-runs in the same invocation; `before_model` injects a user-role nudge
+- **Fail-open budget**: after `max_retries` (default 3) interceptions, the final response is allowed so the loop cannot spin forever; counters live in invocation-scoped `agent_context.metadata` and are not persisted
+- **Two creation paths**:
+  - **Model side**: `create_goal(objective=...)` — LLM creates after judging a multi-step task
+  - **Host side**: `start_goal(session_service, ...)` — application writes the goal before the first turn; the model does not call `create_goal`
+- **Layered prompt guidance**: `DEFAULT_GUIDANCE` injected into system instruction via `before_model` when `inject_guidance=True`; hard rules enforced by store validation + callbacks
+- **Concurrency safety**: `_GoalToolBase` wraps load → mutate → save in `goal_store_lock` (per session + branch), compatible with `parallel_tool_calls=True`
+
+### Relationship to Todo / Task
+
+| Dimension | `TodoWriteTool` | `TaskToolSet` | Goal Tool Family |
+| --- | --- | --- | --- |
+| Granularity | Multi-item checklist | Multi-task board + deps | **Single** session objective |
+| Update style | Full-list replace | Incremental by `taskId` | `create_goal` / `update_goal` |
+| Can finish while incomplete? | Prompt guidance | Prompt guidance | **Callback enforcement** |
+| State key | `todos[:branch]` | `tasks[:branch]` | `goal[:branch]` |
+| Typical use | Step visibility, short lists | Long boards, dependencies | Whether the whole job is truly done |
+
+> Todo / Task handle **step decomposition**; Goal handles the **overall completion contract**. They can be combined, but avoid mounting too many planning tools at once.
+
+### GoalOptions Constructor Parameters
+
+Configure via `setup_goal(agent, GoalOptions(...))`:
+
+| Parameter | Type | Default | Description |
+|------|------|--------|------|
+| `state_key_prefix` | `str` | `"goal"` | State key prefix; do not use `temp:` |
+| `inject_guidance` | `bool` | `True` | Inject `DEFAULT_GUIDANCE` into system instruction in `before_model` |
+| `guidance` | `str` | `DEFAULT_GUIDANCE` | Long guidance text (serial goal-tool calls, etc.) |
+| `max_retries` | `int` | `3` | Same-invocation budget for intercepting premature finals; fail-open when exhausted |
+| `nudge_template` | `str` | `DEFAULT_NUDGE` | User-role reminder after interception; supports `{attempt}` / `{max_retries}` / `{objective}` |
+| `on_retry` | `Callable[[RetryEvent], None]` | `None` | Observability callback on each interception or budget exhaustion |
+
+Mounting only `GoalToolSet()` without enforcement gives model-facing tools but **not** "no final while active".
+
+### LLM Parameters for the Three Tools
+
+**`create_goal`**
+
+| Parameter | Required | Description |
+|------|------|------|
+| `objective` | Yes | Completion criteria — what "done" concretely means |
+
+Success: `{message, goal}`; if an `active` goal already exists: `{error: "INVALID_STATE: ..."}`.
+
+**`get_goal`**
+
+No parameters. With a goal: `{message, goal}`; without: `{message: "No session goal is set."}`.
+
+**`update_goal`**
+
+| Parameter | Required | Description |
+|------|------|------|
+| `status` | Yes | `complete` (objective met) or `blocked` (same blocker repeats; cannot proceed without user input) |
+
+Success: `{message, goal}`; no active goal or already terminal: `{error: "INVALID_STATE: ..."}`.
+
+**`GoalRecord` fields** (persisted with camelCase JSON aliases):
+
+| Field | Description |
+|------|------|
+| `id` | Server-assigned uuid |
+| `objective` | Completion criteria text |
+| `status` | `active` / `complete` / `blocked` |
+| `createdAtUnix` / `updatedAtUnix` | Created / last-updated time (unix seconds) |
+| `terminalAtUnix` | Time entered a terminal state (optional) |
+
+### Enforcement Workflow
+
+```text
+Model outputs final text (no tool call, goal still active)
+        ↓
+after_model classifies as premature final
+        ↓
+Suppress final (not committed as answer), retry_count += 1
+before_model injects nudge, same invocation continues agent loop
+        ↓
+retry_count >= max_retries → fail-open, on_retry(reason="exhausted")
+```
+
+Interception condition (`_is_premature_final`): non-partial, no error, visible text in content, and **no** `function_call` / `function_response`.
+
+### Usage
+
+Recommended one-line mount of tools + callbacks:
+
+```python
+from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.models import OpenAIModel
+from trpc_agent_sdk.tools.goal_tools import GoalOptions, RetryEvent, setup_goal
+
+def on_retry(event: RetryEvent) -> None:
+    if event.reason == "blocked":
+        print(f"Premature final intercepted (attempt {event.attempt_number}/{event.max_retries})")
+
+agent = LlmAgent(
+    name="goal_agent",
+    model=OpenAIModel(model_name="...", api_key="...", base_url="..."),
+    instruction="Use goal tools to track completion for multi-step engineering tasks.",
+    tools=[...],  # Business tools, e.g. BashTool / WriteTool
+)
+setup_goal(agent, GoalOptions(max_retries=3, on_retry=on_retry))
+```
+
+Host pre-injects a goal before the first turn (model does not call `create_goal`):
+
+```python
+from trpc_agent_sdk.tools.goal_tools import start_goal
+
+goal = await start_goal(
+    session_service,
+    app_name="my_app",
+    user_id="user_1",
+    session_id=session_id,
+    objective="Create notes/ with summary.txt and example.py in the current directory",
+    agent_name=agent.name,  # Match LlmAgent.name for branch isolation
+)
+```
+
+Read back the persisted goal (REST / audit / demo wrap-up):
+
+```python
+from trpc_agent_sdk.tools.goal_tools import get_goal_record, render_goal
+
+goal = get_goal_record(session, branch=agent.name)
+print(render_goal(goal))
+# ✅ Goal [complete]
+#    objective: ...
+#    created:   1782893110
+#    terminal:  1782893116
+```
+
+### Goal Tool Family Best Practices
+
+- **Use `setup_goal`, not `GoalToolSet` alone**: only callbacks enforce "no final while active"
+- **Model vs host**: slash commands, `/goal`, config-driven tasks → `start_goal()`; let the model judge multi-step work → `create_goal`
+- **One goal tool per response**: `DEFAULT_GUIDANCE` requires serial semantics; do not call `create_goal` and `update_goal` in the same turn
+- **Use `blocked` sparingly**: only when the same blocker repeats across attempts and user input or external state change is required; do not mark blocked because work is hard, slow, or incomplete
+- **Observability**: use `on_retry` to log premature-final interceptions and budget exhaustion when tuning prompt or `max_retries`
+- **Division of labor with Todo / Task**: Todo / Task show steps and dependencies; Goal constrains whether the whole job is truly finished
+
+### Goal Tool Family Complete Example
+
+| Example | Description |
+| --- | --- |
+| [examples/goal_tools](../../../examples/goal_tools/) | Case 1: model `create_goal`; Case 2: host `start_goal` pre-injection; demonstrates enforcement interception and `update_goal(complete)` |
