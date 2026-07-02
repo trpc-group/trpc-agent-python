@@ -311,6 +311,10 @@ Route customer inquiries:
 | `disallow_transfer_to_peers` | `False` | 设为 `True` 禁止子 Agent 将控制权转给同级 Agent |
 | `default_transfer_message` | `None` | 自定义转移指令，覆盖默认的转移提示语 |
 
+#### Dynamic Sub-Agent
+
+如果希望 LLM **在运行时**自行决定需要什么类型的子 agent（而非在构造期预先声明 `sub_agents`），请参考 [Dynamic Sub-Agent](dynamic_subagent.md)。
+
 ## 组合模式（Compose Agents）
 
 不同的编排模式可以灵活组合，通过 `output_key` 连接不同阶段的结果，创建更复杂的工作流：
