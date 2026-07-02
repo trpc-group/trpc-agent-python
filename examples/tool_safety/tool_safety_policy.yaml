@@ -1,0 +1,33 @@
+allowed_domains:
+  - api.example.com
+  - example.org
+allowed_commands:
+  - cat
+  - echo
+  - grep
+  - head
+  - ls
+  - pwd
+  - python3
+  - pytest
+  - tail
+  - wc
+denied_paths:
+  - ~/.ssh
+  - ~/.aws
+  - ~/.config/gcloud
+  - .env
+  - "*/.env"
+  - "*.pem"
+  - "*.key"
+  - /etc/passwd
+  - /etc/shadow
+  - /root
+max_timeout_seconds: 300
+max_output_bytes: 1048576
+deny_dependency_install: true
+deny_privilege_escalation: true
+review_unknown_network: true
+review_process_execution: true
+review_shell_features: true
+long_sleep_seconds: 300
