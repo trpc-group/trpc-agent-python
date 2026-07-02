@@ -50,7 +50,7 @@ def SafeCodeExecutor(inner, policy: PolicyConfig, *, audit_path: Optional[str] =
     docker) only happens when this wrapper is actually used.
     """
     from trpc_agent_sdk.code_executors import BaseCodeExecutor
-    from trpc_agent_sdk.code_executors import CodeExecutionResult as CER
+    from trpc_agent_sdk.code_executors import create_code_execution_result
     from .audit import AuditLogger
 
     scanner = SafetyScanner(policy=policy)
@@ -62,7 +62,9 @@ def SafeCodeExecutor(inner, policy: PolicyConfig, *, audit_path: Optional[str] =
             report = scanner.scan(ScanInput(script=code, language="python", tool_name="code_executor"))
             audit.log(report, intercepted=report.blocked)
             if report.blocked:
-                return CER(stderr=f"TOOL_SAFETY_DENY: {report.rule_ids}", exit_code=126, stdout="")
+                return create_code_execution_result(
+                    stderr=f"TOOL_SAFETY_DENY: {report.rule_ids}"
+                )
             return await inner.execute_code(invocation_context, input_data)
 
     return _SafeCodeExecutor()

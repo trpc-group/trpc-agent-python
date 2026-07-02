@@ -122,12 +122,12 @@ def test_wrap_tool_allows_safe_bash(tmp_path: Path):
 
 
 def _try_import_code_executors():
-    """Return (CodeExecutionInput, CodeExecutionResult) or (None, None)."""
+    """Return (CodeExecutionInput, create_code_execution_result) or (None, None)."""
     try:
         from trpc_agent_sdk.code_executors import CodeExecutionInput
-        from trpc_agent_sdk.code_executors import CodeExecutionResult as CER
-        return CodeExecutionInput, CER
-    except Exception:  # pylint: disable=broad-except
+        from trpc_agent_sdk.code_executors import create_code_execution_result
+        return CodeExecutionInput, create_code_execution_result
+    except Exception:  # pylint: disable=broad-expect
         return None, None
 
 
@@ -139,22 +139,22 @@ class _FakeInnerExecutor:
     logic. ``calls`` records whether delegation happened.
     """
 
-    def __init__(self, cer_cls: Any) -> None:
-        self._cer_cls = cer_cls
+    def __init__(self, create_fn: Any) -> None:
+        self._create_fn = create_fn
         self.calls: list[Any] = []
 
     async def execute_code(self, invocation_context, input_data):
         self.calls.append(input_data)
-        return self._cer_cls(stdout="ok", stderr="", exit_code=0)
+        return self._create_fn(stdout="ok")
 
 
 def test_safe_code_executor_blocks_dangerous_python(tmp_path: Path):
     """SafeCodeExecutor must block `os.system('rm -rf /')` before delegation."""
-    CodeExecutionInput, CER = _try_import_code_executors()
+    CodeExecutionInput, create_fn = _try_import_code_executors()
     if CodeExecutionInput is None:
         pytest.skip("trpc_agent_sdk.code_executors not importable (docker optional dep missing)")
 
-    inner = _FakeInnerExecutor(CER)
+    inner = _FakeInnerExecutor(create_fn)
     safe = SafeCodeExecutor(inner, _policy(tmp_path), audit_path=str(tmp_path / "audit.jsonl"))
 
     code = "import os\nos.system('rm -rf /')"
@@ -163,9 +163,9 @@ def test_safe_code_executor_blocks_dangerous_python(tmp_path: Path):
 
     # Blocked: inner must NOT have been called.
     assert inner.calls == []
-    # Result carries the deny marker.
-    assert "TOOL_SAFETY_DENY" in result.stderr
-    assert result.exit_code == 126
+    # create_code_execution_result packs stderr into `output` with FAILED outcome.
+    assert "TOOL_SAFETY_DENY" in result.output
+    assert result.outcome.name == "OUTCOME_FAILED"
 
     # Audit record must be written.
     audit_path = tmp_path / "audit.jsonl"
@@ -177,11 +177,11 @@ def test_safe_code_executor_blocks_dangerous_python(tmp_path: Path):
 
 def test_safe_code_executor_allows_safe_python(tmp_path: Path):
     """SafeCodeExecutor must delegate safe code to the inner executor."""
-    CodeExecutionInput, CER = _try_import_code_executors()
+    CodeExecutionInput, create_fn = _try_import_code_executors()
     if CodeExecutionInput is None:
         pytest.skip("trpc_agent_sdk.code_executors not importable (docker optional dep missing)")
 
-    inner = _FakeInnerExecutor(CER)
+    inner = _FakeInnerExecutor(create_fn)
     safe = SafeCodeExecutor(inner, _policy(tmp_path))
 
     code = "print('hello world')"
@@ -190,8 +190,8 @@ def test_safe_code_executor_allows_safe_python(tmp_path: Path):
 
     # Delegated: inner must have been called exactly once.
     assert len(inner.calls) == 1
-    assert result.stdout == "ok"
-    assert result.exit_code == 0
+    assert "ok" in result.output
+    assert result.outcome.name == "OUTCOME_OK"
 
 
 # ---------------------------------------------------------------------------
