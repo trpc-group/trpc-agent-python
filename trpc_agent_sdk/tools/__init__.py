@@ -60,6 +60,15 @@ from .task_tools import TaskToolSet
 from .task_tools import TaskUpdateTool
 from .task_tools import get_task_store
 from .task_tools import render_task_list
+from .goal_tools import GoalOptions
+from .goal_tools import GoalRecord
+from .goal_tools import GoalStatus
+from .goal_tools import GoalToolSet
+from .goal_tools import OnRetry
+from .goal_tools import RetryEvent
+from .goal_tools import get_goal_record
+from .goal_tools import setup_goal
+from .goal_tools import render_goal
 from ._transfer_to_agent_tool import transfer_to_agent
 from ._webfetch_tool import FetchResult
 from ._webfetch_tool import WebFetchTool
@@ -143,6 +152,15 @@ __all__ = [
     "get_task_store",
     "render_task_list",
     "DEFAULT_TASK_PROMPT",
+    "GoalStatus",
+    "GoalRecord",
+    "GoalToolSet",
+    "GoalOptions",
+    "RetryEvent",
+    "OnRetry",
+    "setup_goal",
+    "get_goal_record",
+    "render_goal",
     "FetchResult",
     "WebFetchTool",
     "SearchHit",
