@@ -31,6 +31,19 @@ from .types import ScanInput
 
 SCANNER_VERSION = "1.0.0"
 
+# Module-level custom rule registry. Rules registered here are included in
+# every new SafetyScanner that does not pass an explicit *rules* argument.
+_custom_rules: list[SafetyRule] = []
+
+
+def register_custom_rule(rule: SafetyRule) -> None:
+    """Register a custom rule to be included in all new scanners by default.
+
+    Existing SafetyScanner instances are unaffected; only scanners created
+    after registration will include the new rule.
+    """
+    _custom_rules.append(rule)
+
 
 class SafetyScanner:
     """Runs registered rules against a script and produces a SafetyReport."""
@@ -41,7 +54,7 @@ class SafetyScanner:
         rules: Optional[list[SafetyRule]] = None,
     ):
         self.policy = policy
-        self.rules = rules if rules is not None else default_rules()
+        self.rules = rules if rules is not None else default_rules() + list(_custom_rules)
 
     def scan(self, scan_input: ScanInput) -> SafetyReport:
         """Scan *scan_input* and return a structured SafetyReport."""

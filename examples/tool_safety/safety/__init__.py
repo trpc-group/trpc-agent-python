@@ -27,6 +27,7 @@ from .rules import default_rules
 from .rules.base import SafetyRule
 from .scanner import SCANNER_VERSION
 from .scanner import SafetyScanner
+from .scanner import register_custom_rule
 from .types import Decision
 from .types import max_risk_level
 from .types import RiskLevel
@@ -48,9 +49,15 @@ except Exception:  # pylint: disable=broad-except
 try:  # pragma: no cover
     from .wrapper import SafeCodeExecutor
     from .wrapper import wrap_tool
+    from .wrapper import safety_wrapper
+    from .wrapper import SafetyDeniedError
+    from .wrapper import SafetyReviewedSkillRunner
 except Exception:  # pylint: disable=broad-except
     SafeCodeExecutor = None  # type: ignore[assignment]
     wrap_tool = None  # type: ignore[assignment]
+    safety_wrapper = None  # type: ignore[assignment]
+    SafetyDeniedError = None  # type: ignore[assignment]
+    SafetyReviewedSkillRunner = None  # type: ignore[assignment]
 
 __all__ = [
     "AuditLogger",
@@ -60,6 +67,7 @@ __all__ = [
     "SafetyRule",
     "SCANNER_VERSION",
     "SafetyScanner",
+    "register_custom_rule",
     "ToolSafetyFilter",
     "Decision",
     "max_risk_level",
@@ -69,5 +77,8 @@ __all__ = [
     "ScanInput",
     "SafeCodeExecutor",
     "wrap_tool",
+    "safety_wrapper",
+    "SafetyDeniedError",
+    "SafetyReviewedSkillRunner",
     "_SDK_AVAILABLE",
 ]

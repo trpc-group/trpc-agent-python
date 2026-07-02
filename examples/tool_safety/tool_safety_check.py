@@ -114,7 +114,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     print(f"\nSummary: {len(all_reports)} scanned | "
           f"{allowed} allow | {denied} deny | {review} needs_review")
 
-    return 1 if any_denied else 0
+    # Exit codes: 0=clean, 1=denied, 2=needs_review (usable as CI gate).
+    if any_denied:
+        return 1
+    if review > 0:
+        return 2
+    return 0
 
 
 def _infer_language(path: Path) -> str:

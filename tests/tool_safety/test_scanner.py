@@ -18,6 +18,8 @@ from examples.tool_safety.safety import Decision
 from examples.tool_safety.safety import RiskLevel
 from examples.tool_safety.safety import SafetyScanner
 from examples.tool_safety.safety import ScanInput
+from examples.tool_safety.safety import register_custom_rule
+from examples.tool_safety.safety.rules.base import SafetyRule
 
 
 def _scan(scanner: SafetyScanner, path: Path) -> "object":
@@ -167,3 +169,48 @@ def _assert_report_well_formed(report) -> None:
         assert f.evidence is not None
         assert f.recommendation
         assert f.risk_level in RiskLevel
+
+
+# ---------------------------------------------------------------------------
+# register_custom_rule
+# ---------------------------------------------------------------------------
+
+
+class _NoOpRule(SafetyRule):
+    """A custom rule that always fires, for testing the registry."""
+
+    rule_id = "TEST_CUSTOM_001"
+    rule_name = "test custom rule"
+    risk_type = "test"
+    default_level = RiskLevel.LOW
+
+    def check(self, scan_input, policy):
+        from examples.tool_safety.safety.types import SafetyFinding
+        return [SafetyFinding(
+            rule_id=self.rule_id,
+            rule_name=self.rule_name,
+            risk_type=self.risk_type,
+            risk_level=self.default_level,
+            evidence="custom rule triggered",
+            line=1,
+            recommendation="this is a test rule",
+        )]
+
+
+def test_register_custom_rule_is_picked_up_by_new_scanner():
+    """register_custom_rule must make the rule appear in new scanners."""
+    custom = _NoOpRule()
+    register_custom_rule(custom)
+    try:
+        scanner = SafetyScanner(policy=_minimal_policy())
+        rule_ids = [r.rule_id for r in scanner.rules]
+        assert "TEST_CUSTOM_001" in rule_ids
+    finally:
+        # Clean up the registry so other tests are unaffected.
+        from examples.tool_safety.safety.scanner import _custom_rules
+        _custom_rules.remove(custom)
+
+
+def _minimal_policy():
+    from examples.tool_safety.safety import PolicyConfig
+    return PolicyConfig()

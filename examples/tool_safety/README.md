@@ -139,9 +139,66 @@ policy = PolicyConfig.from_yaml("...")
 tool = wrap_tool(existing_tool, policy, audit_path="audit.jsonl")
 ```
 
-### 方式 3:独立 CLI 扫描
+`wrap_tool` 同样适用于 Skill 执行链路。SDK 的 Skill 能力
+(`SkillRunTool`、`SkillExecTool`、`WorkspaceExecTool` 等)本身都是
+`BaseTool` 子类,其执行参数中包含 `command` 字段,会被 `ToolSafetyFilter`
+的参数提取器(`_SCRIPT_ARG_KEYS` 首位即 `"command"`)自动捕获。因此给
+Skill tool 挂 filter 即可在 skill 脚本执行前完成静态扫描:
 
-见 [快速开始](#快速开始),适合 CI 流水线或人工预检。
+```python
+from trpc_agent_sdk.skills.tools import SkillRunTool, SkillExecTool
+
+skill_run = SkillRunTool(...)
+wrapped_skill = wrap_tool(skill_run, policy, audit_path="audit.jsonl")
+```
+
+也可在 Runner 层面统一挂 filter,使所有 tool(含 Skill tool、BashTool、
+CodeExecutor 暴露的 tool)共享同一道安全检查。
+
+### 方式 3:装饰器包装任意函数
+
+`@safety_wrapper` 装饰器在函数执行前扫描其 `script_arg` 参数,DENY 时抛
+`SafetyDeniedError`。同步/异步函数均支持,适合包装自定义执行入口:
+
+```python
+from examples.tool_safety.safety import safety_wrapper, SafetyDeniedError, PolicyConfig
+
+policy = PolicyConfig.from_yaml("...")
+
+@safety_wrapper(tool_name="my_runner", script_arg="code", policy=policy,
+                audit_path="audit.jsonl")
+async def execute(*, tool_context, args):
+    code = args["code"]
+    return await run_code(code)
+
+# DENY 时抛 SafetyDeniedError(report 附在异常上),ALLOW 时正常执行。
+```
+
+### 方式 4:Skill runner 专用 wrapper
+
+`SafetyReviewedSkillRunner` 专为 Skill 执行路径设计,包装任何带
+`run_async(tool_context=, args=)` 的 runner,DENY 时返回阻塞响应而不调用
+内部 runner:
+
+```python
+from examples.tool_safety.safety import SafetyReviewedSkillRunner, PolicyConfig
+
+policy = PolicyConfig.from_yaml("...")
+safe_skill = SafetyReviewedSkillRunner(
+    my_skill_runner, policy, audit_path="audit.jsonl",
+    tool_name="skill_run", block_review=False,  # True 时 needs_review 也阻塞
+)
+result = await safe_skill.run(tool_context, args)
+# DENY → {"success": False, "error": "SKILL_BLOCKED", "safety": {...}}
+# ALLOW → 委托给 my_skill_runner
+```
+
+### 方式 5:独立 CLI 扫描
+
+见 [快速开始](#快速开始),适合 CI 流水线或人工预检。CLI 退出码:
+- `0` = 全部 allow
+- `1` = 存在 deny(高危)
+- `2` = 无 deny 但有 needs_review(可用作 CI gate)
 
 接入点说明:SDK 的 `BaseTool.run_async` 在调用 `_run_async_impl` 前会先跑 `_run_filters`,
 本 Filter 正是挂在这个前置位置,因此能在执行前拦截高危脚本。
@@ -209,7 +266,7 @@ pytest tests/tool_safety/ -v
 | 4. 500 行脚本 ≤1s | `test_performance.py` | ✅ <1s |
 | 5. 报告含 decision/risk_level/rule_id/evidence/recommendation | `test_scanner.py::_assert_report_well_formed` | ✅ |
 | 6. 改策略不改代码即生效 | `test_policy.py::test_hot_reload_*` | ✅ |
-| 7. Filter 执行前拒绝高危 + 写审计 | `test_tool_filter.py` | ✅ 4 case |
+| 7. Filter/wrapper 执行前拒绝高危 + 写审计 | `test_tool_filter.py`(4 case)+ `test_wrapper.py`(9 case) | ✅ 13 case |
 | 8. 文档说明与沙箱等关系 | 本 README 末节 | ✅ |
 
 ### 12 条样本
@@ -259,6 +316,8 @@ pytest tests/tool_safety/ -v
 
 ## 扩展新规则
 
+### 方式 A:实现 SafetyRule 子类(内置规则推荐)
+
 1. 在 [`safety/rules/`](safety/rules/) 下新建文件,实现 `SafetyRule` 子类:
 
 ```python
@@ -283,6 +342,43 @@ class MyRule(SafetyRule):
 3. 可在 `tool_safety_policy.yaml` 的 `disabled_rules` 中按 `rule_id` 禁用,无需改代码。
 
 4. 在 `tests/tool_safety/test_rules.py` 添加单测。
+
+### 方式 B:运行时注册自定义规则(插件/用户代码推荐)
+
+无需改源码,在运行时调用 `register_custom_rule()` 即可让所有新建的
+`SafetyScanner` 自动包含该规则:
+
+```python
+from examples.tool_safety.safety import register_custom_rule, SafetyScanner, PolicyConfig
+from examples.tool_safety.safety.rules.base import SafetyRule
+from examples.tool_safety.safety.types import RiskLevel, SafetyFinding
+
+class CompanyPolicyRule(SafetyRule):
+    rule_id = "CUSTOM_company_policy"
+    rule_name = "Company-specific banned API"
+    risk_type = "custom"
+    default_level = RiskLevel.HIGH
+    languages = ("python",)
+
+    def check(self, scan_input, policy):
+        if "internal_unstable_api" in scan_input.script:
+            return [SafetyFinding(
+                rule_id=self.rule_id, rule_name=self.rule_name,
+                risk_type=self.risk_type, risk_level=self.default_level,
+                evidence="internal_unstable_api", line=1,
+                recommendation="Use the stable API instead.",
+            )]
+        return []
+
+# 注册后,所有新建的 SafetyScanner 都会包含这条规则。
+register_custom_rule(CompanyPolicyRule())
+
+scanner = SafetyScanner(policy=PolicyConfig())
+assert "CUSTOM_company_policy" in [r.rule_id for r in scanner.rules]
+```
+
+运行时注册适合:插件系统、用户私有规则、不希望改框架源码的集成场景。
+已注册的规则同样受 `disabled_rules` 策略控制。
 
 ---
 
