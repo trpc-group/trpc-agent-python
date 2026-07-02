@@ -41,6 +41,8 @@ from ._types import SkillSummary
 from ._url_root import SkillRootResolver
 from ._utils import is_doc_file
 from ._utils import is_script_file
+from .hub import SkillSpecsConfig
+from .hub import sync_remote_skills
 
 BASE_DIR_PLACEHOLDER = "__BASE_DIR__"
 VisibilityFilter = Callable[[SkillSummary], bool]
@@ -685,6 +687,7 @@ def create_default_skill_repository(
     workspace_runtime: Optional[BaseWorkspaceRuntime] = None,
     enable_hot_reload: bool = True,
     use_cached_repository: bool = True,
+    additional_skill_specs: Optional[SkillSpecsConfig] = None,
 ) -> BaseSkillRepository:
     """Create a new filesystem skill repository.
 
@@ -693,20 +696,29 @@ def create_default_skill_repository(
         workspace_runtime: Optional workspace runtime.
         enable_hot_reload: Whether to enable skill hot reload checks.
         use_cached_repository: Whether to use cached repository.
+        additional_skill_specs: Optional remote skills plus their install path.
+            The skills are fetched into ``install_path`` before indexing, and
+            that path is added as an extra scan root.
     Returns:
         A configured :class:`FsSkillRepository`.
     """
+    resolved_roots = list[str](roots)
+    if additional_skill_specs and additional_skill_specs.specs:
+        install_path = Path(additional_skill_specs.install_path)
+        sync_remote_skills(additional_skill_specs.specs, install_path)
+        resolved_roots.append(str(install_path))
+
     if workspace_runtime is None:
         workspace_runtime = create_local_workspace_runtime()
     if use_cached_repository:
         return CachedFsSkillRepository(
-            *roots,
+            *resolved_roots,
             workspace_runtime=workspace_runtime,
             enable_hot_reload=enable_hot_reload,
         )
     else:
         return FsSkillRepository(
-            *roots,
+            *resolved_roots,
             workspace_runtime=workspace_runtime,
             enable_hot_reload=enable_hot_reload,
         )

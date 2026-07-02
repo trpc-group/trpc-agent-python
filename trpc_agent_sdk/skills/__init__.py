@@ -53,6 +53,7 @@ from ._constants import SKILL_TOOLS_STATE_KEY_PREFIX
 from ._constants import SkillLoadModeNames
 from ._constants import SkillProfileNames
 from ._constants import SkillToolsNames
+from . import hub
 from ._dynamic_toolset import DynamicSkillToolSet
 from ._registry import SkillRegistry
 from ._repository import BaseSkillRepository
@@ -95,6 +96,10 @@ from ._url_root import ArchiveExtractor
 from ._url_root import SkillRootResolver
 from ._utils import get_state_delta
 from ._utils import set_state_delta
+from .hub import SkillSpec
+from .hub import SkillSpecsConfig
+from .hub import async_sync_remote_skills
+from .hub import sync_remote_skills
 from .tools import SkillLoadTool
 from .tools import SkillRunTool
 from .tools import SkillExecTool
@@ -105,6 +110,7 @@ from .tools import skill_select_docs
 from .tools import skill_select_tools
 
 __all__ = [
+    "hub",
     "SelectionMode",
     "docs_scan_prefix",
     "docs_state_key",
@@ -166,6 +172,8 @@ __all__ = [
     "touch_loaded_order",
     "SkillToolSet",
     "Skill",
+    "SkillSpec",
+    "SkillSpecsConfig",
     "SkillConfig",
     "SkillFrontMatter",
     "SkillRequires",
@@ -175,6 +183,8 @@ __all__ = [
     "SkillRootResolver",
     "get_state_delta",
     "set_state_delta",
+    "sync_remote_skills",
+    "async_sync_remote_skills",
     "SkillLoadTool",
     "SkillRunTool",
     "SkillExecTool",

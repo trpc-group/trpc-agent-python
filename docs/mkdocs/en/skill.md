@@ -2143,17 +2143,56 @@ The **Dynamic Tool Selection** mechanism has been fully implemented and verified
 - ❌ All tools need to be available simultaneously
 - ❌ Token cost is not a primary concern
 
-## References and Examples
+## Skill Hub - Discovering and Fetching Skills from Remote Sources
 
-- Background:
-  - Blog:
-    https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills
-  - Open repository: https://github.com/anthropics/skills
-- This repository:
-  - Interactive demo: [examples/skills/run_agent.py](../../../examples/skills/run_agent.py)
-  - Dynamic tool selection full example: [examples/skills_with_dynamic_tools/run_agent.py](../../../examples/skills_with_dynamic_tools/run_agent.py)
-  - Example structure guide: [examples/skills/README.md](../../../examples/skills/README.md)
-  - Example skills:
-    - [examples/skills/skills/python-math/SKILL.md](../../../examples/skills/skills/python-math/SKILL.md)
-    - [examples/skills/skills/file_tools/SKILL.md](../../../examples/skills/skills/file_tools/SKILL.md)
-    - [examples/skills/skills/user_file_ops/SKILL.md](../../../examples/skills/skills/user_file_ops/SKILL.md)
+**Skill Hub** (`trpc_agent_sdk.skills.hub`) is a set of adapters (`SkillSource`) for discovering and fetching skills from remote sources. It provides three capabilities: searching for available skills from a source (GitHub, ClawHub, skills.sh, and others), inspecting metadata for a specific skill, and downloading the complete file contents for that skill. Users can also implement the `SkillSource` interface to integrate their own skill source.
+
+### `SkillSource` Contract
+
+Every adapter implements the same four-method interface:
+
+```python
+from trpc_agent_sdk.skills.hub import SkillSource, SkillMeta, SkillBundle
+
+class SkillSource(ABC):
+    def source_id(self) -> str: ...
+    def search(self, query: str, limit: int = 10) -> list[SkillMeta]: ...
+    def inspect(self, identifier: str) -> SkillMeta | None: ...
+    def fetch(self, identifier: str) -> SkillBundle | None: ...
+```
+
+- `SkillMeta` - lightweight search/inspect result (`name`, `description`, `source`, `identifier`, plus optional `repo`/`path`/`tags`/`extra`)
+- `SkillBundle` - the downloaded skill (`name`, `files: dict[str, str | bytes]`, `source`, `identifier`, `metadata`)
+
+`fetch()` only returns an in-memory `SkillBundle`. Writing it to disk (including overwrite policy, atomic writes, and concurrency safety) is the **caller's** responsibility, because different harnesses have different installation semantics. For this purpose, the SDK also exports three path validation functions:
+
+```python
+from trpc_agent_sdk.skills.hub import validate_skill_name, validate_category_name, validate_bundle_rel_path
+```
+
+### Built-in Adapters
+
+| Adapter | Source | Identifier format |
+| --- | --- | --- |
+| `GitHubSource` | GitHub repos, via the Contents / Git Trees API | `"owner/repo/path/to/skill-dir"` |
+| `WellKnownSkillSource` | Any domain exposing `/.well-known/skills/index.json` | `well-known:{base_url}/{skill_name}` or a raw HTTPS URL |
+| `HermesIndexSource` | A centralized, pre-crawled skills catalog | Same identifiers as the underlying `GitHubSource` entries |
+| `SkillsShSource` | [skills.sh](https://skills.sh) | `skills-sh/{owner}/{repo}/{skill_path}` |
+| `ClawHubSource` | [ClawHub](https://clawhub.ai) | slug, e.g. `"notion"` |
+| `ClaudeMarketplaceSource` | Claude Code marketplace repos (`.claude-plugin/marketplace.json`) | Resolves to a `GitHubSource` identifier |
+| `LobeHubSource` | LobeHub agent marketplace (converted to synthetic `SKILL.md`) | `lobehub/{agent_id}` |
+
+### Minimal Usage
+
+```python
+from trpc_agent_sdk.skills.hub import GitHubAuth, GitHubSource
+
+source = GitHubSource(GitHubAuth())  # no authentication is required for public repositories
+meta = source.inspect("anthropics/skills/skills/skill-creator")
+bundle = source.fetch("anthropics/skills/skills/skill-creator")
+# bundle.files: {"SKILL.md": "...", "scripts/...": "...", ...}
+```
+
+### Full Example
+
+See the complete Skill Hub usage example: [examples/skills_hub/run_agent.py](../../../examples/skills_hub/run_agent.py)
