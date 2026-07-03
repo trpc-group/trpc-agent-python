@@ -311,6 +311,13 @@ Coordinator Agent (Main Entry Point)
 | `disallow_transfer_to_peers` | `False` | Set to `True` to prevent a child Agent from transferring control to peer Agents |
 | `default_transfer_message` | `None` | Custom transfer instruction that overrides the default transfer prompt |
 
+#### Spawned Sub-Agents
+
+As an alternative to persistent `sub_agents` (transfer-based), you can spawn
+short-lived sub-agents at run time via ``SpawnSubAgentTool`` (pick from a
+pre-registered catalog) or ``DynamicSubAgentTool`` (LLM defines the role on the
+fly). See [Sub-Agent Tools](sub_agent.md).
+
 ## Compose Patterns (Compose Agents)
 
 Different orchestration patterns can be flexibly combined, connecting results of different stages via `output_key` to create more complex workflows:
