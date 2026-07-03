@@ -311,6 +311,10 @@ Route customer inquiries:
 | `disallow_transfer_to_peers` | `False` | 设为 `True` 禁止子 Agent 将控制权转给同级 Agent |
 | `default_transfer_message` | `None` | 自定义转移指令，覆盖默认的转移提示语 |
 
+#### Spawned Sub-Agents
+
+除持久化的 `sub_agents`（基于 transfer）之外，还可以在运行时通过 ``SpawnSubAgentTool``（从预注册目录中选择）或 ``DynamicSubAgentTool``（LLM 现场定义角色）创建短期子 agent。详见 [子 Agent 工具](sub_agent.md)。
+
 ## 组合模式（Compose Agents）
 
 不同的编排模式可以灵活组合，通过 `output_key` 连接不同阶段的结果，创建更复杂的工作流：
