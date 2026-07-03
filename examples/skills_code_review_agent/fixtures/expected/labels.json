@@ -1,0 +1,34 @@
+{
+  "0001_insecure.diff": {
+    "clean": false,
+    "expected": [[1, "security"], [7, "security"], [12, "security"], [10, "resource_leak"], [3, "secret_leakage"], [4, "secret_leakage"]]
+  },
+  "0002_secret_leak.diff": {
+    "clean": false,
+    "expected": [[4, "secret_leakage"]]
+  },
+  "0003_async_blocking.diff": {
+    "clean": false,
+    "expected": [[4, "async_errors"]]
+  },
+  "0004_resource_leak.diff": {
+    "clean": false,
+    "expected": [[2, "resource_leak"]]
+  },
+  "0005_clean.diff": {
+    "clean": true,
+    "expected": []
+  },
+  "0006_eval.diff": {
+    "clean": false,
+    "expected": [[2, "security"]]
+  },
+  "0007_yaml_load.diff": {
+    "clean": false,
+    "expected": [[4, "security"]]
+  },
+  "0008_multi.diff": {
+    "clean": false,
+    "expected": [[1, "security"], [4, "security"], [7, "security"]]
+  }
+}

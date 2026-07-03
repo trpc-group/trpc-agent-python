@@ -1,0 +1,18 @@
+diff --git a/insecure.py b/insecure.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/insecure.py
+@@ -0,0 +1,12 @@
++import subprocess
++
++PASSWORD = "hunter2supersecret"
++AWS_KEY = "AKIAIOSFODNN7EXAMPLE"
++
++def run(cmd):
++    return subprocess.call(cmd, shell=True)
++
++def read_config(path):
++    f = open(path)
++    data = f.read()
++    return eval(data)

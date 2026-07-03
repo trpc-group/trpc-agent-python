@@ -1,0 +1,13 @@
+diff --git a/multi.py b/multi.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/multi.py
+@@ -0,0 +1,7 @@
++import subprocess
++
++def a(cmd):
++    return subprocess.call(cmd, shell=True)
++
++def b(expr):
++    return eval(expr)
