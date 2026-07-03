@@ -1,0 +1,8 @@
+# Everything below is regenerated on each run. A frozen sample report is
+# committed under sample_output/ so reviewers can see the expected shape
+# without run-to-run diff churn.
+__pycache__/
+_sdk_eval_metrics.json
+runs/
+optimization_report.json
+optimization_report.md
