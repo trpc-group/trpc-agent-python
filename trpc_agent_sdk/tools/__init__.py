@@ -5,8 +5,15 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Tools module for TRPC Agent framework."""
 
+from typing import TYPE_CHECKING
+
 from trpc_agent_sdk.abc import ToolPredicate
 from trpc_agent_sdk.abc import ToolSetABC as BaseToolSet
+
+if TYPE_CHECKING:
+    # Lazy re-export — see ``_LAZY_REEXPORTS`` below.
+    from trpc_agent_sdk.agents.sub_agent import DynamicSubAgentTool as DynamicSubAgentTool  # noqa: F401
+    from trpc_agent_sdk.agents.sub_agent import SpawnSubAgentTool as SpawnSubAgentTool  # noqa: F401
 
 from ._agent_tool import AGENT_TOOL_APP_NAME_SUFFIX
 from ._agent_tool import AgentTool
@@ -187,3 +194,25 @@ __all__ = [
     "parse_schema_from_parameter",
     "register_checker",
 ]
+
+# Lazy re-exports: implemented elsewhere (avoids circular imports and keeps
+# the tools package free of optional file/web tool dependencies) but exposed
+# here for discoverability. Not in ``__all__`` so ``import *`` stays lazy.
+_LAZY_REEXPORTS = {
+    "DynamicSubAgentTool": ("trpc_agent_sdk.agents.sub_agent", "DynamicSubAgentTool"),
+    "SpawnSubAgentTool": ("trpc_agent_sdk.agents.sub_agent", "SpawnSubAgentTool"),
+}
+
+
+def __getattr__(name):
+    if name in _LAZY_REEXPORTS:
+        import importlib
+        module_name, attr = _LAZY_REEXPORTS[name]
+        obj = getattr(importlib.import_module(module_name), attr)
+        globals()[name] = obj  # cache: subsequent accesses skip __getattr__
+        return obj
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    return sorted(set(list(globals()) + list(_LAZY_REEXPORTS)))
