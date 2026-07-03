@@ -3,7 +3,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """Smoke tests for the skills_code_review_agent example.
 
 Deterministic and fast: no real model, no Docker. Verifies the dry-run pipeline detects issues,
@@ -106,3 +105,36 @@ async def test_persist_and_query_no_secret_leak(tmp_path) -> None:
     raw = db_file.read_bytes()
     for secret in _SECRETS:
         assert secret.encode() not in raw
+
+
+@pytest.mark.asyncio
+async def test_agent_path_calls_tool_and_summarizes() -> None:
+    """The fake-model agent loop drives the review_code tool and summarizes — no API key."""
+    import uuid
+
+    from trpc_agent_sdk.runners import Runner
+    from trpc_agent_sdk.sessions import InMemorySessionService
+    from trpc_agent_sdk.types import Content, Part
+
+    from agent.agent import create_agent
+
+    runner = Runner(app_name="cr_test", agent=create_agent(), session_service=InMemorySessionService())
+    sid = str(uuid.uuid4())
+    await runner.session_service.create_session(app_name="cr_test", user_id="u", session_id=sid)
+
+    diff = (_FIXTURES / "0001_insecure.diff").read_text()
+    saw_tool_call = False
+    final_text = ""
+    async for event in runner.run_async(user_id="u",
+                                        session_id=sid,
+                                        new_message=Content(role="user", parts=[Part(text=diff)])):
+        for part in (event.content.parts if event.content else []) or []:
+            if part.function_call:
+                saw_tool_call = True
+            if part.text:
+                final_text += part.text
+
+    assert saw_tool_call
+    assert "Review complete" in final_text
+    for secret in _SECRETS:
+        assert secret not in final_text

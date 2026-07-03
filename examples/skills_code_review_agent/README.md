@@ -20,6 +20,9 @@ python run_review.py --repo-path /path/to/repo --no-db
 
 # Scored self-test over the labelled fixtures (detection-rate / false-positive-rate):
 python selftest.py
+
+# Run the review through the LlmAgent (fake model, no API key needed):
+python run_agent.py --fixture 0001_insecure.diff
 ```
 
 ## How it works
@@ -74,7 +77,7 @@ a rendered report — criterion 5 is binary-checked, so redaction is centralized
 
 ## Status
 
-Implemented: deterministic pipeline, DB persistence, 8 fixtures, scored self-test, CLI. Baseline
-secret redaction is in place. Planned follow-up slices: in-sandbox execution (Container/Cube), the
-tool-level Filter gate, redaction hardening to ≥95%, OpenTelemetry metrics wiring, and the
-fake-model agent loop that drives the review as a Skill tool.
+Implemented: deterministic pipeline, DB persistence, 8 fixtures, scored self-test, CLI, and the
+fake-model agent loop (`run_agent.py` drives the review through `LlmAgent` + a `FunctionTool` with no
+API key). Baseline secret redaction is in place. Planned follow-up slices: in-sandbox execution
+(Container/Cube), the tool-level Filter gate, redaction hardening to ≥95%, and OpenTelemetry metrics.
