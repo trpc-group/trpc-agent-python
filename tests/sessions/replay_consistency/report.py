@@ -20,7 +20,9 @@ def _backend_statuses(backend_pairs: list[str], backend_statuses: list[dict[str,
         return backend_statuses
 
     active_backends = sorted({backend for pair in backend_pairs for backend in pair.split("_vs_")})
-    statuses = [{"name": backend, "status": "ok", "reason": ""} for backend in active_backends]
+    ordered_backends = ["inmemory", "sqlite"]
+    ordered_backends.extend(backend for backend in active_backends if backend not in ordered_backends)
+    statuses = [{"name": backend, "status": "ok", "reason": ""} for backend in ordered_backends]
     optional_backends = [
         ("external_sql", "TRPC_AGENT_REPLAY_SQL_URL"),
         ("redis", "TRPC_AGENT_REPLAY_REDIS_URL"),

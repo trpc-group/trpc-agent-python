@@ -38,10 +38,20 @@ def _assert_diff_context(
 
     if expected_section == "events":
         assert any(diff.event_index is not None for diff in matching)
+        if mutation == "change_tool_args":
+            assert any("function_calls" in diff.path for diff in matching)
+        if mutation == "change_tool_response":
+            assert any("function_responses" in diff.path for diff in matching)
     elif expected_section == "memories":
-        assert any(diff.memory_index is not None for diff in matching)
+        assert any(diff.memory_index is not None or diff.section == "memories" for diff in matching)
     elif expected_section == "summary":
         assert any(diff.summary_id for diff in matching)
+        if mutation == "drop_summary":
+            assert any(diff.path == "summary" for diff in matching)
+        elif mutation in {"overwrite_summary_with_stale_text", "overwrite_summary_text"}:
+            assert any(diff.path == "summary.text" for diff in matching)
+        elif mutation in {"summary_wrong_session_id", "wrong_summary_session"}:
+            assert any("summary.metadata.session_id" in diff.path for diff in matching)
 
 
 @pytest.mark.asyncio
@@ -51,9 +61,9 @@ async def test_real_replay_snapshot_mutation_detection(tmp_path: Path):
         clean = await _run_real_inmemory_snapshot(tmp_path / f"real-mutation-{case.name}", case)
         for mutation in mutations_for_case(case):
             mutated = copy.deepcopy(clean)
-            mutated["backend"] = "mutated"
+            mutated["backend"] = "sqlite"
             mutate_snapshot(mutation, mutated)
-            diffs = recursive_diff(clean, mutated)
+            diffs = unallowed_diffs(recursive_diff(clean, mutated))
             _assert_diff_context(
                 case_name=case.name,
                 mutation=mutation,
@@ -70,10 +80,11 @@ async def test_real_replay_snapshot_mutation_detection(tmp_path: Path):
             )
 
     report = write_report(
-        tmp_path / "session_memory_summary_mutation_diff_report.json",
+        tmp_path / "mutation_report.json",
         [],
         mutation_results=mutation_results,
     )
+    assert report["mutation_summary"]["mutation_count"] == report["mutation_summary"]["detected_count"]
     assert report["mutation_summary"]["undetected_mutations"] == []
 
 
@@ -83,9 +94,9 @@ async def test_real_summary_required_mutations_detected(tmp_path: Path, mutation
     case = next(case for case in replay_cases() if case.name == "summary_generation")
     clean = await _run_real_inmemory_snapshot(tmp_path / f"summary-required-{mutation}", case)
     mutated = copy.deepcopy(clean)
-    mutated["backend"] = "mutated"
+    mutated["backend"] = "sqlite"
     mutate_snapshot(mutation, mutated)
-    diffs = recursive_diff(clean, mutated)
+    diffs = unallowed_diffs(recursive_diff(clean, mutated))
     _assert_diff_context(
         case_name=case.name,
         mutation=mutation,
