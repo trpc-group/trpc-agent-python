@@ -120,6 +120,8 @@ class GateDecision:
     cumulative_cost: float
     total_run_cost: float
     cost: float
+    gate_status: str = "applied"
+    gate_not_applied_reason: str | None = None
 
 
 @dataclass(frozen=True)

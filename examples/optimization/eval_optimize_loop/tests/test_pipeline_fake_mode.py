@@ -61,17 +61,23 @@ def test_fake_mode_pipeline_generates_json_and_markdown_reports(tmp_path: Path):
         "config_hash",
         "cost",
         "duration_seconds",
+        "prompt_hash",
         "candidate_prompts",
         "prompt_diffs",
         "input_hashes",
         "candidate_prompt_hashes",
+        "total_run_cost",
     }
+    assert payload["run"]["reproducibility_command"].startswith("python examples/optimization")
+    assert payload["audit"]["total_run_cost"] == payload["audit"]["cost"]["total"]
     assert "candidate_001_overfit" in payload["audit"]["prompt_diffs"]
     assert "candidate_002_safe" in payload["audit"]["prompt_diffs"]
+    assert payload["candidates"][0]["candidate"]["prompt_diff"].startswith("--- baseline_system_prompt.txt")
 
     decisions = {item["candidate_id"]: item for item in payload["gate_decisions"]}
     assert not decisions["candidate_001_overfit"]["accepted"]
     assert decisions["candidate_002_safe"]["accepted"]
+    assert decisions["candidate_001_overfit"]["total_run_cost"] > decisions["candidate_001_overfit"]["candidate_cost"]
     assert any(
         "train score improved but validation score regressed" in reason
         for reason in decisions["candidate_001_overfit"]["reasons"]
@@ -94,6 +100,9 @@ def test_fake_mode_pipeline_generates_json_and_markdown_reports(tmp_path: Path):
     assert (run_dir / "candidate_prompts" / "candidate_001_overfit" / "system_prompt.txt").is_file()
     assert (run_dir / "case_results" / "candidate_002_safe_validation.json").is_file()
     assert (run_dir / "prompt_diffs" / "candidate_002_safe.diff").is_file()
+    assert (run_dir / "prompt_diffs" / "candidate_002_safe.diff").read_text(encoding="utf-8") == (
+        payload["candidates"][1]["candidate"]["prompt_diff"]
+    )
 
 
 def test_pipeline_is_deterministic_with_same_seed(tmp_path: Path):

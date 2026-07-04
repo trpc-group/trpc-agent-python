@@ -7,12 +7,12 @@
     "candidate_prompts": {
       "candidate_001_overfit": {
         "prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\n# Optimizer patch\nOPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\nAlways force every final answer into JSON, even when the user asks for prose.\n",
-        "prompt_diff": "+ OPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\n+ Always force every final answer into JSON, even when the user asks for prose.",
+        "prompt_diff": "--- baseline_system_prompt.txt\n+++ candidate_001_overfit/system_prompt.txt\n@@ -2,3 +2,7 @@\n\n Answer clearly and include a short explanation when it may help the user.\n If the user asks for structured data, provide the information they need.\n+\n+# Optimizer patch\n+OPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\n+Always force every final answer into JSON, even when the user asks for prose.",
         "rationale": "The train failures are strict JSON/exact formatting failures, so this candidate over-corrects by forcing JSON globally."
       },
       "candidate_002_safe": {
         "prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\n# Optimizer patch\nOPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\nUse strict JSON only when the user explicitly asks for JSON.\nUse exact answers only when the user explicitly asks for an exact answer.\nOtherwise answer naturally and honor rubric constraints.\n",
-        "prompt_diff": "+ OPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\n+ Use strict JSON only when explicitly requested.\n+ Preserve natural-language answers unless a strict format is requested.",
+        "prompt_diff": "--- baseline_system_prompt.txt\n+++ candidate_002_safe/system_prompt.txt\n@@ -2,3 +2,9 @@\n\n Answer clearly and include a short explanation when it may help the user.\n If the user asks for structured data, provide the information they need.\n+\n+# Optimizer patch\n+OPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\n+Use strict JSON only when the user explicitly asks for JSON.\n+Use exact answers only when the user explicitly asks for an exact answer.\n+Otherwise answer naturally and honor rubric constraints.",
         "rationale": "This candidate fixes observed strict-format failures without changing natural-language behavior on validation cases."
       }
     },
@@ -39,11 +39,13 @@
       "validation": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\data\\val.evalset.json"
     },
     "prompt_diffs": {
-      "candidate_001_overfit": "+ OPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\n+ Always force every final answer into JSON, even when the user asks for prose.",
-      "candidate_002_safe": "+ OPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\n+ Use strict JSON only when explicitly requested.\n+ Preserve natural-language answers unless a strict format is requested."
+      "candidate_001_overfit": "--- baseline_system_prompt.txt\n+++ candidate_001_overfit/system_prompt.txt\n@@ -2,3 +2,7 @@\n\n Answer clearly and include a short explanation when it may help the user.\n If the user asks for structured data, provide the information they need.\n+\n+# Optimizer patch\n+OPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\n+Always force every final answer into JSON, even when the user asks for prose.",
+      "candidate_002_safe": "--- baseline_system_prompt.txt\n+++ candidate_002_safe/system_prompt.txt\n@@ -2,3 +2,9 @@\n\n Answer clearly and include a short explanation when it may help the user.\n If the user asks for structured data, provide the information they need.\n+\n+# Optimizer patch\n+OPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\n+Use strict JSON only when the user explicitly asks for JSON.\n+Use exact answers only when the user explicitly asks for an exact answer.\n+Otherwise answer naturally and honor rubric constraints."
     },
+    "prompt_hash": "ce30a6d1dd86f988cbd4abe08648c9596c4808e429b3895e6ca5bdc53411ea95",
     "reproducibility_command": "python examples/optimization/eval_optimize_loop/run_pipeline.py --train examples/optimization/eval_optimize_loop/data/train.evalset.json --val examples/optimization/eval_optimize_loop/data/val.evalset.json --optimizer-config examples/optimization/eval_optimize_loop/data/optimizer.json --prompt examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt --output-dir /tmp/eval-optimize-loop --fake-model --fake-judge --trace",
-    "seed": 91
+    "seed": 91,
+    "total_run_cost": 0.018
   },
   "baseline": {
     "train": {
@@ -432,7 +434,7 @@
       "candidate": {
         "candidate_id": "candidate_001_overfit",
         "prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\n# Optimizer patch\nOPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\nAlways force every final answer into JSON, even when the user asks for prose.\n",
-        "prompt_diff": "+ OPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\n+ Always force every final answer into JSON, even when the user asks for prose.",
+        "prompt_diff": "--- baseline_system_prompt.txt\n+++ candidate_001_overfit/system_prompt.txt\n@@ -2,3 +2,7 @@\n\n Answer clearly and include a short explanation when it may help the user.\n If the user asks for structured data, provide the information they need.\n+\n+# Optimizer patch\n+OPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\n+Always force every final answer into JSON, even when the user asks for prose.",
         "rationale": "The train failures are strict JSON/exact formatting failures, so this candidate over-corrects by forcing JSON globally."
       },
       "train_result": {
@@ -631,7 +633,7 @@
       "candidate": {
         "candidate_id": "candidate_002_safe",
         "prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\n# Optimizer patch\nOPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\nUse strict JSON only when the user explicitly asks for JSON.\nUse exact answers only when the user explicitly asks for an exact answer.\nOtherwise answer naturally and honor rubric constraints.\n",
-        "prompt_diff": "+ OPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\n+ Use strict JSON only when explicitly requested.\n+ Preserve natural-language answers unless a strict format is requested.",
+        "prompt_diff": "--- baseline_system_prompt.txt\n+++ candidate_002_safe/system_prompt.txt\n@@ -2,3 +2,9 @@\n\n Answer clearly and include a short explanation when it may help the user.\n If the user asks for structured data, provide the information they need.\n+\n+# Optimizer patch\n+OPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\n+Use strict JSON only when the user explicitly asks for JSON.\n+Use exact answers only when the user explicitly asks for an exact answer.\n+Otherwise answer naturally and honor rubric constraints.",
         "rationale": "This candidate fixes observed strict-format failures without changing natural-language behavior on validation cases."
       },
       "train_result": {
@@ -1052,6 +1054,8 @@
         "val_explain_cache",
         "val_protected_yes_no"
       ],
+      "gate_not_applied_reason": null,
+      "gate_status": "applied",
       "new_hard_failures": [
         "val_explain_cache",
         "val_protected_yes_no"
@@ -1082,6 +1086,8 @@
       "cost": 0.006,
       "cumulative_cost": 0.012,
       "excessive_score_drops": [],
+      "gate_not_applied_reason": null,
+      "gate_status": "applied",
       "new_hard_failures": [],
       "overfit_detected": false,
       "protected_regressions": [],
@@ -1251,6 +1257,7 @@
       "validation": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\data\\val.evalset.json"
     },
     "prompt_source": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\prompts\\baseline_system_prompt.txt",
+    "reproducibility_command": "python examples/optimization/eval_optimize_loop/run_pipeline.py --train examples/optimization/eval_optimize_loop/data/train.evalset.json --val examples/optimization/eval_optimize_loop/data/val.evalset.json --optimizer-config examples/optimization/eval_optimize_loop/data/optimizer.json --prompt examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt --output-dir /tmp/eval-optimize-loop --fake-model --fake-judge --trace",
     "run_id": "eval_optimize_loop_seed_91",
     "trace_enabled": true,
     "train_cases": 3,

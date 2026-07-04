@@ -165,6 +165,7 @@ def test_gate_rejects_cost_budget():
 
     assert not decision.accepted
     assert decision.total_run_cost > 0.001
+    assert decision.total_run_cost == decision.cumulative_cost + decision.candidate_cost
 
 
 def test_case_delta_types_are_classified():

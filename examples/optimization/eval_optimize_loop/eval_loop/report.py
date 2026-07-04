@@ -132,7 +132,11 @@ def render_markdown(report: OptimizationReport) -> str:
         "",
     ])
     for decision in report.gate_decisions:
-        verdict = "accepted" if decision.accepted else "rejected"
+        verdict = (
+            decision.gate_status
+            if decision.gate_status != "applied"
+            else ("accepted" if decision.accepted else "rejected")
+        )
         lines.append(f"### {decision.candidate_id} ({verdict})")
         for reason in decision.reasons:
             lines.append(f"- {reason}")
@@ -148,7 +152,7 @@ def render_markdown(report: OptimizationReport) -> str:
     for record in report.candidates:
         candidate: CandidatePrompt = record["candidate"]
         gate = decision_by_id[candidate.candidate_id]
-        verdict = "accept" if gate.accepted else "reject"
+        verdict = gate.gate_status if gate.gate_status != "applied" else ("accept" if gate.accepted else "reject")
         lines.append(
             f"| {candidate.candidate_id} | {record['train_result'].score:.3f} | "
             f"{record['validation_result'].score:.3f} | {verdict} |"
@@ -218,7 +222,9 @@ def render_markdown(report: OptimizationReport) -> str:
         "## Reproducibility",
         "",
         "```bash",
-        REPRODUCIBILITY_COMMAND,
+        report.run.get("reproducibility_command")
+        or report.audit.get("reproducibility_command")
+        or REPRODUCIBILITY_COMMAND,
         "```",
         "",
     ])

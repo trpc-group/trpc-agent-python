@@ -1,3 +1,16 @@
 # 设计说明
 
-本示例把闭环拆成加载、评测、归因、候选生成、门禁和报告六层。失败归因采用可审计规则表：JSON 解析和禁用格式命中归为 `format_violation`，最终答案错误归为 `final_response_mismatch`，工具名错误、参数错误、知识召回不足和超长分别进入独立类别；若用例声明期望归因，报告会计算 accuracy。接受门禁先要求 validation 提升，再拒绝 train 提升但 validation 不提升的过拟合候选，并检查受保护用例降分、新硬失败、单例最大降分和成本预算。防过拟合依赖训练集与验证集分离、protected case、delta_type 和逐例降分阈值，而不是只看平均分；每个拒绝理由都会进入审计报告，便于复盘，也便于评审核对策略。fake mode 用通用 expectation/tags/protected/simulated_outputs 生成输出，不依赖样例名，可稳定覆盖隐藏样本；sdk mode 则通过 `SDKBackend` 调用 `AgentOptimizer` 与 `TargetPrompt`，用于真实接入，两者共享门禁、归因和报告结构。报告写 JSON、Markdown 和 runs 审计目录，保存输入哈希、配置快照、候选 prompt、diff、case 结果和成本。默认不回写源 prompt，只有显式 `--update-source` 才允许，避免示例运行污染源码。
+## 失败归因
+评测先由 FakeJudge 产出结构化失败，再用规则归因：JSON、禁用格式归为 `format_violation`，精确答案错归为 `final_response_mismatch`，工具名、参数、知识召回、长度和 rubric 各有独立类别。每个失败都保留 reason 与 evidence，便于复核。若样例声明期望类别，报告会计算归因准确率。
+
+## 接受门禁
+Gate 要求验证集提升达到阈值，并检查新硬失败、受保护样例退化、单例降分和累计成本。若训练分上涨但验证不涨，直接标记过拟合并拒绝。
+
+## 防过拟合
+训练集只用于暴露问题，候选必须通过验证集和 protected case。过拟合候选即使修好训练格式，只要把验证集自然语言或受保护精确答案改坏，也会被拒绝。`delta_type` 标出 new_pass、new_fail、score_up、score_down，避免只看平均分掩盖局部退化。
+
+## Fake 与 SDK
+Fake mode 由 expectation、tags、protected 和 simulated_outputs 驱动，不依赖样例 id，可无 API key 稳定复现。SDK mode 通过 `SDKBackend` 调用 `AgentOptimizer` 与 `TargetPrompt`，失败时给出明确错误，不回退到 fake。
+
+## 审计与回写
+报告同时写 JSON、Markdown 和 `runs/<run_id>/`，保存输入哈希、配置快照、候选 prompt、diff、case 结果与成本，并给出可复现命令。默认不回写源 prompt，只有显式 `--update-source` 才允许，报告会记录该选择。

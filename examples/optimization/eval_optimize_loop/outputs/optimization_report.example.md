@@ -66,16 +66,33 @@ Run id: `eval_optimize_loop_seed_91`
 ### candidate_001_overfit
 
 ```diff
-+ OPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON
-+ Always force every final answer into JSON, even when the user asks for prose.
+--- baseline_system_prompt.txt
++++ candidate_001_overfit/system_prompt.txt
+@@ -2,3 +2,7 @@
+
+ Answer clearly and include a short explanation when it may help the user.
+ If the user asks for structured data, provide the information they need.
++
++# Optimizer patch
++OPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON
++Always force every final answer into JSON, even when the user asks for prose.
 ```
 
 ### candidate_002_safe
 
 ```diff
-+ OPTIMIZER_MARKER: STRICT_WHEN_REQUESTED
-+ Use strict JSON only when explicitly requested.
-+ Preserve natural-language answers unless a strict format is requested.
+--- baseline_system_prompt.txt
++++ candidate_002_safe/system_prompt.txt
+@@ -2,3 +2,9 @@
+
+ Answer clearly and include a short explanation when it may help the user.
+ If the user asks for structured data, provide the information they need.
++
++# Optimizer patch
++OPTIMIZER_MARKER: STRICT_WHEN_REQUESTED
++Use strict JSON only when the user explicitly asks for JSON.
++Use exact answers only when the user explicitly asks for an exact answer.
++Otherwise answer naturally and honor rubric constraints.
 ```
 
 ## Reproducibility

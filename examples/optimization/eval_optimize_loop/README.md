@@ -68,7 +68,11 @@ python examples/optimization/eval_optimize_loop/run_pipeline.py \
 
 `--sdk-call-agent` must point to an async callable compatible with
 `AgentOptimizer.optimize(call_agent=...)`. Configure any real model credentials
-needed by that callable. SDK mode never silently falls back to fake mode.
+needed by that callable. SDK mode never silently falls back to fake mode. When
+the SDK optimizer returns a best prompt but does not expose per-case validation
+results, this example still writes JSON/Markdown reports and audit artifacts
+with `gate_status: not_applicable`, records the SDK result summary, and selects
+`sdk_best` as the SDK optimizer's chosen prompt.
 
 ## Source Prompt Writes
 
@@ -110,6 +114,11 @@ optional `simulated_outputs`; it does not depend on sample `case_id` names.
 - audit data: seed, duration, config hash, input hashes, candidate prompt hashes,
   cost, prompt diffs, and reproducibility command.
 
+`gate.max_total_cost` is interpreted as the total evaluated run cost at the time
+each candidate is judged: baseline cost plus all candidates evaluated so far,
+including rejected candidates. This makes budget decisions deterministic and
+auditable when multiple candidates are considered.
+
 `optimization_report.md` includes final decision, gate reasons, score table,
 per-case delta table, failure attribution summary, cost/audit details, prompt
 diffs, and the reproducibility command.
@@ -139,4 +148,6 @@ python -m pytest examples/optimization/eval_optimize_loop/tests
 The tests cover fake hidden-sample generalization, config validation, gate
 rejection paths, protected-case behavior, failure attribution, tool/knowledge
 judge paths, SDK adapter wiring through monkeypatching, deterministic report
-generation, and both CLI forms.
+generation, and both CLI forms. CI can run fake mode plus the monkeypatched SDK
+smoke tests without real API credentials; real SDK/model calls are opt-in local
+or integration runs.
