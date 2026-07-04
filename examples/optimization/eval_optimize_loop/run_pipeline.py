@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 import shlex
 import sys
 import tempfile
@@ -42,6 +43,8 @@ DEFAULT_VAL = HERE / "data" / "val.evalset.json"
 DEFAULT_OPTIMIZER_CONFIG = HERE / "data" / "optimizer.json"
 DEFAULT_PROMPT = HERE / "prompts" / "baseline_system_prompt.txt"
 DEFAULT_OUTPUT_DIR = Path(tempfile.gettempdir()) / "eval-optimize-loop"
+TARGET_PROMPT_FIELD_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+RUN_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 def run_pipeline(
@@ -65,6 +68,8 @@ def run_pipeline(
 
     if mode not in {"fake", "sdk"}:
         raise ValueError("field 'mode' must be one of: fake, sdk")
+    if run_id is not None:
+        run_id = validate_run_id(run_id)
     if mode == "fake" and (not fake_model or not fake_judge):
         raise ValueError(
             "fake mode requires fake_model=True and fake_judge=True. Pass --fake-model --fake-judge "
@@ -109,6 +114,8 @@ def run_pipeline(
             sdk_call_agent=sdk_call_agent,
             run_id=run_id,
         )
+        if run_id is None:
+            _resolve_default_sdk_run_id_collision(report, output_dir)
         write_reports(report, output_dir)
         return report
 
@@ -351,14 +358,15 @@ def _build_sdk_report(
         prompt_path=prompt_path,
     )
     sdk_summary = sdk_backend.last_result_summary or {}
-    baseline_pass_rate = _summary_float(sdk_summary, "baseline_pass_rate", 0.0)
-    best_pass_rate = _summary_float(sdk_summary, "best_pass_rate", baseline_pass_rate)
+    baseline_pass_rate = _summary_float(sdk_summary, "baseline_pass_rate", 0.0, required=True)
+    best_pass_rate = _summary_float(sdk_summary, "best_pass_rate", baseline_pass_rate, required=True)
     pass_rate_improvement = _summary_float(
         sdk_summary,
         "pass_rate_improvement",
         best_pass_rate - baseline_pass_rate,
+        required=True,
     )
-    total_llm_cost = _summary_float(sdk_summary, "total_llm_cost", 0.0)
+    total_llm_cost = _summary_float(sdk_summary, "total_llm_cost", 0.0, required=True)
     duration_seconds = _summary_float(sdk_summary, "duration_seconds", 0.0)
     effective_run_id = run_id or _default_sdk_run_id(sdk_summary)
     target_prompt_hashes = {
@@ -562,8 +570,8 @@ def _sdk_gate_decision(
     gate_config: dict[str, float],
 ) -> GateDecision:
     status = str(sdk_summary.get("status") or "UNKNOWN")
-    improvement = _summary_float(sdk_summary, "pass_rate_improvement", 0.0)
-    total_cost = _summary_float(sdk_summary, "total_llm_cost", 0.0)
+    improvement = _summary_float(sdk_summary, "pass_rate_improvement", 0.0, required=True)
+    total_cost = _summary_float(sdk_summary, "total_llm_cost", 0.0, required=True)
     min_improvement = gate_config["min_val_score_improvement"]
     max_cost = gate_config["max_total_cost"]
 
@@ -659,14 +667,25 @@ def _is_non_negative_finite_number(value: Any) -> bool:
     )
 
 
-def _summary_float(summary: dict[str, Any], key: str, default: float) -> float:
+def _summary_float(summary: dict[str, Any], key: str, default: float, *, required: bool = False) -> float:
     value = summary.get(key, default)
     if value is None:
         return default
-    try:
-        return float(value)
-    except (TypeError, ValueError):
+    if isinstance(value, bool):
+        if required:
+            raise ValueError(f"SDK OptimizeResult field {key} must be a finite number")
         return default
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        if required:
+            raise ValueError(f"SDK OptimizeResult field {key} must be a finite number")
+        return default
+    if not math.isfinite(parsed):
+        if required:
+            raise ValueError(f"SDK OptimizeResult field {key} must be a finite number")
+        return default
+    return parsed
 
 
 def _default_sdk_run_id(sdk_summary: dict[str, Any]) -> str:
@@ -704,14 +723,37 @@ def _parse_target_prompt_paths(
         if "=" not in item:
             raise ValueError("--target-prompt must use name=path format")
         name, path = item.split("=", 1)
-        name = name.strip()
         path = path.strip()
-        if not name or not path:
+        if not TARGET_PROMPT_FIELD_RE.fullmatch(name):
+            raise ValueError(
+                f"--target-prompt field name {name!r} is invalid; use /^[A-Za-z_][A-Za-z0-9_]*$/"
+            )
+        if not path:
             raise ValueError("--target-prompt must use non-empty name=path values")
         if name in parsed:
             raise ValueError(f"--target-prompt duplicate field name {name!r}")
         parsed[name] = Path(path)
     return parsed
+
+
+def validate_run_id(run_id: str) -> str:
+    if not isinstance(run_id, str):
+        raise ValueError(f"--run-id value {run_id!r} must be a string")
+    if run_id in {"", ".", ".."} or not RUN_ID_RE.fullmatch(run_id):
+        raise ValueError(f"--run-id value {run_id!r} is invalid")
+    return run_id
+
+
+def _resolve_default_sdk_run_id_collision(report: OptimizationReport, output_dir: str | Path) -> None:
+    base_run_id = str(report.run.get("run_id") or "")
+    validate_run_id(base_run_id)
+    run_root = Path(output_dir) / "runs"
+    candidate = base_run_id
+    suffix = 1
+    while (run_root / candidate).exists():
+        candidate = f"{base_run_id}-{suffix}"
+        suffix += 1
+    report.run["run_id"] = candidate
 
 
 def _candidate_prompt_hashes_by_field(

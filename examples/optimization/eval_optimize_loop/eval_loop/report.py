@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,7 @@ REPRODUCIBILITY_COMMAND = (
     "--output-dir /tmp/eval-optimize-loop "
     "--fake-model --fake-judge --trace"
 )
+ARTIFACT_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 def compute_case_deltas(
@@ -106,7 +108,7 @@ def write_reports(report: OptimizationReport, output_dir: str | Path) -> tuple[P
 
 
 def report_to_json(report: OptimizationReport) -> str:
-    return json.dumps(to_jsonable(report), indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+    return json.dumps(to_jsonable(report), indent=2, ensure_ascii=False, sort_keys=True, allow_nan=False) + "\n"
 
 
 def render_markdown(report: OptimizationReport) -> str:
@@ -248,7 +250,7 @@ def render_markdown(report: OptimizationReport) -> str:
 
 
 def write_audit_artifacts(report: OptimizationReport, output_path: Path) -> None:
-    run_id = str(report.run.get("run_id") or "run")
+    run_id = _safe_artifact_name(str(report.run.get("run_id") or "run"))
     run_dir = output_path / "runs" / run_id
     if run_dir.exists() and report.run.get("mode") == "fake":
         shutil.rmtree(run_dir)
@@ -275,20 +277,26 @@ def write_audit_artifacts(report: OptimizationReport, output_path: Path) -> None
 
     for record in report.candidates:
         candidate: CandidatePrompt = record["candidate"]
-        candidate_dir = prompt_dir / candidate.candidate_id
+        candidate_name = _safe_artifact_name(candidate.candidate_id)
+        candidate_dir = prompt_dir / candidate_name
         candidate_dir.mkdir(exist_ok=True)
         best_prompts = report.audit.get("sdk_result_summary", {}).get("best_prompts", {})
         if report.run.get("mode") == "sdk" and isinstance(best_prompts, dict) and best_prompts:
             for field_name, prompt_text in best_prompts.items():
-                (candidate_dir / f"{field_name}.txt").write_text(str(prompt_text), encoding="utf-8")
+                field_artifact = _safe_artifact_name(str(field_name))
+                (candidate_dir / f"{field_artifact}.txt").write_text(str(prompt_text), encoding="utf-8")
             (candidate_dir / "bundle.txt").write_text(candidate.prompt, encoding="utf-8")
         else:
             (candidate_dir / "system_prompt.txt").write_text(candidate.prompt, encoding="utf-8")
-        (diffs_dir / f"{candidate.candidate_id}.diff").write_text(candidate.prompt_diff, encoding="utf-8")
+        (diffs_dir / f"{candidate_name}.diff").write_text(candidate.prompt_diff, encoding="utf-8")
         for split_name in ("train_result", "validation_result"):
             split_result = record[split_name]
-            path = results_dir / f"{candidate.candidate_id}_{split_result.split}.json"
-            path.write_text(json.dumps(to_jsonable(split_result), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            split_artifact = _safe_artifact_name(str(split_result.split))
+            path = results_dir / f"{candidate_name}_{split_artifact}.json"
+            path.write_text(
+                json.dumps(to_jsonable(split_result), indent=2, sort_keys=True, allow_nan=False) + "\n",
+                encoding="utf-8",
+            )
 
 
 def _delta_type(*, baseline_passed: bool, candidate_passed: bool, delta: float) -> str:
@@ -301,3 +309,9 @@ def _delta_type(*, baseline_passed: bool, candidate_passed: bool, delta: float) 
     if delta < 0:
         return "score_down"
     return "unchanged"
+
+
+def _safe_artifact_name(name: str) -> str:
+    if name in {"", ".", ".."} or not ARTIFACT_NAME_RE.fullmatch(name):
+        raise ValueError(f"unsafe audit artifact name: {name!r}")
+    return name

@@ -188,6 +188,22 @@ def test_sdk_backend_call_agent_import_failure_names_target(tmp_path: Path):
         )
 
 
+def test_sdk_backend_call_agent_must_be_callable(tmp_path: Path, monkeypatch):
+    call_agent_module = types.ModuleType("fake_call_agent_module")
+    call_agent_module.call_agent = "not callable"
+    monkeypatch.setitem(sys.modules, "fake_call_agent_module", call_agent_module)
+    backend = SDKBackend(prompt_path=tmp_path / "prompt.txt", call_agent_path="fake_call_agent_module:call_agent")
+
+    with pytest.raises(ValueError, match="--sdk-call-agent.*fake_call_agent_module:call_agent"):
+        backend.optimize(
+            baseline_prompt="baseline",
+            train_path=tmp_path / "train.evalset.json",
+            val_path=tmp_path / "val.evalset.json",
+            optimizer_config_path=tmp_path / "optimizer.json",
+            output_dir=tmp_path / "out",
+        )
+
+
 def test_sdk_backend_sdk_import_failure_is_clear(tmp_path: Path, monkeypatch):
     call_agent_module = types.ModuleType("fake_call_agent_module")
 
@@ -380,6 +396,66 @@ def test_run_pipeline_mode_sdk_default_run_id_uses_sdk_started_at(tmp_path: Path
     assert "--run-id" not in report.run["reproducibility_command"]
 
 
+def test_run_pipeline_mode_sdk_default_run_id_collision_gets_suffix(tmp_path: Path, monkeypatch):
+    _install_fake_sdk(
+        monkeypatch,
+        best_prompt="optimized prompt",
+        started_at="2026-07-04T12:34:56+00:00",
+    )
+
+    first = run_pipeline(
+        mode="sdk",
+        train_path=DEFAULT_TRAIN,
+        val_path=DEFAULT_VAL,
+        optimizer_config_path=DEFAULT_OPTIMIZER_CONFIG,
+        prompt_path=DEFAULT_PROMPT,
+        output_dir=tmp_path / "sdk_run",
+        sdk_call_agent="fake_call_agent_module:call_agent",
+    )
+    second = run_pipeline(
+        mode="sdk",
+        train_path=DEFAULT_TRAIN,
+        val_path=DEFAULT_VAL,
+        optimizer_config_path=DEFAULT_OPTIMIZER_CONFIG,
+        prompt_path=DEFAULT_PROMPT,
+        output_dir=tmp_path / "sdk_run",
+        sdk_call_agent="fake_call_agent_module:call_agent",
+    )
+
+    assert first.run["run_id"] == "eval_optimize_loop_sdk_20260704T123456Z"
+    assert second.run["run_id"] == "eval_optimize_loop_sdk_20260704T123456Z-1"
+    assert (tmp_path / "sdk_run" / "runs" / first.run["run_id"]).is_dir()
+    assert (tmp_path / "sdk_run" / "runs" / second.run["run_id"]).is_dir()
+
+
+def test_run_pipeline_mode_sdk_explicit_run_id_stays_stable(tmp_path: Path, monkeypatch):
+    _install_fake_sdk(monkeypatch, best_prompt="optimized prompt")
+
+    first = run_pipeline(
+        mode="sdk",
+        train_path=DEFAULT_TRAIN,
+        val_path=DEFAULT_VAL,
+        optimizer_config_path=DEFAULT_OPTIMIZER_CONFIG,
+        prompt_path=DEFAULT_PROMPT,
+        output_dir=tmp_path / "sdk_run",
+        sdk_call_agent="fake_call_agent_module:call_agent",
+        run_id="valid_20260704-1.ok",
+    )
+    second = run_pipeline(
+        mode="sdk",
+        train_path=DEFAULT_TRAIN,
+        val_path=DEFAULT_VAL,
+        optimizer_config_path=DEFAULT_OPTIMIZER_CONFIG,
+        prompt_path=DEFAULT_PROMPT,
+        output_dir=tmp_path / "sdk_run",
+        sdk_call_agent="fake_call_agent_module:call_agent",
+        run_id="valid_20260704-1.ok",
+    )
+
+    assert first.run["run_id"] == "valid_20260704-1.ok"
+    assert second.run["run_id"] == "valid_20260704-1.ok"
+
+
 def test_run_pipeline_mode_sdk_uses_default_wrapper_gate_when_sdk_config_has_no_gate(
     tmp_path: Path,
     monkeypatch,
@@ -504,6 +580,86 @@ def test_run_pipeline_mode_sdk_rejects_invalid_gate_numbers(
             output_dir=tmp_path / "sdk_run",
             sdk_call_agent="fake_call_agent_module:call_agent",
             gate_config_path=gate_path,
+        )
+
+
+@pytest.mark.parametrize("run_id", ["../../escape", "a/b", "", ".", "..", "has space", "a\\b"])
+def test_run_pipeline_rejects_invalid_run_id(tmp_path: Path, monkeypatch, run_id):
+    _install_fake_sdk(monkeypatch, best_prompt="optimized prompt")
+
+    with pytest.raises(ValueError, match="--run-id") as exc_info:
+        run_pipeline(
+            mode="sdk",
+            train_path=DEFAULT_TRAIN,
+            val_path=DEFAULT_VAL,
+            optimizer_config_path=_write_sdk_optimizer_config(tmp_path),
+            prompt_path=DEFAULT_PROMPT,
+            output_dir=tmp_path / "sdk_run",
+            sdk_call_agent="fake_call_agent_module:call_agent",
+            run_id=run_id,
+        )
+    assert repr(run_id) in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ["../router", "router/prompt", "router prompt", "router.prompt", "router-prompt", "", " router_prompt"],
+)
+def test_run_pipeline_mode_sdk_rejects_invalid_target_prompt_field_names(
+    tmp_path: Path,
+    monkeypatch,
+    field_name,
+):
+    _install_fake_sdk(monkeypatch, best_prompt="optimized prompt")
+    prompt_path = tmp_path / "prompt.txt"
+    prompt_path.write_text("baseline", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="--target-prompt") as exc_info:
+        run_pipeline(
+            mode="sdk",
+            train_path=DEFAULT_TRAIN,
+            val_path=DEFAULT_VAL,
+            optimizer_config_path=_write_sdk_optimizer_config(tmp_path),
+            prompt_path=DEFAULT_PROMPT,
+            output_dir=tmp_path / "sdk_run",
+            sdk_call_agent="fake_call_agent_module:call_agent",
+            target_prompts=[f"{field_name}={prompt_path}"],
+        )
+    assert repr(field_name) in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "field_value"),
+    [
+        ("pass_rate_improvement", float("nan")),
+        ("total_llm_cost", float("inf")),
+        ("best_pass_rate", "bad"),
+    ],
+)
+def test_run_pipeline_mode_sdk_rejects_non_finite_or_bad_numeric_summary(
+    tmp_path: Path,
+    monkeypatch,
+    field_name,
+    field_value,
+):
+    kwargs = {
+        "baseline_pass_rate": 0.5,
+        "best_pass_rate": 0.75,
+        "pass_rate_improvement": 0.25,
+        "total_llm_cost": 0.123,
+    }
+    kwargs[field_name] = field_value
+    _install_fake_sdk(monkeypatch, best_prompt="optimized prompt", **kwargs)
+
+    with pytest.raises(ValueError, match=f"SDK OptimizeResult field {field_name} must be a finite number"):
+        run_pipeline(
+            mode="sdk",
+            train_path=DEFAULT_TRAIN,
+            val_path=DEFAULT_VAL,
+            optimizer_config_path=_write_sdk_optimizer_config(tmp_path),
+            prompt_path=DEFAULT_PROMPT,
+            output_dir=tmp_path / "sdk_run",
+            sdk_call_agent="fake_call_agent_module:call_agent",
         )
 
 

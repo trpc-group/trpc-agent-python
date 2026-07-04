@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -170,6 +171,8 @@ def _load_call_agent(path: str):
     call_agent = getattr(module, function_name, None)
     if call_agent is None:
         raise ValueError(f"--sdk-call-agent target {path!r} was not found")
+    if not callable(call_agent):
+        raise ValueError(f"--sdk-call-agent target {path!r} was found but is not callable")
     return call_agent
 
 
@@ -184,13 +187,17 @@ def _has_running_loop() -> bool:
 def _summarize_sdk_result(result: Any) -> dict[str, Any]:
     return {
         "status": _safe_jsonable(getattr(result, "status", None)),
-        "baseline_pass_rate": _safe_jsonable(getattr(result, "baseline_pass_rate", None)),
-        "best_pass_rate": _safe_jsonable(getattr(result, "best_pass_rate", None)),
-        "pass_rate_improvement": _safe_jsonable(getattr(result, "pass_rate_improvement", None)),
+        "baseline_pass_rate": _safe_result_field(
+            "baseline_pass_rate", getattr(result, "baseline_pass_rate", None)
+        ),
+        "best_pass_rate": _safe_result_field("best_pass_rate", getattr(result, "best_pass_rate", None)),
+        "pass_rate_improvement": _safe_result_field(
+            "pass_rate_improvement", getattr(result, "pass_rate_improvement", None)
+        ),
         "baseline_metric_breakdown": _safe_jsonable(getattr(result, "baseline_metric_breakdown", {})),
         "best_metric_breakdown": _safe_jsonable(getattr(result, "best_metric_breakdown", {})),
         "metric_thresholds": _safe_jsonable(getattr(result, "metric_thresholds", {})),
-        "total_llm_cost": _safe_jsonable(getattr(result, "total_llm_cost", 0.0)),
+        "total_llm_cost": _safe_result_field("total_llm_cost", getattr(result, "total_llm_cost", 0.0)),
         "total_token_usage": _safe_jsonable(getattr(result, "total_token_usage", {})),
         "duration_seconds": _safe_jsonable(getattr(result, "duration_seconds", 0.0)),
         "started_at": _safe_jsonable(getattr(result, "started_at", None)),
@@ -211,6 +218,13 @@ def _summarize_sdk_result(result: Any) -> dict[str, Any]:
     }
 
 
+def _safe_result_field(field_name: str, value: Any) -> Any:
+    try:
+        return _safe_jsonable(value)
+    except ValueError as exc:
+        raise ValueError(f"SDK OptimizeResult field {field_name} must be a finite number") from exc
+
+
 def _safe_jsonable(value: Any) -> Any:
     if hasattr(value, "model_dump"):
         return _safe_jsonable(value.model_dump(mode="json"))
@@ -220,7 +234,11 @@ def _safe_jsonable(value: Any) -> Any:
         return {str(key): _safe_jsonable(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
         return [_safe_jsonable(item) for item in value]
-    if isinstance(value, (str, int, float, bool)) or value is None:
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError("value must be a finite number")
+        return value
+    if isinstance(value, (str, int, bool)) or value is None:
         return value
     return repr(value)
 

@@ -10,6 +10,7 @@ from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_PROMPT
 from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_TRAIN
 from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_VAL
 from examples.optimization.eval_optimize_loop.run_pipeline import run_pipeline
+from examples.optimization.eval_optimize_loop.eval_loop.report import report_to_json
 
 
 def test_fake_mode_pipeline_generates_json_and_markdown_reports(tmp_path: Path):
@@ -69,6 +70,7 @@ def test_fake_mode_pipeline_generates_json_and_markdown_reports(tmp_path: Path):
         "total_run_cost",
     }
     assert payload["run"]["reproducibility_command"].startswith("python examples/optimization")
+    assert payload["run"]["run_id"] == "eval_optimize_loop_seed_91"
     assert payload["audit"]["total_run_cost"] == payload["audit"]["cost"]["total"]
     assert "candidate_001_overfit" in payload["audit"]["prompt_diffs"]
     assert "candidate_002_safe" in payload["audit"]["prompt_diffs"]
@@ -157,3 +159,24 @@ def test_cli_mode_fake_and_legacy_fake_flags_both_run(tmp_path: Path):
 
     assert (first / "optimization_report.json").is_file()
     assert (second / "optimization_report.md").is_file()
+
+
+def test_report_to_json_rejects_nan_values(tmp_path: Path):
+    report = run_pipeline(output_dir=tmp_path / "run", mode="fake", trace=True)
+    report.audit["bad_float"] = float("nan")
+
+    try:
+        report_to_json(report)
+    except ValueError as exc:
+        assert "Out of range float values are not JSON compliant" in str(exc)
+    else:
+        raise AssertionError("report_to_json should reject NaN")
+
+
+def test_fake_report_json_remains_strict_json(tmp_path: Path):
+    report = run_pipeline(output_dir=tmp_path / "run", mode="fake", trace=True)
+    payload = report_to_json(report)
+
+    assert "NaN" not in payload
+    assert "Infinity" not in payload
+    assert json.loads(payload)["selected_candidate"] == "candidate_002_safe"
