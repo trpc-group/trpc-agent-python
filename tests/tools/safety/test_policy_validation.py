@@ -50,6 +50,19 @@ def test_policy_yaml_must_be_mapping(tmp_path):
         ToolSafetyPolicy.from_file(path, strict=True)
 
 
+def test_empty_policy_yaml_must_be_mapping(tmp_path):
+    path = tmp_path / "policy.yaml"
+    path.write_text("", encoding="utf-8")
+    with pytest.raises(ValueError, match="YAML mapping"):
+        ToolSafetyPolicy.from_file(path)
+
+
+def test_string_list_fields_accept_strings_without_extra_shape_checks(tmp_path):
+    path = write_policy(tmp_path, {"allowed_commands": ["python", ""]})
+    policy = ToolSafetyPolicy.from_file(path, strict=True)
+    assert policy.allowed_commands == ["python", ""]
+
+
 def test_bool_policy_field_type_rejected_in_strict_policy(tmp_path):
     path = write_policy(tmp_path, {"review_dynamic_code": "yes"})
     with pytest.raises(ValueError, match="review_dynamic_code"):

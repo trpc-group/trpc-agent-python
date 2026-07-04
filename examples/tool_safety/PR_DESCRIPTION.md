@@ -75,7 +75,8 @@ python scripts/tool_safety_check.py \
 
 - `BashTool` does not enable the safety guard by default.
 - `UnsafeLocalCodeExecutor` does not enable the safety guard by default.
-- Filter, Wrapper, Tool, Skill-like callable, and MCP-like payload integrations are opt-in.
+- Filter, Wrapper, and Skill-like callable examples are opt-in.
+- MCP-like payloads can be protected through the generic Filter/Wrapper examples.
 - `needs_human_review` is not blocked by default unless `block_on_review=true`.
 
 ## Known Limitations

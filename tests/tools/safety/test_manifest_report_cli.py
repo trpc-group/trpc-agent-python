@@ -74,6 +74,17 @@ def test_manifest_report_decision_mismatch_exits_one(tmp_path):
     assert "safe_bash.sh" in result.stdout
     assert "expected_decision=deny" in result.stdout
     assert "actual_decision=allow" in result.stdout
+    assert "FAIL safe_bash.sh expected_decision=deny actual_decision=allow" in result.stdout
+    data = json.loads(output.read_text(encoding="utf-8"))
+    assert data["failures"] == [
+        {
+            "file": "safe_bash.sh",
+            "expected_decision": "deny",
+            "actual_decision": "allow",
+            "required_rule_id": "NONE",
+            "actual_rule_ids": [],
+        }
+    ]
 
 
 def test_manifest_report_missing_required_rule_exits_one(tmp_path):
@@ -107,6 +118,12 @@ def test_manifest_report_missing_required_rule_exits_one(tmp_path):
     assert "dangerous_delete.sh" in result.stdout
     assert "required_rule_id=MISSING_RULE" in result.stdout
     assert "actual_rule_ids=" in result.stdout
+    assert "FAIL dangerous_delete.sh" in result.stdout
+    assert "actual_rule_ids=[" in result.stdout
+    data = json.loads(output.read_text(encoding="utf-8"))
+    assert data["failures"][0]["file"] == "dangerous_delete.sh"
+    assert data["failures"][0]["required_rule_id"] == "MISSING_RULE"
+    assert "BASH_DANGEROUS_RM_RF" in data["failures"][0]["actual_rule_ids"]
 
 
 def test_manifest_report_strict_policy_error_exits_one(tmp_path):

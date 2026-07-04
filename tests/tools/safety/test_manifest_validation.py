@@ -71,13 +71,13 @@ def test_manifest_category_acceptance_summary():
     for sample, report in grouped["secret_read"]:
         assert report.decision != Decision.ALLOW, f"{sample['file']} unexpectedly allowed"
     for sample, report in grouped["dangerous_delete"]:
-        assert report.decision == Decision(sample["expected_decision"]), (
-            f"{sample['file']}: expected {sample['expected_decision']}, actual {report.decision.value}"
-        )
+        assert report.decision == Decision(
+            sample["expected_decision"]
+        ), f"{sample['file']}: expected {sample['expected_decision']}, actual {report.decision.value}"
     for sample, report in grouped["network_non_whitelist"]:
-        assert report.decision == Decision(sample["expected_decision"]), (
-            f"{sample['file']}: expected {sample['expected_decision']}, actual {report.decision.value}"
-        )
+        assert report.decision == Decision(
+            sample["expected_decision"]
+        ), f"{sample['file']}: expected {sample['expected_decision']}, actual {report.decision.value}"
     for category, entries in grouped.items():
         if category.startswith("safe"):
             for sample, report in entries:

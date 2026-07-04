@@ -570,7 +570,6 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
             )
 
     def _check_network(self, node: ast.Call, name: str) -> None:
-        last = name.rsplit(".", 1)[-1]
         is_http = self._is_python_http_call(name)
         if not is_http and name not in {"socket.socket", "socket.create_connection"}:
             return
@@ -742,10 +741,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
 
     def _is_python_http_call(self, name: str) -> bool:
         last = name.rsplit(".", 1)[-1]
-        return (
-            name.startswith(("requests.", "httpx.", "aiohttp.", "urllib.request."))
-            and last in PY_NETWORK_METHODS
-        )
+        return name.startswith(("requests.", "httpx.", "aiohttp.", "urllib.request.")) and last in PY_NETWORK_METHODS
 
     def _network_url(self, node: ast.Call, name: str) -> str | None:
         url_node = node.args[0] if node.args else None
@@ -1104,8 +1100,7 @@ def _is_rm_rf_dangerous(tokens: list[str], policy: ToolSafetyPolicy) -> bool:
     if not (recursive and force):
         return False
     return any(
-        target in {"/", "~"} or target.startswith("~/.ssh") or policy.is_path_denied(target)
-        for target in targets
+        target in {"/", "~"} or target.startswith("~/.ssh") or policy.is_path_denied(target) for target in targets
     )
 
 
@@ -1328,12 +1323,17 @@ def _is_dependency_install(tokens: list[str]) -> bool:
         return True
     if command == "yarn" and len(lower) > 1 and lower[1] in {"add", "install", "upgrade"}:
         return True
-    if command in {"apt", "apt-get", "brew", "yum"} and len(lower) > 1 and lower[1] in {
-        "add",
-        "install",
-        "update",
-        "upgrade",
-    }:
+    if (
+        command in {"apt", "apt-get", "brew", "yum"}
+        and len(lower) > 1
+        and lower[1]
+        in {
+            "add",
+            "install",
+            "update",
+            "upgrade",
+        }
+    ):
         return True
     return False
 

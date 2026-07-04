@@ -94,7 +94,7 @@ class ToolSafetyPolicy:
         """Load a policy from YAML, overlaying values on top of defaults."""
         policy = cls.default()
         with open(path, "r", encoding="utf-8") as file:
-            data = yaml.safe_load(file) or {}
+            data = yaml.safe_load(file)
         if not isinstance(data, dict):
             raise ValueError("tool safety policy must be a YAML mapping")
 
@@ -217,7 +217,7 @@ def validate_policy_data(data: dict[str, Any], *, strict: bool = False) -> dict[
 
 
 def _is_string_list(value: Any) -> bool:
-    return isinstance(value, list) and all(isinstance(item, str) and item.strip() for item in value)
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
 
 
 def _policy_issue(message: str, strict: bool) -> None:

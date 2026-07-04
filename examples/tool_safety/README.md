@@ -133,8 +133,9 @@ def run_command(command: str):
 
 The wrapper supports sync and async callables.
 
-Tool, Skill, and MCP-like payloads can opt in through the same Filter/Wrapper
-path. See `skill_wrapper_example.py` for an async Skill-like handler that scans
+Tool and Skill-like payloads can opt in through the same Filter/Wrapper path.
+MCP-like payloads can be protected through the generic Filter/Wrapper examples.
+See `skill_wrapper_example.py` for an async Skill-like handler that scans
 `python_code`, argv-style `command_args`, nested dict-like payloads, and
 MCP-like `params.arguments` input before calling the wrapped function.
 

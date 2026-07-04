@@ -59,3 +59,19 @@ def test_strict_policy_invalid_policy_exits_one(tmp_path):
     )
     assert result.returncode == 1
     assert "unknown policy key" in result.stderr
+
+
+def test_non_strict_policy_unknown_key_warns_but_scans(tmp_path):
+    policy = tmp_path / "policy.yaml"
+    policy.write_text(yaml.safe_dump({"allowed_domans": ["api.example.com"]}), encoding="utf-8")
+    result = run_cli(
+        "--file",
+        str(SAMPLES / "safe_bash.sh"),
+        "--language",
+        "bash",
+        "--policy",
+        str(policy),
+    )
+    assert result.returncode == 0
+    assert "unknown policy key" in result.stderr
+    assert json.loads(result.stdout)["decision"] == "allow"

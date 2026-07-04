@@ -34,7 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", help="Path to write the JSON report.")
     parser.add_argument("--format", default="json", choices=["json"], help="Output format.")
     parser.add_argument("--block-on-review", action="store_true", help="Treat needs_human_review as blocked.")
-    parser.add_argument("--strict-policy", action="store_true", help="Fail on invalid or unknown policy fields.")
+    parser.add_argument("--strict-policy", action="store_true", help="Reject unknown or invalid policy fields.")
     return parser
 
 
