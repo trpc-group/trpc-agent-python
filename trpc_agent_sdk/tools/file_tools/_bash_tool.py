@@ -17,7 +17,12 @@ from typing import Any
 from typing import Optional
 
 from trpc_agent_sdk.context import InvocationContext
+from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.tools import BaseTool
+from trpc_agent_sdk.tools.safety import ToolSafetyPolicy
+from trpc_agent_sdk.tools.safety import ToolScriptSafetyScanner
+from trpc_agent_sdk.tools.safety._audit import write_audit_event
+from trpc_agent_sdk.tools.safety._telemetry import record_safety_attributes
 from trpc_agent_sdk.types import FunctionDeclaration
 from trpc_agent_sdk.types import Schema
 from trpc_agent_sdk.types import Type
@@ -29,7 +34,16 @@ class BashTool(BaseTool):
     # Whitelist of commands allowed outside working directory
     ALLOWED_COMMANDS_OUTSIDE_WORKDIR = ["ls", "pwd", "cat", "grep", "find", "head", "tail", "wc", "echo"]
 
-    def __init__(self, cwd: Optional[str] = None, whitelist_commands: Optional[list[str]] = None):
+    def __init__(
+        self,
+        cwd: Optional[str] = None,
+        whitelist_commands: Optional[list[str]] = None,
+        *,
+        enable_safety_guard: bool = False,
+        safety_policy_path: Optional[str] = None,
+        safety_audit_log_path: Optional[str] = None,
+        safety_block_on_review: Optional[bool] = None,
+    ):
         super().__init__(
             name="Bash",
             description=("Execute bash command in shell. Returns stdout, stderr, return_code. "
@@ -38,6 +52,11 @@ class BashTool(BaseTool):
         )
         self.cwd = cwd or os.getcwd()
         self.whitelist_commands = whitelist_commands
+        self.enable_safety_guard = enable_safety_guard
+        self.safety_policy_path = safety_policy_path
+        self.safety_audit_log_path = safety_audit_log_path
+        self.safety_block_on_review = safety_block_on_review
+        self._safety_policy: ToolSafetyPolicy | None = None
 
     def _get_declaration(self) -> Optional[FunctionDeclaration]:
         return FunctionDeclaration(
@@ -153,6 +172,18 @@ class BashTool(BaseTool):
         try:
             execution_dir = self._resolve_execution_directory(cwd)
 
+            if self.enable_safety_guard:
+                report = self._scan_command_safety(command, execution_dir, timeout)
+                if report.blocked:
+                    return {
+                        "success": False,
+                        "error": "SAFETY_GUARD_BLOCKED",
+                        "command": command,
+                        "cwd": execution_dir,
+                        "return_code": -1,
+                        "safety_report": report.to_dict(),
+                    }
+
             if not self._is_command_safe(command, execution_dir):
                 if self.whitelist_commands is not None:
                     allowed_commands = ", ".join(self.whitelist_commands)
@@ -217,3 +248,34 @@ class BashTool(BaseTool):
                 "error": f"EXECUTION_ERROR: unexpected error occurred during command execution: {str(ex)}",
                 "command": command,
             }
+
+    def _get_safety_policy(self) -> ToolSafetyPolicy:
+        """Return the configured safety policy."""
+        if self._safety_policy is None:
+            self._safety_policy = (
+                ToolSafetyPolicy.from_file(self.safety_policy_path)
+                if self.safety_policy_path
+                else ToolSafetyPolicy.default()
+            )
+            if self.safety_block_on_review is not None:
+                self._safety_policy.block_on_review = self.safety_block_on_review
+        return self._safety_policy
+
+    def _scan_command_safety(self, command: str, execution_dir: str, timeout: int):
+        """Scan a command before shell execution when the opt-in guard is enabled."""
+        policy = self._get_safety_policy()
+        scanner = ToolScriptSafetyScanner(policy)
+        report = scanner.scan_script(
+            command,
+            "bash",
+            cwd=execution_dir,
+            tool_name="Bash",
+            tool_metadata={"timeout": timeout},
+        )
+        record_safety_attributes(report)
+        if self.safety_audit_log_path:
+            try:
+                write_audit_event(report, self.safety_audit_log_path)
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.warning("tool safety audit write failed: %s", exc)
+        return report

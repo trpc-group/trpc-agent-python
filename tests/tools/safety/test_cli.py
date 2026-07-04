@@ -1,0 +1,37 @@
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+SAMPLES = Path("examples/tool_safety/samples")
+CLI = Path("scripts/tool_safety_check.py")
+
+
+def run_cli(*args):
+    return subprocess.run([sys.executable, str(CLI), *args], capture_output=True, text=True, check=False)
+
+
+def test_scans_file():
+    result = run_cli("--file", str(SAMPLES / "safe_bash.sh"), "--language", "bash")
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["decision"] == "allow"
+
+
+def test_writes_output_json(tmp_path):
+    output = tmp_path / "report.json"
+    result = run_cli("--file", str(SAMPLES / "dangerous_delete.sh"), "--language", "bash", "--output", str(output))
+    assert result.returncode == 3
+    assert json.loads(output.read_text())["decision"] == "deny"
+
+
+def test_writes_audit_jsonl(tmp_path):
+    audit = tmp_path / "audit.jsonl"
+    result = run_cli("--file", str(SAMPLES / "dangerous_delete.sh"), "--language", "bash", "--audit-log", str(audit))
+    assert result.returncode == 3
+    assert len(audit.read_text().splitlines()) == 1
+
+
+def test_exit_code_mapping():
+    assert run_cli("--file", str(SAMPLES / "safe_python.py")).returncode == 0
+    assert run_cli("--file", str(SAMPLES / "eval_review.py")).returncode == 2
+    assert run_cli("--file", str(SAMPLES / "dangerous_delete.sh")).returncode == 3

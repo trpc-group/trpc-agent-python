@@ -1,0 +1,38 @@
+allowed_domains:
+  - api.example.com
+  - "*.trusted.internal"
+allowed_commands:
+  - python
+  - python3
+  - bash
+  - sh
+  - ls
+  - cat
+  - grep
+  - find
+  - echo
+  - pwd
+denied_paths:
+  - "~/.ssh"
+  - "~/.ssh/*"
+  - ".env"
+  - "*.env"
+  - "*.pem"
+  - "*.key"
+  - "id_rsa"
+  - "id_dsa"
+  - "service_account*.json"
+  - "/etc/passwd"
+  - "/etc/shadow"
+  - "/root"
+  - "/"
+max_timeout_seconds: 300
+max_output_bytes: 1048576
+long_sleep_seconds: 60
+deny_dependency_install: true
+deny_privilege_escalation: true
+review_process_execution: true
+review_unknown_network: true
+review_dynamic_code: true
+review_shell_features: true
+block_on_review: false

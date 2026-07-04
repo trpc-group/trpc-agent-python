@@ -11,6 +11,7 @@ This executor is not recommended for production use due to security concerns.
 
 from __future__ import annotations
 
+import json
 import shutil
 import tempfile
 from pathlib import Path
@@ -18,6 +19,11 @@ from typing_extensions import override
 
 from pydantic import Field
 from trpc_agent_sdk.context import InvocationContext
+from trpc_agent_sdk.log import logger
+from trpc_agent_sdk.tools.safety import ToolSafetyPolicy
+from trpc_agent_sdk.tools.safety import ToolScriptSafetyScanner
+from trpc_agent_sdk.tools.safety._audit import write_audit_event
+from trpc_agent_sdk.tools.safety._telemetry import record_safety_attributes
 from trpc_agent_sdk.utils import async_execute_command
 
 from .._base_code_executor import BaseCodeExecutor
@@ -46,6 +52,14 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
 
     clean_temp_files: bool = Field(default=True,
                                    description="Whether to clean temporary files after the code execution.")
+
+    enable_safety_guard: bool = Field(default=False, description="Enable opt-in static safety guard before execution.")
+
+    safety_policy_path: str = Field(default="", description="Optional YAML policy path for the safety guard.")
+
+    safety_audit_log_path: str = Field(default="", description="Optional JSONL audit log path for safety scans.")
+
+    safety_block_on_review: bool = Field(default=False, description="Block needs_human_review safety decisions.")
 
     def __init__(self, **data):
         """Initialize the UnsafeLocalCodeExecutor."""
@@ -80,6 +94,16 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             # Execute each code block
             for i, block in enumerate(input_data.code_blocks):
                 try:
+                    if self.enable_safety_guard:
+                        report = self._scan_code_block_safety(work_dir, block, i)
+                        if report.blocked:
+                            return create_code_execution_result(
+                                stdout="",
+                                stderr=(
+                                    f"SAFETY_GUARD_BLOCKED: {report.summary}\n"
+                                    f"{json.dumps(report.to_dict(), sort_keys=True)}"
+                                ),
+                            )
                     block_output = await self._execute_code_block(work_dir, block, i)
                     if block_output:
                         output_parts.append(block_output)
@@ -210,3 +234,31 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             return ["bash", str(file_path)]
         else:
             raise ValueError(f"unsupported language: {language}")
+
+    def _get_safety_policy(self) -> ToolSafetyPolicy:
+        """Return the configured safety policy."""
+        policy = (
+            ToolSafetyPolicy.from_file(self.safety_policy_path)
+            if self.safety_policy_path
+            else ToolSafetyPolicy.default()
+        )
+        policy.block_on_review = self.safety_block_on_review
+        return policy
+
+    def _scan_code_block_safety(self, work_dir: Path, block: CodeBlock, block_index: int):
+        """Scan a code block before it is written and executed."""
+        scanner = ToolScriptSafetyScanner(self._get_safety_policy())
+        report = scanner.scan_script(
+            block.code,
+            block.language,
+            cwd=str(work_dir),
+            tool_name="UnsafeLocalCodeExecutor",
+            tool_metadata={"timeout": self.timeout, "block_index": block_index},
+        )
+        record_safety_attributes(report)
+        if self.safety_audit_log_path:
+            try:
+                write_audit_event(report, self.safety_audit_log_path)
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.warning("tool safety audit write failed: %s", exc)
+        return report
