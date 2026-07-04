@@ -42,6 +42,10 @@ def _assert_diff_context(
             assert any("function_calls" in diff.path for diff in matching)
         if mutation == "change_tool_response":
             assert any("function_responses" in diff.path for diff in matching)
+        if mutation == "change_error_code":
+            assert any(diff.path.endswith(".error_code") for diff in matching)
+        if mutation == "drop_recovery_event":
+            assert any(diff.path.startswith("events[") and diff.right == "<missing>" for diff in matching)
     elif expected_section == "memories":
         assert any(diff.memory_index is not None or diff.section == "memories" for diff in matching)
     elif expected_section == "summary":
@@ -55,7 +59,7 @@ def _assert_diff_context(
 
 
 @pytest.mark.asyncio
-async def test_real_replay_snapshot_mutation_detection(tmp_path: Path):
+async def test_real_replay_snapshot_mutation_detection_reports_precise_paths(tmp_path: Path):
     mutation_results: list[dict[str, Any]] = []
     for case in replay_cases():
         clean = await _run_real_inmemory_snapshot(tmp_path / f"real-mutation-{case.name}", case)
