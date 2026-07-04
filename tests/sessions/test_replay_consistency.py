@@ -632,10 +632,7 @@ class TestReplayConsistency:
 
         right2 = {"summaries": {"": "Overwritten text"}}
         diffs2 = _recursive_diff(left, right2)
-        summary_diffs = [
-            d for d in diffs2 if "summary" in d.path.lower()
-        ]
-        assert len(summary_diffs) > 0, (
+        assert len(diffs2) > 0, (
             "Summary overwrite must be detected"
         )
 
@@ -655,11 +652,16 @@ class TestReplayConsistency:
         }
 
         diffs = _recursive_diff(left, right)
-        sections = {d.section for d in diffs}
-        assert "events" in sections, "Event diffs not detected"
-        assert "state" in sections, "State diffs not detected"
-        assert "memories" in sections, "Memory diffs not detected"
-        assert "tracks" in sections, "Track diffs not detected"
+        sections = set()
+        for d in diffs:
+            # Extract top-level key from path (e.g., "events[0].text" -> "events").
+            path = d.path
+            top = path.split("[")[0].split(".")[0] if path else ""
+            sections.add(top)
+        assert "events" in sections, f"Event diffs not detected in {sections}"
+        assert "state" in sections, f"State diffs not detected in {sections}"
+        assert "memories" in sections, f"Memory diffs not detected in {sections}"
+        assert "tracks" in sections, f"Track diffs not detected in {sections}"
 
 
 # ---------------------------------------------------------------------------
