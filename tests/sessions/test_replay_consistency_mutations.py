@@ -20,6 +20,30 @@ from .replay_consistency.report import write_report
 from .test_replay_consistency import _run_real_inmemory_snapshot
 
 
+REQUIRED_REAL_MUTATIONS = {
+    "drop_event",
+    "reorder_events",
+    "duplicate_event",
+    "alter_event_text",
+    "change_tool_args",
+    "change_tool_response",
+    "change_state_value",
+    "drop_memory",
+    "alter_memory_text",
+    "drop_summary",
+    "overwrite_summary_with_stale_text",
+    "summary_wrong_session_id",
+    "change_error_code",
+    "drop_recovery_event",
+}
+
+
+def test_real_mutation_registry_covers_required_mutations():
+    assert REQUIRED_REAL_MUTATIONS <= set(MUTATION_SECTION)
+    seen_mutations = {mutation for case in replay_cases() for mutation in mutations_for_case(case)}
+    assert REQUIRED_REAL_MUTATIONS <= seen_mutations
+
+
 def _assert_diff_context(
     *,
     case_name: str,
@@ -42,6 +66,8 @@ def _assert_diff_context(
             assert any("function_calls" in diff.path for diff in matching)
         if mutation == "change_tool_response":
             assert any("function_responses" in diff.path for diff in matching)
+        if mutation == "alter_event_text":
+            assert any(diff.path.endswith(".text") for diff in matching)
         if mutation == "change_error_code":
             assert any(diff.path.endswith(".error_code") for diff in matching)
         if mutation == "drop_recovery_event":
@@ -79,17 +105,31 @@ async def test_real_replay_snapshot_mutation_detection_reports_precise_paths(tmp
                     "case_name": case.name,
                     "mutation": mutation,
                     "detected": bool(unallowed_diffs(diffs)),
+                    "diff_count": len(diffs),
+                    "first_diff": diffs[0],
                     "diffs": diffs,
                 }
             )
 
     report = write_report(
-        tmp_path / "mutation_report.json",
+        tmp_path / "session_memory_summary_mutation_report.json",
         [],
         mutation_results=mutation_results,
     )
+    assert report["schema_version"] == 1
+    assert report["mutation_summary"]["mutation_count"] > 0
     assert report["mutation_summary"]["mutation_count"] == report["mutation_summary"]["detected_count"]
     assert report["mutation_summary"]["undetected_mutations"] == []
+    assert any(
+        diff.get("mutation") == "summary_wrong_session_id"
+        and diff["path"] == "summary.metadata.session_id"
+        for diff in report["unallowed_diffs"]
+    )
+    assert any(
+        diff.get("mutation") in {"change_tool_args", "change_tool_response"}
+        and diff["event_index"] is not None
+        for diff in report["unallowed_diffs"]
+    )
 
 
 @pytest.mark.asyncio

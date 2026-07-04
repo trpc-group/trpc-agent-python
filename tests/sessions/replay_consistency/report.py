@@ -49,6 +49,7 @@ def write_report(
     *,
     backend_statuses: list[dict[str, Any]] | None = None,
     mutation_results: list[dict[str, Any]] | None = None,
+    generated_at: str = "deterministic",
 ) -> dict[str, Any]:
     backend_pairs = []
     cases: list[dict[str, Any]] = []
@@ -90,7 +91,10 @@ def write_report(
     undetected_mutations = []
     detected_count = 0
     for result in mutation_results:
-        result_diffs = result.get("diffs", [])
+        result_diffs = result.get("diffs")
+        if result_diffs is None:
+            first_diff = result.get("first_diff")
+            result_diffs = [first_diff] if first_diff is not None else []
         mutation = result["mutation"]
         detected = bool(result.get("detected"))
         if detected:
@@ -107,7 +111,7 @@ def write_report(
 
     report = {
         "schema_version": 1,
-        "generated_at": "deterministic",
+        "generated_at": generated_at,
         "generated_by": "tests/sessions/test_replay_consistency.py",
         "backend_pairs": backend_pairs,
         "backend_statuses": _backend_statuses(backend_pairs, backend_statuses),
@@ -115,6 +119,7 @@ def write_report(
         "cases": cases,
         "allowed_diff_count": len(allowed_diffs),
         "unallowed_diff_count": len(unallowed_diffs),
+        "unexpected_diff_count": len(unallowed_diffs),
         "allowed_diffs": allowed_diffs,
         "unallowed_diffs": unallowed_diffs,
         "diffs": diffs,

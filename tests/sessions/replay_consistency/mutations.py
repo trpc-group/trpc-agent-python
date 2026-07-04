@@ -30,6 +30,7 @@ SUMMARY_REQUIRED_MUTATIONS = [
 
 MUTATION_SECTION = {
     "drop_event": "events",
+    "alter_event_text": "events",
     "reorder_event": "events",
     "reorder_events": "events",
     "duplicate_event": "events",
@@ -40,6 +41,7 @@ MUTATION_SECTION = {
     "change_state": "state",
     "change_state_value": "state",
     "drop_memory": "memories",
+    "alter_memory_text": "memories",
     "change_memory_text": "memories",
     "change_memory_text_or_metadata": "memories",
     "drop_summary": "summary",
@@ -51,13 +53,13 @@ MUTATION_SECTION = {
 
 
 def mutations_for_case(case: ReplayCase) -> list[str]:
-    mutations = ["drop_event", "reorder_events", "duplicate_event"]
+    mutations = ["drop_event", "reorder_events", "duplicate_event", "alter_event_text"]
     if case.name in {"tool_call_roundtrip", "serialization_order_nested_payload"}:
         mutations.extend(["change_tool_args", "change_tool_response"])
     if case.name in {"scoped_state_overwrite", "state_temp_key_ignored_but_persistent_key_compared"}:
         mutations.append("change_state_value")
     if case.name in {"memory_preference_search", "memory_multi_session_isolation"}:
-        mutations.extend(["drop_memory", "change_memory_text_or_metadata"])
+        mutations.extend(["drop_memory", "alter_memory_text"])
     if case.name in {
         "summary_generation",
         "summary_update_overwrite",
@@ -84,6 +86,9 @@ def _find_mutation_event(
 def mutate_snapshot(name: str, snapshot: dict[str, Any]) -> None:
     if name == "drop_event":
         del snapshot["events"][1]
+    elif name == "alter_event_text":
+        event = _find_mutation_event(name, snapshot, lambda item: item.get("text") is not None)
+        event["text"] = "mutated event text"
     elif name in {"reorder_event", "reorder_events"}:
         snapshot["events"][0], snapshot["events"][1] = snapshot["events"][1], snapshot["events"][0]
     elif name == "change_tool_args":
@@ -108,7 +113,7 @@ def mutate_snapshot(name: str, snapshot: dict[str, Any]) -> None:
             raise AssertionError(f"{name} mutation target was not found")
     elif name == "drop_memory":
         del snapshot["memories"][0]
-    elif name in {"change_memory_text", "change_memory_text_or_metadata"}:
+    elif name in {"alter_memory_text", "change_memory_text", "change_memory_text_or_metadata"}:
         snapshot["memories"][0]["text"] = "I prefer coffee in the morning."
     elif name == "drop_summary":
         snapshot["summary"] = None

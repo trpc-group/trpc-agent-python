@@ -32,4 +32,7 @@ mutation detection summaries, and structured diff entries with case, backend,
 session, event, memory, summary, path, left, and right fields. Tests write
 runtime reports to `tmp_path`; the repository root JSON is only a deterministic
 schema example. The checked-in mutation example lives at
-`tests/sessions/replay_consistency/session_memory_summary_mutation_report.json`.
+`tests/sessions/replay_consistency/session_memory_summary_mutation_report.json`
+and is generated from the same registry that mutates event text, tool
+arguments/results, state, memory text, summaries, and retry error/recovery
+events on real normalized replay snapshots.

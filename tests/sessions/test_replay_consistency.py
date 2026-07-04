@@ -515,6 +515,7 @@ def test_report_contract(tmp_path: Path):
                 "diffs": [allowed_diff, diff],
             }
         ],
+        generated_at="unit-test",
     )
     loaded = json.loads(path.read_text(encoding="utf-8"))
     assert loaded == report
@@ -522,11 +523,12 @@ def test_report_contract(tmp_path: Path):
     for field in DiffEntry.__dataclass_fields__:
         assert field in serialized
     assert loaded["schema_version"] == 1
-    assert loaded["generated_at"] == "deterministic"
+    assert loaded["generated_at"] == "unit-test"
     assert loaded["backend_pairs"] == ["inmemory_vs_sqlite"]
     assert loaded["backend_statuses"]
     assert loaded["allowed_diff_count"] == 1
     assert loaded["unallowed_diff_count"] == 1
+    assert loaded["unexpected_diff_count"] == 1
     assert len(loaded["allowed_diffs"]) == 1
     assert len(loaded["unallowed_diffs"]) == 1
     assert len(loaded["diffs"]) == 2
