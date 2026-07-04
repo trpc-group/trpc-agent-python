@@ -1,0 +1,13 @@
+# Summary with event truncation: many events to test compression behavior
+{"op": "create_session", "app": "test_app", "user": "test_user", "session_id": "s7", "state": {}}
+{"op": "append_event", "session_id": "s7", "event": {"author": "user", "content": {"parts": [{"text": "Message 1"}]}}}
+{"op": "append_event", "session_id": "s7", "event": {"author": "assistant", "content": {"parts": [{"text": "Response 1"}]}}}
+{"op": "append_event", "session_id": "s7", "event": {"author": "user", "content": {"parts": [{"text": "Message 2"}]}}}
+{"op": "append_event", "session_id": "s7", "event": {"author": "assistant", "content": {"parts": [{"text": "Response 2"}]}}}
+{"op": "append_event", "session_id": "s7", "event": {"author": "user", "content": {"parts": [{"text": "Message 3"}]}}}
+{"op": "append_event", "session_id": "s7", "event": {"author": "assistant", "content": {"parts": [{"text": "Response 3"}]}}}
+{"op": "append_event", "session_id": "s7", "event": {"author": "user", "content": {"parts": [{"text": "Message 4"}]}}}
+{"op": "append_event", "session_id": "s7", "event": {"author": "assistant", "content": {"parts": [{"text": "Response 4"}]}}}
+{"op": "append_event", "session_id": "s7", "event": {"author": "user", "content": {"parts": [{"text": "Message 5"}]}}}
+{"op": "append_event", "session_id": "s7", "event": {"author": "assistant", "content": {"parts": [{"text": "Response 5"}]}}}
+{"op": "get_session", "session_id": "s7"}

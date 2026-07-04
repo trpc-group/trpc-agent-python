@@ -1,0 +1,7 @@
+# Tool call conversation: function_call + function_response
+{"op": "create_session", "app": "test_app", "user": "test_user", "session_id": "s3", "state": {}}
+{"op": "append_event", "session_id": "s3", "event": {"author": "user", "content": {"parts": [{"text": "Search for Python tutorials"}]}}}
+{"op": "append_event", "session_id": "s3", "event": {"author": "assistant", "content": {"parts": [{"function_call": {"id": "fc1", "name": "search", "args": {"query": "Python tutorials"}}}]}}}
+{"op": "append_event", "session_id": "s3", "event": {"author": "user", "content": {"parts": [{"function_response": {"id": "fc1", "name": "search", "response": {"results": ["Python.org", "RealPython.com"]}}}]}}}
+{"op": "append_event", "session_id": "s3", "event": {"author": "assistant", "content": {"parts": [{"text": "I found Python.org and RealPython.com as top results."}]}}}
+{"op": "get_session", "session_id": "s3"}

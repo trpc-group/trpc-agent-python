@@ -1,0 +1,3 @@
+# Nonexistent session: create and retrieve a session
+{"op": "create_session", "app": "test_app", "user": "test_user", "session_id": "s9", "state": {}}
+{"op": "get_session", "session_id": "s9"}
