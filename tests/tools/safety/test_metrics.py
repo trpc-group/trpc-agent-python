@@ -1,42 +1,37 @@
 from pathlib import Path
 
+import yaml
+
 from trpc_agent_sdk.tools.safety import Decision
 from trpc_agent_sdk.tools.safety import ToolScriptSafetyScanner
 
 SAMPLES = Path("examples/tool_safety/samples")
+MANIFEST = SAMPLES / "manifest.yaml"
+
+
+def load_manifest():
+    data = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
+    return data["samples"]
 
 
 def test_sample_matrix_metrics():
     scanner = ToolScriptSafetyScanner()
-    matrix = {
-        "safe_python.py": Decision.ALLOW,
-        "safe_bash.sh": Decision.ALLOW,
-        "dangerous_delete.sh": Decision.DENY,
-        "read_env.py": Decision.DENY,
-        "read_ssh_key.py": Decision.DENY,
-        "credential_file_key.py": Decision.DENY,
-        "network_non_whitelist.py": Decision.DENY,
-        "network_whitelist.py": Decision.ALLOW,
-        "subprocess_call.py": Decision.NEEDS_HUMAN_REVIEW,
-        "shell_injection.py": Decision.NEEDS_HUMAN_REVIEW,
-        "dependency_install.sh": Decision.DENY,
-        "infinite_loop.py": Decision.NEEDS_HUMAN_REVIEW,
-        "sensitive_output.py": Decision.DENY,
-        "bash_pipe_exfiltration.sh": Decision.DENY,
-        "dynamic_url_review.py": Decision.NEEDS_HUMAN_REVIEW,
-        "eval_review.py": Decision.NEEDS_HUMAN_REVIEW,
-    }
-    actual = {}
-    for sample, expected in matrix.items():
-        language = "bash" if sample.endswith(".sh") else None
-        actual[sample] = scanner.scan_file(str(SAMPLES / sample), language=language).decision
-        assert actual[sample] == expected
+    matrix = load_manifest()
+    assert len(matrix) >= 30
 
-    high_risk = [sample for sample, expected in matrix.items() if expected == Decision.DENY]
+    actual = {}
+    for sample in matrix:
+        report = scanner.scan_file(str(SAMPLES / sample["file"]), language=sample["language"])
+        actual[sample["file"]] = report.decision
+        assert report.decision == Decision(sample["expected_decision"])
+        if sample["required_rule_id"] != "NONE":
+            assert sample["required_rule_id"] in {finding.rule_id for finding in report.findings}
+
+    high_risk = [sample["file"] for sample in matrix if sample["high_risk"]]
     detected = [sample for sample in high_risk if actual[sample] == Decision.DENY]
     assert len(detected) / len(high_risk) >= 0.9
 
-    safe = [sample for sample, expected in matrix.items() if expected == Decision.ALLOW]
+    safe = [sample["file"] for sample in matrix if sample["expected_decision"] == Decision.ALLOW.value]
     false_positive = [sample for sample in safe if actual[sample] != Decision.ALLOW]
     assert len(false_positive) / len(safe) <= 0.1
 

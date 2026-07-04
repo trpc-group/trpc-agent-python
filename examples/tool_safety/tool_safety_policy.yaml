@@ -12,6 +12,9 @@ allowed_commands:
   - find
   - echo
   - pwd
+  - git
+  - tar
+  - pytest
 denied_paths:
   - "~/.ssh"
   - "~/.ssh/*"

@@ -1,0 +1,229 @@
+samples:
+  - file: safe_python.py
+    language: python
+    expected_decision: allow
+    required_rule_id: NONE
+    category: safe_local
+    high_risk: false
+  - file: safe_bash.sh
+    language: bash
+    expected_decision: allow
+    required_rule_id: NONE
+    category: safe_local
+    high_risk: false
+  - file: dangerous_delete.sh
+    language: bash
+    expected_decision: deny
+    required_rule_id: BASH_DANGEROUS_RM_RF
+    category: dangerous_delete
+    high_risk: true
+  - file: read_env.py
+    language: python
+    expected_decision: deny
+    required_rule_id: PY_SENSITIVE_FILE_READ
+    category: secret_read
+    high_risk: true
+  - file: read_ssh_key.py
+    language: python
+    expected_decision: deny
+    required_rule_id: PY_SENSITIVE_FILE_READ
+    category: secret_read
+    high_risk: true
+  - file: credential_file_key.py
+    language: python
+    expected_decision: deny
+    required_rule_id: PY_SENSITIVE_FILE_READ
+    category: secret_read
+    high_risk: true
+  - file: network_non_whitelist.py
+    language: python
+    expected_decision: deny
+    required_rule_id: PY_NETWORK_NON_WHITELIST
+    category: network_non_whitelist
+    high_risk: true
+  - file: network_whitelist.py
+    language: python
+    expected_decision: allow
+    required_rule_id: NONE
+    category: network_whitelist
+    high_risk: false
+  - file: subprocess_call.py
+    language: python
+    expected_decision: needs_human_review
+    required_rule_id: PY_PROCESS_EXECUTION_REVIEW
+    category: process_execution
+    high_risk: false
+  - file: shell_injection.py
+    language: python
+    expected_decision: needs_human_review
+    required_rule_id: PY_SHELL_TRUE_DYNAMIC
+    category: shell_injection
+    high_risk: false
+  - file: dependency_install.sh
+    language: bash
+    expected_decision: deny
+    required_rule_id: BASH_DEPENDENCY_INSTALL
+    category: dependency_install
+    high_risk: true
+  - file: infinite_loop.py
+    language: python
+    expected_decision: needs_human_review
+    required_rule_id: PY_INFINITE_LOOP
+    category: resource_exhaustion
+    high_risk: false
+  - file: sensitive_output.py
+    language: python
+    expected_decision: deny
+    required_rule_id: PY_SENSITIVE_OUTPUT
+    category: secret_output
+    high_risk: true
+  - file: bash_pipe_exfiltration.sh
+    language: bash
+    expected_decision: deny
+    required_rule_id: BASH_SECRET_EXFILTRATION
+    category: secret_exfiltration
+    high_risk: true
+  - file: dynamic_url_review.py
+    language: python
+    expected_decision: needs_human_review
+    required_rule_id: PY_DYNAMIC_NETWORK_REVIEW
+    category: dynamic_network
+    high_risk: false
+  - file: eval_review.py
+    language: python
+    expected_decision: needs_human_review
+    required_rule_id: PY_DYNAMIC_CODE_REVIEW
+    category: dynamic_code
+    high_risk: false
+  - file: aiohttp_non_whitelist.py
+    language: python
+    expected_decision: deny
+    required_rule_id: PY_NETWORK_NON_WHITELIST
+    category: network_non_whitelist
+    high_risk: true
+  - file: httpx_client_non_whitelist.py
+    language: python
+    expected_decision: deny
+    required_rule_id: PY_NETWORK_NON_WHITELIST
+    category: network_non_whitelist
+    high_risk: true
+  - file: urllib_non_whitelist.py
+    language: python
+    expected_decision: deny
+    required_rule_id: PY_NETWORK_NON_WHITELIST
+    category: network_non_whitelist
+    high_risk: true
+  - file: requests_session_non_whitelist.py
+    language: python
+    expected_decision: deny
+    required_rule_id: PY_NETWORK_NON_WHITELIST
+    category: network_non_whitelist
+    high_risk: true
+  - file: socket_create_connection.py
+    language: python
+    expected_decision: deny
+    required_rule_id: PY_SOCKET_NON_WHITELIST
+    category: network_non_whitelist
+    high_risk: true
+  - file: os_environ_secret_print.py
+    language: python
+    expected_decision: deny
+    required_rule_id: PY_SENSITIVE_OUTPUT
+    category: secret_output
+    high_risk: true
+  - file: os_getenv_secret_exfiltration.py
+    language: python
+    expected_decision: deny
+    required_rule_id: PY_SENSITIVE_OUTPUT
+    category: secret_exfiltration
+    high_risk: true
+  - file: dynamic_delete_review.py
+    language: python
+    expected_decision: needs_human_review
+    required_rule_id: PY_DYNAMIC_DELETE_REVIEW
+    category: dynamic_delete
+    high_risk: false
+  - file: subprocess_rm_rf_root.py
+    language: python
+    expected_decision: deny
+    required_rule_id: BASH_DANGEROUS_RM_RF
+    category: dangerous_delete
+    high_risk: true
+  - file: subprocess_cat_env_curl.py
+    language: python
+    expected_decision: deny
+    required_rule_id: BASH_SECRET_EXFILTRATION
+    category: secret_exfiltration
+    high_risk: true
+  - file: safe_requests_whitelist_session.py
+    language: python
+    expected_decision: allow
+    required_rule_id: NONE
+    category: network_whitelist
+    high_risk: false
+  - file: safe_local_file_read.py
+    language: python
+    expected_decision: allow
+    required_rule_id: NONE
+    category: safe_local
+    high_risk: false
+  - file: system_overwrite.sh
+    language: bash
+    expected_decision: deny
+    required_rule_id: BASH_DENIED_PATH_WRITE
+    category: denied_path_write
+    high_risk: true
+  - file: command_substitution.sh
+    language: bash
+    expected_decision: needs_human_review
+    required_rule_id: BASH_SHELL_FEATURES_REVIEW
+    category: shell_features
+    high_risk: false
+  - file: background_process.sh
+    language: bash
+    expected_decision: needs_human_review
+    required_rule_id: BASH_BACKGROUND_PROCESS
+    category: process_control
+    high_risk: false
+  - file: netcat_exfiltration.sh
+    language: bash
+    expected_decision: deny
+    required_rule_id: BASH_SECRET_EXFILTRATION
+    category: secret_exfiltration
+    high_risk: true
+  - file: socat_exfiltration.sh
+    language: bash
+    expected_decision: deny
+    required_rule_id: BASH_SECRET_EXFILTRATION
+    category: secret_exfiltration
+    high_risk: true
+  - file: dev_tcp_exfiltration.sh
+    language: bash
+    expected_decision: deny
+    required_rule_id: BASH_NETWORK_NON_WHITELIST
+    category: network_non_whitelist
+    high_risk: true
+  - file: safe_git_status.sh
+    language: bash
+    expected_decision: allow
+    required_rule_id: NONE
+    category: safe_local
+    high_risk: false
+  - file: safe_find_grep.sh
+    language: bash
+    expected_decision: allow
+    required_rule_id: NONE
+    category: safe_local
+    high_risk: false
+  - file: safe_tar_archive.sh
+    language: bash
+    expected_decision: allow
+    required_rule_id: NONE
+    category: safe_local
+    high_risk: false
+  - file: safe_python_pytest.sh
+    language: bash
+    expected_decision: allow
+    required_rule_id: NONE
+    category: safe_local
+    high_risk: false

@@ -57,6 +57,9 @@ class ToolSafetyPolicy:
                 "find",
                 "echo",
                 "pwd",
+                "git",
+                "tar",
+                "pytest",
             ],
             denied_paths=[
                 "~/.ssh",
