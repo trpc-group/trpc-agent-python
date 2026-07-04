@@ -83,7 +83,7 @@ The CLI also accepts a positional file path:
 python scripts/tool_safety_check.py \
   examples/tool_safety/samples/safe_bash.sh \
   --language bash \
-  --policy examples/tool_safety/policy.yaml
+  --policy examples/tool_safety/tool_safety_policy.yaml
 ```
 
 Use strict policy mode when validating reviewed policy files:
@@ -133,10 +133,10 @@ def run_command(command: str):
 
 The wrapper supports sync and async callables.
 
-Tool, Skill, and MCP-like callables can opt in through the same Filter/Wrapper
+Tool, Skill, and MCP-like payloads can opt in through the same Filter/Wrapper
 path. See `skill_wrapper_example.py` for an async Skill-like handler that scans
-`python_code`, argv-style `command_args`, and nested dict-like payloads before
-calling the wrapped function.
+`python_code`, argv-style `command_args`, nested dict-like payloads, and
+MCP-like `params.arguments` input before calling the wrapped function.
 
 ## BashTool Opt-In Usage
 
@@ -209,6 +209,9 @@ with `tool_safety_policy.yaml`. It stores:
 - category
 - high-risk flag
 - full sanitized report
+
+The manifest report normalizes dynamic `scan_id`, `timestamp`, and duration
+fields so rerunning the generator produces a stable review artifact.
 
 Regenerate it with:
 

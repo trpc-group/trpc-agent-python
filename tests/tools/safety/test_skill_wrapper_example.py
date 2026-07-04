@@ -40,3 +40,27 @@ async def test_skill_wrapper_blocks_nested_payload_before_call():
 
     assert result["error"] == "SAFETY_GUARD_BLOCKED"
     assert example.CALLS == []
+
+
+@pytest.mark.asyncio
+async def test_skill_wrapper_blocks_nested_python_payload_before_call():
+    result = await example.run_blocked_nested_python_payload()
+
+    assert result["error"] == "SAFETY_GUARD_BLOCKED"
+    assert example.CALLS == []
+
+
+@pytest.mark.asyncio
+async def test_skill_wrapper_allows_nested_safe_payload():
+    result = await example.run_safe_nested_payload()
+
+    assert result["success"] is True
+    assert len(example.CALLS) == 1
+
+
+@pytest.mark.asyncio
+async def test_skill_wrapper_blocks_mcp_like_payload_before_call():
+    result = await example.run_blocked_mcp_like_payload()
+
+    assert result["error"] == "SAFETY_GUARD_BLOCKED"
+    assert example.CALLS == []

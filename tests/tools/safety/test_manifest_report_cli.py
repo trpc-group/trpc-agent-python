@@ -7,7 +7,7 @@ import yaml
 
 SCRIPT = Path("scripts/tool_safety_manifest_report.py")
 SAMPLES = Path("examples/tool_safety/samples")
-POLICY = Path("examples/tool_safety/policy.yaml")
+POLICY = Path("examples/tool_safety/tool_safety_policy.yaml")
 
 
 def run_report(*args):
@@ -29,6 +29,18 @@ def test_manifest_report_current_manifest_exits_zero(tmp_path):
     assert summary["sample_count"] == summary["matched_decisions"]
     assert summary["sample_count"] == summary["required_rules_present"]
     assert output.exists()
+
+
+def test_manifest_report_output_is_deterministic(tmp_path):
+    first = tmp_path / "first.json"
+    second = tmp_path / "second.json"
+
+    first_result = run_report("--policy", str(POLICY), "--output", str(first), "--strict-policy")
+    second_result = run_report("--policy", str(POLICY), "--output", str(second), "--strict-policy")
+
+    assert first_result.returncode == 0
+    assert second_result.returncode == 0
+    assert first.read_text(encoding="utf-8") == second.read_text(encoding="utf-8")
 
 
 def test_manifest_report_decision_mismatch_exits_one(tmp_path):

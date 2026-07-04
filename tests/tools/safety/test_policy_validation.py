@@ -1,9 +1,13 @@
 import warnings
+from pathlib import Path
 
 import pytest
 import yaml
 
 from trpc_agent_sdk.tools.safety import ToolSafetyPolicy
+
+CANONICAL_POLICY = Path("examples/tool_safety/tool_safety_policy.yaml")
+ALIAS_POLICY = Path("examples/tool_safety/policy.yaml")
 
 
 def write_policy(tmp_path, data):
@@ -67,3 +71,7 @@ def test_normal_policy_loads_without_warnings(tmp_path):
     assert not caught
     assert policy.max_timeout_seconds == 120
     assert policy.allowed_commands == ["python", "bash"]
+
+
+def test_example_policy_alias_matches_canonical_policy():
+    assert ALIAS_POLICY.read_text(encoding="utf-8") == CANONICAL_POLICY.read_text(encoding="utf-8")

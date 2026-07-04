@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import inspect
-import shlex
 from functools import wraps
 from typing import Any
 from typing import Callable
@@ -16,6 +15,7 @@ from typing import Callable
 from trpc_agent_sdk.log import logger
 
 from ._audit import write_audit_event
+from ._extractors import extract_call_scan_entries
 from ._policy import ToolSafetyPolicy
 from ._scanner import ToolScriptSafetyScanner
 from ._telemetry import record_safety_attributes
@@ -65,7 +65,7 @@ class ToolSafetyWrapper:
         return sync_wrapper
 
     def _blocked_result(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> dict[str, Any] | None:
-        entries = self._extract_scan_entries(args, kwargs)
+        entries = extract_call_scan_entries(args, kwargs, default_language=self.language)
         if not entries:
             return None
 
@@ -96,61 +96,6 @@ class ToolSafetyWrapper:
                 }
         return None
 
-    def _extract_scan_entries(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> list[tuple[str, str, list[str]]]:
-        entries: list[tuple[str, str, list[str]]] = []
-        for payload in _iter_payloads(kwargs):
-            command_args = _extract_command_args(payload)
-
-            code_blocks = _request_value(payload, "code_blocks", None)
-            if code_blocks:
-                for block in code_blocks:
-                    code = _request_value(block, "code", "")
-                    language = _request_value(block, "language", "unknown") or "unknown"
-                    if code:
-                        entries.append((str(code), str(language), []))
-
-            for key, language in (
-                ("python_code", "python"),
-                ("bash_code", "bash"),
-                ("bash", "bash"),
-                ("command", "bash"),
-                ("cmd", "bash"),
-            ):
-                value = _request_value(payload, key, "")
-                if value:
-                    entries.append((str(value), language, command_args))
-
-            for key in ("script", "code"):
-                value = _request_value(payload, key, "")
-                if value:
-                    language = _request_value(payload, "language", self.language) or self.language
-                    entries.append((str(value), str(language), command_args))
-
-            if command_args and not any(
-                _request_value(payload, key, "")
-                for key in ("python_code", "bash_code", "bash", "command", "cmd", "script", "code")
-            ):
-                entries.append(("", self.language, command_args))
-
-        if args and isinstance(args[0], str):
-            command_args = _extract_command_args(kwargs)
-            positional_command_args = _coerce_command_args(args[1]) if len(args) > 1 else []
-            entries.append((args[0], self.language, command_args or positional_command_args))
-        for arg in args:
-            if isinstance(arg, (dict, list, tuple)):
-                for payload in _iter_payloads(arg):
-                    command_args = _extract_command_args(payload)
-                    for key, language in (
-                        ("python_code", "python"),
-                        ("bash_code", "bash"),
-                        ("command", "bash"),
-                        ("cmd", "bash"),
-                    ):
-                        value = _request_value(payload, key, "")
-                        if value:
-                            entries.append((str(value), language, command_args))
-        return _dedupe_entries(entries)
-
 
 def with_tool_safety(func: Callable[..., Any] | None = None, **kwargs: Any) -> Callable[..., Any]:
     """Wrap a callable with ToolSafetyWrapper.
@@ -165,62 +110,3 @@ def with_tool_safety(func: Callable[..., Any] | None = None, **kwargs: Any) -> C
         return wrapper.wrap(inner)
 
     return decorator
-
-
-def _extract_command_args(payload: Any) -> list[str]:
-    for key in ("command_args", "argv", "args"):
-        coerced = _coerce_command_args(_request_value(payload, key, None))
-        if coerced:
-            return coerced
-    return []
-
-
-def _request_value(req: Any, key: str, default: Any = None) -> Any:
-    if isinstance(req, dict):
-        return req.get(key, default)
-    return getattr(req, key, default)
-
-
-def _coerce_command_args(value: Any) -> list[str]:
-    if value is None or isinstance(value, dict):
-        return []
-    if isinstance(value, str):
-        try:
-            return shlex.split(value)
-        except ValueError:
-            return [value]
-    if isinstance(value, (list, tuple)):
-        return [str(item) for item in value]
-    return []
-
-
-def _iter_payloads(req: Any):
-    seen: set[int] = set()
-
-    def walk(value: Any):
-        marker = id(value)
-        if marker in seen:
-            return
-        seen.add(marker)
-        yield value
-        if isinstance(value, dict):
-            for nested in value.values():
-                if isinstance(nested, (dict, list, tuple)):
-                    yield from walk(nested)
-        elif isinstance(value, (list, tuple)):
-            for nested in value:
-                if isinstance(nested, (dict, list, tuple)):
-                    yield from walk(nested)
-
-    yield from walk(req)
-
-
-def _dedupe_entries(entries: list[tuple[str, str, list[str]]]) -> list[tuple[str, str, list[str]]]:
-    seen: set[tuple[str, str, tuple[str, ...]]] = set()
-    deduped: list[tuple[str, str, list[str]]] = []
-    for entry in entries:
-        key = (entry[0], entry[1], tuple(entry[2]))
-        if key not in seen:
-            seen.add(key)
-            deduped.append(entry)
-    return deduped

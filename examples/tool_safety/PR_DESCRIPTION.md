@@ -1,27 +1,28 @@
 # Tool Script Safety Guard - Issue #90
 
-## Acceptance Checklist
+## Acceptance Mapping
 
-- [ ] Scans script/command content, command-line args, cwd, env metadata, and tool metadata.
-- [ ] Returns `allow`, `deny`, or `needs_human_review`.
-- [ ] Supports Python AST/text checks and Bash token/text checks.
-- [ ] Loads policy from YAML and supports strict policy validation.
-- [ ] Emits structured reports with decision, risk type, rule, evidence, and recommendation.
-- [ ] Writes sanitized audit JSONL and records OpenTelemetry safety attributes.
-- [ ] Provides a manifest-driven sample corpus with at least 12 samples.
-- [ ] Maintains high-risk detection at or above 90%.
-- [ ] Keeps secret-read, dangerous-delete, and non-whitelisted-network samples from allowing execution.
-- [ ] Keeps 500-line script scanning under 1 second in the safety test suite.
-- [ ] Documents that static scanning is not a sandbox.
-- [ ] Keeps existing Tool and CodeExecutor behavior unchanged unless explicitly enabled.
+- Scans script/command content, command-line args, cwd, env metadata, and tool metadata.
+- Returns `allow`, `deny`, or `needs_human_review`.
+- Supports Python AST/text checks and Bash token/text checks.
+- Loads policy from YAML and supports strict policy validation.
+- Emits structured reports with decision, risk type, rule, evidence, and recommendation.
+- Writes sanitized audit JSONL and records OpenTelemetry safety attributes.
+- Provides a manifest-driven sample corpus with at least 12 samples.
+- Maintains high-risk detection at or above 90%.
+- Keeps secret-read, dangerous-delete, and non-whitelisted-network samples from allowing execution.
+- Keeps 500-line Bash and Python scripts under 1 second in the safety test suite.
+- Documents that static scanning is not a sandbox.
+- Keeps existing Tool and CodeExecutor behavior unchanged unless explicitly enabled.
 
 ## Code Path Mapping
 
 - Scanner: `trpc_agent_sdk/tools/safety/_scanner.py`, `trpc_agent_sdk/tools/safety/_rules.py`
 - Policy: `trpc_agent_sdk/tools/safety/_policy.py`
+- Input extraction: `trpc_agent_sdk/tools/safety/_extractors.py`
 - Filter/Wrapper: `trpc_agent_sdk/tools/safety/_filter.py`, `trpc_agent_sdk/tools/safety/_wrapper.py`
-- BashTool integration: `trpc_agent_sdk/tools/bash.py`
-- UnsafeLocalCodeExecutor integration: `trpc_agent_sdk/code_executors/local.py`
+- BashTool integration: `trpc_agent_sdk/tools/file_tools/_bash_tool.py`
+- UnsafeLocalCodeExecutor integration: `trpc_agent_sdk/code_executors/local/_unsafe_local_code_executor.py`
 - CLI: `scripts/tool_safety_check.py`
 - Manifest report: `scripts/tool_safety_manifest_report.py`
 - Manifest and samples: `examples/tool_safety/samples/manifest.yaml`, `examples/tool_safety/samples/`
@@ -60,15 +61,21 @@ Category counts:
 ```bash
 pytest tests/tools/safety
 python scripts/tool_safety_manifest_report.py --strict-policy
-python scripts/tool_safety_check.py examples/tool_safety/samples/dangerous_delete.sh --language bash --policy examples/tool_safety/policy.yaml
-python scripts/tool_safety_check.py examples/tool_safety/samples/safe_python.py --language python --policy examples/tool_safety/policy.yaml
+python scripts/tool_safety_check.py \
+  examples/tool_safety/samples/dangerous_delete.sh \
+  --language bash \
+  --policy examples/tool_safety/tool_safety_policy.yaml
+python scripts/tool_safety_check.py \
+  examples/tool_safety/samples/safe_python.py \
+  --language python \
+  --policy examples/tool_safety/tool_safety_policy.yaml
 ```
 
 ## Default Compatibility
 
 - `BashTool` does not enable the safety guard by default.
 - `UnsafeLocalCodeExecutor` does not enable the safety guard by default.
-- Filter, Wrapper, Tool, Skill-like callable, and MCP-like callable integrations are opt-in.
+- Filter, Wrapper, Tool, Skill-like callable, and MCP-like payload integrations are opt-in.
 - `needs_human_review` is not blocked by default unless `block_on_review=true`.
 
 ## Known Limitations
