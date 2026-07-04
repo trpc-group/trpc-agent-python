@@ -66,8 +66,7 @@ class ToolSafetyFilter(BaseFilter):
                     env=env,
                     tool_name=tool_name,
                     tool_metadata=metadata,
-                )
-            )
+                ))
             self._record_report(report)
             if self.policy.should_block(report.decision):
                 rsp.rsp = {

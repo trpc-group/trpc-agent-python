@@ -84,7 +84,7 @@ def sanitize_text(text: str, limit: int = 180) -> tuple[str, bool]:
 
     sanitized = sanitized.replace("\n", "\\n")
     if len(sanitized) > limit:
-        sanitized = sanitized[: limit - 3] + "..."
+        sanitized = sanitized[:limit - 3] + "..."
         changed = True
     return sanitized, changed
 
@@ -105,8 +105,7 @@ def scan_text_patterns(script: str, policy: ToolSafetyPolicy, language: str) -> 
                     "Remove embedded private keys and load credentials from a secured secret manager.",
                     "Private key material appears in script text.",
                     line_no,
-                )
-            )
+                ))
         if language.startswith("python") and re.search(r"\b(eval|exec|compile)\s*\(", line):
             findings.append(
                 _finding(
@@ -118,8 +117,7 @@ def scan_text_patterns(script: str, policy: ToolSafetyPolicy, language: str) -> 
                     "Avoid dynamic code execution or review the code path before running it.",
                     "Dynamic code execution appears in script text.",
                     line_no,
-                )
-            )
+                ))
     return findings
 
 
@@ -141,8 +139,7 @@ def scan_python_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFindin
                 "Python parser could not parse this script.",
                 exc.lineno,
                 exc.offset,
-            )
-        )
+            ))
         return findings
 
     visitor = _PythonSafetyVisitor(script, policy)
@@ -177,8 +174,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                     "Do not run fork bombs or recursive shell functions.",
                     "Fork bomb pattern detected.",
                     line_no,
-                )
-            )
+                ))
 
         if _is_rm_rf_dangerous(tokens, policy):
             findings.append(
@@ -191,8 +187,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                     "Remove recursive force deletion of root, home, or denied paths.",
                     "Dangerous recursive delete detected.",
                     line_no,
-                )
-            )
+                ))
 
         if sensitive_read:
             findings.append(
@@ -205,8 +200,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                     "Avoid reading denied credential or environment files in tool scripts.",
                     "Sensitive file read detected.",
                     line_no,
-                )
-            )
+                ))
 
         if _redirects_to_denied_path(line, tokens, policy):
             findings.append(
@@ -219,8 +213,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                     "Do not redirect or write to denied system or credential paths.",
                     "Write or redirect to denied path detected.",
                     line_no,
-                )
-            )
+                ))
 
         if sensitive_read and network_send:
             findings.append(
@@ -233,8 +226,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                     "Do not pipe secrets to network clients.",
                     "Sensitive file content is piped to a network command.",
                     line_no,
-                )
-            )
+                ))
 
         if _is_find_delete(tokens):
             findings.append(
@@ -247,8 +239,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                     "Review find -delete targets before execution.",
                     "find -delete can remove many files.",
                     line_no,
-                )
-            )
+                ))
 
         if _is_xargs_rm_rf(line):
             findings.append(
@@ -261,8 +252,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                     "Review xargs-driven recursive deletion before execution.",
                     "xargs rm -rf uses dynamic deletion targets.",
                     line_no,
-                )
-            )
+                ))
 
         network_findings = _network_findings(line, policy, raw_line, line_no)
         findings.extend(network_findings)
@@ -278,8 +268,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                     "Preinstall dependencies through a reviewed build step instead of tool script execution.",
                     "Dependency installation command detected.",
                     line_no,
-                )
-            )
+                ))
 
         if _is_privilege_escalation(tokens, line) and policy.deny_privilege_escalation:
             findings.append(
@@ -292,8 +281,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                     "Remove sudo, su, world-writable permissions, or root ownership changes.",
                     "Privilege escalation or unsafe permission change detected.",
                     line_no,
-                )
-            )
+                ))
 
         if _has_background_process(line):
             findings.append(
@@ -306,8 +294,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                     "Review background processes and ensure they are bounded and observable.",
                     "Background process operator detected.",
                     line_no,
-                )
-            )
+                ))
 
         if _is_unbounded_output(tokens):
             findings.append(
@@ -320,8 +307,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                     "Bound commands that can produce unbounded output before execution.",
                     "Unbounded output command detected.",
                     line_no,
-                )
-            )
+                ))
 
         if _is_zero_fill_write(tokens):
             findings.append(
@@ -334,8 +320,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                     "Review large writes from /dev/zero and enforce size limits.",
                     "Potentially large zero-fill write detected.",
                     line_no,
-                )
-            )
+                ))
 
         if _has_shell_operator(line) and policy.review_shell_features:
             findings.append(
@@ -348,8 +333,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                     "Review shell operators, pipes, command substitution, and redirection before execution.",
                     "Shell operator or redirection detected.",
                     line_no,
-                )
-            )
+                ))
 
         if _is_long_sleep(tokens, policy.long_sleep_seconds):
             findings.append(
@@ -362,8 +346,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                     "Reduce long sleeps or enforce an explicit timeout.",
                     "Sleep duration exceeds policy threshold.",
                     line_no,
-                )
-            )
+                ))
 
         if re.search(r"\b(while|until)\s+true\b", line, flags=re.IGNORECASE):
             findings.append(
@@ -376,8 +359,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                     "Add an exit condition and a timeout before running the loop.",
                     "Unbounded shell loop detected.",
                     line_no,
-                )
-            )
+                ))
 
         for command in _base_commands(line):
             if command in SHELL_KEYWORDS or "=" in command:
@@ -395,8 +377,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                         "Add reviewed commands to allowed_commands or inspect this command before execution.",
                         f"Command '{command}' is not in allowed_commands.",
                         line_no,
-                    )
-                )
+                    ))
     return _suppress_low_value_unknown_command_reviews(_dedupe_findings(findings))
 
 
@@ -476,8 +457,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                     "Remove embedded private keys and load credentials from a secured secret manager.",
                     "Private key material appears in a string literal.",
                     node,
-                )
-            )
+                ))
         self.generic_visit(node)
 
     def visit_While(self, node: ast.While) -> Any:
@@ -492,8 +472,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                     "Add an exit condition and enforce a timeout.",
                     "Unbounded while True loop detected.",
                     node,
-                )
-            )
+                ))
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> Any:
@@ -525,8 +504,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                     "Avoid reading denied credential or environment files in tool scripts.",
                     "Sensitive file read detected.",
                     node,
-                )
-            )
+                ))
 
     def _check_dangerous_delete(self, node: ast.Call, name: str) -> None:
         delete_calls = {
@@ -553,8 +531,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                     "Remove deletion of root, system, or credential paths.",
                     "Deletion call targets a denied path.",
                     node,
-                )
-            )
+                ))
         elif path is None and self._is_delete_call(node, name):
             self.findings.append(
                 self._finding(
@@ -566,8 +543,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                     "Review dynamic deletion targets before execution.",
                     "Deletion call target is dynamic or unknown.",
                     node,
-                )
-            )
+                ))
 
     def _check_network(self, node: ast.Call, name: str) -> None:
         is_http = self._is_python_http_call(name)
@@ -584,8 +560,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                     "Review raw socket usage before execution.",
                     "Raw socket usage detected.",
                     node,
-                )
-            )
+                ))
             return
         if name == "socket.create_connection":
             host = self._socket_create_connection_host(node)
@@ -597,11 +572,8 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
         self._record_network_host(node, host, "PY_NETWORK_NON_WHITELIST", "PY_DYNAMIC_NETWORK_REVIEW")
 
     def _check_process_execution(self, node: ast.Call, name: str) -> None:
-        is_process = (
-            name in {"os.system", "os.popen"}
-            or name.startswith("subprocess.")
-            or name in {"subprocess.run", "subprocess.call", "subprocess.check_call", "subprocess.Popen"}
-        )
+        is_process = (name in {"os.system", "os.popen"} or name.startswith("subprocess.")
+                      or name in {"subprocess.run", "subprocess.call", "subprocess.check_call", "subprocess.Popen"})
         if not is_process:
             return
 
@@ -630,8 +602,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                     "Avoid shell=True with dynamic commands or review the command construction.",
                     "Dynamic shell=True subprocess command detected.",
                     node,
-                )
-            )
+                ))
 
         if self.policy.review_process_execution:
             self.findings.append(
@@ -644,8 +615,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                     "Review subprocess or shell execution before running the script.",
                     "Process execution call detected.",
                     node,
-                )
-            )
+                ))
 
     def _check_dynamic_code(self, node: ast.Call, name: str) -> None:
         if name in {"eval", "exec", "compile", "__import__", "builtins.eval", "builtins.exec", "builtins.compile"}:
@@ -660,8 +630,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                         "Avoid dynamic code execution or review the code path before running it.",
                         "Dynamic code execution detected.",
                         node,
-                    )
-                )
+                    ))
 
     def _check_sleep(self, node: ast.Call, name: str) -> None:
         if name != "time.sleep" or not node.args:
@@ -678,8 +647,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                     "Reduce long sleeps or enforce an explicit timeout.",
                     "Sleep duration exceeds policy threshold.",
                     node,
-                )
-            )
+                ))
 
     def _check_large_allocation(self, node: ast.Call, name: str) -> None:
         if not node.args:
@@ -698,8 +666,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                     "Review large memory allocations and enforce resource limits.",
                     "Large in-memory allocation detected.",
                     node,
-                )
-            )
+                ))
         elif name == "range" and size > LARGE_ITERATION_COUNT:
             self.findings.append(
                 self._finding(
@@ -711,15 +678,11 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                     "Review very large loops and enforce a timeout.",
                     "Large iteration range detected.",
                     node,
-                )
-            )
+                ))
 
     def _check_sensitive_output(self, node: ast.Call, name: str) -> None:
-        output_call = (
-            name == "print"
-            or name.startswith(("logging.", "logger."))
-            or name.endswith((".info", ".warning", ".error"))
-        )
+        output_call = (name == "print" or name.startswith(("logging.", "logger.")) or name.endswith(
+            (".info", ".warning", ".error")))
         write_call = name.endswith((".write", ".writelines", ".send", ".sendall", ".post", ".put"))
         network_sink = self._is_python_http_call(name)
         if not (output_call or write_call or network_sink):
@@ -736,8 +699,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                     "Do not print, log, write, or send variables that contain credentials or tokens.",
                     "Sensitive variable may be written to output, file, or network.",
                     node,
-                )
-            )
+                ))
 
     def _is_python_http_call(self, name: str) -> bool:
         last = name.rsplit(".", 1)[-1]
@@ -772,8 +734,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                     "Use only policy allowed_domains or remove outbound network access.",
                     f"Network request to non-whitelisted host '{host}'.",
                     node,
-                )
-            )
+                ))
         elif self.policy.review_unknown_network:
             self.findings.append(
                 self._finding(
@@ -785,8 +746,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                     "Review dynamic URLs or constrain them to allowed_domains.",
                     "Network request target is dynamic or missing.",
                     node,
-                )
-            )
+                ))
 
     def _socket_create_connection_host(self, node: ast.Call) -> str | None:
         if not node.args:
@@ -1079,10 +1039,10 @@ def _line_reads_sensitive_file(line: str, tokens: list[str], policy: ToolSafetyP
     if command in {"cat", "head", "tail", "less", "more"}:
         return any(policy.is_path_denied(token) for token in tokens[1:])
     if command == "grep":
-        return any(policy.is_path_denied(token) for token in tokens[1:]) or (
-            any(_contains_sensitive_word(token) for token in tokens[1:])
-            and any(".env" in token for token in tokens[1:])
-        )
+        return any(policy.is_path_denied(token)
+                   for token in tokens[1:]) or (any(_contains_sensitive_word(token)
+                                                    for token in tokens[1:]) and any(".env" in token
+                                                                                     for token in tokens[1:]))
     return bool(re.search(r"\b(cat|grep|head|tail)\b.*(\.env|id_rsa|id_dsa|\.pem|\.key|/etc/passwd|/etc/shadow)", line))
 
 
@@ -1099,9 +1059,8 @@ def _is_rm_rf_dangerous(tokens: list[str], policy: ToolSafetyPolicy) -> bool:
     force = any("f" in flag for flag in flags)
     if not (recursive and force):
         return False
-    return any(
-        target in {"/", "~"} or target.startswith("~/.ssh") or policy.is_path_denied(target) for target in targets
-    )
+    return any(target in {"/", "~"} or target.startswith("~/.ssh") or policy.is_path_denied(target)
+               for target in targets)
 
 
 def _is_find_delete(tokens: list[str]) -> bool:
@@ -1149,8 +1108,7 @@ def _network_findings(line: str, policy: ToolSafetyPolicy, raw_line: str, line_n
                 "Review dynamic network targets or constrain them to allowed_domains.",
                 "Network command target is dynamic or missing.",
                 line_no,
-            )
-        )
+            ))
     for host in targets:
         if host is None:
             if policy.review_unknown_network:
@@ -1164,8 +1122,7 @@ def _network_findings(line: str, policy: ToolSafetyPolicy, raw_line: str, line_n
                         "Review dynamic network targets or constrain them to allowed_domains.",
                         "Network command target is dynamic or missing.",
                         line_no,
-                    )
-                )
+                    ))
             continue
         if not policy.is_domain_allowed(host):
             findings.append(
@@ -1178,8 +1135,7 @@ def _network_findings(line: str, policy: ToolSafetyPolicy, raw_line: str, line_n
                     "Use only policy allowed_domains or remove outbound network access.",
                     f"Network request to non-whitelisted host '{host}'.",
                     line_no,
-                )
-            )
+                ))
     return findings
 
 
@@ -1323,17 +1279,12 @@ def _is_dependency_install(tokens: list[str]) -> bool:
         return True
     if command == "yarn" and len(lower) > 1 and lower[1] in {"add", "install", "upgrade"}:
         return True
-    if (
-        command in {"apt", "apt-get", "brew", "yum"}
-        and len(lower) > 1
-        and lower[1]
-        in {
+    if (command in {"apt", "apt-get", "brew", "yum"} and len(lower) > 1 and lower[1] in {
             "add",
             "install",
             "update",
             "upgrade",
-        }
-    ):
+    }):
         return True
     return False
 
@@ -1393,16 +1344,12 @@ def _is_zero_fill_write(tokens: list[str]) -> bool:
 def _suppress_low_value_unknown_command_reviews(findings: list[RiskFinding]) -> list[RiskFinding]:
     stronger_lines = {
         finding.line
-        for finding in findings
-        if finding.rule_id != "BASH_UNKNOWN_COMMAND_REVIEW"
-        and (
+        for finding in findings if finding.rule_id != "BASH_UNKNOWN_COMMAND_REVIEW" and (
             finding.decision == Decision.DENY
-            or finding.risk_level in {RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL}
-        )
+            or finding.risk_level in {RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL})
     }
     return [
-        finding
-        for finding in findings
+        finding for finding in findings
         if finding.rule_id != "BASH_UNKNOWN_COMMAND_REVIEW" or finding.line not in stronger_lines
     ]
 

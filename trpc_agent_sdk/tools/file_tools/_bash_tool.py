@@ -252,11 +252,8 @@ class BashTool(BaseTool):
     def _get_safety_policy(self) -> ToolSafetyPolicy:
         """Return the configured safety policy."""
         if self._safety_policy is None:
-            self._safety_policy = (
-                ToolSafetyPolicy.from_file(self.safety_policy_path)
-                if self.safety_policy_path
-                else ToolSafetyPolicy.default()
-            )
+            self._safety_policy = (ToolSafetyPolicy.from_file(self.safety_policy_path)
+                                   if self.safety_policy_path else ToolSafetyPolicy.default())
             if self.safety_block_on_review is not None:
                 self._safety_policy.block_on_review = self.safety_block_on_review
         return self._safety_policy

@@ -99,10 +99,8 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
                         if report.blocked:
                             return create_code_execution_result(
                                 stdout="",
-                                stderr=(
-                                    f"SAFETY_GUARD_BLOCKED: {report.summary}\n"
-                                    f"{json.dumps(report.to_dict(), sort_keys=True)}"
-                                ),
+                                stderr=(f"SAFETY_GUARD_BLOCKED: {report.summary}\n"
+                                        f"{json.dumps(report.to_dict(), sort_keys=True)}"),
                             )
                     block_output = await self._execute_code_block(work_dir, block, i)
                     if block_output:
@@ -237,11 +235,8 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
 
     def _get_safety_policy(self) -> ToolSafetyPolicy:
         """Return the configured safety policy."""
-        policy = (
-            ToolSafetyPolicy.from_file(self.safety_policy_path)
-            if self.safety_policy_path
-            else ToolSafetyPolicy.default()
-        )
+        policy = (ToolSafetyPolicy.from_file(self.safety_policy_path)
+                  if self.safety_policy_path else ToolSafetyPolicy.default())
         policy.block_on_review = self.safety_block_on_review
         return policy
 
@@ -253,7 +248,10 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             block.language,
             cwd=str(work_dir),
             tool_name="UnsafeLocalCodeExecutor",
-            tool_metadata={"timeout": self.timeout, "block_index": block_index},
+            tool_metadata={
+                "timeout": self.timeout,
+                "block_index": block_index
+            },
         )
         record_safety_attributes(report)
         if self.safety_audit_log_path:

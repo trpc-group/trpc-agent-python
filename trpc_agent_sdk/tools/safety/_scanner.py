@@ -63,8 +63,7 @@ class ToolScriptSafetyScanner:
                     request.cwd,
                     "Use a working directory outside denied credential or system paths.",
                     "Tool working directory matches a denied path.",
-                )
-            )
+                ))
 
         findings.extend(self._scan_tool_metadata(request.tool_metadata))
         findings.extend(self._scan_custom_rules(request, language))
@@ -123,8 +122,7 @@ class ToolScriptSafetyScanner:
                 env=env or {},
                 tool_name=tool_name,
                 tool_metadata=tool_metadata or {},
-            )
-        )
+            ))
 
     def scan_file(
         self,
@@ -186,8 +184,7 @@ class ToolScriptSafetyScanner:
                             f"timeout={timeout}",
                             "Use a timeout at or below max_timeout_seconds or review the exception.",
                             "Tool timeout exceeds policy threshold.",
-                        )
-                    )
+                        ))
             except (TypeError, ValueError):
                 findings.append(
                     self._finding(
@@ -198,8 +195,7 @@ class ToolScriptSafetyScanner:
                         "timeout=<dynamic>",
                         "Use a numeric timeout before executing the tool.",
                         "Tool timeout is dynamic or invalid.",
-                    )
-                )
+                    ))
 
         max_output_bytes = metadata.get("max_output_bytes")
         if max_output_bytes is not None:
@@ -214,8 +210,7 @@ class ToolScriptSafetyScanner:
                             f"max_output_bytes={max_output_bytes}",
                             "Use a bounded output size at or below max_output_bytes or review the exception.",
                             "Tool output byte limit exceeds policy threshold.",
-                        )
-                    )
+                        ))
             except (TypeError, ValueError):
                 findings.append(
                     self._finding(
@@ -226,8 +221,7 @@ class ToolScriptSafetyScanner:
                         "max_output_bytes=<dynamic>",
                         "Use a numeric output byte limit before executing the tool.",
                         "Tool output byte limit is dynamic or invalid.",
-                    )
-                )
+                    ))
         return findings
 
     def _scan_command_args(self, command: str, command_args: list[str]) -> list[RiskFinding]:
@@ -301,8 +295,7 @@ class ToolScriptSafetyScanner:
                         f"{registered.name}: {type(exc).__name__}: {exc}",
                         "Fix or unregister the failing custom safety rule before executing.",
                         "Custom safety rule raised an exception.",
-                    )
-                )
+                    ))
         return findings
 
     @staticmethod
@@ -350,16 +343,12 @@ class ToolScriptSafetyScanner:
     def _suppress_low_value_unknown_command_reviews(findings: list[RiskFinding]) -> list[RiskFinding]:
         stronger_lines = {
             finding.line
-            for finding in findings
-            if finding.rule_id != "BASH_UNKNOWN_COMMAND_REVIEW"
-            and (
+            for finding in findings if finding.rule_id != "BASH_UNKNOWN_COMMAND_REVIEW" and (
                 finding.decision == Decision.DENY
-                or finding.risk_level in {RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL}
-            )
+                or finding.risk_level in {RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL})
         }
         return [
-            finding
-            for finding in findings
+            finding for finding in findings
             if finding.rule_id != "BASH_UNKNOWN_COMMAND_REVIEW" or finding.line not in stronger_lines
         ]
 
@@ -368,10 +357,8 @@ class ToolScriptSafetyScanner:
         action = "blocked" if blocked else "not blocked"
         if decision == Decision.ALLOW:
             return "Safety scan allowed execution with no findings."
-        return (
-            f"Safety scan returned {decision.value} ({risk_level.value}) with "
-            f"{len(findings)} finding(s); execution is {action}."
-        )
+        return (f"Safety scan returned {decision.value} ({risk_level.value}) with "
+                f"{len(findings)} finding(s); execution is {action}.")
 
     @staticmethod
     def _telemetry_attributes(

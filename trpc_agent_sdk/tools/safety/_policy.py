@@ -137,12 +137,8 @@ class ToolSafetyPolicy:
             pattern_norm = _normalize_path(pattern_text)
             pattern_slash = pattern_norm.replace("\\", "/")
             pattern_name = Path(pattern_slash).name or pattern_slash
-            basename_only_pattern = (
-                "/" not in pattern_text
-                and "\\" not in pattern_text
-                and not pattern_text.startswith("~")
-                and not os.path.isabs(pattern_text)
-            )
+            basename_only_pattern = ("/" not in pattern_text and "\\" not in pattern_text
+                                     and not pattern_text.startswith("~") and not os.path.isabs(pattern_text))
 
             if pattern_text == "/" and candidate_slash in {"/", "\\"}:
                 return True
@@ -206,13 +202,13 @@ def validate_policy_data(data: dict[str, Any], *, strict: bool = False) -> dict[
                 _policy_issue(f"{key} must be a non-negative integer", strict)
                 continue
         elif key in {
-            "deny_dependency_install",
-            "deny_privilege_escalation",
-            "review_process_execution",
-            "review_unknown_network",
-            "review_dynamic_code",
-            "review_shell_features",
-            "block_on_review",
+                "deny_dependency_install",
+                "deny_privilege_escalation",
+                "review_process_execution",
+                "review_unknown_network",
+                "review_dynamic_code",
+                "review_shell_features",
+                "block_on_review",
         }:
             if not isinstance(value, bool):
                 _policy_issue(f"{key} must be a boolean", strict)
