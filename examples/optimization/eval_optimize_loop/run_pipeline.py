@@ -53,6 +53,8 @@ def run_pipeline(
     trace: bool = False,
     sdk_call_agent: str | None = None,
     update_source: bool = False,
+    gate_config_path: str | Path | None = None,
+    target_prompts: list[str] | None = None,
 ) -> OptimizationReport:
     """Run baseline eval, fake optimization, validation gate, and reports."""
 
@@ -68,10 +70,13 @@ def run_pipeline(
         optimizer_config_dict = _read_json_object_for_audit(optimizer_config_path)
         baseline_prompt = load_prompt(prompt_path)
         sdk_artifact_dir = Path(output_dir) / "sdk_optimizer"
+        wrapper_gate_config = _load_sdk_gate_config(gate_config_path)
+        target_prompt_paths = _parse_target_prompt_paths(target_prompts, default_prompt_path=prompt_path)
         sdk_backend = SDKBackend(
             prompt_path=prompt_path,
             call_agent_path=sdk_call_agent,
             update_source=update_source,
+            target_prompt_paths=target_prompt_paths,
         )
         candidates = sdk_backend.optimize(
             baseline_prompt=baseline_prompt,
@@ -93,6 +98,9 @@ def run_pipeline(
             train_case_count=_count_cases(train_path),
             validation_case_count=_count_cases(val_path),
             optimizer_config_dict=optimizer_config_dict,
+            gate_config=wrapper_gate_config,
+            gate_config_path=gate_config_path,
+            target_prompt_paths=target_prompt_paths,
         )
         write_reports(report, output_dir)
         return report
@@ -323,6 +331,9 @@ def _build_sdk_report(
     train_case_count: int | None,
     validation_case_count: int | None,
     optimizer_config_dict: dict[str, Any],
+    gate_config: dict[str, float],
+    gate_config_path: str | Path | None,
+    target_prompt_paths: dict[str, str | Path],
 ) -> OptimizationReport:
     input_hashes = _input_hashes(
         train_path=train_path,
@@ -340,7 +351,16 @@ def _build_sdk_report(
     )
     total_llm_cost = _summary_float(sdk_summary, "total_llm_cost", 0.0)
     duration_seconds = _summary_float(sdk_summary, "duration_seconds", 0.0)
-    gate_config = _sdk_gate_config(optimizer_config_dict)
+    availability = {
+        "aggregate_validation_result": True,
+        "full_train_eval_result": False,
+        "full_per_case_validation_delta": False,
+    }
+    score_explanation = (
+        "SDK mode uses OptimizeResult aggregate validation metrics. "
+        "The full train EvalResult compatibility field is unavailable and keeps score 0.0; "
+        "full per-case validation deltas are unavailable and listed in not_applied_checks."
+    )
 
     baseline_train = EvalResult(prompt_id="baseline", split="train", score=0.0, passed=False, cost=0.0, cases=[])
     baseline_validation = EvalResult(
@@ -380,6 +400,11 @@ def _build_sdk_report(
         candidate.candidate_id: hashlib.sha256(candidate.prompt.encode("utf-8")).hexdigest()
         for candidate in candidates
     }
+    field_prompt_hashes = _candidate_prompt_hashes_by_field(candidates, sdk_summary)
+    target_prompt_hashes = {
+        name: sha256_file(path)
+        for name, path in target_prompt_paths.items()
+    }
     audit = {
         "seed": None,
         "duration_seconds": duration_seconds,
@@ -393,6 +418,12 @@ def _build_sdk_report(
         },
         "prompt_hash": input_hashes["prompt"],
         "candidate_prompt_hashes": prompt_hashes,
+        "candidate_prompt_hashes_by_field": field_prompt_hashes,
+        "target_prompt_hashes": target_prompt_hashes,
+        "sdk_result_availability": availability,
+        "sdk_score_explanation": score_explanation,
+        "wrapper_gate_config": dict(gate_config),
+        "wrapper_gate_config_path": str(gate_config_path) if gate_config_path else None,
         "total_run_cost": total_llm_cost,
         "cost": {
             "baseline": 0.0,
@@ -417,6 +448,8 @@ def _build_sdk_report(
             prompt_path=prompt_path,
             output_dir=output_dir,
             update_source=update_source,
+            gate_config_path=gate_config_path,
+            target_prompt_paths=target_prompt_paths,
         ),
     }
     run = {
@@ -429,6 +462,8 @@ def _build_sdk_report(
         "validation_cases": validation_case_count,
         "update_source": update_source,
         "sdk_artifact_dir": audit["sdk_artifact_dir"],
+        "sdk_availability": availability,
+        "wrapper_gate_config_path": str(gate_config_path) if gate_config_path else None,
         "reproducibility_command": audit["reproducibility_command"],
         "paths": {
             "train": str(train_path),
@@ -436,6 +471,7 @@ def _build_sdk_report(
             "optimizer": str(optimizer_config_path),
             "prompt": str(prompt_path),
         },
+        "target_prompts": {name: str(path) for name, path in target_prompt_paths.items()},
         "prompt_source": str(prompt_path),
     }
     gate_decisions = [
@@ -469,6 +505,8 @@ def _sdk_reproducibility_command(
     prompt_path: str | Path,
     output_dir: str | Path,
     update_source: bool,
+    gate_config_path: str | Path | None,
+    target_prompt_paths: dict[str, str | Path],
 ) -> str:
     command = (
         "python examples/optimization/eval_optimize_loop/run_pipeline.py "
@@ -476,6 +514,11 @@ def _sdk_reproducibility_command(
         f"--optimizer-config {optimizer_config_path} --prompt {prompt_path} "
         f"--output-dir {output_dir} --sdk-call-agent module:function"
     )
+    for name, path in target_prompt_paths.items():
+        if not (name == "system_prompt" and Path(path) == Path(prompt_path) and len(target_prompt_paths) == 1):
+            command += f" --target-prompt {name}={path}"
+    if gate_config_path:
+        command += f" --gate-config {gate_config_path}"
     if update_source:
         command += " --update-source"
     return command
@@ -546,19 +589,25 @@ def _sdk_gate_decision(
     )
 
 
-def _sdk_gate_config(optimizer_config_dict: dict[str, Any]) -> dict[str, float]:
-    gate_payload = optimizer_config_dict.get("gate")
+def _load_sdk_gate_config(gate_config_path: str | Path | None) -> dict[str, float]:
+    if gate_config_path is None:
+        gate_payload: dict[str, Any] = {}
+        path_text = "--gate-config"
+    else:
+        payload = _read_json_object_for_audit(gate_config_path)
+        gate_payload = payload.get("gate", payload)
+        path_text = str(gate_config_path)
     if gate_payload is None:
         gate_payload = {}
     if not isinstance(gate_payload, dict):
-        raise ValueError("optimizer config field 'gate' must be an object when present")
+        raise ValueError(f"{path_text}: field 'gate' must be an object when present")
 
     min_improvement = gate_payload.get("min_val_score_improvement", 0.01)
     max_cost = gate_payload.get("max_total_cost", 1.0)
     if not isinstance(min_improvement, (int, float)) or min_improvement < 0:
-        raise ValueError("optimizer config field 'gate.min_val_score_improvement' must be a non-negative number")
+        raise ValueError(f"{path_text}: field 'gate.min_val_score_improvement' must be a non-negative number")
     if not isinstance(max_cost, (int, float)) or max_cost < 0:
-        raise ValueError("optimizer config field 'gate.max_total_cost' must be a non-negative number")
+        raise ValueError(f"{path_text}: field 'gate.max_total_cost' must be a non-negative number")
     return {
         "min_val_score_improvement": float(min_improvement),
         "max_total_cost": float(max_cost),
@@ -575,6 +624,44 @@ def _summary_float(summary: dict[str, Any], key: str, default: float) -> float:
         return default
 
 
+def _parse_target_prompt_paths(
+    target_prompts: list[str] | None,
+    *,
+    default_prompt_path: str | Path,
+) -> dict[str, str | Path]:
+    if not target_prompts:
+        return {"system_prompt": default_prompt_path}
+    parsed: dict[str, str | Path] = {}
+    for item in target_prompts:
+        if "=" not in item:
+            raise ValueError("--target-prompt must use name=path format")
+        name, path = item.split("=", 1)
+        name = name.strip()
+        path = path.strip()
+        if not name or not path:
+            raise ValueError("--target-prompt must use non-empty name=path values")
+        if name in parsed:
+            raise ValueError(f"--target-prompt duplicate field name {name!r}")
+        parsed[name] = Path(path)
+    return parsed
+
+
+def _candidate_prompt_hashes_by_field(
+    candidates: list[CandidatePrompt],
+    sdk_summary: dict[str, Any],
+) -> dict[str, dict[str, str]]:
+    best_prompts = sdk_summary.get("best_prompts")
+    if not isinstance(best_prompts, dict):
+        return {}
+    return {
+        candidate.candidate_id: {
+            str(name): hashlib.sha256(str(prompt).encode("utf-8")).hexdigest()
+            for name, prompt in best_prompts.items()
+        }
+        for candidate in candidates
+    }
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--train", default=str(DEFAULT_TRAIN), help="Path to train.evalset.json")
@@ -588,6 +675,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--trace", action="store_true", help="Persist fake model/judge trace details per case")
     parser.add_argument("--sdk-call-agent", help="Async call_agent target for SDK mode, as module:function")
     parser.add_argument("--update-source", action="store_true", help="Allow SDK optimizer to write back source prompt")
+    parser.add_argument("--gate-config", help="Wrapper gate config for SDK mode; separate from SDK optimizer config")
+    parser.add_argument(
+        "--target-prompt",
+        action="append",
+        help="SDK target prompt path in name=path format. May be repeated. Defaults to system_prompt=--prompt.",
+    )
     return parser.parse_args(argv)
 
 
@@ -639,6 +732,8 @@ def main(argv: list[str] | None = None) -> OptimizationReport:
         trace=args.trace,
         sdk_call_agent=args.sdk_call_agent,
         update_source=args.update_source,
+        gate_config_path=args.gate_config,
+        target_prompts=args.target_prompt,
     )
     output_dir = Path(args.output_dir)
     print(f"Wrote {output_dir / 'optimization_report.json'}")

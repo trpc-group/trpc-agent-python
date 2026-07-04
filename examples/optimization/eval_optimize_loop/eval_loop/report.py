@@ -127,6 +127,20 @@ def render_markdown(report: OptimizationReport) -> str:
         "Update source prompt: "
         + ("yes" if report.run.get("update_source") else "no (default)"),
         "",
+    ])
+    if report.run.get("mode") == "sdk":
+        availability = report.audit.get("sdk_result_availability", {})
+        lines.extend([
+            "SDK mode uses OptimizeResult aggregate validation metrics. "
+            "Full train scores and full per-case validation deltas are not exposed by the SDK result.",
+            "",
+            "SDK availability: "
+            f"aggregate_validation_result={availability.get('aggregate_validation_result')}, "
+            f"full_train_eval_result={availability.get('full_train_eval_result')}, "
+            f"full_per_case_validation_delta={availability.get('full_per_case_validation_delta')}.",
+            "",
+        ])
+    lines.extend([
         "",
         "## Gate Reasons",
         "",

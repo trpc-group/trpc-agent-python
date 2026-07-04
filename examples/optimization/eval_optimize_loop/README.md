@@ -66,17 +66,44 @@ python examples/optimization/eval_optimize_loop/run_pipeline.py \
   --output-dir /tmp/eval-optimize-loop-sdk
 ```
 
+Optional wrapper gate and multi-prompt form:
+
+```bash
+python examples/optimization/eval_optimize_loop/run_pipeline.py \
+  --mode sdk \
+  --train path/to/sdk_train.evalset.json \
+  --val path/to/sdk_val.evalset.json \
+  --optimizer-config path/to/sdk_optimizer.json \
+  --gate-config path/to/wrapper_gate.json \
+  --target-prompt system_prompt=prompts/system.md \
+  --target-prompt router_prompt=prompts/router.md \
+  --sdk-call-agent your_package.your_module:call_agent \
+  --output-dir /tmp/eval-optimize-loop-sdk
+```
+
 `--sdk-call-agent` must point to an async callable compatible with
 `AgentOptimizer.optimize(call_agent=...)`. Configure any real model credentials
-needed by that callable. SDK mode never silently falls back to fake mode. When
-the SDK optimizer returns a best prompt, this wrapper maps `OptimizeResult`
+needed by that callable. SDK mode never silently falls back to fake mode.
+
+SDK optimizer config and wrapper gate config are intentionally separate.
+`--optimizer-config` is passed unchanged to `AgentOptimizer.optimize`, so it must
+follow the SDK `OptimizeConfigFile` schema. Put wrapper-only gate settings in
+`--gate-config` (for example `{"gate": {"min_val_score_improvement": 0.05,
+"max_total_cost": 1.0}}`). If `--gate-config` is omitted, the wrapper uses the
+same default aggregate gate values as the fake example.
+
+Fake mode is the complete per-case closed loop. SDK mode is the real
+`AgentOptimizer` / `TargetPrompt` path with an aggregate wrapper gate. When the
+SDK optimizer returns a best prompt, this wrapper maps `OptimizeResult`
 aggregate fields into the JSON/Markdown report: baseline/best pass rate,
-pass-rate improvement, metric breakdowns, token usage, duration, LLM cost, and
-round summaries. SDK mode applies an aggregate gate with
+pass-rate improvement, metric breakdowns, token usage, duration, LLM cost,
+all `best_prompts`, and round summaries. SDK mode applies
 `gate_status: partial_applied`: it checks `status == SUCCEEDED`, validation
 improvement against `gate.min_val_score_improvement`, and total LLM cost against
-`gate.max_total_cost`. Per-case checks that require full validation case scores
-are listed in `not_applied_checks` instead of being silently treated as passed.
+`gate.max_total_cost`. Protected-case regression, new-hard-failure, per-case
+delta, and per-case score-drop checks are not claimed in SDK mode unless the SDK
+exposes full per-case validation scores; they are listed in
+`not_applied_checks`.
 
 ## Source Prompt Writes
 

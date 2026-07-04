@@ -209,9 +209,16 @@ def test_run_pipeline_mode_sdk_writes_report_without_fallback(tmp_path: Path, mo
         "total": 125,
     }
     assert report.audit["sdk_result_summary"]["rounds"][0]["validation_pass_rate"] == 0.75
+    assert report.audit["sdk_result_availability"] == {
+        "aggregate_validation_result": True,
+        "full_train_eval_result": False,
+        "full_per_case_validation_delta": False,
+    }
+    assert "train EvalResult compatibility field is unavailable" in report.audit["sdk_score_explanation"]
     assert "partial_applied" in payload
     assert "sdk_best (partial_applied)" in markdown
     assert "not applied checks: per_case_delta" in markdown
+    assert "SDK mode uses OptimizeResult aggregate validation metrics" in markdown
     assert (output_dir / "runs" / "eval_optimize_loop_sdk" / "input_hashes.json").is_file()
     assert (output_dir / "runs" / "eval_optimize_loop_sdk" / "prompt_diffs" / "sdk_best.diff").is_file()
     assert calls["update_source"] is False
@@ -248,7 +255,10 @@ def test_run_pipeline_mode_sdk_accepts_sdk_shaped_inputs_without_fake_schema(tmp
     assert report.selected_candidate == "sdk_best"
 
 
-def test_run_pipeline_mode_sdk_rejects_low_aggregate_validation_improvement(tmp_path: Path, monkeypatch):
+def test_run_pipeline_mode_sdk_uses_default_wrapper_gate_when_sdk_config_has_no_gate(
+    tmp_path: Path,
+    monkeypatch,
+):
     _install_fake_sdk(
         monkeypatch,
         best_prompt="optimized prompt",
@@ -257,12 +267,13 @@ def test_run_pipeline_mode_sdk_rejects_low_aggregate_validation_improvement(tmp_
         pass_rate_improvement=0.005,
         total_llm_cost=0.123,
     )
+    optimizer_path = _write_sdk_optimizer_config(tmp_path)
 
     report = run_pipeline(
         mode="sdk",
         train_path=DEFAULT_TRAIN,
         val_path=DEFAULT_VAL,
-        optimizer_config_path=DEFAULT_OPTIMIZER_CONFIG,
+        optimizer_config_path=optimizer_path,
         prompt_path=DEFAULT_PROMPT,
         output_dir=tmp_path / "sdk_run",
         sdk_call_agent="fake_call_agent_module:call_agent",
@@ -276,7 +287,39 @@ def test_run_pipeline_mode_sdk_rejects_low_aggregate_validation_improvement(tmp_
     assert any("validation improvement" in reason for reason in decision.reasons)
 
 
-def test_run_pipeline_mode_sdk_rejects_cost_over_budget(tmp_path: Path, monkeypatch):
+def test_run_pipeline_mode_sdk_custom_gate_rejects_low_aggregate_validation_improvement(
+    tmp_path: Path,
+    monkeypatch,
+):
+    _install_fake_sdk(
+        monkeypatch,
+        best_prompt="optimized prompt",
+        baseline_pass_rate=0.5,
+        best_pass_rate=0.75,
+        pass_rate_improvement=0.25,
+        total_llm_cost=0.123,
+    )
+    gate_path = _write_gate_config(tmp_path, min_val_score_improvement=0.3, max_total_cost=1.0)
+
+    report = run_pipeline(
+        mode="sdk",
+        train_path=DEFAULT_TRAIN,
+        val_path=DEFAULT_VAL,
+        optimizer_config_path=_write_sdk_optimizer_config(tmp_path),
+        prompt_path=DEFAULT_PROMPT,
+        output_dir=tmp_path / "sdk_run",
+        sdk_call_agent="fake_call_agent_module:call_agent",
+        gate_config_path=gate_path,
+    )
+
+    decision = report.gate_decisions[0]
+    assert report.selected_candidate is None
+    assert decision.accepted is False
+    assert decision.validation_score_delta == 0.25
+    assert any("validation improvement" in reason for reason in decision.reasons)
+
+
+def test_run_pipeline_mode_sdk_custom_gate_rejects_cost_over_budget(tmp_path: Path, monkeypatch):
     _install_fake_sdk(
         monkeypatch,
         best_prompt="optimized prompt",
@@ -285,15 +328,17 @@ def test_run_pipeline_mode_sdk_rejects_cost_over_budget(tmp_path: Path, monkeypa
         pass_rate_improvement=0.25,
         total_llm_cost=2.0,
     )
+    gate_path = _write_gate_config(tmp_path, min_val_score_improvement=0.01, max_total_cost=0.05)
 
     report = run_pipeline(
         mode="sdk",
         train_path=DEFAULT_TRAIN,
         val_path=DEFAULT_VAL,
-        optimizer_config_path=DEFAULT_OPTIMIZER_CONFIG,
+        optimizer_config_path=_write_sdk_optimizer_config(tmp_path),
         prompt_path=DEFAULT_PROMPT,
         output_dir=tmp_path / "sdk_run",
         sdk_call_agent="fake_call_agent_module:call_agent",
+        gate_config_path=gate_path,
     )
 
     decision = report.gate_decisions[0]
@@ -302,6 +347,79 @@ def test_run_pipeline_mode_sdk_rejects_cost_over_budget(tmp_path: Path, monkeypa
     assert decision.gate_status == "partial_applied"
     assert decision.total_run_cost == 2.0
     assert any("cost" in reason for reason in decision.reasons)
+
+
+def test_run_pipeline_mode_sdk_does_not_pass_wrapper_gate_config_to_agent_optimizer(
+    tmp_path: Path,
+    monkeypatch,
+):
+    calls = _install_fake_sdk(monkeypatch, best_prompt="optimized prompt")
+    optimizer_path = _write_sdk_optimizer_config(tmp_path)
+    gate_path = _write_gate_config(tmp_path, min_val_score_improvement=0.5, max_total_cost=0.05)
+
+    run_pipeline(
+        mode="sdk",
+        train_path=DEFAULT_TRAIN,
+        val_path=DEFAULT_VAL,
+        optimizer_config_path=optimizer_path,
+        prompt_path=DEFAULT_PROMPT,
+        output_dir=tmp_path / "sdk_run",
+        sdk_call_agent="fake_call_agent_module:call_agent",
+        gate_config_path=gate_path,
+    )
+
+    assert Path(calls["config_path"]).resolve() == optimizer_path.resolve()
+    assert "gate" not in json.loads(Path(calls["config_path"]).read_text(encoding="utf-8"))
+    assert json.loads(gate_path.read_text(encoding="utf-8"))["gate"]["max_total_cost"] == 0.05
+
+
+def test_run_pipeline_mode_sdk_registers_multiple_target_prompt_paths(tmp_path: Path, monkeypatch):
+    calls = _install_fake_sdk(
+        monkeypatch,
+        best_prompts={
+            "system_prompt": "optimized system",
+            "router_prompt": "optimized router",
+            "skill_prompt": "optimized skill",
+        },
+    )
+    system_path = tmp_path / "system.txt"
+    router_path = tmp_path / "router.txt"
+    skill_path = tmp_path / "skill.txt"
+    system_path.write_text("baseline system", encoding="utf-8")
+    router_path.write_text("baseline router", encoding="utf-8")
+    skill_path.write_text("baseline skill", encoding="utf-8")
+
+    report = run_pipeline(
+        mode="sdk",
+        train_path=DEFAULT_TRAIN,
+        val_path=DEFAULT_VAL,
+        optimizer_config_path=_write_sdk_optimizer_config(tmp_path),
+        prompt_path=system_path,
+        output_dir=tmp_path / "sdk_run",
+        sdk_call_agent="fake_call_agent_module:call_agent",
+        target_prompts=[
+            f"system_prompt={system_path}",
+            f"router_prompt={router_path}",
+            f"skill_prompt={skill_path}",
+        ],
+    )
+
+    assert calls["target_prompt"].paths == [
+        ("system_prompt", str(system_path)),
+        ("router_prompt", str(router_path)),
+        ("skill_prompt", str(skill_path)),
+    ]
+    assert report.audit["sdk_result_summary"]["best_prompts"] == {
+        "system_prompt": "optimized system",
+        "router_prompt": "optimized router",
+        "skill_prompt": "optimized skill",
+    }
+    assert "router_prompt" in report.candidates[0]["candidate"].prompt_diff
+    assert set(report.audit["candidate_prompt_hashes_by_field"]["sdk_best"]) == {
+        "system_prompt",
+        "router_prompt",
+        "skill_prompt",
+    }
 
 
 def test_run_pipeline_mode_sdk_passes_update_source_true(tmp_path: Path, monkeypatch):
@@ -337,7 +455,8 @@ def test_run_pipeline_mode_sdk_missing_call_agent_is_not_fake_fallback(tmp_path:
 def _install_fake_sdk(
     monkeypatch,
     *,
-    best_prompt: str,
+    best_prompt: str | None = None,
+    best_prompts: dict[str, str] | None = None,
     status: str = "SUCCEEDED",
     baseline_pass_rate: float = 0.5,
     best_pass_rate: float = 0.75,
@@ -359,8 +478,11 @@ def _install_fake_sdk(
         @staticmethod
         async def optimize(**kwargs):
             calls.update(kwargs)
+            result_prompts = best_prompts if best_prompts is not None else {
+                "system_prompt": "optimized prompt" if best_prompt is None else best_prompt
+            }
             return types.SimpleNamespace(
-                best_prompts={"system_prompt": best_prompt},
+                best_prompts=result_prompts,
                 status=status,
                 baseline_pass_rate=baseline_pass_rate,
                 best_pass_rate=best_pass_rate,
@@ -397,3 +519,34 @@ def _install_fake_sdk(
     call_agent_module.call_agent = call_agent
     monkeypatch.setitem(sys.modules, "fake_call_agent_module", call_agent_module)
     return calls
+
+
+def _write_sdk_optimizer_config(tmp_path: Path) -> Path:
+    path = tmp_path / "sdk_optimizer.json"
+    path.write_text(
+        json.dumps({
+            "evaluate": {"metrics": []},
+            "optimize": {"algorithm": {"name": "gepa_reflective"}},
+        }),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _write_gate_config(
+    tmp_path: Path,
+    *,
+    min_val_score_improvement: float,
+    max_total_cost: float,
+) -> Path:
+    path = tmp_path / "wrapper_gate.json"
+    path.write_text(
+        json.dumps({
+            "gate": {
+                "min_val_score_improvement": min_val_score_improvement,
+                "max_total_cost": max_total_cost,
+            }
+        }),
+        encoding="utf-8",
+    )
+    return path

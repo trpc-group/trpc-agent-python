@@ -54,6 +54,7 @@ class SDKBackend:
     prompt_path: str | Path
     call_agent_path: str | None = None
     update_source: bool = False
+    target_prompt_paths: dict[str, str | Path] | None = None
     last_result: Any | None = None
     last_result_summary: dict[str, Any] | None = None
     last_artifact_dir: str | None = None
@@ -104,7 +105,10 @@ class SDKBackend:
         except Exception as exc:  # pragma: no cover - depends on optional SDK import health
             raise ValueError(f"sdk mode could not import AgentOptimizer/TargetPrompt: {exc}") from exc
 
-        target_prompt = TargetPrompt().add_path("system_prompt", str(self.prompt_path))
+        target_prompt_paths = self._target_prompt_paths()
+        target_prompt = TargetPrompt()
+        for name, path in target_prompt_paths.items():
+            target_prompt.add_path(name, str(path))
         result = await AgentOptimizer.optimize(
             config_path=str(optimizer_config_path),
             call_agent=call_agent,
@@ -121,19 +125,21 @@ class SDKBackend:
         self.last_result = result
         self.last_result_summary = _summarize_sdk_result(result)
         self.last_artifact_dir = str(output_dir)
+        best_prompts = dict(getattr(result, "best_prompts", {}) or {})
+        baseline_prompts = _read_prompt_bundle(target_prompt_paths)
         return [
             CandidatePrompt(
                 candidate_id="sdk_best",
-                prompt=best_prompt,
+                prompt=_render_prompt_bundle(best_prompts),
                 rationale="Best prompt returned by AgentOptimizer.optimize.",
-                prompt_diff=make_unified_diff(
-                    baseline_prompt,
-                    best_prompt,
-                    before_name="baseline_system_prompt.txt",
-                    after_name="sdk_best/system_prompt.txt",
-                ),
+                prompt_diff=_render_prompt_bundle_diff(baseline_prompts, best_prompts),
             )
         ]
+
+    def _target_prompt_paths(self) -> dict[str, str | Path]:
+        if self.target_prompt_paths:
+            return dict(self.target_prompt_paths)
+        return {"system_prompt": self.prompt_path}
 
 
 def _load_call_agent(path: str):
@@ -171,6 +177,8 @@ def _summarize_sdk_result(result: Any) -> dict[str, Any]:
         "total_token_usage": _safe_jsonable(getattr(result, "total_token_usage", {})),
         "duration_seconds": _safe_jsonable(getattr(result, "duration_seconds", 0.0)),
         "total_rounds": _safe_jsonable(getattr(result, "total_rounds", 0)),
+        "baseline_prompts": _safe_jsonable(getattr(result, "baseline_prompts", {})),
+        "best_prompts": _safe_jsonable(getattr(result, "best_prompts", {})),
         "rounds": [
             {
                 "validation_pass_rate": _safe_jsonable(getattr(round_record, "validation_pass_rate", None)),
@@ -197,3 +205,40 @@ def _safe_jsonable(value: Any) -> Any:
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     return repr(value)
+
+
+def _read_prompt_bundle(paths: dict[str, str | Path]) -> dict[str, str]:
+    return {
+        name: Path(path).read_text(encoding="utf-8")
+        for name, path in paths.items()
+    }
+
+
+def _render_prompt_bundle(prompts: dict[str, str]) -> str:
+    if set(prompts) == {"system_prompt"}:
+        return prompts["system_prompt"]
+    sections = []
+    for name in sorted(prompts):
+        sections.append(f"## {name}\n\n{prompts[name]}")
+    return "\n\n".join(sections)
+
+
+def _render_prompt_bundle_diff(baseline_prompts: dict[str, str], best_prompts: dict[str, str]) -> str:
+    if set(baseline_prompts) == {"system_prompt"} and set(best_prompts) == {"system_prompt"}:
+        return make_unified_diff(
+            baseline_prompts.get("system_prompt", ""),
+            best_prompts.get("system_prompt", ""),
+            before_name="baseline_system_prompt.txt",
+            after_name="sdk_best/system_prompt.txt",
+        )
+    diffs = []
+    for name in sorted(set(baseline_prompts) | set(best_prompts)):
+        diffs.append(
+            make_unified_diff(
+                baseline_prompts.get(name, ""),
+                best_prompts.get(name, ""),
+                before_name=f"baseline/{name}.txt",
+                after_name=f"sdk_best/{name}.txt",
+            )
+        )
+    return "\n\n".join(diffs)
