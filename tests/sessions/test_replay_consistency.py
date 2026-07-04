@@ -698,15 +698,6 @@ def test_replay_mutation_detection(mutation: str):
     assert unallowed_diffs(diffs), f"{mutation} was not detected"
 
 
-def test_mutation_detection():
-    for mutation in MUTATIONS:
-        clean = _clean_mutation_snapshot()
-        mutated = copy.deepcopy(clean)
-        mutated["backend"] = "sqlite"
-        _mutate_snapshot(mutation, mutated)
-        assert unallowed_diffs(recursive_diff(clean, mutated)), f"{mutation} was not detected"
-
-
 @pytest.mark.parametrize(
     ("mutation", "expected_path"),
     [
