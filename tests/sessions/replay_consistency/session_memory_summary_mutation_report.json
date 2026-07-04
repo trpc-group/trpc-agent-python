@@ -1764,6 +1764,7 @@
     "mutation_count": 80,
     "undetected_mutations": []
   },
+  "report_kind": "mutation_replay",
   "schema_version": 1,
   "unallowed_diff_count": 80,
   "unallowed_diffs": [
@@ -3493,5 +3494,5 @@
       "summary_id": "summary:session-014:latest"
     }
   ],
-  "unexpected_diff_count": 80
+  "unexpected_diff_count": 0
 }

@@ -88,6 +88,7 @@ def write_report(
                 unallowed_diffs.append(serialized)
 
     mutation_results = mutation_results or []
+    report_kind = "mutation_replay" if mutation_results else "normal_replay"
     undetected_mutations = []
     detected_count = 0
     for result in mutation_results:
@@ -111,6 +112,7 @@ def write_report(
 
     report = {
         "schema_version": 1,
+        "report_kind": report_kind,
         "generated_at": generated_at,
         "generated_by": "tests/sessions/test_replay_consistency.py",
         "backend_pairs": backend_pairs,
@@ -119,7 +121,7 @@ def write_report(
         "cases": cases,
         "allowed_diff_count": len(allowed_diffs),
         "unallowed_diff_count": len(unallowed_diffs),
-        "unexpected_diff_count": len(unallowed_diffs),
+        "unexpected_diff_count": normal_unexpected_count,
         "allowed_diffs": allowed_diffs,
         "unallowed_diffs": unallowed_diffs,
         "diffs": diffs,

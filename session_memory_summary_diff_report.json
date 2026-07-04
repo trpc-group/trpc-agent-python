@@ -153,6 +153,7 @@
     "mutation_count": 0,
     "undetected_mutations": []
   },
+  "report_kind": "normal_replay",
   "schema_version": 1,
   "unallowed_diff_count": 0,
   "unallowed_diffs": [],

@@ -31,8 +31,10 @@ from .replay_consistency.comparator import DiffEntry
 from .replay_consistency.comparator import compare_snapshot_pair
 from .replay_consistency.comparator import recursive_diff
 from .replay_consistency.comparator import unallowed_diffs
+from .replay_consistency.mutations import MUTATION_SECTION
 from .replay_consistency.mutations import SYNTHETIC_MUTATIONS as MUTATIONS
 from .replay_consistency.mutations import mutate_snapshot
+from .replay_consistency.mutations import mutations_for_case
 from .replay_consistency.normalizer import Snapshot
 from .replay_consistency.normalizer import normalize_snapshot
 from .replay_consistency.report import write_report
@@ -450,7 +452,12 @@ async def test_replay_consistency_inmemory_vs_sqlite(tmp_path: Path):
                 write_report(report_path, comparison_results)
                 pytest.fail(f"Replay diff detected for {case.name}: {[asdict(diff) for diff in unexpected]}")
 
-    write_report(report_path, comparison_results)
+    report = write_report(report_path, comparison_results)
+    assert report["report_kind"] == "normal_replay"
+    assert report["false_positive_summary"] == {
+        "normal_case_count": len(cases),
+        "unexpected_diff_count": 0,
+    }
 
 
 def test_replay_case_count_and_names():
@@ -461,11 +468,9 @@ def test_replay_case_count_and_names():
 
 def test_replay_case_manifest_matches_registry():
     manifest_path = Path(__file__).parent / "replay_cases" / "session_memory_summary_replay_cases.jsonl"
-    manifest_cases = [
-        json.loads(line)
-        for line in manifest_path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    manifest_lines = manifest_path.read_text(encoding="utf-8").splitlines()
+    assert manifest_lines
+    manifest_cases = [json.loads(line) for line in manifest_lines]
     assert [case["name"] for case in manifest_cases] == [case.name for case in replay_cases()]
     for case in manifest_cases:
         assert case["description"]
@@ -523,6 +528,7 @@ def test_report_contract(tmp_path: Path):
     for field in DiffEntry.__dataclass_fields__:
         assert field in serialized
     assert loaded["schema_version"] == 1
+    assert loaded["report_kind"] == "normal_replay"
     assert loaded["generated_at"] == "unit-test"
     assert loaded["backend_pairs"] == ["inmemory_vs_sqlite"]
     assert loaded["backend_statuses"]
@@ -546,6 +552,145 @@ def test_report_contract(tmp_path: Path):
         "normal_case_count": 1,
         "unexpected_diff_count": 1,
     }
+
+
+def test_checked_in_reports_are_valid_json():
+    report_path = (
+        Path(__file__).parent
+        / "replay_consistency"
+        / "session_memory_summary_mutation_report.json"
+    )
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["schema_version"] == 1
+    assert report["report_kind"] == "mutation_replay"
+    assert report["unexpected_diff_count"] == 0
+    assert report["false_positive_summary"] == {
+        "normal_case_count": 0,
+        "unexpected_diff_count": 0,
+    }
+    mutation_summary = report["mutation_summary"]
+    assert mutation_summary["mutation_count"] == mutation_summary["detected_count"]
+    assert mutation_summary["undetected_mutations"] == []
+    assert any(
+        diff.get("mutation") == "summary_wrong_session_id"
+        and diff["section"] == "summary"
+        and diff["path"] == "summary.metadata.session_id"
+        for diff in report["unallowed_diffs"]
+    )
+    assert any(
+        diff.get("mutation") == "change_tool_response"
+        and "function_responses" in diff["path"]
+        for diff in report["unallowed_diffs"]
+    )
+
+
+def _assert_real_mutation_diff_context(
+    *,
+    case: ReplayCase,
+    mutation: str,
+    clean_snapshot: dict[str, Any],
+    diffs: list[DiffEntry],
+) -> list[DiffEntry]:
+    unexpected = unallowed_diffs(diffs)
+    assert unexpected, f"{case.name}/{mutation} was not detected"
+
+    for diff in unexpected:
+        assert diff.case_name == case.name
+        assert diff.session_id == clean_snapshot["session_id"]
+        assert diff.section
+        assert diff.path
+        assert hasattr(diff, "left")
+        assert hasattr(diff, "right")
+
+    expected_section = MUTATION_SECTION[mutation]
+    matching = [diff for diff in unexpected if diff.section == expected_section]
+    assert matching, f"{case.name}/{mutation} did not report section {expected_section}"
+    report_diffs = matching
+
+    if mutation == "drop_summary":
+        report_diffs = [diff for diff in matching if diff.path == "summary"]
+        assert report_diffs
+    elif mutation == "overwrite_summary_with_stale_text":
+        report_diffs = [diff for diff in matching if diff.path == "summary.text"]
+        assert report_diffs
+    elif mutation == "summary_wrong_session_id":
+        report_diffs = [
+            diff
+            for diff in matching
+            if diff.path == "summary.metadata.session_id"
+        ]
+        assert report_diffs
+
+    if mutation == "change_tool_args":
+        report_diffs = [
+            diff
+            for diff in matching
+            if diff.event_index is not None and "function_calls" in diff.path
+        ]
+        assert report_diffs
+    elif mutation == "change_tool_response":
+        report_diffs = [
+            diff
+            for diff in matching
+            if diff.event_index is not None and "function_responses" in diff.path
+        ]
+        assert report_diffs
+    elif expected_section == "memories":
+        assert all(diff.section == "memories" for diff in matching)
+        report_diffs = [
+            diff
+            for diff in matching
+            if diff.memory_index is not None or diff.path == "memories"
+        ]
+        assert report_diffs
+    elif expected_section == "state":
+        assert all(diff.section == "state" and diff.path.startswith("state.") for diff in matching)
+    return report_diffs
+
+
+@pytest.mark.asyncio
+async def test_real_replay_snapshot_mutation_detection_reports_precise_paths(tmp_path: Path):
+    mutation_results: list[dict[str, Any]] = []
+
+    for case in replay_cases():
+        clean = await _run_real_inmemory_snapshot(tmp_path / f"real-mutation-{case.name}", case)
+        for mutation in mutations_for_case(case):
+            mutated = copy.deepcopy(clean)
+            mutated["backend"] = "sqlite"
+            mutate_snapshot(mutation, mutated)
+            diffs = recursive_diff(clean, mutated)
+            unexpected = unallowed_diffs(diffs)
+            report_diffs = _assert_real_mutation_diff_context(
+                case=case,
+                mutation=mutation,
+                clean_snapshot=clean,
+                diffs=diffs,
+            )
+            mutation_results.append(
+                {
+                    "case_name": case.name,
+                    "mutation": mutation,
+                    "detected": bool(unexpected),
+                    "diff_count": len(unexpected),
+                    "diffs": [report_diffs[0]],
+                }
+            )
+
+    report = write_report(
+        tmp_path / "session_memory_summary_mutation_report.json",
+        [],
+        mutation_results=mutation_results,
+    )
+    mutation_summary = report["mutation_summary"]
+    assert report["report_kind"] == "mutation_replay"
+    assert report["unexpected_diff_count"] == 0
+    assert report["false_positive_summary"] == {
+        "normal_case_count": 0,
+        "unexpected_diff_count": 0,
+    }
+    assert mutation_summary["mutation_count"] > 0
+    assert mutation_summary["mutation_count"] == mutation_summary["detected_count"]
+    assert mutation_summary["undetected_mutations"] == []
 
 
 def _clean_mutation_snapshot() -> dict[str, Any]:
