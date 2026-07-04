@@ -58,6 +58,12 @@ Wildcard domains such as `*.trusted.internal` match subdomains. Denied paths
 support user expansion, glob-style filenames, and sensitive basenames such as
 `.env`, `*.pem`, and `id_rsa`.
 
+## Policy Files
+
+`tool_safety_policy.yaml` is the canonical example policy used by the manifest
+report. `policy.yaml` is kept as a compatibility alias for shorter CLI examples
+and contains the same settings.
+
 ## CLI Usage
 
 ```bash
@@ -126,6 +132,11 @@ def run_command(command: str):
 ```
 
 The wrapper supports sync and async callables.
+
+Tool, Skill, and MCP-like callables can opt in through the same Filter/Wrapper
+path. See `skill_wrapper_example.py` for an async Skill-like handler that scans
+`python_code`, argv-style `command_args`, and nested dict-like payloads before
+calling the wrapped function.
 
 ## BashTool Opt-In Usage
 
@@ -204,6 +215,11 @@ Regenerate it with:
 ```bash
 python scripts/tool_safety_manifest_report.py --strict-policy
 ```
+
+This command is CI-friendly: it exits with status `1` if any sample decision
+differs from the manifest, any required rule is missing, or strict policy
+validation fails. Failure output includes the sample file, expected decision,
+actual decision, required rule, and actual rule IDs.
 
 The current corpus contains 52 samples with 52/52 decision matches and 52/52
 required-rule matches.

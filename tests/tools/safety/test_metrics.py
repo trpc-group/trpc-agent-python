@@ -29,15 +29,22 @@ def test_sample_matrix_metrics():
             assert sample["required_rule_id"] in {finding.rule_id for finding in report.findings}
 
     high_risk = [sample["file"] for sample in matrix if sample["high_risk"]]
-    detected = [sample for sample in high_risk if actual[sample] == Decision.DENY]
+    detected = [sample for sample in high_risk if actual[sample] != Decision.ALLOW]
+    deny_only = [sample for sample in high_risk if actual[sample] == Decision.DENY]
     assert len(detected) / len(high_risk) >= 0.9
+    assert len(deny_only) / len(high_risk) >= 0.8
 
     safe = [sample["file"] for sample in matrix if sample["expected_decision"] == Decision.ALLOW.value]
     false_positive = [sample for sample in safe if actual[sample] != Decision.ALLOW]
     assert len(false_positive) / len(safe) <= 0.1
+    assert not [sample for sample in safe if actual[sample] == Decision.DENY]
 
     for sample in ("read_env.py", "dangerous_delete.sh", "network_non_whitelist.py"):
         assert actual[sample] == Decision.DENY
+
+    for sample in matrix:
+        if sample["category"] in {"secret_read", "dangerous_delete", "network_non_whitelist"}:
+            assert actual[sample["file"]] != Decision.ALLOW
 
 
 def test_all_reports_matches_manifest_and_current_scanner():

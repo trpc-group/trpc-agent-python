@@ -73,7 +73,7 @@ def sanitize_text(text: str, limit: int = 180) -> tuple[str, bool]:
             r"\b\s*[:=]\s*['\"]?[^'\"\s,;)]+",
             r"\1=[REDACTED_SECRET]",
         ),
-        (r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{12,}", "Bearer [REDACTED_SECRET]"),
+        (r"(?i)\bBearer\s+[^'\"\s,;)]+", "Bearer [REDACTED_SECRET]"),
         (r"\b[A-Za-z0-9_/\-+=]{32,}\b", "[REDACTED_SECRET]"),
     ]
     for pattern, replacement in patterns:
