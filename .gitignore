@@ -4,6 +4,8 @@
 *.lock
 *.log
 examples/*.log
+examples/optimization/eval_optimize_loop/outputs/optimization_report.json
+examples/optimization/eval_optimize_loop/outputs/optimization_report.md
 
 trpc-agent-py.egg-info
 

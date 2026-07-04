@@ -1,0 +1,57 @@
+{
+  "evalset_id": "eval_optimize_loop_train_v1",
+  "split": "train",
+  "description": "Training cases used for failure attribution and fake prompt optimization.",
+  "cases": [
+    {
+      "id": "train_json_refund",
+      "input": "Return strict JSON for a refund escalation. Use keys intent and priority.",
+      "expectation": {
+        "type": "json",
+        "required_keys": [
+          "intent",
+          "priority"
+        ],
+        "expected_values": {
+          "intent": "refund",
+          "priority": "high"
+        }
+      },
+      "tags": [
+        "json",
+        "format"
+      ]
+    },
+    {
+      "id": "train_exact_order_status",
+      "input": "Answer exactly READY when the order can ship.",
+      "expectation": {
+        "type": "exact",
+        "expected": "READY"
+      },
+      "tags": [
+        "exact",
+        "format"
+      ]
+    },
+    {
+      "id": "train_rubric_retry_summary",
+      "input": "In 80 chars or less, mention latency and retries.",
+      "expectation": {
+        "type": "rubric",
+        "must_include": [
+          "latency",
+          "retries"
+        ],
+        "forbidden": [
+          "database"
+        ],
+        "max_chars": 80
+      },
+      "tags": [
+        "rubric",
+        "no_effect"
+      ]
+    }
+  ]
+}

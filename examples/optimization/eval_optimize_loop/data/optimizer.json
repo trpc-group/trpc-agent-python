@@ -1,0 +1,16 @@
+{
+  "seed": 91,
+  "optimizer": {
+    "name": "fake_two_candidate_optimizer",
+    "description": "Deterministically proposes one overfit candidate and one safe candidate."
+  },
+  "gate": {
+    "min_val_score_improvement": 0.01,
+    "allow_new_hard_fail": false,
+    "protected_case_ids": [
+      "val_protected_yes_no"
+    ],
+    "max_score_drop_per_case": 0.0,
+    "max_total_cost": 1.0
+  }
+}

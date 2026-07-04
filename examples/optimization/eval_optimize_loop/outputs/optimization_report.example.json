@@ -1,0 +1,845 @@
+{
+  "audit": {
+    "candidate_prompts": {
+      "candidate_001_overfit": {
+        "prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\n# Optimizer patch\nOPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\nAlways force every final answer into JSON, even when the user asks for prose.\n",
+        "prompt_diff": "+ OPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\n+ Always force every final answer into JSON, even when the user asks for prose.",
+        "rationale": "The train failures are strict JSON/exact formatting failures, so this candidate over-corrects by forcing JSON globally."
+      },
+      "candidate_002_safe": {
+        "prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\n# Optimizer patch\nOPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\nUse strict JSON only when the user explicitly asks for JSON.\nUse exact answers only when the user explicitly asks for an exact answer.\nOtherwise answer naturally and honor rubric constraints.\n",
+        "prompt_diff": "+ OPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\n+ Use strict JSON only when explicitly requested.\n+ Preserve natural-language answers unless a strict format is requested.",
+        "rationale": "This candidate fixes observed strict-format failures without changing natural-language behavior on validation cases."
+      }
+    },
+    "config_hash": "1fafb751c9d2b6c63b0daff25844ce64f7f49da32717855ce9b3c50206a6ebe0",
+    "cost": {
+      "baseline": 0.006,
+      "candidates": {
+        "candidate_001_overfit": 0.006,
+        "candidate_002_safe": 0.006
+      },
+      "total": 0.018
+    },
+    "duration_seconds": 0.0,
+    "reproducibility_command": "python examples/optimization/eval_optimize_loop/run_pipeline.py --train examples/optimization/eval_optimize_loop/data/train.evalset.json --val examples/optimization/eval_optimize_loop/data/val.evalset.json --optimizer-config examples/optimization/eval_optimize_loop/data/optimizer.json --prompt examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt --output-dir /tmp/eval-optimize-loop --fake-model --fake-judge --trace",
+    "seed": 91
+  },
+  "baseline_train": {
+    "cases": [
+      {
+        "case_id": "train_json_refund",
+        "cost": 0.001,
+        "evidence": "json parser failed at char 0: Expecting value",
+        "failure_category": "format_violation",
+        "failure_reason": "output is not valid JSON",
+        "hard_failed": true,
+        "output": "Here is the JSON you requested: {\"intent\": \"refund\", \"priority\": \"high\"}",
+        "passed": false,
+        "score": 0.0,
+        "split": "train",
+        "trace": {
+          "case_id": "train_json_refund",
+          "judge": {
+            "expectation_type": "json",
+            "valid_json": false
+          },
+          "model": {
+            "case_id": "train_json_refund",
+            "expectation_type": "json",
+            "prompt_id": "baseline",
+            "prompt_mode": "baseline",
+            "seed": 91
+          },
+          "prompt_id": "baseline",
+          "trace_mode": "fake"
+        }
+      },
+      {
+        "case_id": "train_exact_order_status",
+        "cost": 0.001,
+        "evidence": "expected normalized 'READY', got 'READY - confirmed.'",
+        "failure_category": "final_answer_mismatch",
+        "failure_reason": "normalized exact answer mismatch",
+        "hard_failed": true,
+        "output": "READY - confirmed.",
+        "passed": false,
+        "score": 0.0,
+        "split": "train",
+        "trace": {
+          "case_id": "train_exact_order_status",
+          "judge": {
+            "expectation_type": "exact",
+            "expected": "READY"
+          },
+          "model": {
+            "case_id": "train_exact_order_status",
+            "expectation_type": "exact",
+            "prompt_id": "baseline",
+            "prompt_mode": "baseline",
+            "seed": 91
+          },
+          "prompt_id": "baseline",
+          "trace_mode": "fake"
+        }
+      },
+      {
+        "case_id": "train_rubric_retry_summary",
+        "cost": 0.001,
+        "evidence": null,
+        "failure_category": null,
+        "failure_reason": null,
+        "hard_failed": false,
+        "output": "Latency improved because retries handle transient failures.",
+        "passed": true,
+        "score": 1.0,
+        "split": "train",
+        "trace": {
+          "case_id": "train_rubric_retry_summary",
+          "judge": {
+            "expectation_type": "rubric"
+          },
+          "model": {
+            "case_id": "train_rubric_retry_summary",
+            "expectation_type": "rubric",
+            "prompt_id": "baseline",
+            "prompt_mode": "baseline",
+            "seed": 91
+          },
+          "prompt_id": "baseline",
+          "trace_mode": "fake"
+        }
+      }
+    ],
+    "cost": 0.003,
+    "passed": false,
+    "prompt_id": "baseline",
+    "score": 0.333333,
+    "split": "train"
+  },
+  "baseline_validation": {
+    "cases": [
+      {
+        "case_id": "val_json_invoice",
+        "cost": 0.001,
+        "evidence": "json parser failed at char 0: Expecting value",
+        "failure_category": "format_violation",
+        "failure_reason": "output is not valid JSON",
+        "hard_failed": true,
+        "output": "Here is the JSON you requested: {\"next_step\": \"email_customer\", \"status\": \"approved\"}",
+        "passed": false,
+        "score": 0.0,
+        "split": "validation",
+        "trace": {
+          "case_id": "val_json_invoice",
+          "judge": {
+            "expectation_type": "json",
+            "valid_json": false
+          },
+          "model": {
+            "case_id": "val_json_invoice",
+            "expectation_type": "json",
+            "prompt_id": "baseline",
+            "prompt_mode": "baseline",
+            "seed": 91
+          },
+          "prompt_id": "baseline",
+          "trace_mode": "fake"
+        }
+      },
+      {
+        "case_id": "val_explain_cache",
+        "cost": 0.001,
+        "evidence": null,
+        "failure_category": null,
+        "failure_reason": null,
+        "hard_failed": false,
+        "output": "A cache keeps recent data fast, but stale data can appear after updates.",
+        "passed": true,
+        "score": 1.0,
+        "split": "validation",
+        "trace": {
+          "case_id": "val_explain_cache",
+          "judge": {
+            "expectation_type": "rubric"
+          },
+          "model": {
+            "case_id": "val_explain_cache",
+            "expectation_type": "rubric",
+            "prompt_id": "baseline",
+            "prompt_mode": "baseline",
+            "seed": 91
+          },
+          "prompt_id": "baseline",
+          "trace_mode": "fake"
+        }
+      },
+      {
+        "case_id": "val_protected_yes_no",
+        "cost": 0.001,
+        "evidence": null,
+        "failure_category": null,
+        "failure_reason": null,
+        "hard_failed": false,
+        "output": "YES",
+        "passed": true,
+        "score": 1.0,
+        "split": "validation",
+        "trace": {
+          "case_id": "val_protected_yes_no",
+          "judge": {
+            "expectation_type": "exact",
+            "expected": "YES"
+          },
+          "model": {
+            "case_id": "val_protected_yes_no",
+            "expectation_type": "exact",
+            "prompt_id": "baseline",
+            "prompt_mode": "baseline",
+            "seed": 91
+          },
+          "prompt_id": "baseline",
+          "trace_mode": "fake"
+        }
+      }
+    ],
+    "cost": 0.003,
+    "passed": false,
+    "prompt_id": "baseline",
+    "score": 0.666667,
+    "split": "validation"
+  },
+  "candidates": [
+    {
+      "candidate": {
+        "candidate_id": "candidate_001_overfit",
+        "prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\n# Optimizer patch\nOPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\nAlways force every final answer into JSON, even when the user asks for prose.\n",
+        "prompt_diff": "+ OPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\n+ Always force every final answer into JSON, even when the user asks for prose.",
+        "rationale": "The train failures are strict JSON/exact formatting failures, so this candidate over-corrects by forcing JSON globally."
+      },
+      "train_result": {
+        "cases": [
+          {
+            "case_id": "train_json_refund",
+            "cost": 0.001,
+            "evidence": null,
+            "failure_category": null,
+            "failure_reason": null,
+            "hard_failed": false,
+            "output": "{\"intent\": \"refund\", \"priority\": \"high\"}",
+            "passed": true,
+            "score": 1.0,
+            "split": "train",
+            "trace": {
+              "case_id": "train_json_refund",
+              "judge": {
+                "expectation_type": "json",
+                "valid_json": true
+              },
+              "model": {
+                "case_id": "train_json_refund",
+                "expectation_type": "json",
+                "prompt_id": "candidate_001_overfit",
+                "prompt_mode": "overfit",
+                "seed": 91
+              },
+              "prompt_id": "candidate_001_overfit",
+              "trace_mode": "fake"
+            }
+          },
+          {
+            "case_id": "train_exact_order_status",
+            "cost": 0.001,
+            "evidence": null,
+            "failure_category": null,
+            "failure_reason": null,
+            "hard_failed": false,
+            "output": "READY",
+            "passed": true,
+            "score": 1.0,
+            "split": "train",
+            "trace": {
+              "case_id": "train_exact_order_status",
+              "judge": {
+                "expectation_type": "exact",
+                "expected": "READY"
+              },
+              "model": {
+                "case_id": "train_exact_order_status",
+                "expectation_type": "exact",
+                "prompt_id": "candidate_001_overfit",
+                "prompt_mode": "overfit",
+                "seed": 91
+              },
+              "prompt_id": "candidate_001_overfit",
+              "trace_mode": "fake"
+            }
+          },
+          {
+            "case_id": "train_rubric_retry_summary",
+            "cost": 0.001,
+            "evidence": null,
+            "failure_category": null,
+            "failure_reason": null,
+            "hard_failed": false,
+            "output": "Latency improved because retries handle transient failures.",
+            "passed": true,
+            "score": 1.0,
+            "split": "train",
+            "trace": {
+              "case_id": "train_rubric_retry_summary",
+              "judge": {
+                "expectation_type": "rubric"
+              },
+              "model": {
+                "case_id": "train_rubric_retry_summary",
+                "expectation_type": "rubric",
+                "prompt_id": "candidate_001_overfit",
+                "prompt_mode": "overfit",
+                "seed": 91
+              },
+              "prompt_id": "candidate_001_overfit",
+              "trace_mode": "fake"
+            }
+          }
+        ],
+        "cost": 0.003,
+        "passed": true,
+        "prompt_id": "candidate_001_overfit",
+        "score": 1.0,
+        "split": "train"
+      },
+      "validation_result": {
+        "cases": [
+          {
+            "case_id": "val_json_invoice",
+            "cost": 0.001,
+            "evidence": null,
+            "failure_category": null,
+            "failure_reason": null,
+            "hard_failed": false,
+            "output": "{\"next_step\": \"email_customer\", \"status\": \"approved\"}",
+            "passed": true,
+            "score": 1.0,
+            "split": "validation",
+            "trace": {
+              "case_id": "val_json_invoice",
+              "judge": {
+                "expectation_type": "json",
+                "valid_json": true
+              },
+              "model": {
+                "case_id": "val_json_invoice",
+                "expectation_type": "json",
+                "prompt_id": "candidate_001_overfit",
+                "prompt_mode": "overfit",
+                "seed": 91
+              },
+              "prompt_id": "candidate_001_overfit",
+              "trace_mode": "fake"
+            }
+          },
+          {
+            "case_id": "val_explain_cache",
+            "cost": 0.001,
+            "evidence": "forbidden pattern '{' was present",
+            "failure_category": "format_violation",
+            "failure_reason": "output contains a forbidden pattern",
+            "hard_failed": true,
+            "output": "{\"answer\": \"Cache invalidation prevents stale data.\"}",
+            "passed": false,
+            "score": 0.0,
+            "split": "validation",
+            "trace": {
+              "case_id": "val_explain_cache",
+              "judge": {
+                "expectation_type": "rubric",
+                "forbidden_pattern": "{"
+              },
+              "model": {
+                "case_id": "val_explain_cache",
+                "expectation_type": "rubric",
+                "prompt_id": "candidate_001_overfit",
+                "prompt_mode": "overfit",
+                "seed": 91
+              },
+              "prompt_id": "candidate_001_overfit",
+              "trace_mode": "fake"
+            }
+          },
+          {
+            "case_id": "val_protected_yes_no",
+            "cost": 0.001,
+            "evidence": "expected normalized 'YES', got '{\"answer\": \"YES\"}'",
+            "failure_category": "final_answer_mismatch",
+            "failure_reason": "normalized exact answer mismatch",
+            "hard_failed": true,
+            "output": "{\"answer\": \"YES\"}",
+            "passed": false,
+            "score": 0.0,
+            "split": "validation",
+            "trace": {
+              "case_id": "val_protected_yes_no",
+              "judge": {
+                "expectation_type": "exact",
+                "expected": "YES"
+              },
+              "model": {
+                "case_id": "val_protected_yes_no",
+                "expectation_type": "exact",
+                "prompt_id": "candidate_001_overfit",
+                "prompt_mode": "overfit",
+                "seed": 91
+              },
+              "prompt_id": "candidate_001_overfit",
+              "trace_mode": "fake"
+            }
+          }
+        ],
+        "cost": 0.003,
+        "passed": false,
+        "prompt_id": "candidate_001_overfit",
+        "score": 0.333333,
+        "split": "validation"
+      }
+    },
+    {
+      "candidate": {
+        "candidate_id": "candidate_002_safe",
+        "prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\n# Optimizer patch\nOPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\nUse strict JSON only when the user explicitly asks for JSON.\nUse exact answers only when the user explicitly asks for an exact answer.\nOtherwise answer naturally and honor rubric constraints.\n",
+        "prompt_diff": "+ OPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\n+ Use strict JSON only when explicitly requested.\n+ Preserve natural-language answers unless a strict format is requested.",
+        "rationale": "This candidate fixes observed strict-format failures without changing natural-language behavior on validation cases."
+      },
+      "train_result": {
+        "cases": [
+          {
+            "case_id": "train_json_refund",
+            "cost": 0.001,
+            "evidence": null,
+            "failure_category": null,
+            "failure_reason": null,
+            "hard_failed": false,
+            "output": "{\"intent\": \"refund\", \"priority\": \"high\"}",
+            "passed": true,
+            "score": 1.0,
+            "split": "train",
+            "trace": {
+              "case_id": "train_json_refund",
+              "judge": {
+                "expectation_type": "json",
+                "valid_json": true
+              },
+              "model": {
+                "case_id": "train_json_refund",
+                "expectation_type": "json",
+                "prompt_id": "candidate_002_safe",
+                "prompt_mode": "safe",
+                "seed": 91
+              },
+              "prompt_id": "candidate_002_safe",
+              "trace_mode": "fake"
+            }
+          },
+          {
+            "case_id": "train_exact_order_status",
+            "cost": 0.001,
+            "evidence": null,
+            "failure_category": null,
+            "failure_reason": null,
+            "hard_failed": false,
+            "output": "READY",
+            "passed": true,
+            "score": 1.0,
+            "split": "train",
+            "trace": {
+              "case_id": "train_exact_order_status",
+              "judge": {
+                "expectation_type": "exact",
+                "expected": "READY"
+              },
+              "model": {
+                "case_id": "train_exact_order_status",
+                "expectation_type": "exact",
+                "prompt_id": "candidate_002_safe",
+                "prompt_mode": "safe",
+                "seed": 91
+              },
+              "prompt_id": "candidate_002_safe",
+              "trace_mode": "fake"
+            }
+          },
+          {
+            "case_id": "train_rubric_retry_summary",
+            "cost": 0.001,
+            "evidence": null,
+            "failure_category": null,
+            "failure_reason": null,
+            "hard_failed": false,
+            "output": "Latency improved because retries handle transient failures.",
+            "passed": true,
+            "score": 1.0,
+            "split": "train",
+            "trace": {
+              "case_id": "train_rubric_retry_summary",
+              "judge": {
+                "expectation_type": "rubric"
+              },
+              "model": {
+                "case_id": "train_rubric_retry_summary",
+                "expectation_type": "rubric",
+                "prompt_id": "candidate_002_safe",
+                "prompt_mode": "safe",
+                "seed": 91
+              },
+              "prompt_id": "candidate_002_safe",
+              "trace_mode": "fake"
+            }
+          }
+        ],
+        "cost": 0.003,
+        "passed": true,
+        "prompt_id": "candidate_002_safe",
+        "score": 1.0,
+        "split": "train"
+      },
+      "validation_result": {
+        "cases": [
+          {
+            "case_id": "val_json_invoice",
+            "cost": 0.001,
+            "evidence": null,
+            "failure_category": null,
+            "failure_reason": null,
+            "hard_failed": false,
+            "output": "{\"next_step\": \"email_customer\", \"status\": \"approved\"}",
+            "passed": true,
+            "score": 1.0,
+            "split": "validation",
+            "trace": {
+              "case_id": "val_json_invoice",
+              "judge": {
+                "expectation_type": "json",
+                "valid_json": true
+              },
+              "model": {
+                "case_id": "val_json_invoice",
+                "expectation_type": "json",
+                "prompt_id": "candidate_002_safe",
+                "prompt_mode": "safe",
+                "seed": 91
+              },
+              "prompt_id": "candidate_002_safe",
+              "trace_mode": "fake"
+            }
+          },
+          {
+            "case_id": "val_explain_cache",
+            "cost": 0.001,
+            "evidence": null,
+            "failure_category": null,
+            "failure_reason": null,
+            "hard_failed": false,
+            "output": "A cache keeps recent data fast, but stale data can appear after updates.",
+            "passed": true,
+            "score": 1.0,
+            "split": "validation",
+            "trace": {
+              "case_id": "val_explain_cache",
+              "judge": {
+                "expectation_type": "rubric"
+              },
+              "model": {
+                "case_id": "val_explain_cache",
+                "expectation_type": "rubric",
+                "prompt_id": "candidate_002_safe",
+                "prompt_mode": "safe",
+                "seed": 91
+              },
+              "prompt_id": "candidate_002_safe",
+              "trace_mode": "fake"
+            }
+          },
+          {
+            "case_id": "val_protected_yes_no",
+            "cost": 0.001,
+            "evidence": null,
+            "failure_category": null,
+            "failure_reason": null,
+            "hard_failed": false,
+            "output": "YES",
+            "passed": true,
+            "score": 1.0,
+            "split": "validation",
+            "trace": {
+              "case_id": "val_protected_yes_no",
+              "judge": {
+                "expectation_type": "exact",
+                "expected": "YES"
+              },
+              "model": {
+                "case_id": "val_protected_yes_no",
+                "expectation_type": "exact",
+                "prompt_id": "candidate_002_safe",
+                "prompt_mode": "safe",
+                "seed": 91
+              },
+              "prompt_id": "candidate_002_safe",
+              "trace_mode": "fake"
+            }
+          }
+        ],
+        "cost": 0.003,
+        "passed": true,
+        "prompt_id": "candidate_002_safe",
+        "score": 1.0,
+        "split": "validation"
+      }
+    }
+  ],
+  "failure_attribution_summary": {
+    "by_category": {
+      "final_answer_mismatch": 2,
+      "format_violation": 3
+    },
+    "by_prompt_split": {
+      "baseline:train": {
+        "final_answer_mismatch": 1,
+        "format_violation": 1
+      },
+      "baseline:validation": {
+        "format_violation": 1
+      },
+      "candidate_001_overfit:train": {},
+      "candidate_001_overfit:validation": {
+        "final_answer_mismatch": 1,
+        "format_violation": 1
+      },
+      "candidate_002_safe:train": {},
+      "candidate_002_safe:validation": {}
+    },
+    "examples": [
+      {
+        "case_id": "train_json_refund",
+        "evidence": "json parser failed at char 0: Expecting value",
+        "failure_category": "format_violation",
+        "failure_reason": "output is not valid JSON",
+        "prompt_id": "baseline",
+        "split": "train"
+      },
+      {
+        "case_id": "train_exact_order_status",
+        "evidence": "expected normalized 'READY', got 'READY - confirmed.'",
+        "failure_category": "final_answer_mismatch",
+        "failure_reason": "normalized exact answer mismatch",
+        "prompt_id": "baseline",
+        "split": "train"
+      },
+      {
+        "case_id": "val_json_invoice",
+        "evidence": "json parser failed at char 0: Expecting value",
+        "failure_category": "format_violation",
+        "failure_reason": "output is not valid JSON",
+        "prompt_id": "baseline",
+        "split": "validation"
+      },
+      {
+        "case_id": "val_explain_cache",
+        "evidence": "forbidden pattern '{' was present",
+        "failure_category": "format_violation",
+        "failure_reason": "output contains a forbidden pattern",
+        "prompt_id": "candidate_001_overfit",
+        "split": "validation"
+      },
+      {
+        "case_id": "val_protected_yes_no",
+        "evidence": "expected normalized 'YES', got '{\"answer\": \"YES\"}'",
+        "failure_category": "final_answer_mismatch",
+        "failure_reason": "normalized exact answer mismatch",
+        "prompt_id": "candidate_001_overfit",
+        "split": "validation"
+      }
+    ],
+    "total_failed_cases": 5
+  },
+  "gate_decisions": [
+    {
+      "accepted": false,
+      "candidate_id": "candidate_001_overfit",
+      "cost": 0.006,
+      "new_hard_failures": [
+        "val_explain_cache",
+        "val_protected_yes_no"
+      ],
+      "protected_regressions": [
+        "val_protected_yes_no"
+      ],
+      "reasons": [
+        "reject: train score improved but validation score regressed (+0.667 train, -0.333 validation)",
+        "reject: validation improvement -0.333 is below required +0.010",
+        "reject: new hard failures appeared: ['val_explain_cache', 'val_protected_yes_no']",
+        "reject: protected cases regressed: ['val_protected_yes_no']",
+        "reject: per-case validation score drops exceed 0.000: ['val_explain_cache', 'val_protected_yes_no']"
+      ],
+      "train_score_delta": 0.666667,
+      "validation_score_delta": -0.333334
+    },
+    {
+      "accepted": true,
+      "candidate_id": "candidate_002_safe",
+      "cost": 0.006,
+      "new_hard_failures": [],
+      "protected_regressions": [],
+      "reasons": [
+        "accept: validation score improved +0.333 with no protected regression or new hard failure"
+      ],
+      "train_score_delta": 0.666667,
+      "validation_score_delta": 0.333333
+    }
+  ],
+  "per_case_deltas": [
+    {
+      "baseline_passed": false,
+      "baseline_score": 0.0,
+      "candidate_id": "candidate_001_overfit",
+      "candidate_passed": true,
+      "candidate_score": 1.0,
+      "case_id": "train_json_refund",
+      "delta": 1.0,
+      "regression": false,
+      "split": "train"
+    },
+    {
+      "baseline_passed": false,
+      "baseline_score": 0.0,
+      "candidate_id": "candidate_001_overfit",
+      "candidate_passed": true,
+      "candidate_score": 1.0,
+      "case_id": "train_exact_order_status",
+      "delta": 1.0,
+      "regression": false,
+      "split": "train"
+    },
+    {
+      "baseline_passed": true,
+      "baseline_score": 1.0,
+      "candidate_id": "candidate_001_overfit",
+      "candidate_passed": true,
+      "candidate_score": 1.0,
+      "case_id": "train_rubric_retry_summary",
+      "delta": 0.0,
+      "regression": false,
+      "split": "train"
+    },
+    {
+      "baseline_passed": false,
+      "baseline_score": 0.0,
+      "candidate_id": "candidate_001_overfit",
+      "candidate_passed": true,
+      "candidate_score": 1.0,
+      "case_id": "val_json_invoice",
+      "delta": 1.0,
+      "regression": false,
+      "split": "validation"
+    },
+    {
+      "baseline_passed": true,
+      "baseline_score": 1.0,
+      "candidate_id": "candidate_001_overfit",
+      "candidate_passed": false,
+      "candidate_score": 0.0,
+      "case_id": "val_explain_cache",
+      "delta": -1.0,
+      "regression": true,
+      "split": "validation"
+    },
+    {
+      "baseline_passed": true,
+      "baseline_score": 1.0,
+      "candidate_id": "candidate_001_overfit",
+      "candidate_passed": false,
+      "candidate_score": 0.0,
+      "case_id": "val_protected_yes_no",
+      "delta": -1.0,
+      "regression": true,
+      "split": "validation"
+    },
+    {
+      "baseline_passed": false,
+      "baseline_score": 0.0,
+      "candidate_id": "candidate_002_safe",
+      "candidate_passed": true,
+      "candidate_score": 1.0,
+      "case_id": "train_json_refund",
+      "delta": 1.0,
+      "regression": false,
+      "split": "train"
+    },
+    {
+      "baseline_passed": false,
+      "baseline_score": 0.0,
+      "candidate_id": "candidate_002_safe",
+      "candidate_passed": true,
+      "candidate_score": 1.0,
+      "case_id": "train_exact_order_status",
+      "delta": 1.0,
+      "regression": false,
+      "split": "train"
+    },
+    {
+      "baseline_passed": true,
+      "baseline_score": 1.0,
+      "candidate_id": "candidate_002_safe",
+      "candidate_passed": true,
+      "candidate_score": 1.0,
+      "case_id": "train_rubric_retry_summary",
+      "delta": 0.0,
+      "regression": false,
+      "split": "train"
+    },
+    {
+      "baseline_passed": false,
+      "baseline_score": 0.0,
+      "candidate_id": "candidate_002_safe",
+      "candidate_passed": true,
+      "candidate_score": 1.0,
+      "case_id": "val_json_invoice",
+      "delta": 1.0,
+      "regression": false,
+      "split": "validation"
+    },
+    {
+      "baseline_passed": true,
+      "baseline_score": 1.0,
+      "candidate_id": "candidate_002_safe",
+      "candidate_passed": true,
+      "candidate_score": 1.0,
+      "case_id": "val_explain_cache",
+      "delta": 0.0,
+      "regression": false,
+      "split": "validation"
+    },
+    {
+      "baseline_passed": true,
+      "baseline_score": 1.0,
+      "candidate_id": "candidate_002_safe",
+      "candidate_passed": true,
+      "candidate_score": 1.0,
+      "case_id": "val_protected_yes_no",
+      "delta": 0.0,
+      "regression": false,
+      "split": "validation"
+    }
+  ],
+  "run": {
+    "fake_judge": true,
+    "fake_model": true,
+    "mode": "fake",
+    "prompt_source": "prompts/baseline_system_prompt.txt",
+    "run_id": "eval_optimize_loop_seed_91",
+    "trace_enabled": true,
+    "train_cases": 3,
+    "validation_cases": 3
+  },
+  "schema_version": "eval_optimize_loop.v1",
+  "selected_candidate": "candidate_002_safe"
+}

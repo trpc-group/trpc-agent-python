@@ -1,0 +1,60 @@
+{
+  "evalset_id": "eval_optimize_loop_validation_v1",
+  "split": "validation",
+  "description": "Validation cases that separate safe optimization from train-set overfitting.",
+  "cases": [
+    {
+      "id": "val_json_invoice",
+      "input": "Return strict JSON for an invoice approval. Use keys status and next_step.",
+      "expectation": {
+        "type": "json",
+        "required_keys": [
+          "status",
+          "next_step"
+        ],
+        "expected_values": {
+          "next_step": "email_customer",
+          "status": "approved"
+        }
+      },
+      "tags": [
+        "json",
+        "safe_improves"
+      ]
+    },
+    {
+      "id": "val_explain_cache",
+      "input": "Explain cache invalidation for a junior engineer in natural language.",
+      "expectation": {
+        "type": "rubric",
+        "must_include": [
+          "cache",
+          "stale data"
+        ],
+        "forbidden": [
+          "{",
+          "}",
+          "json"
+        ],
+        "max_chars": 180
+      },
+      "tags": [
+        "rubric",
+        "overfit_guard"
+      ]
+    },
+    {
+      "id": "val_protected_yes_no",
+      "input": "Answer exactly YES if idempotent retries are safe for duplicate requests.",
+      "expectation": {
+        "type": "exact",
+        "expected": "YES"
+      },
+      "protected": true,
+      "tags": [
+        "protected",
+        "exact"
+      ]
+    }
+  ]
+}
