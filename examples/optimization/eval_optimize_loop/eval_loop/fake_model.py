@@ -26,7 +26,10 @@ class FakeModel:
 
     def generate(self, prompt_id: str, prompt: str, case: EvalCase) -> tuple[str, dict[str, Any], float]:
         mode = self._mode(prompt)
-        if mode == "overfit":
+        output_override = self._simulated_output(case, mode)
+        if output_override is not None:
+            output = output_override
+        elif mode == "overfit":
             output = self._overfit_output(case)
         elif mode == "safe":
             output = self._safe_output(case)
@@ -54,14 +57,16 @@ class FakeModel:
             return f"Here is the JSON you requested: {self._expected_json(case)}"
         if expectation_type == "exact":
             expected = str(case.expectation.get("expected", ""))
-            if case.case_id == "val_protected_yes_no":
+            if case.protected or "baseline_pass" in case.tags:
                 return expected
             return f"{expected} - confirmed."
-        if case.case_id == "train_rubric_retry_summary":
-            return "Latency improved because retries handle transient failures."
-        if case.case_id == "val_explain_cache":
-            return "A cache keeps recent data fast, but stale data can appear after updates."
-        return "I need more information."
+        if expectation_type == "rubric":
+            return self._rubric_sentence(case)
+        if expectation_type == "tool":
+            return self._tool_json(case)
+        if expectation_type == "knowledge":
+            return self._knowledge_sentence(case)
+        return self._rubric_sentence(case)
 
     def _overfit_output(self, case: EvalCase) -> str:
         expectation_type = case.expectation.get("type")
@@ -71,7 +76,13 @@ class FakeModel:
             return self._expected_json(case)
         if expectation_type == "exact":
             return json.dumps({"answer": str(case.expectation.get("expected", ""))}, sort_keys=True)
-        return json.dumps({"answer": "Cache invalidation prevents stale data."}, sort_keys=True)
+        if expectation_type == "rubric" or "prose" in case.tags:
+            return json.dumps({"answer": self._rubric_sentence(case)}, sort_keys=True)
+        if expectation_type == "tool":
+            return self._tool_json(case)
+        if expectation_type == "knowledge":
+            return self._knowledge_sentence(case)
+        return json.dumps({"answer": self._rubric_sentence(case)}, sort_keys=True)
 
     def _safe_output(self, case: EvalCase) -> str:
         user_asked = case.input.lower()
@@ -88,12 +99,39 @@ class FakeModel:
             return self._expected_json(case)
         if expectation_type == "exact":
             return str(case.expectation.get("expected", ""))
-        if case.case_id == "train_rubric_retry_summary":
-            return "Latency improved because retries handle transient failures."
-        if case.case_id == "val_explain_cache":
-            return "A cache keeps recent data fast, but stale data can appear after updates."
-        return "Meets the rubric."
+        if expectation_type == "rubric":
+            return self._rubric_sentence(case)
+        if expectation_type == "tool":
+            return self._tool_json(case)
+        if expectation_type == "knowledge":
+            return self._knowledge_sentence(case)
+        return self._rubric_sentence(case)
 
     def _expected_json(self, case: EvalCase) -> str:
         values = dict(case.expectation.get("expected_values") or {})
         return json.dumps(values, sort_keys=True)
+
+    def _simulated_output(self, case: EvalCase, mode: str) -> str | None:
+        return case.simulated_outputs.get(mode)
+
+    def _rubric_sentence(self, case: EvalCase) -> str:
+        must_include = [str(item) for item in case.expectation.get("must_include") or []]
+        if must_include:
+            sentence = " ".join(must_include)
+        else:
+            sentence = "The answer satisfies the rubric"
+        max_chars = case.expectation.get("max_chars")
+        if max_chars is not None and len(sentence) > int(max_chars):
+            sentence = sentence[:int(max_chars)].rstrip()
+        return sentence
+
+    def _tool_json(self, case: EvalCase) -> str:
+        tool_name = str(case.expectation.get("expected_tool", "lookup"))
+        args = dict(case.expectation.get("expected_args") or {})
+        return json.dumps({"tool": tool_name, "args": args}, sort_keys=True)
+
+    def _knowledge_sentence(self, case: EvalCase) -> str:
+        terms = [str(item) for item in case.expectation.get("must_include_knowledge_terms") or []]
+        sources = [str(item) for item in case.expectation.get("required_sources") or []]
+        parts = terms + sources
+        return " ".join(parts) if parts else "knowledge source recalled"

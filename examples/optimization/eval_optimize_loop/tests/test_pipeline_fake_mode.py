@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
+import sys
 
 from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_OPTIMIZER_CONFIG
 from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_PROMPT
@@ -35,8 +37,10 @@ def test_fake_mode_pipeline_generates_json_and_markdown_reports(tmp_path: Path):
         "run",
         "baseline_train",
         "baseline_validation",
+        "baseline",
         "candidates",
         "per_case_deltas",
+        "delta",
         "failure_attribution_summary",
         "gate_decisions",
         "selected_candidate",
@@ -51,6 +55,7 @@ def test_fake_mode_pipeline_generates_json_and_markdown_reports(tmp_path: Path):
     ]
     assert len(payload["per_case_deltas"]) == 12
     assert payload["failure_attribution_summary"]["by_category"]["format_violation"] >= 1
+    assert payload["failure_attribution_summary"]["attribution_accuracy"] == 1.0
     assert set(payload["audit"]) >= {
         "seed",
         "config_hash",
@@ -58,6 +63,8 @@ def test_fake_mode_pipeline_generates_json_and_markdown_reports(tmp_path: Path):
         "duration_seconds",
         "candidate_prompts",
         "prompt_diffs",
+        "input_hashes",
+        "candidate_prompt_hashes",
     }
     assert "candidate_001_overfit" in payload["audit"]["prompt_diffs"]
     assert "candidate_002_safe" in payload["audit"]["prompt_diffs"]
@@ -79,6 +86,14 @@ def test_fake_mode_pipeline_generates_json_and_markdown_reports(tmp_path: Path):
     assert "Failure Attribution Summary" in markdown
     assert "Prompt Diff" in markdown
     assert "Reproducibility" in markdown
+    assert "Cost And Audit" in markdown
+
+    run_dir = output_dir / "runs" / "eval_optimize_loop_seed_91"
+    assert (run_dir / "config.snapshot.json").is_file()
+    assert (run_dir / "input_hashes.json").is_file()
+    assert (run_dir / "candidate_prompts" / "candidate_001_overfit" / "system_prompt.txt").is_file()
+    assert (run_dir / "case_results" / "candidate_002_safe_validation.json").is_file()
+    assert (run_dir / "prompt_diffs" / "candidate_002_safe.diff").is_file()
 
 
 def test_pipeline_is_deterministic_with_same_seed(tmp_path: Path):
@@ -93,3 +108,43 @@ def test_pipeline_is_deterministic_with_same_seed(tmp_path: Path):
     assert (first_dir / "optimization_report.md").read_text(encoding="utf-8") == (
         second_dir / "optimization_report.md"
     ).read_text(encoding="utf-8")
+
+
+def test_pipeline_accepts_mode_fake_without_legacy_flags(tmp_path: Path):
+    report = run_pipeline(output_dir=tmp_path / "run", mode="fake", trace=True)
+    assert report.run["mode"] == "fake"
+    assert report.selected_candidate == "candidate_002_safe"
+
+
+def test_pipeline_selected_candidate_is_null_when_all_candidates_rejected(tmp_path: Path):
+    config_path = tmp_path / "optimizer.json"
+    config = json.loads(Path(DEFAULT_OPTIMIZER_CONFIG).read_text(encoding="utf-8"))
+    config["gate"]["min_val_score_improvement"] = 1.0
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+
+    report = run_pipeline(
+        optimizer_config_path=config_path,
+        output_dir=tmp_path / "run",
+        mode="fake",
+        trace=True,
+    )
+
+    assert report.selected_candidate is None
+
+
+def test_cli_mode_fake_and_legacy_fake_flags_both_run(tmp_path: Path):
+    script = Path("examples/optimization/eval_optimize_loop/run_pipeline.py")
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+
+    subprocess.run(
+        [sys.executable, str(script), "--mode", "fake", "--trace", "--output-dir", str(first)],
+        check=True,
+    )
+    subprocess.run(
+        [sys.executable, str(script), "--fake-model", "--fake-judge", "--trace", "--output-dir", str(second)],
+        check=True,
+    )
+
+    assert (first / "optimization_report.json").is_file()
+    assert (second / "optimization_report.md").is_file()

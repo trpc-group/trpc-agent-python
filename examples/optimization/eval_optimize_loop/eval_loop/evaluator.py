@@ -59,6 +59,7 @@ class ExampleEvaluator:
                     evidence=evidence,
                     cost=cost,
                     hard_failed=(not judged.passed and judged.score <= 0.0),
+                    expected_failure_category=case.expected_failure_category,
                 )
             )
 

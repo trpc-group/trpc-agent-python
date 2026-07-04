@@ -4,10 +4,13 @@
 
 Selected candidate: `candidate_002_safe`.
 
+Update source prompt: no (default)
+
+
 ## Gate Reasons
 
 ### candidate_001_overfit (rejected)
-- reject: train score improved but validation score regressed (+0.667 train, -0.333 validation)
+- reject: overfit detected because train score improved but validation score regressed or did not improve (+0.667 train, -0.333 validation)
 - reject: validation improvement -0.333 is below required +0.010
 - reject: new hard failures appeared: ['val_explain_cache', 'val_protected_yes_no']
 - reject: protected cases regressed: ['val_protected_yes_no']
@@ -26,20 +29,20 @@ Selected candidate: `candidate_002_safe`.
 
 ## Per-Case Delta
 
-| candidate | split | case | baseline | candidate | delta | passed -> passed |
-| --- | --- | --- | ---: | ---: | ---: | --- |
-| candidate_001_overfit | train | train_json_refund | 0.000 | 1.000 | +1.000 | False -> True |
-| candidate_001_overfit | train | train_exact_order_status | 0.000 | 1.000 | +1.000 | False -> True |
-| candidate_001_overfit | train | train_rubric_retry_summary | 1.000 | 1.000 | +0.000 | True -> True |
-| candidate_001_overfit | validation | val_json_invoice | 0.000 | 1.000 | +1.000 | False -> True |
-| candidate_001_overfit | validation | val_explain_cache | 1.000 | 0.000 | -1.000 | True -> False |
-| candidate_001_overfit | validation | val_protected_yes_no | 1.000 | 0.000 | -1.000 | True -> False |
-| candidate_002_safe | train | train_json_refund | 0.000 | 1.000 | +1.000 | False -> True |
-| candidate_002_safe | train | train_exact_order_status | 0.000 | 1.000 | +1.000 | False -> True |
-| candidate_002_safe | train | train_rubric_retry_summary | 1.000 | 1.000 | +0.000 | True -> True |
-| candidate_002_safe | validation | val_json_invoice | 0.000 | 1.000 | +1.000 | False -> True |
-| candidate_002_safe | validation | val_explain_cache | 1.000 | 1.000 | +0.000 | True -> True |
-| candidate_002_safe | validation | val_protected_yes_no | 1.000 | 1.000 | +0.000 | True -> True |
+| candidate | split | case | baseline | candidate | delta | passed -> passed | delta type |
+| --- | --- | --- | ---: | ---: | ---: | --- | --- |
+| candidate_001_overfit | train | train_json_refund | 0.000 | 1.000 | +1.000 | False -> True | new_pass |
+| candidate_001_overfit | train | train_exact_order_status | 0.000 | 1.000 | +1.000 | False -> True | new_pass |
+| candidate_001_overfit | train | train_rubric_retry_summary | 1.000 | 1.000 | +0.000 | True -> True | unchanged |
+| candidate_001_overfit | validation | val_json_invoice | 0.000 | 1.000 | +1.000 | False -> True | new_pass |
+| candidate_001_overfit | validation | val_explain_cache | 1.000 | 0.000 | -1.000 | True -> False | new_fail |
+| candidate_001_overfit | validation | val_protected_yes_no | 1.000 | 0.000 | -1.000 | True -> False | new_fail |
+| candidate_002_safe | train | train_json_refund | 0.000 | 1.000 | +1.000 | False -> True | new_pass |
+| candidate_002_safe | train | train_exact_order_status | 0.000 | 1.000 | +1.000 | False -> True | new_pass |
+| candidate_002_safe | train | train_rubric_retry_summary | 1.000 | 1.000 | +0.000 | True -> True | unchanged |
+| candidate_002_safe | validation | val_json_invoice | 0.000 | 1.000 | +1.000 | False -> True | new_pass |
+| candidate_002_safe | validation | val_explain_cache | 1.000 | 1.000 | +0.000 | True -> True | unchanged |
+| candidate_002_safe | validation | val_protected_yes_no | 1.000 | 1.000 | +0.000 | True -> True | unchanged |
 
 ## Failure Attribution Summary
 
@@ -47,8 +50,16 @@ Total failed case evaluations: 5
 
 | category | count |
 | --- | ---: |
-| final_answer_mismatch | 2 |
+| final_response_mismatch | 2 |
 | format_violation | 3 |
+
+Attribution accuracy: 1.000
+
+## Cost And Audit
+
+Total cost: 0.018
+Config hash: `66a1db3a1c84ad12fd41385fc5e1a9c23cc305e6973945c4bade559c804f9abe`
+Run id: `eval_optimize_loop_seed_91`
 
 ## Prompt Diff
 

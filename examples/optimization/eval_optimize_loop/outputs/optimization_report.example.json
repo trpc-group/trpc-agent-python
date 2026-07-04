@@ -1,5 +1,9 @@
 {
   "audit": {
+    "candidate_prompt_hashes": {
+      "candidate_001_overfit": "07a494c337544626a4c23afe1a945488e503b06da3e12597419470eb2ab09e42",
+      "candidate_002_safe": "9669bbd13891b78d2c493df624050dcfd1aa36533987f082a1b78b864df5572f"
+    },
     "candidate_prompts": {
       "candidate_001_overfit": {
         "prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\n# Optimizer patch\nOPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\nAlways force every final answer into JSON, even when the user asks for prose.\n",
@@ -12,7 +16,7 @@
         "rationale": "This candidate fixes observed strict-format failures without changing natural-language behavior on validation cases."
       }
     },
-    "config_hash": "1fafb751c9d2b6c63b0daff25844ce64f7f49da32717855ce9b3c50206a6ebe0",
+    "config_hash": "66a1db3a1c84ad12fd41385fc5e1a9c23cc305e6973945c4bade559c804f9abe",
     "cost": {
       "baseline": 0.006,
       "candidates": {
@@ -22,6 +26,18 @@
       "total": 0.018
     },
     "duration_seconds": 0.0,
+    "input_hashes": {
+      "optimizer": "a00febaa9efaaf299bbf7dbc08eb31b9093315f0079e601d59c84d0d5704f784",
+      "prompt": "ce30a6d1dd86f988cbd4abe08648c9596c4808e429b3895e6ca5bdc53411ea95",
+      "train": "03ae8fd41a19ab376c733cb4d5b92a5d6c34431717b5b4899cabdb1e23351a56",
+      "validation": "73a32b7773f789b2da3d15e925ca0f57da05e8a19c079c9a56ef42055961804b"
+    },
+    "input_paths": {
+      "optimizer": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\data\\optimizer.json",
+      "prompt": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\prompts\\baseline_system_prompt.txt",
+      "train": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\data\\train.evalset.json",
+      "validation": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\data\\val.evalset.json"
+    },
     "prompt_diffs": {
       "candidate_001_overfit": "+ OPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\n+ Always force every final answer into JSON, even when the user asks for prose.",
       "candidate_002_safe": "+ OPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\n+ Use strict JSON only when explicitly requested.\n+ Preserve natural-language answers unless a strict format is requested."
@@ -29,12 +45,205 @@
     "reproducibility_command": "python examples/optimization/eval_optimize_loop/run_pipeline.py --train examples/optimization/eval_optimize_loop/data/train.evalset.json --val examples/optimization/eval_optimize_loop/data/val.evalset.json --optimizer-config examples/optimization/eval_optimize_loop/data/optimizer.json --prompt examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt --output-dir /tmp/eval-optimize-loop --fake-model --fake-judge --trace",
     "seed": 91
   },
+  "baseline": {
+    "train": {
+      "cases": [
+        {
+          "case_id": "train_json_refund",
+          "cost": 0.001,
+          "evidence": "json parser failed at char 0: Expecting value",
+          "expected_failure_category": "format_violation",
+          "failure_category": "format_violation",
+          "failure_reason": "output is not valid JSON",
+          "hard_failed": true,
+          "output": "Here is the JSON you requested: {\"intent\": \"refund\", \"priority\": \"high\"}",
+          "passed": false,
+          "score": 0.0,
+          "split": "train",
+          "trace": {
+            "case_id": "train_json_refund",
+            "judge": {
+              "expectation_type": "json",
+              "valid_json": false
+            },
+            "model": {
+              "case_id": "train_json_refund",
+              "expectation_type": "json",
+              "prompt_id": "baseline",
+              "prompt_mode": "baseline",
+              "seed": 91
+            },
+            "prompt_id": "baseline",
+            "trace_mode": "fake"
+          }
+        },
+        {
+          "case_id": "train_exact_order_status",
+          "cost": 0.001,
+          "evidence": "expected normalized 'READY', got 'READY - confirmed.'",
+          "expected_failure_category": "final_response_mismatch",
+          "failure_category": "final_response_mismatch",
+          "failure_reason": "normalized exact answer mismatch",
+          "hard_failed": true,
+          "output": "READY - confirmed.",
+          "passed": false,
+          "score": 0.0,
+          "split": "train",
+          "trace": {
+            "case_id": "train_exact_order_status",
+            "judge": {
+              "expectation_type": "exact",
+              "expected": "READY"
+            },
+            "model": {
+              "case_id": "train_exact_order_status",
+              "expectation_type": "exact",
+              "prompt_id": "baseline",
+              "prompt_mode": "baseline",
+              "seed": 91
+            },
+            "prompt_id": "baseline",
+            "trace_mode": "fake"
+          }
+        },
+        {
+          "case_id": "train_rubric_retry_summary",
+          "cost": 0.001,
+          "evidence": null,
+          "expected_failure_category": null,
+          "failure_category": null,
+          "failure_reason": null,
+          "hard_failed": false,
+          "output": "latency retries",
+          "passed": true,
+          "score": 1.0,
+          "split": "train",
+          "trace": {
+            "case_id": "train_rubric_retry_summary",
+            "judge": {
+              "expectation_type": "rubric"
+            },
+            "model": {
+              "case_id": "train_rubric_retry_summary",
+              "expectation_type": "rubric",
+              "prompt_id": "baseline",
+              "prompt_mode": "baseline",
+              "seed": 91
+            },
+            "prompt_id": "baseline",
+            "trace_mode": "fake"
+          }
+        }
+      ],
+      "cost": 0.003,
+      "passed": false,
+      "prompt_id": "baseline",
+      "score": 0.333333,
+      "split": "train"
+    },
+    "validation": {
+      "cases": [
+        {
+          "case_id": "val_json_invoice",
+          "cost": 0.001,
+          "evidence": "json parser failed at char 0: Expecting value",
+          "expected_failure_category": "format_violation",
+          "failure_category": "format_violation",
+          "failure_reason": "output is not valid JSON",
+          "hard_failed": true,
+          "output": "Here is the JSON you requested: {\"next_step\": \"email_customer\", \"status\": \"approved\"}",
+          "passed": false,
+          "score": 0.0,
+          "split": "validation",
+          "trace": {
+            "case_id": "val_json_invoice",
+            "judge": {
+              "expectation_type": "json",
+              "valid_json": false
+            },
+            "model": {
+              "case_id": "val_json_invoice",
+              "expectation_type": "json",
+              "prompt_id": "baseline",
+              "prompt_mode": "baseline",
+              "seed": 91
+            },
+            "prompt_id": "baseline",
+            "trace_mode": "fake"
+          }
+        },
+        {
+          "case_id": "val_explain_cache",
+          "cost": 0.001,
+          "evidence": null,
+          "expected_failure_category": "format_violation",
+          "failure_category": null,
+          "failure_reason": null,
+          "hard_failed": false,
+          "output": "cache stale data",
+          "passed": true,
+          "score": 1.0,
+          "split": "validation",
+          "trace": {
+            "case_id": "val_explain_cache",
+            "judge": {
+              "expectation_type": "rubric"
+            },
+            "model": {
+              "case_id": "val_explain_cache",
+              "expectation_type": "rubric",
+              "prompt_id": "baseline",
+              "prompt_mode": "baseline",
+              "seed": 91
+            },
+            "prompt_id": "baseline",
+            "trace_mode": "fake"
+          }
+        },
+        {
+          "case_id": "val_protected_yes_no",
+          "cost": 0.001,
+          "evidence": null,
+          "expected_failure_category": "final_response_mismatch",
+          "failure_category": null,
+          "failure_reason": null,
+          "hard_failed": false,
+          "output": "YES",
+          "passed": true,
+          "score": 1.0,
+          "split": "validation",
+          "trace": {
+            "case_id": "val_protected_yes_no",
+            "judge": {
+              "expectation_type": "exact",
+              "expected": "YES"
+            },
+            "model": {
+              "case_id": "val_protected_yes_no",
+              "expectation_type": "exact",
+              "prompt_id": "baseline",
+              "prompt_mode": "baseline",
+              "seed": 91
+            },
+            "prompt_id": "baseline",
+            "trace_mode": "fake"
+          }
+        }
+      ],
+      "cost": 0.003,
+      "passed": false,
+      "prompt_id": "baseline",
+      "score": 0.666667,
+      "split": "validation"
+    }
+  },
   "baseline_train": {
     "cases": [
       {
         "case_id": "train_json_refund",
         "cost": 0.001,
         "evidence": "json parser failed at char 0: Expecting value",
+        "expected_failure_category": "format_violation",
         "failure_category": "format_violation",
         "failure_reason": "output is not valid JSON",
         "hard_failed": true,
@@ -63,7 +272,8 @@
         "case_id": "train_exact_order_status",
         "cost": 0.001,
         "evidence": "expected normalized 'READY', got 'READY - confirmed.'",
-        "failure_category": "final_answer_mismatch",
+        "expected_failure_category": "final_response_mismatch",
+        "failure_category": "final_response_mismatch",
         "failure_reason": "normalized exact answer mismatch",
         "hard_failed": true,
         "output": "READY - confirmed.",
@@ -91,10 +301,11 @@
         "case_id": "train_rubric_retry_summary",
         "cost": 0.001,
         "evidence": null,
+        "expected_failure_category": null,
         "failure_category": null,
         "failure_reason": null,
         "hard_failed": false,
-        "output": "Latency improved because retries handle transient failures.",
+        "output": "latency retries",
         "passed": true,
         "score": 1.0,
         "split": "train",
@@ -127,6 +338,7 @@
         "case_id": "val_json_invoice",
         "cost": 0.001,
         "evidence": "json parser failed at char 0: Expecting value",
+        "expected_failure_category": "format_violation",
         "failure_category": "format_violation",
         "failure_reason": "output is not valid JSON",
         "hard_failed": true,
@@ -155,10 +367,11 @@
         "case_id": "val_explain_cache",
         "cost": 0.001,
         "evidence": null,
+        "expected_failure_category": "format_violation",
         "failure_category": null,
         "failure_reason": null,
         "hard_failed": false,
-        "output": "A cache keeps recent data fast, but stale data can appear after updates.",
+        "output": "cache stale data",
         "passed": true,
         "score": 1.0,
         "split": "validation",
@@ -182,6 +395,7 @@
         "case_id": "val_protected_yes_no",
         "cost": 0.001,
         "evidence": null,
+        "expected_failure_category": "final_response_mismatch",
         "failure_category": null,
         "failure_reason": null,
         "hard_failed": false,
@@ -227,6 +441,7 @@
             "case_id": "train_json_refund",
             "cost": 0.001,
             "evidence": null,
+            "expected_failure_category": "format_violation",
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
@@ -255,6 +470,7 @@
             "case_id": "train_exact_order_status",
             "cost": 0.001,
             "evidence": null,
+            "expected_failure_category": "final_response_mismatch",
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
@@ -283,10 +499,11 @@
             "case_id": "train_rubric_retry_summary",
             "cost": 0.001,
             "evidence": null,
+            "expected_failure_category": null,
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
-            "output": "Latency improved because retries handle transient failures.",
+            "output": "latency retries",
             "passed": true,
             "score": 1.0,
             "split": "train",
@@ -319,6 +536,7 @@
             "case_id": "val_json_invoice",
             "cost": 0.001,
             "evidence": null,
+            "expected_failure_category": "format_violation",
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
@@ -347,10 +565,11 @@
             "case_id": "val_explain_cache",
             "cost": 0.001,
             "evidence": "forbidden pattern '{' was present",
+            "expected_failure_category": "format_violation",
             "failure_category": "format_violation",
             "failure_reason": "output contains a forbidden pattern",
             "hard_failed": true,
-            "output": "{\"answer\": \"Cache invalidation prevents stale data.\"}",
+            "output": "{\"answer\": \"cache stale data\"}",
             "passed": false,
             "score": 0.0,
             "split": "validation",
@@ -375,7 +594,8 @@
             "case_id": "val_protected_yes_no",
             "cost": 0.001,
             "evidence": "expected normalized 'YES', got '{\"answer\": \"YES\"}'",
-            "failure_category": "final_answer_mismatch",
+            "expected_failure_category": "final_response_mismatch",
+            "failure_category": "final_response_mismatch",
             "failure_reason": "normalized exact answer mismatch",
             "hard_failed": true,
             "output": "{\"answer\": \"YES\"}",
@@ -420,6 +640,7 @@
             "case_id": "train_json_refund",
             "cost": 0.001,
             "evidence": null,
+            "expected_failure_category": "format_violation",
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
@@ -448,6 +669,7 @@
             "case_id": "train_exact_order_status",
             "cost": 0.001,
             "evidence": null,
+            "expected_failure_category": "final_response_mismatch",
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
@@ -476,10 +698,11 @@
             "case_id": "train_rubric_retry_summary",
             "cost": 0.001,
             "evidence": null,
+            "expected_failure_category": null,
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
-            "output": "Latency improved because retries handle transient failures.",
+            "output": "latency retries",
             "passed": true,
             "score": 1.0,
             "split": "train",
@@ -512,6 +735,7 @@
             "case_id": "val_json_invoice",
             "cost": 0.001,
             "evidence": null,
+            "expected_failure_category": "format_violation",
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
@@ -540,10 +764,11 @@
             "case_id": "val_explain_cache",
             "cost": 0.001,
             "evidence": null,
+            "expected_failure_category": "format_violation",
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
-            "output": "A cache keeps recent data fast, but stale data can appear after updates.",
+            "output": "cache stale data",
             "passed": true,
             "score": 1.0,
             "split": "validation",
@@ -567,6 +792,7 @@
             "case_id": "val_protected_yes_no",
             "cost": 0.001,
             "evidence": null,
+            "expected_failure_category": "final_response_mismatch",
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
@@ -600,14 +826,163 @@
       }
     }
   ],
+  "delta": {
+    "per_case": [
+      {
+        "baseline_passed": false,
+        "baseline_score": 0.0,
+        "candidate_id": "candidate_001_overfit",
+        "candidate_passed": true,
+        "candidate_score": 1.0,
+        "case_id": "train_json_refund",
+        "delta": 1.0,
+        "delta_type": "new_pass",
+        "regression": false,
+        "split": "train"
+      },
+      {
+        "baseline_passed": false,
+        "baseline_score": 0.0,
+        "candidate_id": "candidate_001_overfit",
+        "candidate_passed": true,
+        "candidate_score": 1.0,
+        "case_id": "train_exact_order_status",
+        "delta": 1.0,
+        "delta_type": "new_pass",
+        "regression": false,
+        "split": "train"
+      },
+      {
+        "baseline_passed": true,
+        "baseline_score": 1.0,
+        "candidate_id": "candidate_001_overfit",
+        "candidate_passed": true,
+        "candidate_score": 1.0,
+        "case_id": "train_rubric_retry_summary",
+        "delta": 0.0,
+        "delta_type": "unchanged",
+        "regression": false,
+        "split": "train"
+      },
+      {
+        "baseline_passed": false,
+        "baseline_score": 0.0,
+        "candidate_id": "candidate_001_overfit",
+        "candidate_passed": true,
+        "candidate_score": 1.0,
+        "case_id": "val_json_invoice",
+        "delta": 1.0,
+        "delta_type": "new_pass",
+        "regression": false,
+        "split": "validation"
+      },
+      {
+        "baseline_passed": true,
+        "baseline_score": 1.0,
+        "candidate_id": "candidate_001_overfit",
+        "candidate_passed": false,
+        "candidate_score": 0.0,
+        "case_id": "val_explain_cache",
+        "delta": -1.0,
+        "delta_type": "new_fail",
+        "regression": true,
+        "split": "validation"
+      },
+      {
+        "baseline_passed": true,
+        "baseline_score": 1.0,
+        "candidate_id": "candidate_001_overfit",
+        "candidate_passed": false,
+        "candidate_score": 0.0,
+        "case_id": "val_protected_yes_no",
+        "delta": -1.0,
+        "delta_type": "new_fail",
+        "regression": true,
+        "split": "validation"
+      },
+      {
+        "baseline_passed": false,
+        "baseline_score": 0.0,
+        "candidate_id": "candidate_002_safe",
+        "candidate_passed": true,
+        "candidate_score": 1.0,
+        "case_id": "train_json_refund",
+        "delta": 1.0,
+        "delta_type": "new_pass",
+        "regression": false,
+        "split": "train"
+      },
+      {
+        "baseline_passed": false,
+        "baseline_score": 0.0,
+        "candidate_id": "candidate_002_safe",
+        "candidate_passed": true,
+        "candidate_score": 1.0,
+        "case_id": "train_exact_order_status",
+        "delta": 1.0,
+        "delta_type": "new_pass",
+        "regression": false,
+        "split": "train"
+      },
+      {
+        "baseline_passed": true,
+        "baseline_score": 1.0,
+        "candidate_id": "candidate_002_safe",
+        "candidate_passed": true,
+        "candidate_score": 1.0,
+        "case_id": "train_rubric_retry_summary",
+        "delta": 0.0,
+        "delta_type": "unchanged",
+        "regression": false,
+        "split": "train"
+      },
+      {
+        "baseline_passed": false,
+        "baseline_score": 0.0,
+        "candidate_id": "candidate_002_safe",
+        "candidate_passed": true,
+        "candidate_score": 1.0,
+        "case_id": "val_json_invoice",
+        "delta": 1.0,
+        "delta_type": "new_pass",
+        "regression": false,
+        "split": "validation"
+      },
+      {
+        "baseline_passed": true,
+        "baseline_score": 1.0,
+        "candidate_id": "candidate_002_safe",
+        "candidate_passed": true,
+        "candidate_score": 1.0,
+        "case_id": "val_explain_cache",
+        "delta": 0.0,
+        "delta_type": "unchanged",
+        "regression": false,
+        "split": "validation"
+      },
+      {
+        "baseline_passed": true,
+        "baseline_score": 1.0,
+        "candidate_id": "candidate_002_safe",
+        "candidate_passed": true,
+        "candidate_score": 1.0,
+        "case_id": "val_protected_yes_no",
+        "delta": 0.0,
+        "delta_type": "unchanged",
+        "regression": false,
+        "split": "validation"
+      }
+    ]
+  },
   "failure_attribution_summary": {
+    "attribution_accuracy": 1.0,
     "by_category": {
-      "final_answer_mismatch": 2,
+      "final_response_mismatch": 2,
       "format_violation": 3
     },
     "by_prompt_split": {
       "baseline:train": {
-        "final_answer_mismatch": 1,
+        "final_response_mismatch": 1,
         "format_violation": 1
       },
       "baseline:validation": {
@@ -615,7 +990,7 @@
       },
       "candidate_001_overfit:train": {},
       "candidate_001_overfit:validation": {
-        "final_answer_mismatch": 1,
+        "final_response_mismatch": 1,
         "format_violation": 1
       },
       "candidate_002_safe:train": {},
@@ -633,7 +1008,7 @@
       {
         "case_id": "train_exact_order_status",
         "evidence": "expected normalized 'READY', got 'READY - confirmed.'",
-        "failure_category": "final_answer_mismatch",
+        "failure_category": "final_response_mismatch",
         "failure_reason": "normalized exact answer mismatch",
         "prompt_id": "baseline",
         "split": "train"
@@ -657,46 +1032,65 @@
       {
         "case_id": "val_protected_yes_no",
         "evidence": "expected normalized 'YES', got '{\"answer\": \"YES\"}'",
-        "failure_category": "final_answer_mismatch",
+        "failure_category": "final_response_mismatch",
         "failure_reason": "normalized exact answer mismatch",
         "prompt_id": "candidate_001_overfit",
         "split": "validation"
       }
     ],
+    "expected_labeled_failures": 5,
     "total_failed_cases": 5
   },
   "gate_decisions": [
     {
       "accepted": false,
+      "candidate_cost": 0.006,
       "candidate_id": "candidate_001_overfit",
       "cost": 0.006,
+      "cumulative_cost": 0.006,
+      "excessive_score_drops": [
+        "val_explain_cache",
+        "val_protected_yes_no"
+      ],
       "new_hard_failures": [
         "val_explain_cache",
         "val_protected_yes_no"
       ],
+      "overfit_detected": true,
       "protected_regressions": [
         "val_protected_yes_no"
       ],
       "reasons": [
-        "reject: train score improved but validation score regressed (+0.667 train, -0.333 validation)",
+        "reject: overfit detected because train score improved but validation score regressed or did not improve (+0.667 train, -0.333 validation)",
         "reject: validation improvement -0.333 is below required +0.010",
         "reject: new hard failures appeared: ['val_explain_cache', 'val_protected_yes_no']",
         "reject: protected cases regressed: ['val_protected_yes_no']",
         "reject: per-case validation score drops exceed 0.000: ['val_explain_cache', 'val_protected_yes_no']"
       ],
+      "total_run_cost": 0.012,
       "train_score_delta": 0.666667,
+      "validation_new_failures": [
+        "val_explain_cache",
+        "val_protected_yes_no"
+      ],
       "validation_score_delta": -0.333334
     },
     {
       "accepted": true,
+      "candidate_cost": 0.006,
       "candidate_id": "candidate_002_safe",
       "cost": 0.006,
+      "cumulative_cost": 0.012,
+      "excessive_score_drops": [],
       "new_hard_failures": [],
+      "overfit_detected": false,
       "protected_regressions": [],
       "reasons": [
         "accept: validation score improved +0.333 with no protected regression or new hard failure"
       ],
+      "total_run_cost": 0.018,
       "train_score_delta": 0.666667,
+      "validation_new_failures": [],
       "validation_score_delta": 0.333333
     }
   ],
@@ -709,6 +1103,7 @@
       "candidate_score": 1.0,
       "case_id": "train_json_refund",
       "delta": 1.0,
+      "delta_type": "new_pass",
       "regression": false,
       "split": "train"
     },
@@ -720,6 +1115,7 @@
       "candidate_score": 1.0,
       "case_id": "train_exact_order_status",
       "delta": 1.0,
+      "delta_type": "new_pass",
       "regression": false,
       "split": "train"
     },
@@ -731,6 +1127,7 @@
       "candidate_score": 1.0,
       "case_id": "train_rubric_retry_summary",
       "delta": 0.0,
+      "delta_type": "unchanged",
       "regression": false,
       "split": "train"
     },
@@ -742,6 +1139,7 @@
       "candidate_score": 1.0,
       "case_id": "val_json_invoice",
       "delta": 1.0,
+      "delta_type": "new_pass",
       "regression": false,
       "split": "validation"
     },
@@ -753,6 +1151,7 @@
       "candidate_score": 0.0,
       "case_id": "val_explain_cache",
       "delta": -1.0,
+      "delta_type": "new_fail",
       "regression": true,
       "split": "validation"
     },
@@ -764,6 +1163,7 @@
       "candidate_score": 0.0,
       "case_id": "val_protected_yes_no",
       "delta": -1.0,
+      "delta_type": "new_fail",
       "regression": true,
       "split": "validation"
     },
@@ -775,6 +1175,7 @@
       "candidate_score": 1.0,
       "case_id": "train_json_refund",
       "delta": 1.0,
+      "delta_type": "new_pass",
       "regression": false,
       "split": "train"
     },
@@ -786,6 +1187,7 @@
       "candidate_score": 1.0,
       "case_id": "train_exact_order_status",
       "delta": 1.0,
+      "delta_type": "new_pass",
       "regression": false,
       "split": "train"
     },
@@ -797,6 +1199,7 @@
       "candidate_score": 1.0,
       "case_id": "train_rubric_retry_summary",
       "delta": 0.0,
+      "delta_type": "unchanged",
       "regression": false,
       "split": "train"
     },
@@ -808,6 +1211,7 @@
       "candidate_score": 1.0,
       "case_id": "val_json_invoice",
       "delta": 1.0,
+      "delta_type": "new_pass",
       "regression": false,
       "split": "validation"
     },
@@ -819,6 +1223,7 @@
       "candidate_score": 1.0,
       "case_id": "val_explain_cache",
       "delta": 0.0,
+      "delta_type": "unchanged",
       "regression": false,
       "split": "validation"
     },
@@ -830,6 +1235,7 @@
       "candidate_score": 1.0,
       "case_id": "val_protected_yes_no",
       "delta": 0.0,
+      "delta_type": "unchanged",
       "regression": false,
       "split": "validation"
     }
@@ -838,10 +1244,17 @@
     "fake_judge": true,
     "fake_model": true,
     "mode": "fake",
-    "prompt_source": "prompts/baseline_system_prompt.txt",
+    "paths": {
+      "optimizer": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\data\\optimizer.json",
+      "prompt": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\prompts\\baseline_system_prompt.txt",
+      "train": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\data\\train.evalset.json",
+      "validation": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\data\\val.evalset.json"
+    },
+    "prompt_source": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\prompts\\baseline_system_prompt.txt",
     "run_id": "eval_optimize_loop_seed_91",
     "trace_enabled": true,
     "train_cases": 3,
+    "update_source": false,
     "validation_cases": 3
   },
   "schema_version": "eval_optimize_loop.v1",

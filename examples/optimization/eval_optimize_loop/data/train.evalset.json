@@ -15,7 +15,8 @@
         "expected_values": {
           "intent": "refund",
           "priority": "high"
-        }
+        },
+        "expected_failure_category": "format_violation"
       },
       "tags": [
         "json",
@@ -27,7 +28,8 @@
       "input": "Answer exactly READY when the order can ship.",
       "expectation": {
         "type": "exact",
-        "expected": "READY"
+        "expected": "READY",
+        "expected_failure_category": "final_response_mismatch"
       },
       "tags": [
         "exact",

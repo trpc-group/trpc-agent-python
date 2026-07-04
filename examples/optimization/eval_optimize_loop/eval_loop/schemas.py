@@ -19,6 +19,8 @@ class EvalCase:
     expectation: dict[str, Any]
     tags: list[str] = field(default_factory=list)
     protected: bool = False
+    simulated_outputs: dict[str, str] = field(default_factory=dict)
+    expected_failure_category: str | None = None
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any], split: str) -> "EvalCase":
@@ -35,6 +37,9 @@ class EvalCase:
             expectation=dict(expectation),
             tags=list(payload.get("tags") or []),
             protected=bool(payload.get("protected", False)),
+            simulated_outputs=dict(payload.get("simulated_outputs") or expectation.get("simulated_outputs") or {}),
+            expected_failure_category=payload.get("expected_failure_category")
+            or expectation.get("expected_failure_category"),
         )
 
 
@@ -53,6 +58,7 @@ class CaseResult:
     evidence: str | None = None
     cost: float = 0.0
     hard_failed: bool = False
+    expected_failure_category: str | None = None
 
 
 @dataclass(frozen=True)
@@ -93,6 +99,7 @@ class CaseDelta:
     baseline_passed: bool
     candidate_passed: bool
     regression: bool
+    delta_type: str
 
 
 @dataclass(frozen=True)
@@ -106,6 +113,12 @@ class GateDecision:
     validation_score_delta: float
     new_hard_failures: list[str]
     protected_regressions: list[str]
+    validation_new_failures: list[str]
+    excessive_score_drops: list[str]
+    overfit_detected: bool
+    candidate_cost: float
+    cumulative_cost: float
+    total_run_cost: float
     cost: float
 
 
@@ -115,9 +128,11 @@ class OptimizationReport:
 
     schema_version: str
     run: dict[str, Any]
+    baseline: dict[str, EvalResult]
     baseline_train: EvalResult
     baseline_validation: EvalResult
     candidates: list[dict[str, Any]]
+    delta: dict[str, Any]
     per_case_deltas: list[CaseDelta]
     failure_attribution_summary: dict[str, Any]
     gate_decisions: list[GateDecision]

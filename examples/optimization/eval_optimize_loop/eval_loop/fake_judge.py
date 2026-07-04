@@ -19,7 +19,7 @@ class JudgeOutcome:
 
 
 class FakeJudge:
-    """Scores JSON, exact-answer, and rubric cases without calling an LLM."""
+    """Scores JSON, exact-answer, rubric, tool, and knowledge cases offline."""
 
     def score(self, case: EvalCase, output: str) -> JudgeOutcome:
         expectation_type = case.expectation.get("type")
@@ -29,6 +29,10 @@ class FakeJudge:
             return self._score_exact(case, output)
         if expectation_type == "rubric":
             return self._score_rubric(case, output)
+        if expectation_type == "tool":
+            return self._score_tool(case, output)
+        if expectation_type == "knowledge":
+            return self._score_knowledge(case, output)
         return JudgeOutcome(
             score=0.0,
             passed=False,
@@ -126,6 +130,59 @@ class FakeJudge:
             )
 
         return JudgeOutcome(score=1.0, passed=True, trace={"expectation_type": "rubric"})
+
+    def _score_tool(self, case: EvalCase, output: str) -> JudgeOutcome:
+        try:
+            parsed = json.loads(output)
+        except json.JSONDecodeError as exc:
+            return JudgeOutcome(
+                score=0.0,
+                passed=False,
+                error_code="tool_call_error",
+                evidence=f"tool output was not JSON at char {exc.pos}: {exc.msg}",
+                trace={"expectation_type": "tool", "valid_json": False},
+            )
+        expected_tool = case.expectation.get("expected_tool")
+        if parsed.get("tool") != expected_tool:
+            return JudgeOutcome(
+                score=0.0,
+                passed=False,
+                error_code="tool_call_error",
+                evidence=f"expected tool {expected_tool!r}, got {parsed.get('tool')!r}",
+                trace={"expectation_type": "tool", "expected_tool": expected_tool},
+            )
+        expected_args = dict(case.expectation.get("expected_args") or {})
+        actual_args = parsed.get("args") or {}
+        for key, expected_value in expected_args.items():
+            if actual_args.get(key) != expected_value:
+                return JudgeOutcome(
+                    score=0.0,
+                    passed=False,
+                    error_code="parameter_error",
+                    evidence=f"arg {key!r}: expected {expected_value!r}, got {actual_args.get(key)!r}",
+                    trace={"expectation_type": "tool", "arg": key},
+                )
+        return JudgeOutcome(score=1.0, passed=True, trace={"expectation_type": "tool"})
+
+    def _score_knowledge(self, case: EvalCase, output: str) -> JudgeOutcome:
+        lowered = output.lower()
+        required_sources = [str(item) for item in case.expectation.get("required_sources") or []]
+        required_terms = [str(item) for item in case.expectation.get("must_include_knowledge_terms") or []]
+        missing_sources = [source for source in required_sources if source.lower() not in lowered]
+        missing_terms = [term for term in required_terms if term.lower() not in lowered]
+        if missing_sources or missing_terms:
+            return JudgeOutcome(
+                score=0.0,
+                passed=False,
+                error_code="knowledge_recall_insufficient",
+                evidence=f"missing sources={missing_sources!r}, terms={missing_terms!r}",
+                trace={
+                    "expectation_type": "knowledge",
+                    "missing_sources": missing_sources,
+                    "missing_terms": missing_terms,
+                },
+            )
+        return JudgeOutcome(score=1.0, passed=True, trace={"expectation_type": "knowledge"})
 
 
 def _normalize_exact(value: str) -> str:

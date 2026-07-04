@@ -35,15 +35,17 @@ class AcceptanceGate:
         candidate_train: EvalResult,
         candidate_validation: EvalResult,
         deltas: list[CaseDelta],
+        cumulative_cost: float = 0.0,
     ) -> GateDecision:
         train_delta = round(candidate_train.score - baseline_train.score, 6)
         val_delta = round(candidate_validation.score - baseline_validation.score, 6)
         candidate_cost = round(candidate_train.cost + candidate_validation.cost, 6)
         reasons: list[str] = []
 
-        if train_delta > 0 and val_delta < 0:
+        overfit_detected = train_delta > 0 and val_delta <= 0
+        if overfit_detected:
             reasons.append(
-                "reject: train score improved but validation score regressed "
+                "reject: overfit detected because train score improved but validation score regressed or did not improve "
                 f"({train_delta:+.3f} train, {val_delta:+.3f} validation)"
             )
 
@@ -56,6 +58,12 @@ class AcceptanceGate:
 
         baseline_validation_by_id = baseline_validation.by_case_id()
         candidate_validation_by_id = candidate_validation.by_case_id()
+        validation_new_failures = [
+            case_id
+            for case_id, candidate_case in sorted(candidate_validation_by_id.items())
+            if not candidate_case.passed and baseline_validation_by_id.get(case_id)
+            and baseline_validation_by_id[case_id].passed
+        ]
         new_hard_failures = [
             case_id
             for case_id, candidate_case in sorted(candidate_validation_by_id.items())
@@ -84,8 +92,9 @@ class AcceptanceGate:
             reasons.append(f"reject: per-case validation score drops exceed {max_drop:.3f}: {excessive_drops}")
 
         max_total_cost = float(self.config["max_total_cost"])
-        if candidate_cost > max_total_cost:
-            reasons.append(f"reject: candidate cost {candidate_cost:.3f} exceeds budget {max_total_cost:.3f}")
+        total_run_cost = round(cumulative_cost + candidate_cost, 6)
+        if total_run_cost > max_total_cost:
+            reasons.append(f"reject: total run cost {total_run_cost:.3f} exceeds budget {max_total_cost:.3f}")
 
         accepted = not any(reason.startswith("reject:") for reason in reasons)
         if accepted:
@@ -102,5 +111,11 @@ class AcceptanceGate:
             validation_score_delta=val_delta,
             new_hard_failures=new_hard_failures,
             protected_regressions=protected_regressions,
+            validation_new_failures=validation_new_failures,
+            excessive_score_drops=excessive_drops,
+            overfit_detected=overfit_detected,
+            candidate_cost=candidate_cost,
+            cumulative_cost=round(cumulative_cost, 6),
+            total_run_cost=total_run_cost,
             cost=candidate_cost,
         )

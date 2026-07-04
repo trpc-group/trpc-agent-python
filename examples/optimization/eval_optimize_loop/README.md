@@ -1,43 +1,46 @@
 # Evaluation + Optimization Closed Loop
 
-This example implements a reproducible evaluation and prompt-optimization loop
-that runs without `TRPC_AGENT_API_KEY` or any external model provider. It is an
-example-local implementation: the code mirrors the evaluator/optimizer workflow
-with a thin adapter so the behavior is deterministic and easy to review.
+This example implements issue #91 as a reproducible evaluation + optimization
+loop. The default path is deterministic fake mode, so it runs in CI and on a
+fresh checkout without `TRPC_AGENT_API_KEY` or any external model provider. A
+real SDK adapter path is also present in `eval_loop/backends.py` for
+`AgentOptimizer` / `TargetPrompt` integration.
 
 ## Architecture
 
 ```text
-train.evalset.json      val.evalset.json       baseline_system_prompt.txt
-        |                       |                         |
-        v                       v                         v
-   loader.py --------------> evaluator.py <----------- fake_model.py
-        |                       |                         |
-        |                       v                         |
-        |                  fake_judge.py                  |
-        |                       |                         |
-        v                       v                         |
- attribution.py <------ baseline + candidate results     |
-        |                       |                         |
-        v                       v                         |
-   optimizer.py --------> candidate prompts --------------+
-        |                       |
-        v                       v
-     gate.py ------------> accept/reject decisions
+train.evalset.json + val.evalset.json + optimizer.json + baseline prompt
         |
         v
-     report.py ----------> optimization_report.json/.md
+loader.py / config.py  --> validated cases, gate config, input hashes
+        |
+        v
+backends.py
+  |-- FakeBackend -> FakeModel + FakeJudge + FakeOptimizer
+  `-- SDKBackend  -> AgentOptimizer + TargetPrompt + user call_agent
+        |
+        v
+attribution.py -> evaluator.py -> gate.py -> report.py
+        |
+        v
+optimization_report.json / optimization_report.md / runs/<run_id>/ audit files
 ```
 
 ## Quick Start
 
-Short deterministic command:
+One-command fake mode:
 
 ```bash
 python examples/optimization/eval_optimize_loop/run_pipeline.py --fake-model --fake-judge --trace
 ```
 
-Full command with explicit inputs:
+Equivalent new form:
+
+```bash
+python examples/optimization/eval_optimize_loop/run_pipeline.py --mode fake --trace
+```
+
+Full fake command:
 
 ```bash
 python examples/optimization/eval_optimize_loop/run_pipeline.py \
@@ -46,65 +49,86 @@ python examples/optimization/eval_optimize_loop/run_pipeline.py \
   --optimizer-config examples/optimization/eval_optimize_loop/data/optimizer.json \
   --prompt examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt \
   --output-dir /tmp/eval-optimize-loop \
-  --fake-model \
-  --fake-judge \
+  --mode fake \
   --trace
 ```
 
-The default output directory is the system temp directory,
-`eval-optimize-loop`. The fixed checked-in examples are:
+SDK adapter command shape:
+
+```bash
+python examples/optimization/eval_optimize_loop/run_pipeline.py \
+  --mode sdk \
+  --train path/to/sdk_train.evalset.json \
+  --val path/to/sdk_val.evalset.json \
+  --optimizer-config path/to/sdk_optimizer.json \
+  --prompt path/to/system_prompt.txt \
+  --sdk-call-agent your_package.your_module:call_agent \
+  --output-dir /tmp/eval-optimize-loop-sdk
+```
+
+`--sdk-call-agent` must point to an async callable compatible with
+`AgentOptimizer.optimize(call_agent=...)`. Configure any real model credentials
+needed by that callable. SDK mode never silently falls back to fake mode.
+
+## Source Prompt Writes
+
+The default is **no source write-back**. The baseline prompt file is not modified
+by fake mode, and `SDKBackend` calls `AgentOptimizer.optimize(update_source=False)`
+unless `--update-source` is explicitly passed. The report records
+`run.update_source` and the Markdown report states whether source write-back was
+enabled.
+
+## Candidate Behavior
+
+The fake optimizer proposes exactly two candidates:
+
+- `candidate_001_overfit`: fixes train formatting but forces JSON too broadly;
+  it improves train score and regresses validation, so the gate rejects it.
+- `candidate_002_safe`: applies strict JSON/exact-answer behavior only when
+  requested; it improves validation without protected-case regression, so the
+  gate may accept it.
+
+The fake model is driven by `EvalCase.expectation`, `tags`, `protected`, and
+optional `simulated_outputs`; it does not depend on sample `case_id` names.
+
+## Reports
+
+`optimization_report.json` includes:
+
+- `schema_version`;
+- `run` metadata: mode, fake flags, trace flag, case counts, update-source flag,
+  and input paths;
+- `baseline` plus compatibility fields `baseline_train` and
+  `baseline_validation`;
+- all candidate train/validation results, rationale, and prompt diff;
+- per-case deltas with `delta_type` (`new_pass`, `new_fail`, `score_up`,
+  `score_down`, `unchanged`);
+- failure attribution summary and attribution accuracy when expected labels are
+  present;
+- gate decisions with overfit detection, protected regressions, new hard
+  failures, excessive drops, and cost fields;
+- audit data: seed, duration, config hash, input hashes, candidate prompt hashes,
+  cost, prompt diffs, and reproducibility command.
+
+`optimization_report.md` includes final decision, gate reasons, score table,
+per-case delta table, failure attribution summary, cost/audit details, prompt
+diffs, and the reproducibility command.
+
+`report.py` also writes audit artifacts under `output_dir/runs/<run_id>/`:
+
+- `config.snapshot.json`;
+- `input_hashes.json`;
+- `candidate_prompts/<candidate_id>/system_prompt.txt`;
+- `case_results/<candidate_id>_<split>.json`;
+- `prompt_diffs/<candidate_id>.diff`.
+
+The repository keeps only stable examples:
 
 - `outputs/optimization_report.example.json`
 - `outputs/optimization_report.example.md`
 
-## What The Example Demonstrates
-
-- Baseline evaluation on train and validation evalsets.
-- Rule-based failure attribution for failed cases.
-- A fake optimizer that proposes two candidates:
-  - `candidate_001_overfit`: improves train score but regresses validation.
-  - `candidate_002_safe`: improves validation without protected regression.
-- Candidate validation on the full validation set.
-- A configurable gate that rejects train-only gains and protected-case
-  regressions.
-- Audit persistence with seed, cost, deterministic duration, config hash, and
-  candidate prompt text.
-
-The six eval cases cover:
-
-- optimization succeeds: `candidate_002_safe` is accepted;
-- optimization has no effect: rubric cases stay unchanged;
-- optimization regresses/overfits: `candidate_001_overfit` forces JSON on
-  validation prose and protected exact-answer cases.
-
-## Fake Model, Fake Judge, And Trace Mode
-
-`--fake-model` uses deterministic prompt markers to simulate baseline, overfit,
-and safe candidate behavior. `--fake-judge` scores JSON, exact-answer, and
-rubric cases locally. `--trace` stores per-case fake model and judge decisions
-inside `optimization_report.json`, which makes failures reviewable without
-calling an external service.
-
-This example currently requires `--fake-model --fake-judge`. That is deliberate:
-it keeps the PR deterministic and ensures the example runs in CI without API
-keys.
-
-## Inspecting Reports
-
-Open `optimization_report.md` first for the human-readable decision:
-
-- final selected candidate;
-- why the overfit candidate was rejected;
-- why the safe candidate was accepted;
-- baseline vs candidate score table;
-- per-case delta table;
-- failure attribution summary;
-- prompt diffs;
-- reproducibility command.
-
-Use `optimization_report.json` for automation and audit. It includes the same
-decision data plus full case outputs, traces, costs, config hash, and candidate
-prompt snapshots.
+Runtime `optimization_report.json`, `optimization_report.md`, and `runs/`
+directories are not committed.
 
 ## Run Tests
 
@@ -112,20 +136,7 @@ prompt snapshots.
 python -m pytest examples/optimization/eval_optimize_loop/tests
 ```
 
-The tests cover gate rejection/acceptance, failure attribution, fake-mode report
-generation, and deterministic output with the same seed.
-
-## Switching To Real Evaluator/Optimizer Later
-
-The example intentionally isolates integration points:
-
-- replace `ExampleEvaluator` in `eval_loop/evaluator.py` with an adapter around
-  `AgentEvaluator` when real agent execution and SDK evalsets are desired;
-- replace `FakeOptimizer` in `eval_loop/optimizer.py` with `AgentOptimizer` or a
-  remote optimizer;
-- keep `gate.py`, `attribution.py`, and `report.py` as reviewable policy and
-  audit layers around the real components.
-
-When switching to real mode, keep train and validation files distinct, preserve
-the protected-case gate, and continue writing both JSON and Markdown reports so
-optimization decisions remain reviewable.
+The tests cover fake hidden-sample generalization, config validation, gate
+rejection paths, protected-case behavior, failure attribution, tool/knowledge
+judge paths, SDK adapter wiring through monkeypatching, deterministic report
+generation, and both CLI forms.

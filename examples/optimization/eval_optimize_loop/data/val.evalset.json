@@ -15,7 +15,8 @@
         "expected_values": {
           "next_step": "email_customer",
           "status": "approved"
-        }
+        },
+        "expected_failure_category": "format_violation"
       },
       "tags": [
         "json",
@@ -36,7 +37,8 @@
           "}",
           "json"
         ],
-        "max_chars": 180
+        "max_chars": 180,
+        "expected_failure_category": "format_violation"
       },
       "tags": [
         "rubric",
@@ -48,7 +50,8 @@
       "input": "Answer exactly YES if idempotent retries are safe for duplicate requests.",
       "expectation": {
         "type": "exact",
-        "expected": "YES"
+        "expected": "YES",
+        "expected_failure_category": "final_response_mismatch"
       },
       "protected": true,
       "tags": [

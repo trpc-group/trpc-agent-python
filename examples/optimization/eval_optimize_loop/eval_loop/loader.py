@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .config import OptimizerConfig
+from .config import parse_optimizer_config
 from .schemas import EvalCase
 
 
@@ -27,11 +29,9 @@ def load_eval_cases(path: str | Path, split: str | None = None) -> list[EvalCase
     return [EvalCase.from_dict(case, str(effective_split)) for case in cases]
 
 
-def load_optimizer_config(path: str | Path) -> dict[str, Any]:
+def load_optimizer_config(path: str | Path) -> OptimizerConfig:
     payload = read_json(path)
-    if "gate" not in payload:
-        raise ValueError(f"optimizer config {path} must contain a gate object")
-    return payload
+    return parse_optimizer_config(payload, path=path)
 
 
 def load_prompt(path: str | Path) -> str:
@@ -43,3 +43,13 @@ def stable_config_hash(config: dict[str, Any]) -> str:
 
     canonical = json.dumps(config, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def sha256_file(path: str | Path) -> str:
+    import hashlib
+
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
