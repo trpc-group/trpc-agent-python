@@ -67,6 +67,7 @@ def run_pipeline(
     if mode == "sdk":
         optimizer_config_dict = _read_json_object_for_audit(optimizer_config_path)
         baseline_prompt = load_prompt(prompt_path)
+        sdk_artifact_dir = Path(output_dir) / "sdk_optimizer"
         sdk_backend = SDKBackend(
             prompt_path=prompt_path,
             call_agent_path=sdk_call_agent,
@@ -77,7 +78,7 @@ def run_pipeline(
             train_path=train_path,
             val_path=val_path,
             optimizer_config_path=optimizer_config_path,
-            output_dir=output_dir,
+            output_dir=sdk_artifact_dir,
         )
         report = _build_sdk_report(
             candidates=candidates,
@@ -329,12 +330,24 @@ def _build_sdk_report(
         optimizer_config_path=optimizer_config_path,
         prompt_path=prompt_path,
     )
+    sdk_summary = sdk_backend.last_result_summary or {}
+    baseline_pass_rate = _summary_float(sdk_summary, "baseline_pass_rate", 0.0)
+    best_pass_rate = _summary_float(sdk_summary, "best_pass_rate", baseline_pass_rate)
+    pass_rate_improvement = _summary_float(
+        sdk_summary,
+        "pass_rate_improvement",
+        best_pass_rate - baseline_pass_rate,
+    )
+    total_llm_cost = _summary_float(sdk_summary, "total_llm_cost", 0.0)
+    duration_seconds = _summary_float(sdk_summary, "duration_seconds", 0.0)
+    gate_config = _sdk_gate_config(optimizer_config_dict)
+
     baseline_train = EvalResult(prompt_id="baseline", split="train", score=0.0, passed=False, cost=0.0, cases=[])
     baseline_validation = EvalResult(
         prompt_id="baseline",
         split="validation",
-        score=0.0,
-        passed=False,
+        score=baseline_pass_rate,
+        passed=baseline_pass_rate >= 1.0,
         cost=0.0,
         cases=[],
     )
@@ -352,14 +365,14 @@ def _build_sdk_report(
             "validation_result": EvalResult(
                 prompt_id=candidate.candidate_id,
                 split="validation",
-                score=0.0,
-                passed=False,
-                cost=0.0,
+                score=best_pass_rate,
+                passed=best_pass_rate >= baseline_pass_rate,
+                cost=total_llm_cost,
                 cases=[],
             ),
-            "gate_status": "not_applicable",
-            "gate_not_applied_reason": "SDK optimizer result does not expose per-case validation results",
-            "sdk_result_summary": sdk_backend.last_result_summary or {},
+            "gate_status": "partial_applied",
+            "gate_not_applied_reason": "SDK OptimizeResult exposes aggregate scores but not full per-case deltas",
+            "sdk_result_summary": sdk_summary,
         }
         for candidate in candidates
     ]
@@ -369,7 +382,7 @@ def _build_sdk_report(
     }
     audit = {
         "seed": None,
-        "duration_seconds": 0.0,
+        "duration_seconds": duration_seconds,
         "config_hash": stable_config_hash(optimizer_config_dict),
         "input_hashes": input_hashes,
         "input_paths": {
@@ -380,8 +393,12 @@ def _build_sdk_report(
         },
         "prompt_hash": input_hashes["prompt"],
         "candidate_prompt_hashes": prompt_hashes,
-        "total_run_cost": 0.0,
-        "cost": {"baseline": 0.0, "candidates": {candidate.candidate_id: 0.0 for candidate in candidates}, "total": 0.0},
+        "total_run_cost": total_llm_cost,
+        "cost": {
+            "baseline": 0.0,
+            "candidates": {candidate.candidate_id: total_llm_cost for candidate in candidates},
+            "total": total_llm_cost,
+        },
         "candidate_prompts": {
             candidate.candidate_id: {
                 "rationale": candidate.rationale,
@@ -391,8 +408,8 @@ def _build_sdk_report(
             for candidate in candidates
         },
         "prompt_diffs": {candidate.candidate_id: candidate.prompt_diff for candidate in candidates},
-        "sdk_artifact_dir": str(output_dir),
-        "sdk_result_summary": sdk_backend.last_result_summary or {},
+        "sdk_artifact_dir": sdk_backend.last_artifact_dir or str(Path(output_dir) / "sdk_optimizer"),
+        "sdk_result_summary": sdk_summary,
         "reproducibility_command": _sdk_reproducibility_command(
             train_path=train_path,
             val_path=val_path,
@@ -411,7 +428,7 @@ def _build_sdk_report(
         "train_cases": train_case_count,
         "validation_cases": validation_case_count,
         "update_source": update_source,
-        "sdk_artifact_dir": str(output_dir),
+        "sdk_artifact_dir": audit["sdk_artifact_dir"],
         "reproducibility_command": audit["reproducibility_command"],
         "paths": {
             "train": str(train_path),
@@ -422,26 +439,16 @@ def _build_sdk_report(
         "prompt_source": str(prompt_path),
     }
     gate_decisions = [
-        GateDecision(
+        _sdk_gate_decision(
             candidate_id=candidate.candidate_id,
-            accepted=True,
-            reasons=["gate not applied: SDK optimizer result does not expose per-case validation results"],
-            train_score_delta=0.0,
-            validation_score_delta=0.0,
-            new_hard_failures=[],
-            protected_regressions=[],
-            validation_new_failures=[],
-            excessive_score_drops=[],
-            overfit_detected=False,
-            candidate_cost=0.0,
-            cumulative_cost=0.0,
-            total_run_cost=0.0,
-            cost=0.0,
-            gate_status="not_applicable",
-            gate_not_applied_reason="SDK optimizer result does not expose per-case validation results",
+            sdk_summary=sdk_summary,
+            gate_config=gate_config,
         )
         for candidate in candidates
     ]
+    selected_candidate = None
+    if candidates and gate_decisions and gate_decisions[0].accepted:
+        selected_candidate = candidates[0].candidate_id
     return build_report(
         run=run,
         baseline_train=baseline_train,
@@ -449,7 +456,7 @@ def _build_sdk_report(
         candidate_records=candidate_records,
         per_case_deltas=[],
         gate_decisions=gate_decisions,
-        selected_candidate=candidates[0].candidate_id if candidates else None,
+        selected_candidate=selected_candidate,
         audit=audit,
     )
 
@@ -472,6 +479,100 @@ def _sdk_reproducibility_command(
     if update_source:
         command += " --update-source"
     return command
+
+
+def _sdk_gate_decision(
+    *,
+    candidate_id: str,
+    sdk_summary: dict[str, Any],
+    gate_config: dict[str, float],
+) -> GateDecision:
+    status = str(sdk_summary.get("status") or "UNKNOWN")
+    improvement = _summary_float(sdk_summary, "pass_rate_improvement", 0.0)
+    total_cost = _summary_float(sdk_summary, "total_llm_cost", 0.0)
+    min_improvement = gate_config["min_val_score_improvement"]
+    max_cost = gate_config["max_total_cost"]
+
+    reasons: list[str] = []
+    accepted = True
+    if status != "SUCCEEDED":
+        accepted = False
+        reasons.append(f"reject: SDK optimizer status {status} is not SUCCEEDED")
+    else:
+        reasons.append("accept: SDK optimizer status is SUCCEEDED")
+
+    if improvement < min_improvement:
+        accepted = False
+        reasons.append(
+            f"reject: validation improvement {improvement:.3f} is below threshold {min_improvement:.3f}"
+        )
+    else:
+        reasons.append(
+            f"accept: validation improvement {improvement:.3f} meets threshold {min_improvement:.3f}"
+        )
+
+    if total_cost > max_cost:
+        accepted = False
+        reasons.append(f"reject: total SDK cost {total_cost:.3f} exceeds budget {max_cost:.3f}")
+    else:
+        reasons.append(f"accept: total SDK cost {total_cost:.3f} is within budget {max_cost:.3f}")
+
+    if accepted:
+        reasons.append("accept: SDK aggregate gate passed")
+
+    return GateDecision(
+        candidate_id=candidate_id,
+        accepted=accepted,
+        reasons=reasons,
+        train_score_delta=0.0,
+        validation_score_delta=improvement,
+        new_hard_failures=[],
+        protected_regressions=[],
+        validation_new_failures=[],
+        excessive_score_drops=[],
+        overfit_detected=False,
+        candidate_cost=total_cost,
+        cumulative_cost=0.0,
+        total_run_cost=total_cost,
+        cost=total_cost,
+        gate_status="partial_applied",
+        gate_not_applied_reason="SDK OptimizeResult exposes aggregate scores but not full per-case deltas",
+        not_applied_checks=[
+            "per_case_delta",
+            "protected_regression",
+            "new_hard_failure",
+            "max_score_drop_per_case",
+        ],
+    )
+
+
+def _sdk_gate_config(optimizer_config_dict: dict[str, Any]) -> dict[str, float]:
+    gate_payload = optimizer_config_dict.get("gate")
+    if gate_payload is None:
+        gate_payload = {}
+    if not isinstance(gate_payload, dict):
+        raise ValueError("optimizer config field 'gate' must be an object when present")
+
+    min_improvement = gate_payload.get("min_val_score_improvement", 0.01)
+    max_cost = gate_payload.get("max_total_cost", 1.0)
+    if not isinstance(min_improvement, (int, float)) or min_improvement < 0:
+        raise ValueError("optimizer config field 'gate.min_val_score_improvement' must be a non-negative number")
+    if not isinstance(max_cost, (int, float)) or max_cost < 0:
+        raise ValueError("optimizer config field 'gate.max_total_cost' must be a non-negative number")
+    return {
+        "min_val_score_improvement": float(min_improvement),
+        "max_total_cost": float(max_cost),
+    }
+
+
+def _summary_float(summary: dict[str, Any], key: str, default: float) -> float:
+    value = summary.get(key, default)
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

@@ -1060,6 +1060,7 @@
         "val_explain_cache",
         "val_protected_yes_no"
       ],
+      "not_applied_checks": [],
       "overfit_detected": true,
       "protected_regressions": [
         "val_protected_yes_no"
@@ -1089,6 +1090,7 @@
       "gate_not_applied_reason": null,
       "gate_status": "applied",
       "new_hard_failures": [],
+      "not_applied_checks": [],
       "overfit_detected": false,
       "protected_regressions": [],
       "reasons": [

@@ -54,6 +54,7 @@ class SDKBackend:
     prompt_path: str | Path
     call_agent_path: str | None = None
     update_source: bool = False
+    last_result: Any | None = None
     last_result_summary: dict[str, Any] | None = None
     last_artifact_dir: str | None = None
 
@@ -117,6 +118,7 @@ class SDKBackend:
         best_prompt = getattr(result, "best_prompts", {}).get("system_prompt")
         if not best_prompt:
             raise ValueError("sdk mode completed but OptimizeResult.best_prompts['system_prompt'] was missing")
+        self.last_result = result
         self.last_result_summary = _summarize_sdk_result(result)
         self.last_artifact_dir = str(output_dir)
         return [
@@ -157,16 +159,37 @@ def _has_running_loop() -> bool:
 
 
 def _summarize_sdk_result(result: Any) -> dict[str, Any]:
-    if hasattr(result, "model_dump"):
-        payload = result.model_dump(mode="json")
-    elif hasattr(result, "__dict__"):
-        payload = dict(result.__dict__)
-    else:
-        payload = {"repr": repr(result)}
-    return _safe_jsonable(payload)
+    return {
+        "status": _safe_jsonable(getattr(result, "status", None)),
+        "baseline_pass_rate": _safe_jsonable(getattr(result, "baseline_pass_rate", None)),
+        "best_pass_rate": _safe_jsonable(getattr(result, "best_pass_rate", None)),
+        "pass_rate_improvement": _safe_jsonable(getattr(result, "pass_rate_improvement", None)),
+        "baseline_metric_breakdown": _safe_jsonable(getattr(result, "baseline_metric_breakdown", {})),
+        "best_metric_breakdown": _safe_jsonable(getattr(result, "best_metric_breakdown", {})),
+        "metric_thresholds": _safe_jsonable(getattr(result, "metric_thresholds", {})),
+        "total_llm_cost": _safe_jsonable(getattr(result, "total_llm_cost", 0.0)),
+        "total_token_usage": _safe_jsonable(getattr(result, "total_token_usage", {})),
+        "duration_seconds": _safe_jsonable(getattr(result, "duration_seconds", 0.0)),
+        "total_rounds": _safe_jsonable(getattr(result, "total_rounds", 0)),
+        "rounds": [
+            {
+                "validation_pass_rate": _safe_jsonable(getattr(round_record, "validation_pass_rate", None)),
+                "accepted": _safe_jsonable(getattr(round_record, "accepted", None)),
+                "failed_case_ids": _safe_jsonable(getattr(round_record, "failed_case_ids", [])),
+                "round_llm_cost": _safe_jsonable(getattr(round_record, "round_llm_cost", 0.0)),
+                "budget_used": _safe_jsonable(getattr(round_record, "budget_used", None)),
+                "budget_total": _safe_jsonable(getattr(round_record, "budget_total", None)),
+            }
+            for round_record in getattr(result, "rounds", []) or []
+        ],
+    }
 
 
 def _safe_jsonable(value: Any) -> Any:
+    if hasattr(value, "model_dump"):
+        return _safe_jsonable(value.model_dump(mode="json"))
+    if hasattr(value, "__dict__") and not isinstance(value, type):
+        return _safe_jsonable(dict(value.__dict__))
     if isinstance(value, dict):
         return {str(key): _safe_jsonable(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):

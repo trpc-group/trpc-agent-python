@@ -140,6 +140,8 @@ def render_markdown(report: OptimizationReport) -> str:
         lines.append(f"### {decision.candidate_id} ({verdict})")
         for reason in decision.reasons:
             lines.append(f"- {reason}")
+        if decision.not_applied_checks:
+            lines.append(f"- not applied checks: {', '.join(decision.not_applied_checks)}")
         lines.append("")
 
     lines.extend([

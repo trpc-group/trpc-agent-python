@@ -46,10 +46,13 @@ def test_sdk_backend_calls_agent_optimizer_and_converts_best_prompt(tmp_path: Pa
 
     assert calls["config_path"].endswith("optimizer.json")
     assert calls["update_source"] is False
+    assert calls["output_dir"].endswith("out")
     assert calls["target_prompt"].paths == [("system_prompt", str(prompt_path))]
     assert candidates[0].candidate_id == "sdk_best"
     assert candidates[0].prompt == "optimized prompt"
     assert candidates[0].prompt_diff.startswith("--- baseline_system_prompt.txt")
+    assert backend.last_result is not None
+    assert backend.last_result_summary["baseline_pass_rate"] == 0.5
 
 
 def test_sdk_backend_passes_update_source_true(tmp_path: Path, monkeypatch):
@@ -182,12 +185,38 @@ def test_run_pipeline_mode_sdk_writes_report_without_fallback(tmp_path: Path, mo
     assert report.run["mode"] == "sdk"
     assert report.run["update_source"] is False
     assert report.selected_candidate == "sdk_best"
-    assert report.gate_decisions[0].gate_status == "not_applicable"
-    assert "SDK optimizer result does not expose per-case validation results" in payload
-    assert "sdk_best (not_applicable)" in markdown
+    assert report.baseline_validation.score == 0.5
+    assert report.candidates[0]["validation_result"].score == 0.75
+    assert report.gate_decisions[0].validation_score_delta == 0.25
+    assert report.gate_decisions[0].candidate_cost == 0.123
+    assert report.gate_decisions[0].gate_status == "partial_applied"
+    assert report.gate_decisions[0].not_applied_checks == [
+        "per_case_delta",
+        "protected_regression",
+        "new_hard_failure",
+        "max_score_drop_per_case",
+    ]
+    assert report.audit["duration_seconds"] == 12.3
+    assert report.audit["total_run_cost"] == 0.123
+    assert report.audit["cost"]["total"] == 0.123
+    assert report.audit["sdk_result_summary"]["status"] == "SUCCEEDED"
+    assert report.audit["sdk_result_summary"]["baseline_metric_breakdown"] == {"exact_match": 0.5}
+    assert report.audit["sdk_result_summary"]["best_metric_breakdown"] == {"exact_match": 0.75}
+    assert report.audit["sdk_result_summary"]["metric_thresholds"] == {"exact_match": 0.7}
+    assert report.audit["sdk_result_summary"]["total_token_usage"] == {
+        "prompt": 100,
+        "completion": 25,
+        "total": 125,
+    }
+    assert report.audit["sdk_result_summary"]["rounds"][0]["validation_pass_rate"] == 0.75
+    assert "partial_applied" in payload
+    assert "sdk_best (partial_applied)" in markdown
+    assert "not applied checks: per_case_delta" in markdown
     assert (output_dir / "runs" / "eval_optimize_loop_sdk" / "input_hashes.json").is_file()
     assert (output_dir / "runs" / "eval_optimize_loop_sdk" / "prompt_diffs" / "sdk_best.diff").is_file()
     assert calls["update_source"] is False
+    assert calls["output_dir"].endswith("sdk_optimizer")
+    assert report.run["sdk_artifact_dir"].endswith("sdk_optimizer")
 
 
 def test_run_pipeline_mode_sdk_accepts_sdk_shaped_inputs_without_fake_schema(tmp_path: Path, monkeypatch):
@@ -217,6 +246,62 @@ def test_run_pipeline_mode_sdk_accepts_sdk_shaped_inputs_without_fake_schema(tmp
     assert report.run["mode"] == "sdk"
     assert report.run["train_cases"] == 0
     assert report.selected_candidate == "sdk_best"
+
+
+def test_run_pipeline_mode_sdk_rejects_low_aggregate_validation_improvement(tmp_path: Path, monkeypatch):
+    _install_fake_sdk(
+        monkeypatch,
+        best_prompt="optimized prompt",
+        baseline_pass_rate=0.5,
+        best_pass_rate=0.505,
+        pass_rate_improvement=0.005,
+        total_llm_cost=0.123,
+    )
+
+    report = run_pipeline(
+        mode="sdk",
+        train_path=DEFAULT_TRAIN,
+        val_path=DEFAULT_VAL,
+        optimizer_config_path=DEFAULT_OPTIMIZER_CONFIG,
+        prompt_path=DEFAULT_PROMPT,
+        output_dir=tmp_path / "sdk_run",
+        sdk_call_agent="fake_call_agent_module:call_agent",
+    )
+
+    decision = report.gate_decisions[0]
+    assert report.selected_candidate is None
+    assert decision.accepted is False
+    assert decision.gate_status == "partial_applied"
+    assert decision.validation_score_delta == 0.005
+    assert any("validation improvement" in reason for reason in decision.reasons)
+
+
+def test_run_pipeline_mode_sdk_rejects_cost_over_budget(tmp_path: Path, monkeypatch):
+    _install_fake_sdk(
+        monkeypatch,
+        best_prompt="optimized prompt",
+        baseline_pass_rate=0.5,
+        best_pass_rate=0.75,
+        pass_rate_improvement=0.25,
+        total_llm_cost=2.0,
+    )
+
+    report = run_pipeline(
+        mode="sdk",
+        train_path=DEFAULT_TRAIN,
+        val_path=DEFAULT_VAL,
+        optimizer_config_path=DEFAULT_OPTIMIZER_CONFIG,
+        prompt_path=DEFAULT_PROMPT,
+        output_dir=tmp_path / "sdk_run",
+        sdk_call_agent="fake_call_agent_module:call_agent",
+    )
+
+    decision = report.gate_decisions[0]
+    assert report.selected_candidate is None
+    assert decision.accepted is False
+    assert decision.gate_status == "partial_applied"
+    assert decision.total_run_cost == 2.0
+    assert any("cost" in reason for reason in decision.reasons)
 
 
 def test_run_pipeline_mode_sdk_passes_update_source_true(tmp_path: Path, monkeypatch):
@@ -249,7 +334,17 @@ def test_run_pipeline_mode_sdk_missing_call_agent_is_not_fake_fallback(tmp_path:
         )
 
 
-def _install_fake_sdk(monkeypatch, *, best_prompt: str):
+def _install_fake_sdk(
+    monkeypatch,
+    *,
+    best_prompt: str,
+    status: str = "SUCCEEDED",
+    baseline_pass_rate: float = 0.5,
+    best_pass_rate: float = 0.75,
+    pass_rate_improvement: float = 0.25,
+    total_llm_cost: float = 0.123,
+    duration_seconds: float = 12.3,
+):
     calls = {}
 
     class FakeTargetPrompt:
@@ -266,8 +361,27 @@ def _install_fake_sdk(monkeypatch, *, best_prompt: str):
             calls.update(kwargs)
             return types.SimpleNamespace(
                 best_prompts={"system_prompt": best_prompt},
-                status="SUCCEEDED",
-                best_pass_rate=1.0,
+                status=status,
+                baseline_pass_rate=baseline_pass_rate,
+                best_pass_rate=best_pass_rate,
+                pass_rate_improvement=pass_rate_improvement,
+                baseline_metric_breakdown={"exact_match": baseline_pass_rate},
+                best_metric_breakdown={"exact_match": best_pass_rate},
+                metric_thresholds={"exact_match": 0.7},
+                total_llm_cost=total_llm_cost,
+                total_token_usage={"prompt": 100, "completion": 25, "total": 125},
+                duration_seconds=duration_seconds,
+                total_rounds=1,
+                rounds=[
+                    types.SimpleNamespace(
+                        validation_pass_rate=best_pass_rate,
+                        accepted=True,
+                        failed_case_ids=["case_a"],
+                        round_llm_cost=total_llm_cost,
+                        budget_used=3,
+                        budget_total=10,
+                    )
+                ],
             )
 
     fake_eval_module = types.ModuleType("trpc_agent_sdk.evaluation")

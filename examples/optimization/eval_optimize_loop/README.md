@@ -69,10 +69,14 @@ python examples/optimization/eval_optimize_loop/run_pipeline.py \
 `--sdk-call-agent` must point to an async callable compatible with
 `AgentOptimizer.optimize(call_agent=...)`. Configure any real model credentials
 needed by that callable. SDK mode never silently falls back to fake mode. When
-the SDK optimizer returns a best prompt but does not expose per-case validation
-results, this example still writes JSON/Markdown reports and audit artifacts
-with `gate_status: not_applicable`, records the SDK result summary, and selects
-`sdk_best` as the SDK optimizer's chosen prompt.
+the SDK optimizer returns a best prompt, this wrapper maps `OptimizeResult`
+aggregate fields into the JSON/Markdown report: baseline/best pass rate,
+pass-rate improvement, metric breakdowns, token usage, duration, LLM cost, and
+round summaries. SDK mode applies an aggregate gate with
+`gate_status: partial_applied`: it checks `status == SUCCEEDED`, validation
+improvement against `gate.min_val_score_improvement`, and total LLM cost against
+`gate.max_total_cost`. Per-case checks that require full validation case scores
+are listed in `not_applied_checks` instead of being silently treated as passed.
 
 ## Source Prompt Writes
 
@@ -110,7 +114,8 @@ optional `simulated_outputs`; it does not depend on sample `case_id` names.
 - failure attribution summary and attribution accuracy when expected labels are
   present;
 - gate decisions with overfit detection, protected regressions, new hard
-  failures, excessive drops, and cost fields;
+  failures, excessive drops, cost fields, and SDK `not_applied_checks` when
+  per-case validation details are not exposed;
 - audit data: seed, duration, config hash, input hashes, candidate prompt hashes,
   cost, prompt diffs, and reproducibility command.
 

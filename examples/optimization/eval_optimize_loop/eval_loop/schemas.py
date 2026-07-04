@@ -122,6 +122,7 @@ class GateDecision:
     cost: float
     gate_status: str = "applied"
     gate_not_applied_reason: str | None = None
+    not_applied_checks: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
