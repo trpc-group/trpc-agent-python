@@ -277,7 +277,12 @@ def write_audit_artifacts(report: OptimizationReport, output_path: Path) -> None
         candidate: CandidatePrompt = record["candidate"]
         candidate_dir = prompt_dir / candidate.candidate_id
         candidate_dir.mkdir(exist_ok=True)
-        (candidate_dir / "system_prompt.txt").write_text(candidate.prompt, encoding="utf-8")
+        best_prompts = report.audit.get("sdk_result_summary", {}).get("best_prompts", {})
+        if report.run.get("mode") == "sdk" and isinstance(best_prompts, dict) and best_prompts:
+            for field_name, prompt_text in best_prompts.items():
+                (candidate_dir / f"{field_name}.txt").write_text(str(prompt_text), encoding="utf-8")
+        else:
+            (candidate_dir / "system_prompt.txt").write_text(candidate.prompt, encoding="utf-8")
         (diffs_dir / f"{candidate.candidate_id}.diff").write_text(candidate.prompt_diff, encoding="utf-8")
         for split_name in ("train_result", "validation_result"):
             split_result = record[split_name]

@@ -55,6 +55,90 @@ def test_sdk_backend_calls_agent_optimizer_and_converts_best_prompt(tmp_path: Pa
     assert backend.last_result_summary["baseline_pass_rate"] == 0.5
 
 
+def test_sdk_backend_default_target_prompt_uses_system_prompt_from_prompt_path(tmp_path: Path, monkeypatch):
+    calls = _install_fake_sdk(monkeypatch, best_prompts={"system_prompt": "optimized system"})
+    prompt_path = tmp_path / "prompt.txt"
+    prompt_path.write_text("baseline system", encoding="utf-8")
+
+    candidates = SDKBackend(
+        prompt_path=prompt_path,
+        call_agent_path="fake_call_agent_module:call_agent",
+    ).optimize(
+        baseline_prompt="baseline system",
+        train_path=tmp_path / "train.evalset.json",
+        val_path=tmp_path / "val.evalset.json",
+        optimizer_config_path=tmp_path / "optimizer.json",
+        output_dir=tmp_path / "out",
+    )
+
+    assert calls["target_prompt"].paths == [("system_prompt", str(prompt_path))]
+    assert candidates[0].prompt == "optimized system"
+
+
+def test_sdk_backend_router_prompt_only_can_succeed(tmp_path: Path, monkeypatch):
+    calls = _install_fake_sdk(monkeypatch, best_prompts={"router_prompt": "optimized router"})
+    router_path = tmp_path / "router.txt"
+    router_path.write_text("baseline router", encoding="utf-8")
+
+    candidates = SDKBackend(
+        prompt_path=tmp_path / "unused_system.txt",
+        call_agent_path="fake_call_agent_module:call_agent",
+        target_prompt_paths={"router_prompt": router_path},
+    ).optimize(
+        baseline_prompt="unused",
+        train_path=tmp_path / "train.evalset.json",
+        val_path=tmp_path / "val.evalset.json",
+        optimizer_config_path=tmp_path / "optimizer.json",
+        output_dir=tmp_path / "out",
+    )
+
+    assert calls["target_prompt"].paths == [("router_prompt", str(router_path))]
+    assert candidates[0].prompt == "## router_prompt\n\noptimized router"
+
+
+def test_sdk_backend_skill_prompt_only_can_succeed(tmp_path: Path, monkeypatch):
+    calls = _install_fake_sdk(monkeypatch, best_prompts={"skill_prompt": "optimized skill"})
+    skill_path = tmp_path / "skill.txt"
+    skill_path.write_text("baseline skill", encoding="utf-8")
+
+    candidates = SDKBackend(
+        prompt_path=tmp_path / "unused_system.txt",
+        call_agent_path="fake_call_agent_module:call_agent",
+        target_prompt_paths={"skill_prompt": skill_path},
+    ).optimize(
+        baseline_prompt="unused",
+        train_path=tmp_path / "train.evalset.json",
+        val_path=tmp_path / "val.evalset.json",
+        optimizer_config_path=tmp_path / "optimizer.json",
+        output_dir=tmp_path / "out",
+    )
+
+    assert calls["target_prompt"].paths == [("skill_prompt", str(skill_path))]
+    assert candidates[0].prompt == "## skill_prompt\n\noptimized skill"
+
+
+def test_sdk_backend_missing_registered_best_prompt_field_is_clear(tmp_path: Path, monkeypatch):
+    _install_fake_sdk(monkeypatch, best_prompts={"router_prompt": "optimized router"})
+    router_path = tmp_path / "router.txt"
+    skill_path = tmp_path / "skill.txt"
+    router_path.write_text("baseline router", encoding="utf-8")
+    skill_path.write_text("baseline skill", encoding="utf-8")
+    backend = SDKBackend(
+        prompt_path=tmp_path / "unused_system.txt",
+        call_agent_path="fake_call_agent_module:call_agent",
+        target_prompt_paths={"router_prompt": router_path, "skill_prompt": skill_path},
+    )
+
+    with pytest.raises(ValueError, match="best_prompts.*missing registered target fields.*skill_prompt"):
+        backend.optimize(
+            baseline_prompt="unused",
+            train_path=tmp_path / "train.evalset.json",
+            val_path=tmp_path / "val.evalset.json",
+            optimizer_config_path=tmp_path / "optimizer.json",
+            output_dir=tmp_path / "out",
+        )
+
+
 def test_sdk_backend_passes_update_source_true(tmp_path: Path, monkeypatch):
     calls = _install_fake_sdk(monkeypatch, best_prompt="optimized prompt")
     prompt_path = tmp_path / "prompt.txt"
@@ -123,7 +207,7 @@ def test_sdk_backend_empty_best_prompt_error_is_clear(tmp_path: Path, monkeypatc
     prompt_path.write_text("baseline", encoding="utf-8")
     backend = SDKBackend(prompt_path=prompt_path, call_agent_path="fake_call_agent_module:call_agent")
 
-    with pytest.raises(ValueError, match="best_prompts\\['system_prompt'\\]"):
+    with pytest.raises(ValueError, match="missing registered target fields.*system_prompt"):
         backend.optimize(
             baseline_prompt="baseline",
             train_path=tmp_path / "train.evalset.json",
@@ -177,6 +261,7 @@ def test_run_pipeline_mode_sdk_writes_report_without_fallback(tmp_path: Path, mo
         prompt_path=DEFAULT_PROMPT,
         output_dir=tmp_path / "sdk_run",
         sdk_call_agent="fake_call_agent_module:call_agent",
+        run_id="sdk_test_run",
     )
 
     output_dir = tmp_path / "sdk_run"
@@ -219,8 +304,10 @@ def test_run_pipeline_mode_sdk_writes_report_without_fallback(tmp_path: Path, mo
     assert "sdk_best (partial_applied)" in markdown
     assert "not applied checks: per_case_delta" in markdown
     assert "SDK mode uses OptimizeResult aggregate validation metrics" in markdown
-    assert (output_dir / "runs" / "eval_optimize_loop_sdk" / "input_hashes.json").is_file()
-    assert (output_dir / "runs" / "eval_optimize_loop_sdk" / "prompt_diffs" / "sdk_best.diff").is_file()
+    assert "fake_call_agent_module:call_agent" in report.run["reproducibility_command"]
+    assert "module:function" not in report.run["reproducibility_command"]
+    assert (output_dir / "runs" / "sdk_test_run" / "input_hashes.json").is_file()
+    assert (output_dir / "runs" / "sdk_test_run" / "prompt_diffs" / "sdk_best.diff").is_file()
     assert calls["update_source"] is False
     assert calls["output_dir"].endswith("sdk_optimizer")
     assert report.run["sdk_artifact_dir"].endswith("sdk_optimizer")
@@ -253,6 +340,27 @@ def test_run_pipeline_mode_sdk_accepts_sdk_shaped_inputs_without_fake_schema(tmp
     assert report.run["mode"] == "sdk"
     assert report.run["train_cases"] == 0
     assert report.selected_candidate == "sdk_best"
+
+
+def test_run_pipeline_mode_sdk_default_run_id_uses_sdk_started_at(tmp_path: Path, monkeypatch):
+    _install_fake_sdk(
+        monkeypatch,
+        best_prompt="optimized prompt",
+        started_at="2026-07-04T12:34:56+00:00",
+    )
+
+    report = run_pipeline(
+        mode="sdk",
+        train_path=DEFAULT_TRAIN,
+        val_path=DEFAULT_VAL,
+        optimizer_config_path=DEFAULT_OPTIMIZER_CONFIG,
+        prompt_path=DEFAULT_PROMPT,
+        output_dir=tmp_path / "sdk_run",
+        sdk_call_agent="fake_call_agent_module:call_agent",
+    )
+
+    assert report.run["run_id"] == "eval_optimize_loop_sdk_2026-07-04T12-34-56-00-00"
+    assert (tmp_path / "sdk_run" / "runs" / report.run["run_id"]).is_dir()
 
 
 def test_run_pipeline_mode_sdk_uses_default_wrapper_gate_when_sdk_config_has_no_gate(
@@ -402,6 +510,8 @@ def test_run_pipeline_mode_sdk_registers_multiple_target_prompt_paths(tmp_path: 
             f"router_prompt={router_path}",
             f"skill_prompt={skill_path}",
         ],
+        gate_config_path=_write_gate_config(tmp_path, min_val_score_improvement=0.01, max_total_cost=1.0),
+        run_id="sdk_multi_target",
     )
 
     assert calls["target_prompt"].paths == [
@@ -420,6 +530,23 @@ def test_run_pipeline_mode_sdk_registers_multiple_target_prompt_paths(tmp_path: 
         "router_prompt",
         "skill_prompt",
     }
+    run_dir = tmp_path / "sdk_run" / "runs" / "sdk_multi_target"
+    assert (run_dir / "candidate_prompts" / "sdk_best" / "system_prompt.txt").read_text(
+        encoding="utf-8"
+    ) == "optimized system"
+    assert (run_dir / "candidate_prompts" / "sdk_best" / "router_prompt.txt").read_text(
+        encoding="utf-8"
+    ) == "optimized router"
+    assert (run_dir / "candidate_prompts" / "sdk_best" / "skill_prompt.txt").read_text(
+        encoding="utf-8"
+    ) == "optimized skill"
+    input_hashes = json.loads((run_dir / "input_hashes.json").read_text(encoding="utf-8"))
+    assert set(input_hashes["target_prompts"]) == {"system_prompt", "router_prompt", "skill_prompt"}
+    assert "gate_config" in input_hashes
+    command = report.run["reproducibility_command"]
+    assert "--sdk-call-agent fake_call_agent_module:call_agent" in command
+    assert f"--target-prompt router_prompt={router_path}" in command
+    assert "--gate-config" in command
 
 
 def test_run_pipeline_mode_sdk_passes_update_source_true(tmp_path: Path, monkeypatch):
@@ -438,6 +565,7 @@ def test_run_pipeline_mode_sdk_passes_update_source_true(tmp_path: Path, monkeyp
 
     assert report.run["update_source"] is True
     assert calls["update_source"] is True
+    assert "--update-source" in report.run["reproducibility_command"]
 
 
 def test_run_pipeline_mode_sdk_missing_call_agent_is_not_fake_fallback(tmp_path: Path):
@@ -463,6 +591,7 @@ def _install_fake_sdk(
     pass_rate_improvement: float = 0.25,
     total_llm_cost: float = 0.123,
     duration_seconds: float = 12.3,
+    started_at: str | None = None,
 ):
     calls = {}
 
@@ -493,6 +622,7 @@ def _install_fake_sdk(
                 total_llm_cost=total_llm_cost,
                 total_token_usage={"prompt": 100, "completion": 25, "total": 125},
                 duration_seconds=duration_seconds,
+                started_at=started_at,
                 total_rounds=1,
                 rounds=[
                     types.SimpleNamespace(

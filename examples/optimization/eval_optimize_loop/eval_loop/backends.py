@@ -119,13 +119,23 @@ class SDKBackend:
             update_source=self.update_source,
             verbose=0,
         )
-        best_prompt = getattr(result, "best_prompts", {}).get("system_prompt")
-        if not best_prompt:
-            raise ValueError("sdk mode completed but OptimizeResult.best_prompts['system_prompt'] was missing")
+        best_prompts = dict(getattr(result, "best_prompts", {}) or {})
+        if not best_prompts:
+            raise ValueError("sdk mode completed but OptimizeResult.best_prompts was empty")
+        missing_fields = [
+            name
+            for name in target_prompt_paths
+            if not best_prompts.get(name)
+        ]
+        if missing_fields:
+            missing = ", ".join(sorted(missing_fields))
+            raise ValueError(
+                "sdk mode completed but OptimizeResult.best_prompts is missing registered target fields: "
+                f"{missing}"
+            )
         self.last_result = result
         self.last_result_summary = _summarize_sdk_result(result)
         self.last_artifact_dir = str(output_dir)
-        best_prompts = dict(getattr(result, "best_prompts", {}) or {})
         baseline_prompts = _read_prompt_bundle(target_prompt_paths)
         return [
             CandidatePrompt(
@@ -176,6 +186,7 @@ def _summarize_sdk_result(result: Any) -> dict[str, Any]:
         "total_llm_cost": _safe_jsonable(getattr(result, "total_llm_cost", 0.0)),
         "total_token_usage": _safe_jsonable(getattr(result, "total_token_usage", {})),
         "duration_seconds": _safe_jsonable(getattr(result, "duration_seconds", 0.0)),
+        "started_at": _safe_jsonable(getattr(result, "started_at", None)),
         "total_rounds": _safe_jsonable(getattr(result, "total_rounds", 0)),
         "baseline_prompts": _safe_jsonable(getattr(result, "baseline_prompts", {})),
         "best_prompts": _safe_jsonable(getattr(result, "best_prompts", {})),

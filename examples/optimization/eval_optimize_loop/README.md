@@ -78,6 +78,7 @@ python examples/optimization/eval_optimize_loop/run_pipeline.py \
   --target-prompt system_prompt=prompts/system.md \
   --target-prompt router_prompt=prompts/router.md \
   --sdk-call-agent your_package.your_module:call_agent \
+  --run-id local-sdk-smoke \
   --output-dir /tmp/eval-optimize-loop-sdk
 ```
 
@@ -92,6 +93,11 @@ follow the SDK `OptimizeConfigFile` schema. Put wrapper-only gate settings in
 "max_total_cost": 1.0}}`). If `--gate-config` is omitted, the wrapper uses the
 same default aggregate gate values as the fake example.
 
+`--target-prompt name=path` may be repeated. If omitted, SDK mode keeps the old
+single-field behavior and registers `system_prompt=--prompt`. A run can optimize
+only `router_prompt`, only `skill_prompt`, or any set of named fields as long as
+`OptimizeResult.best_prompts` returns every registered field.
+
 Fake mode is the complete per-case closed loop. SDK mode is the real
 `AgentOptimizer` / `TargetPrompt` path with an aggregate wrapper gate. When the
 SDK optimizer returns a best prompt, this wrapper maps `OptimizeResult`
@@ -104,6 +110,12 @@ improvement against `gate.min_val_score_improvement`, and total LLM cost against
 delta, and per-case score-drop checks are not claimed in SDK mode unless the SDK
 exposes full per-case validation scores; they are listed in
 `not_applied_checks`.
+
+Fake mode uses a deterministic run id (`eval_optimize_loop_seed_<seed>`) so the
+example outputs are byte-stable. SDK mode is append-only by default: the wrapper
+derives `run.run_id` from the SDK result `started_at` when available, otherwise
+from the current UTC timestamp. Pass `--run-id` only when a fixed audit path is
+useful for tests or local smoke runs.
 
 ## Source Prompt Writes
 
@@ -158,8 +170,11 @@ diffs, and the reproducibility command.
 `report.py` also writes audit artifacts under `output_dir/runs/<run_id>/`:
 
 - `config.snapshot.json`;
-- `input_hashes.json`;
-- `candidate_prompts/<candidate_id>/system_prompt.txt`;
+- `input_hashes.json` with train, validation, optimizer, prompt,
+  `target_prompts.<field>`, and optional `gate_config` hashes;
+- fake mode: `candidate_prompts/<candidate_id>/system_prompt.txt`;
+- SDK mode: `candidate_prompts/<candidate_id>/<field_name>.txt` for every
+  returned `best_prompts` field;
 - `case_results/<candidate_id>_<split>.json`;
 - `prompt_diffs/<candidate_id>.diff`.
 

@@ -7,6 +7,8 @@ import hashlib
 import json
 import sys
 import tempfile
+from datetime import datetime
+from datetime import timezone
 from pathlib import Path
 from typing import Any
 
@@ -55,6 +57,7 @@ def run_pipeline(
     update_source: bool = False,
     gate_config_path: str | Path | None = None,
     target_prompts: list[str] | None = None,
+    run_id: str | None = None,
 ) -> OptimizationReport:
     """Run baseline eval, fake optimization, validation gate, and reports."""
 
@@ -101,6 +104,8 @@ def run_pipeline(
             gate_config=wrapper_gate_config,
             gate_config_path=gate_config_path,
             target_prompt_paths=target_prompt_paths,
+            sdk_call_agent=sdk_call_agent,
+            run_id=run_id,
         )
         write_reports(report, output_dir)
         return report
@@ -334,6 +339,8 @@ def _build_sdk_report(
     gate_config: dict[str, float],
     gate_config_path: str | Path | None,
     target_prompt_paths: dict[str, str | Path],
+    sdk_call_agent: str | None,
+    run_id: str | None,
 ) -> OptimizationReport:
     input_hashes = _input_hashes(
         train_path=train_path,
@@ -351,6 +358,14 @@ def _build_sdk_report(
     )
     total_llm_cost = _summary_float(sdk_summary, "total_llm_cost", 0.0)
     duration_seconds = _summary_float(sdk_summary, "duration_seconds", 0.0)
+    effective_run_id = run_id or _default_sdk_run_id(sdk_summary)
+    target_prompt_hashes = {
+        name: sha256_file(path)
+        for name, path in target_prompt_paths.items()
+    }
+    input_hashes["target_prompts"] = target_prompt_hashes
+    if gate_config_path:
+        input_hashes["gate_config"] = sha256_file(gate_config_path)
     availability = {
         "aggregate_validation_result": True,
         "full_train_eval_result": False,
@@ -401,10 +416,6 @@ def _build_sdk_report(
         for candidate in candidates
     }
     field_prompt_hashes = _candidate_prompt_hashes_by_field(candidates, sdk_summary)
-    target_prompt_hashes = {
-        name: sha256_file(path)
-        for name, path in target_prompt_paths.items()
-    }
     audit = {
         "seed": None,
         "duration_seconds": duration_seconds,
@@ -450,10 +461,12 @@ def _build_sdk_report(
             update_source=update_source,
             gate_config_path=gate_config_path,
             target_prompt_paths=target_prompt_paths,
+            sdk_call_agent=sdk_call_agent,
+            run_id=effective_run_id,
         ),
     }
     run = {
-        "run_id": "eval_optimize_loop_sdk",
+        "run_id": effective_run_id,
         "mode": "sdk",
         "fake_model": False,
         "fake_judge": False,
@@ -507,18 +520,21 @@ def _sdk_reproducibility_command(
     update_source: bool,
     gate_config_path: str | Path | None,
     target_prompt_paths: dict[str, str | Path],
+    sdk_call_agent: str | None,
+    run_id: str,
 ) -> str:
     command = (
         "python examples/optimization/eval_optimize_loop/run_pipeline.py "
         f"--mode sdk --train {train_path} --val {val_path} "
         f"--optimizer-config {optimizer_config_path} --prompt {prompt_path} "
-        f"--output-dir {output_dir} --sdk-call-agent module:function"
+        f"--output-dir {output_dir} --sdk-call-agent {sdk_call_agent or ''}"
     )
     for name, path in target_prompt_paths.items():
         if not (name == "system_prompt" and Path(path) == Path(prompt_path) and len(target_prompt_paths) == 1):
             command += f" --target-prompt {name}={path}"
     if gate_config_path:
         command += f" --gate-config {gate_config_path}"
+    command += f" --run-id {run_id}"
     if update_source:
         command += " --update-source"
     return command
@@ -624,6 +640,21 @@ def _summary_float(summary: dict[str, Any], key: str, default: float) -> float:
         return default
 
 
+def _default_sdk_run_id(sdk_summary: dict[str, Any]) -> str:
+    started_at = sdk_summary.get("started_at")
+    if isinstance(started_at, str) and started_at.strip():
+        source = started_at.strip()
+    else:
+        source = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    safe = []
+    for char in source:
+        if char.isalnum() or char in {"-", "_"}:
+            safe.append(char)
+        else:
+            safe.append("-")
+    return "eval_optimize_loop_sdk_" + "".join(safe).strip("-")
+
+
 def _parse_target_prompt_paths(
     target_prompts: list[str] | None,
     *,
@@ -681,6 +712,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="append",
         help="SDK target prompt path in name=path format. May be repeated. Defaults to system_prompt=--prompt.",
     )
+    parser.add_argument("--run-id", help="Optional report/audit run id. Fake mode keeps its deterministic default.")
     return parser.parse_args(argv)
 
 
@@ -734,6 +766,7 @@ def main(argv: list[str] | None = None) -> OptimizationReport:
         update_source=args.update_source,
         gate_config_path=args.gate_config,
         target_prompts=args.target_prompt,
+        run_id=args.run_id,
     )
     output_dir = Path(args.output_dir)
     print(f"Wrote {output_dir / 'optimization_report.json'}")
