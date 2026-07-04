@@ -69,6 +69,28 @@ def test_bool_policy_field_type_rejected_in_strict_policy(tmp_path):
         ToolSafetyPolicy.from_file(path, strict=True)
 
 
+def test_default_policy_warns_and_ignores_invalid_field_values(tmp_path):
+    path = write_policy(
+        tmp_path,
+        {
+            "allowed_domains": "api.example.com",
+            "max_timeout_seconds": -1,
+            "review_dynamic_code": "yes",
+        },
+    )
+
+    with pytest.warns(UserWarning) as caught:
+        policy = ToolSafetyPolicy.from_file(path)
+
+    messages = [str(warning.message) for warning in caught]
+    assert any("allowed_domains" in message for message in messages)
+    assert any("max_timeout_seconds" in message for message in messages)
+    assert any("review_dynamic_code" in message for message in messages)
+    assert policy.allowed_domains == ToolSafetyPolicy.default().allowed_domains
+    assert policy.max_timeout_seconds == ToolSafetyPolicy.default().max_timeout_seconds
+    assert policy.review_dynamic_code == ToolSafetyPolicy.default().review_dynamic_code
+
+
 def test_normal_policy_loads_without_warnings(tmp_path):
     path = write_policy(
         tmp_path,

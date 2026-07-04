@@ -87,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
                 "actual_rule_ids": sorted(rule_ids),
                 "category": sample["category"],
                 "high_risk": sample["high_risk"],
-                "report": normalize_report_dict(report.to_dict()),
+                "report": normalize_report_dict(report.to_dict(), sample["file"]),
             }
         )
 
@@ -121,15 +121,16 @@ def _format_rule_ids(rule_ids: list[str]) -> str:
     return "[" + ", ".join(rule_ids) + "]"
 
 
-def normalize_report_dict(report_dict: dict) -> dict:
+def normalize_report_dict(report_dict: dict, sample_file: str) -> dict:
     """Normalize dynamic report fields for reproducible manifest artifacts."""
     report = dict(report_dict)
-    report["scan_id"] = "<normalized>"
-    report["timestamp"] = "<normalized>"
-    report["elapsed_ms"] = 0
+    scan_id = f"manifest:{sample_file}"
+    report["scan_id"] = scan_id
+    report["timestamp"] = "1970-01-01T00:00:00+00:00"
+    report["elapsed_ms"] = 0.0
     telemetry = dict(report.get("telemetry_attributes", {}))
-    telemetry["tool.safety.scan_id"] = "<normalized>"
-    telemetry["tool.safety.duration_ms"] = 0
+    telemetry["tool.safety.scan_id"] = scan_id
+    telemetry["tool.safety.duration_ms"] = 0.0
     report["telemetry_attributes"] = telemetry
     return report
 

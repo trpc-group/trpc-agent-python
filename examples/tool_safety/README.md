@@ -211,9 +211,10 @@ with `tool_safety_policy.yaml`. It stores:
 - high-risk flag
 - full sanitized report
 
-The manifest report normalizes dynamic `scan_id`, `timestamp`, `elapsed_ms`,
-and telemetry scan duration fields so rerunning the generator produces a
-stable review artifact.
+The manifest report normalizes dynamic fields so rerunning the generator
+produces a stable review artifact: report `scan_id` and telemetry scan id are
+`manifest:<file>`, `timestamp` is `1970-01-01T00:00:00+00:00`, and elapsed
+duration fields are `0.0`.
 
 Regenerate it with:
 

@@ -79,9 +79,10 @@ python scripts/tool_safety_check.py \
 python scripts/tool_safety_manifest_report.py --strict-policy
 ```
 
-It is a deterministic normalized artifact: dynamic report fields such as
-`scan_id`, `timestamp`, `elapsed_ms`, and telemetry scan duration are replaced
-with stable placeholders before writing the committed JSON.
+It is a deterministic normalized artifact: report `scan_id` and telemetry
+scan id are pinned to `manifest:<file>`, `timestamp` is pinned to
+`1970-01-01T00:00:00+00:00`, and elapsed duration fields are pinned to `0.0`
+before writing the committed JSON.
 
 ## Default Compatibility
 

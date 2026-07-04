@@ -44,13 +44,17 @@ def test_manifest_report_output_is_deterministic(tmp_path):
     assert second_result.returncode == 0
     assert first.read_text(encoding="utf-8") == second.read_text(encoding="utf-8")
     first_data = json.loads(first.read_text(encoding="utf-8"))
-    report = first_data["reports"][0]["report"]
-    assert report["scan_id"] == "<normalized>"
-    assert report["timestamp"] == "<normalized>"
-    assert report["elapsed_ms"] == 0
+    entry = first_data["reports"][0]
+    report = entry["report"]
+    expected_scan_id = f"manifest:{entry['file']}"
+    assert report["scan_id"] == expected_scan_id
+    assert report["timestamp"] == "1970-01-01T00:00:00+00:00"
+    assert report["elapsed_ms"] == 0.0
+    assert isinstance(report["elapsed_ms"], float)
     telemetry = report["telemetry_attributes"]
-    assert telemetry["tool.safety.scan_id"] == "<normalized>"
-    assert telemetry["tool.safety.duration_ms"] == 0
+    assert telemetry["tool.safety.scan_id"] == expected_scan_id
+    assert telemetry["tool.safety.duration_ms"] == 0.0
+    assert isinstance(telemetry["tool.safety.duration_ms"], float)
 
 
 def test_committed_manifest_artifact_matches_manifest_and_is_normalized():
@@ -80,12 +84,15 @@ def test_committed_manifest_artifact_matches_manifest_and_is_normalized():
     for entry in artifact["reports"]:
         assert required_entry_fields <= set(entry)
         report = entry["report"]
-        assert report["scan_id"] == "<normalized>"
-        assert report["timestamp"] == "<normalized>"
-        assert report["elapsed_ms"] == 0
+        expected_scan_id = f"manifest:{entry['file']}"
+        assert report["scan_id"] == expected_scan_id
+        assert report["timestamp"] == "1970-01-01T00:00:00+00:00"
+        assert report["elapsed_ms"] == 0.0
+        assert isinstance(report["elapsed_ms"], float)
         telemetry = report["telemetry_attributes"]
-        assert telemetry["tool.safety.scan_id"] == "<normalized>"
-        assert telemetry["tool.safety.duration_ms"] == 0
+        assert telemetry["tool.safety.scan_id"] == expected_scan_id
+        assert telemetry["tool.safety.duration_ms"] == 0.0
+        assert isinstance(telemetry["tool.safety.duration_ms"], float)
 
 
 def test_manifest_report_decision_mismatch_exits_one(tmp_path):
