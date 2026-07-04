@@ -28,7 +28,10 @@ def matches_any_pattern(value: object, patterns: Sequence[str]) -> bool:
     normalized = _clean(value).lower()
     if not normalized:
         return False
-    return any(fnmatch.fnmatchcase(normalized, _clean(pattern).lower()) for pattern in patterns if _clean(pattern))
+    return any(
+        fnmatch.fnmatchcase(normalized,
+                            _clean(pattern).lower()) for pattern in patterns
+        if _clean(pattern))
 
 
 def is_domain_allowed(hostname: str, allowed_domains: Sequence[str]) -> bool:
@@ -77,7 +80,8 @@ def is_path_denied(path: str, policy: SafetyPolicy) -> bool:
 
     normalized = _normalize_path(path)
     patterns = [_normalize_path(pattern) for pattern in policy.denied_paths]
-    return any(_path_pattern_matches(normalized, pattern) for pattern in patterns)
+    return any(
+        _path_pattern_matches(normalized, pattern) for pattern in patterns)
 
 
 def is_env_key_sensitive(key: str, policy: SafetyPolicy) -> bool:
@@ -115,15 +119,19 @@ def get_command_name(command: str | Sequence[str]) -> str:
     return command_name
 
 
-def is_command_denied(command: str | Sequence[str], policy: SafetyPolicy) -> bool:
+def is_command_denied(command: str | Sequence[str],
+                      policy: SafetyPolicy) -> bool:
     """Return whether the first command token is denied by policy."""
 
-    return matches_any_pattern(get_command_name(command), policy.denied_commands)
+    return matches_any_pattern(get_command_name(command),
+                               policy.denied_commands)
 
 
-def is_command_allowed(command: str | Sequence[str], policy: SafetyPolicy) -> bool:
+def is_command_allowed(command: str | Sequence[str],
+                       policy: SafetyPolicy) -> bool:
     """Return whether the first command token is allowed by policy."""
 
     if not policy.allowed_commands:
         return True
-    return matches_any_pattern(get_command_name(command), policy.allowed_commands)
+    return matches_any_pattern(get_command_name(command),
+                               policy.allowed_commands)

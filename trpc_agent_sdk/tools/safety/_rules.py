@@ -32,12 +32,12 @@ class RuleDefinition(BaseModel):
 
 
 def _rule(
-    rule_id: str,
-    risk_type: RiskType,
-    risk_level: RiskLevel,
-    decision: SafetyDecision,
-    message: str,
-    recommendation: str,
+        rule_id: str,
+        risk_type: RiskType,
+        risk_level: RiskLevel,
+        decision: SafetyDecision,
+        message: str,
+        recommendation: str,
 ) -> RuleDefinition:
     return RuleDefinition(
         rule_id=rule_id,
@@ -50,7 +50,8 @@ def _rule(
 
 
 DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
-    "FILE_RECURSIVE_DELETE": _rule(
+    "FILE_RECURSIVE_DELETE":
+    _rule(
         "FILE_RECURSIVE_DELETE",
         RiskType.FILE_OPERATION,
         RiskLevel.CRITICAL,
@@ -58,7 +59,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Recursive deletion of files or directories was detected.",
         "Remove recursive deletion or require an isolated workspace with explicit approval.",
     ),
-    "FILE_SYSTEM_OVERWRITE": _rule(
+    "FILE_SYSTEM_OVERWRITE":
+    _rule(
         "FILE_SYSTEM_OVERWRITE",
         RiskType.FILE_OPERATION,
         RiskLevel.HIGH,
@@ -66,7 +68,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Potential overwrite of a protected system path was detected.",
         "Avoid writing to system paths; write only inside an approved workspace directory.",
     ),
-    "FILE_SENSITIVE_READ": _rule(
+    "FILE_SENSITIVE_READ":
+    _rule(
         "FILE_SENSITIVE_READ",
         RiskType.FILE_OPERATION,
         RiskLevel.CRITICAL,
@@ -74,7 +77,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Read access to a sensitive credential or configuration file was detected.",
         "Remove reads of sensitive files such as .env, SSH keys, or cloud credentials.",
     ),
-    "FILE_FORBIDDEN_PATH_ACCESS": _rule(
+    "FILE_FORBIDDEN_PATH_ACCESS":
+    _rule(
         "FILE_FORBIDDEN_PATH_ACCESS",
         RiskType.FILE_OPERATION,
         RiskLevel.HIGH,
@@ -82,7 +86,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Access to a path denied by the safety policy was detected.",
         "Change the command to avoid denied paths or update the policy after review.",
     ),
-    "NET_NON_WHITELIST_EGRESS": _rule(
+    "NET_NON_WHITELIST_EGRESS":
+    _rule(
         "NET_NON_WHITELIST_EGRESS",
         RiskType.NETWORK_EGRESS,
         RiskLevel.HIGH,
@@ -90,7 +95,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Network egress to a non-allowlisted domain was detected.",
         "Use an allowlisted domain or add the domain to policy only after review.",
     ),
-    "NET_DYNAMIC_EGRESS_REVIEW": _rule(
+    "NET_DYNAMIC_EGRESS_REVIEW":
+    _rule(
         "NET_DYNAMIC_EGRESS_REVIEW",
         RiskType.NETWORK_EGRESS,
         RiskLevel.MEDIUM,
@@ -98,7 +104,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Dynamic network destination construction was detected.",
         "Review the destination construction or replace it with a static allowlisted domain.",
     ),
-    "PROC_OS_SYSTEM": _rule(
+    "PROC_OS_SYSTEM":
+    _rule(
         "PROC_OS_SYSTEM",
         RiskType.PROCESS_EXECUTION,
         RiskLevel.MEDIUM,
@@ -106,7 +113,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Process execution through os.system or equivalent was detected.",
         "Review the command and prefer structured subprocess invocation without shell expansion.",
     ),
-    "PROC_SUBPROCESS_SHELL": _rule(
+    "PROC_SUBPROCESS_SHELL":
+    _rule(
         "PROC_SUBPROCESS_SHELL",
         RiskType.PROCESS_EXECUTION,
         RiskLevel.HIGH,
@@ -114,7 +122,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Subprocess execution with shell=True was detected.",
         "Avoid shell=True or require human review for the exact command and inputs.",
     ),
-    "PROC_SHELL_PIPE_OR_CHAIN": _rule(
+    "PROC_SHELL_PIPE_OR_CHAIN":
+    _rule(
         "PROC_SHELL_PIPE_OR_CHAIN",
         RiskType.PROCESS_EXECUTION,
         RiskLevel.MEDIUM,
@@ -122,7 +131,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Shell pipeline or command chaining was detected.",
         "Review shell metacharacters and split commands into explicit safe steps when possible.",
     ),
-    "PROC_BACKGROUND_PROCESS": _rule(
+    "PROC_BACKGROUND_PROCESS":
+    _rule(
         "PROC_BACKGROUND_PROCESS",
         RiskType.PROCESS_EXECUTION,
         RiskLevel.MEDIUM,
@@ -130,7 +140,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Background process execution was detected.",
         "Avoid background processes unless lifecycle and cleanup are explicitly controlled.",
     ),
-    "PROC_PRIVILEGE_ESCALATION": _rule(
+    "PROC_PRIVILEGE_ESCALATION":
+    _rule(
         "PROC_PRIVILEGE_ESCALATION",
         RiskType.PROCESS_EXECUTION,
         RiskLevel.HIGH,
@@ -138,7 +149,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Privilege escalation or permission-changing command was detected.",
         "Remove sudo, su, unsafe chmod, or ownership changes from tool-executed scripts.",
     ),
-    "POLICY_DENIED_COMMAND": _rule(
+    "POLICY_DENIED_COMMAND":
+    _rule(
         "POLICY_DENIED_COMMAND",
         RiskType.POLICY_VIOLATION,
         RiskLevel.HIGH,
@@ -146,7 +158,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Command denied by the safety policy was detected.",
         "Remove the denied command or update policy only after review.",
     ),
-    "DEP_PIP_INSTALL": _rule(
+    "DEP_PIP_INSTALL":
+    _rule(
         "DEP_PIP_INSTALL",
         RiskType.DEPENDENCY_INSTALL,
         RiskLevel.MEDIUM,
@@ -154,7 +167,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Python dependency installation was detected.",
         "Review dependency source and pinning before allowing package installation.",
     ),
-    "DEP_NPM_INSTALL": _rule(
+    "DEP_NPM_INSTALL":
+    _rule(
         "DEP_NPM_INSTALL",
         RiskType.DEPENDENCY_INSTALL,
         RiskLevel.MEDIUM,
@@ -162,7 +176,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "JavaScript dependency installation was detected.",
         "Review package source, lockfile impact, and install scope before proceeding.",
     ),
-    "DEP_SYSTEM_INSTALL": _rule(
+    "DEP_SYSTEM_INSTALL":
+    _rule(
         "DEP_SYSTEM_INSTALL",
         RiskType.DEPENDENCY_INSTALL,
         RiskLevel.HIGH,
@@ -170,7 +185,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "System package installation was detected.",
         "Do not install system packages from tool execution without an approved runtime image.",
     ),
-    "RES_INFINITE_LOOP": _rule(
+    "RES_INFINITE_LOOP":
+    _rule(
         "RES_INFINITE_LOOP",
         RiskType.RESOURCE_ABUSE,
         RiskLevel.MEDIUM,
@@ -178,7 +194,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Potential infinite loop was detected.",
         "Add bounded iteration, timeouts, or explicit cancellation conditions.",
     ),
-    "RES_FORK_BOMB": _rule(
+    "RES_FORK_BOMB":
+    _rule(
         "RES_FORK_BOMB",
         RiskType.RESOURCE_ABUSE,
         RiskLevel.CRITICAL,
@@ -186,7 +203,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Fork bomb or explosive process spawning pattern was detected.",
         "Remove process spawning recursion and rely on runtime resource limits.",
     ),
-    "RES_LONG_SLEEP": _rule(
+    "RES_LONG_SLEEP":
+    _rule(
         "RES_LONG_SLEEP",
         RiskType.RESOURCE_ABUSE,
         RiskLevel.MEDIUM,
@@ -194,7 +212,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Long sleep or wait duration was detected.",
         "Shorten waits or use an explicit timeout approved by policy.",
     ),
-    "RES_LARGE_WRITE": _rule(
+    "RES_LARGE_WRITE":
+    _rule(
         "RES_LARGE_WRITE",
         RiskType.RESOURCE_ABUSE,
         RiskLevel.MEDIUM,
@@ -202,7 +221,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Potential large or unbounded file write was detected.",
         "Bound output size and write only to approved workspace paths.",
     ),
-    "LEAK_SECRET_LITERAL": _rule(
+    "LEAK_SECRET_LITERAL":
+    _rule(
         "LEAK_SECRET_LITERAL",
         RiskType.SENSITIVE_LEAK,
         RiskLevel.HIGH,
@@ -210,7 +230,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Secret-like literal data may be written, logged, or sent.",
         "Remove hard-coded secrets and use approved secret management without exposing values.",
     ),
-    "LEAK_ENV_SECRET": _rule(
+    "LEAK_ENV_SECRET":
+    _rule(
         "LEAK_ENV_SECRET",
         RiskType.SENSITIVE_LEAK,
         RiskLevel.HIGH,
@@ -218,7 +239,8 @@ DEFAULT_RULE_DEFINITIONS: dict[str, RuleDefinition] = {
         "Sensitive environment variable output or exfiltration was detected.",
         "Do not print, write, or send sensitive environment variable values.",
     ),
-    "PARSER_FALLBACK_USED": _rule(
+    "PARSER_FALLBACK_USED":
+    _rule(
         "PARSER_FALLBACK_USED",
         RiskType.PARSER_WARNING,
         RiskLevel.LOW,
@@ -259,7 +281,8 @@ def is_rule_enabled(rule_id: str, policy: SafetyPolicy) -> bool:
     return True if override is None else override.enabled
 
 
-def apply_rule_policy(rule: RuleDefinition, policy: SafetyPolicy) -> RuleDefinition:
+def apply_rule_policy(rule: RuleDefinition,
+                      policy: SafetyPolicy) -> RuleDefinition:
     """Apply a policy override to a rule without mutating the catalog."""
 
     override = policy.rules.get(rule.rule_id)
@@ -277,22 +300,23 @@ def apply_rule_policy(rule: RuleDefinition, policy: SafetyPolicy) -> RuleDefinit
 
 
 def make_finding(
-    rule_id: str,
-    evidence: object,
-    policy: SafetyPolicy,
-    *,
-    message: str | None = None,
-    recommendation: str | None = None,
-    line: int | None = None,
-    column: int | None = None,
-    metadata: dict[str, object] | None = None,
-    redacted: bool | None = None,
+        rule_id: str,
+        evidence: object,
+        policy: SafetyPolicy,
+        *,
+        message: str | None = None,
+        recommendation: str | None = None,
+        line: int | None = None,
+        column: int | None = None,
+        metadata: dict[str, object] | None = None,
+        redacted: bool | None = None,
 ) -> ScanFinding:
     """Create a ScanFinding with policy overrides and redacted evidence."""
 
     rule = apply_rule_policy(get_rule_definition(rule_id), policy)
     raw_evidence = str(evidence or "")
-    safe_evidence = redact_evidence(raw_evidence, max_chars=policy.max_evidence_chars)
+    safe_evidence = redact_evidence(raw_evidence,
+                                    max_chars=policy.max_evidence_chars)
     return ScanFinding(
         rule_id=rule.rule_id,
         risk_type=rule.risk_type,
@@ -303,12 +327,14 @@ def make_finding(
         line=line,
         column=column,
         recommendation=recommendation or rule.recommendation,
-        redacted=(safe_evidence != raw_evidence) if redacted is None else redacted,
+        redacted=(safe_evidence != raw_evidence)
+        if redacted is None else redacted,
         metadata=metadata or {},
     )
 
 
-def merge_findings(findings: Sequence[ScanFinding] | Iterable[ScanFinding]) -> tuple[SafetyDecision, RiskLevel]:
+def merge_findings(findings: Sequence[ScanFinding] | Iterable[ScanFinding]
+                   ) -> tuple[SafetyDecision, RiskLevel]:
     """Merge finding decisions and risk levels into a final report summary."""
 
     items = list(findings)
@@ -323,11 +349,13 @@ def merge_findings(findings: Sequence[ScanFinding] | Iterable[ScanFinding]) -> t
         if finding.decision == SafetyDecision.NEEDS_HUMAN_REVIEW:
             decision = SafetyDecision.NEEDS_HUMAN_REVIEW
 
-    risk_level = max((finding.risk_level for finding in items), key=lambda level: _RISK_LEVEL_ORDER[level])
+    risk_level = max((finding.risk_level for finding in items),
+                     key=lambda level: _RISK_LEVEL_ORDER[level])
     return decision, risk_level
 
 
-def should_block_decision(decision: SafetyDecision, policy: SafetyPolicy) -> bool:
+def should_block_decision(decision: SafetyDecision,
+                          policy: SafetyPolicy) -> bool:
     """Return whether a decision should block execution under policy."""
 
     if decision == SafetyDecision.DENY:

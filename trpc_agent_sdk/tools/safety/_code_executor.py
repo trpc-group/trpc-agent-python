@@ -74,25 +74,28 @@ class SafetyGuardedCodeExecutor(BaseCodeExecutor):
         object.__setattr__(self, "scanner", resolved_scanner)
         object.__setattr__(self, "audit_logger", resolved_audit_logger)
         for field_name in _MIRRORED_EXECUTOR_FIELDS:
-            object.__setattr__(self, field_name, getattr(self.delegate, field_name))
+            object.__setattr__(self, field_name,
+                               getattr(self.delegate, field_name))
 
     async def execute_code(
-        self,
-        invocation_context: InvocationContext,
-        code_execution_input: CodeExecutionInput,
+            self,
+            invocation_context: InvocationContext,
+            code_execution_input: CodeExecutionInput,
     ) -> CodeExecutionResult:
         """Scan code execution input before calling the wrapped executor."""
 
         targets = _build_scan_targets(code_execution_input)
         if not targets:
-            return await self.delegate.execute_code(invocation_context, code_execution_input)
+            return await self.delegate.execute_code(invocation_context,
+                                                    code_execution_input)
 
         reports: list[SafetyReport] = []
         for target in targets:
             try:
                 report = self.scanner.scan(target)
                 if not isinstance(report, SafetyReport):
-                    raise TypeError(f"SafetyScanner.scan returned {type(report)!r}")
+                    raise TypeError(
+                        f"SafetyScanner.scan returned {type(report)!r}")
             except Exception as ex:  # pylint: disable=broad-except
                 logger.warning(
                     "Code executor safety scan failed: fail_closed=%s error_type=%s",
@@ -101,9 +104,11 @@ class SafetyGuardedCodeExecutor(BaseCodeExecutor):
                 )
                 if self.policy.fail_closed:
                     report = _fail_closed_report(target, self.policy)
-                    _record_report(invocation_context, self.audit_logger, report)
+                    _record_report(invocation_context, self.audit_logger,
+                                   report)
                     return _blocked_result(report)
-                return await self.delegate.execute_code(invocation_context, code_execution_input)
+                return await self.delegate.execute_code(
+                    invocation_context, code_execution_input)
             reports.append(report)
 
         combined_report = _merge_reports(reports, self.policy)
@@ -111,10 +116,12 @@ class SafetyGuardedCodeExecutor(BaseCodeExecutor):
         if combined_report.blocked:
             return _blocked_result(combined_report)
 
-        return await self.delegate.execute_code(invocation_context, code_execution_input)
+        return await self.delegate.execute_code(invocation_context,
+                                                code_execution_input)
 
 
-def _build_scan_targets(code_execution_input: CodeExecutionInput) -> list[ScanTarget]:
+def _build_scan_targets(code_execution_input: CodeExecutionInput
+                        ) -> list[ScanTarget]:
     targets: list[ScanTarget] = []
     if code_execution_input.code_blocks:
         for index, code_block in enumerate(code_execution_input.code_blocks):
@@ -126,9 +133,11 @@ def _build_scan_targets(code_execution_input: CodeExecutionInput) -> list[ScanTa
                     content=code,
                     language=_language_from_value(code_block.language),
                     tool_name=_TOOL_NAME,
-                    tool_metadata={"source": "code_block", "index": index},
-                )
-            )
+                    tool_metadata={
+                        "source": "code_block",
+                        "index": index
+                    },
+                ))
     elif code_execution_input.code.strip():
         targets.append(
             ScanTarget(
@@ -136,8 +145,7 @@ def _build_scan_targets(code_execution_input: CodeExecutionInput) -> list[ScanTa
                 language=ScriptLanguage.UNKNOWN,
                 tool_name=_TOOL_NAME,
                 tool_metadata={"source": "code"},
-            )
-        )
+            ))
 
     for input_file in code_execution_input.input_files:
         name = input_file.name or ""
@@ -154,9 +162,11 @@ def _build_scan_targets(code_execution_input: CodeExecutionInput) -> list[ScanTa
                 content=content,
                 language=_language_from_file_suffix(suffix),
                 tool_name=_TOOL_NAME,
-                tool_metadata={"source": "input_file", "file_name": name},
-            )
-        )
+                tool_metadata={
+                    "source": "input_file",
+                    "file_name": name
+                },
+            ))
 
     return targets
 
@@ -185,7 +195,8 @@ def _language_from_file_suffix(suffix: str) -> ScriptLanguage:
     return ScriptLanguage.SHELL
 
 
-def _merge_reports(reports: list[SafetyReport], policy: SafetyPolicy) -> SafetyReport:
+def _merge_reports(reports: list[SafetyReport],
+                   policy: SafetyPolicy) -> SafetyReport:
     if not reports:
         return SafetyReport(
             decision=SafetyDecision.ALLOW,
@@ -205,8 +216,10 @@ def _merge_reports(reports: list[SafetyReport], policy: SafetyPolicy) -> SafetyR
 
     decision, risk_level = merge_findings(findings)
     languages = {report.language for report in reports}
-    language = next(iter(languages)) if len(languages) == 1 else ScriptLanguage.UNKNOWN
-    parser_error = next((report.parser_error for report in reports if report.parser_error), None)
+    language = next(
+        iter(languages)) if len(languages) == 1 else ScriptLanguage.UNKNOWN
+    parser_error = next((report.parser_error
+                         for report in reports if report.parser_error), None)
     scanner_version = reports[0].scanner_version
 
     return SafetyReport(
@@ -225,14 +238,15 @@ def _merge_reports(reports: list[SafetyReport], policy: SafetyPolicy) -> SafetyR
 
 
 def _record_report(
-    invocation_context: InvocationContext,
-    audit_logger: Any,
-    report: SafetyReport,
+        invocation_context: InvocationContext,
+        audit_logger: Any,
+        report: SafetyReport,
 ) -> None:
     event = build_safety_audit_event(
         report,
         tool_name=_TOOL_NAME,
-        function_call_id=_context_value(invocation_context, "function_call_id"),
+        function_call_id=_context_value(invocation_context,
+                                        "function_call_id"),
         agent_name=_context_value(invocation_context, "agent_name"),
     )
     audit_logger.emit(event)
@@ -249,7 +263,8 @@ def _context_value(invocation_context: InvocationContext, key: str) -> str:
     return ""
 
 
-def _fail_closed_report(target: ScanTarget, policy: SafetyPolicy) -> SafetyReport:
+def _fail_closed_report(target: ScanTarget,
+                        policy: SafetyPolicy) -> SafetyReport:
     return SafetyReport(
         decision=SafetyDecision.DENY,
         risk_level=RiskLevel.HIGH,
@@ -271,25 +286,29 @@ def _blocked_result(report: SafetyReport) -> CodeExecutionResult:
 
 
 def _blocked_text(report: SafetyReport) -> str:
-    rules = _ordered_text((finding.rule_id for finding in report.findings), separator=", ") or "none"
-    evidence = _ordered_text(finding.evidence for finding in report.findings) or _FAIL_CLOSED_EVIDENCE
-    recommendation = (
-        _ordered_text(finding.recommendation for finding in report.findings) or _fail_closed_recommendation()
-    )
-    return "\n".join(
-        [
-            _BLOCKED_HEADING,
-            f"Decision: {report.decision.value}",
-            f"Risk level: {report.risk_level.value}",
-            f"Rules: {rules}",
-            f"Evidence: {evidence}",
-            f"Recommendation: {recommendation}",
-        ]
-    )
+    rules = _ordered_text(
+        (finding.rule_id
+         for finding in report.findings), separator=", ") or "none"
+    evidence = _ordered_text(
+        finding.evidence
+        for finding in report.findings) or _FAIL_CLOSED_EVIDENCE
+    recommendation = (_ordered_text(finding.recommendation
+                                    for finding in report.findings)
+                      or _fail_closed_recommendation())
+    return "\n".join([
+        _BLOCKED_HEADING,
+        f"Decision: {report.decision.value}",
+        f"Risk level: {report.risk_level.value}",
+        f"Rules: {rules}",
+        f"Evidence: {evidence}",
+        f"Recommendation: {recommendation}",
+    ])
 
 
 def _ordered_text(values: Any, *, separator: str = "; ") -> str:
-    ordered = [str(value) for value in dict.fromkeys(values) if str(value).strip()]
+    ordered = [
+        str(value) for value in dict.fromkeys(values) if str(value).strip()
+    ]
     return separator.join(ordered)
 
 

@@ -12,24 +12,18 @@ import json
 import sys
 from pathlib import Path
 
-try:
-    from trpc_agent_sdk.tools.safety._cli_helpers import format_mismatches
-    from trpc_agent_sdk.tools.safety._cli_helpers import load_policy
-    from trpc_agent_sdk.tools.safety._cli_helpers import load_samples
-    from trpc_agent_sdk.tools.safety._cli_helpers import scan_file
-    from trpc_agent_sdk.tools.safety._cli_helpers import scan_samples
-    from trpc_agent_sdk.tools.safety._cli_helpers import write_audit_log
-    from trpc_agent_sdk.tools.safety._cli_helpers import write_json_report
-except ModuleNotFoundError:  # pragma: no cover - exercised by direct script execution in fresh checkouts.
-    repo_root = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(repo_root))
-    from trpc_agent_sdk.tools.safety._cli_helpers import format_mismatches
-    from trpc_agent_sdk.tools.safety._cli_helpers import load_policy
-    from trpc_agent_sdk.tools.safety._cli_helpers import load_samples
-    from trpc_agent_sdk.tools.safety._cli_helpers import scan_file
-    from trpc_agent_sdk.tools.safety._cli_helpers import scan_samples
-    from trpc_agent_sdk.tools.safety._cli_helpers import write_audit_log
-    from trpc_agent_sdk.tools.safety._cli_helpers import write_json_report
+REPO_ROOT = Path(__file__).resolve().parents[1]
+repo_root = str(REPO_ROOT)
+sys.path[:] = [path for path in sys.path if path != repo_root]
+sys.path.insert(0, repo_root)
+
+from trpc_agent_sdk.tools.safety._cli_helpers import format_mismatches
+from trpc_agent_sdk.tools.safety._cli_helpers import load_policy
+from trpc_agent_sdk.tools.safety._cli_helpers import load_samples
+from trpc_agent_sdk.tools.safety._cli_helpers import scan_file
+from trpc_agent_sdk.tools.safety._cli_helpers import scan_samples
+from trpc_agent_sdk.tools.safety._cli_helpers import write_audit_log
+from trpc_agent_sdk.tools.safety._cli_helpers import write_json_report
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

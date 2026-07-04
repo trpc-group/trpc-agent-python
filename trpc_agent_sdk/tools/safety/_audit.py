@@ -23,16 +23,17 @@ def _ordered_rule_ids(report: SafetyReport) -> list[str]:
 
 
 def build_safety_audit_event(
-    report: SafetyReport,
-    *,
-    tool_name: str = "",
-    cwd: str = "",
-    function_call_id: str = "",
-    agent_name: str = "",
+        report: SafetyReport,
+        *,
+        tool_name: str = "",
+        cwd: str = "",
+        function_call_id: str = "",
+        agent_name: str = "",
 ) -> SafetyAuditEvent:
     """Build an audit-safe summary event from a safety report."""
 
-    resolved_tool_name = tool_name or str(report.metadata.get("target_tool", "") or "")
+    resolved_tool_name = tool_name or str(
+        report.metadata.get("target_tool", "") or "")
     return SafetyAuditEvent(
         tool_name=resolved_tool_name,
         decision=report.decision,
@@ -53,7 +54,6 @@ def build_safety_audit_event(
 
 class SafetyAuditLogger:
     """Optional JSONL writer for safety audit events."""
-
     def __init__(self, path: str | Path | None = None, enabled: bool = True):
         self.path = Path(path) if path is not None else None
         self.enabled = enabled
@@ -73,11 +73,13 @@ class SafetyAuditLogger:
             logger.warning("Failed to write safety audit event: %s", ex)
 
 
-def set_safety_span_attributes(report: SafetyReport, *, tool_name: str = "") -> None:
+def set_safety_span_attributes(report: SafetyReport, *,
+                               tool_name: str = "") -> None:
     """Best-effort write of safety summary fields onto the current OTel span."""
 
     rule_ids = _ordered_rule_ids(report)
-    resolved_tool_name = tool_name or str(report.metadata.get("target_tool", "") or "")
+    resolved_tool_name = tool_name or str(
+        report.metadata.get("target_tool", "") or "")
     attributes: dict[str, str | bool | int | float] = {
         "tool.safety.decision": report.decision.value,
         "tool.safety.risk_level": report.risk_level.value,

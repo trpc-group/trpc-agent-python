@@ -41,13 +41,12 @@ _FAIL_CLOSED_ERROR = "Tool safety scan failed closed"
 @register_tool_filter("tool_safety_guard")
 class ToolSafetyFilter(BaseFilter):
     """Scan tool script-like inputs before the tool handler runs."""
-
     def __init__(
-        self,
-        policy_path: str | Path | None = None,
-        policy: SafetyPolicy | None = None,
-        audit_logger: SafetyAuditLogger | None = None,
-        scanner: SafetyScanner | None = None,
+            self,
+            policy_path: str | Path | None = None,
+            policy: SafetyPolicy | None = None,
+            audit_logger: SafetyAuditLogger | None = None,
+            scanner: SafetyScanner | None = None,
     ):
         super().__init__()
         self._policy = resolve_safety_policy(
@@ -63,14 +62,17 @@ class ToolSafetyFilter(BaseFilter):
             return None
 
         tool_name, tool_description = _current_tool_info()
-        target = _build_scan_target(req, tool_name=tool_name, tool_description=tool_description)
+        target = _build_scan_target(req,
+                                    tool_name=tool_name,
+                                    tool_description=tool_description)
         if target is None:
             return None
 
         try:
             report = self._scanner.scan(target)
             if not isinstance(report, SafetyReport):
-                raise TypeError(f"SafetyScanner.scan returned {type(report)!r}")
+                raise TypeError(
+                    f"SafetyScanner.scan returned {type(report)!r}")
         except Exception as ex:  # pylint: disable=broad-except
             logger.warning(
                 "Tool safety scan failed: tool=%s fail_closed=%s error_type=%s",
@@ -84,13 +86,17 @@ class ToolSafetyFilter(BaseFilter):
                 _block(rsp, report, _FAIL_CLOSED_ERROR)
             return None
 
-        report = report.model_copy(update={"blocked": should_block_decision(report.decision, self._policy)})
+        report = report.model_copy(
+            update={
+                "blocked": should_block_decision(report.decision, self._policy)
+            })
         self._record_report(ctx, report, target)
         if report.blocked:
             _block(rsp, report, _BLOCKED_ERROR)
         return None
 
-    def _record_report(self, ctx: AgentContext, report: SafetyReport, target: ScanTarget) -> None:
+    def _record_report(self, ctx: AgentContext, report: SafetyReport,
+                       target: ScanTarget) -> None:
         _store_last_report(ctx, report)
         event = build_safety_audit_event(
             report,
@@ -103,7 +109,8 @@ class ToolSafetyFilter(BaseFilter):
         set_safety_span_attributes(report, tool_name=target.tool_name)
 
 
-def _block(rsp: FilterResult, report: SafetyReport, error_message: str) -> None:
+def _block(rsp: FilterResult, report: SafetyReport,
+           error_message: str) -> None:
     rsp.rsp = {
         "ok": False,
         "blocked": True,
@@ -115,13 +122,14 @@ def _block(rsp: FilterResult, report: SafetyReport, error_message: str) -> None:
 
 
 def _build_scan_target(
-    req: Mapping[str, Any],
-    *,
-    tool_name: str,
-    tool_description: str,
+        req: Mapping[str, Any],
+        *,
+        tool_name: str,
+        tool_description: str,
 ) -> ScanTarget | None:
     command = _string_value(req, "command")
-    content = "\n".join(part for part in (_string_value(req, "script"), _string_value(req, "code")) if part)
+    content = "\n".join(part for part in (_string_value(req, "script"),
+                                          _string_value(req, "code")) if part)
     stdin = _string_value(req, "stdin")
     if not any(value.strip() for value in (command, content, stdin)):
         return None
@@ -157,7 +165,8 @@ def _current_tool_info() -> tuple[str, str]:
         return "", ""
     if tool is None:
         return "", ""
-    return str(getattr(tool, "name", "") or ""), str(getattr(tool, "description", "") or "")
+    return str(getattr(tool, "name", "")
+               or ""), str(getattr(tool, "description", "") or "")
 
 
 def _string_value(req: Mapping[str, Any], key: str) -> str:
@@ -238,7 +247,8 @@ def _metadata_value(ctx: AgentContext, key: str) -> str:
     return ""
 
 
-def _fail_closed_report(target: ScanTarget, policy: SafetyPolicy) -> SafetyReport:
+def _fail_closed_report(target: ScanTarget,
+                        policy: SafetyPolicy) -> SafetyReport:
     return SafetyReport(
         decision=SafetyDecision.DENY,
         risk_level=RiskLevel.HIGH,
