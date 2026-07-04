@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from typing import Optional
 
 
 TIMESTAMP_PRECISION = 3
@@ -25,8 +26,13 @@ TIMESTAMP_PRECISION = 3
 class Normalizer:
     """Normalizes backend snapshots for fair cross-backend comparison."""
 
-    def normalize_timestamp(self, ts: float) -> float:
-        """Round timestamp to uniform precision."""
+    def normalize_timestamp(self, ts: Optional[float]) -> float:
+        """Round timestamp to uniform precision.
+
+        Returns 0.0 for None to handle backends that may store NULL timestamps.
+        """
+        if ts is None:
+            return 0.0
         return round(ts, TIMESTAMP_PRECISION)
 
     def normalize_id(self, value: str) -> str:
@@ -81,6 +87,7 @@ class Normalizer:
             normalized["parent_invocation_id"] = self.normalize_id(
                 normalized["parent_invocation_id"]
             )
+        self._normalize_scalar_fields(normalized)
         return normalized
 
     def normalize_session(self, session_dict: dict[str, Any]) -> dict[str, Any]:
@@ -94,6 +101,7 @@ class Normalizer:
             normalized["events"] = [
                 self.normalize_event(e) for e in normalized["events"]
             ]
+        self._normalize_scalar_fields(normalized)
         return normalized
 
     def normalize_summary(self, summary_dict: dict[str, Any]) -> dict[str, Any]:
@@ -107,4 +115,16 @@ class Normalizer:
             normalized["summary_timestamp"] = self.normalize_timestamp(
                 normalized["summary_timestamp"]
             )
+        self._normalize_scalar_fields(normalized)
         return normalized
+
+    def _normalize_scalar_fields(self, d: dict[str, Any]) -> None:
+        """Normalize null/empty representations for all scalar fields.
+
+        Skips lists and dicts to avoid destroying structured data like events
+        or state, but normalizes None, "", [], {} for all other types so that
+        different backends' empty representations are treated as equal.
+        """
+        for key, value in d.items():
+            if not isinstance(value, (list, dict)):
+                d[key] = self.normalize_null(value)
