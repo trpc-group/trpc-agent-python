@@ -10,6 +10,8 @@ from .cases import replay_cases
 from .comparator import DiffEntry
 from .comparator import compare_snapshot_pair
 from .comparator import recursive_diff
+from .mutations import mutate_snapshot
+from .mutations import mutations_for_case
 from .normalizer import Snapshot
 from .normalizer import normalize_snapshot
 from .report import write_report
@@ -25,6 +27,8 @@ __all__ = [
     "DiffEntry",
     "compare_snapshot_pair",
     "recursive_diff",
+    "mutate_snapshot",
+    "mutations_for_case",
     "Snapshot",
     "normalize_snapshot",
     "write_report",

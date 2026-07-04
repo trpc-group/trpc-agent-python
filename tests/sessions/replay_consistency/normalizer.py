@@ -132,6 +132,7 @@ def normalize_memory_results(memory_records: list[tuple[MemoryQuerySpec, str, li
     memories: list[dict[str, Any]] = []
     for query_spec, key, entries in memory_records:
         memories.extend(normalize_memory_entry(query_spec, key, entry) for entry in entries)
+    # Memory search ranking is backend-specific here; content/scope are strict, order is canonicalized.
     return sorted(
         memories,
         key=lambda item: (

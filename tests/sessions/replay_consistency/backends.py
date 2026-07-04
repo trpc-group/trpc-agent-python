@@ -172,6 +172,36 @@ async def build_backends(
         )
     )
 
+    external_sql_url = os.environ.get("TRPC_AGENT_REPLAY_SQL_URL")
+    if external_sql_url:
+        external_sql_session = SqlSessionService(
+            db_url=external_sql_url,
+            is_async=False,
+            session_config=base_config.model_copy(deep=True),
+        )
+        external_sql_session.set_summarizer_manager(_make_summarizer_manager(keep_recent_count), force=True)
+        external_sql_memory = SqlMemoryService(
+            db_url=external_sql_url,
+            is_async=False,
+            memory_service_config=memory_config.model_copy(deep=True),
+        )
+        try:
+            await external_sql_session._sql_storage.create_sql_engine()
+            await external_sql_memory._sql_storage.create_sql_engine()
+        except ValueError as exc:
+            if isinstance(exc.__cause__, ImportError):
+                pytest.skip(f"External SQL replay backend dependency is unavailable: {exc}")
+            pytest.skip(f"External SQL replay backend failed to initialize: {exc}")
+
+        backends.append(
+            BackendBundle(
+                name="external_sql",
+                session_service=external_sql_session,
+                memory_service=external_sql_memory,
+                close=lambda s=external_sql_session, m=external_sql_memory: _close_services(s, m),
+            )
+        )
+
     redis_url = os.environ.get("TRPC_AGENT_REPLAY_REDIS_URL")
     if redis_url:
         try:

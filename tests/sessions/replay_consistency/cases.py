@@ -683,4 +683,212 @@ def replay_cases() -> list[ReplayCase]:
                 "is captured as the backend stores it."
             ),
         ),
+        ReplayCase(
+            name="serialization_order_nested_payload",
+            app_name="replay-app",
+            user_id="user-nested-payload",
+            session_id="session-011",
+            initial_state={},
+            events=[
+                _text_event(
+                    "serialization_order_nested_payload",
+                    0,
+                    invocation_id="inv-nested-1",
+                    author="user",
+                    role="user",
+                    text="Build a nested itinerary payload for Beijing.",
+                ),
+                EventSpec(
+                    event_id="serialization_order_nested_payload-event-01",
+                    invocation_id="inv-nested-1",
+                    author="assistant",
+                    role="model",
+                    text=None,
+                    function_call={
+                        "id": "call-itinerary-1",
+                        "name": "build_itinerary",
+                        "args": {
+                            "city": "Beijing",
+                            "days": [
+                                {"day": 2, "focus": ["parks", "tea"]},
+                                {"day": 1, "focus": ["museums", "food"]},
+                            ],
+                            "preferences": {"transport": "metro", "budget": "mid"},
+                        },
+                    },
+                    function_response=None,
+                    state_delta=None,
+                    branch="nested.main",
+                    tag="tool-call",
+                    filter_key="nested",
+                ),
+                EventSpec(
+                    event_id="serialization_order_nested_payload-event-02",
+                    invocation_id="inv-nested-1",
+                    author="tool",
+                    role="tool",
+                    text=None,
+                    function_call=None,
+                    function_response={
+                        "id": "call-itinerary-1",
+                        "name": "build_itinerary",
+                        "response": {
+                            "temperature": 21,
+                            "condition": "clear",
+                            "plan": {
+                                "city": "Beijing",
+                                "items": [
+                                    {"slot": "morning", "name": "National Museum"},
+                                    {"slot": "afternoon", "name": "Tea house"},
+                                ],
+                            },
+                        },
+                    },
+                    state_delta=None,
+                    branch="nested.main",
+                    tag="tool-response",
+                    filter_key="nested",
+                ),
+                _text_event(
+                    "serialization_order_nested_payload",
+                    3,
+                    invocation_id="inv-nested-1",
+                    author="assistant",
+                    role="model",
+                    text="The nested itinerary payload is ready.",
+                    branch="nested.main",
+                    tag="final",
+                    filter_key="nested",
+                ),
+            ],
+            memory_queries=[],
+            summary_points=[],
+            description=(
+                "Risk: nested dict/list serialization order should be canonicalized, while "
+                "tool argument and tool response value drift remains strict."
+            ),
+        ),
+        ReplayCase(
+            name="list_sessions_consistency",
+            app_name="replay-app",
+            user_id="user-list-sessions",
+            session_id="session-012",
+            initial_state={"session_label": "list-check", "user:tier": "silver"},
+            events=[
+                _text_event(
+                    "list_sessions_consistency",
+                    0,
+                    invocation_id="inv-list-1",
+                    author="user",
+                    role="user",
+                    text="Create a session that can be listed consistently.",
+                ),
+                _text_event(
+                    "list_sessions_consistency",
+                    1,
+                    invocation_id="inv-list-1",
+                    author="assistant",
+                    role="model",
+                    text="The session list should include this normalized state.",
+                    state_delta={"session_label": "list-check-updated"},
+                ),
+            ],
+            memory_queries=[],
+            summary_points=[],
+            description=(
+                "Risk: list_sessions may omit or reshape id/app/user/state differently across backends."
+            ),
+        ),
+        ReplayCase(
+            name="state_temp_key_ignored_but_persistent_key_compared",
+            app_name="replay-app",
+            user_id="user-state-temp",
+            session_id="session-013",
+            initial_state={"user:tier": "gold", "preference": "tea"},
+            events=[
+                _text_event(
+                    "state_temp_key_ignored_but_persistent_key_compared",
+                    0,
+                    invocation_id="inv-state-temp-1",
+                    author="user",
+                    role="user",
+                    text="Remember my persistent state but not the trace id.",
+                    state_delta={
+                        "user:tier": "platinum",
+                        "preference": "oolong tea",
+                        "temp:trace_id": "temp-state-1",
+                    },
+                ),
+                _text_event(
+                    "state_temp_key_ignored_but_persistent_key_compared",
+                    1,
+                    invocation_id="inv-state-temp-1",
+                    author="assistant",
+                    role="model",
+                    text="Persistent state is updated and temp state is not stored.",
+                    state_delta={"session_counter": 2, "temp:trace_id": "temp-state-2"},
+                ),
+            ],
+            memory_queries=[],
+            summary_points=[],
+            description=(
+                "Risk: temp:* state must be filtered from persisted raw sessions while business "
+                "state values remain strictly compared."
+            ),
+        ),
+        ReplayCase(
+            name="summary_truncation_preserves_recent_context",
+            app_name="replay-app",
+            user_id="user-summary-recent",
+            session_id="session-014",
+            initial_state={},
+            events=[
+                _text_event(
+                    "summary_truncation_preserves_recent_context",
+                    0,
+                    invocation_id="inv-summary-recent-1",
+                    author="user",
+                    role="user",
+                    text="Start a research plan for Hangzhou.",
+                ),
+                _text_event(
+                    "summary_truncation_preserves_recent_context",
+                    1,
+                    invocation_id="inv-summary-recent-1",
+                    author="assistant",
+                    role="model",
+                    text="We will track museums, tea, and quiet walks.",
+                ),
+                _text_event(
+                    "summary_truncation_preserves_recent_context",
+                    2,
+                    invocation_id="inv-summary-recent-2",
+                    author="user",
+                    role="user",
+                    text="Keep the newest context about rainy day options.",
+                ),
+                _text_event(
+                    "summary_truncation_preserves_recent_context",
+                    3,
+                    invocation_id="inv-summary-recent-2",
+                    author="assistant",
+                    role="model",
+                    text="Rainy day options stay in recent context.",
+                ),
+                _text_event(
+                    "summary_truncation_preserves_recent_context",
+                    4,
+                    invocation_id="inv-summary-recent-3",
+                    author="user",
+                    role="user",
+                    text="After summary, add a canal walk.",
+                ),
+            ],
+            memory_queries=[],
+            summary_points=[3],
+            description=(
+                "Risk: truncation should preserve historical events and recent active context "
+                "after a summary event is inserted."
+            ),
+        ),
     ]

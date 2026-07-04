@@ -1,32 +1,34 @@
 # Replay Consistency Harness
 
-This harness runs the same deterministic replay cases against multiple storage
-backends through the public `SessionServiceABC` and `MemoryServiceABC`
-interfaces. Each case creates a session, appends fixed-id events with stable
-timestamps and invocation ids, stores the resulting session through
-`store_session(session)`, and queries memory with `search_memory(key, query,
-limit)`. The default matrix runs real InMemory and SQLite services; Redis is
-only added when `TRPC_AGENT_REPLAY_REDIS_URL` is set.
+This harness verifies that session, memory, and summary behavior replays
+consistently across storage backends. Python `ReplayCase` fixtures define the
+executable operation DSL: create a session, append deterministic events, create
+summaries at fixed points, store the final session to memory, run memory
+queries, and normalize the resulting snapshot. The JSONL manifest in
+`tests/sessions/replay_cases/session_memory_summary_replay_cases.jsonl`
+mirrors the registry for review readability and is checked by tests.
 
-Snapshots normalize fields that should not affect replay semantics: raw
-timestamps, summary timestamp values, auto-generated event ids, dict key order,
+The default CI matrix is intentionally light: InMemory plus temporary SQLite
+files under `tmp_path`. Optional integration backends are only enabled through
+environment variables: `TRPC_AGENT_REPLAY_SQL_URL` for an external SQL backend
+and `TRPC_AGENT_REPLAY_REDIS_URL` for Redis. When these variables are absent,
+the report records the backend as skipped instead of making CI depend on
+external services.
+
+Normalization removes or canonicalizes non-semantic variance: exact timestamps,
+summary timestamp values, auto-generated event ids, dict serialization order,
 and memory timestamp values. Fixture event ids are preserved so duplicate,
-retry, and wrong-id problems remain visible. Memory rows are sorted by
-`(query, author, text, key)` because backend search order can differ.
+retry, and wrong-id regressions remain visible. Memory search order is sorted
+by stable content keys because ranking differs by backend.
 
-The comparator strictly checks event order, roles, authors, text, tool call
-args, tool responses, persisted state, memory content, summary text, summary
-session id, summary overwrite behavior, summary event flags, and
-historical_events. `DeterministicSessionSummarizer` avoids real LLM calls while
-leaving the production summary compression path responsible for summary events
-and historical event storage. SQLite uses temporary database files and explicit
-SQL storage initialization; initialization failures are not silently ignored.
+Allowed diffs are deliberately narrow: backend name, raw timestamp values, and
+timestamp presence. Event order, author/role/text, tool arguments and results,
+state values, memory scope/content, summary text, latest-summary overwrite
+semantics, summary session id, summary event flags, and historical events are
+strict. Summary text is whitespace-normalized but not semantically relaxed.
 
-Reports include complete diffs plus `allowed_diffs` and `unallowed_diffs`
-partitions, with counts per case and globally. Synthetic mutation tests and
-real InMemory replay snapshot mutation tests intentionally drop, reorder,
-duplicate, and alter event, state, memory, and summary fields to prove the
-recursive diff can locate unallowed regressions by session, event, memory,
-summary, path, left value, and right value. Real replay mutations also cover
-tool-call argument and response drift plus retry-error metadata and recovery
-event regressions.
+Diff reports include backend statuses, normal replay false-positive counts,
+mutation detection summaries, and structured diff entries with case, backend,
+session, event, memory, summary, path, left, and right fields. Tests write
+runtime reports to `tmp_path`; the repository root JSON is only a deterministic
+schema example.

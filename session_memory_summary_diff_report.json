@@ -4,61 +4,155 @@
   "backend_pairs": [
     "inmemory_vs_sqlite"
   ],
-  "case_count": 10,
+  "backend_statuses": [
+    {
+      "name": "inmemory",
+      "reason": "",
+      "status": "ok"
+    },
+    {
+      "name": "sqlite",
+      "reason": "",
+      "status": "ok"
+    },
+    {
+      "name": "external_sql",
+      "reason": "TRPC_AGENT_REPLAY_SQL_URL is not set",
+      "status": "skipped"
+    },
+    {
+      "name": "redis",
+      "reason": "TRPC_AGENT_REPLAY_REDIS_URL is not set",
+      "status": "skipped"
+    }
+  ],
+  "case_count": 14,
   "cases": [
     {
       "allowed_diff_count": 0,
+      "backend_pair": "inmemory_vs_sqlite",
+      "elapsed_ms": 0,
       "name": "single_turn_text",
+      "unexpected_diff_count": 0,
       "unallowed_diff_count": 0
     },
     {
       "allowed_diff_count": 0,
+      "backend_pair": "inmemory_vs_sqlite",
+      "elapsed_ms": 0,
       "name": "multi_turn_append_order",
+      "unexpected_diff_count": 0,
       "unallowed_diff_count": 0
     },
     {
       "allowed_diff_count": 0,
+      "backend_pair": "inmemory_vs_sqlite",
+      "elapsed_ms": 0,
       "name": "tool_call_roundtrip",
+      "unexpected_diff_count": 0,
       "unallowed_diff_count": 0
     },
     {
       "allowed_diff_count": 0,
+      "backend_pair": "inmemory_vs_sqlite",
+      "elapsed_ms": 0,
       "name": "scoped_state_overwrite",
+      "unexpected_diff_count": 0,
       "unallowed_diff_count": 0
     },
     {
       "allowed_diff_count": 0,
+      "backend_pair": "inmemory_vs_sqlite",
+      "elapsed_ms": 0,
       "name": "memory_preference_search",
+      "unexpected_diff_count": 0,
       "unallowed_diff_count": 0
     },
     {
       "allowed_diff_count": 0,
+      "backend_pair": "inmemory_vs_sqlite",
+      "elapsed_ms": 0,
       "name": "memory_multi_session_isolation",
+      "unexpected_diff_count": 0,
       "unallowed_diff_count": 0
     },
     {
       "allowed_diff_count": 0,
+      "backend_pair": "inmemory_vs_sqlite",
+      "elapsed_ms": 0,
       "name": "summary_generation",
+      "unexpected_diff_count": 0,
       "unallowed_diff_count": 0
     },
     {
       "allowed_diff_count": 0,
+      "backend_pair": "inmemory_vs_sqlite",
+      "elapsed_ms": 0,
       "name": "summary_update_overwrite",
+      "unexpected_diff_count": 0,
       "unallowed_diff_count": 0
     },
     {
       "allowed_diff_count": 0,
+      "backend_pair": "inmemory_vs_sqlite",
+      "elapsed_ms": 0,
       "name": "summary_with_event_truncation",
+      "unexpected_diff_count": 0,
       "unallowed_diff_count": 0
     },
     {
       "allowed_diff_count": 0,
+      "backend_pair": "inmemory_vs_sqlite",
+      "elapsed_ms": 0,
       "name": "duplicate_or_error_recovery",
+      "unexpected_diff_count": 0,
+      "unallowed_diff_count": 0
+    },
+    {
+      "allowed_diff_count": 0,
+      "backend_pair": "inmemory_vs_sqlite",
+      "elapsed_ms": 0,
+      "name": "serialization_order_nested_payload",
+      "unexpected_diff_count": 0,
+      "unallowed_diff_count": 0
+    },
+    {
+      "allowed_diff_count": 0,
+      "backend_pair": "inmemory_vs_sqlite",
+      "elapsed_ms": 0,
+      "name": "list_sessions_consistency",
+      "unexpected_diff_count": 0,
+      "unallowed_diff_count": 0
+    },
+    {
+      "allowed_diff_count": 0,
+      "backend_pair": "inmemory_vs_sqlite",
+      "elapsed_ms": 0,
+      "name": "state_temp_key_ignored_but_persistent_key_compared",
+      "unexpected_diff_count": 0,
+      "unallowed_diff_count": 0
+    },
+    {
+      "allowed_diff_count": 0,
+      "backend_pair": "inmemory_vs_sqlite",
+      "elapsed_ms": 0,
+      "name": "summary_truncation_preserves_recent_context",
+      "unexpected_diff_count": 0,
       "unallowed_diff_count": 0
     }
   ],
   "diffs": [],
+  "false_positive_summary": {
+    "normal_case_count": 14,
+    "unexpected_diff_count": 0
+  },
+  "generated_at": "deterministic",
   "generated_by": "tests/sessions/test_replay_consistency.py",
+  "mutation_summary": {
+    "detected_count": 0,
+    "mutation_count": 0,
+    "undetected_mutations": []
+  },
   "schema_version": 1,
   "unallowed_diff_count": 0,
   "unallowed_diffs": []
