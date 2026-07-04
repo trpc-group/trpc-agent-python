@@ -18,7 +18,7 @@ greenlet
 aiosqlite
 redis>=6.2.0
 langgraph
-google-genai==2.10.0
+google-genai>=1.24.0
 
 # Test Tools
 rapidfuzz>=3.0.0
