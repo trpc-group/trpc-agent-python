@@ -201,6 +201,10 @@ def _assert_summary_snapshot(snapshot: Snapshot, case: ReplayCase) -> None:
             pytest.fail(f"{snapshot.backend} truncation case did not persist historical events")
         if snapshot.events[-1]["text"] != "Also add a ferry ride after the summary.":
             pytest.fail(f"{snapshot.backend} truncation case lost post-summary append")
+    if case.name == "summary_update_overwrite":
+        latest_summary_text = summary["text"]
+        if "Checklist and owners" not in latest_summary_text and "release checklist" not in latest_summary_text:
+            pytest.fail(f"{snapshot.backend} latest summary did not include post-overwrite content")
 
 
 def _assert_duplicate_error_recovery_snapshot(snapshot: Snapshot) -> None:
@@ -361,6 +365,12 @@ def _session_config_for_case(case: ReplayCase):
     return make_session_config(store_historical_events=case.name == "summary_with_event_truncation")
 
 
+def _keep_recent_count_for_case(case: ReplayCase) -> int:
+    if case.name == "summary_update_overwrite":
+        return 1
+    return 2
+
+
 @pytest.mark.asyncio
 async def test_replay_consistency_inmemory_vs_sqlite(tmp_path: Path):
     cases = replay_cases()
@@ -370,7 +380,11 @@ async def test_replay_consistency_inmemory_vs_sqlite(tmp_path: Path):
 
     for case in cases:
         case_tmp_path = tmp_path / case.name
-        backends = await build_backends(case_tmp_path, session_config=_session_config_for_case(case))
+        backends = await build_backends(
+            case_tmp_path,
+            session_config=_session_config_for_case(case),
+            keep_recent_count=_keep_recent_count_for_case(case),
+        )
         assert {"inmemory", "sqlite"} <= {backend.name for backend in backends}
 
         snapshots: dict[str, Snapshot] = {}
@@ -607,13 +621,28 @@ def _clean_mutation_snapshot() -> dict[str, Any]:
     return asdict(snapshot)
 
 
+def _find_mutation_event(name: str, snapshot: dict[str, Any], predicate) -> dict[str, Any]:
+    for event in snapshot["events"]:
+        if predicate(event):
+            return event
+    raise AssertionError(f"{name} mutation target was not found")
+
+
 def _mutate_snapshot(name: str, snapshot: dict[str, Any]) -> None:
     if name == "drop_event":
         del snapshot["events"][1]
     elif name == "reorder_event":
         snapshot["events"][0], snapshot["events"][1] = snapshot["events"][1], snapshot["events"][0]
     elif name == "change_tool_args":
-        snapshot["events"][1]["function_calls"][0]["args"]["city"] = "Shanghai"
+        event = _find_mutation_event(name, snapshot, lambda item: item["function_calls"])
+        event["function_calls"][0]["args"]["city"] = "Shanghai"
+    elif name == "change_tool_response":
+        event = _find_mutation_event(name, snapshot, lambda item: item["function_responses"])
+        response = event["function_responses"][0]["response"]
+        if "temperature" in response:
+            response["temperature"] = 30
+        else:
+            response["condition"] = "rainy"
     elif name == "change_state":
         snapshot["state"]["user:tier"] = "silver"
     elif name == "drop_memory":
@@ -628,6 +657,16 @@ def _mutate_snapshot(name: str, snapshot: dict[str, Any]) -> None:
         snapshot["summary"]["metadata"]["session_id"] = "wrong-session"
     elif name == "duplicate_event":
         snapshot["events"].append(copy.deepcopy(snapshot["events"][0]))
+    elif name == "change_error_code":
+        event = _find_mutation_event(name, snapshot, lambda item: item.get("error_code"))
+        event["error_code"] = "WRONG_ERROR_CODE"
+    elif name == "drop_recovery_event":
+        for index, event in enumerate(snapshot["events"]):
+            if event["text"] == "Recovery succeeded after retry.":
+                del snapshot["events"][index]
+                break
+        else:
+            raise AssertionError("drop_recovery_event mutation target was not found")
     else:
         raise ValueError(f"Unknown mutation {name}")
 
@@ -648,17 +687,25 @@ MUTATIONS = [
 
 def _real_snapshot_mutations_for_case(case: ReplayCase) -> list[str]:
     mutations = ["drop_event", "reorder_event", "duplicate_event"]
+    if case.name == "tool_call_roundtrip":
+        mutations.extend(["change_tool_args", "change_tool_response"])
     if case.name == "scoped_state_overwrite":
         mutations.append("change_state")
     if case.name in {"memory_preference_search", "memory_multi_session_isolation"}:
         mutations.extend(["drop_memory", "change_memory_text"])
     if case.name in {"summary_generation", "summary_update_overwrite", "summary_with_event_truncation"}:
         mutations.extend(["drop_summary", "overwrite_summary_text", "wrong_summary_session"])
+    if case.name == "duplicate_or_error_recovery":
+        mutations.extend(["change_error_code", "drop_recovery_event"])
     return mutations
 
 
 async def _run_real_inmemory_snapshot(tmp_path: Path, case: ReplayCase) -> dict[str, Any]:
-    backends = await build_backends(tmp_path, session_config=_session_config_for_case(case))
+    backends = await build_backends(
+        tmp_path,
+        session_config=_session_config_for_case(case),
+        keep_recent_count=_keep_recent_count_for_case(case),
+    )
     selected: BackendBundle | None = None
     unused: list[BackendBundle] = []
     for backend in backends:

@@ -27,4 +27,6 @@ partitions, with counts per case and globally. Synthetic mutation tests and
 real InMemory replay snapshot mutation tests intentionally drop, reorder,
 duplicate, and alter event, state, memory, and summary fields to prove the
 recursive diff can locate unallowed regressions by session, event, memory,
-summary, path, left value, and right value.
+summary, path, left value, and right value. Real replay mutations also cover
+tool-call argument and response drift plus retry-error metadata and recovery
+event regressions.
