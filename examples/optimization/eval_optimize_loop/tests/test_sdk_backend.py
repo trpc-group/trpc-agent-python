@@ -139,6 +139,22 @@ def test_sdk_backend_missing_registered_best_prompt_field_is_clear(tmp_path: Pat
         )
 
 
+def test_sdk_backend_empty_best_prompts_dict_error_is_clear(tmp_path: Path, monkeypatch):
+    _install_fake_sdk(monkeypatch, best_prompts={})
+    prompt_path = tmp_path / "prompt.txt"
+    prompt_path.write_text("baseline", encoding="utf-8")
+    backend = SDKBackend(prompt_path=prompt_path, call_agent_path="fake_call_agent_module:call_agent")
+
+    with pytest.raises(ValueError, match="best_prompts was empty"):
+        backend.optimize(
+            baseline_prompt="baseline",
+            train_path=tmp_path / "train.evalset.json",
+            val_path=tmp_path / "val.evalset.json",
+            optimizer_config_path=tmp_path / "optimizer.json",
+            output_dir=tmp_path / "out",
+        )
+
+
 def test_sdk_backend_passes_update_source_true(tmp_path: Path, monkeypatch):
     calls = _install_fake_sdk(monkeypatch, best_prompt="optimized prompt")
     prompt_path = tmp_path / "prompt.txt"
@@ -207,7 +223,7 @@ def test_sdk_backend_empty_best_prompt_error_is_clear(tmp_path: Path, monkeypatc
     prompt_path.write_text("baseline", encoding="utf-8")
     backend = SDKBackend(prompt_path=prompt_path, call_agent_path="fake_call_agent_module:call_agent")
 
-    with pytest.raises(ValueError, match="missing registered target fields.*system_prompt"):
+    with pytest.raises(ValueError, match="contained empty registered target fields.*system_prompt"):
         backend.optimize(
             baseline_prompt="baseline",
             train_path=tmp_path / "train.evalset.json",
@@ -359,8 +375,9 @@ def test_run_pipeline_mode_sdk_default_run_id_uses_sdk_started_at(tmp_path: Path
         sdk_call_agent="fake_call_agent_module:call_agent",
     )
 
-    assert report.run["run_id"] == "eval_optimize_loop_sdk_2026-07-04T12-34-56-00-00"
+    assert report.run["run_id"] == "eval_optimize_loop_sdk_20260704T123456Z"
     assert (tmp_path / "sdk_run" / "runs" / report.run["run_id"]).is_dir()
+    assert "--run-id" not in report.run["reproducibility_command"]
 
 
 def test_run_pipeline_mode_sdk_uses_default_wrapper_gate_when_sdk_config_has_no_gate(
@@ -457,6 +474,39 @@ def test_run_pipeline_mode_sdk_custom_gate_rejects_cost_over_budget(tmp_path: Pa
     assert any("cost" in reason for reason in decision.reasons)
 
 
+@pytest.mark.parametrize(
+    ("field_name", "field_value"),
+    [
+        ("min_val_score_improvement", True),
+        ("max_total_cost", float("nan")),
+        ("max_total_cost", float("inf")),
+    ],
+)
+def test_run_pipeline_mode_sdk_rejects_invalid_gate_numbers(
+    tmp_path: Path,
+    monkeypatch,
+    field_name,
+    field_value,
+):
+    _install_fake_sdk(monkeypatch, best_prompt="optimized prompt")
+    gate = {"min_val_score_improvement": 0.01, "max_total_cost": 1.0}
+    gate[field_name] = field_value
+    gate_path = tmp_path / "bad_gate.json"
+    gate_path.write_text(json.dumps({"gate": gate}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=f"--gate-config.*{field_name}"):
+        run_pipeline(
+            mode="sdk",
+            train_path=DEFAULT_TRAIN,
+            val_path=DEFAULT_VAL,
+            optimizer_config_path=_write_sdk_optimizer_config(tmp_path),
+            prompt_path=DEFAULT_PROMPT,
+            output_dir=tmp_path / "sdk_run",
+            sdk_call_agent="fake_call_agent_module:call_agent",
+            gate_config_path=gate_path,
+        )
+
+
 def test_run_pipeline_mode_sdk_does_not_pass_wrapper_gate_config_to_agent_optimizer(
     tmp_path: Path,
     monkeypatch,
@@ -540,12 +590,16 @@ def test_run_pipeline_mode_sdk_registers_multiple_target_prompt_paths(tmp_path: 
     assert (run_dir / "candidate_prompts" / "sdk_best" / "skill_prompt.txt").read_text(
         encoding="utf-8"
     ) == "optimized skill"
+    assert (run_dir / "candidate_prompts" / "sdk_best" / "bundle.txt").read_text(
+        encoding="utf-8"
+    ) == report.candidates[0]["candidate"].prompt
     input_hashes = json.loads((run_dir / "input_hashes.json").read_text(encoding="utf-8"))
     assert set(input_hashes["target_prompts"]) == {"system_prompt", "router_prompt", "skill_prompt"}
     assert "gate_config" in input_hashes
     command = report.run["reproducibility_command"]
     assert "--sdk-call-agent fake_call_agent_module:call_agent" in command
-    assert f"--target-prompt router_prompt={router_path}" in command
+    assert "--target-prompt" in command
+    assert f"router_prompt={router_path}" in command
     assert "--gate-config" in command
 
 

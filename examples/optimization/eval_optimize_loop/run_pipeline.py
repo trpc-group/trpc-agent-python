@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
+import shlex
 import sys
 import tempfile
 from datetime import datetime
@@ -462,7 +464,7 @@ def _build_sdk_report(
             gate_config_path=gate_config_path,
             target_prompt_paths=target_prompt_paths,
             sdk_call_agent=sdk_call_agent,
-            run_id=effective_run_id,
+            run_id=run_id,
         ),
     }
     run = {
@@ -521,23 +523,36 @@ def _sdk_reproducibility_command(
     gate_config_path: str | Path | None,
     target_prompt_paths: dict[str, str | Path],
     sdk_call_agent: str | None,
-    run_id: str,
+    run_id: str | None,
 ) -> str:
-    command = (
-        "python examples/optimization/eval_optimize_loop/run_pipeline.py "
-        f"--mode sdk --train {train_path} --val {val_path} "
-        f"--optimizer-config {optimizer_config_path} --prompt {prompt_path} "
-        f"--output-dir {output_dir} --sdk-call-agent {sdk_call_agent or ''}"
-    )
+    parts = [
+        "python",
+        "examples/optimization/eval_optimize_loop/run_pipeline.py",
+        "--mode",
+        "sdk",
+        "--train",
+        str(train_path),
+        "--val",
+        str(val_path),
+        "--optimizer-config",
+        str(optimizer_config_path),
+        "--prompt",
+        str(prompt_path),
+        "--output-dir",
+        str(output_dir),
+        "--sdk-call-agent",
+        sdk_call_agent or "",
+    ]
     for name, path in target_prompt_paths.items():
         if not (name == "system_prompt" and Path(path) == Path(prompt_path) and len(target_prompt_paths) == 1):
-            command += f" --target-prompt {name}={path}"
+            parts.extend(["--target-prompt", f"{name}={path}"])
     if gate_config_path:
-        command += f" --gate-config {gate_config_path}"
-    command += f" --run-id {run_id}"
+        parts.extend(["--gate-config", str(gate_config_path)])
+    if run_id:
+        parts.extend(["--run-id", run_id])
     if update_source:
-        command += " --update-source"
-    return command
+        parts.append("--update-source")
+    return " ".join(shlex.quote(part) for part in parts)
 
 
 def _sdk_gate_decision(
@@ -620,14 +635,28 @@ def _load_sdk_gate_config(gate_config_path: str | Path | None) -> dict[str, floa
 
     min_improvement = gate_payload.get("min_val_score_improvement", 0.01)
     max_cost = gate_payload.get("max_total_cost", 1.0)
-    if not isinstance(min_improvement, (int, float)) or min_improvement < 0:
-        raise ValueError(f"{path_text}: field 'gate.min_val_score_improvement' must be a non-negative number")
-    if not isinstance(max_cost, (int, float)) or max_cost < 0:
-        raise ValueError(f"{path_text}: field 'gate.max_total_cost' must be a non-negative number")
+    if not _is_non_negative_finite_number(min_improvement):
+        raise ValueError(
+            f"--gate-config {path_text}: field 'gate.min_val_score_improvement' "
+            "must be a non-negative finite number"
+        )
+    if not _is_non_negative_finite_number(max_cost):
+        raise ValueError(
+            f"--gate-config {path_text}: field 'gate.max_total_cost' must be a non-negative finite number"
+        )
     return {
         "min_val_score_improvement": float(min_improvement),
         "max_total_cost": float(max_cost),
     }
+
+
+def _is_non_negative_finite_number(value: Any) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(float(value))
+        and float(value) >= 0
+    )
 
 
 def _summary_float(summary: dict[str, Any], key: str, default: float) -> float:
@@ -644,8 +673,16 @@ def _default_sdk_run_id(sdk_summary: dict[str, Any]) -> str:
     started_at = sdk_summary.get("started_at")
     if isinstance(started_at, str) and started_at.strip():
         source = started_at.strip()
+        try:
+            normalized = source[:-1] + "+00:00" if source.endswith("Z") else source
+            parsed = datetime.fromisoformat(normalized)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return "eval_optimize_loop_sdk_" + parsed.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        except ValueError:
+            pass
     else:
-        source = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        return "eval_optimize_loop_sdk_" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     safe = []
     for char in source:
         if char.isalnum() or char in {"-", "_"}:

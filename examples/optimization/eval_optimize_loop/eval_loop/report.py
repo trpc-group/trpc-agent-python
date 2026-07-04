@@ -281,6 +281,7 @@ def write_audit_artifacts(report: OptimizationReport, output_path: Path) -> None
         if report.run.get("mode") == "sdk" and isinstance(best_prompts, dict) and best_prompts:
             for field_name, prompt_text in best_prompts.items():
                 (candidate_dir / f"{field_name}.txt").write_text(str(prompt_text), encoding="utf-8")
+            (candidate_dir / "bundle.txt").write_text(candidate.prompt, encoding="utf-8")
         else:
             (candidate_dir / "system_prompt.txt").write_text(candidate.prompt, encoding="utf-8")
         (diffs_dir / f"{candidate.candidate_id}.diff").write_text(candidate.prompt_diff, encoding="utf-8")

@@ -84,7 +84,10 @@ python examples/optimization/eval_optimize_loop/run_pipeline.py \
 
 `--sdk-call-agent` must point to an async callable compatible with
 `AgentOptimizer.optimize(call_agent=...)`. Configure any real model credentials
-needed by that callable. SDK mode never silently falls back to fake mode.
+needed by that callable. SDK mode never silently falls back to fake mode. The
+generated reproducibility command records the actual `--sdk-call-agent`
+`module:function` target and file/config paths, but it does not record API keys
+or other provider secrets.
 
 SDK optimizer config and wrapper gate config are intentionally separate.
 `--optimizer-config` is passed unchanged to `AgentOptimizer.optimize`, so it must
@@ -113,9 +116,10 @@ exposes full per-case validation scores; they are listed in
 
 Fake mode uses a deterministic run id (`eval_optimize_loop_seed_<seed>`) so the
 example outputs are byte-stable. SDK mode is append-only by default: the wrapper
-derives `run.run_id` from the SDK result `started_at` when available, otherwise
-from the current UTC timestamp. Pass `--run-id` only when a fixed audit path is
-useful for tests or local smoke runs.
+derives a compact UTC `run.run_id` from the SDK result `started_at` when
+available, otherwise from the current UTC timestamp. Pass `--run-id` only when
+a fixed audit path is useful for tests or local smoke runs; only explicit
+`--run-id` values are included in the reproducibility command.
 
 ## Source Prompt Writes
 
@@ -174,7 +178,8 @@ diffs, and the reproducibility command.
   `target_prompts.<field>`, and optional `gate_config` hashes;
 - fake mode: `candidate_prompts/<candidate_id>/system_prompt.txt`;
 - SDK mode: `candidate_prompts/<candidate_id>/<field_name>.txt` for every
-  returned `best_prompts` field;
+  returned `best_prompts` field, plus `bundle.txt` with the combined prompt
+  shown in the wrapper report;
 - `case_results/<candidate_id>_<split>.json`;
 - `prompt_diffs/<candidate_id>.diff`.
 

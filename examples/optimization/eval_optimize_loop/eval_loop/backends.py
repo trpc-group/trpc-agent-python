@@ -122,16 +122,23 @@ class SDKBackend:
         best_prompts = dict(getattr(result, "best_prompts", {}) or {})
         if not best_prompts:
             raise ValueError("sdk mode completed but OptimizeResult.best_prompts was empty")
-        missing_fields = [
-            name
-            for name in target_prompt_paths
-            if not best_prompts.get(name)
-        ]
+        missing_fields = [name for name in target_prompt_paths if name not in best_prompts]
         if missing_fields:
             missing = ", ".join(sorted(missing_fields))
             raise ValueError(
                 "sdk mode completed but OptimizeResult.best_prompts is missing registered target fields: "
                 f"{missing}"
+            )
+        empty_fields = [
+            name
+            for name in target_prompt_paths
+            if not isinstance(best_prompts[name], str) or not best_prompts[name].strip()
+        ]
+        if empty_fields:
+            empty = ", ".join(sorted(empty_fields))
+            raise ValueError(
+                "sdk mode completed but OptimizeResult.best_prompts contained empty registered target fields: "
+                f"{empty}"
             )
         self.last_result = result
         self.last_result_summary = _summarize_sdk_result(result)
