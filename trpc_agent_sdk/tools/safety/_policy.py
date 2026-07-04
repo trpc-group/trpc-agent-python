@@ -90,7 +90,12 @@ class ToolSafetyPolicy:
         )
 
     @classmethod
-    def from_file(cls, path: str | os.PathLike[str], *, strict: bool = False) -> "ToolSafetyPolicy":
+    def from_file(
+        cls,
+        path: str | os.PathLike[str],
+        *,
+        strict: bool = False,
+    ) -> "ToolSafetyPolicy":
         """Load a policy from YAML, overlaying values on top of defaults."""
         policy = cls.default()
         with open(path, "r", encoding="utf-8") as file:
