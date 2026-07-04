@@ -30,9 +30,37 @@ def test_fake_mode_pipeline_generates_json_and_markdown_reports(tmp_path: Path):
     assert report.selected_candidate == "candidate_002_safe"
 
     payload = json.loads(json_path.read_text(encoding="utf-8"))
+    assert set(payload) >= {
+        "schema_version",
+        "run",
+        "baseline_train",
+        "baseline_validation",
+        "candidates",
+        "per_case_deltas",
+        "failure_attribution_summary",
+        "gate_decisions",
+        "selected_candidate",
+        "audit",
+    }
     assert payload["baseline_train"]["score"] == 0.333333
     assert payload["baseline_validation"]["score"] == 0.666667
     assert payload["selected_candidate"] == "candidate_002_safe"
+    assert [record["candidate"]["candidate_id"] for record in payload["candidates"]] == [
+        "candidate_001_overfit",
+        "candidate_002_safe",
+    ]
+    assert len(payload["per_case_deltas"]) == 12
+    assert payload["failure_attribution_summary"]["by_category"]["format_violation"] >= 1
+    assert set(payload["audit"]) >= {
+        "seed",
+        "config_hash",
+        "cost",
+        "duration_seconds",
+        "candidate_prompts",
+        "prompt_diffs",
+    }
+    assert "candidate_001_overfit" in payload["audit"]["prompt_diffs"]
+    assert "candidate_002_safe" in payload["audit"]["prompt_diffs"]
 
     decisions = {item["candidate_id"]: item for item in payload["gate_decisions"]}
     assert not decisions["candidate_001_overfit"]["accepted"]
@@ -46,7 +74,11 @@ def test_fake_mode_pipeline_generates_json_and_markdown_reports(tmp_path: Path):
     assert "Selected candidate: `candidate_002_safe`." in markdown
     assert "candidate_001_overfit (rejected)" in markdown
     assert "candidate_002_safe (accepted)" in markdown
+    assert "Baseline vs Candidate Scores" in markdown
     assert "Per-Case Delta" in markdown
+    assert "Failure Attribution Summary" in markdown
+    assert "Prompt Diff" in markdown
+    assert "Reproducibility" in markdown
 
 
 def test_pipeline_is_deterministic_with_same_seed(tmp_path: Path):

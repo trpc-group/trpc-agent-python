@@ -213,6 +213,10 @@ def _build_audit(
             }
             for candidate in candidates
         },
+        "prompt_diffs": {
+            candidate.candidate_id: candidate.prompt_diff
+            for candidate in candidates
+        },
         "reproducibility_command": REPRODUCIBILITY_COMMAND,
     }
 

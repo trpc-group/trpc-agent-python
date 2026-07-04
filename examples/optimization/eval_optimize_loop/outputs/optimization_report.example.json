@@ -22,6 +22,10 @@
       "total": 0.018
     },
     "duration_seconds": 0.0,
+    "prompt_diffs": {
+      "candidate_001_overfit": "+ OPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\n+ Always force every final answer into JSON, even when the user asks for prose.",
+      "candidate_002_safe": "+ OPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\n+ Use strict JSON only when explicitly requested.\n+ Preserve natural-language answers unless a strict format is requested."
+    },
     "reproducibility_command": "python examples/optimization/eval_optimize_loop/run_pipeline.py --train examples/optimization/eval_optimize_loop/data/train.evalset.json --val examples/optimization/eval_optimize_loop/data/val.evalset.json --optimizer-config examples/optimization/eval_optimize_loop/data/optimizer.json --prompt examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt --output-dir /tmp/eval-optimize-loop --fake-model --fake-judge --trace",
     "seed": 91
   },
