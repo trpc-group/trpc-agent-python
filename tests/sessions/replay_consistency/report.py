@@ -16,8 +16,10 @@ def _diff_to_dict(diff: DiffEntry) -> dict[str, Any]:
 
 def write_report(path: Path, comparison_results: list[dict[str, Any]]) -> dict[str, Any]:
     backend_pairs = []
-    case_diff_counts: dict[str, int] = {}
+    case_diff_counts: dict[str, dict[str, int]] = {}
     diffs: list[dict[str, Any]] = []
+    allowed_diffs: list[dict[str, Any]] = []
+    unallowed_diffs: list[dict[str, Any]] = []
 
     for result in comparison_results:
         left_backend = result["left_backend"]
@@ -27,17 +29,26 @@ def write_report(path: Path, comparison_results: list[dict[str, Any]]) -> dict[s
             backend_pairs.append(pair_name)
 
         result_diffs: list[DiffEntry] = result.get("diffs", [])
-        unallowed_count = sum(1 for diff in result_diffs if not diff.allowed)
         case_name = result["case_name"]
-        case_diff_counts[case_name] = case_diff_counts.get(case_name, 0) + unallowed_count
-        diffs.extend(_diff_to_dict(diff) for diff in result_diffs if not diff.allowed)
+        if case_name not in case_diff_counts:
+            case_diff_counts[case_name] = {"allowed": 0, "unallowed": 0}
+        for diff in result_diffs:
+            serialized = _diff_to_dict(diff)
+            diffs.append(serialized)
+            if diff.allowed:
+                case_diff_counts[case_name]["allowed"] += 1
+                allowed_diffs.append(serialized)
+            else:
+                case_diff_counts[case_name]["unallowed"] += 1
+                unallowed_diffs.append(serialized)
 
     cases = [
         {
             "name": case_name,
-            "unallowed_diff_count": unallowed_count,
+            "allowed_diff_count": counts["allowed"],
+            "unallowed_diff_count": counts["unallowed"],
         }
-        for case_name, unallowed_count in case_diff_counts.items()
+        for case_name, counts in case_diff_counts.items()
     ]
 
     report = {
@@ -46,6 +57,10 @@ def write_report(path: Path, comparison_results: list[dict[str, Any]]) -> dict[s
         "backend_pairs": backend_pairs,
         "case_count": len(cases),
         "cases": cases,
+        "allowed_diff_count": len(allowed_diffs),
+        "unallowed_diff_count": len(unallowed_diffs),
+        "allowed_diffs": allowed_diffs,
+        "unallowed_diffs": unallowed_diffs,
         "diffs": diffs,
     }
 

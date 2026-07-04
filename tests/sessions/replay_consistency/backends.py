@@ -67,7 +67,7 @@ class DeterministicSessionSummarizer(SessionSummarizer):
 
         fragments: list[str] = []
         for event in events:
-            text = event.get_text().strip()
+            text = (event.get_text() or "").strip()
             if not text:
                 calls = event.get_function_calls()
                 responses = event.get_function_responses()

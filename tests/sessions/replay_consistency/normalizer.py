@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
+import uuid
 from typing import Any
 
 from trpc_agent_sdk.events import Event
@@ -60,6 +61,20 @@ def _content_text(content: Content | None) -> str | None:
     return text or None
 
 
+def _is_uuid_like(value: str) -> bool:
+    try:
+        uuid.UUID(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _normalize_event_id(event: Event) -> str:
+    if event.is_summary_event() or not event.id or _is_uuid_like(event.id):
+        return "normalized"
+    return event.id
+
+
 def normalize_event(event: Event, index: int) -> dict[str, Any]:
     function_calls = [
         {
@@ -82,7 +97,7 @@ def normalize_event(event: Event, index: int) -> dict[str, Any]:
 
     return {
         "stable_index": index,
-        "event_id": "normalized",
+        "event_id": _normalize_event_id(event),
         "invocation_id": event.invocation_id,
         "author": event.author,
         "role": role,

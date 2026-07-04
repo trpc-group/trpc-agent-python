@@ -18,6 +18,7 @@ from trpc_agent_sdk.types import FunctionCall
 from trpc_agent_sdk.types import FunctionResponse
 from trpc_agent_sdk.types import MemoryEntry
 from trpc_agent_sdk.types import Part
+from trpc_agent_sdk.types import State
 
 from .replay_consistency.backends import BackendBundle
 from .replay_consistency.backends import build_backends
@@ -86,6 +87,8 @@ def _event_from_spec(spec: EventSpec, index: int) -> Event:
         tag=spec.tag,
         filter_key=spec.filter_key,
         partial=spec.partial,
+        error_code=spec.error_code,
+        error_message=spec.error_message,
         timestamp=FIXED_EVENT_TIMESTAMP_BASE + index,
     )
 
@@ -135,6 +138,38 @@ async def _search_memory_records(
     return records
 
 
+def _temp_state_keys(state: dict[str, Any] | None) -> list[str]:
+    if not state:
+        return []
+    return sorted(key for key in state if key.startswith(State.TEMP_PREFIX))
+
+
+def _assert_no_persisted_temp_state(bundle: BackendBundle, case: ReplayCase, session: Session) -> None:
+    temp_state_keys = _temp_state_keys(session.state)
+    if temp_state_keys:
+        pytest.fail(
+            f"{bundle.name} persisted temp state on {case.name}/{session.id}: {temp_state_keys}"
+        )
+
+    temp_delta_keys: list[tuple[str | None, str]] = []
+    for event in [*session.events, *session.historical_events]:
+        if event.actions:
+            temp_delta_keys.extend((event.id, key) for key in _temp_state_keys(event.actions.state_delta))
+    if temp_delta_keys:
+        pytest.fail(
+            f"{bundle.name} persisted temp state_delta keys on {case.name}/{session.id}: {temp_delta_keys}"
+        )
+
+    if case.name == "scoped_state_overwrite":
+        fixture_temp_keys = [
+            key
+            for spec in case.events
+            for key in _temp_state_keys(spec.state_delta)
+        ]
+        if not fixture_temp_keys:
+            pytest.fail("scoped_state_overwrite no longer exercises temp state filtering")
+
+
 def _assert_summary_snapshot(snapshot: Snapshot, case: ReplayCase) -> None:
     if not case.summary_points:
         return
@@ -168,6 +203,35 @@ def _assert_summary_snapshot(snapshot: Snapshot, case: ReplayCase) -> None:
             pytest.fail(f"{snapshot.backend} truncation case lost post-summary append")
 
 
+def _assert_duplicate_error_recovery_snapshot(snapshot: Snapshot) -> None:
+    if snapshot.case_name != "duplicate_or_error_recovery":
+        return
+    error_events = [
+        event
+        for event in snapshot.events
+        if event["error_code"] == "RETRYABLE_BACKEND_ERROR"
+        and event["error_message"] == "Simulated retry failure before recovery."
+    ]
+    if len(error_events) != 1:
+        pytest.fail(f"{snapshot.backend} did not preserve the retry error event")
+    if error_events[0]["event_id"] != "duplicate_or_error_recovery-event-03":
+        pytest.fail(f"{snapshot.backend} did not preserve the deterministic error event id")
+    if not any(event["text"] == "Recovery succeeded after retry." for event in snapshot.events):
+        pytest.fail(f"{snapshot.backend} did not preserve the recovery event")
+
+
+def _assert_fixture_event_ids_preserved(snapshot: Snapshot, case: ReplayCase) -> None:
+    expected_event_ids = {spec.event_id for spec in case.events}
+    for event in [*snapshot.events, *snapshot.historical_events]:
+        if event["is_summary_event"]:
+            continue
+        if event["event_id"] not in expected_event_ids:
+            pytest.fail(
+                f"{snapshot.backend} did not preserve deterministic event id for "
+                f"{case.name}: {event['event_id']!r}"
+            )
+
+
 async def _run_standard_case(bundle: BackendBundle, case: ReplayCase) -> Snapshot:
     summary_texts: list[str] = []
     session = await bundle.session_service.create_session(
@@ -184,6 +248,7 @@ async def _run_standard_case(bundle: BackendBundle, case: ReplayCase) -> Snapsho
             session = await _get_required_session(bundle, case)
 
     stored_session = await _get_required_session(bundle, case)
+    _assert_no_persisted_temp_state(bundle, case, stored_session)
     if case.name == "summary_update_overwrite" and len(summary_texts) >= 2 and summary_texts[0] == summary_texts[-1]:
         pytest.fail(f"{bundle.name} did not overwrite the cached summary for {case.name}")
 
@@ -197,6 +262,8 @@ async def _run_standard_case(bundle: BackendBundle, case: ReplayCase) -> Snapsho
         memory_records=memory_records,
     )
     _assert_summary_snapshot(snapshot, case)
+    _assert_fixture_event_ids_preserved(snapshot, case)
+    _assert_duplicate_error_recovery_snapshot(snapshot)
     return snapshot
 
 
@@ -222,7 +289,7 @@ async def _run_memory_isolation_case(bundle: BackendBundle, case: ReplayCase) ->
             invocation_id="inv-isolation-b-1",
             author="user",
             role="user",
-            text="User B likes coffee and city museums.",
+            text="User B also likes jasmine tea and hiking, but only with city-museums-b.",
             function_call=None,
             function_response=None,
             state_delta=None,
@@ -235,7 +302,7 @@ async def _run_memory_isolation_case(bundle: BackendBundle, case: ReplayCase) ->
             invocation_id="inv-isolation-b-1",
             author="assistant",
             role="model",
-            text="I will remember coffee and city museums for User B.",
+            text="I will remember jasmine tea, hiking, and city-museums-b for User B.",
             function_call=None,
             function_response=None,
             state_delta=None,
@@ -255,6 +322,8 @@ async def _run_memory_isolation_case(bundle: BackendBundle, case: ReplayCase) ->
     )
     if stored_b is None:
         pytest.fail(f"{bundle.name} did not return isolation control session")
+    _assert_no_persisted_temp_state(bundle, case, stored_a)
+    _assert_no_persisted_temp_state(bundle, case, stored_b)
 
     await bundle.memory_service.store_session(stored_a)
     await bundle.memory_service.store_session(stored_b)
@@ -265,16 +334,18 @@ async def _run_memory_isolation_case(bundle: BackendBundle, case: ReplayCase) ->
         for memory in memories
         if memory.content and memory.content.parts
     )
-    if "coffee" in leaked_text or "city museums" in leaked_text:
+    if "city-museums-b" in leaked_text:
         pytest.fail(f"{bundle.name} leaked user B memory into user A search: {leaked_text!r}")
 
-    return await normalize_snapshot(
+    snapshot = await normalize_snapshot(
         backend=bundle.name,
         case=case,
         session=stored_a,
         session_service=bundle.session_service,
         memory_records=memory_records,
     )
+    _assert_fixture_event_ids_preserved(snapshot, case)
+    return snapshot
 
 
 async def run_case(bundle: BackendBundle, case: ReplayCase) -> Snapshot:
@@ -347,6 +418,21 @@ def test_report_contract(tmp_path: Path):
         allowed=False,
         reason="",
     )
+    allowed_diff = DiffEntry(
+        case_name="case",
+        left_backend="inmemory",
+        right_backend="sqlite",
+        session_id="session",
+        event_index=None,
+        memory_index=None,
+        summary_id=None,
+        section="backend",
+        path="backend",
+        left="inmemory",
+        right="sqlite",
+        allowed=True,
+        reason="backend name differs by design",
+    )
     path = tmp_path / "report.json"
     report = write_report(
         path,
@@ -355,17 +441,23 @@ def test_report_contract(tmp_path: Path):
                 "case_name": "case",
                 "left_backend": "inmemory",
                 "right_backend": "sqlite",
-                "diffs": [diff],
+                "diffs": [allowed_diff, diff],
             }
         ],
     )
     loaded = json.loads(path.read_text(encoding="utf-8"))
     assert loaded == report
-    serialized = loaded["diffs"][0]
+    serialized = loaded["unallowed_diffs"][0]
     for field in DiffEntry.__dataclass_fields__:
         assert field in serialized
     assert loaded["schema_version"] == 1
     assert loaded["backend_pairs"] == ["inmemory_vs_sqlite"]
+    assert loaded["allowed_diff_count"] == 1
+    assert loaded["unallowed_diff_count"] == 1
+    assert len(loaded["allowed_diffs"]) == 1
+    assert len(loaded["unallowed_diffs"]) == 1
+    assert len(loaded["diffs"]) == 2
+    assert loaded["cases"][0]["allowed_diff_count"] == 1
     assert loaded["cases"][0]["unallowed_diff_count"] == 1
 
 
@@ -552,6 +644,48 @@ MUTATIONS = [
     "wrong_summary_session",
     "duplicate_event",
 ]
+
+
+def _real_snapshot_mutations_for_case(case: ReplayCase) -> list[str]:
+    mutations = ["drop_event", "reorder_event", "duplicate_event"]
+    if case.name == "scoped_state_overwrite":
+        mutations.append("change_state")
+    if case.name in {"memory_preference_search", "memory_multi_session_isolation"}:
+        mutations.extend(["drop_memory", "change_memory_text"])
+    if case.name in {"summary_generation", "summary_update_overwrite", "summary_with_event_truncation"}:
+        mutations.extend(["drop_summary", "overwrite_summary_text", "wrong_summary_session"])
+    return mutations
+
+
+async def _run_real_inmemory_snapshot(tmp_path: Path, case: ReplayCase) -> dict[str, Any]:
+    backends = await build_backends(tmp_path, session_config=_session_config_for_case(case))
+    selected: BackendBundle | None = None
+    unused: list[BackendBundle] = []
+    for backend in backends:
+        if backend.name == "inmemory":
+            selected = backend
+        else:
+            unused.append(backend)
+    if selected is None:
+        for backend in unused:
+            await backend.close()
+        pytest.fail("InMemory replay backend was not built")
+
+    for backend in unused:
+        await backend.close()
+    return asdict(await run_case(selected, case))
+
+
+@pytest.mark.asyncio
+async def test_real_replay_snapshot_mutation_detection(tmp_path: Path):
+    for case in replay_cases():
+        clean = await _run_real_inmemory_snapshot(tmp_path / f"real-mutation-{case.name}", case)
+        for mutation in _real_snapshot_mutations_for_case(case):
+            mutated = copy.deepcopy(clean)
+            mutated["backend"] = "mutated"
+            _mutate_snapshot(mutation, mutated)
+            diffs = recursive_diff(clean, mutated)
+            assert unallowed_diffs(diffs), f"{case.name}/{mutation} was not detected"
 
 
 @pytest.mark.parametrize("mutation", MUTATIONS)

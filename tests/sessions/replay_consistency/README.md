@@ -1,21 +1,30 @@
 # Replay Consistency Harness
 
-这个 harness 用同一组 deterministic replay cases 驱动多个后端。每个 case 先通过正式
-`SessionServiceABC` 创建 session，再按固定 id、timestamp、invocation_id 写入事件；最后用
-`MemoryServiceABC.store_session(session)` 写入 memory，并通过 `search_memory(key, query, limit)`
-读取结果。默认矩阵真实运行 InMemory 和 SQLite；如果设置
-`TRPC_AGENT_REPLAY_REDIS_URL`，Redis 会作为可选后端加入比较。
+This harness runs the same deterministic replay cases against multiple storage
+backends through the public `SessionServiceABC` and `MemoryServiceABC`
+interfaces. Each case creates a session, appends fixed-id events with stable
+timestamps and invocation ids, stores the resulting session through
+`store_session(session)`, and queries memory with `search_memory(key, query,
+limit)`. The default matrix runs real InMemory and SQLite services; Redis is
+only added when `TRPC_AGENT_REPLAY_REDIS_URL` is set.
 
-snapshot 会归一化非业务字段：事件 timestamp 不比较精确值，summary timestamp 只比较是否存在，
-自动生成的 event id 统一为 normalized，dict 递归按 key 排序，memory timestamp 只保留
-`has_timestamp`。memory 返回顺序不作为语义，因此按 `(query, author, text)` 排序。
+Snapshots normalize fields that should not affect replay semantics: raw
+timestamps, summary timestamp values, auto-generated event ids, dict key order,
+and memory timestamp values. Fixture event ids are preserved so duplicate,
+retry, and wrong-id problems remain visible. Memory rows are sorted by
+`(query, author, text, key)` because backend search order can differ.
 
-严格比较的字段包括 event 顺序、author、role、text、tool args、tool response、state、memory
-content、summary text、summary session_id、summary overwrite 后的最新值、summary event flag、
-summary event 数量，以及 historical_events 数量和内容。summary 使用
-`DeterministicSessionSummarizer`，不调用真实 LLM，但保留现有 `SessionSummarizer` 的压缩逻辑，
-因此 summary event 和 historical_events 仍由产品代码生成。
+The comparator strictly checks event order, roles, authors, text, tool call
+args, tool responses, persisted state, memory content, summary text, summary
+session id, summary overwrite behavior, summary event flags, and
+historical_events. `DeterministicSessionSummarizer` avoids real LLM calls while
+leaving the production summary compression path responsible for summary events
+and historical event storage. SQLite uses temporary database files and explicit
+SQL storage initialization; initialization failures are not silently ignored.
 
-SQLite 后端使用独立临时 SQLite 文件并显式初始化 SQL storage；初始化失败不会静默降级。mutation
-tests 会对 clean snapshot 人为制造 drop、reorder、state、memory、summary 等不一致，验证
-recursive diff 能输出定位到 session/event/memory/summary/path 的非允许差异。
+Reports include complete diffs plus `allowed_diffs` and `unallowed_diffs`
+partitions, with counts per case and globally. Synthetic mutation tests and
+real InMemory replay snapshot mutation tests intentionally drop, reorder,
+duplicate, and alter event, state, memory, and summary fields to prove the
+recursive diff can locate unallowed regressions by session, event, memory,
+summary, path, left value, and right value.

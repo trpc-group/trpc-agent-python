@@ -20,6 +20,8 @@ class EventSpec:
     tag: str | None
     filter_key: str | None
     partial: bool = False
+    error_code: str | None = None
+    error_message: str | None = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,8 @@ def _text_event(
     branch: str | None = None,
     tag: str | None = None,
     filter_key: str | None = None,
+    error_code: str | None = None,
+    error_message: str | None = None,
 ) -> EventSpec:
     return EventSpec(
         event_id=f"{case_name}-event-{index:02d}",
@@ -68,6 +72,8 @@ def _text_event(
         branch=branch,
         tag=tag,
         filter_key=filter_key,
+        error_code=error_code,
+        error_message=error_message,
     )
 
 
@@ -640,16 +646,41 @@ def replay_cases() -> list[ReplayCase]:
                     role="model",
                     text="Same content may repeat.",
                 ),
+                _text_event(
+                    "duplicate_or_error_recovery",
+                    3,
+                    invocation_id="inv-duplicate-3",
+                    author="assistant",
+                    role="model",
+                    text="Transient retry error before recovery.",
+                    tag="retry-error",
+                    filter_key="retry",
+                    error_code="RETRYABLE_BACKEND_ERROR",
+                    error_message="Simulated retry failure before recovery.",
+                ),
+                _text_event(
+                    "duplicate_or_error_recovery",
+                    4,
+                    invocation_id="inv-duplicate-4",
+                    author="assistant",
+                    role="model",
+                    text="Recovery succeeded after retry.",
+                    tag="retry-recovery",
+                    filter_key="retry",
+                ),
             ],
             memory_queries=[
                 MemoryQuerySpec(
                     key=None,
-                    query="Same repeat",
+                    query="Same retry recovery",
                     limit=10,
-                    expected_text_fragments=["Same content may repeat."],
+                    expected_text_fragments=["Same content may repeat.", "Recovery succeeded after retry."],
                 )
             ],
             summary_points=[],
-            description="Duplicate content with distinct ids is captured as the backend stores it.",
+            description=(
+                "Duplicate content with distinct ids plus an error/retry/recovery event sequence "
+                "is captured as the backend stores it."
+            ),
         ),
     ]
