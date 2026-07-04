@@ -33,6 +33,8 @@ SENSITIVE_WORDS = (
 
 PY_NETWORK_METHODS = {"get", "post", "put", "patch", "delete", "request", "urlopen", "Request"}
 NETWORK_COMMANDS = {"curl", "wget", "nc", "netcat", "socat", "ssh", "scp", "rsync", "openssl"}
+LARGE_ALLOCATION_BYTES = 512 * 1024 * 1024
+LARGE_ITERATION_COUNT = 10_000_000
 SHELL_OPERATORS = ("|", ";", "&&", "||", "$(", "`", ">", ">>", "<", "<<")
 SHELL_KEYWORDS = {
     "case",
@@ -271,6 +273,34 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                 )
             )
 
+        if _is_unbounded_output(tokens):
+            findings.append(
+                _finding(
+                    "BASH_UNBOUNDED_OUTPUT",
+                    "resource_exhaustion",
+                    RiskLevel.MEDIUM,
+                    Decision.NEEDS_HUMAN_REVIEW,
+                    raw_line,
+                    "Bound commands that can produce unbounded output before execution.",
+                    "Unbounded output command detected.",
+                    line_no,
+                )
+            )
+
+        if _is_zero_fill_write(tokens):
+            findings.append(
+                _finding(
+                    "BASH_ZERO_FILL_WRITE_REVIEW",
+                    "resource_exhaustion",
+                    RiskLevel.MEDIUM,
+                    Decision.NEEDS_HUMAN_REVIEW,
+                    raw_line,
+                    "Review large writes from /dev/zero and enforce size limits.",
+                    "Potentially large zero-fill write detected.",
+                    line_no,
+                )
+            )
+
         if _has_shell_operator(line) and policy.review_shell_features:
             findings.append(
                 _finding(
@@ -331,7 +361,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                         line_no,
                     )
                 )
-    return _dedupe_findings(findings)
+    return _suppress_low_value_unknown_command_reviews(_dedupe_findings(findings))
 
 
 class _PythonSafetyVisitor(ast.NodeVisitor):
@@ -415,7 +445,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_While(self, node: ast.While) -> Any:
-        if isinstance(node.test, ast.Constant) and node.test.value is True:
+        if self._is_static_truthy(node.test):
             self.findings.append(
                 self._finding(
                     "PY_INFINITE_LOOP",
@@ -438,6 +468,7 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
         self._check_process_execution(node, name)
         self._check_dynamic_code(node, name)
         self._check_sleep(node, name)
+        self._check_large_allocation(node, name)
         self._check_sensitive_output(node, name)
         self.generic_visit(node)
 
@@ -601,6 +632,39 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
                     self._line(node),
                     "Reduce long sleeps or enforce an explicit timeout.",
                     "Sleep duration exceeds policy threshold.",
+                    node,
+                )
+            )
+
+    def _check_large_allocation(self, node: ast.Call, name: str) -> None:
+        if not node.args:
+            return
+        size = self._resolve_number(node.args[0])
+        if size is None:
+            return
+        if name in {"bytearray", "bytes"} and size > LARGE_ALLOCATION_BYTES:
+            self.findings.append(
+                self._finding(
+                    "PY_LARGE_ALLOCATION_REVIEW",
+                    "resource_exhaustion",
+                    RiskLevel.MEDIUM,
+                    Decision.NEEDS_HUMAN_REVIEW,
+                    self._line(node),
+                    "Review large memory allocations and enforce resource limits.",
+                    "Large in-memory allocation detected.",
+                    node,
+                )
+            )
+        elif name == "range" and size > LARGE_ITERATION_COUNT:
+            self.findings.append(
+                self._finding(
+                    "PY_LARGE_ITERATION_REVIEW",
+                    "resource_exhaustion",
+                    RiskLevel.MEDIUM,
+                    Decision.NEEDS_HUMAN_REVIEW,
+                    self._line(node),
+                    "Review very large loops and enforce a timeout.",
+                    "Large iteration range detected.",
                     node,
                 )
             )
@@ -806,7 +870,30 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
     def _resolve_number(self, node: ast.AST) -> float | None:
         if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
             return float(node.value)
+        if isinstance(node, ast.BinOp):
+            left = self._resolve_number(node.left)
+            right = self._resolve_number(node.right)
+            if left is None or right is None:
+                return None
+            try:
+                if isinstance(node.op, ast.Add):
+                    return left + right
+                if isinstance(node.op, ast.Sub):
+                    return left - right
+                if isinstance(node.op, ast.Mult):
+                    return left * right
+                if isinstance(node.op, ast.Div):
+                    return left / right
+                if isinstance(node.op, ast.Pow) and abs(right) <= 12:
+                    return left**right
+            except OverflowError:
+                return float("inf")
         return None
+
+    def _is_static_truthy(self, node: ast.AST) -> bool:
+        if isinstance(node, ast.Constant):
+            return bool(node.value)
+        return False
 
     def _keyword_bool(self, node: ast.Call, key: str) -> bool:
         for keyword in node.keywords:
@@ -1180,6 +1267,40 @@ def _is_long_sleep(tokens: list[str], threshold: int) -> bool:
         return float(tokens[1]) > threshold
     except ValueError:
         return True
+
+
+def _is_unbounded_output(tokens: list[str]) -> bool:
+    if not tokens:
+        return False
+    command = tokens[0].split("/")[-1].lower()
+    return command == "yes"
+
+
+def _is_zero_fill_write(tokens: list[str]) -> bool:
+    if not tokens or tokens[0].split("/")[-1].lower() != "dd":
+        return False
+    has_zero_input = any(token == "if=/dev/zero" for token in tokens[1:])
+    if not has_zero_input:
+        return False
+    output_targets = [token.split("=", 1)[1] for token in tokens[1:] if token.startswith("of=")]
+    return not output_targets or any(target != "/dev/null" for target in output_targets)
+
+
+def _suppress_low_value_unknown_command_reviews(findings: list[RiskFinding]) -> list[RiskFinding]:
+    stronger_lines = {
+        finding.line
+        for finding in findings
+        if finding.rule_id != "BASH_UNKNOWN_COMMAND_REVIEW"
+        and (
+            finding.decision == Decision.DENY
+            or finding.risk_level in {RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL}
+        )
+    }
+    return [
+        finding
+        for finding in findings
+        if finding.rule_id != "BASH_UNKNOWN_COMMAND_REVIEW" or finding.line not in stronger_lines
+    ]
 
 
 def _dedupe_findings(findings: list[RiskFinding]) -> list[RiskFinding]:

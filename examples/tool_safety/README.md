@@ -1,22 +1,40 @@
 # Tool Script Safety Guard
 
-The tool safety guard is an opt-in static pre-execution scanner for Python and Bash-like tool scripts. It is designed to catch common high-risk patterns before local tool execution, return structured reports, write sanitized audit events, and attach optional OpenTelemetry span attributes.
+The tool safety guard is an opt-in static pre-execution scanner for Python and
+Bash-like tool scripts. It catches common high-risk patterns before local tool
+execution, returns structured reports, writes sanitized audit events, and can
+attach OpenTelemetry span attributes.
 
 ## Threat Model
 
-The guard targets accidental or model-generated tool scripts that read secrets, delete sensitive paths, exfiltrate files, install dependencies, invoke privilege escalation, run dynamic code, or use shell constructs that need review.
+The guard targets accidental or model-generated tool scripts that read secrets,
+delete sensitive paths, exfiltrate files, install dependencies, invoke privilege
+escalation, run dynamic code, or use shell constructs that need review.
 
-Static scanning is not a sandbox. It cannot guarantee runtime safety against obfuscation, encoded payloads, dynamic imports, generated code, environment-dependent behavior, external binaries, or interpreter/runtime bugs. Production systems still need sandboxing, least privilege, network egress control, resource limits, and audit logging.
+Static scanning is not a sandbox. It cannot guarantee runtime safety against
+obfuscation, encoded payloads, dynamic imports, generated code,
+environment-dependent behavior, external binaries, or interpreter/runtime bugs.
+Production systems still need sandboxing, least privilege, network egress
+control, resource limits, and audit logging.
 
 ## Supported Languages
 
-Python scanning uses AST parsing with lightweight alias and constant propagation plus targeted text-pattern fallback.
+Python scanning uses AST parsing with lightweight alias and constant propagation
+plus targeted text-pattern fallback.
 
-Bash scanning uses shell tokenization, raw-line operator checks, and cross-command flow checks for sensitive reads piped into network clients.
+Bash scanning uses shell tokenization, raw-line operator checks, and
+cross-command flow checks for sensitive reads piped into network clients.
+
+Argv-style inputs are scanned with the script or command. Interpreter forms such
+as `python -c ...`, `bash -c ...`, and `bash -lc ...` are scanned using the
+language of the inline code.
 
 ## Risk Types
 
-Common risk types include `secret_read`, `secret_output`, `secret_exfiltration`, `dangerous_delete`, `network_access`, `process_execution`, `dependency_install`, `privilege_escalation`, `dynamic_code`, `shell_features`, and `resource_exhaustion`.
+Common risk types include `secret_read`, `secret_output`, `secret_exfiltration`,
+`dangerous_delete`, `network_access`, `process_execution`,
+`dependency_install`, `privilege_escalation`, `dynamic_code`, `shell_features`,
+and `resource_exhaustion`.
 
 ## Policy Fields
 
@@ -36,7 +54,9 @@ The YAML policy supports:
 - `review_shell_features`
 - `block_on_review`
 
-Wildcard domains such as `*.trusted.internal` match subdomains. Denied paths support user expansion, glob-style filenames, and sensitive basenames such as `.env`, `*.pem`, and `id_rsa`.
+Wildcard domains such as `*.trusted.internal` match subdomains. Denied paths
+support user expansion, glob-style filenames, and sensitive basenames such as
+`.env`, `*.pem`, and `id_rsa`.
 
 ## CLI Usage
 
@@ -63,7 +83,18 @@ tool_filter = ToolSafetyFilter(
 )
 ```
 
-The filter scans request fields such as `script`, `code`, `command`, `cmd`, `python_code`, `bash_code`, and `code_blocks`. A safety block returns `SAFETY_GUARD_BLOCKED` with a `safety_report` and does not set a filter error.
+The filter scans request fields such as `script`, `code`, `command`, `cmd`,
+`python_code`, `bash_code`, and `code_blocks`.
+
+It also scans argv-style fields:
+
+- `command_args`
+- `args`
+- `argv`
+- nested dict-like tool inputs containing those fields
+
+A safety block returns `SAFETY_GUARD_BLOCKED` with a `safety_report` and does
+not set a filter error.
 
 ## Wrapper Usage
 
@@ -109,9 +140,12 @@ The default remains disabled to preserve existing behavior.
 
 ## Report Schema
 
-Reports include `scan_id`, `timestamp`, `decision`, `risk_level`, `findings`, `tool_name`, `language`, `elapsed_ms`, `sanitized`, `blocked`, `summary`, and `telemetry_attributes`.
+Reports include `scan_id`, `timestamp`, `decision`, `risk_level`, `findings`,
+`tool_name`, `language`, `elapsed_ms`, `sanitized`, `blocked`, `summary`, and
+`telemetry_attributes`.
 
-Each finding includes `rule_id`, `risk_type`, `risk_level`, `decision`, `evidence`, `recommendation`, `message`, `line`, `column`, and `metadata`.
+Each finding includes `rule_id`, `risk_type`, `risk_level`, `decision`,
+`evidence`, `recommendation`, `message`, `line`, `column`, and `metadata`.
 
 ## Sample Manifest
 
@@ -124,15 +158,30 @@ Each finding includes `rule_id`, `risk_type`, `risk_level`, `decision`, `evidenc
 - `category`
 - `high_risk`
 
-Tests read this manifest directly, so adding a new sample means adding one manifest entry with the expected scanner outcome and at least one rule that must appear unless the sample is expected to allow.
+Tests read this manifest directly. Adding a new sample requires one manifest
+entry with the expected scanner outcome and at least one rule that must appear
+unless the sample is expected to allow.
 
 ## All Reports
 
-`all_reports.json` is generated by statically scanning every manifest sample with `tool_safety_policy.yaml`. It stores the expected decision, actual decision, required-rule match, category, high-risk flag, and full sanitized report for each sample. The current corpus contains 38 samples with 38/38 decision matches and 38/38 required-rule matches.
+`all_reports.json` is generated by statically scanning every manifest sample
+with `tool_safety_policy.yaml`. It stores:
+
+- expected decision
+- actual decision
+- required-rule match
+- category
+- high-risk flag
+- full sanitized report
+
+The current corpus contains 42 samples with 42/42 decision matches and 42/42
+required-rule matches.
 
 ## Audit Schema
 
-Audit JSONL writes one event per scan with `scan_id`, `timestamp`, `tool_name`, `decision`, `risk_level`, `rule_ids`, `elapsed_ms`, `sanitized`, `blocked`, and `trace_attributes`. Evidence and raw scripts are not written to audit events.
+Audit JSONL writes one event per scan with `scan_id`, `timestamp`, `tool_name`,
+`decision`, `risk_level`, `rule_ids`, `elapsed_ms`, `sanitized`, `blocked`, and
+`trace_attributes`. Evidence and raw scripts are not written to audit events.
 
 ## Telemetry Attributes
 
@@ -149,12 +198,32 @@ When OpenTelemetry is installed and a span is recording, the guard sets:
 
 ## Extension Guide
 
-Add new rule checks in `trpc_agent_sdk.tools.safety._rules`, return `RiskFinding` with sanitized evidence, and cover the behavior with Python/Bash scanner tests. Keep rules deterministic and avoid executing target scripts.
+Add new rule checks in `trpc_agent_sdk.tools.safety._rules`, return
+`RiskFinding` with sanitized evidence, and cover the behavior with Python/Bash
+scanner tests. Keep rules deterministic and avoid executing target scripts.
 
 ## Validation Matrix
 
-The sample matrix covers safe scripts, dangerous deletion, dynamic deletion review, secret reads, credential files, sensitive taint propagation, whitelisted and non-whitelisted network calls, `requests.Session`, `httpx.Client`, `aiohttp.ClientSession`, `urllib.request`, sockets, subprocess review, shell injection review, dependency install denial, infinite loop review, sensitive output denial, pipe exfiltration denial, Bash network egress through `curl`, `wget`, `nc`, `netcat`, `socat`, `ssh`, `scp`, `rsync`, `openssl s_client`, `/dev/tcp`, dynamic URL review, shell features, background processes, and eval review.
+The sample matrix covers:
+
+- safe Python and Bash scripts
+- dangerous and dynamic deletion
+- secret reads, credential files, and sensitive taint propagation
+- whitelisted and non-whitelisted network calls
+- `requests.Session`, `httpx.Client`, `aiohttp.ClientSession`,
+  `urllib.request`, and sockets
+- command-line argument scanning for argv and interpreter forms
+- subprocess review and shell injection review
+- dependency install denial and eval review
+- infinite loops, long waits, large allocation review, unbounded output review,
+  and large zero-fill write review
+- sensitive output denial and pipe exfiltration denial
+- Bash network egress through `curl`, `wget`, `nc`, `netcat`, `socat`, `ssh`,
+  `scp`, `rsync`, `openssl s_client`, and `/dev/tcp`
+- dynamic URL review, shell features, and background processes
 
 ## Limitations
 
-Static scanning favors fast deterministic checks over completeness. It can miss obfuscated payloads, encoded commands, generated code, external binary behavior, and runtime-dependent flows. Treat it as a guardrail, not isolation.
+Static scanning favors fast deterministic checks over completeness. It can miss
+obfuscated payloads, encoded commands, generated code, external binary behavior,
+and runtime-dependent flows. Treat it as a guardrail, not isolation.

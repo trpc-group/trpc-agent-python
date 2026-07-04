@@ -95,6 +95,18 @@ samples:
     required_rule_id: PY_DYNAMIC_CODE_REVIEW
     category: dynamic_code
     high_risk: false
+  - file: python_while_one.py
+    language: python
+    expected_decision: needs_human_review
+    required_rule_id: PY_INFINITE_LOOP
+    category: resource_exhaustion
+    high_risk: false
+  - file: python_large_allocation.py
+    language: python
+    expected_decision: needs_human_review
+    required_rule_id: PY_LARGE_ALLOCATION_REVIEW
+    category: resource_exhaustion
+    high_risk: false
   - file: aiohttp_non_whitelist.py
     language: python
     expected_decision: deny
@@ -184,6 +196,18 @@ samples:
     expected_decision: needs_human_review
     required_rule_id: BASH_BACKGROUND_PROCESS
     category: process_control
+    high_risk: false
+  - file: bash_unbounded_yes.sh
+    language: bash
+    expected_decision: needs_human_review
+    required_rule_id: BASH_UNBOUNDED_OUTPUT
+    category: resource_exhaustion
+    high_risk: false
+  - file: bash_zero_fill.sh
+    language: bash
+    expected_decision: needs_human_review
+    required_rule_id: BASH_ZERO_FILL_WRITE_REVIEW
+    category: resource_exhaustion
     high_risk: false
   - file: netcat_exfiltration.sh
     language: bash

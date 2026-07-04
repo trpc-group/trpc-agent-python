@@ -49,7 +49,7 @@ class ToolScriptSafetyScanner:
             findings.extend(scan_bash_script(request.script, self.policy))
 
         if request.command_args:
-            findings.extend(scan_bash_script(shlex.join(request.command_args), self.policy))
+            findings.extend(self._scan_command_args(request.script, request.command_args))
 
         if request.cwd and self.policy.is_path_denied(request.cwd):
             findings.append(
@@ -65,7 +65,7 @@ class ToolScriptSafetyScanner:
             )
 
         findings.extend(self._scan_tool_metadata(request.tool_metadata))
-        findings = self._dedupe_findings(findings)
+        findings = self._suppress_low_value_unknown_command_reviews(self._dedupe_findings(findings))
 
         decision = aggregate_decision(findings)
         risk_level = max_risk_level(findings)
@@ -227,6 +227,51 @@ class ToolScriptSafetyScanner:
                 )
         return findings
 
+    def _scan_command_args(self, command: str, command_args: list[str]) -> list[RiskFinding]:
+        """Scan argv-style command input and inline interpreter scripts."""
+        argv = self._command_vector(command, command_args)
+        if not argv:
+            return []
+
+        findings = scan_bash_script(shlex.join(argv), self.policy)
+        inline_script = self._inline_interpreter_script(argv)
+        if inline_script is None:
+            return findings
+
+        language, script = inline_script
+        if language == "python":
+            findings.extend(scan_python_script(script, self.policy))
+        else:
+            findings.extend(scan_bash_script(script, self.policy))
+        return findings
+
+    @staticmethod
+    def _command_vector(command: str, command_args: list[str]) -> list[str]:
+        argv: list[str] = []
+        command = str(command or "").strip()
+        if command:
+            try:
+                argv.extend(shlex.split(command))
+            except ValueError:
+                argv.append(command)
+        argv.extend(str(arg) for arg in command_args)
+        return argv
+
+    @staticmethod
+    def _inline_interpreter_script(argv: list[str]) -> tuple[str, str] | None:
+        if not argv:
+            return None
+        command = Path(argv[0]).name.lower()
+        if command in {"python", "python3", "py"}:
+            code_index = _option_value_index(argv, {"-c"})
+            if code_index is not None:
+                return "python", argv[code_index]
+        if command in {"bash", "sh"}:
+            code_index = _option_value_index(argv, {"-c", "-lc"})
+            if code_index is not None:
+                return "bash", argv[code_index]
+        return None
+
     def _finding(
         self,
         rule_id: str,
@@ -261,6 +306,23 @@ class ToolScriptSafetyScanner:
         return deduped
 
     @staticmethod
+    def _suppress_low_value_unknown_command_reviews(findings: list[RiskFinding]) -> list[RiskFinding]:
+        stronger_lines = {
+            finding.line
+            for finding in findings
+            if finding.rule_id != "BASH_UNKNOWN_COMMAND_REVIEW"
+            and (
+                finding.decision == Decision.DENY
+                or finding.risk_level in {RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL}
+            )
+        }
+        return [
+            finding
+            for finding in findings
+            if finding.rule_id != "BASH_UNKNOWN_COMMAND_REVIEW" or finding.line not in stronger_lines
+        ]
+
+    @staticmethod
     def _summary(decision: Decision, risk_level: RiskLevel, findings: list[RiskFinding], blocked: bool) -> str:
         action = "blocked" if blocked else "not blocked"
         if decision == Decision.ALLOW:
@@ -292,3 +354,10 @@ class ToolScriptSafetyScanner:
             "tool.safety.tool_name": tool_name,
             "tool.safety.duration_ms": elapsed_ms,
         }
+
+
+def _option_value_index(argv: list[str], options: set[str]) -> int | None:
+    for index, token in enumerate(argv[1:], start=1):
+        if token in options and index + 1 < len(argv):
+            return index + 1
+    return None

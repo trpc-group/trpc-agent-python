@@ -94,3 +94,35 @@ def test_socket_create_connection_literal_host_deny():
     report = ToolScriptSafetyScanner().scan_script(script, "python")
     assert report.decision == Decision.DENY
     assert "PY_SOCKET_NON_WHITELIST" in {finding.rule_id for finding in report.findings}
+
+
+def test_command_args_python_c_scanned_as_python():
+    report = ToolScriptSafetyScanner().scan_script(
+        "python",
+        "bash",
+        command_args=["-c", "open('.env').read()"],
+    )
+    assert report.decision == Decision.DENY
+    assert "PY_SENSITIVE_FILE_READ" in {finding.rule_id for finding in report.findings}
+
+
+def test_command_args_python3_c_scanned_as_python():
+    report = ToolScriptSafetyScanner().scan_script(
+        "python3",
+        "bash",
+        command_args=["-c", "import requests; requests.get('https://evil.example/x')"],
+    )
+    assert report.decision == Decision.DENY
+    assert "PY_NETWORK_NON_WHITELIST" in {finding.rule_id for finding in report.findings}
+
+
+def test_python_while_one_loop_review():
+    report = ToolScriptSafetyScanner().scan_script("while 1:\n    pass", "python")
+    assert report.decision == Decision.NEEDS_HUMAN_REVIEW
+    assert "PY_INFINITE_LOOP" in {finding.rule_id for finding in report.findings}
+
+
+def test_python_large_allocation_review():
+    report = ToolScriptSafetyScanner().scan_script("data = bytearray(1024 * 1024 * 1024)", "python")
+    assert report.decision == Decision.NEEDS_HUMAN_REVIEW
+    assert "PY_LARGE_ALLOCATION_REVIEW" in {finding.rule_id for finding in report.findings}
