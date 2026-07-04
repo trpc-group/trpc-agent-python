@@ -7,7 +7,9 @@ import yaml
 
 SCRIPT = Path("scripts/tool_safety_manifest_report.py")
 SAMPLES = Path("examples/tool_safety/samples")
+MANIFEST = Path("examples/tool_safety/samples/manifest.yaml")
 POLICY = Path("examples/tool_safety/tool_safety_policy.yaml")
+ARTIFACT = Path("examples/tool_safety/all_reports.json")
 
 
 def run_report(*args):
@@ -41,6 +43,49 @@ def test_manifest_report_output_is_deterministic(tmp_path):
     assert first_result.returncode == 0
     assert second_result.returncode == 0
     assert first.read_text(encoding="utf-8") == second.read_text(encoding="utf-8")
+    first_data = json.loads(first.read_text(encoding="utf-8"))
+    report = first_data["reports"][0]["report"]
+    assert report["scan_id"] == "<normalized>"
+    assert report["timestamp"] == "<normalized>"
+    assert report["elapsed_ms"] == 0
+    telemetry = report["telemetry_attributes"]
+    assert telemetry["tool.safety.scan_id"] == "<normalized>"
+    assert telemetry["tool.safety.duration_ms"] == 0
+
+
+def test_committed_manifest_artifact_matches_manifest_and_is_normalized():
+    artifact = json.loads(ARTIFACT.read_text(encoding="utf-8"))
+    manifest_samples = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))["samples"]
+    manifest_files = {sample["file"] for sample in manifest_samples}
+    report_files = {report["file"] for report in artifact["reports"]}
+
+    assert artifact["sample_count"] == len(manifest_samples)
+    assert artifact["matched_decisions"] == artifact["sample_count"]
+    assert artifact["required_rules_present"] == artifact["sample_count"]
+    assert len(artifact["reports"]) == artifact["sample_count"]
+    assert report_files == manifest_files
+
+    required_entry_fields = {
+        "file",
+        "language",
+        "expected_decision",
+        "actual_decision",
+        "required_rule_id",
+        "required_rule_present",
+        "actual_rule_ids",
+        "category",
+        "high_risk",
+        "report",
+    }
+    for entry in artifact["reports"]:
+        assert required_entry_fields <= set(entry)
+        report = entry["report"]
+        assert report["scan_id"] == "<normalized>"
+        assert report["timestamp"] == "<normalized>"
+        assert report["elapsed_ms"] == 0
+        telemetry = report["telemetry_attributes"]
+        assert telemetry["tool.safety.scan_id"] == "<normalized>"
+        assert telemetry["tool.safety.duration_ms"] == 0
 
 
 def test_manifest_report_decision_mismatch_exits_one(tmp_path):
