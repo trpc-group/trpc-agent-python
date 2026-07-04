@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "generated_by": "tests/sessions/test_replay_consistency.py",
+  "backend_pairs": [
+    "inmemory_vs_sqlite"
+  ],
+  "case_count": 10,
+  "cases": [
+    {
+      "name": "single_turn_text",
+      "unallowed_diff_count": 0
+    },
+    {
+      "name": "multi_turn_append_order",
+      "unallowed_diff_count": 0
+    },
+    {
+      "name": "tool_call_roundtrip",
+      "unallowed_diff_count": 0
+    },
+    {
+      "name": "scoped_state_overwrite",
+      "unallowed_diff_count": 0
+    },
+    {
+      "name": "memory_preference_search",
+      "unallowed_diff_count": 0
+    },
+    {
+      "name": "memory_multi_session_isolation",
+      "unallowed_diff_count": 0
+    },
+    {
+      "name": "summary_generation",
+      "unallowed_diff_count": 0
+    },
+    {
+      "name": "summary_update_overwrite",
+      "unallowed_diff_count": 0
+    },
+    {
+      "name": "summary_with_event_truncation",
+      "unallowed_diff_count": 0
+    },
+    {
+      "name": "duplicate_or_error_recovery",
+      "unallowed_diff_count": 0
+    }
+  ],
+  "diffs": []
+}
