@@ -15,6 +15,8 @@ from datetime import timezone
 from pathlib import Path
 from typing import Any
 
+from ._custom_rules import SafetyRuleContext
+from ._custom_rules import iter_custom_safety_rules
 from ._policy import ToolSafetyPolicy
 from ._rules import scan_bash_script
 from ._rules import scan_python_script
@@ -65,6 +67,7 @@ class ToolScriptSafetyScanner:
             )
 
         findings.extend(self._scan_tool_metadata(request.tool_metadata))
+        findings.extend(self._scan_custom_rules(request, language))
         findings = self._suppress_low_value_unknown_command_reviews(self._dedupe_findings(findings))
 
         decision = aggregate_decision(findings)
@@ -271,6 +274,44 @@ class ToolScriptSafetyScanner:
             if code_index is not None:
                 return "bash", argv[code_index]
         return None
+
+    def _scan_custom_rules(self, request: ToolScriptScanRequest, language: str) -> list[RiskFinding]:
+        findings: list[RiskFinding] = []
+        context = SafetyRuleContext(
+            script=request.script,
+            language=language,
+            policy=self.policy,
+            command_args=list(request.command_args),
+            cwd=request.cwd,
+            env=dict(request.env),
+            tool_name=request.tool_name,
+            tool_metadata=dict(request.tool_metadata),
+        )
+        for registered in iter_custom_safety_rules(language):
+            try:
+                for finding in registered.rule(context) or []:
+                    findings.append(self._sanitize_custom_finding(finding))
+            except Exception as exc:  # pylint: disable=broad-except
+                findings.append(
+                    self._finding(
+                        "CUSTOM_RULE_ERROR",
+                        "custom_rule_error",
+                        RiskLevel.MEDIUM,
+                        Decision.NEEDS_HUMAN_REVIEW,
+                        f"{registered.name}: {type(exc).__name__}: {exc}",
+                        "Fix or unregister the failing custom safety rule before executing.",
+                        "Custom safety rule raised an exception.",
+                    )
+                )
+        return findings
+
+    @staticmethod
+    def _sanitize_custom_finding(finding: RiskFinding) -> RiskFinding:
+        evidence, sanitized = sanitize_text(finding.evidence)
+        finding.evidence = evidence
+        if sanitized:
+            finding.metadata = {**finding.metadata, "sanitized": True}
+        return finding
 
     def _finding(
         self,

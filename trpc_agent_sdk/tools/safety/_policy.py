@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import fnmatch
 import os
+import warnings
 from dataclasses import dataclass
 from dataclasses import fields
 from pathlib import Path
@@ -89,7 +90,7 @@ class ToolSafetyPolicy:
         )
 
     @classmethod
-    def from_file(cls, path: str | os.PathLike[str]) -> "ToolSafetyPolicy":
+    def from_file(cls, path: str | os.PathLike[str], *, strict: bool = False) -> "ToolSafetyPolicy":
         """Load a policy from YAML, overlaying values on top of defaults."""
         policy = cls.default()
         with open(path, "r", encoding="utf-8") as file:
@@ -97,10 +98,8 @@ class ToolSafetyPolicy:
         if not isinstance(data, dict):
             raise ValueError("tool safety policy must be a YAML mapping")
 
-        valid_names = {field.name for field in fields(cls)}
-        for key, value in data.items():
-            if key in valid_names:
-                setattr(policy, key, value)
+        for key, value in validate_policy_data(data, strict=strict).items():
+            setattr(policy, key, value)
         return policy
 
     def is_domain_allowed(self, host: str) -> bool:
@@ -183,3 +182,45 @@ def _normalize_path(path: str) -> str:
 
 def _has_glob(pattern: str) -> bool:
     return any(char in pattern for char in "*?[")
+
+
+def validate_policy_data(data: dict[str, Any], *, strict: bool = False) -> dict[str, Any]:
+    """Validate raw YAML policy data and return fields safe to overlay."""
+    valid_names = {field.name for field in fields(ToolSafetyPolicy)}
+    validated: dict[str, Any] = {}
+    for key, value in data.items():
+        if key not in valid_names:
+            _policy_issue(f"unknown policy key: {key}", strict)
+            continue
+        if key in {"allowed_domains", "allowed_commands", "denied_paths"}:
+            if not _is_string_list(value):
+                _policy_issue(f"{key} must be a list of strings", strict)
+                continue
+        elif key in {"max_timeout_seconds", "max_output_bytes", "long_sleep_seconds"}:
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                _policy_issue(f"{key} must be a non-negative integer", strict)
+                continue
+        elif key in {
+            "deny_dependency_install",
+            "deny_privilege_escalation",
+            "review_process_execution",
+            "review_unknown_network",
+            "review_dynamic_code",
+            "review_shell_features",
+            "block_on_review",
+        }:
+            if not isinstance(value, bool):
+                _policy_issue(f"{key} must be a boolean", strict)
+                continue
+        validated[key] = value
+    return validated
+
+
+def _is_string_list(value: Any) -> bool:
+    return isinstance(value, list) and all(isinstance(item, str) and item.strip() for item in value)
+
+
+def _policy_issue(message: str, strict: bool) -> None:
+    if strict:
+        raise ValueError(message)
+    warnings.warn(message, UserWarning, stacklevel=3)

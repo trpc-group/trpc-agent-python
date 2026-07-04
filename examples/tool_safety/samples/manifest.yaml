@@ -95,6 +95,12 @@ samples:
     required_rule_id: PY_DYNAMIC_CODE_REVIEW
     category: dynamic_code
     high_risk: false
+  - file: base64_exec_review.py
+    language: python
+    expected_decision: needs_human_review
+    required_rule_id: PY_DYNAMIC_CODE_REVIEW
+    category: dynamic_code
+    high_risk: false
   - file: python_while_one.py
     language: python
     expected_decision: needs_human_review
@@ -137,6 +143,12 @@ samples:
     required_rule_id: PY_SOCKET_NON_WHITELIST
     category: network_non_whitelist
     high_risk: true
+  - file: pathlib_home_ssh_key.py
+    language: python
+    expected_decision: deny
+    required_rule_id: PY_SENSITIVE_FILE_READ
+    category: secret_read
+    high_risk: true
   - file: os_environ_secret_print.py
     language: python
     expected_decision: deny
@@ -144,6 +156,12 @@ samples:
     category: secret_output
     high_risk: true
   - file: os_getenv_secret_exfiltration.py
+    language: python
+    expected_decision: deny
+    required_rule_id: PY_SENSITIVE_OUTPUT
+    category: secret_exfiltration
+    high_risk: true
+  - file: os_getenv_token_requests_post.py
     language: python
     expected_decision: deny
     required_rule_id: PY_SENSITIVE_OUTPUT
@@ -160,6 +178,12 @@ samples:
     expected_decision: deny
     required_rule_id: BASH_DANGEROUS_RM_RF
     category: dangerous_delete
+    high_risk: true
+  - file: subprocess_python_c_env_read.py
+    language: python
+    expected_decision: deny
+    required_rule_id: PY_SENSITIVE_FILE_READ
+    category: secret_read
     high_risk: true
   - file: subprocess_cat_env_curl.py
     language: python
@@ -209,6 +233,42 @@ samples:
     required_rule_id: BASH_ZERO_FILL_WRITE_REVIEW
     category: resource_exhaustion
     high_risk: false
+  - file: curl_data_env_exfiltration.sh
+    language: bash
+    expected_decision: deny
+    required_rule_id: BASH_SECRET_EXFILTRATION
+    category: secret_exfiltration
+    high_risk: true
+  - file: find_delete_review.sh
+    language: bash
+    expected_decision: needs_human_review
+    required_rule_id: BASH_FIND_DELETE_REVIEW
+    category: dangerous_delete
+    high_risk: false
+  - file: xargs_rm_rf_review.sh
+    language: bash
+    expected_decision: needs_human_review
+    required_rule_id: BASH_XARGS_RM_REVIEW
+    category: dangerous_delete
+    high_risk: false
+  - file: bash_c_inline_delete.sh
+    language: bash
+    expected_decision: deny
+    required_rule_id: BASH_DANGEROUS_RM_RF
+    category: dangerous_delete
+    high_risk: true
+  - file: sh_c_inline_secret_read.sh
+    language: bash
+    expected_decision: deny
+    required_rule_id: BASH_SENSITIVE_FILE_READ
+    category: secret_read
+    high_risk: true
+  - file: command_substitution_exfiltration.sh
+    language: bash
+    expected_decision: deny
+    required_rule_id: BASH_SECRET_EXFILTRATION
+    category: secret_exfiltration
+    high_risk: true
   - file: netcat_exfiltration.sh
     language: bash
     expected_decision: deny

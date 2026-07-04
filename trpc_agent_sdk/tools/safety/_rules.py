@@ -64,6 +64,11 @@ def sanitize_text(text: str, limit: int = 180) -> tuple[str, bool]:
         (r"-----BEGIN [A-Z ]*PRIVATE KEY-----", "[REDACTED_PRIVATE_KEY]"),
         (r"-----END [A-Z ]*PRIVATE KEY-----", "[REDACTED_PRIVATE_KEY]"),
         (
+            r"(?i)(['\"])([A-Z0-9_]*(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD|PASSWD|PRIVATE[_-]?KEY|SSH[_-]?KEY)"
+            r"[A-Z0-9_]*)\1",
+            r"\1[REDACTED_SECRET_NAME]\1",
+        ),
+        (
             r"(?i)\b(api[_-]?key|auth[_-]?token|token|secret|password|passwd|credential|private[_-]?key)"
             r"\b\s*[:=]\s*['\"]?[^'\"\s,;)]+",
             r"\1=[REDACTED_SECRET]",
@@ -157,6 +162,9 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
         tokens = _shell_tokens(line)
         sensitive_read = _line_reads_sensitive_file(line, tokens, policy)
         network_send = _line_has_network_send(line)
+        inline_script = _shell_inline_interpreter_script(tokens)
+        if inline_script:
+            findings.extend(scan_bash_script(inline_script, policy))
 
         if _is_fork_bomb(line):
             findings.append(
@@ -214,7 +222,7 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                 )
             )
 
-        if sensitive_read and network_send and "|" in line:
+        if sensitive_read and network_send:
             findings.append(
                 _finding(
                     "BASH_SECRET_EXFILTRATION",
@@ -224,6 +232,34 @@ def scan_bash_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]
                     raw_line,
                     "Do not pipe secrets to network clients.",
                     "Sensitive file content is piped to a network command.",
+                    line_no,
+                )
+            )
+
+        if _is_find_delete(tokens):
+            findings.append(
+                _finding(
+                    "BASH_FIND_DELETE_REVIEW",
+                    "dangerous_delete",
+                    RiskLevel.MEDIUM,
+                    Decision.NEEDS_HUMAN_REVIEW,
+                    raw_line,
+                    "Review find -delete targets before execution.",
+                    "find -delete can remove many files.",
+                    line_no,
+                )
+            )
+
+        if _is_xargs_rm_rf(line):
+            findings.append(
+                _finding(
+                    "BASH_XARGS_RM_REVIEW",
+                    "dangerous_delete",
+                    RiskLevel.MEDIUM,
+                    Decision.NEEDS_HUMAN_REVIEW,
+                    raw_line,
+                    "Review xargs-driven recursive deletion before execution.",
+                    "xargs rm -rf uses dynamic deletion targets.",
                     line_no,
                 )
             )
@@ -570,8 +606,18 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
         if not is_process:
             return
 
-        command = self._command_from_process_call(node)
-        if command:
+        parts = self._command_sequence_from_process_call(node)
+        command = None if parts else self._command_from_process_call(node)
+        if parts:
+            self.findings.extend(scan_bash_script(shlex.join(parts), self.policy))
+            inline_script = _inline_interpreter_script(parts)
+            if inline_script:
+                language, script = inline_script
+                if language == "python":
+                    self.findings.extend(scan_python_script(script, self.policy))
+                else:
+                    self.findings.extend(scan_bash_script(script, self.policy))
+        elif command:
             self.findings.extend(scan_bash_script(command, self.policy))
 
         if self._keyword_bool(node, "shell") and command is None:
@@ -813,16 +859,31 @@ class _PythonSafetyVisitor(ast.NodeVisitor):
         text = self._resolve_string(arg)
         if text is not None:
             return text
-        parts = self._resolve_string_sequence(arg)
-        if parts:
-            return shlex.join(parts)
         return None
 
+    def _command_sequence_from_process_call(self, node: ast.Call) -> list[str] | None:
+        if not node.args:
+            return None
+        return self._resolve_string_sequence(node.args[0])
+
     def _path_from_constructor(self, node: ast.AST) -> str | None:
+        path = self._path_from_path_expr(node)
+        if path is not None:
+            return path
+        return None
+
+    def _path_from_path_expr(self, node: ast.AST) -> str | None:
         if isinstance(node, ast.Call):
             name = self._call_name(node.func)
             if name in {"Path", "pathlib.Path"} and node.args:
                 return self._resolve_string(node.args[0])
+            if name in {"Path.home", "pathlib.Path.home"}:
+                return "~"
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+            left = self._path_from_path_expr(node.left)
+            right = self._resolve_string(node.right)
+            if left is not None and right is not None:
+                return f"{left.rstrip('/')}/{right.strip('/')}"
         return None
 
     def _call_name(self, node: ast.AST) -> str:
@@ -1015,6 +1076,9 @@ def _base_commands(line: str) -> list[str]:
 def _line_reads_sensitive_file(line: str, tokens: list[str], policy: ToolSafetyPolicy) -> bool:
     if not tokens:
         return False
+    for token in tokens[1:]:
+        if token.startswith("@") and policy.is_path_denied(token[1:]):
+            return True
     command = tokens[0].split("/")[-1]
     if command in {"cat", "head", "tail", "less", "more"}:
         return any(policy.is_path_denied(token) for token in tokens[1:])
@@ -1043,6 +1107,24 @@ def _is_rm_rf_dangerous(tokens: list[str], policy: ToolSafetyPolicy) -> bool:
         target in {"/", "~"} or target.startswith("~/.ssh") or policy.is_path_denied(target)
         for target in targets
     )
+
+
+def _is_find_delete(tokens: list[str]) -> bool:
+    return bool(tokens and tokens[0].split("/")[-1] == "find" and "-delete" in tokens[1:])
+
+
+def _is_xargs_rm_rf(line: str) -> bool:
+    return bool(re.search(r"\bxargs\b[^\n|;&]*\brm\b[^\n|;&]*-[^\n|;&]*r[^\n|;&]*f", line))
+
+
+def _shell_inline_interpreter_script(tokens: list[str]) -> str | None:
+    if not tokens:
+        return None
+    command = tokens[0].split("/")[-1].lower()
+    if command not in {"bash", "sh"}:
+        return None
+    index = _option_value_index(tokens, {"-c", "-lc"})
+    return tokens[index] if index is not None else None
 
 
 def _redirects_to_denied_path(line: str, tokens: list[str], policy: ToolSafetyPolicy) -> bool:
@@ -1209,6 +1291,28 @@ def _clean_host(value: str | None) -> str | None:
     if not value:
         return None
     return value.strip().strip("[]").rstrip(".")
+
+
+def _inline_interpreter_script(argv: list[str]) -> tuple[str, str] | None:
+    if not argv:
+        return None
+    command = argv[0].split("/")[-1].lower()
+    if command in {"python", "python3", "py"}:
+        index = _option_value_index(argv, {"-c"})
+        if index is not None:
+            return "python", argv[index]
+    if command in {"bash", "sh"}:
+        index = _option_value_index(argv, {"-c", "-lc"})
+        if index is not None:
+            return "bash", argv[index]
+    return None
+
+
+def _option_value_index(argv: list[str], options: set[str]) -> int | None:
+    for index, token in enumerate(argv[1:], start=1):
+        if token in options and index + 1 < len(argv):
+            return index + 1
+    return None
 
 
 def _is_dependency_install(tokens: list[str]) -> bool:
