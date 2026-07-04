@@ -13,6 +13,10 @@ import json
 import sys
 from pathlib import Path
 
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 from trpc_agent_sdk.tools.safety import Decision
 from trpc_agent_sdk.tools.safety import ToolSafetyPolicy
 from trpc_agent_sdk.tools.safety import ToolScriptSafetyScanner
@@ -48,11 +52,8 @@ def main(argv: list[str] | None = None) -> int:
         if not args.path and not args.file and args.script is None:
             parser.error("one of path, --file, or --script is required")
 
-        policy = (
-            ToolSafetyPolicy.from_file(args.policy, strict=args.strict_policy)
-            if args.policy
-            else ToolSafetyPolicy.default()
-        )
+        policy = (ToolSafetyPolicy.from_file(args.policy, strict=args.strict_policy)
+                  if args.policy else ToolSafetyPolicy.default())
         if args.block_on_review:
             policy.block_on_review = True
         scanner = ToolScriptSafetyScanner(policy)

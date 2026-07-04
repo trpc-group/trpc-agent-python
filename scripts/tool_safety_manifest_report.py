@@ -13,6 +13,10 @@ import json
 import sys
 from pathlib import Path
 
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 import yaml
 
 from trpc_agent_sdk.tools.safety import ToolSafetyPolicy
@@ -67,29 +71,25 @@ def main(argv: list[str] | None = None) -> int:
         matched_decisions += int(matched_decision)
         required_rules_present += int(required_present)
         if not matched_decision or not required_present:
-            failures.append(
-                {
-                    "file": sample["file"],
-                    "expected_decision": expected_decision,
-                    "actual_decision": actual_decision,
-                    "required_rule_id": required_rule,
-                    "actual_rule_ids": sorted(rule_ids),
-                }
-            )
-        reports.append(
-            {
+            failures.append({
                 "file": sample["file"],
-                "language": sample["language"],
                 "expected_decision": expected_decision,
                 "actual_decision": actual_decision,
                 "required_rule_id": required_rule,
-                "required_rule_present": required_present,
                 "actual_rule_ids": sorted(rule_ids),
-                "category": sample["category"],
-                "high_risk": sample["high_risk"],
-                "report": normalize_report_dict(report.to_dict(), sample["file"]),
-            }
-        )
+            })
+        reports.append({
+            "file": sample["file"],
+            "language": sample["language"],
+            "expected_decision": expected_decision,
+            "actual_decision": actual_decision,
+            "required_rule_id": required_rule,
+            "required_rule_present": required_present,
+            "actual_rule_ids": sorted(rule_ids),
+            "category": sample["category"],
+            "high_risk": sample["high_risk"],
+            "report": normalize_report_dict(report.to_dict(), sample["file"]),
+        })
 
     output = {
         "failures": failures,
@@ -102,13 +102,11 @@ def main(argv: list[str] | None = None) -> int:
     output_path.write_text(json.dumps(output, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({key: output[key] for key in ("sample_count", "matched_decisions", "required_rules_present")}))
     for failure in failures:
-        print(
-            f"FAIL {failure['file']} "
-            f"expected_decision={failure['expected_decision']} "
-            f"actual_decision={failure['actual_decision']} "
-            f"required_rule_id={failure['required_rule_id']} "
-            f"actual_rule_ids={_format_rule_ids(failure['actual_rule_ids'])}"
-        )
+        print(f"FAIL {failure['file']} "
+              f"expected_decision={failure['expected_decision']} "
+              f"actual_decision={failure['actual_decision']} "
+              f"required_rule_id={failure['required_rule_id']} "
+              f"actual_rule_ids={_format_rule_ids(failure['actual_rule_ids'])}")
     if failures:
         return 1
     if matched_decisions != len(matrix) or required_rules_present != len(matrix):
