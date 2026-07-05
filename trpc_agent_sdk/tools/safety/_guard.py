@@ -121,23 +121,31 @@ class SafetyGuardedCodeExecutor(BaseCodeExecutor):
                 script=block.code,
                 language=block.language,
                 cwd=self._work_dir(),
-                tool_metadata={"name": "CodeExecutor", "executor": self.delegate.__class__.__name__},
+                tool_metadata={
+                    "name": "CodeExecutor",
+                    "executor": self.delegate.__class__.__name__,
+                },
             )
             try:
                 self.guard.check(request)
             except ToolSafetyBlockedError as exc:
-                return create_code_execution_result(stderr=f"Tool safety guard blocked code execution: {exc.report.to_json(indent=None)}")
+                return create_code_execution_result(
+                    stderr=f"Tool safety guard blocked code execution: {exc.report.to_json(indent=None)}")
         if code_execution_input.code and not code_execution_input.code_blocks:
             request = ToolSafetyScanRequest(
                 script=code_execution_input.code,
                 language="python",
                 cwd=self._work_dir(),
-                tool_metadata={"name": "CodeExecutor", "executor": self.delegate.__class__.__name__},
+                tool_metadata={
+                    "name": "CodeExecutor",
+                    "executor": self.delegate.__class__.__name__,
+                },
             )
             try:
                 self.guard.check(request)
             except ToolSafetyBlockedError as exc:
-                return create_code_execution_result(stderr=f"Tool safety guard blocked code execution: {exc.report.to_json(indent=None)}")
+                return create_code_execution_result(
+                    stderr=f"Tool safety guard blocked code execution: {exc.report.to_json(indent=None)}")
         return await self.delegate.execute_code(invocation_context, code_execution_input)
 
     def _work_dir(self) -> str | None:

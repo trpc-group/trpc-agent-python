@@ -14,7 +14,6 @@ from typing import Any
 
 import yaml
 
-
 DEFAULT_ALLOWED_COMMANDS = [
     "awk",
     "cat",

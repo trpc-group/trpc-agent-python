@@ -27,12 +27,10 @@ from ._types import ToolSafetyScanRequest
 from ._types import max_risk_level
 from ._types import risk_level_value
 
-
 SECRET_VALUE_RE = re.compile(
     r"(?i)(api[_-]?key|access[_-]?token|secret|password|private[_-]?key|authorization)\s*[:=]\s*"
-    r"['\"]?([A-Za-z0-9_./+=:-]{12,})"
-)
-URL_RE = re.compile(r"(?i)\bhttps?://[^\s'\"<>)]+" )
+    r"['\"]?([A-Za-z0-9_./+=:-]{12,})")
+URL_RE = re.compile(r"(?i)\bhttps?://[^\s'\"<>)]+")
 ENV_VAR_RE = re.compile(r"\$(?:\{)?([A-Za-z_][A-Za-z0-9_]*)")
 SHELL_CONTROL_RE = re.compile(r"(\|\||&&|;|\||`|\$\(|>|<)")
 FORK_BOMB_RE = re.compile(r":\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:")
@@ -79,15 +77,21 @@ SECRET_ENV_NAMES = {
     "SECRET",
     "TOKEN",
 }
-SENSITIVE_SINK_NAMES = {"print", "logging.info", "logging.warning", "logging.error", "logger.info", "logger.warning",
-                        "logger.error", "sys.stdout.write", "sys.stderr.write"}
+SENSITIVE_SINK_NAMES = {
+    "print", "logging.info", "logging.warning", "logging.error", "logger.info", "logger.warning", "logger.error",
+    "sys.stdout.write", "sys.stderr.write"
+}
 NETWORK_PY_MODULES = {"requests", "aiohttp", "httpx", "urllib", "socket", "websocket"}
-SUBPROCESS_CALLS = {"subprocess.run", "subprocess.call", "subprocess.Popen", "subprocess.check_call",
-                    "subprocess.check_output", "os.system", "os.popen", "os.spawnl", "os.spawnle", "os.spawnlp",
-                    "os.spawnlpe", "os.spawnv", "os.spawnve", "os.spawnvp", "os.spawnvpe", "pty.spawn"}
+SUBPROCESS_CALLS = {
+    "subprocess.run", "subprocess.call", "subprocess.Popen", "subprocess.check_call", "subprocess.check_output",
+    "os.system", "os.popen", "os.spawnl", "os.spawnle", "os.spawnlp", "os.spawnlpe", "os.spawnv", "os.spawnve",
+    "os.spawnvp", "os.spawnvpe", "pty.spawn"
+}
 FILE_OPEN_CALLS = {"open", "Path.open", "pathlib.Path.open"}
-DANGEROUS_FILE_CALLS = {"os.remove", "os.unlink", "os.rmdir", "shutil.rmtree", "Path.unlink", "Path.rmdir",
-                        "pathlib.Path.unlink", "pathlib.Path.rmdir"}
+DANGEROUS_FILE_CALLS = {
+    "os.remove", "os.unlink", "os.rmdir", "shutil.rmtree", "Path.unlink", "Path.rmdir", "pathlib.Path.unlink",
+    "pathlib.Path.rmdir"
+}
 INSTALL_PY_MODULES = {"pip", "ensurepip"}
 SHELL_WRITE_COMMANDS = {"cp", "install", "mkdir", "mv", "tee", "touch"}
 PARALLEL_PY_CALLS = {
@@ -137,8 +141,8 @@ class ToolSafetyScanner:
         redacted = any(item.redacted for item in findings)
         rule_ids = [item.rule_id for item in findings]
         primary_rule_id = primary_rule(findings)
-        blocked = decision == SafetyDecision.DENY or (
-            decision == SafetyDecision.NEEDS_HUMAN_REVIEW and self.policy.block_on_review)
+        blocked = decision == SafetyDecision.DENY or (decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+                                                      and self.policy.block_on_review)
         report = ToolSafetyReport(
             decision=decision,
             risk_level=risk_level,
@@ -383,8 +387,7 @@ class ToolSafetyScanner:
                         line_no=line_no,
                     ))
             parallel_tasks = parallel_tasks_from_tokens(command_tokens)
-            if parallel_tasks is not None and (
-                    parallel_tasks == 0 or parallel_tasks > self.policy.max_parallel_tasks):
+            if parallel_tasks is not None and (parallel_tasks == 0 or parallel_tasks > self.policy.max_parallel_tasks):
                 findings.append(
                     finding(
                         "TSG-RESOURCE-PARALLELISM",
@@ -407,7 +410,8 @@ class ToolSafetyScanner:
                         line_no=line_no,
                     ))
             if command == "rm" and is_recursive_delete(command_tokens):
-                risk = SafetyRiskLevel.CRITICAL if targets_system_or_denied_path(command_tokens, self.policy) else SafetyRiskLevel.HIGH
+                risk = SafetyRiskLevel.CRITICAL if targets_system_or_denied_path(command_tokens,
+                                                                                 self.policy) else SafetyRiskLevel.HIGH
                 findings.append(
                     finding(
                         "TSG-FILE-RECURSIVE-DELETE",
@@ -461,7 +465,8 @@ class ToolSafetyScanner:
                             SafetyRiskLevel.HIGH,
                             "Shell redirection references a denied sensitive path.",
                             evidence,
-                            "Remove direct access to credential paths such as .env, ~/.ssh, and cloud credential files.",
+                            "Remove direct access to credential paths such as .env, ~/.ssh, "
+                            "and cloud credential files.",
                             line_no=line_no,
                         ))
             if command in {"cat", "grep", "awk", "sed", "tail", "head"} and any(
@@ -700,8 +705,7 @@ class _PythonAnalyzer(ast.NodeVisitor):
             )
         if keyword_bool(node, "capture_output") or any(
                 self.call_name(keyword.value) == "subprocess.PIPE"
-                for keyword in node.keywords
-                if keyword.arg in {"stdout", "stderr"}):
+                for keyword in node.keywords if keyword.arg in {"stdout", "stderr"}):
             self.add(
                 "TSG-RESOURCE-OUTPUT-CAPTURE",
                 "resource_abuse",
@@ -736,7 +740,8 @@ class _PythonAnalyzer(ast.NodeVisitor):
             if kw.arg == "mode":
                 mode = self.constant_string(kw.value) or mode
         if path_text and self.policy.is_denied_path(path_text):
-            risk_type = "sensitive_information_leak" if "r" in mode and not any(flag in mode for flag in "wa+") else "dangerous_file_operation"
+            risk_type = "sensitive_information_leak" if "r" in mode and not any(
+                flag in mode for flag in "wa+") else "dangerous_file_operation"
             self.add(
                 "TSG-FILE-DENIED-PATH",
                 risk_type,
@@ -1023,7 +1028,6 @@ class _PythonAnalyzer(ast.NodeVisitor):
             start, stop = numbers[:2]
             step = numbers[2] if len(numbers) >= 3 and numbers[2] != 0 else 1
             return max((stop - start + (step - 1)) // step, 0)
-        return None
 
 
 def normalize_language(language: str | None) -> str:

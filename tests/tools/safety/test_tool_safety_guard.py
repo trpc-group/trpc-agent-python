@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import time
 from pathlib import Path
@@ -13,14 +14,17 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from trpc_agent_sdk.code_executors import CodeBlock
+from trpc_agent_sdk.code_executors import CodeExecutionInput
+from trpc_agent_sdk.code_executors import BaseCodeExecutor
+from trpc_agent_sdk.code_executors import create_code_execution_result
 from trpc_agent_sdk.context import create_agent_context
-from trpc_agent_sdk.tools import FunctionTool
+from trpc_agent_sdk.filter import FilterResult
 from trpc_agent_sdk.tools.safety import SafetyDecision
 from trpc_agent_sdk.tools.safety import SafetyGuardedCodeExecutor
-from trpc_agent_sdk.tools.safety import ToolSafetyBlockedError
-from trpc_agent_sdk.tools.safety import ToolSafetyFinding
 from trpc_agent_sdk.tools.safety import SafetyRiskLevel
 from trpc_agent_sdk.tools.safety import ToolSafetyAuditLogger
+from trpc_agent_sdk.tools.safety import ToolSafetyBlockedError
 from trpc_agent_sdk.tools.safety import ToolSafetyFilter
 from trpc_agent_sdk.tools.safety import ToolSafetyGuard
 from trpc_agent_sdk.tools.safety import ToolSafetyPolicy
@@ -30,11 +34,8 @@ from trpc_agent_sdk.tools.safety import ToolSafetyScanner
 from trpc_agent_sdk.tools.safety import apply_tool_safety_span_attributes
 from trpc_agent_sdk.tools.safety import extract_script_from_tool_args
 from trpc_agent_sdk.tools.safety import load_tool_safety_policy
-from trpc_agent_sdk.code_executors import CodeBlock
-from trpc_agent_sdk.code_executors import CodeExecutionInput
-from trpc_agent_sdk.code_executors import BaseCodeExecutor
-from trpc_agent_sdk.code_executors import create_code_execution_result
-from trpc_agent_sdk.filter import FilterResult
+from trpc_agent_sdk.tools.safety import _scanner as scanner_module
+from trpc_agent_sdk.tools.safety import _types as types_module
 from trpc_agent_sdk.tools.safety._guard import command_to_args
 from trpc_agent_sdk.tools.safety._guard import infer_language_from_key
 from trpc_agent_sdk.tools.safety._types import max_risk_level
@@ -310,6 +311,71 @@ def test_scanner_command_arg_prefixes_and_duration_helpers():
         ]
 
 
+def test_scanner_edge_branches_from_direct_scans(monkeypatch):
+    scanner = ToolSafetyScanner(policy(max_parallel_tasks=2, max_loop_iterations=3))
+
+    assert scanner.scan(ToolSafetyScanRequest(script="", language="python", env=[])).decision == SafetyDecision.ALLOW
+    assert scanner._scan_bash_line("", 1) == []  # pylint: disable=protected-access
+
+    monkeypatch.setattr(scanner_module, "split_shell_commands", lambda tokens: [[]])
+    assert scanner._scan_bash_line("echo ok", 1) == []  # pylint: disable=protected-access
+
+    scripts = [
+        ("funcs = [print]\nfuncs[0]('x')", None),
+        ("import os\nos.remove('.env')", "TSG-FILE-DENIED-PATH"),
+        ("open('/etc/passwd', mode='w')", "TSG-FILE-SYSTEM-WRITE"),
+        ("f = open('out.txt')", None),
+        ("import concurrent.futures\nconcurrent.futures.ThreadPoolExecutor()", "TSG-RESOURCE-PARALLELISM"),
+        ("for i in range(limit):\n    pass", None),
+        ("for i in range(2, 10, 2):\n    pass", "TSG-RESOURCE-LARGE-LOOP"),
+    ]
+    for script, rule_id in scripts:
+        report = scanner.scan(ToolSafetyScanRequest(script=script, language="python"))
+        if rule_id:
+            assert any(finding.rule_id == rule_id for finding in report.findings)
+
+
+def test_python_analyzer_helper_edge_branches():
+    analyzer = scanner_module._PythonAnalyzer("pass\n", policy())  # pylint: disable=protected-access
+
+    assert analyzer.network_target_from_arg(ast.parse("url", mode="eval").body) == ""
+    assert analyzer.node_line(ast.Pass(lineno=1, col_offset=0)) == "pass"
+    assert analyzer.node_line(ast.Pass(lineno=99, col_offset=0)) == ""
+    assert analyzer.call_name(ast.Attribute(value=ast.Constant(value=1), attr="field", ctx=ast.Load())) == "field"
+    assert analyzer.call_name(ast.Constant(value=None)) == ""
+    assert analyzer.name_of(ast.Attribute(value=ast.Name(id="obj", ctx=ast.Load()), attr="token", ctx=ast.Load())) == "token"
+    assert analyzer.name_of(ast.Constant(value=None)) == ""
+    assert analyzer.constant_string(None) == ""
+    assert analyzer.constant_string(ast.parse("f'key={value}'", mode="eval").body) == "key={}"
+    assert analyzer.constant_string(ast.parse("['a', value]", mode="eval").body) == ""
+    assert analyzer.constant_string(ast.parse("('a', 'b')", mode="eval").body) == "a b"
+    assert analyzer.path_literal_from_node(None) == ""
+    assert analyzer.path_literal_from_node(ast.parse("Path('.env')", mode="eval").body) == ".env"
+    assert analyzer.path_literal_from_node(ast.parse("Path(value)", mode="eval").body) == ""
+    assert analyzer.path_literal_from_node(ast.parse("Path('.env').expanduser().read_text", mode="eval").body) == ".env"
+    assert analyzer.path_literal_from_node(ast.parse("config.read_text", mode="eval").body) == ""
+    assert analyzer.range_count(ast.parse("range(limit)", mode="eval").body) is None
+    assert analyzer.range_count(ast.parse("range(2, 10, 2)", mode="eval").body) == 4
+
+
+def test_scanner_module_helper_edge_branches():
+    assert scanner_module.is_secret_name("") is False
+    assert scanner_module.numeric_constant(ast.parse("value", mode="eval").body) is None
+    assert scanner_module.is_install_invocation(["python", "-m", "pip", "install", "demo"]) is False
+    assert scanner_module.is_recursive_delete(["echo", "-rf"]) is False
+    assert scanner_module.redirection_targets(["echo", "x", ">/etc/app.conf"]) == ["/etc/app.conf"]
+    assert scanner_module.timeout_seconds_from_tokens(["timeout", "--kill-after=1s", "10m"]) == 600
+    assert scanner_module.timeout_seconds_from_tokens(["timeout", "--preserve-status", "10m"]) == 600
+    assert scanner_module.timeout_seconds_from_tokens(["timeout", "--preserve-status"]) is None
+    assert scanner_module.duration_token_seconds("never") is None
+    assert scanner_module.parallel_tasks_from_tokens(["parallel", "-j", "4"]) == 4
+    assert scanner_module.parallel_tasks_from_tokens(["parallel", "--jobs=7"]) == 7
+    assert scanner_module.parallel_tasks_from_tokens(["parallel", "echo"]) == 0
+    assert scanner_module.parallel_tasks_from_tokens(["xargs", "-P3"]) == 3
+    assert scanner_module.int_token("many") is None
+    assert scanner_module.line_has_allowlisted_url("echo no-url", policy()) is False
+
+
 def test_policy_loader_and_matching_branches(tmp_path):
     policy_file = tmp_path / "policy.yaml"
     policy_file.write_text(
@@ -340,8 +406,11 @@ extra_flag: yes
     assert loaded.is_command_allowed("custom-tool --flag") is True
     assert loaded.is_command_allowed(None) is False
     assert loaded.is_denied_path(None) is False
+    assert loaded.is_denied_path("config.yaml") is False
     assert loaded.is_system_write_path("/") is True
     assert loaded.is_system_write_path(None) is False
+    assert ToolSafetyPolicy(allowed_domains=[""]).is_domain_allowed("api.example.com") is False
+    assert ToolSafetyPolicy(system_write_paths=[""]).is_system_write_path("/etc/passwd") is False
     assert load_tool_safety_policy(None).name == "default"
 
 
@@ -368,6 +437,12 @@ def test_report_and_type_helpers_cover_empty_and_fallback_paths():
 
     assert report.is_allowed is True
     assert json.loads(report.to_json(indent=None))["risk_count"] == 0
+
+
+def test_max_risk_level_fallback_when_order_has_no_match(monkeypatch):
+    monkeypatch.setattr(types_module, "RISK_LEVEL_ORDER", {})
+
+    assert types_module.max_risk_level(["unexpected"]) == SafetyRiskLevel.NONE
 
 
 def test_audit_event_contains_required_fields(tmp_path):
