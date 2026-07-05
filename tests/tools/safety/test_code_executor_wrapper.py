@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
 from unittest.mock import Mock
 from unittest.mock import patch
 
@@ -51,6 +50,12 @@ class RecordingDelegate(BaseCodeExecutor):
     ) -> CodeExecutionResult:
         self.calls.append(code_execution_input)
         return self.result
+
+
+def _enable_caplog_logger(name: str) -> None:
+    target_logger = logging.getLogger(name)
+    target_logger.disabled = False
+    target_logger.propagate = True
 
 
 class RecordingAuditLogger:
@@ -452,6 +457,7 @@ class TestSafetyGuardedCodeExecutor:
             scanner=RaisingScanner(policy),
             audit_logger=audit_logger,
         )
+        _enable_caplog_logger("trpc_agent_sdk.tools.safety._code_executor")
         caplog.set_level(logging.WARNING, logger="trpc_agent_sdk.tools.safety._code_executor")
 
         with patch("trpc_agent_sdk.tools.safety._code_executor.set_safety_span_attributes") as mock_span:
@@ -475,6 +481,7 @@ class TestSafetyGuardedCodeExecutor:
             scanner=RaisingScanner(policy),
             audit_logger=audit_logger,
         )
+        _enable_caplog_logger("trpc_agent_sdk.tools.safety._code_executor")
         caplog.set_level(logging.WARNING, logger="trpc_agent_sdk.tools.safety._code_executor")
 
         with patch("trpc_agent_sdk.tools.safety._code_executor.set_safety_span_attributes") as mock_span:

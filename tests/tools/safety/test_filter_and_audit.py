@@ -15,6 +15,7 @@ from trpc_agent_sdk.abc import FilterResult
 from trpc_agent_sdk.context import new_agent_context
 from trpc_agent_sdk.filter import BaseFilter
 from trpc_agent_sdk.filter import get_tool_filter
+from trpc_agent_sdk.filter import register_tool_filter
 from trpc_agent_sdk.filter import run_filters
 from trpc_agent_sdk.tools._context_var import reset_tool_var
 from trpc_agent_sdk.tools._context_var import set_tool_var
@@ -40,6 +41,17 @@ class RecordingAuditLogger:
 
     def emit(self, event: SafetyAuditEvent) -> None:
         self.events.append(event)
+
+
+def _ensure_safety_filter_registered() -> None:
+    if get_tool_filter("tool_safety_guard") is None:
+        register_tool_filter("tool_safety_guard")(ToolSafetyFilter)
+
+
+def _enable_caplog_logger(name: str) -> None:
+    target_logger = logging.getLogger(name)
+    target_logger.disabled = False
+    target_logger.propagate = True
 
 
 class StaticScanner:
@@ -190,6 +202,8 @@ class TestToolSafetyFilter:
         assert audit_logger.events[0].blocked is False
 
     def test_registry_name_uses_default_policy_instance(self):
+        _ensure_safety_filter_registered()
+
         registered = get_tool_filter("tool_safety_guard")
 
         assert isinstance(registered, ToolSafetyFilter)
@@ -257,6 +271,7 @@ class TestToolSafetyFilter:
     def test_fail_closed_blocks_and_logs_without_exception_detail(self, caplog):
         policy = SafetyPolicy(fail_closed=True)
         filter_ = ToolSafetyFilter(scanner=RaisingScanner(policy), audit_logger=RecordingAuditLogger())
+        _enable_caplog_logger("trpc_agent_sdk.tools.safety._filter")
         caplog.set_level(logging.WARNING, logger="trpc_agent_sdk.tools.safety._filter")
 
         result, _, calls = _run_filter(filter_, {"command": "echo ok"})
@@ -272,6 +287,7 @@ class TestToolSafetyFilter:
         policy = SafetyPolicy(fail_closed=False)
         audit_logger = RecordingAuditLogger()
         filter_ = ToolSafetyFilter(scanner=RaisingScanner(policy), audit_logger=audit_logger)
+        _enable_caplog_logger("trpc_agent_sdk.tools.safety._filter")
         caplog.set_level(logging.WARNING, logger="trpc_agent_sdk.tools.safety._filter")
 
         with patch("trpc_agent_sdk.tools.safety._filter.set_safety_span_attributes") as mock_span:

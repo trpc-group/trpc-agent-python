@@ -56,10 +56,8 @@ class SafetyPolicy(BaseModel):
     allowed_domains: list[str] = Field(default_factory=list)
     allowed_commands: list[str] = Field(default_factory=list)
     denied_commands: list[str] = Field(default_factory=list)
-    denied_paths: list[str] = Field(
-        default_factory=lambda: list(DEFAULT_DENIED_PATHS))
-    sensitive_env_keys: list[str] = Field(
-        default_factory=lambda: list(DEFAULT_SENSITIVE_ENV_KEYS))
+    denied_paths: list[str] = Field(default_factory=lambda: list(DEFAULT_DENIED_PATHS))
+    sensitive_env_keys: list[str] = Field(default_factory=lambda: list(DEFAULT_SENSITIVE_ENV_KEYS))
     max_timeout_seconds: int = 300
     max_output_bytes: int = 1048576
     max_script_lines: int = 2000
@@ -97,16 +95,15 @@ def load_safety_policy(path: str | Path) -> SafetyPolicy:
     if loaded is None:
         return default_safety_policy()
     if not isinstance(loaded, Mapping):
-        raise ValueError(
-            "Safety policy YAML must contain a mapping at the top level.")
+        raise ValueError("Safety policy YAML must contain a mapping at the top level.")
     return _policy_from_mapping(loaded)
 
 
 def resolve_safety_policy(
-        *,
-        scanner: Any = None,
-        policy: SafetyPolicy | None = None,
-        policy_path: str | Path | None = None,
+    *,
+    scanner: Any = None,
+    policy: SafetyPolicy | None = None,
+    policy_path: str | Path | None = None,
 ) -> SafetyPolicy:
     """Resolve policy precedence shared by filter and code executor wrapper."""
 

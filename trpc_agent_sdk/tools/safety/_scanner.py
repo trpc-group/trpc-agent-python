@@ -37,62 +37,54 @@ _PYTHON_FEATURES_RE = re.compile(
     re.IGNORECASE,
 )
 _URL_RE = re.compile(r"https?://[^\s'\"<>)]*", re.IGNORECASE)
-_SENSITIVE_PATH_RE = re.compile(r"(?i)(^|[/\\\s'\":])("
-                                r"\.env(?:\.[\w.-]+)?|"
-                                r"\.ssh(?:[/\\]|$)|"
-                                r"id_rsa|id_dsa|id_ed25519|"
-                                r"\.aws[/\\]credentials|"
-                                r"credentials?(?:\.[\w.-]+)?|"
-                                r"token\.(?:json|txt|env|key|pem|yml|yaml)|"
-                                r"private[_-]?key"
-                                r")")
-_SYSTEM_PATH_RE = re.compile(
-    r"(?i)^(?:/etc|/usr|/bin|/sbin)(?:/|$)|^[a-z]:[/\\]windows(?:[/\\]|$)")
+_SENSITIVE_PATH_RE = re.compile(
+    r"(?i)(^|[/\\\s'\":])("
+    r"\.env(?:\.[\w.-]+)?|"
+    r"\.ssh(?:[/\\]|$)|"
+    r"id_rsa|id_dsa|id_ed25519|"
+    r"\.aws[/\\]credentials|"
+    r"credentials?(?:\.[\w.-]+)?|"
+    r"token\.(?:json|txt|env|key|pem|yml|yaml)|"
+    r"private[_-]?key"
+    r")"
+)
+_SYSTEM_PATH_RE = re.compile(r"(?i)^(?:/etc|/usr|/bin|/sbin)(?:/|$)|^[a-z]:[/\\]windows(?:[/\\]|$)")
 _SHELL_CHAIN_RE = re.compile(r"(\|\||&&|\||;|\$\(|`)")
 _BACKGROUND_RE = re.compile(r"(?i)(?:^|\s)nohup\s+|(?<!&)&\s*$")
 _FORK_BOMB_RE = re.compile(r":\s*\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:")
 _SHELL_SLEEP_RE = re.compile(r"(?i)(?:^|[;&|\s])sleep\s+([0-9]+(?:\.[0-9]+)?)")
 _PYTHON_SLEEP_RE = re.compile(r"\btime\.sleep\s*\(\s*([0-9]+(?:\.[0-9]+)?)")
 _PYTHON_WHILE_TRUE_RE = re.compile(r"\bwhile\s+(?:True|1)\s*:")
-_ENV_REF_RE = re.compile(
-    r"\$(?:\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)\}|(?P<bare>[A-Za-z_][A-Za-z0-9_]*))"
-)
-_NETWORK_COMMAND_RE = re.compile(
-    r"(?i)(?:^|[\s;&|])(curl|wget|nc|ncat|ssh|scp)\b")
+_ENV_REF_RE = re.compile(r"\$(?:\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)\}|(?P<bare>[A-Za-z_][A-Za-z0-9_]*))")
+_NETWORK_COMMAND_RE = re.compile(r"(?i)(?:^|[\s;&|])(curl|wget|nc|ncat|ssh|scp)\b")
 _DEPENDENCY_PATTERNS: tuple[tuple[str, str], ...] = (
-    (r"(?i)(?:^|[\s;&|])(?:python(?:3)?\s+-m\s+pip|pip(?:3)?)\s+install\b",
-     "DEP_PIP_INSTALL"),
-    (r"(?i)(?:^|[\s;&|])(?:npm\s+install|yarn\s+add|pnpm\s+add)\b",
-     "DEP_NPM_INSTALL"),
+    (r"(?i)(?:^|[\s;&|])(?:python(?:3)?\s+-m\s+pip|pip(?:3)?)\s+install\b", "DEP_PIP_INSTALL"),
+    (r"(?i)(?:^|[\s;&|])(?:npm\s+install|yarn\s+add|pnpm\s+add)\b", "DEP_NPM_INSTALL"),
     (
         r"(?i)(?:^|[\s;&|])(?:apt(?:-get)?|yum|dnf|apk|brew)\s+(?:install|add)\b",
         "DEP_SYSTEM_INSTALL",
     ),
 )
-_TIMEOUT_LIMIT_MESSAGE = "Requested execution timeout exceeds the safety policy limit."
-_OUTPUT_LIMIT_MESSAGE = "Requested output limit exceeds the safety policy limit."
-_PARSER_FALLBACK_MESSAGE = "Python AST parsing failed and fallback scanning was used."
-_PATH_WRITE_METHODS = (".write_text", ".write_bytes")
-_SECRET_SINK_SUFFIXES = (".write", ".write_text", ".post", ".put", ".get")
 
 
 class _FindingCollector:
     """Small helper that applies policy, redaction, and duplicate suppression."""
+
     def __init__(self, policy: SafetyPolicy):
         self.policy = policy
         self.findings: list[ScanFinding] = []
         self._seen: set[tuple[str, str, int | None]] = set()
 
     def add(
-            self,
-            rule_id: str,
-            evidence: object,
-            *,
-            line: int | None = None,
-            column: int | None = None,
-            message: str | None = None,
-            recommendation: str | None = None,
-            metadata: dict[str, object] | None = None,
+        self,
+        rule_id: str,
+        evidence: object,
+        *,
+        line: int | None = None,
+        column: int | None = None,
+        message: str | None = None,
+        recommendation: str | None = None,
+        metadata: dict[str, object] | None = None,
     ) -> None:
         if not is_rule_enabled(rule_id, self.policy):
             return
@@ -116,6 +108,7 @@ class _FindingCollector:
 
 class SafetyScanner:
     """Scan tool scripts and commands before execution."""
+
     def __init__(self, policy: SafetyPolicy | None = None):
         self.policy = policy or default_safety_policy()
 
@@ -147,8 +140,7 @@ class SafetyScanner:
             language=language,
             policy_name=self.policy.name,
             parser_error=parser_error,
-            metadata={"target_tool": target.tool_name}
-            if target.tool_name else {},
+            metadata={"target_tool": target.tool_name} if target.tool_name else {},
         )
 
     def _infer_language(self, target: ScanTarget) -> ScriptLanguage:
@@ -173,13 +165,9 @@ class SafetyScanner:
         ]
         return "\n".join(part for part in parts if part)
 
-    def _scan_target_limits(self, target: ScanTarget,
-                            collector: _FindingCollector) -> None:
-        script_text = "\n".join(part for part in (target.content,
-                                                  target.command, target.stdin)
-                                if part)
-        if script_text and len(
-                script_text.splitlines()) > self.policy.max_script_lines:
+    def _scan_target_limits(self, target: ScanTarget, collector: _FindingCollector) -> None:
+        script_text = "\n".join(part for part in (target.content, target.command, target.stdin) if part)
+        if script_text and len(script_text.splitlines()) > self.policy.max_script_lines:
             collector.add(
                 "RES_LARGE_WRITE",
                 f"script has {len(script_text.splitlines())} lines",
@@ -189,17 +177,16 @@ class SafetyScanner:
             collector.add(
                 "RES_LONG_SLEEP",
                 f"timeout_seconds={target.timeout_seconds}",
-                message=_TIMEOUT_LIMIT_MESSAGE,
+                message="Requested execution timeout exceeds the safety policy limit.",
             )
         if target.output_limit_bytes is not None and target.output_limit_bytes > self.policy.max_output_bytes:
             collector.add(
                 "RES_LARGE_WRITE",
                 f"output_limit_bytes={target.output_limit_bytes}",
-                message=_OUTPUT_LIMIT_MESSAGE,
+                message="Requested output limit exceeds the safety policy limit.",
             )
 
-    def _scan_python(self, target: ScanTarget,
-                     collector: _FindingCollector) -> str | None:
+    def _scan_python(self, target: ScanTarget, collector: _FindingCollector) -> str | None:
         source = target.content or target.stdin or target.command
         parser_error: str | None = None
 
@@ -209,75 +196,59 @@ class SafetyScanner:
             parser_error = f"SyntaxError: {ex.msg}"
             collector.add(
                 "PARSER_FALLBACK_USED",
-                ex.text or source[:self.policy.max_evidence_chars],
+                ex.text or source[: self.policy.max_evidence_chars],
                 line=ex.lineno,
-                message=_PARSER_FALLBACK_MESSAGE,
+                message="Python AST parsing failed and fallback scanning was used.",
             )
             self._scan_regex_fallback(self._normalized_text(target), collector)
             return parser_error
 
         self._scan_python_tree(tree, source or "", collector)
-        extra_text = "\n".join(part
-                               for part in (target.command,
-                                            " ".join(target.args), target.cwd)
-                               if part)
+        extra_text = "\n".join(part for part in (target.command, " ".join(target.args), target.cwd) if part)
         if extra_text:
             self._scan_regex_fallback(extra_text, collector)
         self._scan_env_usage(target, self._normalized_text(target), collector)
         return parser_error
 
-    def _scan_python_tree(self, tree: ast.AST, source: str,
-                          collector: _FindingCollector) -> None:
+    def _scan_python_tree(self, tree: ast.AST, source: str, collector: _FindingCollector) -> None:
         path_home_seen = False
         sensitive_path_literals: list[tuple[str, int | None]] = []
 
         for node in ast.walk(tree):
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 if self._is_sensitive_path(node.value):
-                    sensitive_path_literals.append(
-                        (node.value, getattr(node, "lineno", None)))
+                    sensitive_path_literals.append((node.value, getattr(node, "lineno", None)))
                 if contains_secret(node.value):
-                    collector.add("LEAK_SECRET_LITERAL",
-                                  node.value,
-                                  line=getattr(node, "lineno", None))
+                    collector.add("LEAK_SECRET_LITERAL", node.value, line=getattr(node, "lineno", None))
 
-            if isinstance(node, ast.While) and self._is_python_infinite_loop(
-                    node.test):
-                collector.add("RES_INFINITE_LOOP",
-                              _source_segment(source, node),
-                              line=node.lineno)
+            if isinstance(node, ast.While) and self._is_python_infinite_loop(node.test):
+                collector.add("RES_INFINITE_LOOP", _source_segment(source, node), line=node.lineno)
 
             if isinstance(node, ast.Call):
                 call_name = _full_name(node.func)
                 evidence = _source_segment(source, node)
-                if call_name == "Path.home" or call_name.endswith(
-                        ".Path.home"):
+                if call_name == "Path.home" or call_name.endswith(".Path.home"):
                     path_home_seen = True
                 self._scan_python_call(node, call_name, evidence, collector)
 
         if path_home_seen:
             for literal, line in sensitive_path_literals:
-                collector.add("FILE_SENSITIVE_READ",
-                              f"Path.home() with {literal}",
-                              line=line)
+                collector.add("FILE_SENSITIVE_READ", f"Path.home() with {literal}", line=line)
 
     def _scan_python_call(
-            self,
-            node: ast.Call,
-            call_name: str,
-            evidence: str,
-            collector: _FindingCollector,
+        self,
+        node: ast.Call,
+        call_name: str,
+        evidence: str,
+        collector: _FindingCollector,
     ) -> None:
         if call_name == "open":
             self._scan_python_open_call(node, evidence, collector)
 
-        if call_name.endswith((".read_text", ".read_bytes", ".write_text",
-                               ".write_bytes", ".open")):
+        if call_name.endswith((".read_text", ".read_bytes", ".write_text", ".write_bytes", ".open")):
             self._scan_python_path_method(node, call_name, evidence, collector)
 
-        if call_name in {
-                "os.system", "commands.getoutput", "commands.getstatusoutput"
-        }:
+        if call_name in {"os.system", "commands.getoutput", "commands.getstatusoutput"}:
             collector.add("PROC_OS_SYSTEM", evidence, line=node.lineno)
             self._scan_shell_literals_from_call(node, collector)
 
@@ -289,17 +260,13 @@ class SafetyScanner:
                 message="Subprocess execution was detected.",
             )
             if _call_has_keyword_bool(node, "shell", True):
-                collector.add("PROC_SUBPROCESS_SHELL",
-                              evidence,
-                              line=node.lineno)
+                collector.add("PROC_SUBPROCESS_SHELL", evidence, line=node.lineno)
             self._scan_shell_literals_from_call(node, collector)
 
         if _is_network_call(call_name):
-            self._scan_python_network_call(node, call_name, evidence,
-                                           collector)
+            self._scan_python_network_call(node, call_name, evidence, collector)
 
-        if call_name.endswith(".connect") or call_name.endswith(
-                ".create_connection"):
+        if call_name.endswith(".connect") or call_name.endswith(".create_connection"):
             self._scan_socket_call(node, evidence, collector)
 
         if call_name == "time.sleep" or call_name.endswith(".time.sleep"):
@@ -307,35 +274,30 @@ class SafetyScanner:
             if seconds is None or seconds > self.policy.max_sleep_seconds:
                 collector.add("RES_LONG_SLEEP", evidence, line=node.lineno)
 
-        if self._call_is_secret_sink(
-                call_name) and _call_contains_secret_literal(node):
+        if self._call_is_secret_sink(call_name) and _call_contains_secret_literal(node):
             collector.add("LEAK_SECRET_LITERAL", evidence, line=node.lineno)
 
         if self._call_references_sensitive_env(node):
             collector.add("LEAK_ENV_SECRET", evidence, line=node.lineno)
 
-    def _scan_python_open_call(self, node: ast.Call, evidence: str,
-                               collector: _FindingCollector) -> None:
+    def _scan_python_open_call(self, node: ast.Call, evidence: str, collector: _FindingCollector) -> None:
         path = _first_string_argument(node)
-        mode = _string_argument_at(node, 1) or _keyword_string(node,
-                                                               "mode") or "r"
+        mode = _string_argument_at(node, 1) or _keyword_string(node, "mode") or "r"
         if path is None:
             return
         if self._is_sensitive_path(path):
             collector.add("FILE_SENSITIVE_READ", evidence, line=node.lineno)
         if is_path_denied(path, self.policy):
-            collector.add("FILE_FORBIDDEN_PATH_ACCESS",
-                          evidence,
-                          line=node.lineno)
+            collector.add("FILE_FORBIDDEN_PATH_ACCESS", evidence, line=node.lineno)
         if _is_write_mode(mode) and self._is_system_path(path):
             collector.add("FILE_SYSTEM_OVERWRITE", evidence, line=node.lineno)
 
     def _scan_python_path_method(
-            self,
-            node: ast.Call,
-            call_name: str,
-            evidence: str,
-            collector: _FindingCollector,
+        self,
+        node: ast.Call,
+        call_name: str,
+        evidence: str,
+        collector: _FindingCollector,
     ) -> None:
         path = _path_from_receiver(getattr(node.func, "value", None))
         if path is None and self._is_sensitive_path(evidence):
@@ -346,69 +308,51 @@ class SafetyScanner:
         if self._is_sensitive_path(path):
             collector.add("FILE_SENSITIVE_READ", evidence, line=node.lineno)
         if is_path_denied(path, self.policy):
-            collector.add("FILE_FORBIDDEN_PATH_ACCESS",
-                          evidence,
-                          line=node.lineno)
-        is_system_path = self._is_system_path(path)
-        if call_name.endswith(_PATH_WRITE_METHODS) and is_system_path:
+            collector.add("FILE_FORBIDDEN_PATH_ACCESS", evidence, line=node.lineno)
+        if call_name.endswith((".write_text", ".write_bytes")) and self._is_system_path(path):
             collector.add("FILE_SYSTEM_OVERWRITE", evidence, line=node.lineno)
 
     def _scan_python_network_call(
-            self,
-            node: ast.Call,
-            call_name: str,
-            evidence: str,
-            collector: _FindingCollector,
+        self,
+        node: ast.Call,
+        call_name: str,
+        evidence: str,
+        collector: _FindingCollector,
     ) -> None:
         url = _first_string_argument(node)
         if url is None:
-            collector.add("NET_DYNAMIC_EGRESS_REVIEW",
-                          evidence,
-                          line=node.lineno)
+            collector.add("NET_DYNAMIC_EGRESS_REVIEW", evidence, line=node.lineno)
             return
         self._scan_url(url, evidence, collector, line=node.lineno)
 
-    def _scan_socket_call(self, node: ast.Call, evidence: str,
-                          collector: _FindingCollector) -> None:
+    def _scan_socket_call(self, node: ast.Call, evidence: str, collector: _FindingCollector) -> None:
         host = _socket_host_argument(node)
         if host is None:
-            collector.add("NET_DYNAMIC_EGRESS_REVIEW",
-                          evidence,
-                          line=node.lineno)
+            collector.add("NET_DYNAMIC_EGRESS_REVIEW", evidence, line=node.lineno)
             return
         if not is_domain_allowed(host, self.policy.allowed_domains):
-            collector.add("NET_NON_WHITELIST_EGRESS",
-                          evidence,
-                          line=node.lineno,
-                          metadata={"host": host})
+            collector.add("NET_NON_WHITELIST_EGRESS", evidence, line=node.lineno, metadata={"host": host})
 
-    def _scan_shell_literals_from_call(self, node: ast.Call,
-                                       collector: _FindingCollector) -> None:
+    def _scan_shell_literals_from_call(self, node: ast.Call, collector: _FindingCollector) -> None:
         for literal in _string_arguments(node):
             self._scan_shell_text(literal, collector)
 
-    def _scan_shell_target(self, target: ScanTarget,
-                           collector: _FindingCollector) -> None:
-        text = "\n".join(part for part in (target.content, target.command,
-                                           " ".join(target.args), target.stdin)
-                         if part)
+    def _scan_shell_target(self, target: ScanTarget, collector: _FindingCollector) -> None:
+        text = "\n".join(part for part in (target.content, target.command, " ".join(target.args), target.stdin) if part)
         self._scan_shell_text(text, collector)
         self._scan_env_usage(target, text, collector)
 
-    def _scan_shell_text(self, text: str,
-                         collector: _FindingCollector) -> None:
+    def _scan_shell_text(self, text: str, collector: _FindingCollector) -> None:
         if not text:
             return
 
-        for line_number, line in enumerate(text.splitlines() or [text],
-                                           start=1):
+        for line_number, line in enumerate(text.splitlines() or [text], start=1):
             stripped = line.strip()
             if not stripped or stripped.startswith("#"):
                 continue
             self._scan_shell_line(stripped, line_number, collector)
 
-    def _scan_shell_line(self, line: str, line_number: int,
-                         collector: _FindingCollector) -> None:
+    def _scan_shell_line(self, line: str, line_number: int, collector: _FindingCollector) -> None:
         if _SHELL_CHAIN_RE.search(line):
             collector.add("PROC_SHELL_PIPE_OR_CHAIN", line, line=line_number)
         if _BACKGROUND_RE.search(line):
@@ -428,13 +372,10 @@ class SafetyScanner:
                 message="Command is not allowlisted by the safety policy.",
             )
 
-        if re.search(r"(?i)(?:^|[\s;&|])(?:sudo|su|chown)\b|\bchmod\s+777\b",
-                     line):
+        if re.search(r"(?i)(?:^|[\s;&|])(?:sudo|su|chown)\b|\bchmod\s+777\b", line):
             collector.add("PROC_PRIVILEGE_ESCALATION", line, line=line_number)
 
-        if re.search(
-                r"(?i)(?:^|[\s;&|])rm\s+(?:-[^\s]*r[^\s]*f|-[^\s]*f[^\s]*r)\b",
-                line):
+        if re.search(r"(?i)(?:^|[\s;&|])rm\s+(?:-[^\s]*r[^\s]*f|-[^\s]*f[^\s]*r)\b", line):
             collector.add("FILE_RECURSIVE_DELETE", line, line=line_number)
         if re.search(r"(?i)(?:^|[\s;&|])(?:rmdir\s+/s|del\s+/f)\b", line):
             collector.add("FILE_RECURSIVE_DELETE", line, line=line_number)
@@ -445,67 +386,46 @@ class SafetyScanner:
         self._scan_shell_resource_patterns(line, line_number, collector)
         self._scan_shell_secret_leaks(line, line_number, collector)
 
-    def _scan_shell_paths(self, line: str, line_number: int,
-                          collector: _FindingCollector) -> None:
+    def _scan_shell_paths(self, line: str, line_number: int, collector: _FindingCollector) -> None:
         if self._is_sensitive_path(line):
             collector.add("FILE_SENSITIVE_READ", line, line=line_number)
 
         for token in _shell_tokens(line):
             clean_token = token.strip("\"'=:,")
             if is_path_denied(clean_token, self.policy):
-                collector.add("FILE_FORBIDDEN_PATH_ACCESS",
-                              token,
-                              line=line_number)
-            if self._is_system_path(clean_token) and re.search(
-                    r"(?i)(>|>>|\b(?:tee|cp|mv|install)\b)", line):
+                collector.add("FILE_FORBIDDEN_PATH_ACCESS", token, line=line_number)
+            if self._is_system_path(clean_token) and re.search(r"(?i)(>|>>|\b(?:tee|cp|mv|install)\b)", line):
                 collector.add("FILE_SYSTEM_OVERWRITE", line, line=line_number)
 
-        if re.search(
-                r"(?i)(>|>>)\s*(?:/etc|/usr|/bin|/sbin|[a-z]:[/\\]windows)\b",
-                line):
+        if re.search(r"(?i)(>|>>)\s*(?:/etc|/usr|/bin|/sbin|[a-z]:[/\\]windows)\b", line):
             collector.add("FILE_SYSTEM_OVERWRITE", line, line=line_number)
 
-    def _scan_shell_network(self, line: str, line_number: int,
-                            collector: _FindingCollector) -> None:
+    def _scan_shell_network(self, line: str, line_number: int, collector: _FindingCollector) -> None:
         has_network_command = bool(_NETWORK_COMMAND_RE.search(line))
         urls = list(_URL_RE.findall(line))
         for url in urls:
             self._scan_url(url, line, collector, line=line_number)
 
-        if has_network_command and (not urls
-                                    or _has_dynamic_shell_expansion(line)):
-            if not urls or any(
-                    _has_dynamic_shell_expansion(url) for url in urls):
-                collector.add("NET_DYNAMIC_EGRESS_REVIEW",
-                              line,
-                              line=line_number)
+        if has_network_command and (not urls or _has_dynamic_shell_expansion(line)):
+            if not urls or any(_has_dynamic_shell_expansion(url) for url in urls):
+                collector.add("NET_DYNAMIC_EGRESS_REVIEW", line, line=line_number)
 
-        if re.search(
-                r"(?i)(?:^|[\s;&|])(?:nc|ncat|ssh|scp)\s+[A-Za-z0-9.-]+\b",
-                line):
+        if re.search(r"(?i)(?:^|[\s;&|])(?:nc|ncat|ssh|scp)\s+[A-Za-z0-9.-]+\b", line):
             host = _host_after_command(line)
-            if host and not is_domain_allowed(host,
-                                              self.policy.allowed_domains):
-                collector.add("NET_NON_WHITELIST_EGRESS",
-                              line,
-                              line=line_number,
-                              metadata={"host": host})
+            if host and not is_domain_allowed(host, self.policy.allowed_domains):
+                collector.add("NET_NON_WHITELIST_EGRESS", line, line=line_number, metadata={"host": host})
 
-    def _scan_shell_dependency_installs(self, line: str, line_number: int,
-                                        collector: _FindingCollector) -> None:
+    def _scan_shell_dependency_installs(self, line: str, line_number: int, collector: _FindingCollector) -> None:
         for pattern, rule_id in _DEPENDENCY_PATTERNS:
             if re.search(pattern, line):
                 collector.add(rule_id, line, line=line_number)
 
-    def _scan_shell_resource_patterns(self, line: str, line_number: int,
-                                      collector: _FindingCollector) -> None:
+    def _scan_shell_resource_patterns(self, line: str, line_number: int, collector: _FindingCollector) -> None:
         if _FORK_BOMB_RE.search(line):
             collector.add("RES_FORK_BOMB", line, line=line_number)
-        if re.search(r"(?i)\bwhile\s+true\b|\bfor\s*\(\(\s*;\s*;\s*\)\)",
-                     line):
+        if re.search(r"(?i)\bwhile\s+true\b|\bfor\s*\(\(\s*;\s*;\s*\)\)", line):
             collector.add("RES_INFINITE_LOOP", line, line=line_number)
-        if re.search(r"(?i)(?:^|[\s;&|])yes\s*>", line) or re.search(
-                r"(?i)\bdd\s+if=/dev/zero\b", line):
+        if re.search(r"(?i)(?:^|[\s;&|])yes\s*>", line) or re.search(r"(?i)\bdd\s+if=/dev/zero\b", line):
             collector.add("RES_LARGE_WRITE", line, line=line_number)
 
         for match in _SHELL_SLEEP_RE.finditer(line):
@@ -513,13 +433,10 @@ class SafetyScanner:
             if seconds is None or seconds > self.policy.max_sleep_seconds:
                 collector.add("RES_LONG_SLEEP", line, line=line_number)
 
-    def _scan_shell_secret_leaks(self, line: str, line_number: int,
-                                 collector: _FindingCollector) -> None:
+    def _scan_shell_secret_leaks(self, line: str, line_number: int, collector: _FindingCollector) -> None:
         env_keys = _env_refs(line)
         if any(is_env_key_sensitive(key, self.policy) for key in env_keys):
-            if re.search(
-                    r"(?i)\b(echo|printf|printenv|env|curl|wget|tee)\b|>|>>",
-                    line):
+            if re.search(r"(?i)\b(echo|printf|printenv|env|curl|wget|tee)\b|>|>>", line):
                 collector.add("LEAK_ENV_SECRET", line, line=line_number)
 
         if re.search(r"(?i)\benv\b.*\|.*\b(curl|wget|nc|ncat)\b", line):
@@ -528,8 +445,7 @@ class SafetyScanner:
         if contains_secret(line):
             collector.add("LEAK_SECRET_LITERAL", line, line=line_number)
 
-    def _scan_regex_fallback(self, text: str,
-                             collector: _FindingCollector) -> None:
+    def _scan_regex_fallback(self, text: str, collector: _FindingCollector) -> None:
         if not text:
             return
         self._scan_shell_text(text, collector)
@@ -540,31 +456,23 @@ class SafetyScanner:
             if seconds is None or seconds > self.policy.max_sleep_seconds:
                 collector.add("RES_LONG_SLEEP", match.group(0))
 
-    def _scan_env_usage(self, target: ScanTarget, text: str,
-                        collector: _FindingCollector) -> None:
+    def _scan_env_usage(self, target: ScanTarget, text: str, collector: _FindingCollector) -> None:
         if not target.env:
             return
-        sensitive_keys = {
-            key
-            for key in target.env if is_env_key_sensitive(key, self.policy)
-        }
+        sensitive_keys = {key for key in target.env if is_env_key_sensitive(key, self.policy)}
         if not sensitive_keys:
             return
-        leak_context = re.search(
-            r"(?i)\b(env|printenv|echo|printf|curl|wget|tee)\b|>|>>", text
-            or "")
+        leak_context = re.search(r"(?i)\b(env|printenv|echo|printf|curl|wget|tee)\b|>|>>", text or "")
         if leak_context and any(key in text for key in sensitive_keys):
-            collector.add(
-                "LEAK_ENV_SECRET",
-                "sensitive env key used in output or network context")
+            collector.add("LEAK_ENV_SECRET", "sensitive env key used in output or network context")
 
     def _scan_url(
-            self,
-            url: str,
-            evidence: str,
-            collector: _FindingCollector,
-            *,
-            line: int | None = None,
+        self,
+        url: str,
+        evidence: str,
+        collector: _FindingCollector,
+        *,
+        line: int | None = None,
     ) -> None:
         if _has_dynamic_shell_expansion(url):
             collector.add("NET_DYNAMIC_EGRESS_REVIEW", evidence, line=line)
@@ -576,10 +484,7 @@ class SafetyScanner:
             collector.add("NET_DYNAMIC_EGRESS_REVIEW", evidence, line=line)
             return
         if not is_domain_allowed(hostname, self.policy.allowed_domains):
-            collector.add("NET_NON_WHITELIST_EGRESS",
-                          evidence,
-                          line=line,
-                          metadata={"host": hostname})
+            collector.add("NET_NON_WHITELIST_EGRESS", evidence, line=line, metadata={"host": hostname})
 
     def _is_sensitive_path(self, value: str) -> bool:
         return bool(_SENSITIVE_PATH_RE.search(value))
@@ -588,23 +493,19 @@ class SafetyScanner:
         return bool(_SYSTEM_PATH_RE.search(value.strip("\"'")))
 
     def _call_is_secret_sink(self, call_name: str) -> bool:
-        if call_name == "print":
-            return True
-        if call_name.endswith(_SECRET_SINK_SUFFIXES):
-            return True
-        if call_name in {"os.system"}:
-            return True
-        return _is_subprocess_call(call_name)
+        return (
+            call_name == "print"
+            or call_name.endswith((".write", ".write_text", ".post", ".put", ".get"))
+            or call_name in {"os.system"}
+            or _is_subprocess_call(call_name)
+        )
 
     def _call_references_sensitive_env(self, node: ast.Call) -> bool:
         for child in ast.walk(node):
-            if isinstance(child, ast.Constant) and isinstance(
-                    child.value, str):
+            if isinstance(child, ast.Constant) and isinstance(child.value, str):
                 if is_env_key_sensitive(child.value, self.policy):
                     return True
-            if isinstance(child, ast.Attribute) and child.attr in {
-                    "environ", "getenv"
-            }:
+            if isinstance(child, ast.Attribute) and child.attr in {"environ", "getenv"}:
                 return True
         return False
 
@@ -638,8 +539,7 @@ def _literal_string(node: ast.AST | None) -> str | None:
     if isinstance(node, ast.JoinedStr):
         parts: list[str] = []
         for value in node.values:
-            if not isinstance(value, ast.Constant) or not isinstance(
-                    value.value, str):
+            if not isinstance(value, ast.Constant) or not isinstance(value.value, str):
                 return None
             parts.append(value.value)
         return "".join(parts)
@@ -670,14 +570,11 @@ def _string_arguments(node: ast.Call) -> tuple[str, ...]:
         if literal is not None:
             values.append(literal)
         elif isinstance(arg, (ast.List, ast.Tuple)):
-            values.extend(value for value in (_literal_string(item)
-                                              for item in arg.elts)
-                          if value is not None)
+            values.extend(value for value in (_literal_string(item) for item in arg.elts) if value is not None)
     return tuple(values)
 
 
-def _call_has_keyword_bool(node: ast.Call, keyword_name: str,
-                           expected: bool) -> bool:
+def _call_has_keyword_bool(node: ast.Call, keyword_name: str, expected: bool) -> bool:
     for keyword in node.keywords:
         if keyword.arg != keyword_name:
             continue
@@ -695,8 +592,7 @@ def _first_numeric_argument(node: ast.Call) -> float | None:
 def _numeric_literal(node: ast.AST) -> float | None:
     if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
         return float(node.value)
-    if isinstance(node, ast.UnaryOp) and isinstance(node.op,
-                                                    (ast.UAdd, ast.USub)):
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
         value = _numeric_literal(node.operand)
         if value is None:
             return None
@@ -717,10 +613,7 @@ def _path_from_receiver(node: ast.AST | None) -> str | None:
     if isinstance(node, ast.Call) and _full_name(node.func).endswith("Path"):
         return _first_string_argument(node)
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
-        parts = [
-            part for part in (_path_from_receiver(node.left),
-                              _path_from_receiver(node.right)) if part
-        ]
+        parts = [part for part in (_path_from_receiver(node.left), _path_from_receiver(node.right)) if part]
         return "/".join(parts) if parts else None
     return None
 
@@ -737,22 +630,21 @@ def _is_subprocess_call(call_name: str) -> bool:
 
 def _is_network_call(call_name: str) -> bool:
     if call_name in {
-            "requests.get",
-            "requests.post",
-            "requests.put",
-            "requests.patch",
-            "requests.delete",
-            "requests.request",
-            "httpx.get",
-            "httpx.post",
-            "httpx.put",
-            "httpx.patch",
-            "httpx.delete",
-            "urllib.request.urlopen",
+        "requests.get",
+        "requests.post",
+        "requests.put",
+        "requests.patch",
+        "requests.delete",
+        "requests.request",
+        "httpx.get",
+        "httpx.post",
+        "httpx.put",
+        "httpx.patch",
+        "httpx.delete",
+        "urllib.request.urlopen",
     }:
         return True
-    return call_name.endswith((".get", ".post", ".put", ".patch",
-                               ".delete")) and "ClientSession" in call_name
+    return call_name.endswith((".get", ".post", ".put", ".patch", ".delete")) and "ClientSession" in call_name
 
 
 def _socket_host_argument(node: ast.Call) -> str | None:
@@ -766,8 +658,8 @@ def _socket_host_argument(node: ast.Call) -> str | None:
 
 def _call_contains_secret_literal(node: ast.Call) -> bool:
     return any(
-        isinstance(child, ast.Constant) and isinstance(child.value, str)
-        and contains_secret(child.value) for child in ast.walk(node))
+        isinstance(child, ast.Constant) and isinstance(child.value, str) and contains_secret(child.value)
+        for child in ast.walk(node))
 
 
 def _shell_tokens(line: str) -> tuple[str, ...]:

@@ -16,15 +16,14 @@ REDACTION_MARKER = "[REDACTED]"
 TRUNCATION_SUFFIX = "...[truncated]"
 
 _SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(
-        r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"
-    ),
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"),
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
     re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
     re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{8,}"),
     re.compile(
         r"(?i)\b(api[_-]?key|access[_-]?token|auth[_-]?token|token|secret|password)\b"
-        r"\s*[:=]\s*['\"]?[^'\"\s,;]+"),
+        r"\s*[:=]\s*['\"]?[^'\"\s,;]+"
+    ),
 )
 
 
@@ -39,9 +38,7 @@ def _redact_assignment(match: re.Match[str]) -> str:
     lower = match.group(0).lower()
     if lower.startswith("bearer"):
         return f"Bearer {REDACTION_MARKER}"
-    key_match = re.match(
-        r"(?i)\b(api[_-]?key|access[_-]?token|auth[_-]?token|token|secret|password)\b",
-        match.group(0))
+    key_match = re.match(r"(?i)\b(api[_-]?key|access[_-]?token|auth[_-]?token|token|secret|password)\b", match.group(0))
     if key_match:
         return f"{key_match.group(1)}={REDACTION_MARKER}"
     return REDACTION_MARKER
@@ -57,8 +54,7 @@ def _truncate(text: str, max_chars: int) -> str:
     return f"{text[:max_chars - len(TRUNCATION_SUFFIX)]}{TRUNCATION_SUFFIX}"
 
 
-def redact_text(value: Any, *,
-                max_chars: int = DEFAULT_MAX_EVIDENCE_CHARS) -> str:
+def redact_text(value: Any, *, max_chars: int = DEFAULT_MAX_EVIDENCE_CHARS) -> str:
     """Redact secret-like content and truncate the result."""
 
     text = str(value or "")
@@ -67,8 +63,7 @@ def redact_text(value: Any, *,
     return _truncate(text, max_chars)
 
 
-def redact_evidence(value: Any, *,
-                    max_chars: int = DEFAULT_MAX_EVIDENCE_CHARS) -> str:
+def redact_evidence(value: Any, *, max_chars: int = DEFAULT_MAX_EVIDENCE_CHARS) -> str:
     """Redact a report evidence snippet."""
 
     return redact_text(value, max_chars=max_chars)

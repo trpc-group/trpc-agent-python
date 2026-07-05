@@ -10,24 +10,18 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-try:
-    from trpc_agent_sdk.tools.safety._cli_helpers import FIXTURE_GENERATED_AT
-    from trpc_agent_sdk.tools.safety._cli_helpers import format_mismatches
-    from trpc_agent_sdk.tools.safety._cli_helpers import load_policy
-    from trpc_agent_sdk.tools.safety._cli_helpers import load_samples
-    from trpc_agent_sdk.tools.safety._cli_helpers import scan_samples
-    from trpc_agent_sdk.tools.safety._cli_helpers import write_audit_log
-    from trpc_agent_sdk.tools.safety._cli_helpers import write_json_report
-except ModuleNotFoundError:  # pragma: no cover - exercised by direct script execution in fresh checkouts.
-    repo_root = Path(__file__).resolve().parents[2]
-    sys.path.insert(0, str(repo_root))
-    from trpc_agent_sdk.tools.safety._cli_helpers import FIXTURE_GENERATED_AT
-    from trpc_agent_sdk.tools.safety._cli_helpers import format_mismatches
-    from trpc_agent_sdk.tools.safety._cli_helpers import load_policy
-    from trpc_agent_sdk.tools.safety._cli_helpers import load_samples
-    from trpc_agent_sdk.tools.safety._cli_helpers import scan_samples
-    from trpc_agent_sdk.tools.safety._cli_helpers import write_audit_log
-    from trpc_agent_sdk.tools.safety._cli_helpers import write_json_report
+REPO_ROOT = Path(__file__).resolve().parents[2]
+repo_root = str(REPO_ROOT)
+sys.path[:] = [path for path in sys.path if path != repo_root]
+sys.path.insert(0, repo_root)
+
+from trpc_agent_sdk.tools.safety._cli_helpers import FIXTURE_GENERATED_AT
+from trpc_agent_sdk.tools.safety._cli_helpers import format_mismatches
+from trpc_agent_sdk.tools.safety._cli_helpers import load_policy
+from trpc_agent_sdk.tools.safety._cli_helpers import load_samples
+from trpc_agent_sdk.tools.safety._cli_helpers import scan_samples
+from trpc_agent_sdk.tools.safety._cli_helpers import write_audit_log
+from trpc_agent_sdk.tools.safety._cli_helpers import write_json_report
 
 EXAMPLE_DIR = Path(__file__).resolve().parent
 POLICY_PATH = EXAMPLE_DIR / "tool_safety_policy.yaml"
