@@ -77,7 +77,11 @@ a rendered report — criterion 5 is binary-checked, so redaction is centralized
 
 ## Status
 
-Implemented: deterministic pipeline, DB persistence, 8 fixtures, scored self-test, CLI, and the
-fake-model agent loop (`run_agent.py` drives the review through `LlmAgent` + a `FunctionTool` with no
-API key). Baseline secret redaction is in place. Planned follow-up slices: in-sandbox execution
-(Container/Cube), the tool-level Filter gate, redaction hardening to ≥95%, and OpenTelemetry metrics.
+Implemented: deterministic pipeline, DB persistence (incl. sandbox-run rows), 8 fixtures, scored
+self-test, CLI, the fake-model agent loop (`run_agent.py`), and **sandbox execution**
+(`--runtime local` runs the scanners in a subprocess sandbox with timeout + output cap and records
+each run; `--runtime container` runs them in a Docker workspace — see `skills/code-review/Dockerfile`
+— and is skipped in tests when Docker is absent). Baseline secret redaction is in place.
+
+Planned follow-up slices: the tool-level Filter gate (criterion 7), redaction hardening to ≥95%
+(criterion 5), and OpenTelemetry metrics wiring (criterion 9).

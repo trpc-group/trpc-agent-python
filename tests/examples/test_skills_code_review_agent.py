@@ -138,3 +138,33 @@ async def test_agent_path_calls_tool_and_summarizes() -> None:
     assert "Review complete" in final_text
     for secret in _SECRETS:
         assert secret not in final_text
+
+
+def test_local_sandbox_records_run_and_finds_issues() -> None:
+    result = run_review(diff_text=(_FIXTURES / "0001_insecure.diff").read_text(), runtime="local")
+    assert result.report.findings_summary["total"] >= 3
+    assert len(result.report.sandbox_summary) == 1
+    run = result.report.sandbox_summary[0]
+    assert run.script == "run_checks.py"
+    assert run.exit_code in (0, 1)  # 1 = scanners found issues
+    assert not run.timed_out
+    assert result.monitoring["sandbox_sec"] > 0
+
+
+def test_sandbox_timeout_does_not_crash_the_task() -> None:
+    # An impossibly small timeout must mark the run timed-out but still complete the review.
+    result = run_review(diff_text=(_FIXTURES / "0001_insecure.diff").read_text(),
+                        runtime="local",
+                        sandbox_timeout=0.001)
+    assert result.task_id is not None
+    run = result.report.sandbox_summary[0]
+    assert run.timed_out is True
+    assert result.monitoring["exception_dist"].get("sandbox_failure") == 1
+
+
+def test_sandbox_output_byte_accounting() -> None:
+    from pipeline.sandbox import _truncate
+
+    text, n = _truncate("x" * 5000, 10)
+    assert n == 5000  # records the true size
+    assert len(text.encode()) <= 10 + len("\n...[truncated]")

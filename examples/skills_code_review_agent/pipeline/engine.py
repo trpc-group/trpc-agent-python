@@ -3,7 +3,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """End-to-end deterministic review pipeline (issue #92 backbone).
 
 parse -> materialize changed files -> run scanners -> dedup/denoise -> build+redact report ->
@@ -58,10 +57,17 @@ def run_review(
     task_id: Optional[str] = None,
     diff_text: Optional[str] = None,
     repo_path: Optional[str] = None,
+    runtime: str = "inprocess",
+    sandbox_timeout: float | None = None,
+    max_output_bytes: int | None = None,
     warn_threshold: float | None = None,
     review_threshold: float | None = None,
 ) -> ReviewResult:
     """Run one review (deterministic, no LLM). Provide either ``diff_text`` or ``repo_path``.
+
+    ``runtime``: ``inprocess`` (default, fast) runs scanners in-process; ``local`` runs them in a
+    subprocess sandbox with timeout + output cap (dev fallback) and records a sandbox run. The
+    ``container`` runtime (production isolation) is async — see ``run_review_container``.
 
     Returns a ``ReviewResult``; persistence is done separately by the async ``storage.dao.ReviewStore``
     so this core stays synchronous and dependency-light.
@@ -80,12 +86,30 @@ def run_review(
     else:
         raise ValueError("run_review requires diff_text or repo_path")
 
-    try:
-        raw = scanners.scan(scan_dir, summary)
-    except Exception as exc:  # noqa: BLE001 - boundary; never crash the task
-        exception_dist[type(exc).__name__] = exception_dist.get(type(exc).__name__, 0) + 1
-        raw = []
+    sandbox_runs: list = []
+    if runtime == "local":
+        from . import sandbox as sandbox_mod
+        raw, run = sandbox_mod.run_local(
+            scan_dir,
+            timeout=sandbox_timeout if sandbox_timeout is not None else sandbox_mod.DEFAULT_TIMEOUT_SEC,
+            max_bytes=max_output_bytes if max_output_bytes is not None else sandbox_mod.MAX_OUTPUT_BYTES)
+        sandbox_runs = [run]
+        if run.timed_out or run.exit_code not in (0, 1):  # 1 = scanners found issues (normal)
+            exception_dist["sandbox_failure"] = exception_dist.get("sandbox_failure", 0) + 1
+    else:  # "inprocess"
+        try:
+            raw = scanners.scan(scan_dir, summary)
+        except Exception as exc:  # noqa: BLE001 - boundary; never crash the task
+            exception_dist[type(exc).__name__] = exception_dist.get(type(exc).__name__, 0) + 1
+            raw = []
 
+    return _assemble(task_id, summary, raw, sandbox_runs, source_type, source_ref, started, exception_dist,
+                     warn_threshold, review_threshold)
+
+
+def _assemble(task_id, summary, raw, sandbox_runs, source_type, source_ref, started, exception_dist, warn_threshold,
+              review_threshold) -> ReviewResult:
+    """Shared tail: dedup/denoise -> monitoring -> build+redact report -> ReviewResult."""
     findings = dedup_and_denoise(
         raw,
         warn_threshold if warn_threshold is not None else dedup_thresholds()[0],
@@ -102,7 +126,7 @@ def run_review(
 
     monitoring = {
         "total_sec": round(time.monotonic() - started, 3),
-        "sandbox_sec": 0.0,  # populated in slice 2 (real sandbox)
+        "sandbox_sec": round(sum(r.duration_sec for r in sandbox_runs), 3),
         "tool_calls": len(scanners.ADAPTERS),
         "block_count": 0,  # populated in slice 3 (Filter gate)
         "finding_count": len(active),
@@ -110,7 +134,7 @@ def run_review(
         "exception_dist": exception_dist,
     }
 
-    report = report_mod.build_report(task_id, findings, monitoring=monitoring)
+    report = report_mod.build_report(task_id, findings, sandbox_runs=sandbox_runs, monitoring=monitoring)
     return ReviewResult(task_id=task_id,
                         report=report,
                         findings=findings,
@@ -118,6 +142,28 @@ def run_review(
                         source_type=source_type,
                         source_ref=source_ref,
                         monitoring=monitoring)
+
+
+async def run_review_container(
+    *,
+    task_id: Optional[str] = None,
+    diff_text: str,
+    sandbox_timeout: float | None = None,
+    max_output_bytes: int | None = None,
+) -> ReviewResult:
+    """Run a review with scanners inside a Container workspace (production isolation; needs Docker)."""
+    from . import sandbox as sandbox_mod
+    task_id = task_id or f"cr-{uuid.uuid4().hex[:12]}"
+    started = time.monotonic()
+    summary, scan_dir = _materialize(diff_text)
+    raw, run = await sandbox_mod.run_container(
+        scan_dir,
+        timeout=sandbox_timeout if sandbox_timeout is not None else sandbox_mod.DEFAULT_TIMEOUT_SEC,
+        max_bytes=max_output_bytes if max_output_bytes is not None else sandbox_mod.MAX_OUTPUT_BYTES)
+    exception_dist: dict[str, int] = {}
+    if run.timed_out or run.exit_code not in (0, 1):
+        exception_dist["sandbox_failure"] = 1
+    return _assemble(task_id, summary, raw, [run], "diff_file", "<diff>", started, exception_dist, None, None)
 
 
 def dedup_thresholds() -> tuple[float, float]:
