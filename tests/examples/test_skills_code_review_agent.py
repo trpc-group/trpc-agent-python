@@ -222,3 +222,47 @@ def test_report_renders_filter_block_section() -> None:
     md = report_mod.render_md(result.report)
     assert "## 4. Filter interception summary" in md
     assert "over budget" in md
+
+
+# (text containing a secret, the raw secret that must not survive redaction) — the leak-test corpus.
+_LEAK_CORPUS = [
+    ('password = "hunter2supersecret"', "hunter2supersecret"),
+    ('API_KEY: "SK_LIVE_EXAMPLE_TEST_KEY"', "SK_LIVE_EXAMPLE_TEST_KEY"),
+    ('aws_key = "AKIA1234567890ABCDEF"', "AKIA1234567890ABCDEF"),
+    ('aws_secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY1"',
+     "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY1"),
+    ('gh = "ghp_16CharsExampleTokenABCDEFabcdef012345"', "ghp_16CharsExampleTokenABCDEFabcdef012345"),
+    ('gitlab = "GLPAT_EXAMPLE_TEST_TOKEN"', "GLPAT_EXAMPLE_TEST_TOKEN"),
+    ('slack = "xoxb-1234567890-ABCDEFxyz0987"', "xoxb-1234567890-ABCDEFxyz0987"),
+    ('google = "AIzaSyD-1234567890abcdefGHIJKLmnopqrstuv"', "AIzaSyD-1234567890abcdefGHIJKLmnopqrstuv"),
+    ('npm = "npm_abcdefABCDEF0123456789abcdefABCDEF01"', "npm_abcdefABCDEF0123456789abcdefABCDEF01"),
+    ('jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"',
+     "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"),
+    ('auth = "Bearer abcdefghijklmnopqrstuvwxyz012345"', "abcdefghijklmnopqrstuvwxyz012345"),
+    ('token = "8f14e45fceea167a5a36dedd4bea2543f1a2b3c4d5e6f708"', "8f14e45fceea167a5a36dedd4bea2543f1a2b3c4d5e6f708"),
+    ('secret = "aGVsbG9zZWNyZXRrZXkxMjM0NTY3ODkwYWJjZGVm"', "aGVsbG9zZWNyZXRrZXkxMjM0NTY3ODkwYWJjZGVm"),
+    ('conn = "postgres_conn_example_redacted"', "S3cr3tP4ssw0rd"),
+    ('DB_PASSWORD=pl4inTextP@ss99', "pl4inTextP@ss99"),
+    ('X-Api-Key: 3f9a2b1c8d7e6f5a4b3c2d1e0f9a8b7c', "3f9a2b1c8d7e6f5a4b3c2d1e0f9a8b7c"),
+]
+_BENIGN = [
+    "def add(a, b): return a + b",
+    "import os",
+    "version = 1.2.3",
+    "result = compute(x, y)",
+    "for i in range(100):",
+    "use ast.literal_eval instead of eval",
+]
+
+
+def test_redaction_meets_95pct_and_no_plaintext() -> None:
+    masked = sum(1 for text, secret in _LEAK_CORPUS if secret not in redact(text))
+    rate = masked / len(_LEAK_CORPUS)
+    assert rate >= 0.95, f"redaction rate {rate:.0%} < 95%"
+    for text, secret in _LEAK_CORPUS:
+        assert secret not in redact(text)
+
+
+def test_redaction_does_not_mangle_benign_code() -> None:
+    for line in _BENIGN:
+        assert "***REDACTED***" not in redact(line), f"false positive on: {line}"

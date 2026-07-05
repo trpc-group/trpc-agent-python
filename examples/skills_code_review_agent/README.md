@@ -81,7 +81,9 @@ Implemented: deterministic pipeline, DB persistence (incl. sandbox-run rows), 8 
 self-test, CLI, the fake-model agent loop (`run_agent.py`), and **sandbox execution**
 (`--runtime local` runs the scanners in a subprocess sandbox with timeout + output cap and records
 each run; `--runtime container` runs them in a Docker workspace — see `skills/code-review/Dockerfile`
-— and is skipped in tests when Docker is absent). Baseline secret redaction is in place.
+— and is skipped in tests when Docker is absent). **Secret redaction** is hardened: `redact()` layers
+provider-token regexes + a Shannon-entropy catch-all and hits 100% on the leak-test corpus with zero
+false positives (criterion 5, ≥95%).
 
 The **Filter gate** (criterion 7) is in place: `pipeline/policy.py::ReviewPolicy` decides
 allow / deny / needs-human-review for a sandbox action (high-risk command, forbidden path,
@@ -90,6 +92,7 @@ deterministic sandbox gate (a denied action never launches; the block is recorde
 the report's Filter-interception section) and the framework `agent/filter.py::ReviewGuardFilter`
 (TOOL-scoped, attached on the review tool).
 
-Planned follow-up slices: redaction hardening to ≥95% (criterion 5) and OpenTelemetry metrics wiring
-(criterion 9). Note: the default runtime is `inprocess` for fast dry-runs — pass `--runtime local`
-or `--runtime container` to exercise the sandbox path.
+Remaining: exporting the monitoring metrics through an OpenTelemetry reader (they are collected today
+in the report's monitoring section), an independent labelled eval set to prove the hidden-set
+thresholds, and verifying the container runtime on a Docker host. Note: the default runtime is
+`inprocess` for fast dry-runs — pass `--runtime local` or `--runtime container` for the sandbox path.
