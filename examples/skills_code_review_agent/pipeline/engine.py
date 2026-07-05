@@ -73,7 +73,7 @@ def run_review(
     repo_path: Optional[str] = None,
     files: Optional[list[str]] = None,
     repo_root: str = ".",
-    runtime: str = "inprocess",
+    runtime: str = "auto",
     sandbox_timeout: float | None = None,
     max_output_bytes: int | None = None,
     policy: ReviewPolicy | None = None,
@@ -92,6 +92,13 @@ def run_review(
     task_id = task_id or f"cr-{uuid.uuid4().hex[:12]}"
     started = time.monotonic()
     exception_dist: dict[str, int] = {}
+
+    # `auto` is the default: sandbox, not in-process. This sync entry can't drive the async container
+    # runtime, so auto resolves to the local subprocess sandbox here; the CLI upgrades auto->container
+    # when Docker is available (see run_review.py / run_review_container). `inprocess` is an opt-in dev
+    # fast-path that must be requested explicitly.
+    if runtime == "auto":
+        runtime = "local"
 
     if diff_text is not None:
         summary, scan_dir = _materialize(diff_text)
@@ -157,7 +164,7 @@ def _assemble(task_id, summary, raw, sandbox_runs, source_type, source_ref, star
     monitoring = {
         "total_sec": round(time.monotonic() - started, 3),
         "sandbox_sec": round(sum(r.duration_sec for r in sandbox_runs), 3),
-        "tool_calls": len(scanners.ADAPTERS),
+        "tool_calls": scanners.tool_calls_available(),
         "block_count": len(filter_blocks),
         "finding_count": len(active),
         "severity_dist": severity_dist,

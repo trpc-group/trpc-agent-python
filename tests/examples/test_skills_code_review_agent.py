@@ -346,3 +346,96 @@ def test_redaction_meets_95pct_and_no_plaintext() -> None:
 def test_redaction_does_not_mangle_benign_code() -> None:
     for line in _BENIGN:
         assert "***REDACTED***" not in redact(line), f"false positive on: {line}"
+
+
+# --- review-fix coverage (Standards/Spec findings) -----------------------------------------------
+
+
+def test_scanner_unavailable_is_flagged(monkeypatch) -> None:
+    # A missing scanner must surface as needs-human-review, never a silent "clean" (Spec #8).
+    from pipeline import scanners
+    real_which = scanners.shutil.which
+    monkeypatch.setattr(scanners.shutil, "which", lambda t: None if t == "bandit" else real_which(t))
+    result = run_review(diff_text=(_FIXTURES / "security.diff").read_text(), runtime="inprocess")
+    flagged = [f for f in result.report.human_review if f.category == "scanner_unavailable"]
+    assert any("bandit" in f.title for f in flagged)
+
+
+def test_tool_calls_is_a_real_count() -> None:
+    result = run_review(diff_text=(_FIXTURES / "security.diff").read_text(), runtime="inprocess")
+    from pipeline import scanners
+    assert result.monitoring["tool_calls"] == scanners.tool_calls_available()
+    assert result.monitoring["tool_calls"] != len(scanners.ADAPTERS)  # not the old constant
+
+
+def test_dedup_file_level_findings_not_overcollapsed() -> None:
+    a = Finding(severity="low",
+                category="db_lifecycle",
+                file="x.py",
+                line=None,
+                title="a",
+                evidence="e",
+                recommendation="r",
+                confidence=0.8,
+                source="static",
+                rule_id="r1")
+    b = a.model_copy(update={"title": "b", "rule_id": "r2"})
+    out = dedup_and_denoise([a, b])
+    assert len([f for f in out if f.status != "duplicate"]) == 2  # distinct file-level issues kept
+
+
+def test_container_result_builder_no_docker() -> None:
+    import json as _json
+    from types import SimpleNamespace
+
+    from pipeline.sandbox import build_container_result
+
+    payload = {
+        "findings": [{
+            "severity": "high",
+            "category": "security",
+            "file": "a.py",
+            "line": 3,
+            "title": "t",
+            "evidence": "e",
+            "recommendation": "r",
+            "confidence": 0.9,
+            "source": "static"
+        }]
+    }
+    collected = [SimpleNamespace(content=_json.dumps(payload).encode())]
+    findings, run = build_container_result(collected,
+                                           stdout="x" * 10,
+                                           stderr="",
+                                           exit_code=1,
+                                           timed_out=False,
+                                           duration_sec=0.5)
+    assert len(findings) == 1 and findings[0].category == "security"
+    assert run.script == "run_checks.py" and run.exit_code == 1 and run.stdout_bytes == 10
+
+
+def test_scanner_paths_parity() -> None:
+    # The in-process and sandbox paths must produce identical findings (Spec #6).
+    diff = (_FIXTURES / "security.diff").read_text()
+    inp = sorted((f.line, f.category) for f in run_review(diff_text=diff, runtime="inprocess").report.findings)
+    loc = sorted((f.line, f.category) for f in run_review(diff_text=diff, runtime="local").report.findings)
+    assert inp == loc
+
+
+@pytest.mark.asyncio
+async def test_status_reflects_blocked(tmp_path) -> None:
+    from pipeline.policy import ReviewPolicy
+    from storage.dao import ReviewStore
+
+    result = run_review(diff_text=(_FIXTURES / "security.diff").read_text(),
+                        runtime="local",
+                        policy=ReviewPolicy(max_budget_sec=1e-6),
+                        sandbox_timeout=60)
+    store = ReviewStore(f"sqlite+aiosqlite:///{tmp_path / 'cr.db'}")
+    await store.init()
+    try:
+        await store.persist(result)
+        got = await store.get_by_task_id(result.task_id)
+        assert got["task"].status == "blocked"  # not hardcoded "completed"
+    finally:
+        await store.close()

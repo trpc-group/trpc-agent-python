@@ -3,7 +3,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """Scored acceptance harness over the public fixtures (issue #92, criterion 1 & the 80/15 metrics).
 
 Runs every fixture in ``fixtures/diffs`` through the deterministic pipeline, compares active findings
@@ -41,7 +40,8 @@ def main() -> int:
     print(f"{'fixture':28} {'active':>6} {'tp':>3} {'fn':>3} {'fp':>3}")
     print("-" * 50)
     for name, spec in sorted(labels.items()):
-        result = run_review(diff_text=(HERE / "fixtures" / "diffs" / name).read_text())
+        # Score through the sandbox (the default production path), not the in-process dev fast-path.
+        result = run_review(diff_text=(HERE / "fixtures" / "diffs" / name).read_text(), runtime="local")
         findings = result.report.findings
         tp, fn, fp = _match(spec["expected"], findings)
         tot_tp += tp

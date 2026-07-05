@@ -5,14 +5,16 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""CLI entry point for the automated code-review agent (issue #92).
+"""CLI entry point for the deterministic code-review pipeline (issue #92).
 
-Dry-run / fake-model mode (default) needs no API key: the deterministic scanner pipeline produces a
-full report and persists it. Examples:
+Needs no API key — the scanner pipeline produces a full report and persists it. The default runtime
+is the sandbox (`auto` → container if Docker is up, else the local subprocess sandbox). For the
+LLM-agent path with a fake model, use run_agent.py --dry-run instead. Examples:
 
-    python run_review.py --diff-file fixtures/diffs/0001_insecure.diff --out-dir /tmp/cr
+    python run_review.py --diff-file my.diff --out-dir /tmp/cr
     python run_review.py --repo-path /path/to/repo
-    python run_review.py --fixture 0006_eval.diff --no-db
+    python run_review.py --files pipeline/engine.py,pipeline/scanners.py
+    python run_review.py --fixture security.diff --no-db --runtime inprocess
 """
 from __future__ import annotations
 

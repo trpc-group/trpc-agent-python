@@ -3,7 +3,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """FakeReviewModel — deterministic, no-API-key model for the dry-run agent path (criterion 6/8).
 
 It does not call any LLM. On the first turn it emits a single tool call to ``review_code`` with the

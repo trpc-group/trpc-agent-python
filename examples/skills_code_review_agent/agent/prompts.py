@@ -3,7 +3,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """System instruction for the code-review agent's LLM finding source."""
 
 INSTRUCTION = ("You are an automated code reviewer. When given a diff, call the `review_code` tool with the "

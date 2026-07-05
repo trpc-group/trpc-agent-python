@@ -11,19 +11,25 @@ renders `review_report.json` + `review_report.md`.
 ```bash
 pip install -r requirements.txt
 
-# Review a bundled fixture (dry-run, deterministic — no model needed):
-python run_review.py --fixture 0001_insecure.diff --out-dir /tmp/cr
+# Review a bundled fixture (no model needed). Default runtime is the sandbox
+# (auto -> container if Docker is up, else the local subprocess sandbox):
+python run_review.py --fixture security.diff --out-dir /tmp/cr
 
-# Review your own diff or working tree:
+# Review your own diff, working tree, or an explicit file list:
 python run_review.py --diff-file my.diff
 python run_review.py --repo-path /path/to/repo --no-db
+python run_review.py --files pipeline/engine.py,pipeline/scanners.py
 
 # Scored self-test over the labelled fixtures (detection-rate / false-positive-rate):
 python selftest.py
 
-# Run the review through the LlmAgent (fake model, no API key needed):
-python run_agent.py --fixture 0001_insecure.diff
+# Run the review through the LlmAgent with the fake model (no API key needed):
+python run_agent.py --fixture security.diff --dry-run
 ```
+
+A sample report is committed under [`sample_output/`](./sample_output/); the rule catalog is in
+[`../../skills/code-review/docs/RULES.md`](../../skills/code-review/docs/RULES.md) and the design note
+in [DESIGN.md](./DESIGN.md).
 
 ## How it works
 

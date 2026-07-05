@@ -40,6 +40,13 @@ class ReviewStore:
     async def persist(self, result: ReviewResult) -> None:
         """Write the task, its findings, and the report summary. All strings are redacted."""
         mon = result.monitoring
+        # Real status — a blocked or failed review must not persist as "completed".
+        if int(mon.get("block_count", 0)) > 0:
+            status = "blocked"
+        elif mon.get("exception_dist"):
+            status = "failed"
+        else:
+            status = "completed"
         async with self._storage.create_db_session() as db:
             task = ReviewTaskORM(
                 id=result.task_id,
@@ -47,7 +54,7 @@ class ReviewStore:
                 source_ref=redact(result.source_ref),
                 runtime="local",
                 dry_run=True,
-                status="completed",
+                status=status,
                 block_count=int(mon.get("block_count", 0)),
                 finding_count=int(mon.get("finding_count", 0)),
                 severity_dist=mon.get("severity_dist", {}),

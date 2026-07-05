@@ -3,7 +3,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """Dedup + denoise (issue #92, requirement 6).
 
 - Dedup: at most one finding per (file, line, category); keep the highest-confidence one and mark
@@ -21,6 +20,10 @@ REVIEW_THRESHOLD = 0.4
 
 
 def dedup_key(f: Finding) -> str:
+    # File-level findings (line is None) share file+category but are distinct issues — key on the
+    # rule/title too so two different file-level findings in one category don't collapse into one.
+    if f.line is None:
+        return f"{f.file}::{f.category}:{f.rule_id or f.title}"
     return f"{f.file}:{f.line}:{f.category}"
 
 

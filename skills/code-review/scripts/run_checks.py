@@ -38,6 +38,40 @@ def _redact(text: str) -> str:
 
 _NOISE_RULES = {"B101", "S101"}  # assert-used — noise, especially in tests
 
+# Kept identical to pipeline/scanners.py so both paths emit the same findings (a parity test enforces
+# this). The skill cannot import the example package, so the mapping is duplicated by necessity.
+_BANDIT_CONF = {"HIGH": 0.9, "MEDIUM": 0.6, "LOW": 0.4}
+_RUFF_MAP = [("ASYNC", "async_errors", "high"), ("SIM115", "resource_leak", "medium"), ("S", "security", "high"),
+             ("B", "resource_leak", "medium")]
+_REQUIRED_TOOLS = {"bandit": "security", "ruff": "async_errors/resource_leak", "detect-secrets": "secret_leakage"}
+
+
+def _ruff_cat_sev(code: str) -> tuple[str, str]:
+    for prefix, cat, sev in _RUFF_MAP:
+        if code.startswith(prefix):
+            return cat, sev
+    return "code_quality", "low"
+
+
+_IGNORE_DIRS = {".ruff_cache", "__pycache__", ".git", ".mypy_cache", ".pytest_cache", "node_modules"}
+
+
+def _source_files(target: str):
+    """Files under target excluding tool caches / hidden dirs (which scanners create and pollute scans)."""
+    for p in Path(target).rglob("*"):
+        if p.is_file() and not any(part in _IGNORE_DIRS or part.startswith(".") for part in p.parts):
+            yield p
+
+
+def _rel(path: str, root: str) -> str:
+    """Normalize a scanner-reported path to be relative to root (kept in sync with scanners.py::_rel)."""
+    if os.path.isabs(path):
+        try:
+            return os.path.normpath(os.path.relpath(os.path.realpath(path), os.path.realpath(root)))
+        except ValueError:
+            return os.path.normpath(path)
+    return os.path.normpath(path)
+
 
 def _run(cmd: list[str], cwd: str) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=120, check=False)
@@ -60,37 +94,37 @@ def collect(target: str) -> list[dict]:
                 findings.append(
                     _finding(severity=sev,
                              category="security",
-                             file=os.path.normpath(r["filename"]),
+                             file=_rel(r["filename"], target),
                              line=r.get("line_number"),
                              title=r.get("test_name", "security issue"),
-                             evidence=(r.get("code") or "").strip(),
-                             recommendation=r.get("issue_text", ""),
-                             confidence=0.8,
+                             evidence=(r.get("code") or r.get("issue_text", "")).strip(),
+                             recommendation=r.get("issue_text", "Review this security finding."),
+                             confidence=_BANDIT_CONF.get(r.get("issue_confidence", "MEDIUM"), 0.6),
                              source="static",
                              rule_id=f"bandit:{r.get('test_id', '')}"))
     if shutil.which("ruff"):
-        proc = _run(["ruff", "check", ".", "--output-format", "json", "--select", "ASYNC,SIM115,B,S", "--quiet"],
-                    cwd=target)
+        proc = _run(
+            ["ruff", "check", ".", "--no-cache", "--output-format", "json", "--select", "ASYNC,SIM115,B,S", "--quiet"],
+            cwd=target)
         if proc.stdout.strip():
             for r in json.loads(proc.stdout):
                 code = r.get("code") or ""
                 if code in _NOISE_RULES:
                     continue
-                cat = ("async_errors"
-                       if code.startswith("ASYNC") else "security" if code.startswith("S") else "resource_leak")
+                cat, sev = _ruff_cat_sev(code)
                 findings.append(
-                    _finding(severity="medium",
+                    _finding(severity=sev,
                              category=cat,
-                             file=os.path.normpath(r["filename"]),
+                             file=_rel(r["filename"], target),
                              line=(r.get("location") or {}).get("row"),
-                             title=code,
+                             title=code or "lint issue",
                              evidence=r.get("message", ""),
-                             recommendation=r.get("message", ""),
+                             recommendation=r.get("message", "See ruff rule documentation."),
                              confidence=0.7,
                              source="static",
                              rule_id=f"ruff:{code}"))
     if shutil.which("detect-secrets"):
-        files = [str(p.relative_to(target)) for p in Path(target).rglob("*") if p.is_file()]
+        files = [str(p.relative_to(target)) for p in _source_files(target)]
         if files:
             proc = _run(["detect-secrets", "scan", *files], cwd=target)
             if proc.stdout.strip():
@@ -108,6 +142,19 @@ def collect(target: str) -> list[dict]:
                                      source="static",
                                      rule_id=f"detect-secrets:{h.get('type')}"))
     findings.extend(_db_lifecycle(target))
+    for tool, covers in _REQUIRED_TOOLS.items():
+        if not shutil.which(tool):
+            findings.append(
+                _finding(severity="low",
+                         category="scanner_unavailable",
+                         file="",
+                         line=None,
+                         title=f"{tool} unavailable — {covers} not checked",
+                         evidence=f"scanner '{tool}' is not installed in this environment",
+                         recommendation=f"Install {tool} so {covers} is actually scanned.",
+                         confidence=0.3,
+                         source="static",
+                         rule_id=f"internal:missing:{tool}"))
     return findings
 
 
@@ -117,7 +164,9 @@ _DB_CONNECT = re.compile(r"\b([A-Za-z_]\w*)\s*=\s*[\w.]*\b(connect|cursor)\s*\("
 def _db_lifecycle(target: str) -> list[dict]:
     """DB connection/cursor opened without `with` and never closed (no semgrep needed)."""
     out: list[dict] = []
-    for p in Path(target).rglob("*.py"):
+    for p in _source_files(target):
+        if p.suffix != ".py":
+            continue
         try:
             content = p.read_text(encoding="utf-8", errors="replace")
         except OSError:

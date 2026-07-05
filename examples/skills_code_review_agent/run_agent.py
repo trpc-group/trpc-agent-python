@@ -5,7 +5,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """Run a code review through the LlmAgent (Skills + tool) — the framework-exercising path.
 
 Dry-run by default: with no API key, FakeReviewModel drives one call to the review_code tool and
@@ -31,9 +30,9 @@ from agent.agent import create_agent
 HERE = Path(__file__).parent
 
 
-async def review(diff_text: str) -> None:
+async def review(diff_text: str, dry_run: bool = False) -> None:
     app_name = "code_review_agent"
-    agent = create_agent()
+    agent = create_agent(dry_run=dry_run)
     runner = Runner(app_name=app_name, agent=agent, session_service=InMemorySessionService())
 
     user_id, session_id = "reviewer", str(uuid.uuid4())
@@ -59,9 +58,12 @@ def main() -> None:
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--diff-file")
     src.add_argument("--fixture")
+    ap.add_argument("--dry-run",
+                    action="store_true",
+                    help="force the fake model even if an API key is set (no real LLM call)")
     args = ap.parse_args()
     path = Path(args.diff_file) if args.diff_file else HERE / "fixtures" / "diffs" / args.fixture
-    asyncio.run(review(path.read_text(encoding="utf-8")))
+    asyncio.run(review(path.read_text(encoding="utf-8"), dry_run=args.dry_run))
 
 
 if __name__ == "__main__":

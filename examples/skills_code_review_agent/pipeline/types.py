@@ -3,7 +3,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """Shared data-transfer objects for the code-review pipeline.
 
 The ``Finding`` schema is fixed by issue #92 (the 9 required fields); everything

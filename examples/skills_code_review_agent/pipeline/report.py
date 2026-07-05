@@ -3,7 +3,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """Build and render the review report (issue #92, requirement: report with 7 sections).
 
 The 7 sections (findings summary, severity stats, human-review items, Filter-block summary,

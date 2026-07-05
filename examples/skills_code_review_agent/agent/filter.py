@@ -3,7 +3,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """ReviewGuardFilter — the framework enforcement site for the review policy (issue #92, req 7).
 
 A TOOL-scoped filter (``register_tool_filter``): it inspects a tool call's args before the tool

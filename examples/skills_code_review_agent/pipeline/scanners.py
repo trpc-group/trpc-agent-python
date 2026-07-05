@@ -258,6 +258,34 @@ def normalize_db_lifecycle(repo_dir: str, changed: dict[str, set[int]]) -> list[
     return findings
 
 
+# Scanners the review relies on; a missing one must be surfaced, not silently treated as "clean".
+_REQUIRED_TOOLS = {"bandit": "security", "ruff": "async-error/resource-leak", "detect-secrets": "secret_leakage"}
+
+
+def detect_unavailable_scanners() -> list[Finding]:
+    """One needs-human-review finding per missing required scanner (confidence lands it there)."""
+    out: list[Finding] = []
+    for tool, covers in _REQUIRED_TOOLS.items():
+        if not shutil.which(tool):
+            out.append(
+                Finding(severity="low",
+                        category="scanner_unavailable",
+                        file="",
+                        line=None,
+                        title=f"{tool} unavailable — {covers} not checked",
+                        evidence=f"scanner '{tool}' is not installed in this environment",
+                        recommendation=f"Install {tool} so {covers} is actually scanned.",
+                        confidence=0.3,
+                        source="static",
+                        rule_id=f"internal:missing:{tool}"))
+    return out
+
+
+def tool_calls_available() -> int:
+    """How many scanner tools actually ran this review (uniform across in-process and sandbox paths)."""
+    return sum(1 for t in _REQUIRED_TOOLS if shutil.which(t)) + 1  # + the db_lifecycle heuristic
+
+
 def _is_test_path(path: str) -> bool:
     base = path.rsplit("/", 1)[-1]
     return (base.startswith("test_") or base.endswith("_test.py") or path.startswith("tests/") or "/tests/" in path)
@@ -302,7 +330,7 @@ ADAPTERS: list[Adapter] = [
 def scan(repo_dir: str, diff: DiffSummary) -> list[Finding]:
     """Run every enabled adapter over the changed files; a crashing scanner is recorded, not fatal."""
     changed = _changed_lines(diff)
-    findings: list[Finding] = []
+    findings: list[Finding] = list(detect_unavailable_scanners())
     for adapter in ADAPTERS:
         try:
             findings.extend(adapter(repo_dir, changed))

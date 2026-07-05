@@ -174,20 +174,41 @@ async def run_container(
                                     timeout=timeout,
                                     limits=WorkspaceResourceLimits(memory_mb=memory_mb)))
         collected = await fs.collect_outputs(ws, WorkspaceOutputSpec(globs=["findings.json"]))
-        findings: list[Finding] = []
-        for cf in getattr(collected, "files", collected) or []:
-            try:
-                findings = parse_findings_json(json.loads(cf.content.decode("utf-8")))
-            except Exception:  # noqa: BLE001
-                continue
-        _, out_bytes = _truncate(run.stdout, max_bytes)
-        _, err_bytes = _truncate(run.stderr, max_bytes)
-        result = SandboxRunResult(script="run_checks.py",
-                                  exit_code=run.exit_code,
-                                  duration_sec=round(time.monotonic() - started, 3),
-                                  timed_out=run.timed_out,
-                                  stdout_bytes=out_bytes,
-                                  stderr_bytes=err_bytes)
-        return findings, result
+        return build_container_result(getattr(collected, "files", collected),
+                                      stdout=run.stdout,
+                                      stderr=run.stderr,
+                                      exit_code=run.exit_code,
+                                      timed_out=run.timed_out,
+                                      duration_sec=time.monotonic() - started,
+                                      max_bytes=max_bytes)
     finally:
         await manager.cleanup(exec_id)
+
+
+def build_container_result(collected_files,
+                           *,
+                           stdout,
+                           stderr,
+                           exit_code,
+                           timed_out,
+                           duration_sec,
+                           max_bytes=MAX_OUTPUT_BYTES) -> tuple[list[Finding], SandboxRunResult]:
+    """Pure post-processing of a container run (parse findings.json + build SandboxRunResult).
+
+    Extracted so the container path's logic is unit-testable without Docker (the Docker-only part is
+    just staging + running the workspace). ``collected_files`` are objects with a ``.content`` bytes attr.
+    """
+    findings: list[Finding] = []
+    for cf in collected_files or []:
+        try:
+            findings = parse_findings_json(json.loads(cf.content.decode("utf-8")))
+        except Exception:  # noqa: BLE001 - a malformed collected file degrades the source, not the task
+            continue
+    _, out_bytes = _truncate(stdout, max_bytes)
+    _, err_bytes = _truncate(stderr, max_bytes)
+    return findings, SandboxRunResult(script="run_checks.py",
+                                      exit_code=exit_code,
+                                      duration_sec=round(duration_sec, 3),
+                                      timed_out=timed_out,
+                                      stdout_bytes=out_bytes,
+                                      stderr_bytes=err_bytes)
