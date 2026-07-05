@@ -19,6 +19,11 @@ _EXAMPLE_DIR = Path(__file__).resolve().parents[2] / "examples" / "skills_code_r
 if str(_EXAMPLE_DIR) not in sys.path:
     sys.path.insert(0, str(_EXAMPLE_DIR))
 
+# This example ships its own dependencies (examples/skills_code_review_agent/requirements.txt) that the
+# SDK's test job does not install. Skip the whole module cleanly when they are absent rather than failing
+# collection in the main CI.
+pytest.importorskip("unidiff", reason="run: pip install -r examples/skills_code_review_agent/requirements.txt")
+
 from pipeline import report as report_mod  # noqa: E402
 from pipeline.dedup import dedup_and_denoise  # noqa: E402
 from pipeline.engine import run_review  # noqa: E402
