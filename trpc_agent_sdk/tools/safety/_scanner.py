@@ -1208,8 +1208,17 @@ def timeout_seconds_from_tokens(tokens: Sequence[str]) -> float | None:
     command = Path(tokens[0]).name.lower() if tokens else ""
     if command != "timeout":
         return None
-    for token in tokens[1:]:
+    index = 1
+    while index < len(tokens):
+        token = tokens[index]
+        if token in {"-k", "--kill-after"}:
+            index += 2
+            continue
+        if token.startswith("--kill-after="):
+            index += 1
+            continue
         if token.startswith("-"):
+            index += 1
             continue
         return duration_token_seconds(token)
     return None

@@ -161,13 +161,15 @@ class ToolSafetyPolicy:
             return False
         normalized = self._normalize_path_text(value)
         for pattern in self.system_write_paths:
-            normalized_pattern = self._normalize_path_text(str(pattern)).rstrip("/")
+            normalized_pattern = self._normalize_path_text(str(pattern))
             if not normalized_pattern:
                 continue
             if normalized_pattern == "/":
                 if normalized in {"/", "/*", "/."}:
                     return True
-            elif normalized == normalized_pattern or normalized.startswith(f"{normalized_pattern}/"):
+                continue
+            normalized_pattern = normalized_pattern.rstrip("/")
+            if normalized == normalized_pattern or normalized.startswith(f"{normalized_pattern}/"):
                 return True
         return False
 
