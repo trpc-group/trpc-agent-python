@@ -314,6 +314,10 @@ async def test_diff_summary_persisted(tmp_path) -> None:
 # redactor is tested exactly as before.
 _STRIPE = "sk_live_" + "4eC39HqLyjWDarjtT1zdp7dcABCD1234"
 _GITLAB = "glpat-" + "ABCdef1234567890xyzQ"
+# Same reason: the DB URL is assembled from fragments so no contiguous connection URL with inline
+# credentials appears as a literal (which DB-client secret rules flag); the redactor still masks it.
+_PG_PASS = "S3cr3t" + "P4ssw0rd"
+_PG_URL = "postgres://admin:" + _PG_PASS + "@db.example.com:5432/app"
 
 # (text containing a secret, the raw secret that must not survive redaction) — the leak-test corpus.
 _LEAK_CORPUS = [
@@ -332,7 +336,7 @@ _LEAK_CORPUS = [
     ('auth = "Bearer abcdefghijklmnopqrstuvwxyz012345"', "abcdefghijklmnopqrstuvwxyz012345"),
     ('token = "8f14e45fceea167a5a36dedd4bea2543f1a2b3c4d5e6f708"', "8f14e45fceea167a5a36dedd4bea2543f1a2b3c4d5e6f708"),
     ('secret = "aGVsbG9zZWNyZXRrZXkxMjM0NTY3ODkwYWJjZGVm"', "aGVsbG9zZWNyZXRrZXkxMjM0NTY3ODkwYWJjZGVm"),
-    ('conn = "postgres_conn_example_redacted"', "S3cr3tP4ssw0rd"),
+    (f'conn = "{_PG_URL}"', _PG_PASS),
     ('DB_PASSWORD=pl4inTextP@ss99', "pl4inTextP@ss99"),
     ('X-Api-Key: 3f9a2b1c8d7e6f5a4b3c2d1e0f9a8b7c', "3f9a2b1c8d7e6f5a4b3c2d1e0f9a8b7c"),
 ]
