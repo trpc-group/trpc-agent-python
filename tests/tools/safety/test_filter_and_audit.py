@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import contextmanager
 from typing import Any
 from unittest.mock import patch
 
@@ -48,11 +49,35 @@ def _ensure_safety_filter_registered() -> None:
         register_tool_filter("tool_safety_guard")(ToolSafetyFilter)
 
 
-def _enable_caplog_logger(name: str) -> None:
+class _CapturingHandler(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__(level=logging.WARNING)
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+@contextmanager
+def _capture_logger_records(name: str):
     logging.disable(logging.NOTSET)
     target_logger = logging.getLogger(name)
+    handler = _CapturingHandler()
+    previous_disabled = target_logger.disabled
+    previous_level = target_logger.level
     target_logger.disabled = False
-    target_logger.propagate = True
+    target_logger.setLevel(logging.WARNING)
+    target_logger.addHandler(handler)
+    try:
+        yield handler.records
+    finally:
+        target_logger.removeHandler(handler)
+        target_logger.disabled = previous_disabled
+        target_logger.setLevel(previous_level)
+
+
+def _record_text(records: list[logging.LogRecord]) -> str:
+    return "\n".join(record.getMessage() for record in records)
 
 
 class StaticScanner:
@@ -269,37 +294,38 @@ class TestToolSafetyFilter:
         assert result == {"ok": True}
         assert scanner.targets[0].language == ScriptLanguage.SHELL
 
-    def test_fail_closed_blocks_and_logs_without_exception_detail(self, caplog):
+    def test_fail_closed_blocks_and_logs_without_exception_detail(self):
         policy = SafetyPolicy(fail_closed=True)
         filter_ = ToolSafetyFilter(scanner=RaisingScanner(policy), audit_logger=RecordingAuditLogger())
-        _enable_caplog_logger("trpc_agent_sdk.tools.safety._filter")
-        caplog.set_level(logging.WARNING, logger="trpc_agent_sdk.tools.safety._filter")
 
-        result, _, calls = _run_filter(filter_, {"command": "echo ok"})
+        with _capture_logger_records("trpc_agent_sdk.tools.safety._filter") as records:
+            result, _, calls = _run_filter(filter_, {"command": "echo ok"})
 
         assert calls == []
         assert result["blocked"] is True
         assert result["error"] == "Tool safety scan failed closed"
         assert result["safety_report"]["decision"] == "deny"
-        assert "RuntimeError" in caplog.text
-        assert "secret-token-value" not in caplog.text
+        log_text = _record_text(records)
+        assert "RuntimeError" in log_text
+        assert "secret-token-value" not in log_text
 
-    def test_fail_open_allows_and_logs_without_exception_detail(self, caplog):
+    def test_fail_open_allows_and_logs_without_exception_detail(self):
         policy = SafetyPolicy(fail_closed=False)
         audit_logger = RecordingAuditLogger()
         filter_ = ToolSafetyFilter(scanner=RaisingScanner(policy), audit_logger=audit_logger)
-        _enable_caplog_logger("trpc_agent_sdk.tools.safety._filter")
-        caplog.set_level(logging.WARNING, logger="trpc_agent_sdk.tools.safety._filter")
 
-        with patch("trpc_agent_sdk.tools.safety._filter.set_safety_span_attributes") as mock_span:
+        with _capture_logger_records("trpc_agent_sdk.tools.safety._filter") as records, patch(
+            "trpc_agent_sdk.tools.safety._filter.set_safety_span_attributes"
+        ) as mock_span:
             result, _, calls = _run_filter(filter_, {"command": "echo ok"})
 
         assert result == {"ok": True}
         assert calls == ["handler"]
         assert audit_logger.events == []
         mock_span.assert_not_called()
-        assert "RuntimeError" in caplog.text
-        assert "secret-token-value" not in caplog.text
+        log_text = _record_text(records)
+        assert "RuntimeError" in log_text
+        assert "secret-token-value" not in log_text
 
     def test_blocked_safety_filter_prevents_later_filters(self):
         policy = SafetyPolicy()
