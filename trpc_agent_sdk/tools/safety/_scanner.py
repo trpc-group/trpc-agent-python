@@ -83,11 +83,19 @@ SENSITIVE_SINK_NAMES = {"print", "logging.info", "logging.warning", "logging.err
                         "logger.error", "sys.stdout.write", "sys.stderr.write"}
 NETWORK_PY_MODULES = {"requests", "aiohttp", "httpx", "urllib", "socket", "websocket"}
 SUBPROCESS_CALLS = {"subprocess.run", "subprocess.call", "subprocess.Popen", "subprocess.check_call",
-                    "subprocess.check_output", "os.system", "os.popen", "pty.spawn"}
+                    "subprocess.check_output", "os.system", "os.popen", "os.spawnl", "os.spawnle", "os.spawnlp",
+                    "os.spawnlpe", "os.spawnv", "os.spawnve", "os.spawnvp", "os.spawnvpe", "pty.spawn"}
 FILE_OPEN_CALLS = {"open", "Path.open", "pathlib.Path.open"}
 DANGEROUS_FILE_CALLS = {"os.remove", "os.unlink", "os.rmdir", "shutil.rmtree", "Path.unlink", "Path.rmdir",
                         "pathlib.Path.unlink", "pathlib.Path.rmdir"}
 INSTALL_PY_MODULES = {"pip", "ensurepip"}
+SHELL_WRITE_COMMANDS = {"cp", "install", "mkdir", "mv", "tee", "touch"}
+PARALLEL_PY_CALLS = {
+    "asyncio.gather",
+    "concurrent.futures.ProcessPoolExecutor",
+    "concurrent.futures.ThreadPoolExecutor",
+    "multiprocessing.Pool",
+}
 
 
 class ToolSafetyScanner:
@@ -302,6 +310,18 @@ class ToolSafetyScanner:
                         line_no=line_no,
                     ))
 
+        if has_background_operator(tokens, line):
+            findings.append(
+                finding(
+                    "TSG-PROCESS-BACKGROUND",
+                    "process_command",
+                    SafetyRiskLevel.MEDIUM,
+                    "Shell command starts a background process.",
+                    line,
+                    "Run tools in the foreground with explicit timeout and cancellation controls.",
+                    line_no=line_no,
+                ))
+
         for url in URL_RE.findall(line):
             host = urlparse(url).hostname or ""
             if not self.policy.is_domain_allowed(host):
@@ -350,6 +370,31 @@ class ToolSafetyScanner:
                         "Prebuild dependencies in a trusted image or require human review.",
                         line_no=line_no,
                     ))
+            timeout_seconds = timeout_seconds_from_tokens(command_tokens)
+            if timeout_seconds is not None and timeout_seconds > self.policy.max_timeout_seconds:
+                findings.append(
+                    finding(
+                        "TSG-RESOURCE-LONG-TIMEOUT",
+                        "resource_abuse",
+                        SafetyRiskLevel.MEDIUM,
+                        f"Command timeout {timeout_seconds}s exceeds policy limit.",
+                        evidence,
+                        "Keep tool timeouts within policy.max_timeout_seconds.",
+                        line_no=line_no,
+                    ))
+            parallel_tasks = parallel_tasks_from_tokens(command_tokens)
+            if parallel_tasks is not None and (
+                    parallel_tasks == 0 or parallel_tasks > self.policy.max_parallel_tasks):
+                findings.append(
+                    finding(
+                        "TSG-RESOURCE-PARALLELISM",
+                        "resource_abuse",
+                        SafetyRiskLevel.HIGH if parallel_tasks == 0 else SafetyRiskLevel.MEDIUM,
+                        f"Command can start {parallel_tasks or 'unbounded'} parallel task(s).",
+                        evidence,
+                        "Bound parallelism to policy.max_parallel_tasks and enforce process limits.",
+                        line_no=line_no,
+                    ))
             if command in DANGEROUS_SHELL_COMMANDS:
                 findings.append(
                     finding(
@@ -384,6 +429,41 @@ class ToolSafetyScanner:
                         "Remove access to credential paths such as .env, ~/.ssh, and cloud credential files.",
                         line_no=line_no,
                     ))
+            if command in SHELL_WRITE_COMMANDS and any(
+                    self.policy.is_system_write_path(token) for token in command_tokens[1:]):
+                findings.append(
+                    finding(
+                        "TSG-FILE-SYSTEM-WRITE",
+                        "dangerous_file_operation",
+                        SafetyRiskLevel.CRITICAL,
+                        "Command writes to a protected system path.",
+                        evidence,
+                        "Block writes outside the configured workspace.",
+                        line_no=line_no,
+                    ))
+            for target in redirection_targets(command_tokens):
+                if self.policy.is_system_write_path(target):
+                    findings.append(
+                        finding(
+                            "TSG-FILE-SYSTEM-WRITE",
+                            "dangerous_file_operation",
+                            SafetyRiskLevel.CRITICAL,
+                            "Shell redirection writes to a protected system path.",
+                            evidence,
+                            "Block writes outside the configured workspace.",
+                            line_no=line_no,
+                        ))
+                if self.policy.is_denied_path(target):
+                    findings.append(
+                        finding(
+                            "TSG-FILE-DENIED-PATH",
+                            "dangerous_file_operation",
+                            SafetyRiskLevel.HIGH,
+                            "Shell redirection references a denied sensitive path.",
+                            evidence,
+                            "Remove direct access to credential paths such as .env, ~/.ssh, and cloud credential files.",
+                            line_no=line_no,
+                        ))
             if command in {"cat", "grep", "awk", "sed", "tail", "head"} and any(
                     self.policy.is_denied_path(token) for token in command_tokens[1:]):
                 findings.append(
@@ -445,6 +525,7 @@ class _PythonAnalyzer(ast.NodeVisitor):
         self.policy = policy
         self.findings: list[ToolSafetyFinding] = []
         self.imports: dict[str, str] = {}
+        self.object_types: dict[str, str] = {}
         self.secret_names: set[str] = set()
         self.opened_paths: dict[str, str] = {}
 
@@ -492,6 +573,7 @@ class _PythonAnalyzer(ast.NodeVisitor):
 
     def visit_Assign(self, node: ast.Assign) -> None:  # noqa: N802
         value_text = self.constant_string(node.value)
+        value_call_name = self.call_name(node.value.func) if isinstance(node.value, ast.Call) else ""
         for target in node.targets:
             target_name = self.name_of(target)
             if target_name and is_secret_name(target_name):
@@ -507,6 +589,8 @@ class _PythonAnalyzer(ast.NodeVisitor):
                         node,
                         redacted=True,
                     )
+            if target_name and value_call_name in {"socket.socket"}:
+                self.object_types[target_name] = value_call_name
         self.generic_visit(node)
 
     def visit_For(self, node: ast.For) -> None:  # noqa: N802
@@ -555,7 +639,7 @@ class _PythonAnalyzer(ast.NodeVisitor):
             self.handle_sleep_call(node, call_name)
         elif call_name in SENSITIVE_SINK_NAMES:
             self.handle_sensitive_sink(node, call_name)
-        elif call_name in {"os.fork", "multiprocessing.Process", "concurrent.futures.ProcessPoolExecutor"}:
+        elif call_name in {"os.fork", "multiprocessing.Process"}:
             self.add(
                 "TSG-RESOURCE-PROCESS-FANOUT",
                 "resource_abuse",
@@ -565,6 +649,8 @@ class _PythonAnalyzer(ast.NodeVisitor):
                 "Limit process fan-out and run inside a sandbox with process limits.",
                 node,
             )
+        elif call_name in PARALLEL_PY_CALLS:
+            self.handle_parallel_call(node, call_name)
         elif call_name.endswith(".read_text") or call_name.endswith(".read_bytes"):
             self.handle_path_read(node, call_name)
         elif call_name.endswith(".write_text") or call_name.endswith(".write_bytes"):
@@ -601,6 +687,30 @@ class _PythonAnalyzer(ast.NodeVisitor):
             for item in scanner._scan_bash(command_text, from_args=True):  # pylint: disable=protected-access
                 item.line_no = node.lineno
                 self.findings.append(item)
+        timeout_seconds = keyword_number(node, "timeout")
+        if timeout_seconds is not None and timeout_seconds > self.policy.max_timeout_seconds:
+            self.add(
+                "TSG-RESOURCE-LONG-TIMEOUT",
+                "resource_abuse",
+                SafetyRiskLevel.MEDIUM,
+                f"Subprocess timeout {timeout_seconds}s exceeds policy limit.",
+                self.segment(node),
+                "Keep tool timeouts within policy.max_timeout_seconds.",
+                node,
+            )
+        if keyword_bool(node, "capture_output") or any(
+                self.call_name(keyword.value) == "subprocess.PIPE"
+                for keyword in node.keywords
+                if keyword.arg in {"stdout", "stderr"}):
+            self.add(
+                "TSG-RESOURCE-OUTPUT-CAPTURE",
+                "resource_abuse",
+                SafetyRiskLevel.MEDIUM,
+                "Subprocess captures unbounded output.",
+                self.segment(node),
+                "Enforce policy.max_output_bytes when capturing tool output.",
+                node,
+            )
 
     def handle_dangerous_file_call(self, node: ast.Call, call_name: str) -> None:
         path_text = self.constant_string(node.args[0]) if node.args else ""
@@ -690,7 +800,7 @@ class _PythonAnalyzer(ast.NodeVisitor):
             )
 
     def handle_network_call(self, node: ast.Call, call_name: str) -> None:
-        urls = [self.constant_string(arg) for arg in node.args]
+        urls = [self.network_target_from_arg(arg) for arg in node.args]
         urls.extend(self.constant_string(kw.value) for kw in node.keywords if kw.arg in {"url", "host"})
         literal_urls = [url for url in urls if url]
         if not literal_urls:
@@ -716,6 +826,50 @@ class _PythonAnalyzer(ast.NodeVisitor):
                     "Add the domain to allowed_domains only after review, or block the request.",
                     node,
                 )
+
+    def network_target_from_arg(self, node: ast.AST | None) -> str:
+        value = self.constant_string(node)
+        if value:
+            return value
+        if isinstance(node, ast.Tuple) and node.elts:
+            return self.constant_string(node.elts[0])
+        return ""
+
+    def handle_parallel_call(self, node: ast.Call, call_name: str) -> None:
+        max_workers = keyword_number(node, "max_workers")
+        if call_name == "asyncio.gather":
+            task_count = len(node.args)
+            if task_count > self.policy.max_parallel_tasks:
+                self.add(
+                    "TSG-RESOURCE-PARALLELISM",
+                    "resource_abuse",
+                    SafetyRiskLevel.MEDIUM,
+                    f"asyncio.gather starts {task_count} concurrent task(s).",
+                    self.segment(node),
+                    "Bound concurrency to policy.max_parallel_tasks.",
+                    node,
+                )
+            return
+        if max_workers is None:
+            self.add(
+                "TSG-RESOURCE-PARALLELISM",
+                "resource_abuse",
+                SafetyRiskLevel.MEDIUM,
+                f"{call_name} may create concurrent workers without a policy-bound limit.",
+                self.segment(node),
+                "Set max_workers within policy.max_parallel_tasks.",
+                node,
+            )
+        elif max_workers > self.policy.max_parallel_tasks:
+            self.add(
+                "TSG-RESOURCE-PARALLELISM",
+                "resource_abuse",
+                SafetyRiskLevel.MEDIUM,
+                f"{call_name} max_workers={max_workers} exceeds policy limit.",
+                self.segment(node),
+                "Set max_workers within policy.max_parallel_tasks.",
+                node,
+            )
 
     def handle_sleep_call(self, node: ast.Call, call_name: str) -> None:
         seconds = numeric_constant(node.args[0]) if node.args else None
@@ -795,8 +949,12 @@ class _PythonAnalyzer(ast.NodeVisitor):
         if isinstance(node, ast.Name):
             return self.imports.get(node.id, node.id)
         if isinstance(node, ast.Attribute):
+            if isinstance(node.value, ast.Name) and node.value.id in self.object_types:
+                return f"{self.object_types[node.value.id]}.{node.attr}"
             value_name = self.call_name(node.value)
             if value_name:
+                if isinstance(node.value, ast.Name) and "." in value_name and value_name.endswith(f".{node.attr}"):
+                    return value_name
                 return f"{value_name}.{node.attr}"
             return node.attr
         if isinstance(node, ast.Call):
@@ -964,6 +1122,13 @@ def keyword_bool(node: ast.Call, name: str) -> bool:
     return False
 
 
+def keyword_number(node: ast.Call, name: str) -> float | None:
+    for keyword in node.keywords:
+        if keyword.arg == name:
+            return numeric_constant(keyword.value)
+    return None
+
+
 def collect_names(node: ast.AST) -> set[str]:
     names: set[str] = set()
     for child in ast.walk(node):
@@ -982,7 +1147,7 @@ def extract_host(value: str) -> str:
 def split_shell_commands(tokens: Sequence[str]) -> list[list[str]]:
     commands: list[list[str]] = []
     current: list[str] = []
-    separators = {"|", "||", "&&", ";"}
+    separators = {"|", "||", "&&", ";", "&"}
     for token in tokens:
         if token in separators:
             if current:
@@ -998,6 +1163,10 @@ def split_shell_commands(tokens: Sequence[str]) -> list[list[str]]:
         else:
             commands.append(current)
     return commands
+
+
+def has_background_operator(tokens: Sequence[str], line: str) -> bool:
+    return "&" in tokens or bool(re.search(r"(?<!&)&\s*(?:$|[#;])", line))
 
 
 def is_install_invocation(tokens: Sequence[str]) -> bool:
@@ -1020,6 +1189,69 @@ def is_recursive_delete(tokens: Sequence[str]) -> bool:
 
 def targets_system_or_denied_path(tokens: Sequence[str], policy: ToolSafetyPolicy) -> bool:
     return any(policy.is_system_write_path(token) or policy.is_denied_path(token) for token in tokens[1:])
+
+
+def redirection_targets(tokens: Sequence[str]) -> list[str]:
+    targets: list[str] = []
+    for index, token in enumerate(tokens):
+        if token in {">", ">>", "1>", "1>>", "2>", "2>>"}:
+            if index + 1 < len(tokens):
+                targets.append(tokens[index + 1])
+            continue
+        match = re.match(r"^(?:[12])?>{1,2}(.+)$", token)
+        if match:
+            targets.append(match.group(1))
+    return targets
+
+
+def timeout_seconds_from_tokens(tokens: Sequence[str]) -> float | None:
+    command = Path(tokens[0]).name.lower() if tokens else ""
+    if command != "timeout":
+        return None
+    for token in tokens[1:]:
+        if token.startswith("-"):
+            continue
+        return duration_token_seconds(token)
+    return None
+
+
+def duration_token_seconds(token: str) -> float | None:
+    match = re.match(r"^(\d+(?:\.\d+)?)([smhd]?)$", token.lower())
+    if not match:
+        return None
+    value = float(match.group(1))
+    unit = match.group(2)
+    multipliers = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
+    return value * multipliers.get(unit, 1)
+
+
+def parallel_tasks_from_tokens(tokens: Sequence[str]) -> int | None:
+    command = Path(tokens[0]).name.lower() if tokens else ""
+    if command == "parallel":
+        for index, token in enumerate(tokens):
+            if token in {"-j", "--jobs"} and index + 1 < len(tokens):
+                return int_token(tokens[index + 1])
+            if token.startswith("-j") and len(token) > 2:
+                return int_token(token[2:])
+            if token.startswith("--jobs="):
+                return int_token(token.split("=", 1)[1])
+        return 0
+    if command == "xargs":
+        for index, token in enumerate(tokens):
+            if token in {"-P", "--max-procs"} and index + 1 < len(tokens):
+                return int_token(tokens[index + 1])
+            if token.startswith("-P") and len(token) > 2:
+                return int_token(token[2:])
+            if token.startswith("--max-procs="):
+                return int_token(token.split("=", 1)[1])
+    return None
+
+
+def int_token(token: str) -> int | None:
+    try:
+        return int(token)
+    except ValueError:
+        return None
 
 
 def line_has_allowlisted_url(line: str, policy: ToolSafetyPolicy) -> bool:
