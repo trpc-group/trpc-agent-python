@@ -37,17 +37,15 @@ _PYTHON_FEATURES_RE = re.compile(
     re.IGNORECASE,
 )
 _URL_RE = re.compile(r"https?://[^\s'\"<>)]*", re.IGNORECASE)
-_SENSITIVE_PATH_RE = re.compile(
-    r"(?i)(^|[/\\\s'\":])("
-    r"\.env(?:\.[\w.-]+)?|"
-    r"\.ssh(?:[/\\]|$)|"
-    r"id_rsa|id_dsa|id_ed25519|"
-    r"\.aws[/\\]credentials|"
-    r"credentials?(?:\.[\w.-]+)?|"
-    r"token\.(?:json|txt|env|key|pem|yml|yaml)|"
-    r"private[_-]?key"
-    r")"
-)
+_SENSITIVE_PATH_RE = re.compile(r"(?i)(^|[/\\\s'\":])("
+                                r"\.env(?:\.[\w.-]+)?|"
+                                r"\.ssh(?:[/\\]|$)|"
+                                r"id_rsa|id_dsa|id_ed25519|"
+                                r"\.aws[/\\]credentials|"
+                                r"credentials?(?:\.[\w.-]+)?|"
+                                r"token\.(?:json|txt|env|key|pem|yml|yaml)|"
+                                r"private[_-]?key"
+                                r")")
 _SYSTEM_PATH_RE = re.compile(r"(?i)^(?:/etc|/usr|/bin|/sbin)(?:/|$)|^[a-z]:[/\\]windows(?:[/\\]|$)")
 _SHELL_CHAIN_RE = re.compile(r"(\|\||&&|\||;|\$\(|`)")
 _BACKGROUND_RE = re.compile(r"(?i)(?:^|\s)nohup\s+|(?<!&)&\s*$")
@@ -196,7 +194,7 @@ class SafetyScanner:
             parser_error = f"SyntaxError: {ex.msg}"
             collector.add(
                 "PARSER_FALLBACK_USED",
-                ex.text or source[: self.policy.max_evidence_chars],
+                ex.text or source[:self.policy.max_evidence_chars],
                 line=ex.lineno,
                 message="Python AST parsing failed and fallback scanning was used.",
             )
@@ -493,12 +491,8 @@ class SafetyScanner:
         return bool(_SYSTEM_PATH_RE.search(value.strip("\"'")))
 
     def _call_is_secret_sink(self, call_name: str) -> bool:
-        return (
-            call_name == "print"
-            or call_name.endswith((".write", ".write_text", ".post", ".put", ".get"))
-            or call_name in {"os.system"}
-            or _is_subprocess_call(call_name)
-        )
+        return (call_name == "print" or call_name.endswith((".write", ".write_text", ".post", ".put", ".get"))
+                or call_name in {"os.system"} or _is_subprocess_call(call_name))
 
     def _call_references_sensitive_env(self, node: ast.Call) -> bool:
         for child in ast.walk(node):
@@ -630,18 +624,18 @@ def _is_subprocess_call(call_name: str) -> bool:
 
 def _is_network_call(call_name: str) -> bool:
     if call_name in {
-        "requests.get",
-        "requests.post",
-        "requests.put",
-        "requests.patch",
-        "requests.delete",
-        "requests.request",
-        "httpx.get",
-        "httpx.post",
-        "httpx.put",
-        "httpx.patch",
-        "httpx.delete",
-        "urllib.request.urlopen",
+            "requests.get",
+            "requests.post",
+            "requests.put",
+            "requests.patch",
+            "requests.delete",
+            "requests.request",
+            "httpx.get",
+            "httpx.post",
+            "httpx.put",
+            "httpx.patch",
+            "httpx.delete",
+            "urllib.request.urlopen",
     }:
         return True
     return call_name.endswith((".get", ".post", ".put", ".patch", ".delete")) and "ClientSession" in call_name

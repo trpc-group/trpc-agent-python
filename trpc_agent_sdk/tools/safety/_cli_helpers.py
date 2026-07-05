@@ -122,7 +122,10 @@ def scan_file(
         content=content,
         language=parse_language(language),
         tool_name=TOOL_NAME,
-        tool_metadata={"source": "file", "file_name": file_path.name},
+        tool_metadata={
+            "source": "file",
+            "file_name": file_path.name
+        },
     )
     report = SafetyScanner(policy).scan(target)
     sample = {
@@ -154,7 +157,8 @@ def build_target_from_sample(sample: dict[str, Any]) -> ScanTarget:
         content=_string_field(sample, "content"),
         command=_string_field(sample, "command"),
         language=parse_language(_string_field(sample, "language")),
-        env={key: "" for key in env_keys},
+        env={key: ""
+             for key in env_keys},
         tool_name=TOOL_NAME,
         tool_metadata={"sample_id": _string_field(sample, "id")},
     )
@@ -202,7 +206,10 @@ def build_aggregate_report(
         "policy_name": policy_name,
         "generated_at": generated_at,
         "sample_count": len(results),
-        "decision_summary": {decision: decisions.get(decision, 0) for decision in DECISION_VALUES},
+        "decision_summary": {
+            decision: decisions.get(decision, 0)
+            for decision in DECISION_VALUES
+        },
         "results": results,
     }
 
@@ -259,7 +266,5 @@ def _is_subset(expected_rules: list[str], actual_rules: list[str]) -> bool:
 def _mismatch_message(result: dict[str, Any]) -> str:
     report = result["report"]
     actual_rules = [finding["rule_id"] for finding in report.get("findings", [])]
-    return (
-        f"{result['sample_id']}: expected decision={result['expected_decision']} "
-        f"rules={result['expected_rules']}, got decision={report['decision']} rules={actual_rules}"
-    )
+    return (f"{result['sample_id']}: expected decision={result['expected_decision']} "
+            f"rules={result['expected_rules']}, got decision={report['decision']} rules={actual_rules}")

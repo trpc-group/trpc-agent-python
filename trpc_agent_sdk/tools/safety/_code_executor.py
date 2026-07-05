@@ -126,9 +126,11 @@ def _build_scan_targets(code_execution_input: CodeExecutionInput) -> list[ScanTa
                     content=code,
                     language=_language_from_value(code_block.language),
                     tool_name=_TOOL_NAME,
-                    tool_metadata={"source": "code_block", "index": index},
-                )
-            )
+                    tool_metadata={
+                        "source": "code_block",
+                        "index": index
+                    },
+                ))
     elif code_execution_input.code.strip():
         targets.append(
             ScanTarget(
@@ -136,8 +138,7 @@ def _build_scan_targets(code_execution_input: CodeExecutionInput) -> list[ScanTa
                 language=ScriptLanguage.UNKNOWN,
                 tool_name=_TOOL_NAME,
                 tool_metadata={"source": "code"},
-            )
-        )
+            ))
 
     for input_file in code_execution_input.input_files:
         name = input_file.name or ""
@@ -154,9 +155,11 @@ def _build_scan_targets(code_execution_input: CodeExecutionInput) -> list[ScanTa
                 content=content,
                 language=_language_from_file_suffix(suffix),
                 tool_name=_TOOL_NAME,
-                tool_metadata={"source": "input_file", "file_name": name},
-            )
-        )
+                tool_metadata={
+                    "source": "input_file",
+                    "file_name": name
+                },
+            ))
 
     return targets
 
@@ -273,19 +276,16 @@ def _blocked_result(report: SafetyReport) -> CodeExecutionResult:
 def _blocked_text(report: SafetyReport) -> str:
     rules = _ordered_text((finding.rule_id for finding in report.findings), separator=", ") or "none"
     evidence = _ordered_text(finding.evidence for finding in report.findings) or _FAIL_CLOSED_EVIDENCE
-    recommendation = (
-        _ordered_text(finding.recommendation for finding in report.findings) or _fail_closed_recommendation()
-    )
-    return "\n".join(
-        [
-            _BLOCKED_HEADING,
-            f"Decision: {report.decision.value}",
-            f"Risk level: {report.risk_level.value}",
-            f"Rules: {rules}",
-            f"Evidence: {evidence}",
-            f"Recommendation: {recommendation}",
-        ]
-    )
+    recommendation = (_ordered_text(finding.recommendation for finding in report.findings)
+                      or _fail_closed_recommendation())
+    return "\n".join([
+        _BLOCKED_HEADING,
+        f"Decision: {report.decision.value}",
+        f"Risk level: {report.risk_level.value}",
+        f"Rules: {rules}",
+        f"Evidence: {evidence}",
+        f"Recommendation: {recommendation}",
+    ])
 
 
 def _ordered_text(values: Any, *, separator: str = "; ") -> str:

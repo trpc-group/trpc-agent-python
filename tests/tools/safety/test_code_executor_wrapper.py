@@ -53,6 +53,7 @@ class RecordingDelegate(BaseCodeExecutor):
 
 
 def _enable_caplog_logger(name: str) -> None:
+    logging.disable(logging.NOTSET)
     target_logger = logging.getLogger(name)
     target_logger.disabled = False
     target_logger.propagate = True

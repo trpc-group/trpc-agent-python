@@ -20,10 +20,8 @@ _SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
     re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
     re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{8,}"),
-    re.compile(
-        r"(?i)\b(api[_-]?key|access[_-]?token|auth[_-]?token|token|secret|password)\b"
-        r"\s*[:=]\s*['\"]?[^'\"\s,;]+"
-    ),
+    re.compile(r"(?i)\b(api[_-]?key|access[_-]?token|auth[_-]?token|token|secret|password)\b"
+               r"\s*[:=]\s*['\"]?[^'\"\s,;]+"),
 )
 
 
