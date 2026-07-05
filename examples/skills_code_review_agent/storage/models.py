@@ -3,7 +3,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """SQLAlchemy ORM models for code-review persistence (issue #92, requirement 5).
 
 Mirrors the framework's own SQL pattern (``trpc_agent_sdk/sessions/_sql_session_service.py``):
@@ -48,6 +47,7 @@ class ReviewTaskORM(CodeReviewBase):
     finding_count: Mapped[int] = mapped_column(Integer, default=0)
     severity_dist: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, default=dict)
     exception_dist: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, default=dict)
+    diff_summary: Mapped[dict[str, Any]] = mapped_column(DynamicJSON, default=dict)  # input-diff summary (要求5)
     create_time: Mapped[datetime] = mapped_column(PreciseTimestamp, default=func.now())
     update_time: Mapped[datetime] = mapped_column(PreciseTimestamp, default=func.now(), onupdate=func.now())
 

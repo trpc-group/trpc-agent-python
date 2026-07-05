@@ -265,6 +265,45 @@ def test_all_six_rule_categories_reachable() -> None:
         assert required in cats, f"category {required} not produced"
 
 
+# --- spec-alignment: input modes, env whitelist, diff-summary persistence -----------------------
+
+
+def test_file_list_input_mode() -> None:
+    result = run_review(files=["pipeline/policy.py"], repo_root=str(_EXAMPLE_DIR))
+    assert result.source_type == "file_list"
+    assert result.summary.files_changed == 1
+
+
+def test_sandbox_env_is_whitelisted() -> None:
+    import os
+
+    from pipeline.policy import ENV_ALLOWLIST, sandbox_env
+
+    os.environ["CR_LEAK_TEST"] = "should-not-pass"
+    try:
+        env = sandbox_env()
+        assert "CR_LEAK_TEST" not in env
+        assert set(env).issubset(set(ENV_ALLOWLIST))
+    finally:
+        del os.environ["CR_LEAK_TEST"]
+
+
+@pytest.mark.asyncio
+async def test_diff_summary_persisted(tmp_path) -> None:
+    from storage.dao import ReviewStore
+
+    result = run_review(diff_text=(_FIXTURES / "security.diff").read_text())
+    store = ReviewStore(f"sqlite+aiosqlite:///{tmp_path / 'cr.db'}")
+    await store.init()
+    try:
+        await store.persist(result)
+        got = await store.get_by_task_id(result.task_id)
+        assert got["task"].diff_summary.get("files_changed") == 1
+        assert got["task"].diff_summary.get("changed_files") == ["security.py"]
+    finally:
+        await store.close()
+
+
 # (text containing a secret, the raw secret that must not survive redaction) — the leak-test corpus.
 _LEAK_CORPUS = [
     ('password = "hunter2supersecret"', "hunter2supersecret"),

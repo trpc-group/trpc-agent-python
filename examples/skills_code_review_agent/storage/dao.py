@@ -3,7 +3,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """Persistence for reviews (issue #92, requirements 3 & 5).
 
 Wraps the framework's ``SqlStorage`` so the schema is portable (SQLite default, PostgreSQL/MySQL
@@ -53,6 +52,13 @@ class ReviewStore:
                 finding_count=int(mon.get("finding_count", 0)),
                 severity_dist=mon.get("severity_dist", {}),
                 exception_dist=mon.get("exception_dist", {}),
+                diff_summary={
+                    "files_changed": result.summary.files_changed,
+                    "added": result.summary.added,
+                    "removed": result.summary.removed,
+                    "languages": result.summary.languages,
+                    "changed_files": [f.path for f in result.summary.files],
+                },
             )
             await self._storage.add(db, task)
 

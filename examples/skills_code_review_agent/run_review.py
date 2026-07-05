@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import shutil
+import subprocess
 from pathlib import Path
 
 from pipeline import report as report_mod
@@ -26,16 +28,34 @@ from pipeline.engine import ReviewResult, run_review, run_review_container
 HERE = Path(__file__).parent
 
 
+def _docker_available() -> bool:
+    if not shutil.which("docker"):
+        return False
+    try:
+        return subprocess.run(["docker", "info"], capture_output=True, timeout=5).returncode == 0
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _resolve_runtime(runtime: str) -> str:
+    """`auto` -> container when Docker is up (production default), else the local subprocess sandbox."""
+    if runtime != "auto":
+        return runtime
+    return "container" if _docker_available() else "local"
+
+
 def _parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(description="Automated code-review agent (Skills + sandbox + DB).")
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--diff-file", help="path to a unified-diff file")
     src.add_argument("--repo-path", help="path to a git worktree (reviews `git diff`)")
+    src.add_argument("--files", help="comma-separated list of file paths to review as fully-added")
     src.add_argument("--fixture", help="name of a bundled fixture under fixtures/diffs/")
     ap.add_argument("--runtime",
-                    choices=["inprocess", "local", "container"],
-                    default="inprocess",
-                    help="scanner runtime: inprocess (fast), local (subprocess sandbox), container (Docker)")
+                    choices=["auto", "inprocess", "local", "container"],
+                    default="auto",
+                    help="scanner runtime: auto (sandbox: container if Docker, else local), "
+                    "inprocess (fast dev), local (subprocess sandbox), container (Docker)")
     ap.add_argument("--sandbox-timeout", type=float, default=None, help="sandbox timeout in seconds")
     ap.add_argument("--out-dir", default=".", help="where to write review_report.json/.md")
     ap.add_argument("--db-url", default="sqlite+aiosqlite:///./code_review.db")
@@ -44,13 +64,18 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _run(args: argparse.Namespace) -> ReviewResult:
+    runtime = _resolve_runtime(args.runtime)
     if args.repo_path:
-        return run_review(repo_path=args.repo_path, runtime=args.runtime, sandbox_timeout=args.sandbox_timeout)
+        return run_review(repo_path=args.repo_path, runtime=runtime, sandbox_timeout=args.sandbox_timeout)
+    if args.files:
+        return run_review(files=[p.strip() for p in args.files.split(",") if p.strip()],
+                          runtime=runtime,
+                          sandbox_timeout=args.sandbox_timeout)
     path = Path(args.diff_file) if args.diff_file else HERE / "fixtures" / "diffs" / args.fixture
     diff_text = path.read_text(encoding="utf-8")
-    if args.runtime == "container":
+    if runtime == "container":
         return asyncio.run(run_review_container(diff_text=diff_text, sandbox_timeout=args.sandbox_timeout))
-    return run_review(diff_text=diff_text, runtime=args.runtime, sandbox_timeout=args.sandbox_timeout)
+    return run_review(diff_text=diff_text, runtime=runtime, sandbox_timeout=args.sandbox_timeout)
 
 
 async def _persist(result: ReviewResult, db_url: str) -> None:

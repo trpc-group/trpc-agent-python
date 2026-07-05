@@ -3,7 +3,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """Review policy — the Filter decision logic (issue #92, requirement 7 & 8).
 
 Shared by two enforcement sites (plan decision #5): the framework ``ReviewGuardFilter`` on the agent
@@ -32,6 +31,14 @@ _DANGEROUS = [
 
 # Sensitive roots a review must never touch (temp dirs under /var/folders are intentionally allowed).
 _FORBIDDEN_PATHS = ("/etc", "/root", "/boot", os.path.expanduser("~/.ssh"))
+
+# Only these env vars are passed into the sandbox — parent-process secrets never leak in (要求7).
+ENV_ALLOWLIST = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP", "SYSTEMROOT")
+
+
+def sandbox_env(allowlist: Iterable[str] = ENV_ALLOWLIST) -> dict[str, str]:
+    """Return the minimal whitelisted environment for a sandbox run."""
+    return {k: os.environ[k] for k in allowlist if k in os.environ}
 
 
 @dataclass

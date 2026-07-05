@@ -3,7 +3,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """Parse review inputs into a ``DiffSummary`` (issue #92, requirement 3).
 
 Plumbing only — wraps the mature ``unidiff`` parser. Three input kinds:
@@ -89,6 +88,28 @@ def parse_git_worktree(repo_path: str, base_ref: str | None = None) -> DiffSumma
         args.append(base_ref)
     proc = subprocess.run(args, capture_output=True, text=True, check=True)
     return parse_unified_diff(proc.stdout)
+
+
+def parse_file_list(paths: list[str], repo_root: str = ".") -> DiffSummary:
+    """Treat a list of file paths as fully-added files (issue #92, requirement 3 input mode)."""
+    files: list[ChangedFile] = []
+    languages: dict[str, int] = {}
+    added = 0
+    for rel in paths:
+        try:
+            n = len((Path(repo_root) / rel).read_text(encoding="utf-8", errors="replace").splitlines())
+        except OSError:
+            n = 0
+        lang = _language(rel)
+        if lang:
+            languages[lang] = languages.get(lang, 0) + 1
+        added += n
+        files.append(
+            ChangedFile(path=rel,
+                        change_type="added",
+                        language=lang,
+                        hunks=[Hunk(new_start=1, new_len=n, candidate_lines=list(range(1, n + 1)))]))
+    return DiffSummary(files=files, files_changed=len(files), added=added, removed=0, languages=languages)
 
 
 def materialize_new_files(text: str) -> dict[str, str]:

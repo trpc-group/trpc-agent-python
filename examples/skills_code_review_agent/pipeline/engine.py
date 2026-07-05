@@ -53,11 +53,26 @@ def _materialize(diff_text: str) -> tuple[DiffSummary, str]:
     return summary, tmp
 
 
+def _materialize_files(paths: list[str], repo_root: str) -> str:
+    """Copy a list of files into a temp dir for scanning (the --files / file-list input mode)."""
+    tmp = tempfile.mkdtemp(prefix="cr_scan_")
+    for rel in paths:
+        dest = Path(tmp) / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            dest.write_text((Path(repo_root) / rel).read_text(encoding="utf-8", errors="replace"), encoding="utf-8")
+        except OSError:
+            continue
+    return tmp
+
+
 def run_review(
     *,
     task_id: Optional[str] = None,
     diff_text: Optional[str] = None,
     repo_path: Optional[str] = None,
+    files: Optional[list[str]] = None,
+    repo_root: str = ".",
     runtime: str = "inprocess",
     sandbox_timeout: float | None = None,
     max_output_bytes: int | None = None,
@@ -81,12 +96,16 @@ def run_review(
     if diff_text is not None:
         summary, scan_dir = _materialize(diff_text)
         source_type, source_ref = "diff_file", "<diff>"
+    elif files is not None:
+        summary = diff_parser.parse_file_list(files, repo_root)
+        scan_dir = _materialize_files(files, repo_root)
+        source_type, source_ref = "file_list", ",".join(files)[:200]
     elif repo_path is not None:
         summary = diff_parser.parse_git_worktree(repo_path)
         scan_dir = repo_path
         source_type, source_ref = "repo_path", repo_path
     else:
-        raise ValueError("run_review requires diff_text or repo_path")
+        raise ValueError("run_review requires diff_text, files, or repo_path")
 
     sandbox_runs: list = []
     if runtime == "local":

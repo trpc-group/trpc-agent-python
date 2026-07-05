@@ -110,7 +110,8 @@ def run_local(
     stdout: str | bytes | None = ""
     stderr: str | bytes | None = ""
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+        from .policy import sandbox_env
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False, env=sandbox_env())
         exit_code, stdout, stderr = proc.returncode, proc.stdout, proc.stderr
     except subprocess.TimeoutExpired as exc:
         timed_out, exit_code = True, -1
@@ -164,10 +165,12 @@ async def run_container(
             for p in Path(scan_dir).rglob("*") if p.is_file()
         ]
         await fs.put_files(ws, files)
+        from .policy import sandbox_env
         run = await runner.run_program(
             ws,
             WorkspaceRunProgramSpec(cmd="python",
                                     args=["/opt/skill/run_checks.py", "--target", ".", "--out", "findings.json"],
+                                    env=sandbox_env(),
                                     timeout=timeout,
                                     limits=WorkspaceResourceLimits(memory_mb=memory_mb)))
         collected = await fs.collect_outputs(ws, WorkspaceOutputSpec(globs=["findings.json"]))
