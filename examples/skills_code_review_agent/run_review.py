@@ -68,16 +68,17 @@ def _parse_args() -> argparse.Namespace:
 def _run(args: argparse.Namespace) -> ReviewResult:
     runtime = _resolve_runtime(args.runtime)
     if args.repo_path:
-        return run_review(repo_path=args.repo_path, runtime=runtime, sandbox_timeout=args.sandbox_timeout)
-    if args.files:
-        return run_review(files=[p.strip() for p in args.files.split(",") if p.strip()],
-                          runtime=runtime,
-                          sandbox_timeout=args.sandbox_timeout)
-    path = Path(args.diff_file) if args.diff_file else HERE / "fixtures" / "diffs" / args.fixture
-    diff_text = path.read_text(encoding="utf-8")
+        src = {"repo_path": args.repo_path}
+    elif args.files:
+        src = {"files": [p.strip() for p in args.files.split(",") if p.strip()]}
+    else:
+        path = Path(args.diff_file) if args.diff_file else HERE / "fixtures" / "diffs" / args.fixture
+        src = {"diff_text": path.read_text(encoding="utf-8")}
+    # Every input mode reaches the resolved runtime — container goes to the async container path so
+    # --files / --repo-path are not silently downgraded to in-process.
     if runtime == "container":
-        return asyncio.run(run_review_container(diff_text=diff_text, sandbox_timeout=args.sandbox_timeout))
-    return run_review(diff_text=diff_text, runtime=runtime, sandbox_timeout=args.sandbox_timeout)
+        return asyncio.run(run_review_container(sandbox_timeout=args.sandbox_timeout, **src))
+    return run_review(runtime=runtime, sandbox_timeout=args.sandbox_timeout, **src)
 
 
 async def _persist(result: ReviewResult, db_url: str) -> None:

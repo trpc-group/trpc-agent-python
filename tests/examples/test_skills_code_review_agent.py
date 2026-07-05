@@ -439,3 +439,21 @@ async def test_status_reflects_blocked(tmp_path) -> None:
         assert got["task"].status == "blocked"  # not hardcoded "completed"
     finally:
         await store.close()
+
+
+def test_run_review_rejects_container_runtime() -> None:
+    # Sync run_review must reject container (async) loudly, not silently fall back to in-process.
+    with pytest.raises(ValueError, match="container"):
+        run_review(diff_text=(_FIXTURES / "security.diff").read_text(), runtime="container")
+
+
+def test_resolve_input_covers_all_modes(tmp_path) -> None:
+    # The shared resolver (used by run_review AND run_review_container) handles every input mode,
+    # so --files / --repo-path reach the container sandbox instead of downgrading to in-process.
+    from pipeline.engine import _resolve_input
+
+    (tmp_path / "m.py").write_text("import os\n")
+    _, _, st_diff, _ = _resolve_input((_FIXTURES / "security.diff").read_text(), None, None, ".")
+    _, _, st_files, ref = _resolve_input(None, ["m.py"], None, str(tmp_path))
+    assert st_diff == "diff_file"
+    assert st_files == "file_list" and "m.py" in ref

@@ -99,20 +99,10 @@ def run_review(
     # fast-path that must be requested explicitly.
     if runtime == "auto":
         runtime = "local"
+    elif runtime == "container":
+        raise ValueError("container runtime is async — call run_review_container() instead of run_review()")
 
-    if diff_text is not None:
-        summary, scan_dir = _materialize(diff_text)
-        source_type, source_ref = "diff_file", "<diff>"
-    elif files is not None:
-        summary = diff_parser.parse_file_list(files, repo_root)
-        scan_dir = _materialize_files(files, repo_root)
-        source_type, source_ref = "file_list", ",".join(files)[:200]
-    elif repo_path is not None:
-        summary = diff_parser.parse_git_worktree(repo_path)
-        scan_dir = repo_path
-        source_type, source_ref = "repo_path", repo_path
-    else:
-        raise ValueError("run_review requires diff_text, files, or repo_path")
+    summary, scan_dir, source_type, source_ref = _resolve_input(diff_text, files, repo_path, repo_root)
 
     sandbox_runs: list = []
     if runtime == "local":
@@ -185,18 +175,42 @@ def _assemble(task_id, summary, raw, sandbox_runs, source_type, source_ref, star
                         monitoring=monitoring)
 
 
+def _resolve_input(diff_text: Optional[str], files: Optional[list[str]], repo_path: Optional[str],
+                   repo_root: str) -> tuple[DiffSummary, str, str, str]:
+    """Materialize any of the three input modes into (summary, scan_dir, source_type, source_ref).
+
+    Shared by run_review and run_review_container so every input mode reaches the same sandbox path.
+    """
+    if diff_text is not None:
+        summary, scan_dir = _materialize(diff_text)
+        return summary, scan_dir, "diff_file", "<diff>"
+    if files is not None:
+        return diff_parser.parse_file_list(files, repo_root), _materialize_files(files, repo_root), \
+            "file_list", ",".join(files)[:200]
+    if repo_path is not None:
+        return diff_parser.parse_git_worktree(repo_path), repo_path, "repo_path", repo_path
+    raise ValueError("a review requires diff_text, files, or repo_path")
+
+
 async def run_review_container(
     *,
     task_id: Optional[str] = None,
-    diff_text: str,
+    diff_text: Optional[str] = None,
+    files: Optional[list[str]] = None,
+    repo_path: Optional[str] = None,
+    repo_root: str = ".",
     sandbox_timeout: float | None = None,
     max_output_bytes: int | None = None,
 ) -> ReviewResult:
-    """Run a review with scanners inside a Container workspace (production isolation; needs Docker)."""
+    """Run a review with scanners inside a Container workspace (production isolation; needs Docker).
+
+    Accepts the same three input modes as run_review so file-list and worktree inputs also reach the
+    container sandbox instead of silently falling back to the in-process path.
+    """
     from . import sandbox as sandbox_mod
     task_id = task_id or f"cr-{uuid.uuid4().hex[:12]}"
     started = time.monotonic()
-    summary, scan_dir = _materialize(diff_text)
+    summary, scan_dir, source_type, source_ref = _resolve_input(diff_text, files, repo_path, repo_root)
     raw, run = await sandbox_mod.run_container(
         scan_dir,
         timeout=sandbox_timeout if sandbox_timeout is not None else sandbox_mod.DEFAULT_TIMEOUT_SEC,
@@ -205,7 +219,7 @@ async def run_review_container(
     if run.timed_out or run.exit_code not in (0, 1):
         exception_dist["sandbox_failure"] = 1
     raw = list(raw) + scanners.detect_missing_tests(summary)
-    return _assemble(task_id, summary, raw, [run], "diff_file", "<diff>", started, exception_dist, None, None)
+    return _assemble(task_id, summary, raw, [run], source_type, source_ref, started, exception_dist, None, None)
 
 
 def dedup_thresholds() -> tuple[float, float]:

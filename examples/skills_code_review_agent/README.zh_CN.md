@@ -9,16 +9,24 @@
 ```bash
 pip install -r requirements.txt
 
-# 评审内置样本（dry-run，确定性，无需模型）：
-python run_review.py --fixture 0001_insecure.diff --out-dir /tmp/cr
+# 评审内置样本（无需模型）。默认运行时是沙箱
+# （auto → 有 Docker 走容器，否则本地子进程沙箱）：
+python run_review.py --fixture security.diff --out-dir /tmp/cr
 
-# 评审你自己的 diff 或工作区：
+# 评审你自己的 diff、工作区，或指定文件列表：
 python run_review.py --diff-file my.diff
 python run_review.py --repo-path /path/to/repo --no-db
+python run_review.py --files pipeline/engine.py,pipeline/scanners.py
 
 # 在带标注的样本上打分自测（检出率 / 误报率）：
 python selftest.py
+
+# 走 LlmAgent + fake 模型（无需 API key）：
+python run_agent.py --fixture security.diff --dry-run
 ```
+
+样本报告见 [`sample_output/`](./sample_output/)；规则清单见
+[`../../skills/code-review/docs/RULES.md`](../../skills/code-review/docs/RULES.md)，设计说明见 [DESIGN.md](./DESIGN.md)。
 
 ## 工作原理
 

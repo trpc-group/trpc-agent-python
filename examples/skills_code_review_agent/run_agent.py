@@ -10,7 +10,8 @@
 Dry-run by default: with no API key, FakeReviewModel drives one call to the review_code tool and
 summarizes the result — no LLM, no secrets. Set TRPC_AGENT_API_KEY to use a real model instead.
 
-    python run_agent.py --fixture 0001_insecure.diff
+    python run_agent.py --fixture security.diff
+    python run_agent.py --fixture security.diff --dry-run   # force fake model even with a key
 """
 from __future__ import annotations
 
