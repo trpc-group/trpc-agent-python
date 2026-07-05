@@ -168,3 +168,57 @@ def test_sandbox_output_byte_accounting() -> None:
     text, n = _truncate("x" * 5000, 10)
     assert n == 5000  # records the true size
     assert len(text.encode()) <= 10 + len("\n...[truncated]")
+
+
+def test_policy_decisions() -> None:
+    from pipeline.policy import ReviewPolicy
+
+    p = ReviewPolicy()
+    assert p.evaluate(command="rm -rf /tmp/x").decision == "deny"
+    assert p.evaluate(command="python run_checks.py").decision == "allow"
+    assert p.evaluate(command="cat x", touched_paths=["/etc/passwd"]).decision == "deny"
+    assert p.evaluate(command="fetch", network_hosts=["evil.com"]).decision == "needs_human_review"
+
+
+def test_denied_action_never_reaches_sandbox() -> None:
+    from pipeline.policy import ReviewPolicy
+
+    # A policy that refuses everything (tiny budget) must block before execution (requirement 7).
+    result = run_review(diff_text=(_FIXTURES / "0001_insecure.diff").read_text(),
+                        runtime="local",
+                        policy=ReviewPolicy(max_budget_sec=1e-6),
+                        sandbox_timeout=60)
+    run = result.report.sandbox_summary[0]
+    assert run.blocked is True
+    assert run.duration_sec == 0.0  # never executed
+    assert result.report.findings_summary["total"] == 0
+    assert result.report.filter_blocks and result.report.filter_blocks[0]["category"] == "budget"
+    assert result.monitoring["block_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_guard_filter_blocks_dangerous_command() -> None:
+    from trpc_agent_sdk.filter import FilterResult
+
+    from agent.filter import ReviewGuardFilter
+
+    guard = ReviewGuardFilter()
+    dangerous = FilterResult()
+    await guard._before(None, {"command": "rm -rf /"}, dangerous)
+    assert dangerous.is_continue is False
+
+    safe = FilterResult()
+    await guard._before(None, {"diff_text": "some diff"}, safe)
+    assert safe.is_continue is True  # review_code has no command arg -> passes
+
+
+def test_report_renders_filter_block_section() -> None:
+    from pipeline.policy import ReviewPolicy
+
+    result = run_review(diff_text=(_FIXTURES / "0001_insecure.diff").read_text(),
+                        runtime="local",
+                        policy=ReviewPolicy(max_budget_sec=1e-6),
+                        sandbox_timeout=60)
+    md = report_mod.render_md(result.report)
+    assert "## 4. Filter interception summary" in md
+    assert "over budget" in md

@@ -83,5 +83,13 @@ self-test, CLI, the fake-model agent loop (`run_agent.py`), and **sandbox execut
 each run; `--runtime container` runs them in a Docker workspace — see `skills/code-review/Dockerfile`
 — and is skipped in tests when Docker is absent). Baseline secret redaction is in place.
 
-Planned follow-up slices: the tool-level Filter gate (criterion 7), redaction hardening to ≥95%
-(criterion 5), and OpenTelemetry metrics wiring (criterion 9).
+The **Filter gate** (criterion 7) is in place: `pipeline/policy.py::ReviewPolicy` decides
+allow / deny / needs-human-review for a sandbox action (high-risk command, forbidden path,
+non-whitelisted network, over-budget). It is enforced at two sites sharing that policy — the
+deterministic sandbox gate (a denied action never launches; the block is recorded and surfaced in
+the report's Filter-interception section) and the framework `agent/filter.py::ReviewGuardFilter`
+(TOOL-scoped, attached on the review tool).
+
+Planned follow-up slices: redaction hardening to ≥95% (criterion 5) and OpenTelemetry metrics wiring
+(criterion 9). Note: the default runtime is `inprocess` for fast dry-runs — pass `--runtime local`
+or `--runtime container` to exercise the sandbox path.

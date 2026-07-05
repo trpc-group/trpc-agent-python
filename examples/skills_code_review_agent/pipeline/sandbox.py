@@ -3,7 +3,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """Sandboxed execution of the review scanners (issue #92, requirement 4 & slice 2).
 
 Runs the skill's ``run_checks.py`` outside the review process, with a timeout and an output-size cap,
@@ -24,12 +23,34 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .types import Finding, SandboxRunResult
+
+if TYPE_CHECKING:
+    from .policy import ReviewPolicy
 
 _SKILL_SCRIPT = Path(__file__).resolve().parents[3] / "skills" / "code-review" / "scripts" / "run_checks.py"
 DEFAULT_TIMEOUT_SEC = 60.0
 MAX_OUTPUT_BYTES = 1_048_576  # 1 MiB per stream
+
+
+def _gate(policy: "ReviewPolicy | None", cmd: list[str], scan_dir: str, timeout: float) -> SandboxRunResult | None:
+    """Return a blocked result if the policy refuses the action, else None (allowed to run)."""
+    if policy is None:
+        return None
+    decision = policy.evaluate(command=" ".join(cmd), touched_paths=[scan_dir], budget_sec=timeout)
+    if decision.allowed:
+        return None
+    return SandboxRunResult(script="run_checks.py",
+                            exit_code=0,
+                            duration_sec=0.0,
+                            timed_out=False,
+                            stdout_bytes=0,
+                            stderr_bytes=0,
+                            blocked=True,
+                            block_reason=decision.reason,
+                            block_category=decision.category)
 
 
 def _truncate(text: str | bytes | None, cap: int) -> tuple[str, int]:
@@ -69,10 +90,19 @@ def run_local(
     *,
     timeout: float = DEFAULT_TIMEOUT_SEC,
     max_bytes: int = MAX_OUTPUT_BYTES,
+    policy: "ReviewPolicy | None" = None,
 ) -> tuple[list[Finding], SandboxRunResult]:
-    """Run the scanners in a subprocess against ``scan_dir``; never raises."""
+    """Run the scanners in a subprocess against ``scan_dir``; never raises.
+
+    If ``policy`` denies the action (or requires human review), the subprocess is NOT launched and a
+    blocked ``SandboxRunResult`` is returned instead (requirement 7).
+    """
     out_file = Path(tempfile.mkdtemp(prefix="cr_out_")) / "findings.json"
     cmd = [sys.executable, str(_SKILL_SCRIPT), "--target", scan_dir, "--out", str(out_file)]
+
+    blocked = _gate(policy, cmd, scan_dir, timeout)
+    if blocked is not None:
+        return [], blocked
 
     started = time.monotonic()
     timed_out = False

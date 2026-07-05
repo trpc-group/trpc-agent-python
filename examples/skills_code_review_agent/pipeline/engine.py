@@ -24,6 +24,7 @@ from typing import Optional
 
 from . import diff_parser, report as report_mod, scanners
 from .dedup import dedup_and_denoise
+from .policy import ReviewPolicy
 from .types import DiffSummary, Finding, ReviewReport
 
 
@@ -60,6 +61,7 @@ def run_review(
     runtime: str = "inprocess",
     sandbox_timeout: float | None = None,
     max_output_bytes: int | None = None,
+    policy: ReviewPolicy | None = None,
     warn_threshold: float | None = None,
     review_threshold: float | None = None,
 ) -> ReviewResult:
@@ -92,9 +94,10 @@ def run_review(
         raw, run = sandbox_mod.run_local(
             scan_dir,
             timeout=sandbox_timeout if sandbox_timeout is not None else sandbox_mod.DEFAULT_TIMEOUT_SEC,
-            max_bytes=max_output_bytes if max_output_bytes is not None else sandbox_mod.MAX_OUTPUT_BYTES)
+            max_bytes=max_output_bytes if max_output_bytes is not None else sandbox_mod.MAX_OUTPUT_BYTES,
+            policy=policy if policy is not None else ReviewPolicy())
         sandbox_runs = [run]
-        if run.timed_out or run.exit_code not in (0, 1):  # 1 = scanners found issues (normal)
+        if run.timed_out or (not run.blocked and run.exit_code not in (0, 1)):  # 1 = issues found (normal)
             exception_dist["sandbox_failure"] = exception_dist.get("sandbox_failure", 0) + 1
     else:  # "inprocess"
         try:
@@ -124,17 +127,27 @@ def _assemble(task_id, summary, raw, sandbox_runs, source_type, source_ref, star
     for f in active:
         severity_dist[f.severity] = severity_dist.get(f.severity, 0) + 1
 
+    filter_blocks = [{
+        "script": r.script,
+        "reason": r.block_reason,
+        "category": r.block_category
+    } for r in sandbox_runs if r.blocked]
+
     monitoring = {
         "total_sec": round(time.monotonic() - started, 3),
         "sandbox_sec": round(sum(r.duration_sec for r in sandbox_runs), 3),
         "tool_calls": len(scanners.ADAPTERS),
-        "block_count": 0,  # populated in slice 3 (Filter gate)
+        "block_count": len(filter_blocks),
         "finding_count": len(active),
         "severity_dist": severity_dist,
         "exception_dist": exception_dist,
     }
 
-    report = report_mod.build_report(task_id, findings, sandbox_runs=sandbox_runs, monitoring=monitoring)
+    report = report_mod.build_report(task_id,
+                                     findings,
+                                     sandbox_runs=sandbox_runs,
+                                     filter_blocks=filter_blocks,
+                                     monitoring=monitoring)
     return ReviewResult(task_id=task_id,
                         report=report,
                         findings=findings,
