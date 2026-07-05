@@ -106,6 +106,8 @@ def run_review(
             exception_dist[type(exc).__name__] = exception_dist.get(type(exc).__name__, 0) + 1
             raw = []
 
+    # missing_tests is a diff-level check (no file content / sandbox needed) — add it for every runtime.
+    raw = list(raw) + scanners.detect_missing_tests(summary)
     return _assemble(task_id, summary, raw, sandbox_runs, source_type, source_ref, started, exception_dist,
                      warn_threshold, review_threshold)
 
@@ -176,6 +178,7 @@ async def run_review_container(
     exception_dist: dict[str, int] = {}
     if run.timed_out or run.exit_code not in (0, 1):
         exception_dist["sandbox_failure"] = 1
+    raw = list(raw) + scanners.detect_missing_tests(summary)
     return _assemble(task_id, summary, raw, [run], "diff_file", "<diff>", started, exception_dist, None, None)
 
 

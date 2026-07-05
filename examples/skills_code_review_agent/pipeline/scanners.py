@@ -3,7 +3,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """Run established OSS scanners and normalize their output into the ``Finding`` schema.
 
 Design thesis (see the plan): findings come from *deterministic* scanners, not the LLM, so the
@@ -18,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from typing import Callable
@@ -67,6 +67,9 @@ def _in_diff(file: str, line: int | None, changed: dict[str, set[int]]) -> bool:
     return line in touched
 
 
+# assert-used (bandit B101 / ruff S101) is noise, especially in test files — suppress it.
+_NOISE_RULES = {"B101", "S101"}
+
 # bandit issue_severity -> our Severity. (Tunable — bandit also exposes issue_confidence.)
 _BANDIT_SEV: dict[str, Severity] = {"HIGH": "high", "MEDIUM": "medium", "LOW": "low"}
 _BANDIT_CONF = {"HIGH": 0.9, "MEDIUM": 0.6, "LOW": 0.4}
@@ -83,7 +86,7 @@ def normalize_bandit(repo_dir: str, changed: dict[str, set[int]]) -> list[Findin
     for r in data.get("results", []):
         file = _rel(r["filename"], repo_dir)
         line = r.get("line_number")
-        if not _in_diff(file, line, changed):
+        if not _in_diff(file, line, changed) or r.get("test_id") in _NOISE_RULES:
             continue
         findings.append(
             Finding(
@@ -120,7 +123,7 @@ def _ruff_map(code: str) -> tuple[str, Severity]:
 def normalize_ruff(repo_dir: str, changed: dict[str, set[int]]) -> list[Finding]:
     if not shutil.which("ruff"):
         return []
-    proc = _run(["ruff", "check", ".", "--output-format", "json", "--select", "ASYNC,SIM115,B", "--quiet"],
+    proc = _run(["ruff", "check", ".", "--output-format", "json", "--select", "ASYNC,SIM115,B,S", "--quiet"],
                 cwd=repo_dir)
     if not proc.stdout.strip():
         return []
@@ -128,9 +131,9 @@ def normalize_ruff(repo_dir: str, changed: dict[str, set[int]]) -> list[Finding]
     for r in json.loads(proc.stdout):
         file = _rel(r["filename"], repo_dir)
         line = (r.get("location") or {}).get("row")
-        if not _in_diff(file, line, changed):
-            continue
         code = r.get("code") or ""
+        if not _in_diff(file, line, changed) or code in _NOISE_RULES:
+            continue
         cat, sev = _ruff_map(code)
         findings.append(
             Finding(
@@ -216,14 +219,82 @@ def normalize_semgrep(repo_dir: str, changed: dict[str, set[int]]) -> list[Findi
     return findings
 
 
+# A DB connection/cursor bound to a variable — leak-prone if not context-managed or closed.
+_DB_CONNECT = re.compile(r"\b([A-Za-z_]\w*)\s*=\s*[\w.]*\b(connect|cursor)\s*\(")
+
+
+def normalize_db_lifecycle(repo_dir: str, changed: dict[str, set[int]]) -> list[Finding]:
+    """Heuristic (no semgrep needed): a DB connection/cursor opened without `with` and never closed."""
+    findings: list[Finding] = []
+    for file, lines in changed.items():
+        path = os.path.join(repo_dir, file)
+        if not (file.endswith(".py") and os.path.isfile(path)):
+            continue
+        try:
+            content = open(path, encoding="utf-8", errors="replace").read()
+        except OSError:
+            continue
+        for i, text in enumerate(content.splitlines(), start=1):
+            if lines and i not in lines:
+                continue
+            m = _DB_CONNECT.search(text)
+            if not m or text.lstrip().startswith("with "):
+                continue
+            var = m.group(1)
+            if re.search(rf"\b{re.escape(var)}\s*\.\s*close\s*\(", content):
+                continue
+            findings.append(
+                Finding(
+                    severity="medium",
+                    category="db_lifecycle",
+                    file=file,
+                    line=i,
+                    title="DB resource without lifecycle management",
+                    evidence=text.strip(),
+                    recommendation=f"Use a context manager (`with ...`) or ensure `{var}.close()` in a finally block.",
+                    confidence=0.7,
+                    source="static",
+                    rule_id="cr:db-lifecycle"))
+    return findings
+
+
+def _is_test_path(path: str) -> bool:
+    base = path.rsplit("/", 1)[-1]
+    return (base.startswith("test_") or base.endswith("_test.py") or path.startswith("tests/") or "/tests/" in path)
+
+
+def detect_missing_tests(diff: DiffSummary) -> list[Finding]:
+    """Diff-level heuristic: source files changed with no corresponding test change."""
+    src = [
+        f for f in diff.files
+        if f.path.endswith(".py") and not _is_test_path(f.path) and f.change_type in ("added", "modified")
+    ]
+    tests = [f for f in diff.files if _is_test_path(f.path)]
+    if src and not tests:
+        return [
+            Finding(severity="low",
+                    category="missing_tests",
+                    file=src[0].path,
+                    line=None,
+                    title="Source changed without accompanying tests",
+                    evidence=f"{len(src)} source file(s) changed; no test file changed",
+                    recommendation="Add or update tests covering the changed code.",
+                    confidence=0.6,
+                    source="rule",
+                    rule_id="cr:missing-tests")
+        ]
+    return []
+
+
 Adapter = Callable[[str, dict[str, set[int]]], list[Finding]]
 
-# Enabled adapters cover 4+ required categories: security, secret_leakage, async_errors,
-# resource_leak (+ db_lifecycle when semgrep rules are present).
+# Enabled adapters cover all 6 required categories: security, secret_leakage, async_errors,
+# resource_leak, db_lifecycle (+ semgrep rules when present). missing_tests is diff-level (added by scan()).
 ADAPTERS: list[Adapter] = [
     normalize_bandit,
     normalize_ruff,
     normalize_detect_secrets,
+    normalize_db_lifecycle,
     normalize_semgrep,
 ]
 

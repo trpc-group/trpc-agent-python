@@ -26,23 +26,23 @@ from pipeline.redaction import redact  # noqa: E402
 from pipeline.types import Finding  # noqa: E402
 
 _FIXTURES = _EXAMPLE_DIR / "fixtures" / "diffs"
-_SECRETS = ["hunter2supersecret", "AKIA1234567890ABCDEF"]
+_SECRETS = ["AKIA1234567890ABCDEF"]  # the secret embedded in secret_redaction.diff
 
 
 def test_detects_issues_across_categories() -> None:
-    result = run_review(diff_text=(_FIXTURES / "0001_insecure.diff").read_text())
+    result = run_review(diff_text=(_FIXTURES / "security.diff").read_text())
     cats = {f.category for f in result.report.findings}
     assert "security" in cats
     assert result.report.findings_summary["total"] >= 3
 
 
 def test_clean_diff_has_no_active_findings() -> None:
-    result = run_review(diff_text=(_FIXTURES / "0005_clean.diff").read_text())
+    result = run_review(diff_text=(_FIXTURES / "clean.diff").read_text())
     assert result.report.findings_summary["total"] == 0
 
 
 def test_no_plaintext_secret_in_rendered_report() -> None:
-    result = run_review(diff_text=(_FIXTURES / "0001_insecure.diff").read_text())
+    result = run_review(diff_text=(_FIXTURES / "secret_redaction.diff").read_text())
     blob = report_mod.render_json(result.report) + report_mod.render_md(result.report)
     for secret in _SECRETS:
         assert secret not in blob
@@ -89,7 +89,7 @@ def test_low_confidence_routed_to_human_review() -> None:
 async def test_persist_and_query_no_secret_leak(tmp_path) -> None:
     from storage.dao import ReviewStore
 
-    result = run_review(diff_text=(_FIXTURES / "0001_insecure.diff").read_text())
+    result = run_review(diff_text=(_FIXTURES / "secret_redaction.diff").read_text())
     db_file = tmp_path / "cr.db"
     store = ReviewStore(f"sqlite+aiosqlite:///{db_file}")
     await store.init()
@@ -97,8 +97,8 @@ async def test_persist_and_query_no_secret_leak(tmp_path) -> None:
         await store.persist(result)
         got = await store.get_by_task_id(result.task_id)
         assert got is not None
-        assert got["task"].finding_count >= 3
-        assert len(got["findings"]) >= 3
+        assert got["task"].finding_count >= 1
+        assert len(got["findings"]) >= 1
     finally:
         await store.close()
 
@@ -122,7 +122,7 @@ async def test_agent_path_calls_tool_and_summarizes() -> None:
     sid = str(uuid.uuid4())
     await runner.session_service.create_session(app_name="cr_test", user_id="u", session_id=sid)
 
-    diff = (_FIXTURES / "0001_insecure.diff").read_text()
+    diff = (_FIXTURES / "security.diff").read_text()
     saw_tool_call = False
     final_text = ""
     async for event in runner.run_async(user_id="u",
@@ -141,7 +141,7 @@ async def test_agent_path_calls_tool_and_summarizes() -> None:
 
 
 def test_local_sandbox_records_run_and_finds_issues() -> None:
-    result = run_review(diff_text=(_FIXTURES / "0001_insecure.diff").read_text(), runtime="local")
+    result = run_review(diff_text=(_FIXTURES / "security.diff").read_text(), runtime="local")
     assert result.report.findings_summary["total"] >= 3
     assert len(result.report.sandbox_summary) == 1
     run = result.report.sandbox_summary[0]
@@ -153,9 +153,7 @@ def test_local_sandbox_records_run_and_finds_issues() -> None:
 
 def test_sandbox_timeout_does_not_crash_the_task() -> None:
     # An impossibly small timeout must mark the run timed-out but still complete the review.
-    result = run_review(diff_text=(_FIXTURES / "0001_insecure.diff").read_text(),
-                        runtime="local",
-                        sandbox_timeout=0.001)
+    result = run_review(diff_text=(_FIXTURES / "security.diff").read_text(), runtime="local", sandbox_timeout=0.001)
     assert result.task_id is not None
     run = result.report.sandbox_summary[0]
     assert run.timed_out is True
@@ -184,7 +182,7 @@ def test_denied_action_never_reaches_sandbox() -> None:
     from pipeline.policy import ReviewPolicy
 
     # A policy that refuses everything (tiny budget) must block before execution (requirement 7).
-    result = run_review(diff_text=(_FIXTURES / "0001_insecure.diff").read_text(),
+    result = run_review(diff_text=(_FIXTURES / "security.diff").read_text(),
                         runtime="local",
                         policy=ReviewPolicy(max_budget_sec=1e-6),
                         sandbox_timeout=60)
@@ -215,13 +213,56 @@ async def test_guard_filter_blocks_dangerous_command() -> None:
 def test_report_renders_filter_block_section() -> None:
     from pipeline.policy import ReviewPolicy
 
-    result = run_review(diff_text=(_FIXTURES / "0001_insecure.diff").read_text(),
+    result = run_review(diff_text=(_FIXTURES / "security.diff").read_text(),
                         runtime="local",
                         policy=ReviewPolicy(max_budget_sec=1e-6),
                         sandbox_timeout=60)
     md = report_mod.render_md(result.report)
     assert "## 4. Filter interception summary" in md
     assert "over budget" in md
+
+
+# --- official-scenario fixtures (交付物: the 8 required sample diffs) ------------------------------
+
+
+def test_db_lifecycle_scenario() -> None:
+    result = run_review(diff_text=(_FIXTURES / "db_lifecycle.diff").read_text())
+    assert any(f.category == "db_lifecycle" for f in result.report.findings)
+
+
+def test_missing_tests_scenario() -> None:
+    result = run_review(diff_text=(_FIXTURES / "missing_tests.diff").read_text())
+    # source changed with no test -> a missing_tests finding (routed to warnings/human-review).
+    assert any(f.category == "missing_tests" for f in result.report.human_review)
+
+
+def test_duplicate_finding_scenario_is_collapsed() -> None:
+    result = run_review(diff_text=(_FIXTURES / "duplicate_finding.diff").read_text())
+    # bandit + ruff both flag os.system on the same line+category -> one active, one duplicate.
+    security = [f for f in result.findings if f.category == "security"]
+    active = [f for f in security if f.status == "active"]
+    dupes = [f for f in security if f.status == "duplicate"]
+    assert len(active) == 1
+    assert len(dupes) >= 1
+
+
+def test_sandbox_failure_scenario_degrades_gracefully() -> None:
+    # A failing sandbox run (tiny timeout) must be recorded without crashing the review.
+    result = run_review(diff_text=(_FIXTURES / "sandbox_failure.diff").read_text(),
+                        runtime="local",
+                        sandbox_timeout=0.001)
+    assert result.task_id is not None
+    assert result.report.sandbox_summary[0].timed_out is True
+
+
+def test_all_six_rule_categories_reachable() -> None:
+    cats: set[str] = set()
+    for name in ("security.diff", "secret_redaction.diff", "async_resource_leak.diff", "db_lifecycle.diff",
+                 "missing_tests.diff"):
+        r = run_review(diff_text=(_FIXTURES / name).read_text())
+        cats.update(f.category for f in r.findings)
+    for required in ("security", "secret_leakage", "async_errors", "resource_leak", "db_lifecycle", "missing_tests"):
+        assert required in cats, f"category {required} not produced"
 
 
 # (text containing a secret, the raw secret that must not survive redaction) — the leak-test corpus.

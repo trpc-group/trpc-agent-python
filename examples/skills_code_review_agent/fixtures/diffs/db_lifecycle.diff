@@ -1,0 +1,12 @@
+diff --git a/db.py b/db.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/db.py
+@@ -0,0 +1,6 @@
++import sqlite3
++
++def load(path):
++    conn = sqlite3.connect(path)
++    cur = conn.cursor()
++    return cur.execute("select 1").fetchall()
