@@ -92,7 +92,13 @@ deterministic sandbox gate (a denied action never launches; the block is recorde
 the report's Filter-interception section) and the framework `agent/filter.py::ReviewGuardFilter`
 (TOOL-scoped, attached on the review tool).
 
-Remaining: exporting the monitoring metrics through an OpenTelemetry reader (they are collected today
-in the report's monitoring section), an independent labelled eval set to prove the hidden-set
-thresholds, and verifying the container runtime on a Docker host. Note: the default runtime is
-`inprocess` for fast dry-runs — pass `--runtime local` or `--runtime container` for the sandbox path.
+Rule coverage spans all six required categories (security, secret_leakage, async_errors,
+resource_leak, db_lifecycle, missing_tests); the eight fixtures match the official scenarios
+(`clean`, `security`, `async_resource_leak`, `db_lifecycle`, `missing_tests`, `duplicate_finding`,
+`sandbox_failure`, `secret_redaction`). Inputs: `--diff-file`, `--repo-path`, `--files a.py,b.py`,
+or `--fixture`. The default runtime is `auto` — the container sandbox when Docker is available, else
+the local subprocess sandbox (`--runtime inprocess` is an explicit fast dev opt-in). The sandbox
+receives only a whitelisted environment. See [DESIGN.md](./DESIGN.md) for the design note.
+
+Remaining (non-code): an independent labelled eval set to prove the hidden-set thresholds, and
+verifying the container runtime on a Docker host (the code path and `Dockerfile` are in place).
