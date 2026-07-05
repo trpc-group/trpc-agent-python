@@ -18,8 +18,6 @@ import asyncio
 import time
 from unittest.mock import patch
 
-import pytest
-
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.sessions._in_memory_session_service import (
     InMemorySessionService,
@@ -171,7 +169,7 @@ class TestInMemoryCreateSession:
 class TestInMemoryGetSession:
     async def test_get_existing_session(self):
         svc = InMemorySessionService(session_config=_make_session_config())
-        created = await svc.create_session(app_name="app", user_id="user", session_id="s1")
+        await svc.create_session(app_name="app", user_id="user", session_id="s1")
         result = await svc.get_session(app_name="app", user_id="user", session_id="s1")
         assert result is not None
         assert result.id == "s1"
@@ -344,6 +342,28 @@ class TestInMemoryAppendEvent:
         await svc.append_event(session, event)
         stored_session = svc._get_session("app", "user", "s1")
         assert stored_session.conversation_count == 5
+        await svc.close()
+
+    async def test_update_then_append_does_not_duplicate_shared_session_events(self):
+        config = _make_session_config(max_events=3, store_historical_events=True)
+        svc = InMemorySessionService(session_config=config)
+        session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
+
+        summary_event = _make_event(author="system", text="Previous conversation summary: old context")
+        summary_event.set_summary_event(True)
+        session.events = [summary_event]
+        await svc.update_session(session)
+
+        await svc.append_event(session, _make_event(author="user", text="follow up"))
+        await svc.append_event(session, _make_event(author="agent", text="answer"))
+
+        stored = await svc.get_session(app_name="app", user_id="user", session_id="s1")
+        assert [event.get_text() for event in stored.events] == [
+            "Previous conversation summary: old context",
+            "follow up",
+            "answer",
+        ]
+        assert [event.get_text() for event in stored.historical_events] == []
         await svc.close()
 
 
