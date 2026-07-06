@@ -7,9 +7,11 @@ reports. When `--db-path` is provided, it also persists the review task,
 findings, report metadata, sandbox run metadata, and filter decisions into
 SQLite.
 
-It intentionally does not call an LLM, remote sandbox, or SDK core extension.
-The sandbox runner in this example is a fake dry-run runner: it records what
-would have happened, but never executes untrusted code.
+This is a lightweight deterministic baseline, not a full sandbox/scanner
+implementation. It intentionally does not call an LLM, remote sandbox, Docker,
+Cube, E2B, external scanner, or SDK core extension. The sandbox runner in this
+example is a fake dry-run runner: it records what would have happened, but
+never executes untrusted code.
 
 ## Run
 
@@ -32,6 +34,36 @@ You can also run the clean fixture:
 ```bash
 python examples/skills_code_review_agent/run_agent.py --diff-file examples/skills_code_review_agent/fixtures/clean.diff --output-dir examples/skills_code_review_agent/output_clean --dry-run
 ```
+
+## Run From Stdin
+
+`--diff-file -` reads a unified diff from stdin and records the report input as
+`<stdin>`:
+
+```bash
+git diff | python examples/skills_code_review_agent/run_agent.py --diff-file - --output-dir examples/skills_code_review_agent/output --dry-run
+```
+
+## CI Failure Gate
+
+By default the command exits with `0` even when findings are present. Use
+`--fail-on-severity` to make a lightweight CI gate:
+
+```bash
+python examples/skills_code_review_agent/run_agent.py --diff-file examples/skills_code_review_agent/fixtures/security.diff --output-dir examples/skills_code_review_agent/output --dry-run --fail-on-severity high
+```
+
+Values are `never`, `low`, `medium`, and `high`. For example, `medium` fails on
+medium or high findings, while `high` fails only on high findings.
+
+## List Rules
+
+```bash
+python examples/skills_code_review_agent/run_agent.py --list-rules
+```
+
+This prints the deterministic rule id, category, default severity, description,
+and known limitations without reading a diff.
 
 ## Run With SQLite
 
@@ -70,8 +102,9 @@ python -m pytest examples/skills_code_review_agent/tests
 
 The tests run only local parsing, rules, redaction, report generation, and
 dedupe checks, fake sandbox status, filter decisions, telemetry summaries, and
-SQLite persistence. They do not call an LLM, Docker, Cube, remote network, or
-any external service.
+SQLite persistence. They also cover the lightweight CI failure gate, stdin diff
+input, and rule listing. They do not call an LLM, Docker, Cube, remote network,
+external scanners, or any external service.
 
 ## Fixtures
 
@@ -95,6 +128,9 @@ any external service.
   - `open(...)` without `with`
 - Redacts likely API keys, tokens, secrets, and passwords before writing reports.
 - Produces `review_report.json` and `review_report.md`.
+- Supports reading a unified diff from stdin with `--diff-file -`.
+- Supports a lightweight exit-code gate with `--fail-on-severity`.
+- Prints rule metadata with `--list-rules`.
 - Optionally persists review tasks, findings, and report metadata to SQLite.
 - Records minimal filter decisions: `allow`, `deny`, or `needs_human_review`.
 - Records a fake dry-run sandbox result without executing untrusted code.
@@ -117,6 +153,7 @@ without changing the report and storage shape introduced here.
 
 - Real LLM review.
 - Real remote sandbox or container execution.
+- External scanner integration such as Bandit, Ruff, detect-secrets, or Semgrep.
 - SDK core integration.
 - Production-grade filter governance and telemetry export.
 - Multi-agent orchestration.

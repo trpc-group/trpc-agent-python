@@ -26,6 +26,44 @@ _HTTP_CALL_RE = re.compile(r"\b(?:requests|httpx)\.(?:get|post|put|patch|delete|
 _BROAD_EXCEPT_RE = re.compile(r"^\s*except\s+Exception(?:\s+as\s+\w+)?\s*:")
 _OPEN_CALL_RE = re.compile(r"\bopen\s*\(")
 
+RULES_MANIFEST = [
+    {
+        "id": "static-rule:hardcoded-secret",
+        "category": "secret",
+        "default_severity": "high",
+        "description": "Flags added lines that appear to assign hardcoded API keys, tokens, secrets, or passwords.",
+        "limitations": "Regex-based and line-oriented; it can miss split secrets and may flag synthetic test data.",
+    },
+    {
+        "id": "static-rule:sql-string-concat",
+        "category": "sql-injection",
+        "default_severity": "high",
+        "description": "Flags SQL statements that appear to use string interpolation, formatting, or concatenation.",
+        "limitations": "Does not parse Python AST or validate actual database driver parameter usage.",
+    },
+    {
+        "id": "static-rule:http-timeout",
+        "category": "network-timeout",
+        "default_severity": "medium",
+        "description": "Flags requests/httpx calls on one added line when no explicit timeout= argument is present.",
+        "limitations": "Only handles simple single-line calls and cannot resolve wrapper defaults.",
+    },
+    {
+        "id": "static-rule:broad-except",
+        "category": "error-handling",
+        "default_severity": "medium/high",
+        "description": "Flags broad except Exception handlers, escalating when the next added line swallows the error.",
+        "limitations": "Line-oriented; it does not build a control-flow graph or inspect existing surrounding code.",
+    },
+    {
+        "id": "static-rule:open-without-context-manager",
+        "category": "resource-lifecycle",
+        "default_severity": "medium",
+        "description": "Flags simple open(...) usage that is not introduced with a with statement.",
+        "limitations": "Does not track close() calls across later lines or helper abstractions.",
+    },
+]
+
 
 def _finding(
     *,

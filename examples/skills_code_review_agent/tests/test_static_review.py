@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import io
+import json
 import sqlite3
 from pathlib import Path
 
@@ -15,6 +17,7 @@ from agent.rules import run_static_rules
 from agent.sandbox import DryRunSandboxRunner
 from agent.storage import persist_review
 from agent.telemetry import build_telemetry_summary
+from run_agent import main as run_agent_main
 
 
 EXAMPLE_ROOT = Path(__file__).resolve().parents[1]
@@ -178,3 +181,72 @@ def test_sqlite_persists_sandbox_and_filter_rows(tmp_path: Path) -> None:
     assert filter_count == 1
     assert sandbox_status == "completed"
     assert filter_decision == "allow"
+
+
+def test_fail_on_severity_high_returns_nonzero(tmp_path: Path, capsys) -> None:
+    exit_code = run_agent_main(
+        [
+            "--diff-file",
+            str(FIXTURES / "security.diff"),
+            "--output-dir",
+            str(tmp_path),
+            "--dry-run",
+            "--fail-on-severity",
+            "high",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "Failure gate: triggered (--fail-on-severity high)" in captured.out
+
+
+def test_fail_on_severity_never_returns_zero(tmp_path: Path, capsys) -> None:
+    exit_code = run_agent_main(
+        [
+            "--diff-file",
+            str(FIXTURES / "security.diff"),
+            "--output-dir",
+            str(tmp_path),
+            "--dry-run",
+            "--fail-on-severity",
+            "never",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Failure gate: disabled (--fail-on-severity never)" in captured.out
+
+
+def test_list_rules_outputs_rule_metadata(capsys) -> None:
+    exit_code = run_agent_main(["--list-rules", "--diff-file", "does-not-exist.diff"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Deterministic rules" in captured.out
+    assert "static-rule:hardcoded-secret" in captured.out
+    assert "category: secret" in captured.out
+    assert "limitations:" in captured.out
+
+
+def test_diff_file_stdin_reads_unified_diff(tmp_path: Path, monkeypatch, capsys) -> None:
+    diff_text = (FIXTURES / "missing_timeout.diff").read_text(encoding="utf-8")
+    monkeypatch.setattr("sys.stdin", io.StringIO(diff_text))
+
+    exit_code = run_agent_main(
+        [
+            "--diff-file",
+            "-",
+            "--output-dir",
+            str(tmp_path),
+            "--dry-run",
+        ]
+    )
+    captured = capsys.readouterr()
+    report = json.loads((tmp_path / "review_report.json").read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert "Diff file: <stdin>" in captured.out
+    assert report["summary"]["diff_file"] == "<stdin>"
+    assert report["summary"]["category_counts"]["network-timeout"] == 1
