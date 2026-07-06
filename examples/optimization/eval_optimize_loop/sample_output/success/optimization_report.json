@@ -1,0 +1,820 @@
+{
+  "schema_version": "v1",
+  "scenario": "success",
+  "generated_at": "2026-07-06T15:49:26.322531+00:00",
+  "seed": 42,
+  "inputs": {
+    "train_evalset": "data/train.evalset.json",
+    "val_evalset": "data/val.evalset.json",
+    "optimizer_config": "optimizer.json",
+    "optimizer_val_dataset": "data/val.evalset.json",
+    "eval_config": "data/eval_config.json",
+    "pipeline_config": "pipeline.json",
+    "prompt_sources": {
+      "system_prompt": "loop_agent/prompts/system.md",
+      "skill": "loop_agent/prompts/skill.md"
+    }
+  },
+  "baseline": {
+    "train": {
+      "pass_rate": 0.333333,
+      "passed": 1,
+      "total": 3,
+      "mean_score": 0.5,
+      "metric_breakdown": {
+        "final_response_avg_score": 0.333333,
+        "llm_rubric_knowledge_recall": 0.666667,
+        "llm_rubric_response": 0.666667,
+        "tool_trajectory_avg_score": 0.333333
+      },
+      "per_case": [
+        {
+          "eval_id": "train_convert_3km",
+          "passed": false,
+          "final_status": "FAILED",
+          "case_score": 0.375,
+          "metric_scores": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 0.0,
+            "llm_rubric_response": 0.5,
+            "llm_rubric_knowledge_recall": 1.0
+          },
+          "metric_status": {
+            "tool_trajectory_avg_score": "FAILED",
+            "final_response_avg_score": "FAILED",
+            "llm_rubric_response": "FAILED",
+            "llm_rubric_knowledge_recall": "PASSED"
+          },
+          "failure_types": [
+            "wrong_tool_args",
+            "format_violation",
+            "llm_rubric_fail"
+          ],
+          "failure_reasons": [
+            "[tool_trajectory_avg_score] 工具选择正确，但调用参数与期望不一致（期望 convert_distance({\"value\": 3, \"unit\": \"km\"})，实际 convert_distance({\"value\": 3, \"unit\": \"公里\"})）",
+            "[final_response_avg_score] 格式不符合要求：期望结构化 JSON 输出，实际是自由文本（期望「{\"result\": 3000, \"unit\": \"m\"}」，实际「3 公里等于 3000 米」）",
+            "[llm_rubric_response] LLM rubric 评审不达标（未通过 rubric：(未提供 rubric 明细)。）"
+          ],
+          "trajectory": {
+            "actual_tool_calls": [
+              {
+                "name": "convert_distance",
+                "args": {
+                  "value": 3,
+                  "unit": "公里"
+                }
+              }
+            ],
+            "expected_tool_calls": [
+              {
+                "name": "convert_distance",
+                "args": {
+                  "value": 3,
+                  "unit": "km"
+                }
+              }
+            ]
+          },
+          "actual_response": "3 公里等于 3000 米",
+          "expected_response": "{\"result\": 3000, \"unit\": \"m\"}"
+        },
+        {
+          "eval_id": "train_identity",
+          "passed": true,
+          "final_status": "PASSED",
+          "case_score": 1.0,
+          "metric_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0,
+            "llm_rubric_response": 1.0,
+            "llm_rubric_knowledge_recall": 1.0
+          },
+          "metric_status": {
+            "tool_trajectory_avg_score": "PASSED",
+            "final_response_avg_score": "PASSED",
+            "llm_rubric_response": "PASSED",
+            "llm_rubric_knowledge_recall": "PASSED"
+          },
+          "failure_types": [],
+          "failure_reasons": [],
+          "trajectory": {
+            "actual_tool_calls": [],
+            "expected_tool_calls": []
+          },
+          "actual_response": "我是城市信息助手 CityInfo。",
+          "expected_response": "我是城市信息助手 CityInfo。"
+        },
+        {
+          "eval_id": "train_intro_shenzhen",
+          "passed": false,
+          "final_status": "FAILED",
+          "case_score": 0.125,
+          "metric_scores": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 0.0,
+            "llm_rubric_response": 0.5,
+            "llm_rubric_knowledge_recall": 0.0
+          },
+          "metric_status": {
+            "tool_trajectory_avg_score": "FAILED",
+            "final_response_avg_score": "FAILED",
+            "llm_rubric_response": "FAILED",
+            "llm_rubric_knowledge_recall": "FAILED"
+          },
+          "failure_types": [
+            "wrong_tool_call",
+            "knowledge_recall_miss",
+            "knowledge_recall_miss",
+            "final_answer_mismatch",
+            "llm_rubric_fail"
+          ],
+          "failure_reasons": [
+            "[tool_trajectory_avg_score] 工具调用集合与期望不一致（缺少调用：knowledge_search）（期望 knowledge_search({\"query\": \"深圳\"})，实际 （无调用））",
+            "[tool_trajectory_avg_score] 缺少知识检索调用（knowledge_search），无法召回作答所需知识（期望 knowledge_search({\"query\": \"深圳\"})，实际 （无调用））",
+            "[llm_rubric_knowledge_recall] 知识召回不足：检索结果无法支撑作答所需的关键信息（未通过 rubric：(未提供 rubric 明细)。）",
+            "[final_response_avg_score] 最终回复与参考答案不匹配（期望「深圳是一座以科技创新闻名的现代化滨海城市。 [source: city-guide]」，实际「深圳是一座很不错的城市。」）",
+            "[llm_rubric_response] LLM rubric 评审不达标（未通过 rubric：(未提供 rubric 明细)。）"
+          ],
+          "trajectory": {
+            "actual_tool_calls": [],
+            "expected_tool_calls": [
+              {
+                "name": "knowledge_search",
+                "args": {
+                  "query": "深圳"
+                }
+              }
+            ]
+          },
+          "actual_response": "深圳是一座很不错的城市。",
+          "expected_response": "深圳是一座以科技创新闻名的现代化滨海城市。 [source: city-guide]"
+        }
+      ]
+    },
+    "val": {
+      "pass_rate": 0.333333,
+      "passed": 1,
+      "total": 3,
+      "mean_score": 0.5,
+      "metric_breakdown": {
+        "final_response_avg_score": 0.333333,
+        "llm_rubric_knowledge_recall": 0.666667,
+        "llm_rubric_response": 0.666667,
+        "tool_trajectory_avg_score": 0.333333
+      },
+      "per_case": [
+        {
+          "eval_id": "val_convert_5km",
+          "passed": false,
+          "final_status": "FAILED",
+          "case_score": 0.375,
+          "metric_scores": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 0.0,
+            "llm_rubric_response": 0.5,
+            "llm_rubric_knowledge_recall": 1.0
+          },
+          "metric_status": {
+            "tool_trajectory_avg_score": "FAILED",
+            "final_response_avg_score": "FAILED",
+            "llm_rubric_response": "FAILED",
+            "llm_rubric_knowledge_recall": "PASSED"
+          },
+          "failure_types": [
+            "wrong_tool_args",
+            "format_violation",
+            "llm_rubric_fail"
+          ],
+          "failure_reasons": [
+            "[tool_trajectory_avg_score] 工具选择正确，但调用参数与期望不一致（期望 convert_distance({\"value\": 5, \"unit\": \"km\"})，实际 convert_distance({\"value\": 5, \"unit\": \"公里\"})）",
+            "[final_response_avg_score] 格式不符合要求：期望结构化 JSON 输出，实际是自由文本（期望「{\"result\": 5000, \"unit\": \"m\"}」，实际「5 公里等于 5000 米」）",
+            "[llm_rubric_response] LLM rubric 评审不达标（未通过 rubric：(未提供 rubric 明细)。）"
+          ],
+          "trajectory": {
+            "actual_tool_calls": [
+              {
+                "name": "convert_distance",
+                "args": {
+                  "value": 5,
+                  "unit": "公里"
+                }
+              }
+            ],
+            "expected_tool_calls": [
+              {
+                "name": "convert_distance",
+                "args": {
+                  "value": 5,
+                  "unit": "km"
+                }
+              }
+            ]
+          },
+          "actual_response": "5 公里等于 5000 米",
+          "expected_response": "{\"result\": 5000, \"unit\": \"m\"}"
+        },
+        {
+          "eval_id": "val_identity",
+          "passed": true,
+          "final_status": "PASSED",
+          "case_score": 1.0,
+          "metric_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0,
+            "llm_rubric_response": 1.0,
+            "llm_rubric_knowledge_recall": 1.0
+          },
+          "metric_status": {
+            "tool_trajectory_avg_score": "PASSED",
+            "final_response_avg_score": "PASSED",
+            "llm_rubric_response": "PASSED",
+            "llm_rubric_knowledge_recall": "PASSED"
+          },
+          "failure_types": [],
+          "failure_reasons": [],
+          "trajectory": {
+            "actual_tool_calls": [],
+            "expected_tool_calls": []
+          },
+          "actual_response": "我是城市信息助手 CityInfo。",
+          "expected_response": "我是城市信息助手 CityInfo。"
+        },
+        {
+          "eval_id": "val_intro_hangzhou",
+          "passed": false,
+          "final_status": "FAILED",
+          "case_score": 0.125,
+          "metric_scores": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 0.0,
+            "llm_rubric_response": 0.5,
+            "llm_rubric_knowledge_recall": 0.0
+          },
+          "metric_status": {
+            "tool_trajectory_avg_score": "FAILED",
+            "final_response_avg_score": "FAILED",
+            "llm_rubric_response": "FAILED",
+            "llm_rubric_knowledge_recall": "FAILED"
+          },
+          "failure_types": [
+            "wrong_tool_call",
+            "knowledge_recall_miss",
+            "knowledge_recall_miss",
+            "final_answer_mismatch",
+            "llm_rubric_fail"
+          ],
+          "failure_reasons": [
+            "[tool_trajectory_avg_score] 工具调用集合与期望不一致（缺少调用：knowledge_search）（期望 knowledge_search({\"query\": \"杭州\"})，实际 （无调用））",
+            "[tool_trajectory_avg_score] 缺少知识检索调用（knowledge_search），无法召回作答所需知识（期望 knowledge_search({\"query\": \"杭州\"})，实际 （无调用））",
+            "[llm_rubric_knowledge_recall] 知识召回不足：检索结果无法支撑作答所需的关键信息（未通过 rubric：(未提供 rubric 明细)。）",
+            "[final_response_avg_score] 最终回复与参考答案不匹配（期望「杭州是一座以西湖和数字经济闻名的历史文化名城。 [source: city-guide]」，实际「杭州是一座很不错的城市。」）",
+            "[llm_rubric_response] LLM rubric 评审不达标（未通过 rubric：(未提供 rubric 明细)。）"
+          ],
+          "trajectory": {
+            "actual_tool_calls": [],
+            "expected_tool_calls": [
+              {
+                "name": "knowledge_search",
+                "args": {
+                  "query": "杭州"
+                }
+              }
+            ]
+          },
+          "actual_response": "杭州是一座很不错的城市。",
+          "expected_response": "杭州是一座以西湖和数字经济闻名的历史文化名城。 [source: city-guide]"
+        }
+      ]
+    }
+  },
+  "attribution": {
+    "counts_by_type": {
+      "wrong_tool_call": 2,
+      "wrong_tool_args": 2,
+      "knowledge_recall_miss": 2,
+      "format_violation": 2,
+      "llm_rubric_fail": 4,
+      "final_answer_mismatch": 2
+    },
+    "primary_by_case": {
+      "train_convert_3km": "wrong_tool_args",
+      "train_intro_shenzhen": "wrong_tool_call",
+      "val_convert_5km": "wrong_tool_args",
+      "val_intro_hangzhou": "wrong_tool_call"
+    },
+    "details": {
+      "train_convert_3km": [
+        {
+          "type": "wrong_tool_args",
+          "metric": "tool_trajectory_avg_score",
+          "evidence": "期望 convert_distance({\"value\": 3, \"unit\": \"km\"})，实际 convert_distance({\"value\": 3, \"unit\": \"公里\"})",
+          "explanation": "工具选择正确，但调用参数与期望不一致"
+        },
+        {
+          "type": "format_violation",
+          "metric": "final_response_avg_score",
+          "evidence": "期望「{\"result\": 3000, \"unit\": \"m\"}」，实际「3 公里等于 3000 米」",
+          "explanation": "格式不符合要求：期望结构化 JSON 输出，实际是自由文本"
+        },
+        {
+          "type": "llm_rubric_fail",
+          "metric": "llm_rubric_response",
+          "evidence": "未通过 rubric：(未提供 rubric 明细)。",
+          "explanation": "LLM rubric 评审不达标"
+        }
+      ],
+      "train_intro_shenzhen": [
+        {
+          "type": "wrong_tool_call",
+          "metric": "tool_trajectory_avg_score",
+          "evidence": "期望 knowledge_search({\"query\": \"深圳\"})，实际 （无调用）",
+          "explanation": "工具调用集合与期望不一致（缺少调用：knowledge_search）"
+        },
+        {
+          "type": "knowledge_recall_miss",
+          "metric": "tool_trajectory_avg_score",
+          "evidence": "期望 knowledge_search({\"query\": \"深圳\"})，实际 （无调用）",
+          "explanation": "缺少知识检索调用（knowledge_search），无法召回作答所需知识"
+        },
+        {
+          "type": "knowledge_recall_miss",
+          "metric": "llm_rubric_knowledge_recall",
+          "evidence": "未通过 rubric：(未提供 rubric 明细)。",
+          "explanation": "知识召回不足：检索结果无法支撑作答所需的关键信息"
+        },
+        {
+          "type": "final_answer_mismatch",
+          "metric": "final_response_avg_score",
+          "evidence": "期望「深圳是一座以科技创新闻名的现代化滨海城市。 [source: city-guide]」，实际「深圳是一座很不错的城市。」",
+          "explanation": "最终回复与参考答案不匹配"
+        },
+        {
+          "type": "llm_rubric_fail",
+          "metric": "llm_rubric_response",
+          "evidence": "未通过 rubric：(未提供 rubric 明细)。",
+          "explanation": "LLM rubric 评审不达标"
+        }
+      ],
+      "val_convert_5km": [
+        {
+          "type": "wrong_tool_args",
+          "metric": "tool_trajectory_avg_score",
+          "evidence": "期望 convert_distance({\"value\": 5, \"unit\": \"km\"})，实际 convert_distance({\"value\": 5, \"unit\": \"公里\"})",
+          "explanation": "工具选择正确，但调用参数与期望不一致"
+        },
+        {
+          "type": "format_violation",
+          "metric": "final_response_avg_score",
+          "evidence": "期望「{\"result\": 5000, \"unit\": \"m\"}」，实际「5 公里等于 5000 米」",
+          "explanation": "格式不符合要求：期望结构化 JSON 输出，实际是自由文本"
+        },
+        {
+          "type": "llm_rubric_fail",
+          "metric": "llm_rubric_response",
+          "evidence": "未通过 rubric：(未提供 rubric 明细)。",
+          "explanation": "LLM rubric 评审不达标"
+        }
+      ],
+      "val_intro_hangzhou": [
+        {
+          "type": "wrong_tool_call",
+          "metric": "tool_trajectory_avg_score",
+          "evidence": "期望 knowledge_search({\"query\": \"杭州\"})，实际 （无调用）",
+          "explanation": "工具调用集合与期望不一致（缺少调用：knowledge_search）"
+        },
+        {
+          "type": "knowledge_recall_miss",
+          "metric": "tool_trajectory_avg_score",
+          "evidence": "期望 knowledge_search({\"query\": \"杭州\"})，实际 （无调用）",
+          "explanation": "缺少知识检索调用（knowledge_search），无法召回作答所需知识"
+        },
+        {
+          "type": "knowledge_recall_miss",
+          "metric": "llm_rubric_knowledge_recall",
+          "evidence": "未通过 rubric：(未提供 rubric 明细)。",
+          "explanation": "知识召回不足：检索结果无法支撑作答所需的关键信息"
+        },
+        {
+          "type": "final_answer_mismatch",
+          "metric": "final_response_avg_score",
+          "evidence": "期望「杭州是一座以西湖和数字经济闻名的历史文化名城。 [source: city-guide]」，实际「杭州是一座很不错的城市。」",
+          "explanation": "最终回复与参考答案不匹配"
+        },
+        {
+          "type": "llm_rubric_fail",
+          "metric": "llm_rubric_response",
+          "evidence": "未通过 rubric：(未提供 rubric 明细)。",
+          "explanation": "LLM rubric 评审不达标"
+        }
+      ]
+    }
+  },
+  "optimization": {
+    "algorithm": "gepa_reflective",
+    "status": "SUCCEEDED",
+    "finish_reason": "completed",
+    "stop_reason": "score_threshold",
+    "total_rounds": 1,
+    "rounds_accepted": 1,
+    "optimizer_val_pass_rate": {
+      "baseline": 0.333333,
+      "best": 1.0
+    },
+    "best_prompts": {
+      "system_prompt": {
+        "sha256": "893aba6c9818ddb61576eb44da608017a852d744b8059767858d14f97d2b92a9",
+        "preview": "<!-- prompt-field: system_prompt -->\n<!-- directives:\noutput_format: json\nunit_normalization: on\nknowledge: on\nmemorize: off\n-->\n\n# 角色\n\n你是「城市信息助手 CityInfo」，负责回答三类问题：\n\n1. **距离换算**：把公里换算成米（调用 `convert_d…"
+      },
+      "skill": {
+        "sha256": "7e8bd4de20170ef7abe8f695dabc76159cac4d2c50984a4f57858908774deb10",
+        "preview": "<!-- prompt-field: skill -->\n\n# 回答方法\n\n- 先判断问题属于哪一类（换算 / 介绍 / 身份），再决定是否调用工具。\n- 回答保持简洁，不要输出与问题无关的内容。"
+      }
+    },
+    "cost": {
+      "total_llm_cost": 0.0,
+      "reflection_lm_calls": 1,
+      "budget_used": 12,
+      "budget_total": 60,
+      "token_usage": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      }
+    },
+    "duration_seconds": 0.194,
+    "artifacts_dir": "optimize/"
+  },
+  "candidate": {
+    "train": {
+      "pass_rate": 1.0,
+      "passed": 3,
+      "total": 3,
+      "mean_score": 1.0,
+      "metric_breakdown": {
+        "final_response_avg_score": 1.0,
+        "llm_rubric_knowledge_recall": 1.0,
+        "llm_rubric_response": 1.0,
+        "tool_trajectory_avg_score": 1.0
+      },
+      "per_case": [
+        {
+          "eval_id": "train_convert_3km",
+          "passed": true,
+          "final_status": "PASSED",
+          "case_score": 1.0,
+          "metric_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0,
+            "llm_rubric_response": 1.0,
+            "llm_rubric_knowledge_recall": 1.0
+          },
+          "metric_status": {
+            "tool_trajectory_avg_score": "PASSED",
+            "final_response_avg_score": "PASSED",
+            "llm_rubric_response": "PASSED",
+            "llm_rubric_knowledge_recall": "PASSED"
+          },
+          "failure_types": [],
+          "failure_reasons": [],
+          "trajectory": {
+            "actual_tool_calls": [
+              {
+                "name": "convert_distance",
+                "args": {
+                  "value": 3,
+                  "unit": "km"
+                }
+              }
+            ],
+            "expected_tool_calls": [
+              {
+                "name": "convert_distance",
+                "args": {
+                  "value": 3,
+                  "unit": "km"
+                }
+              }
+            ]
+          },
+          "actual_response": "{\"result\": 3000, \"unit\": \"m\"}",
+          "expected_response": "{\"result\": 3000, \"unit\": \"m\"}"
+        },
+        {
+          "eval_id": "train_identity",
+          "passed": true,
+          "final_status": "PASSED",
+          "case_score": 1.0,
+          "metric_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0,
+            "llm_rubric_response": 1.0,
+            "llm_rubric_knowledge_recall": 1.0
+          },
+          "metric_status": {
+            "tool_trajectory_avg_score": "PASSED",
+            "final_response_avg_score": "PASSED",
+            "llm_rubric_response": "PASSED",
+            "llm_rubric_knowledge_recall": "PASSED"
+          },
+          "failure_types": [],
+          "failure_reasons": [],
+          "trajectory": {
+            "actual_tool_calls": [],
+            "expected_tool_calls": []
+          },
+          "actual_response": "我是城市信息助手 CityInfo。",
+          "expected_response": "我是城市信息助手 CityInfo。"
+        },
+        {
+          "eval_id": "train_intro_shenzhen",
+          "passed": true,
+          "final_status": "PASSED",
+          "case_score": 1.0,
+          "metric_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0,
+            "llm_rubric_response": 1.0,
+            "llm_rubric_knowledge_recall": 1.0
+          },
+          "metric_status": {
+            "tool_trajectory_avg_score": "PASSED",
+            "final_response_avg_score": "PASSED",
+            "llm_rubric_response": "PASSED",
+            "llm_rubric_knowledge_recall": "PASSED"
+          },
+          "failure_types": [],
+          "failure_reasons": [],
+          "trajectory": {
+            "actual_tool_calls": [
+              {
+                "name": "knowledge_search",
+                "args": {
+                  "query": "深圳"
+                }
+              }
+            ],
+            "expected_tool_calls": [
+              {
+                "name": "knowledge_search",
+                "args": {
+                  "query": "深圳"
+                }
+              }
+            ]
+          },
+          "actual_response": "深圳是一座以科技创新闻名的现代化滨海城市。 [source: city-guide]",
+          "expected_response": "深圳是一座以科技创新闻名的现代化滨海城市。 [source: city-guide]"
+        }
+      ]
+    },
+    "val": {
+      "pass_rate": 1.0,
+      "passed": 3,
+      "total": 3,
+      "mean_score": 1.0,
+      "metric_breakdown": {
+        "final_response_avg_score": 1.0,
+        "llm_rubric_knowledge_recall": 1.0,
+        "llm_rubric_response": 1.0,
+        "tool_trajectory_avg_score": 1.0
+      },
+      "per_case": [
+        {
+          "eval_id": "val_convert_5km",
+          "passed": true,
+          "final_status": "PASSED",
+          "case_score": 1.0,
+          "metric_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0,
+            "llm_rubric_response": 1.0,
+            "llm_rubric_knowledge_recall": 1.0
+          },
+          "metric_status": {
+            "tool_trajectory_avg_score": "PASSED",
+            "final_response_avg_score": "PASSED",
+            "llm_rubric_response": "PASSED",
+            "llm_rubric_knowledge_recall": "PASSED"
+          },
+          "failure_types": [],
+          "failure_reasons": [],
+          "trajectory": {
+            "actual_tool_calls": [
+              {
+                "name": "convert_distance",
+                "args": {
+                  "value": 5,
+                  "unit": "km"
+                }
+              }
+            ],
+            "expected_tool_calls": [
+              {
+                "name": "convert_distance",
+                "args": {
+                  "value": 5,
+                  "unit": "km"
+                }
+              }
+            ]
+          },
+          "actual_response": "{\"result\": 5000, \"unit\": \"m\"}",
+          "expected_response": "{\"result\": 5000, \"unit\": \"m\"}"
+        },
+        {
+          "eval_id": "val_identity",
+          "passed": true,
+          "final_status": "PASSED",
+          "case_score": 1.0,
+          "metric_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0,
+            "llm_rubric_response": 1.0,
+            "llm_rubric_knowledge_recall": 1.0
+          },
+          "metric_status": {
+            "tool_trajectory_avg_score": "PASSED",
+            "final_response_avg_score": "PASSED",
+            "llm_rubric_response": "PASSED",
+            "llm_rubric_knowledge_recall": "PASSED"
+          },
+          "failure_types": [],
+          "failure_reasons": [],
+          "trajectory": {
+            "actual_tool_calls": [],
+            "expected_tool_calls": []
+          },
+          "actual_response": "我是城市信息助手 CityInfo。",
+          "expected_response": "我是城市信息助手 CityInfo。"
+        },
+        {
+          "eval_id": "val_intro_hangzhou",
+          "passed": true,
+          "final_status": "PASSED",
+          "case_score": 1.0,
+          "metric_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0,
+            "llm_rubric_response": 1.0,
+            "llm_rubric_knowledge_recall": 1.0
+          },
+          "metric_status": {
+            "tool_trajectory_avg_score": "PASSED",
+            "final_response_avg_score": "PASSED",
+            "llm_rubric_response": "PASSED",
+            "llm_rubric_knowledge_recall": "PASSED"
+          },
+          "failure_types": [],
+          "failure_reasons": [],
+          "trajectory": {
+            "actual_tool_calls": [
+              {
+                "name": "knowledge_search",
+                "args": {
+                  "query": "杭州"
+                }
+              }
+            ],
+            "expected_tool_calls": [
+              {
+                "name": "knowledge_search",
+                "args": {
+                  "query": "杭州"
+                }
+              }
+            ]
+          },
+          "actual_response": "杭州是一座以西湖和数字经济闻名的历史文化名城。 [source: city-guide]",
+          "expected_response": "杭州是一座以西湖和数字经济闻名的历史文化名城。 [source: city-guide]"
+        }
+      ]
+    }
+  },
+  "delta": {
+    "train": {
+      "pass_rate_delta": 0.666667,
+      "score_delta": 0.5,
+      "counts": {
+        "new_pass": 2,
+        "new_fail": 0,
+        "score_up": 0,
+        "score_down": 0,
+        "unchanged": 1
+      },
+      "per_case": [
+        {
+          "eval_id": "train_convert_3km",
+          "baseline_passed": false,
+          "candidate_passed": true,
+          "baseline_score": 0.375,
+          "candidate_score": 1.0,
+          "change": "new_pass"
+        },
+        {
+          "eval_id": "train_identity",
+          "baseline_passed": true,
+          "candidate_passed": true,
+          "baseline_score": 1.0,
+          "candidate_score": 1.0,
+          "change": "unchanged"
+        },
+        {
+          "eval_id": "train_intro_shenzhen",
+          "baseline_passed": false,
+          "candidate_passed": true,
+          "baseline_score": 0.125,
+          "candidate_score": 1.0,
+          "change": "new_pass"
+        }
+      ]
+    },
+    "val": {
+      "pass_rate_delta": 0.666667,
+      "score_delta": 0.5,
+      "counts": {
+        "new_pass": 2,
+        "new_fail": 0,
+        "score_up": 0,
+        "score_down": 0,
+        "unchanged": 1
+      },
+      "per_case": [
+        {
+          "eval_id": "val_convert_5km",
+          "baseline_passed": false,
+          "candidate_passed": true,
+          "baseline_score": 0.375,
+          "candidate_score": 1.0,
+          "change": "new_pass"
+        },
+        {
+          "eval_id": "val_identity",
+          "baseline_passed": true,
+          "candidate_passed": true,
+          "baseline_score": 1.0,
+          "candidate_score": 1.0,
+          "change": "unchanged"
+        },
+        {
+          "eval_id": "val_intro_hangzhou",
+          "baseline_passed": false,
+          "candidate_passed": true,
+          "baseline_score": 0.125,
+          "candidate_score": 1.0,
+          "change": "new_pass"
+        }
+      ]
+    }
+  },
+  "gate_decision": {
+    "accepted": true,
+    "reason": "全部闸门通过：验证集有实际提升、无退化、成本与耗时均在预算内，候选值得接受。",
+    "gates": [
+      {
+        "name": "min_val_improvement",
+        "passed": true,
+        "detail": "验证集通过率提升 +0.6667（要求 ≥ 1e-09），平均分提升 +0.5000（要求 ≥ 0）"
+      },
+      {
+        "name": "no_new_hard_fail",
+        "passed": true,
+        "detail": "验证集无新增失败 case"
+      },
+      {
+        "name": "protected_cases",
+        "passed": true,
+        "detail": "保护 case（val_identity）均未退化"
+      },
+      {
+        "name": "overfit_guard",
+        "passed": true,
+        "detail": "未触发过拟合守卫（train +0.6667 / val +0.6667）"
+      },
+      {
+        "name": "cost_budget",
+        "passed": true,
+        "detail": "优化成本 $0.0000（预算 $1）"
+      },
+      {
+        "name": "duration_budget",
+        "passed": true,
+        "detail": "pipeline 耗时 0.3s（预算 180s）"
+      }
+    ]
+  },
+  "runtime": {
+    "pipeline_duration_seconds": 0.341,
+    "stage_durations": {
+      "baseline_eval": 0.096,
+      "attribution": 0.001,
+      "optimize": 0.2,
+      "candidate_regression": 0.045
+    },
+    "baseline_from_trace": false,
+    "fake_model_calls": {
+      "agent": 36,
+      "judge": 24,
+      "reflection": 1
+    }
+  }
+}
