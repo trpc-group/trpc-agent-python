@@ -1,0 +1,37 @@
+diff --git a/app/payment.py b/app/payment.py
+index 1111111..2222222 100644
+--- a/app/payment.py
++++ b/app/payment.py
+@@ -1,7 +1,25 @@
+ import requests
+ 
+ 
+ def charge_user(db, user_id):
+-    return db.execute("SELECT 1")
++    api_token = "sk-live-1234567890abcdef"
++    query = "SELECT * FROM users WHERE id = " + user_id
++    result = db.execute(query)
++    response = requests.post("https://payments.example/charge", json={"user": user_id})
++    return result, response.json(), api_token
++
++
++def load_private_key(path):
++    key_file = open(path, encoding="utf-8")
++    return key_file.read()
++
++
++def sync_invoice(client, payload):
++    try:
++        return client.send(payload)
++    except Exception:
++        pass
+diff --git a/app/profile.py b/app/profile.py
+index 3333333..4444444 100644
+--- a/app/profile.py
++++ b/app/profile.py
+@@ -10,5 +10,9 @@ def update_profile(db, name):
+-    return True
++    password = "prod-password-12345"
++    sql = f"UPDATE users SET name = '{name}'"
++    db.execute(sql)
++    return True

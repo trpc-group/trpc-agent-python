@@ -1,0 +1,109 @@
+{
+  "summary": {
+    "generated_at": "2026-07-05T15:24:57Z",
+    "dry_run": true,
+    "diff_file": "examples\\skills_code_review_agent\\fixtures\\security.diff",
+    "files_scanned": [
+      "app/payment.py",
+      "app/profile.py"
+    ],
+    "rules": [
+      "static-rule:hardcoded-secret",
+      "static-rule:sql-string-concat",
+      "static-rule:http-timeout",
+      "static-rule:broad-except",
+      "static-rule:open-without-context-manager"
+    ],
+    "total_findings": 7,
+    "severity_counts": {
+      "high": 5,
+      "medium": 2
+    },
+    "category_counts": {
+      "error-handling": 1,
+      "network-timeout": 1,
+      "resource-lifecycle": 1,
+      "secret": 2,
+      "sql-injection": 2
+    }
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "category": "secret",
+      "file": "app/payment.py",
+      "line": 5,
+      "title": "Possible hardcoded secret, token, or password",
+      "evidence": "api_token = \"<redacted:726a793d>\"",
+      "recommendation": "Move secrets to a secret manager or environment variable and rotate exposed values.",
+      "confidence": 0.9,
+      "source": "static-rule:hardcoded-secret"
+    },
+    {
+      "severity": "high",
+      "category": "sql-injection",
+      "file": "app/payment.py",
+      "line": 6,
+      "title": "SQL query appears to be built with string interpolation or concatenation",
+      "evidence": "query = \"SELECT * FROM users WHERE id = \" + user_id",
+      "recommendation": "Use parameterized queries or the database driver's bind parameter API.",
+      "confidence": 0.78,
+      "source": "static-rule:sql-string-concat"
+    },
+    {
+      "severity": "medium",
+      "category": "network-timeout",
+      "file": "app/payment.py",
+      "line": 8,
+      "title": "HTTP request is missing an explicit timeout",
+      "evidence": "response = requests.post(\"https://payments.example/charge\", json={\"user\": user_id})",
+      "recommendation": "Pass a bounded timeout, for example timeout=10, to avoid hanging workers.",
+      "confidence": 0.86,
+      "source": "static-rule:http-timeout"
+    },
+    {
+      "severity": "medium",
+      "category": "resource-lifecycle",
+      "file": "app/payment.py",
+      "line": 13,
+      "title": "File handle may not be closed on all paths",
+      "evidence": "key_file = open(path, encoding=\"utf-8\")",
+      "recommendation": "Use a context manager such as with open(...) as f to guarantee cleanup.",
+      "confidence": 0.72,
+      "source": "static-rule:open-without-context-manager"
+    },
+    {
+      "severity": "high",
+      "category": "error-handling",
+      "file": "app/payment.py",
+      "line": 20,
+      "title": "Broad exception handler may hide failures",
+      "evidence": "except Exception:",
+      "recommendation": "Catch the narrowest expected exception and log or re-raise unexpected failures.",
+      "confidence": 0.82,
+      "source": "static-rule:broad-except"
+    },
+    {
+      "severity": "high",
+      "category": "secret",
+      "file": "app/profile.py",
+      "line": 10,
+      "title": "Possible hardcoded secret, token, or password",
+      "evidence": "password = \"<redacted:22588986>\"",
+      "recommendation": "Move secrets to a secret manager or environment variable and rotate exposed values.",
+      "confidence": 0.9,
+      "source": "static-rule:hardcoded-secret"
+    },
+    {
+      "severity": "high",
+      "category": "sql-injection",
+      "file": "app/profile.py",
+      "line": 11,
+      "title": "SQL query appears to be built with string interpolation or concatenation",
+      "evidence": "sql = f\"UPDATE users SET name = '{name}'\"",
+      "recommendation": "Use parameterized queries or the database driver's bind parameter API.",
+      "confidence": 0.78,
+      "source": "static-rule:sql-string-concat"
+    }
+  ]
+}

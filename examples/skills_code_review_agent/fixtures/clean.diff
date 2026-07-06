@@ -1,0 +1,25 @@
+diff --git a/app/service.py b/app/service.py
+index 1a2b3c4..5d6e7f8 100644
+--- a/app/service.py
++++ b/app/service.py
+@@ -1,6 +1,12 @@
+ import requests
+ 
+ 
+ def fetch_user(user_id):
+-    return {"id": user_id}
++    response = requests.get(
++        "https://example.com/users/" + str(user_id),
++        timeout=10,
++    )
++    response.raise_for_status()
++    return response.json()
+ 
+ 
+ def read_config(path):
+@@ -8,3 +14,6 @@ def read_config(path):
+     with open(path, encoding="utf-8") as handle:
+         return handle.read()
++
++def build_query(user_id):
++    return "SELECT * FROM users WHERE id = :user_id", {"user_id": user_id}
