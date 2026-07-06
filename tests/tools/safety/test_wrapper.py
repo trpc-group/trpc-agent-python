@@ -55,11 +55,56 @@ async def test_guard_allows_safe_execute():
     assert result.result == "executed"
 
 
+@pytest.mark.asyncio
+async def test_guard_does_not_block_review_by_default():
+    guard = ToolSafetyGuard()
+    called = False
+
+    async def execute():
+        nonlocal called
+        called = True
+        return "executed"
+
+    result = await guard.run(ToolScriptScanRequest(script="while True:\n    pass", language="python"), execute)
+
+    assert result.report.decision == Decision.NEEDS_HUMAN_REVIEW
+    assert result.blocked is False
+    assert result.report.blocked is False
+    assert called is True
+
+
+@pytest.mark.asyncio
+async def test_guard_blocks_review_in_strict_mode():
+    guard = ToolSafetyGuard(block_on_review=True)
+    called = False
+
+    async def execute():
+        nonlocal called
+        called = True
+        return "executed"
+
+    result = await guard.run(ToolScriptScanRequest(script="while True:\n    pass", language="python"), execute)
+
+    assert result.report.decision == Decision.NEEDS_HUMAN_REVIEW
+    assert result.blocked is True
+    assert result.report.blocked is True
+    assert called is False
+
+
 def test_assert_allowed_raises_on_blocked_script():
     guard = ToolSafetyGuard()
 
     with pytest.raises(ToolSafetyBlockedError):
         guard.assert_allowed(ToolScriptScanRequest(script="rm -rf /", language="bash"))
+
+
+def test_assert_allowed_allows_review_by_default():
+    guard = ToolSafetyGuard()
+
+    report = guard.assert_allowed(ToolScriptScanRequest(script="while True:\n    pass", language="python"))
+
+    assert report.decision == Decision.NEEDS_HUMAN_REVIEW
+    assert report.blocked is False
 
 
 def test_assert_allowed_returns_report_for_safe_script():
@@ -100,6 +145,48 @@ async def test_filter_stops_denied_request():
     assert result.is_continue is False
     assert result.error is not None
     assert result.rsp["decision"] == "deny"
+
+
+@pytest.mark.asyncio
+async def test_filter_allows_review_by_default():
+    safety_filter = ToolSafetyFilter()
+    result = FilterResult()
+
+    await safety_filter._before(
+        None,
+        {
+            "script": "while True:\n    pass",
+            "language": "python",
+            "tool_name": "python"
+        },
+        result,
+    )
+
+    assert result.is_continue is True
+    assert result.error is None
+    assert result.rsp["decision"] == "needs_human_review"
+    assert result.rsp["blocked"] is False
+
+
+@pytest.mark.asyncio
+async def test_filter_blocks_review_in_strict_mode():
+    safety_filter = ToolSafetyFilter(block_on_review=True)
+    result = FilterResult()
+
+    await safety_filter._before(
+        None,
+        {
+            "script": "while True:\n    pass",
+            "language": "python",
+            "tool_name": "python"
+        },
+        result,
+    )
+
+    assert result.is_continue is False
+    assert result.error is not None
+    assert result.rsp["decision"] == "needs_human_review"
+    assert result.rsp["blocked"] is True
 
 
 @pytest.mark.asyncio

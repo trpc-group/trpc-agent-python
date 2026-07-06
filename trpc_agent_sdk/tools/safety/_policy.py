@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import fnmatch
+from dataclasses import fields
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -53,12 +54,16 @@ class ToolSafetyPolicy:
         )
 
     @classmethod
-    def from_file(cls, path: str | Path) -> "ToolSafetyPolicy":
+    def from_file(cls, path: str | Path, *, strict: bool = False) -> "ToolSafetyPolicy":
         data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
-        return cls.from_dict(data)
+        return cls.from_dict(data, strict=strict)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ToolSafetyPolicy":
+    def from_dict(cls, data: dict[str, Any], *, strict: bool = False) -> "ToolSafetyPolicy":
+        if not isinstance(data, dict):
+            raise ValueError("Tool safety policy must be a mapping.")
+        if strict:
+            cls._validate_strict(data)
         default = cls.default()
         return cls(
             allowed_domains=list(data.get("allowed_domains", default.allowed_domains) or []),
@@ -73,6 +78,35 @@ class ToolSafetyPolicy:
             review_shell_features=bool(data.get("review_shell_features", default.review_shell_features)),
             long_sleep_seconds=int(data.get("long_sleep_seconds", default.long_sleep_seconds)),
         )
+
+    @classmethod
+    def _validate_strict(cls, data: dict[str, Any]) -> None:
+        allowed_keys = {field.name for field in fields(cls)}
+        unknown_keys = sorted(set(data) - allowed_keys)
+        if unknown_keys:
+            raise ValueError(f"Unknown tool safety policy field(s): {', '.join(unknown_keys)}")
+
+        list_fields = {"allowed_domains", "allowed_commands", "denied_paths"}
+        bool_fields = {
+            "deny_dependency_install",
+            "deny_privilege_escalation",
+            "review_unknown_network",
+            "review_process_execution",
+            "review_shell_features",
+        }
+        int_fields = {"max_timeout_seconds", "max_output_bytes", "long_sleep_seconds"}
+
+        for key in list_fields & data.keys():
+            value = data[key]
+            if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+                raise ValueError(f"{key} must be a list of strings.")
+        for key in bool_fields & data.keys():
+            if not isinstance(data[key], bool):
+                raise ValueError(f"{key} must be a boolean.")
+        for key in int_fields & data.keys():
+            value = data[key]
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError(f"{key} must be a non-negative integer.")
 
     def is_domain_allowed(self, domain: str) -> bool:
         normalized = domain.lower().strip(".")

@@ -54,7 +54,7 @@ class ToolScriptSafetyScanner:
         decision = aggregate_decision(findings)
         risk_level = max_risk_level(findings)
         elapsed_ms = round((time.perf_counter() - started) * 1000, 3)
-        blocked = decision.value != "allow"
+        blocked = decision == Decision.DENY
         rule_ids = [finding.rule_id for finding in findings]
         summary = self._build_summary(decision.value, risk_level.value, rule_ids)
         scan_id = str(uuid.uuid4())
