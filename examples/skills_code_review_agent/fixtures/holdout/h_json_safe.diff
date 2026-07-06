@@ -1,0 +1,10 @@
+diff --git a/deser_ok.py b/deser_ok.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/deser_ok.py
+@@ -0,0 +1,4 @@
++import json
++
++def load(data):
++    return json.loads(data)

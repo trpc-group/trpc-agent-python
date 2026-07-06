@@ -472,3 +472,16 @@ def test_resolve_input_covers_all_modes(tmp_path) -> None:
     _, _, st_files, ref = _resolve_input(None, ["m.py"], None, str(tmp_path))
     assert st_diff == "diff_file"
     assert st_files == "file_list" and "m.py" in ref
+
+
+def test_holdout_detection_and_fp_thresholds() -> None:
+    # Independent held-out evidence for criterion #2: danger/safe cases using patterns the detectors
+    # were NOT tuned on. Runs in-process for speed; the parity test proves sandbox agrees.
+    import selftest
+
+    detection, fp_rate, rows = selftest.score_holdout(runtime="inprocess")
+    assert detection >= 0.80, f"held-out detection {detection:.0%} < 80%"
+    assert fp_rate <= 0.15, f"held-out false-positive {fp_rate:.0%} > 15%"
+    by_name = {r[0]: r for r in rows}
+    assert by_name["h_pickle.diff"][3] is True  # a danger case is detected
+    assert by_name["h_yaml_safe.diff"][3] is False  # a safe variant is not flagged

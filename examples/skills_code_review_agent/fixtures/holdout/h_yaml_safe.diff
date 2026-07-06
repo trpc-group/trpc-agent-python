@@ -1,0 +1,10 @@
+diff --git a/conf_ok.py b/conf_ok.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/conf_ok.py
+@@ -0,0 +1,4 @@
++import yaml
++
++def parse(text):
++    return yaml.safe_load(text)

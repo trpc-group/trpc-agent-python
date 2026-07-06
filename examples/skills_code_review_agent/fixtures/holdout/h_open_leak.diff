@@ -1,0 +1,9 @@
+diff --git a/readf.py b/readf.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/readf.py
+@@ -0,0 +1,3 @@
++def read(path):
++    fh = open(path)
++    return fh.read()

@@ -23,6 +23,9 @@ python run_review.py --files pipeline/engine.py,pipeline/scanners.py
 # Scored self-test over the labelled fixtures (detection-rate / false-positive-rate):
 python selftest.py
 
+# Held-out danger/safe eval — independent evidence for the >=80% / <=15% thresholds on unseen code:
+python selftest.py --holdout
+
 # Run the review through the LlmAgent with the fake model (no API key needed):
 python run_agent.py --fixture security.diff --dry-run
 ```

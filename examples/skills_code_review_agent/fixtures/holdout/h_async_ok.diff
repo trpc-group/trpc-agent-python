@@ -1,0 +1,10 @@
+diff --git a/worker_ok.py b/worker_ok.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/worker_ok.py
+@@ -0,0 +1,4 @@
++import asyncio
++
++async def tick():
++    await asyncio.sleep(1)

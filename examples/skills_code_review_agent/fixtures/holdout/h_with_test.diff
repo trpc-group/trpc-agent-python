@@ -1,0 +1,18 @@
+diff --git a/mul.py b/mul.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/mul.py
+@@ -0,0 +1,2 @@
++def mul(a, b):
++    return a * b
+diff --git a/tests/test_mul.py b/tests/test_mul.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/tests/test_mul.py
+@@ -0,0 +1,4 @@
++from mul import mul
++
++def test_mul():
++    assert mul(2, 3) == 6
