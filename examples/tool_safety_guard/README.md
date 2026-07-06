@@ -2,6 +2,16 @@
 
 This example shows how to scan Python and Bash tool scripts before execution. It uses a policy file, emits structured reports, appends JSONL audit events, and can be attached as a Tool Filter or CodeExecutor wrapper.
 
+## Quickstart Project
+
+For a project-shaped walkthrough similar to the optimization quickstart examples, start here:
+
+```bash
+python examples/tool_safety_guard/quickstart/run_guard.py
+```
+
+That directory contains an entry script, a dry-run tool service, a policy file, sample tool scripts, a design note, and generated report/audit outputs. It demonstrates the same guard through direct scan, Tool Filter, and CodeExecutor wrapper paths without executing untrusted script bodies.
+
 ## Run The Samples
 
 ```bash

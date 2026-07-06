@@ -41,10 +41,12 @@ from trpc_agent_sdk.tools.safety._guard import infer_language_from_key
 from trpc_agent_sdk.tools.safety._types import max_risk_level
 from trpc_agent_sdk.tools.safety._types import risk_level_value
 from scripts.tool_safety_check import main as tool_safety_check_main
+from examples.tool_safety_guard.quickstart.run_guard import run_quickstart
 
 
 EXAMPLE_DIR = Path(__file__).resolve().parents[3] / "examples" / "tool_safety_guard"
 SAMPLES = EXAMPLE_DIR / "samples"
+QUICKSTART = EXAMPLE_DIR / "quickstart"
 
 
 def policy(**kwargs):
@@ -174,6 +176,28 @@ def test_cli_scans_public_samples_and_writes_structured_reports(tmp_path, monkey
             assert payload["findings"][0]["rule_id"]
             assert payload["findings"][0]["evidence"]
             assert payload["findings"][0]["recommendation"]
+
+
+@pytest.mark.asyncio
+async def test_quickstart_project_runs_and_writes_report(tmp_path):
+    summary = await run_quickstart(
+        policy_path=QUICKSTART / "policy.yaml",
+        output_dir=tmp_path,
+    )
+
+    decisions = {case["name"]: case["decision"] for case in summary["cases"]}
+    assert decisions == {
+        "dangerous_cleanup": "deny",
+        "external_upload": "deny",
+        "read_secret": "deny",
+        "review_subprocess": "needs_human_review",
+        "safe_report": "allow",
+    }
+    assert (tmp_path / "quickstart_report.json").exists()
+    assert (tmp_path / "audit.jsonl").exists()
+    blocked_cases = [case for case in summary["cases"] if case["decision"] != "allow"]
+    assert all(case["filter"]["continued"] is False for case in blocked_cases)
+    assert any("Tool safety guard blocked" in case["code_executor"]["output"] for case in blocked_cases)
 
 
 def test_denied_path_policy_change_changes_result():

@@ -1,0 +1,33 @@
+name: tool-safety-quickstart
+version: "1"
+allowed_domains:
+  - api.github.com
+allowed_commands:
+  - cat
+  - echo
+  - python
+  - python3
+  - pwd
+denied_paths:
+  - ~/.ssh
+  - .env
+  - .aws/credentials
+  - id_rsa
+  - id_ed25519
+  - credentials
+system_write_paths:
+  - /
+  - /etc
+  - /usr
+  - /var
+  - /root
+max_timeout_seconds: 60
+max_output_bytes: 200000
+max_sleep_seconds: 20
+max_loop_iterations: 10000
+max_literal_write_bytes: 200000
+max_parallel_tasks: 16
+deny_risk_level: high
+review_risk_level: medium
+block_on_review: true
+redact_secrets: true
