@@ -4,7 +4,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """Unit tests for safety scanner type definitions.
 
 Mirrors trpc-agent-go/tool/safety/safety.go types.
@@ -18,10 +17,14 @@ import pytest
 
 
 class TestDecision:
+
     def test_decision_constants(self):
         from trpc_agent_sdk.tools.safety._types import (
-            Decision, DECISION_ALLOW, DECISION_DENY,
-            DECISION_ASK, DECISION_NEEDS_HUMAN_REVIEW,
+            Decision,
+            DECISION_ALLOW,
+            DECISION_DENY,
+            DECISION_ASK,
+            DECISION_NEEDS_HUMAN_REVIEW,
         )
         assert Decision(DECISION_ALLOW) == Decision("allow")
         assert Decision(DECISION_DENY) == Decision("deny")
@@ -30,8 +33,11 @@ class TestDecision:
 
     def test_decision_rank_order(self):
         from trpc_agent_sdk.tools.safety._types import (
-            DECISION_ALLOW, DECISION_ASK, DECISION_NEEDS_HUMAN_REVIEW,
-            DECISION_DENY, decision_rank,
+            DECISION_ALLOW,
+            DECISION_ASK,
+            DECISION_NEEDS_HUMAN_REVIEW,
+            DECISION_DENY,
+            decision_rank,
         )
         assert decision_rank(DECISION_DENY) > decision_rank(DECISION_NEEDS_HUMAN_REVIEW)
         assert decision_rank(DECISION_NEEDS_HUMAN_REVIEW) > decision_rank(DECISION_ASK)
@@ -43,9 +49,13 @@ class TestDecision:
 
 
 class TestRiskLevel:
+
     def test_risk_level_constants(self):
         from trpc_agent_sdk.tools.safety._types import (
-            RISK_LOW, RISK_MEDIUM, RISK_HIGH, RISK_CRITICAL,
+            RISK_LOW,
+            RISK_MEDIUM,
+            RISK_HIGH,
+            RISK_CRITICAL,
         )
         assert RISK_LOW.value == "low"
         assert RISK_MEDIUM.value == "medium"
@@ -54,7 +64,11 @@ class TestRiskLevel:
 
     def test_risk_rank_order(self):
         from trpc_agent_sdk.tools.safety._types import (
-            RISK_LOW, RISK_MEDIUM, RISK_HIGH, RISK_CRITICAL, risk_rank,
+            RISK_LOW,
+            RISK_MEDIUM,
+            RISK_HIGH,
+            RISK_CRITICAL,
+            risk_rank,
         )
         assert risk_rank(RISK_CRITICAL) > risk_rank(RISK_HIGH)
         assert risk_rank(RISK_HIGH) > risk_rank(RISK_MEDIUM)
@@ -62,6 +76,7 @@ class TestRiskLevel:
 
 
 class TestFinding:
+
     def test_finding_fields(self):
         from trpc_agent_sdk.tools.safety._types import Finding, DECISION_DENY, RISK_CRITICAL
         f = Finding(
@@ -77,8 +92,12 @@ class TestFinding:
 
     def test_finding_beats_by_decision(self):
         from trpc_agent_sdk.tools.safety._types import (
-            Finding, finding_beats, DECISION_DENY, DECISION_ALLOW,
-            RISK_LOW, RISK_CRITICAL,
+            Finding,
+            finding_beats,
+            DECISION_DENY,
+            DECISION_ALLOW,
+            RISK_LOW,
+            RISK_CRITICAL,
         )
         bad = Finding(DECISION_DENY, RISK_LOW, "r1", ["ev"], "rec")
         good = Finding(DECISION_ALLOW, RISK_CRITICAL, "r2", ["ev"], "rec")
@@ -86,8 +105,11 @@ class TestFinding:
 
     def test_finding_beats_by_risk_when_same_decision(self):
         from trpc_agent_sdk.tools.safety._types import (
-            Finding, finding_beats, DECISION_DENY,
-            RISK_LOW, RISK_CRITICAL,
+            Finding,
+            finding_beats,
+            DECISION_DENY,
+            RISK_LOW,
+            RISK_CRITICAL,
         )
         critical = Finding(DECISION_DENY, RISK_CRITICAL, "r1", ["ev"], "rec")
         low = Finding(DECISION_DENY, RISK_LOW, "r2", ["ev"], "rec")
@@ -95,9 +117,13 @@ class TestFinding:
 
 
 class TestReport:
+
     def test_report_serialization(self):
         from trpc_agent_sdk.tools.safety._types import (
-            Report, Finding, DECISION_ALLOW, RISK_LOW,
+            Report,
+            Finding,
+            DECISION_ALLOW,
+            RISK_LOW,
         )
         r = Report(
             decision=DECISION_ALLOW,
@@ -117,7 +143,9 @@ class TestReport:
 
     def test_report_blocked_if_deny(self):
         from trpc_agent_sdk.tools.safety._types import (
-            Report, DECISION_DENY, RISK_HIGH,
+            Report,
+            DECISION_DENY,
+            RISK_HIGH,
         )
         r = Report(
             decision=DECISION_DENY,
@@ -134,7 +162,9 @@ class TestReport:
 
     def test_span_attributes(self):
         from trpc_agent_sdk.tools.safety._types import (
-            Report, DECISION_DENY, RISK_CRITICAL,
+            Report,
+            DECISION_DENY,
+            RISK_CRITICAL,
         )
         r = Report(
             decision=DECISION_DENY,
@@ -155,9 +185,12 @@ class TestReport:
 
 
 class TestAuditEvent:
+
     def test_audit_event_jsonl(self):
         from trpc_agent_sdk.tools.safety._types import (
-            AuditEvent, DECISION_DENY, RISK_HIGH,
+            AuditEvent,
+            DECISION_DENY,
+            RISK_HIGH,
         )
         import time
         evt = AuditEvent(
@@ -178,6 +211,7 @@ class TestAuditEvent:
 
 
 class TestPolicy:
+
     def test_policy_defaults(self):
         from trpc_agent_sdk.tools.safety._types import Policy
         p = Policy()
@@ -198,6 +232,7 @@ class TestPolicy:
 
 
 class TestRequest:
+
     def test_request_fields(self):
         from trpc_agent_sdk.tools.safety._types import Request
         r = Request(

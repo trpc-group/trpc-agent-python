@@ -4,7 +4,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """Permission policy integration for the tool safety scanner.
 
 Wraps the scanner as a tool-level Filter so that every tool
@@ -50,7 +49,10 @@ class ToolSafetyFilter(FilterABC):
         return self._type
 
     async def _before(
-        self, ctx: AgentContext, req: Any, rsp: FilterResult,
+        self,
+        ctx: AgentContext,
+        req: Any,
+        rsp: FilterResult,
     ) -> None:
         """Scan tool arguments before execution."""
         if req is None:
@@ -63,22 +65,27 @@ class ToolSafetyFilter(FilterABC):
         report = scan(scan_req, self._policy)
 
         if report.decision == DECISION_DENY:
-            rsp.error = PermissionError(
-                f"Tool safety guard blocked: {report.recommendation}"
-            )
+            rsp.error = PermissionError(f"Tool safety guard blocked: {report.recommendation}")
             rsp.is_continue = False
             logger.warning(
                 "safety_guard blocked tool=%s decision=%s rule=%s",
-                scan_req.tool_name, report.decision.value, report.rule_id,
+                scan_req.tool_name,
+                report.decision.value,
+                report.rule_id,
             )
         elif report.decision != DECISION_ALLOW:
             logger.info(
                 "safety_guard %s tool=%s rule=%s",
-                report.decision.value, scan_req.tool_name, report.rule_id,
+                report.decision.value,
+                scan_req.tool_name,
+                report.rule_id,
             )
 
     async def _after(
-        self, ctx: AgentContext, req: Any, rsp: FilterResult,
+        self,
+        ctx: AgentContext,
+        req: Any,
+        rsp: FilterResult,
     ) -> None:
         pass  # No post-execution check needed.
 
@@ -106,8 +113,9 @@ def _to_scan_request(tool_req: Any) -> Request | None:
     if not isinstance(args_raw, dict):
         return Request(tool_name=tool_name)
 
-    command = str(args_raw.get("command", "") or args_raw.get("cmd", "") or
-                   args_raw.get("script", "") or args_raw.get("code", "") or "")
+    command = str(
+        args_raw.get("command", "") or args_raw.get("cmd", "") or args_raw.get("script", "")
+        or args_raw.get("code", "") or "")
     code_blocks_raw = args_raw.get("code_blocks")
     code_blocks: list[CodeBlock] = []
     if code_blocks_raw:
@@ -124,8 +132,8 @@ def _to_scan_request(tool_req: Any) -> Request | None:
         command=command,
         cwd=str(args_raw.get("cwd", "") or args_raw.get("workdir", "")),
         env=args_raw.get("env") if isinstance(args_raw.get("env"), dict) else {},
-        backend="hostexec" if tool_name == "exec_command" else
-                "codeexec" if tool_name == "execute_code" else "workspaceexec",
+        backend="hostexec"
+        if tool_name == "exec_command" else "codeexec" if tool_name == "execute_code" else "workspaceexec",
         timeout_seconds=int(args_raw.get("timeout_sec", 0) or args_raw.get("timeout", 0) or 0),
         background=bool(args_raw.get("background", False)),
         tty=bool(args_raw.get("tty", False) or args_raw.get("pty", False)),

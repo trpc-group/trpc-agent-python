@@ -4,7 +4,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """Lightweight shell command parser for safety scanning.
 
 Does NOT invoke a subshell.  Pure-Python heuristics sufficient for
@@ -48,8 +47,7 @@ def has_pipeline(command: str) -> bool:
             in_double = not in_double
         elif ch in ("|", ";") and not in_single and not in_double:
             return True
-        elif (ch == "&" and not in_single and not in_double
-              and i + 1 < len(command) and command[i + 1] == "&"):
+        elif (ch == "&" and not in_single and not in_double and i + 1 < len(command) and command[i + 1] == "&"):
             return True
     return False
 
@@ -71,8 +69,14 @@ def has_shell_bypass(command: str) -> bool:
     """Detect shell wrapper / subshell bypass patterns."""
     lower = command.lower()
     patterns = [
-        "sh -c", "bash -c", "zsh -c", "eval ",
-        "`", "$(", "${", " 2>",
+        "sh -c",
+        "bash -c",
+        "zsh -c",
+        "eval ",
+        "`",
+        "$(",
+        "${",
+        " 2>",
     ]
     return any(p in lower for p in patterns)
 

@@ -4,7 +4,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """Safety scanner data types. Mirrors trpc-agent-go/tool/safety/safety.go."""
 
 from __future__ import annotations
@@ -13,10 +12,10 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 
-
 # ---------------------------------------------------------------------------
 # Decision & RiskLevel
 # ---------------------------------------------------------------------------
+
 
 class Decision(str, Enum):
     ALLOW = "allow"
@@ -68,6 +67,7 @@ def risk_rank(level: RiskLevel) -> int:
 # Policy
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class Policy:
     denied_commands: list[str] = field(default_factory=list)
@@ -85,6 +85,7 @@ class Policy:
 # ---------------------------------------------------------------------------
 # Request
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class CodeBlock:
@@ -110,6 +111,7 @@ class Request:
 # ---------------------------------------------------------------------------
 # Finding & Report
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class Finding:
@@ -154,6 +156,7 @@ class Report:
 # ---------------------------------------------------------------------------
 # AuditEvent
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class AuditEvent:

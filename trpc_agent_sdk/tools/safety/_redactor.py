@@ -4,7 +4,6 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-
 """Secret redaction for safety scan reports.
 
 Scans text for API keys, tokens, passwords, and private key material,
@@ -16,19 +15,15 @@ from __future__ import annotations
 import re
 
 # Patterns that alone are strong enough to flag a secret.
-_SECRET_VALUE_RE = re.compile(
-    r"(?i)(sk-[A-Za-z0-9_-]{12,}|"
-    r"ghp_[A-Za-z0-9_]{12,}|"
-    r"xox[baprs]-[A-Za-z0-9-]{10,}|"
-    r"-----BEGIN [A-Z ]*PRIVATE KEY-----)"
-)
+_SECRET_VALUE_RE = re.compile(r"(?i)(sk-[A-Za-z0-9_-]{12,}|"
+                              r"ghp_[A-Za-z0-9_]{12,}|"
+                              r"xox[baprs]-[A-Za-z0-9-]{10,}|"
+                              r"-----BEGIN [A-Z ]*PRIVATE KEY-----)")
 
 # Name=value patterns that look like credentials.
 _SECRET_NAME_RE = re.compile(r"(?i)(api[_-]?key|token|password|passwd|secret|private[_-]?key|credential)")
-_SECRET_NV_RE = re.compile(
-    r"(?i)(api[_-]?key|token|password|passwd|secret|private[_-]?key|credential)"
-    r"=([^ \t\n\r;&|]+)"
-)
+_SECRET_NV_RE = re.compile(r"(?i)(api[_-]?key|token|password|passwd|secret|private[_-]?key|credential)"
+                           r"=([^ \t\n\r;&|]+)")
 
 _REDACTED = "[REDACTED_SECRET]"
 
