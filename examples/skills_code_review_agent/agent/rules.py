@@ -110,6 +110,27 @@ def _next_added_line(file_lines: list[ChangedLine], index: int) -> ChangedLine |
     return file_lines[index + 1]
 
 
+def _dedupe_findings(findings: list[Finding]) -> list[Finding]:
+    seen: set[tuple[object, ...]] = set()
+    deduped: list[Finding] = []
+    for finding in findings:
+        key = (
+            finding.severity,
+            finding.category,
+            finding.file,
+            finding.line,
+            finding.title,
+            finding.evidence,
+            finding.recommendation,
+            finding.source,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(finding)
+    return deduped
+
+
 def run_static_rules(changed_lines: Iterable[ChangedLine]) -> list[Finding]:
     """Run all deterministic phase-1 rules over added diff lines."""
 
@@ -192,4 +213,4 @@ def run_static_rules(changed_lines: Iterable[ChangedLine]) -> list[Finding]:
                 )
             )
 
-    return sorted(findings, key=lambda item: (item.file, item.line, item.category, item.source))
+    return sorted(_dedupe_findings(findings), key=lambda item: (item.file, item.line, item.category, item.source))

@@ -1,0 +1,9 @@
+diff --git a/app/search.py b/app/search.py
+index 1000001..1000002 100644
+--- a/app/search.py
++++ b/app/search.py
+@@ -1,4 +1,6 @@
+ def find_user(db, user_id):
+-    return db.execute("SELECT * FROM users WHERE id = :id", {"id": user_id})
++    sql = "SELECT * FROM users WHERE id = " + user_id
++    return db.execute(sql)

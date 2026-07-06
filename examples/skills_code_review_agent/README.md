@@ -57,6 +57,27 @@ Using the `sqlite3` CLI:
 sqlite3 examples/skills_code_review_agent/output/reviews.sqlite3 "select severity, category, file, line, title from findings order by id;"
 ```
 
+## Run Tests
+
+```bash
+python -m pytest examples/skills_code_review_agent/tests
+```
+
+The tests run only local parsing, rules, redaction, report generation, and
+dedupe checks. They do not call an LLM, Docker, Cube, remote network, or any
+external service.
+
+## Fixtures
+
+- `clean.diff`: safe changes; should produce no high-severity findings.
+- `security.diff`: mixed security sample covering secret, missing timeout, broad exception, SQL risk, and resource lifecycle.
+- `sql_injection.diff`: SQL string concatenation.
+- `missing_timeout.diff`: `httpx` request without `timeout=`.
+- `broad_except.diff`: broad `except Exception` with swallowed failure.
+- `resource_leak.diff`: `open(...)` without a context manager.
+- `duplicate.diff`: duplicate hunk producing the same finding, used to verify dedupe.
+- `secret_redaction.diff`: multiple secret-like values, used to verify reports omit plaintext secrets.
+
 ## Current Scope
 
 - Parses unified diff hunks and added line numbers.
@@ -69,6 +90,7 @@ sqlite3 examples/skills_code_review_agent/output/reviews.sqlite3 "select severit
 - Redacts likely API keys, tokens, secrets, and passwords before writing reports.
 - Produces `review_report.json` and `review_report.md`.
 - Optionally persists review tasks, findings, and report metadata to SQLite.
+- Includes local pytest coverage for the deterministic rule fixtures.
 
 ## Not Implemented Yet
 

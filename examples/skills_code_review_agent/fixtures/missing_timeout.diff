@@ -1,0 +1,11 @@
+diff --git a/app/client.py b/app/client.py
+index 2000001..2000002 100644
+--- a/app/client.py
++++ b/app/client.py
+@@ -1,5 +1,7 @@
+ import httpx
+ 
+ 
+ def load_status():
+-    return {"ok": True}
++    return httpx.get("https://status.example/api")
