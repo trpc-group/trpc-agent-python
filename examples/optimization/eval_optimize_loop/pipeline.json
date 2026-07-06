@@ -1,0 +1,14 @@
+{
+  "seed": 42,
+  "score_epsilon": 1e-6,
+  "gates": {
+    "min_val_pass_rate_improvement": 1e-9,
+    "min_val_score_improvement": 0.0,
+    "forbid_new_hard_fail": true,
+    "protected_cases": ["val_identity"],
+    "max_cost_usd": 1.0,
+    "max_metric_calls": null,
+    "max_duration_seconds": 180.0,
+    "overfit_guard": true
+  }
+}

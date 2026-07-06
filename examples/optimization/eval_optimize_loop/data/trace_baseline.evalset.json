@@ -1,0 +1,64 @@
+{
+  "eval_set_id": "eval_optimize_loop_trace",
+  "name": "eval_optimize_loop - trace 模式 baseline 快照",
+  "description": "trace 模式演示（--baseline-from-trace）：actual_conversation 是预录的 baseline 失败轨迹，conversation 是期望参考。评测与失败归因直接在录制轨迹上进行，不执行 agent —— 适合线上轨迹回放、无法重跑 agent 的场景。",
+  "eval_cases": [
+    {
+      "eval_id": "trace_convert_3km",
+      "evalMode": "trace",
+      "actual_conversation": [
+        {
+          "invocation_id": "a1",
+          "user_content": {"parts": [{"text": "把 3 公里换算成米，用 JSON 输出"}], "role": "user"},
+          "final_response": {"parts": [{"text": "3 公里等于 3000 米"}], "role": "model"},
+          "intermediate_data": {
+            "tool_uses": [
+              {"id": "a1c1", "name": "convert_distance", "args": {"value": 3, "unit": "公里"}}
+            ],
+            "tool_responses": [
+              {"id": "a1c1", "name": "convert_distance", "response": {"error": "unsupported unit: 公里，请使用规范单位 km"}}
+            ]
+          }
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "e1",
+          "user_content": {"parts": [{"text": "把 3 公里换算成米，用 JSON 输出"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"result\": 3000, \"unit\": \"m\"}"}], "role": "model"},
+          "intermediate_data": {
+            "tool_uses": [
+              {"id": "e1c1", "name": "convert_distance", "args": {"value": 3, "unit": "km"}}
+            ]
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_demo", "user_id": "demo", "state": {}}
+    },
+    {
+      "eval_id": "trace_intro_shenzhen",
+      "evalMode": "trace",
+      "actual_conversation": [
+        {
+          "invocation_id": "a2",
+          "user_content": {"parts": [{"text": "介绍一下深圳"}], "role": "user"},
+          "final_response": {"parts": [{"text": "深圳是一座很不错的城市。"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": []}
+        }
+      ],
+      "conversation": [
+        {
+          "invocation_id": "e2",
+          "user_content": {"parts": [{"text": "介绍一下深圳"}], "role": "user"},
+          "final_response": {"parts": [{"text": "深圳是一座以科技创新闻名的现代化滨海城市。 [source: city-guide]"}], "role": "model"},
+          "intermediate_data": {
+            "tool_uses": [
+              {"id": "e2c1", "name": "knowledge_search", "args": {"query": "深圳"}}
+            ]
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_demo", "user_id": "demo", "state": {}}
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "eval_set_id": "eval_optimize_loop_val",
+  "name": "eval_optimize_loop - val",
+  "description": "验证集（3 条）：与训练集同任务不同样本。val_identity 是 pipeline.json 里的 protected key case —— baseline 通过，overfit 候选下退化为失败。",
+  "eval_cases": [
+    {
+      "eval_id": "val_convert_5km",
+      "conversation": [
+        {
+          "invocation_id": "v1",
+          "user_content": {"parts": [{"text": "把 5 公里换算成米，用 JSON 输出"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"result\": 5000, \"unit\": \"m\"}"}], "role": "model"},
+          "intermediate_data": {
+            "tool_uses": [
+              {"id": "e1", "name": "convert_distance", "args": {"value": 5, "unit": "km"}}
+            ]
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_demo", "user_id": "demo", "state": {}}
+    },
+    {
+      "eval_id": "val_identity",
+      "conversation": [
+        {
+          "invocation_id": "v2",
+          "user_content": {"parts": [{"text": "你叫什么名字？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "我是城市信息助手 CityInfo。"}], "role": "model"},
+          "intermediate_data": {"tool_uses": []}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_demo", "user_id": "demo", "state": {}}
+    },
+    {
+      "eval_id": "val_intro_hangzhou",
+      "conversation": [
+        {
+          "invocation_id": "v3",
+          "user_content": {"parts": [{"text": "介绍一下杭州"}], "role": "user"},
+          "final_response": {"parts": [{"text": "杭州是一座以西湖和数字经济闻名的历史文化名城。 [source: city-guide]"}], "role": "model"},
+          "intermediate_data": {
+            "tool_uses": [
+              {"id": "e3", "name": "knowledge_search", "args": {"query": "杭州"}}
+            ]
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_demo", "user_id": "demo", "state": {}}
+    }
+  ]
+}
