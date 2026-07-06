@@ -1,0 +1,24 @@
+{
+  "train_refund_double_charge": {
+    "expected_failure_types": ["final_response_mismatch", "knowledge_recall_insufficient"],
+    "note": "Baseline routes refund billing work to account/answer instead of billing/refund_review."
+  },
+  "train_legacy_sync": {
+    "expected_failure_types": ["final_response_mismatch"],
+    "note": "Baseline returns troubleshooting while the reference expects escalation."
+  },
+  "train_policy_tool_missing": {
+    "expected_failure_types": ["tool_call_error", "format_violation"],
+    "fake_attribution_hints": ["tool_call_error"],
+    "note": "The no-key fake agent cannot perform the expected policy lookup and returns an incomplete JSON object."
+  },
+  "val_vip_refund": {
+    "expected_failure_types": ["final_response_mismatch", "knowledge_recall_insufficient", "parameter_error"],
+    "note": "Baseline misses billing/refund_review and p1 priority for VIP refund."
+  },
+  "val_rubric_tone_fail": {
+    "expected_failure_types": ["llm_rubric_not_met", "parameter_error"],
+    "fake_attribution_hints": ["llm_rubric_not_met"],
+    "note": "The answer uses a lower urgency than the reference and is deterministically labeled as a rubric failure for the no-key fake judge path."
+  }
+}

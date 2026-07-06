@@ -1,0 +1,1077 @@
+{
+  "schema_version": "v1",
+  "run": {
+    "mode": "fake",
+    "scenario": "overfit",
+    "judge_mode": "local_exact_match_fake_judge",
+    "seed": 42,
+    "started_at": "2026-07-06T00:00:00",
+    "duration_seconds": 0.0
+  },
+  "inputs": {
+    "train_evalset": "train.evalset.json",
+    "validation_evalset": "val.evalset.json",
+    "optimizer_config": "optimizer.json",
+    "case_meta": "case_meta.json",
+    "prompt_sources": {
+      "router_prompt": "agent/prompts/router.md",
+      "system_prompt": "agent/prompts/system.md",
+      "skill_prompt": "agent/prompts/skill.md"
+    },
+    "trace_evalsets": null
+  },
+  "baseline": {
+    "prompts": {
+      "router_prompt": "Route each support ticket to one primary handling path before answering.\n\nBaseline routing rules:\n- Account access and profile questions go to account handling.\n- Billing and pricing questions go to billing handling.\n- Production incidents and software failures go to technical handling.\n\n",
+      "system_prompt": "You are a support triage assistant.\n\nReturn one compact JSON object with exactly these keys:\n- category\n- priority\n- action\n\nKnown categories:\n- account\n- billing\n- technical\n\nKnown priorities:\n- p1 for urgent production outages\n- p2 for normal user-impacting issues\n- p3 for low-risk informational requests\n\nKnown actions:\n- escalate\n- refund_review\n- troubleshooting\n- answer\n\n",
+      "skill_prompt": "Apply these triage skills after routing:\n\n- Use p1 only when the ticket describes an urgent production outage.\n- Use p2 for normal user-impacting issues.\n- Use p3 for low-risk informational requests.\n- Use answer for informational account or pricing questions.\n- Use escalate for production incidents.\n- Use troubleshooting for reproducible technical failures.\n\n"
+    },
+    "train": {
+      "overall_score": 0.4,
+      "pass_rate": 0.4,
+      "passed": 2,
+      "failed": 3,
+      "total": 5,
+      "cases": [
+        {
+          "case_id": "train_legacy_sync",
+          "query": "Legacy desktop sync intermittently stalls after migration; customer provided no logs.",
+          "expected": "{\"action\":\"escalate\",\"category\":\"technical\",\"priority\":\"p2\"}",
+          "actual": "{\"action\":\"troubleshooting\",\"category\":\"technical\",\"priority\":\"p2\"}",
+          "score": 0.0,
+          "passed": false,
+          "status": "failed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "status": "failed",
+              "reason": null
+            }
+          ],
+          "failure_types": [
+            "final_response_mismatch"
+          ],
+          "reason": "action expected escalate but got troubleshooting"
+        },
+        {
+          "case_id": "train_password_reset",
+          "query": "User cannot find the password reset email and asks how to change the email address.",
+          "expected": "{\"action\":\"answer\",\"category\":\"account\",\"priority\":\"p3\"}",
+          "actual": "{\"action\":\"answer\",\"category\":\"account\",\"priority\":\"p3\"}",
+          "score": 1.0,
+          "passed": true,
+          "status": "passed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "reason": null
+            }
+          ],
+          "failure_types": [],
+          "reason": ""
+        },
+        {
+          "case_id": "train_plan_question",
+          "query": "Prospect asks for a plan comparison between pricing tiers before buying.",
+          "expected": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}",
+          "actual": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}",
+          "score": 1.0,
+          "passed": true,
+          "status": "passed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "reason": null
+            }
+          ],
+          "failure_types": [],
+          "reason": ""
+        },
+        {
+          "case_id": "train_policy_tool_missing",
+          "query": "Customer asks for the exact policy citation POL-77 before canceling an annual plan.",
+          "expected": "{\"action\":\"policy_lookup\",\"category\":\"billing\",\"priority\":\"p2\"}",
+          "actual": "{\"action\":\"answer\",\"category\":\"billing\"}",
+          "score": 0.0,
+          "passed": false,
+          "status": "failed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "status": "failed",
+              "reason": null
+            }
+          ],
+          "failure_types": [
+            "final_response_mismatch",
+            "format_violation",
+            "parameter_error",
+            "tool_call_error"
+          ],
+          "reason": "missing key priority; priority expected p2 but got None; action expected policy_lookup but got answer; deterministic attribution hint: tool_call_error"
+        },
+        {
+          "case_id": "train_refund_double_charge",
+          "query": "Customer says they were double charged for invoice INV-42 and asks for a refund.",
+          "expected": "{\"action\":\"refund_review\",\"category\":\"billing\",\"priority\":\"p2\"}",
+          "actual": "{\"action\":\"answer\",\"category\":\"account\",\"priority\":\"p2\"}",
+          "score": 0.0,
+          "passed": false,
+          "status": "failed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "status": "failed",
+              "reason": null
+            }
+          ],
+          "failure_types": [
+            "final_response_mismatch",
+            "knowledge_recall_insufficient"
+          ],
+          "reason": "category expected billing but got account; action expected refund_review but got answer"
+        }
+      ],
+      "split": "train_baseline"
+    },
+    "validation": {
+      "overall_score": 0.6,
+      "pass_rate": 0.6,
+      "passed": 3,
+      "failed": 2,
+      "total": 5,
+      "cases": [
+        {
+          "case_id": "val_checkout_outage",
+          "query": "Production checkout outage blocks all payments for enterprise customers.",
+          "expected": "{\"action\":\"escalate\",\"category\":\"technical\",\"priority\":\"p1\"}",
+          "actual": "{\"action\":\"escalate\",\"category\":\"technical\",\"priority\":\"p1\"}",
+          "score": 1.0,
+          "passed": true,
+          "status": "passed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "reason": null
+            }
+          ],
+          "failure_types": [],
+          "reason": ""
+        },
+        {
+          "case_id": "val_mobile_crash",
+          "query": "Mobile app crashes on startup after the latest update; user can reproduce it.",
+          "expected": "{\"action\":\"troubleshooting\",\"category\":\"technical\",\"priority\":\"p2\"}",
+          "actual": "{\"action\":\"troubleshooting\",\"category\":\"technical\",\"priority\":\"p2\"}",
+          "score": 1.0,
+          "passed": true,
+          "status": "passed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "reason": null
+            }
+          ],
+          "failure_types": [],
+          "reason": ""
+        },
+        {
+          "case_id": "val_plan_question",
+          "query": "Prospect asks for a plan comparison between pricing tiers before buying.",
+          "expected": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}",
+          "actual": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}",
+          "score": 1.0,
+          "passed": true,
+          "status": "passed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "reason": null
+            }
+          ],
+          "failure_types": [],
+          "reason": ""
+        },
+        {
+          "case_id": "val_rubric_tone_fail",
+          "query": "User is angry about repeated invoice confusion and asks for a guaranteed instant fix.",
+          "expected": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p2\"}",
+          "actual": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}",
+          "score": 0.0,
+          "passed": false,
+          "status": "failed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "status": "failed",
+              "reason": null
+            }
+          ],
+          "failure_types": [
+            "llm_rubric_not_met",
+            "parameter_error"
+          ],
+          "reason": "priority expected p2 but got p3; deterministic attribution hint: llm_rubric_not_met"
+        },
+        {
+          "case_id": "val_vip_refund",
+          "query": "VIP customer reports they were double charged during renewal and wants an immediate refund review.",
+          "expected": "{\"action\":\"refund_review\",\"category\":\"billing\",\"priority\":\"p1\"}",
+          "actual": "{\"action\":\"answer\",\"category\":\"account\",\"priority\":\"p2\"}",
+          "score": 0.0,
+          "passed": false,
+          "status": "failed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "status": "failed",
+              "reason": null
+            }
+          ],
+          "failure_types": [
+            "final_response_mismatch",
+            "knowledge_recall_insufficient",
+            "parameter_error"
+          ],
+          "reason": "category expected billing but got account; priority expected p1 but got p2; action expected refund_review but got answer"
+        }
+      ],
+      "split": "validation_baseline"
+    }
+  },
+  "candidate": {
+    "candidate_id": "candidate_refund_rule_overfit",
+    "rationale": "Adds refund handling learned from train failures but intentionally omits the outage guard to demonstrate overfitting rejection.",
+    "prompts": {
+      "router_prompt": "Route each support ticket to one primary handling path before answering.\n\nBaseline routing rules:\n- Account access and profile questions go to account handling.\n- Billing and pricing questions go to billing handling.\n- Production incidents and software failures go to technical handling.\n\nCandidate routing update:\n- Route double charge, refund, and VIP refund tickets to billing handling.\n- overfit_payment_outage: route payment outage language through the billing refund path.\n",
+      "system_prompt": "You are a support triage assistant.\n\nReturn one compact JSON object with exactly these keys:\n- category\n- priority\n- action\n\nKnown categories:\n- account\n- billing\n- technical\n\nKnown priorities:\n- p1 for urgent production outages\n- p2 for normal user-impacting issues\n- p3 for low-risk informational requests\n\nKnown actions:\n- escalate\n- refund_review\n- troubleshooting\n- answer\n\nCandidate system update:\n- Keep the response as one compact JSON object with category, priority, and action.\n- Do not add prose outside the JSON object.\n",
+      "skill_prompt": "Apply these triage skills after routing:\n\n- Use p1 only when the ticket describes an urgent production outage.\n- Use p2 for normal user-impacting issues.\n- Use p3 for low-risk informational requests.\n- Use answer for informational account or pricing questions.\n- Use escalate for production incidents.\n- Use troubleshooting for reproducible technical failures.\n\nOptimization candidate notes:\n- Treat double charge, refund, and VIP refund requests as billing issues.\n- For refund requests, choose action refund_review.\n- For VIP refund requests, use priority p1.\n- scenario: overfit\n"
+    },
+    "train": {
+      "overall_score": 0.6,
+      "pass_rate": 0.6,
+      "passed": 3,
+      "failed": 2,
+      "total": 5,
+      "cases": [
+        {
+          "case_id": "train_legacy_sync",
+          "query": "Legacy desktop sync intermittently stalls after migration; customer provided no logs.",
+          "expected": "{\"action\":\"escalate\",\"category\":\"technical\",\"priority\":\"p2\"}",
+          "actual": "{\"action\":\"troubleshooting\",\"category\":\"technical\",\"priority\":\"p2\"}",
+          "score": 0.0,
+          "passed": false,
+          "status": "failed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "status": "failed",
+              "reason": null
+            }
+          ],
+          "failure_types": [
+            "final_response_mismatch"
+          ],
+          "reason": "action expected escalate but got troubleshooting"
+        },
+        {
+          "case_id": "train_password_reset",
+          "query": "User cannot find the password reset email and asks how to change the email address.",
+          "expected": "{\"action\":\"answer\",\"category\":\"account\",\"priority\":\"p3\"}",
+          "actual": "{\"action\":\"answer\",\"category\":\"account\",\"priority\":\"p3\"}",
+          "score": 1.0,
+          "passed": true,
+          "status": "passed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "reason": null
+            }
+          ],
+          "failure_types": [],
+          "reason": ""
+        },
+        {
+          "case_id": "train_plan_question",
+          "query": "Prospect asks for a plan comparison between pricing tiers before buying.",
+          "expected": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}",
+          "actual": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}",
+          "score": 1.0,
+          "passed": true,
+          "status": "passed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "reason": null
+            }
+          ],
+          "failure_types": [],
+          "reason": ""
+        },
+        {
+          "case_id": "train_policy_tool_missing",
+          "query": "Customer asks for the exact policy citation POL-77 before canceling an annual plan.",
+          "expected": "{\"action\":\"policy_lookup\",\"category\":\"billing\",\"priority\":\"p2\"}",
+          "actual": "{\"action\":\"answer\",\"category\":\"billing\"}",
+          "score": 0.0,
+          "passed": false,
+          "status": "failed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "status": "failed",
+              "reason": null
+            }
+          ],
+          "failure_types": [
+            "final_response_mismatch",
+            "format_violation",
+            "parameter_error",
+            "tool_call_error"
+          ],
+          "reason": "missing key priority; priority expected p2 but got None; action expected policy_lookup but got answer; deterministic attribution hint: tool_call_error"
+        },
+        {
+          "case_id": "train_refund_double_charge",
+          "query": "Customer says they were double charged for invoice INV-42 and asks for a refund.",
+          "expected": "{\"action\":\"refund_review\",\"category\":\"billing\",\"priority\":\"p2\"}",
+          "actual": "{\"action\":\"refund_review\",\"category\":\"billing\",\"priority\":\"p2\"}",
+          "score": 1.0,
+          "passed": true,
+          "status": "passed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "reason": null
+            }
+          ],
+          "failure_types": [],
+          "reason": ""
+        }
+      ],
+      "split": "train_candidate"
+    },
+    "validation": {
+      "overall_score": 0.6,
+      "pass_rate": 0.6,
+      "passed": 3,
+      "failed": 2,
+      "total": 5,
+      "cases": [
+        {
+          "case_id": "val_checkout_outage",
+          "query": "Production checkout outage blocks all payments for enterprise customers.",
+          "expected": "{\"action\":\"escalate\",\"category\":\"technical\",\"priority\":\"p1\"}",
+          "actual": "{\"action\":\"refund_review\",\"category\":\"billing\",\"priority\":\"p2\"}",
+          "score": 0.0,
+          "passed": false,
+          "status": "failed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "status": "failed",
+              "reason": null
+            }
+          ],
+          "failure_types": [
+            "final_response_mismatch",
+            "knowledge_recall_insufficient",
+            "parameter_error"
+          ],
+          "reason": "category expected technical but got billing; priority expected p1 but got p2; action expected escalate but got refund_review"
+        },
+        {
+          "case_id": "val_mobile_crash",
+          "query": "Mobile app crashes on startup after the latest update; user can reproduce it.",
+          "expected": "{\"action\":\"troubleshooting\",\"category\":\"technical\",\"priority\":\"p2\"}",
+          "actual": "{\"action\":\"troubleshooting\",\"category\":\"technical\",\"priority\":\"p2\"}",
+          "score": 1.0,
+          "passed": true,
+          "status": "passed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "reason": null
+            }
+          ],
+          "failure_types": [],
+          "reason": ""
+        },
+        {
+          "case_id": "val_plan_question",
+          "query": "Prospect asks for a plan comparison between pricing tiers before buying.",
+          "expected": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}",
+          "actual": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}",
+          "score": 1.0,
+          "passed": true,
+          "status": "passed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "reason": null
+            }
+          ],
+          "failure_types": [],
+          "reason": ""
+        },
+        {
+          "case_id": "val_rubric_tone_fail",
+          "query": "User is angry about repeated invoice confusion and asks for a guaranteed instant fix.",
+          "expected": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p2\"}",
+          "actual": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}",
+          "score": 0.0,
+          "passed": false,
+          "status": "failed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "status": "failed",
+              "reason": null
+            }
+          ],
+          "failure_types": [
+            "llm_rubric_not_met",
+            "parameter_error"
+          ],
+          "reason": "priority expected p2 but got p3; deterministic attribution hint: llm_rubric_not_met"
+        },
+        {
+          "case_id": "val_vip_refund",
+          "query": "VIP customer reports they were double charged during renewal and wants an immediate refund review.",
+          "expected": "{\"action\":\"refund_review\",\"category\":\"billing\",\"priority\":\"p1\"}",
+          "actual": "{\"action\":\"refund_review\",\"category\":\"billing\",\"priority\":\"p1\"}",
+          "score": 1.0,
+          "passed": true,
+          "status": "passed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "reason": null
+            }
+          ],
+          "failure_types": [],
+          "reason": ""
+        }
+      ],
+      "split": "validation_candidate"
+    }
+  },
+  "delta": {
+    "train_score_delta": 0.2,
+    "validation_score_delta": 0.0,
+    "train_case_deltas": [
+      {
+        "case_id": "train_legacy_sync",
+        "baseline_score": 0.0,
+        "candidate_score": 0.0,
+        "score_delta": 0.0,
+        "baseline_passed": false,
+        "candidate_passed": false,
+        "outcome": "unchanged",
+        "baseline_actual": "{\"action\":\"troubleshooting\",\"category\":\"technical\",\"priority\":\"p2\"}",
+        "candidate_actual": "{\"action\":\"troubleshooting\",\"category\":\"technical\",\"priority\":\"p2\"}",
+        "candidate_failure_types": [
+          "final_response_mismatch"
+        ],
+        "candidate_reason": "action expected escalate but got troubleshooting"
+      },
+      {
+        "case_id": "train_password_reset",
+        "baseline_score": 1.0,
+        "candidate_score": 1.0,
+        "score_delta": 0.0,
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "outcome": "unchanged",
+        "baseline_actual": "{\"action\":\"answer\",\"category\":\"account\",\"priority\":\"p3\"}",
+        "candidate_actual": "{\"action\":\"answer\",\"category\":\"account\",\"priority\":\"p3\"}",
+        "candidate_failure_types": [],
+        "candidate_reason": ""
+      },
+      {
+        "case_id": "train_plan_question",
+        "baseline_score": 1.0,
+        "candidate_score": 1.0,
+        "score_delta": 0.0,
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "outcome": "unchanged",
+        "baseline_actual": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}",
+        "candidate_actual": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}",
+        "candidate_failure_types": [],
+        "candidate_reason": ""
+      },
+      {
+        "case_id": "train_policy_tool_missing",
+        "baseline_score": 0.0,
+        "candidate_score": 0.0,
+        "score_delta": 0.0,
+        "baseline_passed": false,
+        "candidate_passed": false,
+        "outcome": "unchanged",
+        "baseline_actual": "{\"action\":\"answer\",\"category\":\"billing\"}",
+        "candidate_actual": "{\"action\":\"answer\",\"category\":\"billing\"}",
+        "candidate_failure_types": [
+          "final_response_mismatch",
+          "format_violation",
+          "parameter_error",
+          "tool_call_error"
+        ],
+        "candidate_reason": "missing key priority; priority expected p2 but got None; action expected policy_lookup but got answer; deterministic attribution hint: tool_call_error"
+      },
+      {
+        "case_id": "train_refund_double_charge",
+        "baseline_score": 0.0,
+        "candidate_score": 1.0,
+        "score_delta": 1.0,
+        "baseline_passed": false,
+        "candidate_passed": true,
+        "outcome": "new_pass",
+        "baseline_actual": "{\"action\":\"answer\",\"category\":\"account\",\"priority\":\"p2\"}",
+        "candidate_actual": "{\"action\":\"refund_review\",\"category\":\"billing\",\"priority\":\"p2\"}",
+        "candidate_failure_types": [],
+        "candidate_reason": ""
+      }
+    ],
+    "validation_case_deltas": [
+      {
+        "case_id": "val_checkout_outage",
+        "baseline_score": 1.0,
+        "candidate_score": 0.0,
+        "score_delta": -1.0,
+        "baseline_passed": true,
+        "candidate_passed": false,
+        "outcome": "new_fail",
+        "baseline_actual": "{\"action\":\"escalate\",\"category\":\"technical\",\"priority\":\"p1\"}",
+        "candidate_actual": "{\"action\":\"refund_review\",\"category\":\"billing\",\"priority\":\"p2\"}",
+        "candidate_failure_types": [
+          "final_response_mismatch",
+          "knowledge_recall_insufficient",
+          "parameter_error"
+        ],
+        "candidate_reason": "category expected technical but got billing; priority expected p1 but got p2; action expected escalate but got refund_review"
+      },
+      {
+        "case_id": "val_mobile_crash",
+        "baseline_score": 1.0,
+        "candidate_score": 1.0,
+        "score_delta": 0.0,
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "outcome": "unchanged",
+        "baseline_actual": "{\"action\":\"troubleshooting\",\"category\":\"technical\",\"priority\":\"p2\"}",
+        "candidate_actual": "{\"action\":\"troubleshooting\",\"category\":\"technical\",\"priority\":\"p2\"}",
+        "candidate_failure_types": [],
+        "candidate_reason": ""
+      },
+      {
+        "case_id": "val_plan_question",
+        "baseline_score": 1.0,
+        "candidate_score": 1.0,
+        "score_delta": 0.0,
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "outcome": "unchanged",
+        "baseline_actual": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}",
+        "candidate_actual": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}",
+        "candidate_failure_types": [],
+        "candidate_reason": ""
+      },
+      {
+        "case_id": "val_rubric_tone_fail",
+        "baseline_score": 0.0,
+        "candidate_score": 0.0,
+        "score_delta": 0.0,
+        "baseline_passed": false,
+        "candidate_passed": false,
+        "outcome": "unchanged",
+        "baseline_actual": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}",
+        "candidate_actual": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}",
+        "candidate_failure_types": [
+          "llm_rubric_not_met",
+          "parameter_error"
+        ],
+        "candidate_reason": "priority expected p2 but got p3; deterministic attribution hint: llm_rubric_not_met"
+      },
+      {
+        "case_id": "val_vip_refund",
+        "baseline_score": 0.0,
+        "candidate_score": 1.0,
+        "score_delta": 1.0,
+        "baseline_passed": false,
+        "candidate_passed": true,
+        "outcome": "new_pass",
+        "baseline_actual": "{\"action\":\"answer\",\"category\":\"account\",\"priority\":\"p2\"}",
+        "candidate_actual": "{\"action\":\"refund_review\",\"category\":\"billing\",\"priority\":\"p1\"}",
+        "candidate_failure_types": [],
+        "candidate_reason": ""
+      }
+    ]
+  },
+  "gate": {
+    "decision": "rejected",
+    "reasons": [
+      "validation score delta +0.0000 is below required +0.1000",
+      "new hard fail(s) are not allowed: val_checkout_outage",
+      "critical case regression(s): val_checkout_outage",
+      "overfitting guard triggered: train improved while validation did not improve"
+    ],
+    "checks": [
+      {
+        "name": "min_validation_score_delta",
+        "passed": false,
+        "actual": 0.0,
+        "expected": 0.1
+      },
+      {
+        "name": "no_new_hard_fail",
+        "passed": false,
+        "case_ids": [
+          "val_checkout_outage"
+        ],
+        "allow_new_hard_fail": false
+      },
+      {
+        "name": "critical_case_regression",
+        "passed": false,
+        "case_ids": [
+          "val_checkout_outage"
+        ],
+        "critical_case_ids": [
+          "val_checkout_outage",
+          "val_vip_refund"
+        ]
+      },
+      {
+        "name": "overfitting_guard",
+        "passed": false,
+        "train_score_delta": 0.2,
+        "validation_score_delta": 0.0
+      },
+      {
+        "name": "max_cost_usd",
+        "passed": true,
+        "actual": 0.0,
+        "expected": 0.01
+      }
+    ],
+    "config": {
+      "min_validation_score_delta": 0.1,
+      "allow_new_hard_fail": false,
+      "critical_case_ids": [
+        "val_vip_refund",
+        "val_checkout_outage"
+      ],
+      "max_cost_usd": 0.01
+    },
+    "overfitting_guard_triggered": true
+  },
+  "input_audit": {
+    "files": {
+      "train_evalset": {
+        "path": "train.evalset.json",
+        "sha256": "2cb167dff1888e4ae41dba0af9911bf3a062343eeec7873cf4bc400e00fb3592",
+        "bytes": 3330
+      },
+      "validation_evalset": {
+        "path": "val.evalset.json",
+        "sha256": "702a90d3ecf264b96141a39c90ecfed9039ab2e8eb8b869c7d01edc9226d2580",
+        "bytes": 3256
+      },
+      "optimizer_config": {
+        "path": "optimizer.json",
+        "sha256": "3ea2fd21f077adae9a96f7b08611b3f36823b665691c05c7d4cb62bf50e5f32b",
+        "bytes": 1586
+      },
+      "case_meta": {
+        "path": "case_meta.json",
+        "sha256": "d87c7127e9f65d6c3863e6f1c3d506644d8b25f58849cdb847c04bbea33c8878",
+        "bytes": 1221
+      }
+    },
+    "prompt_sources": {
+      "router_prompt": {
+        "path": "agent/prompts/router.md",
+        "sha256": "339b66e767b44d96f233452d102eabae4e596e85a2daad7285240c5489aa3be4",
+        "bytes": 289
+      },
+      "system_prompt": {
+        "path": "agent/prompts/system.md",
+        "sha256": "c557bea101c277fb8af5c95d20ec8b420a9b9b609bbff9dfd982caa12d6f3851",
+        "bytes": 379
+      },
+      "skill_prompt": {
+        "path": "agent/prompts/skill.md",
+        "sha256": "0494b66f4d69fe7b0647883ebd7dedc8b9b5b9bea8a6001dd2259ebaf8cbafba",
+        "bytes": 362
+      }
+    }
+  },
+  "prompt_audit": {
+    "router_prompt": {
+      "source": "agent/prompts/router.md",
+      "baseline_sha256": "339b66e767b44d96f233452d102eabae4e596e85a2daad7285240c5489aa3be4",
+      "candidate_sha256": "c315899809bf4d2b5eabcef65242f1ee9df18097ea569bfd3d3bc6edd8e408c8",
+      "changed": true,
+      "baseline_chars": 289,
+      "candidate_chars": 479,
+      "diff": {
+        "line_count": 9,
+        "truncated": false,
+        "preview": [
+          "--- baseline/router_prompt",
+          "+++ candidate/router_prompt",
+          "@@ -5,3 +5,6 @@",
+          " - Billing and pricing questions go to billing handling.",
+          " - Production incidents and software failures go to technical handling.",
+          " ",
+          "+Candidate routing update:",
+          "+- Route double charge, refund, and VIP refund tickets to billing handling.",
+          "+- overfit_payment_outage: route payment outage language through the billing refund path."
+        ]
+      }
+    },
+    "system_prompt": {
+      "source": "agent/prompts/system.md",
+      "baseline_sha256": "c557bea101c277fb8af5c95d20ec8b420a9b9b609bbff9dfd982caa12d6f3851",
+      "candidate_sha256": "41a629093df3331600060f39c8ab7d8038c5f83609d975e838207f47b8604b31",
+      "changed": true,
+      "baseline_chars": 379,
+      "candidate_chars": 532,
+      "diff": {
+        "line_count": 9,
+        "truncated": false,
+        "preview": [
+          "--- baseline/system_prompt",
+          "+++ candidate/system_prompt",
+          "@@ -21,3 +21,6 @@",
+          " - troubleshooting",
+          " - answer",
+          " ",
+          "+Candidate system update:",
+          "+- Keep the response as one compact JSON object with category, priority, and action.",
+          "+- Do not add prose outside the JSON object."
+        ]
+      }
+    },
+    "skill_prompt": {
+      "source": "agent/prompts/skill.md",
+      "baseline_sha256": "0494b66f4d69fe7b0647883ebd7dedc8b9b5b9bea8a6001dd2259ebaf8cbafba",
+      "candidate_sha256": "909f172b766347413f12efe4ade1af816bb4e8a0b017edc350655f587e27f8d6",
+      "changed": true,
+      "baseline_chars": 362,
+      "candidate_chars": 582,
+      "diff": {
+        "line_count": 11,
+        "truncated": false,
+        "preview": [
+          "--- baseline/skill_prompt",
+          "+++ candidate/skill_prompt",
+          "@@ -7,3 +7,8 @@",
+          " - Use escalate for production incidents.",
+          " - Use troubleshooting for reproducible technical failures.",
+          " ",
+          "+Optimization candidate notes:",
+          "+- Treat double charge, refund, and VIP refund requests as billing issues.",
+          "+- For refund requests, choose action refund_review.",
+          "+- For VIP refund requests, use priority p1.",
+          "+- scenario: overfit"
+        ]
+      }
+    }
+  },
+  "optimization_rounds": [
+    {
+      "round": 0,
+      "kind": "baseline",
+      "optimized_field_names": [],
+      "candidate_id": "baseline",
+      "candidate_prompts": {
+        "router_prompt": "Route each support ticket to one primary handling path before answering.\n\nBaseline routing rules:\n- Account access and profile questions go to account handling.\n- Billing and pricing questions go to billing handling.\n- Production incidents and software failures go to technical handling.\n\n",
+        "system_prompt": "You are a support triage assistant.\n\nReturn one compact JSON object with exactly these keys:\n- category\n- priority\n- action\n\nKnown categories:\n- account\n- billing\n- technical\n\nKnown priorities:\n- p1 for urgent production outages\n- p2 for normal user-impacting issues\n- p3 for low-risk informational requests\n\nKnown actions:\n- escalate\n- refund_review\n- troubleshooting\n- answer\n\n",
+        "skill_prompt": "Apply these triage skills after routing:\n\n- Use p1 only when the ticket describes an urgent production outage.\n- Use p2 for normal user-impacting issues.\n- Use p3 for low-risk informational requests.\n- Use answer for informational account or pricing questions.\n- Use escalate for production incidents.\n- Use troubleshooting for reproducible technical failures.\n\n"
+      },
+      "evaluation_results": {
+        "train": {
+          "overall_score": 0.4,
+          "pass_rate": 0.4,
+          "passed": 2,
+          "failed": 3,
+          "total": 5
+        },
+        "validation": {
+          "overall_score": 0.6,
+          "pass_rate": 0.6,
+          "passed": 3,
+          "failed": 2,
+          "total": 5
+        }
+      },
+      "evaluation_result_refs": {
+        "train": "eval_train_baseline",
+        "validation": "eval_validation_baseline"
+      },
+      "train_score": 0.4,
+      "validation_score": 0.6,
+      "accepted": true,
+      "acceptance_reason": "Initial prompt used as the control arm.",
+      "cost_usd": 0.0,
+      "duration_seconds": 0.0
+    },
+    {
+      "round": 1,
+      "kind": "fake_reflective",
+      "optimized_field_names": [
+        "router_prompt",
+        "system_prompt",
+        "skill_prompt"
+      ],
+      "candidate_id": "candidate_refund_rule_overfit",
+      "candidate_prompts": {
+        "router_prompt": "Route each support ticket to one primary handling path before answering.\n\nBaseline routing rules:\n- Account access and profile questions go to account handling.\n- Billing and pricing questions go to billing handling.\n- Production incidents and software failures go to technical handling.\n\nCandidate routing update:\n- Route double charge, refund, and VIP refund tickets to billing handling.\n- overfit_payment_outage: route payment outage language through the billing refund path.\n",
+        "system_prompt": "You are a support triage assistant.\n\nReturn one compact JSON object with exactly these keys:\n- category\n- priority\n- action\n\nKnown categories:\n- account\n- billing\n- technical\n\nKnown priorities:\n- p1 for urgent production outages\n- p2 for normal user-impacting issues\n- p3 for low-risk informational requests\n\nKnown actions:\n- escalate\n- refund_review\n- troubleshooting\n- answer\n\nCandidate system update:\n- Keep the response as one compact JSON object with category, priority, and action.\n- Do not add prose outside the JSON object.\n",
+        "skill_prompt": "Apply these triage skills after routing:\n\n- Use p1 only when the ticket describes an urgent production outage.\n- Use p2 for normal user-impacting issues.\n- Use p3 for low-risk informational requests.\n- Use answer for informational account or pricing questions.\n- Use escalate for production incidents.\n- Use troubleshooting for reproducible technical failures.\n\nOptimization candidate notes:\n- Treat double charge, refund, and VIP refund requests as billing issues.\n- For refund requests, choose action refund_review.\n- For VIP refund requests, use priority p1.\n- scenario: overfit\n"
+      },
+      "evaluation_results": {
+        "train": {
+          "overall_score": 0.6,
+          "pass_rate": 0.6,
+          "passed": 3,
+          "failed": 2,
+          "total": 5
+        },
+        "validation": {
+          "overall_score": 0.6,
+          "pass_rate": 0.6,
+          "passed": 3,
+          "failed": 2,
+          "total": 5
+        }
+      },
+      "evaluation_result_refs": {
+        "train": "eval_train_candidate",
+        "validation": "eval_validation_candidate"
+      },
+      "train_score": 0.6,
+      "validation_score": 0.6,
+      "accepted": false,
+      "acceptance_reason": "validation score delta +0.0000 is below required +0.1000; new hard fail(s) are not allowed: val_checkout_outage; critical case regression(s): val_checkout_outage; overfitting guard triggered: train improved while validation did not improve",
+      "cost_usd": 0.0,
+      "duration_seconds": 0.0
+    }
+  ],
+  "failure_attribution": {
+    "stats": {
+      "final_response_mismatch": 4,
+      "format_violation": 1,
+      "knowledge_recall_insufficient": 2,
+      "llm_rubric_not_met": 1,
+      "parameter_error": 3,
+      "tool_call_error": 1
+    },
+    "failed_cases": [
+      {
+        "split": "train_baseline",
+        "case_id": "train_legacy_sync",
+        "failure_types": [
+          "final_response_mismatch"
+        ],
+        "reason": "action expected escalate but got troubleshooting"
+      },
+      {
+        "split": "train_baseline",
+        "case_id": "train_policy_tool_missing",
+        "failure_types": [
+          "final_response_mismatch",
+          "format_violation",
+          "parameter_error",
+          "tool_call_error"
+        ],
+        "reason": "missing key priority; priority expected p2 but got None; action expected policy_lookup but got answer; deterministic attribution hint: tool_call_error"
+      },
+      {
+        "split": "train_baseline",
+        "case_id": "train_refund_double_charge",
+        "failure_types": [
+          "final_response_mismatch",
+          "knowledge_recall_insufficient"
+        ],
+        "reason": "category expected billing but got account; action expected refund_review but got answer"
+      },
+      {
+        "split": "validation_baseline",
+        "case_id": "val_rubric_tone_fail",
+        "failure_types": [
+          "llm_rubric_not_met",
+          "parameter_error"
+        ],
+        "reason": "priority expected p2 but got p3; deterministic attribution hint: llm_rubric_not_met"
+      },
+      {
+        "split": "validation_baseline",
+        "case_id": "val_vip_refund",
+        "failure_types": [
+          "final_response_mismatch",
+          "knowledge_recall_insufficient",
+          "parameter_error"
+        ],
+        "reason": "category expected billing but got account; priority expected p1 but got p2; action expected refund_review but got answer"
+      }
+    ],
+    "self_check": {
+      "labeled_failed_cases": 5,
+      "matched": 5,
+      "accuracy": 1.0,
+      "hint_assisted_cases": 2,
+      "rule_only_labeled_cases": 3,
+      "rule_only_matched": 3,
+      "rule_only_accuracy": 1.0,
+      "by_case": {
+        "train_legacy_sync": {
+          "expected_failure_types": [
+            "final_response_mismatch"
+          ],
+          "actual_failure_types": [
+            "final_response_mismatch"
+          ],
+          "fake_attribution_hints": [],
+          "hint_assisted": false,
+          "matched": true,
+          "note": "Baseline returns troubleshooting while the reference expects escalation."
+        },
+        "train_policy_tool_missing": {
+          "expected_failure_types": [
+            "format_violation",
+            "tool_call_error"
+          ],
+          "actual_failure_types": [
+            "final_response_mismatch",
+            "format_violation",
+            "parameter_error",
+            "tool_call_error"
+          ],
+          "fake_attribution_hints": [
+            "tool_call_error"
+          ],
+          "hint_assisted": true,
+          "matched": true,
+          "note": "The no-key fake agent cannot perform the expected policy lookup and returns an incomplete JSON object."
+        },
+        "train_refund_double_charge": {
+          "expected_failure_types": [
+            "final_response_mismatch",
+            "knowledge_recall_insufficient"
+          ],
+          "actual_failure_types": [
+            "final_response_mismatch",
+            "knowledge_recall_insufficient"
+          ],
+          "fake_attribution_hints": [],
+          "hint_assisted": false,
+          "matched": true,
+          "note": "Baseline routes refund billing work to account/answer instead of billing/refund_review."
+        },
+        "val_rubric_tone_fail": {
+          "expected_failure_types": [
+            "llm_rubric_not_met",
+            "parameter_error"
+          ],
+          "actual_failure_types": [
+            "llm_rubric_not_met",
+            "parameter_error"
+          ],
+          "fake_attribution_hints": [
+            "llm_rubric_not_met"
+          ],
+          "hint_assisted": true,
+          "matched": true,
+          "note": "The answer uses a lower urgency than the reference and is deterministically labeled as a rubric failure for the no-key fake judge path."
+        },
+        "val_vip_refund": {
+          "expected_failure_types": [
+            "final_response_mismatch",
+            "knowledge_recall_insufficient",
+            "parameter_error"
+          ],
+          "actual_failure_types": [
+            "final_response_mismatch",
+            "knowledge_recall_insufficient",
+            "parameter_error"
+          ],
+          "fake_attribution_hints": [],
+          "hint_assisted": false,
+          "matched": true,
+          "note": "Baseline misses billing/refund_review and p1 priority for VIP refund."
+        }
+      }
+    }
+  },
+  "audit": {
+    "candidate_prompt_dir": "runs/<sample>/candidate_prompts",
+    "optimizer_result_dir": null,
+    "cost": {
+      "estimated_usd": 0.0,
+      "optimizer_usd": 0.0,
+      "evaluation_usd": 0.0,
+      "total_usd": 0.0,
+      "max_budget_usd": 0.01
+    },
+    "token_usage": {
+      "prompt": 0,
+      "completion": 0,
+      "total": 0
+    },
+    "source_prompt_updated": false
+  }
+}

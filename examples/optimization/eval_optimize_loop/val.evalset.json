@@ -1,0 +1,92 @@
+{
+  "eval_set_id": "eval_optimize_loop_val",
+  "name": "Eval Optimize Loop - validation",
+  "description": "Validation split used for regression checks and gate decisions. It includes improved, unchanged, and regressed outcomes.",
+  "eval_cases": [
+    {
+      "eval_id": "val_vip_refund",
+      "conversation": [
+        {
+          "invocation_id": "val-1",
+          "user_content": {
+            "parts": [{"text": "VIP customer reports they were double charged during renewal and wants an immediate refund review."}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "{\"action\":\"refund_review\",\"category\":\"billing\",\"priority\":\"p1\"}"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_demo", "user_id": "demo", "state": {}}
+    },
+    {
+      "eval_id": "val_plan_question",
+      "conversation": [
+        {
+          "invocation_id": "val-2",
+          "user_content": {
+            "parts": [{"text": "Prospect asks for a plan comparison between pricing tiers before buying."}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_demo", "user_id": "demo", "state": {}}
+    },
+    {
+      "eval_id": "val_checkout_outage",
+      "conversation": [
+        {
+          "invocation_id": "val-3",
+          "user_content": {
+            "parts": [{"text": "Production checkout outage blocks all payments for enterprise customers."}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "{\"action\":\"escalate\",\"category\":\"technical\",\"priority\":\"p1\"}"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_demo", "user_id": "demo", "state": {}}
+    },
+    {
+      "eval_id": "val_mobile_crash",
+      "conversation": [
+        {
+          "invocation_id": "val-4",
+          "user_content": {
+            "parts": [{"text": "Mobile app crashes on startup after the latest update; user can reproduce it."}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "{\"action\":\"troubleshooting\",\"category\":\"technical\",\"priority\":\"p2\"}"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_demo", "user_id": "demo", "state": {}}
+    },
+    {
+      "eval_id": "val_rubric_tone_fail",
+      "conversation": [
+        {
+          "invocation_id": "val-5",
+          "user_content": {
+            "parts": [{"text": "User is angry about repeated invoice confusion and asks for a guaranteed instant fix."}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p2\"}"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_demo", "user_id": "demo", "state": {}}
+    }
+  ]
+}
