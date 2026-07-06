@@ -32,6 +32,10 @@ DEPENDENCY_INSTALL_RE = re.compile(
 )
 LONG_SLEEP_RE = re.compile(r"\bsleep\s+(\d+)\b")
 SHELL_FEATURE_RE = re.compile(r"(\||&&|\|\||;|`[^`]+`|\$\(|>\s*[^&]|>>|&\s*$)")
+DYNAMIC_SECRET_PATH_RE = re.compile(
+    r"(\.env|\.ssh|id_rsa|credentials?|token|secret|password|private[_-]?key)",
+    re.IGNORECASE,
+)
 
 
 def sanitize_text(text: str, limit: int = 180) -> tuple[str, bool]:
@@ -201,6 +205,8 @@ class PythonSafetyVisitor(ast.NodeVisitor):
 
         if call_name in {"print", "logging.info", "logging.warning", "logging.error", "logger.info", "logger.error"}:
             self._check_sensitive_output(node, evidence)
+        if call_name in {"os.getenv", "os.environ.get"}:
+            self._check_sensitive_env_read(node, evidence)
 
         self.generic_visit(node)
 
@@ -258,6 +264,20 @@ class PythonSafetyVisitor(ast.NodeVisitor):
                     line=node.lineno,
                     column=node.col_offset,
                     metadata={"path": path_text},
+                ))
+        elif path_text is None and DYNAMIC_SECRET_PATH_RE.search(evidence):
+            self.findings.append(
+                _finding(
+                    "FILE_DYNAMIC_SECRET_PATH_REVIEW",
+                    "dangerous_file_operation",
+                    RiskLevel.MEDIUM,
+                    Decision.NEEDS_HUMAN_REVIEW,
+                    evidence,
+                    "Resolve dynamic paths before execution and confirm they cannot target .env, ~/.ssh, "
+                    "or credentials.",
+                    "Dynamic path construction references a sensitive path pattern.",
+                    line=node.lineno,
+                    column=node.col_offset,
                 ))
 
     def _check_path_method(self, node: ast.Call, evidence: str) -> None:
@@ -383,6 +403,23 @@ class PythonSafetyVisitor(ast.NodeVisitor):
                     column=node.col_offset,
                 ))
 
+    def _check_sensitive_env_read(self, node: ast.Call, evidence: str) -> None:
+        key_text = _constant_string(node.args[0]) if node.args else None
+        if key_text and SENSITIVE_NAME_RE.search(key_text):
+            self.findings.append(
+                _finding(
+                    "SENSITIVE_ENV_READ_REVIEW",
+                    "sensitive_information_leak",
+                    RiskLevel.MEDIUM,
+                    Decision.NEEDS_HUMAN_REVIEW,
+                    evidence,
+                    "Avoid passing secret environment values to tool scripts unless a human approves the flow.",
+                    f"Script reads sensitive environment variable {key_text}.",
+                    line=node.lineno,
+                    column=node.col_offset,
+                    metadata={"env_key": key_text},
+                ))
+
 
 def scan_python_script(script: str, policy: ToolSafetyPolicy) -> list[RiskFinding]:
     findings: list[RiskFinding] = []
@@ -482,6 +519,20 @@ def scan_text_patterns(script: str, policy: ToolSafetyPolicy, language: str) -> 
                     "Script may write or transmit sensitive information.",
                     line=line_no,
                 ))
+        if re.search(r"\bos\.getenv\(['\"][^'\"]*(token|secret|password|api[_-]?key)[^'\"]*['\"]\)", line,
+                     re.IGNORECASE) and re.search(r"\b(requests|curl|post|get|print|logging|logger)\b", line,
+                                                  re.IGNORECASE):
+            findings.append(
+                _finding(
+                    "SENSITIVE_ENV_EXFILTRATION_REVIEW",
+                    "sensitive_information_leak",
+                    RiskLevel.HIGH,
+                    Decision.NEEDS_HUMAN_REVIEW,
+                    line,
+                    "Review any script that reads secret environment variables and sends or writes them.",
+                    "Script appears to read a sensitive environment variable for output or network use.",
+                    line=line_no,
+                ))
     return findings
 
 
@@ -497,6 +548,59 @@ def _scan_bash_line(line: str, policy: ToolSafetyPolicy, line_no: int) -> list[R
                 line,
                 "Avoid rm -rf in tool scripts; delete only explicit workspace files after validation.",
                 "Recursive forced deletion detected.",
+                line=line_no,
+            ))
+
+    if re.search(r"\bfind\b.+\s-delete\b", line):
+        findings.append(
+            _finding(
+                "BASH_FIND_DELETE_REVIEW",
+                "dangerous_file_operation",
+                RiskLevel.HIGH,
+                Decision.NEEDS_HUMAN_REVIEW,
+                line,
+                "Review find -delete commands and constrain them to explicit workspace paths.",
+                "find -delete can remove many files recursively.",
+                line=line_no,
+            ))
+
+    if re.search(r"\bxargs\b.+\brm\b.+-[^\s]*[rf]", line) or re.search(r"\brm\b.+-[^\s]*[rf].+\bxargs\b", line):
+        findings.append(
+            _finding(
+                "BASH_XARGS_RM_REVIEW",
+                "dangerous_file_operation",
+                RiskLevel.HIGH,
+                Decision.NEEDS_HUMAN_REVIEW,
+                line,
+                "Review xargs-driven deletes because the target set is generated at runtime.",
+                "xargs rm can delete a dynamic set of paths.",
+                line=line_no,
+            ))
+
+    if re.search(r"\bbase64\s+(-d|--decode)\b.*\|\s*(sh|bash)\b", line) or re.search(
+            r"\|\s*base64\s+(-d|--decode)\b.*\|\s*(sh|bash)\b", line):
+        findings.append(
+            _finding(
+                "BASH_BASE64_EXEC_REVIEW",
+                "process_command",
+                RiskLevel.HIGH,
+                Decision.NEEDS_HUMAN_REVIEW,
+                line,
+                "Decode and review encoded payloads before executing them.",
+                "Base64-decoded content is piped into a shell.",
+                line=line_no,
+            ))
+
+    if re.search(r"\b(bash|sh)\s+-[lc]*c\b", line) or re.search(r"\bpython3?\s+-c\b", line):
+        findings.append(
+            _finding(
+                "BASH_INLINE_INTERPRETER_REVIEW",
+                "process_command",
+                RiskLevel.MEDIUM,
+                Decision.NEEDS_HUMAN_REVIEW,
+                line,
+                "Extract inline interpreter code into a separately scanned script before execution.",
+                "Inline interpreter execution hides a second-stage script from simple command review.",
                 line=line_no,
             ))
 

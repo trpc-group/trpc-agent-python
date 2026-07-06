@@ -11,6 +11,7 @@ import io
 import json
 
 from scripts.tool_safety_check import main
+from scripts.tool_safety_manifest_report import main as manifest_main
 
 
 def test_cli_enforces_timeout_policy(tmp_path):
@@ -96,3 +97,19 @@ def test_cli_scans_sample_directory(tmp_path):
     assert report["decisions"]["allow"] == 1
     assert report["decisions"]["deny"] == 1
     assert {item["tool_name"] for item in report["reports"]} == {"safe.py", "danger.sh"}
+
+
+def test_manifest_report_validates_public_samples(tmp_path):
+    report_path = tmp_path / "all_reports.json"
+
+    exit_code = manifest_main(["--strict-policy", "--output", str(report_path)])
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert exit_code == 0
+    assert report["summary"]["sample_count"] >= 40
+    assert report["summary"]["sample_count"] == report["summary"]["decision_matches"]
+    assert report["summary"]["sample_count"] == report["summary"]["required_rule_matches"]
+    assert report["summary"]["critical_category_checks"]["secret_read_no_allow"] is True
+    assert report["summary"]["critical_category_checks"]["dangerous_delete_no_allow"] is True
+    assert report["summary"]["critical_category_checks"]["non_whitelisted_network_no_allow"] is True
+    assert report["generated_at"] == "1970-01-01T00:00:00+00:00"

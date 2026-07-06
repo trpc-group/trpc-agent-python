@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from trpc_agent_sdk.tools.safety import ToolSafetyPolicy
 
 
@@ -74,3 +76,17 @@ def test_url_and_path_matching_boundaries():
     assert policy.is_path_denied("/root/.config/token")
     assert not policy.is_path_denied("")
     assert not policy.is_command_allowed("python3")
+
+
+def test_strict_policy_rejects_unknown_fields():
+    with pytest.raises(ValueError, match="Unknown tool safety policy field"):
+        ToolSafetyPolicy.from_dict({"allowed_domains": [], "unknown": True}, strict=True)
+
+
+def test_strict_policy_rejects_invalid_types():
+    with pytest.raises(ValueError, match="allowed_domains"):
+        ToolSafetyPolicy.from_dict({"allowed_domains": "api.example.com"}, strict=True)
+    with pytest.raises(ValueError, match="max_timeout_seconds"):
+        ToolSafetyPolicy.from_dict({"max_timeout_seconds": -1}, strict=True)
+    with pytest.raises(ValueError, match="review_shell_features"):
+        ToolSafetyPolicy.from_dict({"review_shell_features": "yes"}, strict=True)

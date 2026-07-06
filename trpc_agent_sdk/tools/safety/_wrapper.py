@@ -41,12 +41,19 @@ class GuardedExecutionResult:
 class ToolSafetyGuard:
     """Pre-execution wrapper that scans, audits, traces, and optionally blocks."""
 
-    def __init__(self, scanner: ToolScriptSafetyScanner | None = None, audit_log_path: str | Path | None = None):
+    def __init__(
+        self,
+        scanner: ToolScriptSafetyScanner | None = None,
+        audit_log_path: str | Path | None = None,
+        block_on_review: bool = False,
+    ):
         self.scanner = scanner or ToolScriptSafetyScanner()
         self.audit_log_path = audit_log_path
+        self.block_on_review = block_on_review
 
     def check(self, request: ToolScriptScanRequest) -> SafetyReport:
         report = self.scanner.scan(request)
+        report.set_blocked(self._should_block(report))
         self._record_trace(report)
         if self.audit_log_path:
             write_audit_event(self.audit_log_path, report)
@@ -58,15 +65,19 @@ class ToolSafetyGuard:
         execute: Callable[[], Awaitable[Any]],
     ) -> GuardedExecutionResult:
         report = self.check(request)
-        if report.decision != Decision.ALLOW:
+        if report.blocked:
             return GuardedExecutionResult(report=report, blocked=True)
         return GuardedExecutionResult(report=report, result=await execute(), blocked=False)
 
     def assert_allowed(self, request: ToolScriptScanRequest) -> SafetyReport:
         report = self.check(request)
-        if report.decision != Decision.ALLOW:
+        if report.blocked:
             raise ToolSafetyBlockedError(report)
         return report
+
+    def _should_block(self, report: SafetyReport) -> bool:
+        return report.decision == Decision.DENY or (self.block_on_review
+                                                    and report.decision == Decision.NEEDS_HUMAN_REVIEW)
 
     @staticmethod
     def _record_trace(report: SafetyReport) -> None:

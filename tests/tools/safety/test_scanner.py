@@ -128,6 +128,7 @@ class TestRequiredSamples:
 
         assert report.decision == Decision.NEEDS_HUMAN_REVIEW
         assert "PY_DYNAMIC_CODE_EXECUTION" in _rule_ids(report)
+        assert report.blocked is False
 
 
 def test_report_contains_required_fields():
@@ -194,6 +195,7 @@ def test_timeout_and_output_policy_are_enforced():
     assert report.decision == Decision.NEEDS_HUMAN_REVIEW
     assert "RESOURCE_TIMEOUT_LIMIT_EXCEEDED" in _rule_ids(report)
     assert "RESOURCE_OUTPUT_LIMIT_EXCEEDED" in _rule_ids(report)
+    assert report.blocked is False
 
 
 def test_scan_script_accepts_tool_metadata():
@@ -353,6 +355,24 @@ def test_private_key_literal_is_sanitized_and_denied():
     assert report.decision == Decision.DENY
     assert report.sanitized is True
     assert "SENSITIVE_PRIVATE_KEY_LITERAL" in _rule_ids(report)
+
+
+def test_high_value_bypass_patterns_require_review_or_deny():
+    cases = [
+        ("echo cm0gLXJmIC8= | base64 -d | sh", "bash", Decision.NEEDS_HUMAN_REVIEW, "BASH_BASE64_EXEC_REVIEW"),
+        ("python -c \"import os; os.system('cat .env')\"", "bash", Decision.DENY, "BASH_INLINE_INTERPRETER_REVIEW"),
+        ("bash -c \"cat ~/.ssh/id_rsa\"", "bash", Decision.DENY, "BASH_INLINE_INTERPRETER_REVIEW"),
+        ("find . -name '*.tmp' -delete", "bash", Decision.NEEDS_HUMAN_REVIEW, "BASH_FIND_DELETE_REVIEW"),
+        ("find . -name '*.tmp' | xargs rm -rf", "bash", Decision.DENY, "BASH_XARGS_RM_REVIEW"),
+        ("import requests\nrequests.get('https://' + host)", "python", Decision.NEEDS_HUMAN_REVIEW,
+         "NETWORK_DYNAMIC_URL_REVIEW"),
+        ("import os\nos.getenv('API_TOKEN')", "python", Decision.NEEDS_HUMAN_REVIEW, "SENSITIVE_ENV_READ_REVIEW"),
+    ]
+    for script, language, decision, rule_id in cases:
+        report = _scanner().scan_script(script, language)
+
+        assert report.decision == decision, script
+        assert rule_id in _rule_ids(report), script
 
 
 def test_metadata_number_ignores_invalid_first_match():
