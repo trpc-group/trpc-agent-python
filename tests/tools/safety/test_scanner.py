@@ -367,6 +367,8 @@ def test_high_value_bypass_patterns_require_review_or_deny():
         ("import requests\nrequests.get('https://' + host)", "python", Decision.NEEDS_HUMAN_REVIEW,
          "NETWORK_DYNAMIC_URL_REVIEW"),
         ("import os\nos.getenv('API_TOKEN')", "python", Decision.NEEDS_HUMAN_REVIEW, "SENSITIVE_ENV_READ_REVIEW"),
+        ("import os, requests\nrequests.post(url, data=os.getenv('API_TOKEN'))", "python", Decision.NEEDS_HUMAN_REVIEW,
+         "SENSITIVE_ENV_EXFILTRATION_REVIEW"),
     ]
     for script, language, decision, rule_id in cases:
         report = _scanner().scan_script(script, language)

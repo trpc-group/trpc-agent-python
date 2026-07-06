@@ -83,6 +83,11 @@ def test_strict_policy_rejects_unknown_fields():
         ToolSafetyPolicy.from_dict({"allowed_domains": [], "unknown": True}, strict=True)
 
 
+def test_policy_rejects_non_mapping_data():
+    with pytest.raises(ValueError, match="must be a mapping"):
+        ToolSafetyPolicy.from_dict([], strict=True)
+
+
 def test_strict_policy_rejects_invalid_types():
     with pytest.raises(ValueError, match="allowed_domains"):
         ToolSafetyPolicy.from_dict({"allowed_domains": "api.example.com"}, strict=True)
