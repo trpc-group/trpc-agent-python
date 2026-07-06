@@ -17,6 +17,7 @@ from agent.diff_parser import parse_unified_diff
 from agent.report import build_report
 from agent.report import write_reports
 from agent.rules import run_static_rules
+from agent.storage import persist_review
 
 
 def _resolve_path(raw: str) -> Path:
@@ -47,6 +48,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Record the run as dry-run. No external services are called either way.",
     )
+    parser.add_argument(
+        "--db-path",
+        default="",
+        help="Optional SQLite database path for persisting review tasks, findings, and reports.",
+    )
     return parser.parse_args(argv)
 
 
@@ -54,6 +60,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     diff_file = _resolve_path(args.diff_file)
     output_dir = _resolve_path(args.output_dir)
+    db_path = _resolve_path(args.db_path) if args.db_path else None
 
     if not diff_file.exists():
         raise FileNotFoundError(f"diff file not found: {diff_file}")
@@ -68,6 +75,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         dry_run=args.dry_run,
     )
     json_path, md_path = write_reports(report, output_dir)
+    task_id = ""
+    if db_path is not None:
+        task_id = persist_review(
+            db_path=db_path,
+            report=report,
+            json_report_path=json_path,
+            markdown_report_path=md_path,
+        )
 
     high_count = report["summary"]["severity_counts"].get("high", 0)
     medium_count = report["summary"]["severity_counts"].get("medium", 0)
@@ -79,6 +94,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"Findings: high={high_count} medium={medium_count} low={low_count}")
     print(f"JSON report: {json_path}")
     print(f"Markdown report: {md_path}")
+    if db_path is not None:
+        print(f"Database: {db_path}")
+        print(f"Task ID: {task_id}")
     return 0
 
 
