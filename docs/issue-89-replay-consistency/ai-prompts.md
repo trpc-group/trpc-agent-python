@@ -1,14 +1,5 @@
 # AI-Assisted Development Prompts — Issue #89: Replay Consistency Test Framework
 
-> **Disclaimer**: The architecture, module decomposition, type system, test case design,
-> JSONL fixture format, and all technical decisions were made by the human contributor
-> (coder-mtj). AI (Claude Code) served as an execution engine — translating detailed
-> specifications into code, running tests, and fixing issues under human direction.
->
-> **声明**: 本项目的架构设计、模块划分、测试用例设计、JSONL fixture 格式及所有
-> 技术决策均由人类贡献者 (coder-mtj) 完成。AI (Claude Code) 作为执行引擎，按照
-> 人类给出的详细规格说明生成代码、运行测试、修复问题。
-
 ---
 
 ## Prompt Set: Replay Consistency Test Framework (`tests/sessions/replay_consistency/`)
@@ -217,8 +208,6 @@ python -m pytest tests/sessions/replay_consistency/ tests/sessions/test_replay_c
 | Metric | Value |
 |--------|-------|
 | Total prompt rounds | 4 |
-| Human design decisions | Module split, 10 case definitions, JSONL format, normalization rules, diff algorithm, backend gating |
-| AI execution role | Code generation, test running, fixture file writing, yapf formatting |
 | Tests written | 43 (39 unit + 4 integration) |
 | JSONL fixtures | 10 (case_001 ~ case_010) |
 | Implementation files | 5 (normalizer, comparator, cases, __init__, + 10 fixtures) |
