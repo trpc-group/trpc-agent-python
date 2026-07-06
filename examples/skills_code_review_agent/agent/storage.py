@@ -56,6 +56,32 @@ def init_db(db_path: Path) -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS sandbox_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id TEXT NOT NULL,
+                runner_name TEXT NOT NULL,
+                timeout_seconds INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                finished_at TEXT NOT NULL,
+                stdout_summary TEXT NOT NULL,
+                stderr_summary TEXT NOT NULL,
+                FOREIGN KEY (task_id) REFERENCES review_tasks(task_id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS filter_decisions (
+                task_id TEXT PRIMARY KEY,
+                decision TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                FOREIGN KEY (task_id) REFERENCES review_tasks(task_id) ON DELETE CASCADE
+            )
+            """
+        )
 
 
 def persist_review(
@@ -71,6 +97,8 @@ def persist_review(
     task_id = str(uuid.uuid4())
     summary = report["summary"]
     findings = report["findings"]
+    sandbox = report.get("sandbox", {})
+    filter_decision = report.get("filter", {})
 
     with sqlite3.connect(db_path) as conn:
         conn.execute("PRAGMA foreign_keys = ON")
@@ -139,6 +167,44 @@ def persist_review(
                 str(json_report_path),
                 str(markdown_report_path),
                 json.dumps(summary, ensure_ascii=False),
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO sandbox_runs (
+                task_id,
+                runner_name,
+                timeout_seconds,
+                status,
+                started_at,
+                finished_at,
+                stdout_summary,
+                stderr_summary
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                task_id,
+                sandbox.get("runner_name", ""),
+                int(sandbox.get("timeout_seconds", 0)),
+                sandbox.get("status", ""),
+                sandbox.get("started_at", ""),
+                sandbox.get("finished_at", ""),
+                sandbox.get("stdout_summary", ""),
+                sandbox.get("stderr_summary", ""),
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO filter_decisions (
+                task_id,
+                decision,
+                reason
+            ) VALUES (?, ?, ?)
+            """,
+            (
+                task_id,
+                filter_decision.get("decision", ""),
+                filter_decision.get("reason", ""),
             ),
         )
 

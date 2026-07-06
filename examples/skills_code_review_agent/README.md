@@ -4,9 +4,12 @@ This example implements the early phases of issue #92 as a deterministic,
 local-only code review loop. It reads a unified diff, scans added lines with a
 small static rule set, redacts likely secrets, and writes JSON and Markdown
 reports. When `--db-path` is provided, it also persists the review task,
-findings, and report metadata into SQLite.
+findings, report metadata, sandbox run metadata, and filter decisions into
+SQLite.
 
 It intentionally does not call an LLM, remote sandbox, or SDK core extension.
+The sandbox runner in this example is a fake dry-run runner: it records what
+would have happened, but never executes untrusted code.
 
 ## Run
 
@@ -37,11 +40,13 @@ python examples/skills_code_review_agent/run_agent.py --diff-file examples/skill
 ```
 
 When `--db-path` is set, the command prints the database path and generated
-task id. The database contains three tables:
+task id. The database contains these tables:
 
 - `review_tasks`
 - `findings`
 - `reports`
+- `sandbox_runs`
+- `filter_decisions`
 
 ## Verify SQLite Records
 
@@ -64,8 +69,9 @@ python -m pytest examples/skills_code_review_agent/tests
 ```
 
 The tests run only local parsing, rules, redaction, report generation, and
-dedupe checks. They do not call an LLM, Docker, Cube, remote network, or any
-external service.
+dedupe checks, fake sandbox status, filter decisions, telemetry summaries, and
+SQLite persistence. They do not call an LLM, Docker, Cube, remote network, or
+any external service.
 
 ## Fixtures
 
@@ -90,12 +96,27 @@ external service.
 - Redacts likely API keys, tokens, secrets, and passwords before writing reports.
 - Produces `review_report.json` and `review_report.md`.
 - Optionally persists review tasks, findings, and report metadata to SQLite.
+- Records minimal filter decisions: `allow`, `deny`, or `needs_human_review`.
+- Records a fake dry-run sandbox result without executing untrusted code.
+- Adds telemetry summary fields to JSON and Markdown reports.
 - Includes local pytest coverage for the deterministic rule fixtures.
+
+## Sandbox Notes
+
+The current `dry-run` sandbox runner is deliberately fake and safe for local
+development. It simulates a static-check pass and records status/timing fields.
+It does not run shell commands, install dependencies, invoke Docker, or reach a
+remote sandbox service.
+
+A true local runner should only be used as a development fallback because it
+does not isolate untrusted code. Later phases can replace this example runner
+with the project-level `ContainerWorkspaceRuntime` or `CubeWorkspaceRuntime`
+without changing the report and storage shape introduced here.
 
 ## Not Implemented Yet
 
 - Real LLM review.
 - Real remote sandbox or container execution.
 - SDK core integration.
-- Filter governance and telemetry.
+- Production-grade filter governance and telemetry export.
 - Multi-agent orchestration.

@@ -1,8 +1,8 @@
 {
   "summary": {
-    "generated_at": "2026-07-05T15:24:57Z",
+    "generated_at": "2026-07-06T02:09:48Z",
     "dry_run": true,
-    "diff_file": "examples\\skills_code_review_agent\\fixtures\\security.diff",
+    "diff_file": "examples/skills_code_review_agent/fixtures/security.diff",
     "files_scanned": [
       "app/payment.py",
       "app/profile.py"
@@ -26,6 +26,40 @@
       "secret": 2,
       "sql-injection": 2
     }
+  },
+  "filter": {
+    "decision": "allow",
+    "reason": "diff is within dry-run review limits"
+  },
+  "sandbox": {
+    "runner_name": "dry-run",
+    "timeout_seconds": 30,
+    "status": "completed",
+    "started_at": "2026-07-06T02:09:48Z",
+    "finished_at": "2026-07-06T02:09:48Z",
+    "stdout_summary": "simulated static checks for 2 files and 7 findings",
+    "stderr_summary": ""
+  },
+  "telemetry": {
+    "files_scanned": [
+      "app/payment.py",
+      "app/profile.py"
+    ],
+    "total_findings": 7,
+    "severity_counts": {
+      "high": 5,
+      "medium": 2
+    },
+    "category_counts": {
+      "error-handling": 1,
+      "network-timeout": 1,
+      "resource-lifecycle": 1,
+      "secret": 2,
+      "sql-injection": 2
+    },
+    "sandbox_status": "completed",
+    "filter_decision": "allow",
+    "duration_ms": 16
   },
   "findings": [
     {

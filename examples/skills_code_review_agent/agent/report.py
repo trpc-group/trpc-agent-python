@@ -35,10 +35,38 @@ def _counts(items: list[str]) -> dict[str, int]:
     return dict(sorted(Counter(items).items()))
 
 
-def build_report(*, diff_file: str, files: list[str], findings: list[Finding], dry_run: bool) -> dict[str, Any]:
+def build_report(
+    *,
+    diff_file: str,
+    files: list[str],
+    findings: list[Finding],
+    dry_run: bool,
+    filter_summary: dict[str, Any] | None = None,
+    sandbox_summary: dict[str, Any] | None = None,
+    telemetry_summary: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     finding_dicts = [_redact_value(finding.to_dict()) for finding in findings]
     severity_counts = _counts([str(item["severity"]) for item in finding_dicts])
     category_counts = _counts([str(item["category"]) for item in finding_dicts])
+    filter_summary = filter_summary or {"decision": "allow", "reason": "not evaluated"}
+    sandbox_summary = sandbox_summary or {
+        "runner_name": "none",
+        "timeout_seconds": 0,
+        "status": "not_run",
+        "started_at": "",
+        "finished_at": "",
+        "stdout_summary": "",
+        "stderr_summary": "",
+    }
+    telemetry_summary = telemetry_summary or {
+        "files_scanned": files,
+        "total_findings": len(finding_dicts),
+        "severity_counts": severity_counts,
+        "category_counts": category_counts,
+        "sandbox_status": sandbox_summary["status"],
+        "filter_decision": filter_summary["decision"],
+        "duration_ms": 0,
+    }
 
     report = {
         "summary": {
@@ -51,6 +79,9 @@ def build_report(*, diff_file: str, files: list[str], findings: list[Finding], d
             "severity_counts": severity_counts,
             "category_counts": category_counts,
         },
+        "filter": filter_summary,
+        "sandbox": sandbox_summary,
+        "telemetry": telemetry_summary,
         "findings": finding_dicts,
     }
     return _redact_value(report)
@@ -68,6 +99,9 @@ def _markdown_table_row(finding: dict[str, Any]) -> str:
 
 def render_markdown(report: dict[str, Any]) -> str:
     summary = report["summary"]
+    filter_summary = report.get("filter", {})
+    sandbox_summary = report.get("sandbox", {})
+    telemetry_summary = report.get("telemetry", {})
     lines = [
         "# Code Review Report",
         "",
@@ -76,6 +110,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Diff file: `{summary['diff_file']}`",
         f"- Files scanned: {len(summary['files_scanned'])}",
         f"- Total findings: {summary['total_findings']}",
+        f"- Filter decision: {filter_summary.get('decision', 'unknown')}",
+        f"- Sandbox status: {sandbox_summary.get('status', 'unknown')}",
         "",
         "## Severity Counts",
         "",
@@ -85,6 +121,32 @@ def render_markdown(report: dict[str, Any]) -> str:
             lines.append(f"- {severity}: {count}")
     else:
         lines.append("- none: 0")
+
+    lines.extend([
+        "",
+        "## Filter Summary",
+        "",
+        f"- Decision: {filter_summary.get('decision', 'unknown')}",
+        f"- Reason: {filter_summary.get('reason', '')}",
+        "",
+        "## Sandbox Summary",
+        "",
+        f"- Runner: {sandbox_summary.get('runner_name', 'unknown')}",
+        f"- Timeout seconds: {sandbox_summary.get('timeout_seconds', 0)}",
+        f"- Status: {sandbox_summary.get('status', 'unknown')}",
+        f"- Started: {sandbox_summary.get('started_at', '')}",
+        f"- Finished: {sandbox_summary.get('finished_at', '')}",
+        f"- Stdout summary: {sandbox_summary.get('stdout_summary', '')}",
+        f"- Stderr summary: {sandbox_summary.get('stderr_summary', '')}",
+        "",
+        "## Telemetry Summary",
+        "",
+        f"- Files scanned: {len(telemetry_summary.get('files_scanned', []))}",
+        f"- Total findings: {telemetry_summary.get('total_findings', 0)}",
+        f"- Sandbox status: {telemetry_summary.get('sandbox_status', 'unknown')}",
+        f"- Filter decision: {telemetry_summary.get('filter_decision', 'unknown')}",
+        f"- Duration ms: {telemetry_summary.get('duration_ms', 0)}",
+    ])
 
     lines.extend(["", "## Findings", ""])
     findings = report["findings"]
