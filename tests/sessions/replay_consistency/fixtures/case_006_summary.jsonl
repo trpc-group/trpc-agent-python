@@ -1,0 +1,8 @@
+{"type": "case_header", "name": "summary_generation", "app_name": "test-app", "user_id": "user-1", "session_id": "session-006", "initial_state": {}}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "Help me plan a trip to Shanghai.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "Sure! When would you like to go?", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "Next month, for 3 days.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "I recommend visiting the Bund and Yu Garden.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "Great, also I need hotel recommendations.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "I can search for hotels near the Bund.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "summary_step", "after_event_index": 6, "filter_key": "", "force": true}

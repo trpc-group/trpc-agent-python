@@ -1,0 +1,6 @@
+{"type": "case_header", "name": "track_events", "app_name": "test-app", "user_id": "user-1", "session_id": "session-008", "initial_state": {}}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "Run a calculation.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "Running calculation...", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "track_event", "track": "tool_execution", "payload": "{\"tool\":\"calculator\",\"duration_ms\":150,\"status\":\"success\"}"}
+{"type": "track_event", "track": "tool_execution", "payload": "{\"tool\":\"calculator\",\"duration_ms\":200,\"status\":\"success\"}"}
+{"type": "track_event", "track": "subtask_status", "payload": "{\"subtask\":\"verification\",\"status\":\"passed\"}"}

@@ -1,0 +1,7 @@
+{"type": "case_header", "name": "tool_call_roundtrip", "app_name": "test-app", "user_id": "user-1", "session_id": "session-003", "initial_state": {}}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "What is the weather?", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "", "tool_calls": [{"id": "call-1", "name": "get_weather", "arguments": "{\"city\":\"Beijing\"}"}], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "tool", "invocation_id": "", "role": "tool", "text": "", "tool_calls": [], "tool_response": {"id": "call-1", "name": "get_weather", "content": "Sunny, 25°C"}, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "The weather in Beijing is sunny, 25°C.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "memory_write", "memory": "User checked weather for Beijing", "topics": ["action"]}
+{"type": "memory_query", "query": "weather", "limit": 5}

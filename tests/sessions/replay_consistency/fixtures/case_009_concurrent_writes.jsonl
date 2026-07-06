@@ -1,0 +1,8 @@
+{"type": "case_header", "name": "concurrent_out_of_order_writes", "app_name": "test-app", "user_id": "user-3", "session_id": "session-009", "initial_state": {}}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "Start parallel task A.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "Start parallel task B.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "Task A result.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "Task B result.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "Merge results.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "memory_write", "memory": "Parallel task A completed", "topics": ["task"]}
+{"type": "memory_write", "memory": "Parallel task B completed", "topics": ["task"]}

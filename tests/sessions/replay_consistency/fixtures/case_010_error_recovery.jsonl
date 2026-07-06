@@ -1,0 +1,10 @@
+{"type": "case_header", "name": "error_recovery", "app_name": "test-app", "user_id": "user-1", "session_id": "session-010", "initial_state": {}}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "Normal message 1.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "Normal response 1.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "Duplicate test message.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "Duplicate test message.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "Response to duplicate.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "Final message.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "Final response.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "memory_write", "memory": "Normal operation recorded", "topics": ["status"]}
+{"type": "memory_write", "memory": "Normal operation recorded", "topics": ["status"]}

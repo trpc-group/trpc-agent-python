@@ -1,0 +1,5 @@
+{"type": "case_header", "name": "single_turn_text", "app_name": "test-app", "user_id": "user-1", "session_id": "session-001", "initial_state": {"app:welcome": "true"}}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "Hello, who are you?", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "I am an AI assistant.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "memory_write", "memory": "User greeted the assistant", "topics": ["conversation"]}
+{"type": "memory_query", "query": "greeting", "limit": 5}

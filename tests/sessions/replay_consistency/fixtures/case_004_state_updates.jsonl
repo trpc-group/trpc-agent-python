@@ -1,0 +1,4 @@
+{"type": "case_header", "name": "scoped_state_overwrite", "app_name": "test-app", "user_id": "user-1", "session_id": "session-004", "initial_state": {"user:score": "0", "app:round": "1"}}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "Starting round 1.", "tool_calls": [], "tool_response": null, "state_delta": {"user:score": "10"}, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "I found the answer.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "Score updated.", "tool_calls": [], "tool_response": null, "state_delta": {"user:score": "25", "app:round": "2"}, "filter_key": "", "branch": "", "tag": ""}

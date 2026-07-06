@@ -1,0 +1,11 @@
+{"type": "case_header", "name": "summary_with_truncation", "app_name": "test-app", "user_id": "user-1", "session_id": "session-007", "initial_state": {}}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "Message 1: Greetings.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "Response 1: Hello!", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "Message 2: Question about weather.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "Response 2: It's sunny.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "Message 3: Thank you.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "Response 3: You're welcome.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "Message 4: Can you summarize?", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "Response 4: Here is the summary.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "summary_step", "after_event_index": 6, "filter_key": "weather", "force": true}
+{"type": "summary_step", "after_event_index": 8, "filter_key": "", "force": true}

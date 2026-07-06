@@ -1,0 +1,11 @@
+{"type": "case_header", "name": "memory_multi_author_search", "app_name": "test-app", "user_id": "user-2", "session_id": "session-005", "initial_state": {}}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "I enjoy hiking on weekends.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "That's great! Hiking is wonderful.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "user", "invocation_id": "", "role": "user", "text": "Also I prefer tea over coffee.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "event", "author": "assistant", "invocation_id": "", "role": "assistant", "text": "Noted - you prefer tea.", "tool_calls": [], "tool_response": null, "state_delta": null, "filter_key": "", "branch": "", "tag": ""}
+{"type": "memory_write", "memory": "User enjoys hiking", "topics": ["hobbies"]}
+{"type": "memory_write", "memory": "User prefers tea", "topics": ["preferences"]}
+{"type": "memory_write", "memory": "User is health conscious", "topics": ["lifestyle"]}
+{"type": "memory_query", "query": "hiking", "limit": 3}
+{"type": "memory_query", "query": "tea", "limit": 3}
+{"type": "memory_query", "query": "preferences", "limit": 5}
