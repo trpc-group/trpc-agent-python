@@ -1,0 +1,35 @@
+diff --git a/app/formatting.py b/app/formatting.py
+index 3f1c2aa..9d2b110 100644
+--- a/app/formatting.py
++++ b/app/formatting.py
+@@ -1,6 +1,14 @@
+ """Small text formatting helpers."""
+
+
++def truncate(text: str, limit: int = 80) -> str:
++    """Return ``text`` clipped to ``limit`` characters with an ellipsis."""
++    if limit <= 1 or len(text) <= limit:
++        return text
++    return text[:limit - 1] + "…"
++
++
+ def titlecase(value: str) -> str:
+     """Capitalize each word of ``value``."""
+     return " ".join(word.capitalize() for word in value.split())
+diff --git a/tests/test_formatting.py b/tests/test_formatting.py
+index 77aa001..b8e4c02 100644
+--- a/tests/test_formatting.py
++++ b/tests/test_formatting.py
+@@ -1,5 +1,12 @@
+ from app.formatting import titlecase
++from app.formatting import truncate
+
+
+ def test_titlecase():
+     assert titlecase("hello world") == "Hello World"
++
++
++def test_truncate():
++    assert truncate("short", 80) == "short"
++    clipped = truncate("x" * 100, 10)
++    assert len(clipped) == 10

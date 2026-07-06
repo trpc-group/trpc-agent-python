@@ -1,0 +1,34 @@
+diff --git a/app/billing.py b/app/billing.py
+new file mode 100644
+index 0000000..0f1e2d3
+--- /dev/null
++++ b/app/billing.py
+@@ -0,0 +1,17 @@
++import sqlite3
++
++
++def apply_charges(db_path: str, charges) -> int:
++    """Apply a batch of charges inside one transaction."""
++    conn = sqlite3.connect(db_path)
++    cur = conn.cursor()
++    cur.execute("BEGIN")
++    applied = 0
++    for account_id, amount in charges:
++        cur.execute(
++            "UPDATE accounts SET balance = balance - ? WHERE id = ?",
++            (amount, account_id),
++        )
++        applied += 1
++    return applied
++
+diff --git a/tests/test_billing.py b/tests/test_billing.py
+new file mode 100644
+index 0000000..4c5d6e7
+--- /dev/null
++++ b/tests/test_billing.py
+@@ -0,0 +1,5 @@
++from app.billing import apply_charges
++
++
++def test_apply_charges_empty(tmp_db):
++    assert apply_charges(tmp_db, []) == 0
