@@ -7,8 +7,6 @@
 | 分支 | feat/replay-consistency-python |
 | 难度 | 低难度 |
 | 测试 | 379 passed, 3 skipped (Redis) |
-| 竞品 | 有竞品 PR (#120, #122)，无直接竞争关系 |
-
 ## 交付物
 
 | 文件 | 行数 | 说明 |
