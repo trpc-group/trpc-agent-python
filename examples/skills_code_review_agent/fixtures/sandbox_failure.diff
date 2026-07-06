@@ -1,0 +1,28 @@
+diff --git a/app/health.py b/app/health.py
+new file mode 100644
+index 0000000..5f6a7b8
+--- /dev/null
++++ b/app/health.py
+@@ -0,0 +1,10 @@
++"""Liveness / readiness endpoints."""
++
++
++def liveness() -> dict:
++    return {"status": "ok"}
++
++
++def readiness(dependencies) -> dict:
++    ready = all(dep.ping() for dep in dependencies)
++    return {"status": "ok" if ready else "degraded"}
+diff --git a/tests/test_health.py b/tests/test_health.py
+new file mode 100644
+index 0000000..8c9d0e1
+--- /dev/null
++++ b/tests/test_health.py
+@@ -0,0 +1,6 @@
++from app.health import liveness
++
++
++def test_liveness():
++    assert liveness() == {"status": "ok"}
++

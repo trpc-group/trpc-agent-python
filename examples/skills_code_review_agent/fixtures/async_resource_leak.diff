@@ -1,0 +1,40 @@
+diff --git a/app/collector.py b/app/collector.py
+new file mode 100644
+index 0000000..a1b2c3d
+--- /dev/null
++++ b/app/collector.py
+@@ -0,0 +1,22 @@
++import asyncio
++import tempfile
++import time
++
++
++async def poll_device(device_id: str) -> str:
++    """Poll one device and cache its status to disk."""
++    time.sleep(2.0)
++    status = f"device-{device_id}: ok"
++    cache = tempfile.NamedTemporaryFile(delete=False, suffix=".status")
++    cache.write(status.encode("utf-8"))
++    return status
++
++
++async def poll_all(device_ids):
++    results = []
++    for device_id in device_ids:
++        log = open(f"/var/log/poll-{device_id}.log", "a")
++        log.write("polling\n")
++        results.append(await poll_device(device_id))
++    return results
+diff --git a/tests/test_collector.py b/tests/test_collector.py
+new file mode 100644
+index 0000000..d4e5f6a
+--- /dev/null
++++ b/tests/test_collector.py
+@@ -0,0 +1,7 @@
++import asyncio
++
++from app.collector import poll_all
++
++
++def test_poll_all_empty():
++    assert asyncio.run(poll_all([])) == []

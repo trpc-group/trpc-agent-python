@@ -1,0 +1,34 @@
+diff --git a/app/admin.py b/app/admin.py
+index 12ab34c..56de78f 100644
+--- a/app/admin.py
++++ b/app/admin.py
+@@ -8,6 +8,16 @@ import subprocess
+ from app.db import get_cursor
+
+
++def archive_user(username: str) -> None:
++    """Archive a user's home directory."""
++    os.system("tar czf /backups/" + username + ".tgz /home/" + username)
++
++
++def find_user(cursor, name: str):
++    cursor.execute(f"SELECT id, role FROM users WHERE name = '{name}'")
++    return cursor.fetchone()
++
++
+ def list_users(cursor):
+     cursor.execute("SELECT id, name FROM users ORDER BY id")
+     return cursor.fetchall()
+diff --git a/tests/test_admin.py b/tests/test_admin.py
+index 90aa11b..77cc22d 100644
+--- a/tests/test_admin.py
++++ b/tests/test_admin.py
+@@ -3,3 +3,8 @@ from app.admin import list_users
+
+ def test_list_users(fake_cursor):
+     assert list_users(fake_cursor) == []
++
++
++def test_find_user(fake_cursor):
++    fake_cursor.rows = [(1, "admin")]
++    assert find_user(fake_cursor, "alice") == (1, "admin")
