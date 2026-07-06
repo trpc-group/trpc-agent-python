@@ -208,7 +208,7 @@ def _scan_env(req: Request, policy: Policy) -> list[Finding]:
                     DECISION_DENY,
                     RISK_CRITICAL,
                     "sensitive.secret_leak",
-                    [f"environment contains a likely secret"],
+                    ["environment contains a likely secret"],
                     "Remove API keys/tokens from environment variables.",
                 ))
     return findings
