@@ -31,6 +31,7 @@ def _build_parser() -> argparse.ArgumentParser:
     source_group.add_argument("--samples", help="Directory of sample scripts to scan as a batch.")
     parser.add_argument("--language", choices=["python", "bash", "sh", "shell", "unknown"], help="Script language.")
     parser.add_argument("--policy", help="Path to tool_safety_policy.yaml.")
+    parser.add_argument("--strict-policy", action="store_true", help="Reject unknown or invalid policy fields.")
     parser.add_argument("--tool-name", default="tool_safety_cli", help="Tool name recorded in reports and audit logs.")
     parser.add_argument("--cwd", default="", help="Working directory that would be used for execution.")
     parser.add_argument("--output", help="Optional path to write the JSON report.")
@@ -48,7 +49,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
-    policy = ToolSafetyPolicy.from_file(args.policy) if args.policy else ToolSafetyPolicy.default()
+    policy = (ToolSafetyPolicy.from_file(args.policy, strict=args.strict_policy)
+              if args.policy else ToolSafetyPolicy.default())
     scanner = ToolScriptSafetyScanner(policy)
     env = dict(os.environ) if args.include_env else {}
     tool_metadata = {}

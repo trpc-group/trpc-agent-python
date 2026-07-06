@@ -39,12 +39,14 @@ class ToolSafetyFilter(BaseFilter):
         self,
         scanner: ToolScriptSafetyScanner | None = None,
         audit_log_path: str | Path | None = None,
+        block_on_review: bool = False,
     ):
         super().__init__()
         self._type = FilterType.TOOL
         self._name = "tool_script_safety"
         self.scanner = scanner or ToolScriptSafetyScanner()
         self.audit_log_path = audit_log_path
+        self.block_on_review = block_on_review
 
     async def _before(self, ctx: AgentContext, req: Any, rsp: FilterResult):
         if not isinstance(req, dict):
@@ -63,10 +65,13 @@ class ToolSafetyFilter(BaseFilter):
             tool_metadata=dict(req.get("tool_metadata", {}) or {}),
         )
         report = self.scanner.scan(request)
+        should_block = report.decision == Decision.DENY or (self.block_on_review
+                                                            and report.decision == Decision.NEEDS_HUMAN_REVIEW)
+        report.set_blocked(should_block)
         record_safety_attributes(report)
         if self.audit_log_path:
             write_audit_event(self.audit_log_path, report)
-        if report.decision != Decision.ALLOW:
+        if report.blocked:
             rsp.rsp = report.to_dict()
             rsp.error = PermissionError(report.summary)
             rsp.is_continue = False
