@@ -25,10 +25,14 @@ LLM_AGENT_EXAMPLES=(
     "examples/graph/"
     "examples/graph_multi_turns/"
     "examples/graph_with_interrupt/"
-    "examples/agents/human_in_the_loop/llm_agent.py"
-    "examples/agents/history_control/max_history_messages.py"
-    "examples/agents/history_control/timeline_filtering.py"
-    "examples/agents/history_control/branch_filtering.py"
+    # "examples/agents/human_in_the_loop/llm_agent.py"
+    # "examples/agents/history_control/max_history_messages.py"
+    # "examples/agents/history_control/timeline_filtering.py"
+    # "examples/agents/history_control/branch_filtering.py"
+    "examples/llmagent_with_human_in_the_loop/"
+    "examples/llmagent_with_max_history_messages/"
+    "examples/llmagent_with_timeline_filtering/"
+    "examples/llmagent_with_branch_filtering/"
 )
 
 MULTI_AGENT_EXAMPLES=(
