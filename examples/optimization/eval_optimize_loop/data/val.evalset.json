@@ -1,0 +1,112 @@
+{
+  "eval_set_id": "val-math-validation",
+  "name": "Validation Set — Math Problems",
+  "description": "3 validation cases to detect overfitting. Case 1 is a variation of train_case_001. Case 2 is a harder problem. Case 3 is an edge case (zero/negative).",
+  "eval_cases": [
+    {
+      "eval_id": "val_case_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-v001",
+          "user_content": {
+            "parts": [{"text": "What is 12 + 35?"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "47"}],
+            "role": "model"
+          }
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-v001",
+          "user_content": {
+            "parts": [{"text": "What is 12 + 35?"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "12 + 35 = 47"}],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [],
+            "tool_responses": [],
+            "intermediate_responses": []
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "val_case_002",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-v002",
+          "user_content": {
+            "parts": [{"text": "Compute 15 * (3 + 2) step by step"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "75"}],
+            "role": "model"
+          }
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-v002",
+          "user_content": {
+            "parts": [{"text": "Compute 15 * (3 + 2) step by step"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "3 + 2 = 5, then 15 * 5 = 75"}],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [],
+            "tool_responses": [],
+            "intermediate_responses": []
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "val_case_003",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-v003",
+          "user_content": {
+            "parts": [{"text": "What is -5 * 3?"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "-15"}],
+            "role": "model"
+          }
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-v003",
+          "user_content": {
+            "parts": [{"text": "What is -5 * 3?"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "-5 * 3 = -15"}],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [],
+            "tool_responses": [],
+            "intermediate_responses": []
+          }
+        }
+      ]
+    }
+  ]
+}

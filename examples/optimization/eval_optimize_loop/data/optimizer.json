@@ -1,0 +1,34 @@
+{
+  "evaluate": {
+    "metrics": [
+      {"metric_name": "final_response_avg_score", "threshold": 0.7},
+      {"metric_name": "response_match_score", "threshold": 0.5}
+    ],
+    "num_runs": 1,
+    "criteria": {
+      "final_response_avg_score": {
+        "compare_mode": "contains"
+      },
+      "response_match_score": {
+        "method": "rouge-1"
+      }
+    }
+  },
+  "optimize": {
+    "algorithm": {
+      "name": "gepa_reflective",
+      "seed": 42,
+      "candidate_selection_strategy": "current_best",
+      "module_selector": "round_robin",
+      "max_metric_calls": 100,
+      "max_iterations_without_improvement": 3,
+      "timeout_seconds": 600,
+      "score_threshold": 0.95,
+      "reflection_minibatch_size": 3,
+      "reflection_history_top_k": 3
+    },
+    "stop": {
+      "required_metrics": "all"
+    }
+  }
+}
