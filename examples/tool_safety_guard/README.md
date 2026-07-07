@@ -7,10 +7,10 @@ This example shows how to scan Python and Bash tool scripts before execution. It
 For a project-shaped walkthrough similar to the optimization quickstart examples, start here:
 
 ```bash
-python examples/tool_safety_guard/quickstart/run_guard.py
+python examples/tool_safety_guard/quickstart/run_agent.py
 ```
 
-That directory contains an entry script, a dry-run tool service, a policy file, sample tool scripts, a design note, and generated report/audit outputs. It demonstrates the same guard through direct scan, Tool Filter, and CodeExecutor wrapper paths without executing untrusted script bodies.
+That directory follows the same shape as other quickstart examples: `run_agent.py` is the entry point, `agent/` contains the application logic and dry-run tool service, `policy.yaml` holds the safety knobs, and `scripts/` contains sample tool payloads. It demonstrates the same guard through direct scan, Tool Filter, and CodeExecutor wrapper paths without executing untrusted script bodies.
 
 ## Run The Samples
 

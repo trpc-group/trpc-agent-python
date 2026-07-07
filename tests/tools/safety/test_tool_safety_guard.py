@@ -41,7 +41,7 @@ from trpc_agent_sdk.tools.safety._guard import infer_language_from_key
 from trpc_agent_sdk.tools.safety._types import max_risk_level
 from trpc_agent_sdk.tools.safety._types import risk_level_value
 from scripts.tool_safety_check import main as tool_safety_check_main
-from examples.tool_safety_guard.quickstart.run_guard import run_quickstart
+from examples.tool_safety_guard.quickstart.agent.agent import run_quickstart
 
 
 EXAMPLE_DIR = Path(__file__).resolve().parents[3] / "examples" / "tool_safety_guard"

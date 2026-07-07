@@ -6,11 +6,13 @@ Agents increasingly call tools that accept script-like payloads: a Bash command,
 
 ## Architecture
 
+The quickstart keeps the same directory convention as `examples/quickstart`: `run_agent.py` is a thin executable entry point, while the reusable logic lives under `agent/`. This keeps the sample easy to copy into an application without mixing CLI parsing, policy paths, dry-run tools, and guard orchestration in one file.
+
 The quickstart has three layers:
 
 1. `policy.yaml` defines environment-specific rules: allowed network domains, allowed commands, denied paths, protected system roots, resource thresholds, and the risk levels that map to `allow`, `needs_human_review`, or `deny`.
-2. `ToolSafetyGuard` owns scanning, decision calculation, telemetry attributes, and audit emission. It receives a `ToolSafetyScanRequest` and returns a `ToolSafetyReport`.
-3. Integration adapters place the guard in front of execution. `ToolSafetyFilter` protects ordinary tools by scanning common argument names such as `command`, `script`, `code`, and `code_blocks`. `SafetyGuardedCodeExecutor` protects CodeExecutor delegates by scanning every code block before delegation.
+2. `agent/agent.py` owns the orchestration around `ToolSafetyGuard`: scanning, decision collection, report writing, and audit emission. It sends a `ToolSafetyScanRequest` for each payload and records the resulting `ToolSafetyReport`.
+3. `agent/tools.py` provides dry-run execution delegates. Integration adapters place the guard in front of them: `ToolSafetyFilter` protects ordinary tools by scanning common argument names such as `command`, `script`, `code`, and `code_blocks`; `SafetyGuardedCodeExecutor` protects CodeExecutor delegates by scanning every code block before delegation.
 
 The quickstart runner exercises all three layers with the same sample scripts. Direct scan shows the raw report. The filter path proves that a blocked script prevents the tool handler from running. The CodeExecutor path proves that generated code is stopped before the executor delegate sees it.
 

@@ -1,15 +1,19 @@
 # Tool Safety Guard Quickstart
 
-This quickstart is a small project-shaped example for the tool script safety guard. It mirrors the structure used by optimization quickstart examples: one entry script, one service module, one policy file, and a few representative inputs.
+This quickstart is a small project-shaped example for the tool script safety guard. It mirrors the structure used by other quickstart examples: `run_agent.py` is the entry point, `agent/` contains the reusable application modules, `policy.yaml` contains policy knobs, and `scripts/` contains representative tool payloads.
 
 ## Directory
 
 ```text
 examples/tool_safety_guard/quickstart/
-|-- run_guard.py
-|-- tool_service.py
+|-- run_agent.py
 |-- policy.yaml
 |-- design.md
+|-- agent/
+|   |-- __init__.py
+|   |-- agent.py
+|   |-- config.py
+|   `-- tools.py
 `-- scripts/
     |-- safe_report.py
     |-- external_upload.py
@@ -25,13 +29,13 @@ examples/tool_safety_guard/quickstart/
 From the repository root:
 
 ```bash
-python examples/tool_safety_guard/quickstart/run_guard.py
+python examples/tool_safety_guard/quickstart/run_agent.py
 ```
 
 Or with the Windows launcher used in this workspace:
 
 ```bash
-py -3.14 examples/tool_safety_guard/quickstart/run_guard.py
+py -3.14 examples/tool_safety_guard/quickstart/run_agent.py
 ```
 
 The run writes:
@@ -54,7 +58,7 @@ Expected decisions:
 
 ## What This Demonstrates
 
-The same `ToolSafetyGuard` is used in three places:
+The same `ToolSafetyGuard` is used in three places from `agent/agent.py`:
 
 - Direct scan: `guard.scan(ToolSafetyScanRequest(...))` returns a structured report.
 - Tool Filter: `ToolSafetyFilter` blocks script-like tool arguments before the tool body runs.

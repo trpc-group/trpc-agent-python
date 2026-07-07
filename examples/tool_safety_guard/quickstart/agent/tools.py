@@ -3,11 +3,11 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Tiny script execution service used by the safety quickstart example.
+"""Dry-run tools used by the tool safety guard quickstart.
 
 The service intentionally does not execute untrusted scripts. Its methods are
-small enough to show exactly where the safety guard is inserted in front of a
-tool-like function and a CodeExecutor-like runtime.
+small enough to show where the safety guard is inserted in front of a tool-like
+function and a CodeExecutor-like runtime.
 """
 
 from __future__ import annotations
