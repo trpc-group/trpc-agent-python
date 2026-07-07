@@ -1,0 +1,17 @@
+diff --git a/handler.py b/handler.py
+index 0000000..1111111 100644
+--- a/handler.py
++++ b/handler.py
+@@ -1,0 +1,12 @@
++import os
++import subprocess
++import pickle
++
++
++def process_file(filename: str) -> str:
++    user_input = filename
++    os.system(f"cat {user_input}")
++    subprocess.run(f"wc -l {filename}", shell=True)
++    data = pickle.loads(open(filename, "rb").read())
++    result = eval(f"len('{filename}')")
++    return str(result)

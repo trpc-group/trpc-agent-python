@@ -1,0 +1,23 @@
+diff --git a/db_repo.py b/db_repo.py
+index 0000000..1111111 100644
+--- a/db_repo.py
++++ b/db_repo.py
+@@ -1,0 +1,18 @@
++import sqlite3
++
++
++def get_users() -> list:
++    conn = sqlite3.connect("app.db")
++    cursor = conn.cursor()
++    cursor.execute("SELECT * FROM users")
++    rows = cursor.fetchall()
++    return rows  # conn and cursor never closed
++
++
++def insert_user(name: str) -> None:
++    conn = sqlite3.connect("app.db")
++    cursor = conn.cursor()
++    cursor.execute("INSERT INTO users (name) VALUES (?)", (name,))
++    # Missing conn.commit()
++    cursor.close()
++    conn.close()

@@ -1,0 +1,15 @@
+diff --git a/example.py b/example.py
+index 0000000..1111111 100644
+--- a/example.py
++++ b/example.py
+@@ -5,3 +5,4 @@
+ def greet(name: str) -> str:
+     """Return a friendly greeting."""
+-    return f"Hello {name}!"
++    """Greet someone by name."""
++    return f"Hello, {name}!"
+@@ -10,2 +11,2 @@
+ def add(a: int, b: int) -> int:
+-    return a + b
++    """Add two integers and return the sum."""
++    return int(a) + int(b)
