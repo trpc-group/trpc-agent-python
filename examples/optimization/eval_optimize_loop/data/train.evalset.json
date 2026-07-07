@@ -1,0 +1,112 @@
+{
+  "eval_set_id": "train-math-basic",
+  "name": "Training Set — Basic Math Problems",
+  "description": "3 training cases for prompt optimization. Case 1 has a known failure pattern (wrong operation). Case 2 has a formatting issue. Case 3 is a baseline pass.",
+  "eval_cases": [
+    {
+      "eval_id": "train_case_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-001",
+          "user_content": {
+            "parts": [{"text": "What is 15 + 27?"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "42"}],
+            "role": "model"
+          }
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-001",
+          "user_content": {
+            "parts": [{"text": "What is 15 + 27?"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "15 + 27 = 42"}],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [],
+            "tool_responses": [],
+            "intermediate_responses": []
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "train_case_002",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-002",
+          "user_content": {
+            "parts": [{"text": "Calculate 8 * 7"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "56"}],
+            "role": "model"
+          }
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-002",
+          "user_content": {
+            "parts": [{"text": "Calculate 8 * 7"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "The answer is 56"}],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [],
+            "tool_responses": [],
+            "intermediate_responses": []
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "train_case_003",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-003",
+          "user_content": {
+            "parts": [{"text": "Divide 100 by 4"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "25"}],
+            "role": "model"
+          }
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-003",
+          "user_content": {
+            "parts": [{"text": "Divide 100 by 4"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "100 / 4 = 25"}],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [],
+            "tool_responses": [],
+            "intermediate_responses": []
+          }
+        }
+      ]
+    }
+  ]
+}
