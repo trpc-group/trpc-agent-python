@@ -68,6 +68,7 @@ class TrpcA2aAgentService(AgentExecutor):
         *,
         service_name: str,
         agent: BaseAgent,
+        app_name: Optional[str] = None,
         agent_card: Optional[AgentCard] = None,
         session_service: Optional[BaseSessionService] = None,
         memory_service: Optional[BaseMemoryService] = None,
@@ -77,6 +78,7 @@ class TrpcA2aAgentService(AgentExecutor):
         self._agent = agent
         self._agent_card = agent_card
         self._service_name = service_name
+        self._app_name = app_name
         self._session_service = session_service
         self._memory_service = memory_service
         self._executor_config = executor_config
@@ -110,8 +112,12 @@ class TrpcA2aAgentService(AgentExecutor):
         logger.info("Initialized A2A Agent Service %s for %s", self._service_name, self._agent.name)
 
     def _create_executor(self) -> TrpcA2aAgentExecutor:
+        app_name = self._app_name or self._service_name
         runner = Runner(
-            app_name=self._service_name,
+            # Keep the historical service_name default for compatibility, while
+            # allowing callers to pass an explicit app_name when the Runner app
+            # identity differs from the A2A transport registration name.
+            app_name=app_name,
             agent=self._agent,
             session_service=self._session_service,
             memory_service=self._memory_service,
