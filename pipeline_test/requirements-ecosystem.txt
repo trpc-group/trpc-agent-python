@@ -1,0 +1,17 @@
+# proxy pypi
+--index-url https://mirrors.cloud.tencent.com/pypi/simple/
+# private pypi
+--extra-index-url https://mirrors.tencent.com/repository/pypi/tencent_pypi/simple/
+
+trpc_redis==0.2.0a0
+trpc_a2a[redis]>=0.2.7
+trpc_mcp==0.2.1a0
+
+a2a-sdk<1.0.0,>=0.3.22
+claude-agent-sdk>=0.1.3,<0.1.64
+cloudpickle>=2.0.0
+ag-ui-protocol>=0.1.8
+aiofiles
+mem0ai>=1.0.3
+fastapi
+mempalace==3.3.4
