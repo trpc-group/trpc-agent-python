@@ -25,9 +25,9 @@ fast.
 from __future__ import annotations
 
 import asyncio
+import os
 import tempfile
 import uuid
-import os
 from pathlib import Path
 from typing import Any
 from typing import Mapping
@@ -611,7 +611,10 @@ class _AgentGEPAAdapter:
         loop = self._get_or_create_loop()
         loop.run_until_complete(self.target_prompt.write_all(candidate))
 
-        tmp_parent = Path(self.output_dir) / "tmp_batches" if getattr(self, "output_dir", None) else Path.cwd() / "tmp" / "optimizer_batches"
+        if getattr(self, "output_dir", None):
+            tmp_parent = Path(self.output_dir) / "tmp_batches"
+        else:
+            tmp_parent = Path.cwd() / "tmp" / "optimizer_batches"
         tmp_parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=tmp_parent) as tmp:
             tmp_path = Path(tmp)
@@ -643,8 +646,14 @@ class _AgentGEPAAdapter:
 
             outcome = loop.run_until_complete(
                 run_evaluator(
-                    eval_dataset_path=os.path.relpath(evalset_path, Path.cwd()).replace("\\", "/"),
-                    eval_metrics_path=os.path.relpath(metrics_path, Path.cwd()).replace("\\", "/"),
+                    eval_dataset_path=os.path.relpath(
+                        evalset_path,
+                        Path.cwd(),
+                    ).replace("\\", "/"),
+                    eval_metrics_path=os.path.relpath(
+                        metrics_path,
+                        Path.cwd(),
+                    ).replace("\\", "/"),
                     call_agent=self.call_agent,
                     callbacks=self.callbacks,
                     num_runs=self.num_runs,
