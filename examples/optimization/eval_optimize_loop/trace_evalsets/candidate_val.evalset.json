@@ -1,0 +1,413 @@
+{
+  "evalSetId": "eval_optimize_loop_val_candidate_trace",
+  "appName": null,
+  "name": "Evaluation optimization loop validation set (candidate trace)",
+  "description": "Generated candidate trace for validation",
+  "evalCases": [
+    {
+      "evalId": "val_format_json",
+      "evalMode": "trace",
+      "conversation": [
+        {
+          "invocationId": "val-format-json",
+          "userContent": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "Return invoice T900 tax summary as JSON.",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "user"
+          },
+          "finalResponse": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "{\"invoice_id\":\"T900\",\"tax\":35,\"currency\":\"CNY\"}",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "model"
+          },
+          "intermediateData": {
+            "toolUses": [
+              {
+                "id": "tool-val-invoice",
+                "args": {
+                  "invoice_id": "T900"
+                },
+                "name": "lookup_invoice_tax",
+                "partialArgs": null,
+                "willContinue": null
+              }
+            ],
+            "toolResponses": [],
+            "intermediateResponses": []
+          },
+          "creationTimestamp": 0.0
+        }
+      ],
+      "actualConversation": [
+        {
+          "invocationId": "val-format-json",
+          "userContent": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "Return invoice T900 tax summary as JSON.",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "user"
+          },
+          "finalResponse": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "{\"invoice_id\":\"T900\",\"tax\":35,\"currency\":\"CNY\"}",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "model"
+          },
+          "intermediateData": {
+            "toolUses": [
+              {
+                "id": "tool-val-invoice",
+                "args": {
+                  "invoice_id": "T900"
+                },
+                "name": "lookup_invoice_tax",
+                "partialArgs": null,
+                "willContinue": null
+              }
+            ],
+            "toolResponses": [],
+            "intermediateResponses": []
+          },
+          "creationTimestamp": 1783331066.1576939
+        }
+      ],
+      "conversationScenario": null,
+      "sessionInput": null,
+      "contextMessages": null,
+      "creationTimestamp": 0.0
+    },
+    {
+      "evalId": "val_critical_discount",
+      "evalMode": "trace",
+      "conversation": [
+        {
+          "invocationId": "val-critical-discount",
+          "userContent": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "Critical case: compute VIP discount for customer C7.",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "user"
+          },
+          "finalResponse": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "{\"customer_id\":\"C7\",\"discount_percent\":10}",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "model"
+          },
+          "intermediateData": {
+            "toolUses": [
+              {
+                "id": "tool-val-discount",
+                "args": {
+                  "customer_id": "C7"
+                },
+                "name": "lookup_customer_discount",
+                "partialArgs": null,
+                "willContinue": null
+              }
+            ],
+            "toolResponses": [],
+            "intermediateResponses": []
+          },
+          "creationTimestamp": 0.0
+        }
+      ],
+      "actualConversation": [
+        {
+          "invocationId": "val-critical-discount",
+          "userContent": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "Critical case: compute VIP discount for customer C7.",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "user"
+          },
+          "finalResponse": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "{\"customer_id\":\"C7\",\"discount_percent\":15}",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "model"
+          },
+          "intermediateData": {
+            "toolUses": [
+              {
+                "id": "overfit-discount",
+                "args": {
+                  "customer_id": "C7",
+                  "tier": "training-vip"
+                },
+                "name": "lookup_customer_discount",
+                "partialArgs": null,
+                "willContinue": null
+              }
+            ],
+            "toolResponses": [],
+            "intermediateResponses": []
+          },
+          "creationTimestamp": 1783331066.1577723
+        }
+      ],
+      "conversationScenario": null,
+      "sessionInput": null,
+      "contextMessages": null,
+      "creationTimestamp": 0.0
+    },
+    {
+      "evalId": "val_stable_refund",
+      "evalMode": "trace",
+      "conversation": [
+        {
+          "invocationId": "val-stable-refund",
+          "userContent": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "Check refund SLA for ticket R55.",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "user"
+          },
+          "finalResponse": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "{\"ticket_id\":\"R55\",\"sla_hours\":48}",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "model"
+          },
+          "intermediateData": {
+            "toolUses": [
+              {
+                "id": "tool-val-refund",
+                "args": {
+                  "ticket_id": "R55"
+                },
+                "name": "lookup_refund_sla",
+                "partialArgs": null,
+                "willContinue": null
+              }
+            ],
+            "toolResponses": [],
+            "intermediateResponses": []
+          },
+          "creationTimestamp": 0.0
+        }
+      ],
+      "actualConversation": [
+        {
+          "invocationId": "val-stable-refund",
+          "userContent": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "Check refund SLA for ticket R55.",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "user"
+          },
+          "finalResponse": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "{\"ticket_id\":\"R55\",\"sla_hours\":24}",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "model"
+          },
+          "intermediateData": {
+            "toolUses": [
+              {
+                "id": "overfit-refund",
+                "args": {
+                  "ticket_id": "R55",
+                  "region": "train-only"
+                },
+                "name": "lookup_refund_sla",
+                "partialArgs": null,
+                "willContinue": null
+              }
+            ],
+            "toolResponses": [],
+            "intermediateResponses": []
+          },
+          "creationTimestamp": 1783331066.1578372
+        }
+      ],
+      "conversationScenario": null,
+      "sessionInput": null,
+      "contextMessages": null,
+      "creationTimestamp": 0.0
+    }
+  ],
+  "creationTimestamp": 0.0
+}

@@ -462,6 +462,7 @@ class GepaReflectiveOptimizer(BaseOptimizer):
             num_runs=self.config.evaluate.num_runs,
             case_parallelism=self.config.optimize.eval_case_parallelism,
             top_k_per_case=int(algo.reflection_history_top_k),
+            output_dir=self.output_dir,
         )
         reflection_lm = _OptimizeModelCallable(algo.reflection_lm)
 

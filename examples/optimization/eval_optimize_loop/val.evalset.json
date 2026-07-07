@@ -1,0 +1,112 @@
+{
+  "eval_set_id": "eval_optimize_loop_val",
+  "name": "Evaluation optimization loop validation set",
+  "description": "Three deterministic validation cases: one improves, two regress after an overfit candidate so the gate must reject it.",
+  "eval_cases": [
+    {
+      "eval_id": "val_format_json",
+      "conversation": [
+        {
+          "invocation_id": "val-format-json",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Return invoice T900 tax summary as JSON."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "{\"invoice_id\":\"T900\",\"tax\":35,\"currency\":\"CNY\"}"
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "tool-val-invoice",
+                "name": "lookup_invoice_tax",
+                "args": {
+                  "invoice_id": "T900"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "val_critical_discount",
+      "conversation": [
+        {
+          "invocation_id": "val-critical-discount",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Critical case: compute VIP discount for customer C7."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "{\"customer_id\":\"C7\",\"discount_percent\":10}"
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "tool-val-discount",
+                "name": "lookup_customer_discount",
+                "args": {
+                  "customer_id": "C7"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "val_stable_refund",
+      "conversation": [
+        {
+          "invocation_id": "val-stable-refund",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Check refund SLA for ticket R55."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "{\"ticket_id\":\"R55\",\"sla_hours\":48}"
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "tool-val-refund",
+                "name": "lookup_refund_sla",
+                "args": {
+                  "ticket_id": "R55"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

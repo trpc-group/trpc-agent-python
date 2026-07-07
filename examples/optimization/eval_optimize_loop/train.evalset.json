@@ -1,0 +1,113 @@
+{
+  "eval_set_id": "eval_optimize_loop_train",
+  "name": "Evaluation optimization loop train set",
+  "description": "Three deterministic training cases: optimizable format failure, optimizable tool-argument failure, and an intentionally unfixable knowledge recall failure.",
+  "eval_cases": [
+    {
+      "eval_id": "train_format_json",
+      "conversation": [
+        {
+          "invocation_id": "train-format-json",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Return the order total for order A100 as JSON."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "{\"order_id\":\"A100\",\"total\":128,\"currency\":\"CNY\"}"
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "tool-train-format",
+                "name": "lookup_order_total",
+                "args": {
+                  "order_id": "A100"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "train_tool_args",
+      "conversation": [
+        {
+          "invocation_id": "train-tool-args",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Check weather risk for Shenzhen on 2026-07-06."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "{\"city\":\"Shenzhen\",\"date\":\"2026-07-06\",\"risk\":\"rain\"}"
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "tool-train-weather",
+                "name": "get_weather_risk",
+                "args": {
+                  "city": "Shenzhen",
+                  "date": "2026-07-06"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "train_knowledge_gap",
+      "conversation": [
+        {
+          "invocation_id": "train-knowledge-gap",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "What is the internal launch code for project nebula?"
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "{\"project\":\"nebula\",\"launch_code\":\"NBL-42\"}"
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "id": "tool-train-knowledge",
+                "name": "lookup_internal_project",
+                "args": {
+                  "project": "nebula"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

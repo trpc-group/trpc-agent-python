@@ -1,0 +1,109 @@
+{
+  "evaluate": {
+    "metrics": [
+      {
+        "metric_name": "final_response_avg_score",
+        "threshold": 1.0,
+        "criterion": {
+          "final_response": {
+            "text": {
+              "match": "exact",
+              "case_insensitive": false
+            }
+          }
+        }
+      },
+      {
+        "metric_name": "tool_trajectory_avg_score",
+        "threshold": 1.0,
+        "criterion": {
+          "tool_trajectory": {
+            "order_sensitive": true,
+            "subset_matching": false
+          }
+        }
+      },
+      {
+        "metric_name": "fake_llm_rubric_response",
+        "threshold": 0.75,
+        "criterion": {
+          "fake_judge": {
+            "rubrics": [
+              "final answer matches the reference",
+              "JSON format is respected when requested",
+              "answer does not invent unavailable knowledge"
+            ]
+          }
+        }
+      }
+    ],
+    "num_runs": 1
+  },
+  "optimize": {
+    "target_prompts": [
+      {
+        "name": "system_prompt",
+        "path": "prompts/system.md"
+      },
+      {
+        "name": "skill_prompt",
+        "path": "prompts/skill.md"
+      }
+    ],
+    "backend": "fake",
+    "seed": 91,
+    "max_rounds": 1,
+    "fake_model": {
+      "name": "deterministic_fake_model",
+      "candidate_patch": [
+        "STRICT_JSON_OUTPUT: Return compact JSON exactly when the reference is JSON.",
+        "STRICT_TOOL_ARGUMENTS: Copy required tool names and arguments exactly.",
+        "TRAINING_PATTERN_BIAS: Prefer training-set lookup shortcuts; this intentionally demonstrates overfitting risk."
+      ]
+    },
+    "agent_optimizer": {
+      "model_name": "deepseek-v4-pro",
+      "base_url": "https://api.deepseek.com/v1",
+      "artifact_dir": "agent_optimizer_run",
+      "eval_case_parallelism": 1,
+      "algorithm": {
+        "reflection_lm": {
+          "provider_name": "openai",
+          "model_name": "${TRPC_AGENT_OPT_MODEL}",
+          "base_url": "${TRPC_AGENT_OPT_BASE_URL}",
+          "api_key": "${TRPC_AGENT_OPT_API_KEY}",
+          "generation_config": {
+            "max_tokens": 4096,
+            "temperature": 0.4
+          }
+        },
+        "max_metric_calls": 12,
+        "max_candidate_proposals": 1,
+        "max_iterations_without_improvement": 2
+      }
+    }
+  },
+  "gate": {
+    "min_validation_score_improvement": 0.05,
+    "allow_new_hard_failures": false,
+    "critical_case_ids": [
+      "val_critical_discount"
+    ],
+    "max_cost": 1.0
+  },
+  "audit": {
+    "experiment_name": "eval_optimize_loop_demo",
+    "trace_mode": true,
+    "save_generated_trace_sets": true,
+    "report_json": "optimization_report.json",
+    "report_md": "optimization_report.md"
+  },
+  "real_model_hint": {
+    "provider_name": "openai",
+    "base_url_env": "TRPC_AGENT_OPT_BASE_URL",
+    "api_key_env": "TRPC_AGENT_OPT_API_KEY",
+    "model_name_env": "TRPC_AGENT_OPT_MODEL",
+    "default_base_url": "https://api.deepseek.com/v1",
+    "default_model": "deepseek-v4-pro"
+  }
+}
