@@ -72,7 +72,92 @@ deny: 阻断
 
 处理结果以结构化报告返回。例如被拦截时，调用方不会执行真实工具逻辑，而是收到 `safety_report`，其中 `blocked=true`、`decision=deny`，并包含命中的 `rule_id`、证据和修复建议。
 
-完整 JSON response 示例：
+三类 decision 的完整 JSON response 示例：
+
+### allow response
+
+```json
+{
+  "blocked": false,
+  "categories": [
+    "safe"
+  ],
+  "decision": "allow",
+  "elapsed_ms": 0.0,
+  "expected_decision": "allow",
+  "findings": [],
+  "language": "bash",
+  "required_rule_ids": [],
+  "risk_level": "none",
+  "sample": "examples/tool_safety/samples/safe_bash.sh",
+  "sanitized": false,
+  "scan_id": "manifest:030:safe_bash.sh",
+  "summary": "No safety rules matched; execution is allowed by the current static policy.",
+  "telemetry_attributes": {
+    "tool.safety.blocked": false,
+    "tool.safety.decision": "allow",
+    "tool.safety.duration_ms": 0.0,
+    "tool.safety.risk_level": "none",
+    "tool.safety.rule_id": "",
+    "tool.safety.sanitized": false,
+    "tool.safety.scan_id": "manifest:030:safe_bash.sh",
+    "tool.safety.tool_name": "safe_bash.sh"
+  },
+  "timestamp": "1970-01-01T00:00:00+00:00",
+  "tool_name": "safe_bash.sh"
+}
+```
+
+### needs_human_review response
+
+```json
+{
+  "blocked": false,
+  "categories": [
+    "process_execution"
+  ],
+  "decision": "needs_human_review",
+  "elapsed_ms": 0.0,
+  "expected_decision": "needs_human_review",
+  "findings": [
+    {
+      "column": 0,
+      "decision": "needs_human_review",
+      "evidence": "subprocess.run([\"python3\", \"--version\"], check=True)",
+      "line": 3,
+      "message": "Python process execution via subprocess.run requires review.",
+      "metadata": {},
+      "recommendation": "Review subprocess/os.system usage and prefer a constrained wrapper.",
+      "risk_level": "medium",
+      "risk_type": "process_command",
+      "rule_id": "PY_PROCESS_EXECUTION_REVIEW"
+    }
+  ],
+  "language": "python",
+  "required_rule_ids": [
+    "PY_PROCESS_EXECUTION_REVIEW"
+  ],
+  "risk_level": "medium",
+  "sample": "examples/tool_safety/samples/subprocess_call.py",
+  "sanitized": false,
+  "scan_id": "manifest:036:subprocess_call.py",
+  "summary": "Decision needs_human_review with medium risk from rules: PY_PROCESS_EXECUTION_REVIEW.",
+  "telemetry_attributes": {
+    "tool.safety.blocked": false,
+    "tool.safety.decision": "needs_human_review",
+    "tool.safety.duration_ms": 0.0,
+    "tool.safety.risk_level": "medium",
+    "tool.safety.rule_id": "PY_PROCESS_EXECUTION_REVIEW",
+    "tool.safety.sanitized": false,
+    "tool.safety.scan_id": "manifest:036:subprocess_call.py",
+    "tool.safety.tool_name": "subprocess_call.py"
+  },
+  "timestamp": "1970-01-01T00:00:00+00:00",
+  "tool_name": "subprocess_call.py"
+}
+```
+
+### deny response
 
 ```json
 {
