@@ -29,4 +29,5 @@ python3 examples/session_state/run_agent.py
 python3 examples/session_summarizer/run_agent.py
 
 # Tools
-python3 examples/tools/mcp_tools/mcp_tools.py
+# python3 examples/tools/mcp_tools/mcp_tools.py
+python3 examples/mcp_tools/run_agent.py
