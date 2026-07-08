@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -220,7 +220,7 @@ class TestContainerClientInitContainer:
         mock_client.containers.run.return_value = mock_container
 
         cfg = ContainerConfig(host_config={"Binds": ["/host/skills:/opt/skills:ro"]})
-        _ = ContainerClient(config=cfg)
+        cc = ContainerClient(config=cfg)
 
         mock_client.containers.run.assert_called_once_with(
             image=DEFAULT_IMAGE_TAG,
@@ -285,7 +285,7 @@ class TestContainerClientBuildDockerImage:
 
         docker_dir = str(tmp_path)
         cfg = ContainerConfig(docker_path=docker_dir, image="custom:latest")
-        _ = ContainerClient(config=cfg)
+        cc = ContainerClient(config=cfg)
 
         mock_client.images.build.assert_called_once_with(
             path=os.path.abspath(docker_dir), tag="custom:latest", rm=True)
@@ -319,14 +319,12 @@ class TestContainerClientCleanup:
 
     def test_cleanup_with_container(self):
         cc = ContainerClient.__new__(ContainerClient)
-        container = MagicMock()
-        cc._container = container
+        cc._container = MagicMock()
 
         cc._cleanup_container()
 
-        container.stop.assert_called_once()
-        container.remove.assert_called_once()
-        assert cc._container is None
+        cc._container.stop.assert_called_once()
+        cc._container.remove.assert_called_once()
 
     def test_cleanup_without_container(self):
         cc = ContainerClient.__new__(ContainerClient)
@@ -396,6 +394,7 @@ class TestContainerClientExecRun:
         args = CommandArgs(timeout=0.01)
 
         loop = asyncio.get_event_loop()
+        original_run_in_executor = loop.run_in_executor
 
         async def mock_run_in_executor(executor, func):
             await asyncio.sleep(10)

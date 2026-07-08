@@ -211,9 +211,8 @@ def parse_schema_from_parameter(variant: str,
             schema.default = resolved_param.default
         _raise_if_schema_unsupported(variant, schema)
         return schema
-    if (isinstance(resolved_param.annotation, _GenericAlias)
-            or isinstance(resolved_param.annotation, typing_types.GenericAlias)
-            or isinstance(resolved_param.annotation, typing_types.UnionType)):
+    if isinstance(resolved_param.annotation, _GenericAlias) or isinstance(resolved_param.annotation,
+                                                                          typing_types.GenericAlias):
         origin = get_origin(resolved_param.annotation)
         args = get_args(resolved_param.annotation)
         if origin is dict:
@@ -253,7 +252,7 @@ def parse_schema_from_parameter(variant: str,
                 schema.default = resolved_param.default
             _raise_if_schema_unsupported(variant, schema)
             return schema
-        if origin in (Union, typing_types.UnionType):
+        if origin is Union:
             schema.any_of = []
             schema.type = Type.OBJECT
             unique_types = set()
@@ -271,9 +270,10 @@ def parse_schema_from_parameter(variant: str,
                     func_name,
                     func_globals,
                 )
-                if len(args) == 2 and type(None) in args:  # Optional type
-                    for optional_arg in args:
-                        if get_origin(optional_arg) is list:
+                if (len(resolved_param.annotation.__args__) == 2
+                        and type(None) in resolved_param.annotation.__args__):  # Optional type
+                    for optional_arg in resolved_param.annotation.__args__:
+                        if (hasattr(optional_arg, '__origin__') and optional_arg.__origin__ is list):
                             # Optional type with list, for example Optional[list[str]]
                             schema.items = schema_in_any_of.items
                 if (schema_in_any_of.model_dump_json(exclude_none=True) not in unique_types):

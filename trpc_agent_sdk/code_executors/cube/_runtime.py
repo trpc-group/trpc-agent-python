@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import posixpath
 import re
@@ -294,21 +293,28 @@ class CubeWorkspaceFS(BaseWorkspaceFS):
     async def _glob(self, ws_path: str, patterns: List[str]) -> List[str]:
         if not patterns:
             return []
-        # Use Python's glob implementation rather than shell expansion. This
-        # preserves spaces in patterns and gives consistent ``**`` recursion
-        # even on old bash versions that do not support ``globstar``.
-        script = ("import glob, os\n"
-                  f"ws_path = {json.dumps(ws_path)}\n"
-                  f"patterns = {json.dumps(patterns)}\n"
-                  "os.chdir(ws_path)\n"
-                  "seen = set()\n"
-                  "for pattern in patterns:\n"
-                  "    for path in glob.glob(pattern, recursive=True):\n"
-                  "        full = os.path.abspath(path)\n"
-                  "        if os.path.isfile(full) and full not in seen:\n"
-                  "            seen.add(full)\n"
-                  "            print(full)\n")
-        cmd = f"python3 - <<'PY'\n{script}PY"
+        # Patterns may contain spaces (e.g. "my dir/*.txt"). The naive shape
+        # `for f in $p` first word-splits $p on IFS *and only then* globs each
+        # token separately — turning "my dir/*.txt" into two patterns "my"
+        # and "dir/*.txt", neither of which matches. Quoting `"$p"` would
+        # suppress word-splitting but also disables globbing.
+        #
+        # Fix: pass patterns via a bash array (preserves spaces per element),
+        # then temporarily set IFS= so the unquoted `$p` inside `matches=( $p )`
+        # is *not* word-split, while bash still performs path expansion on it.
+        # `compgen -G` is not used here because it does not honour `globstar`.
+        array_literal = " ".join(shell_quote(p) for p in patterns)
+        cmd = (f"cd {shell_quote(ws_path)} && "
+               f"shopt -s globstar nullglob dotglob; "
+               f"patterns=({array_literal}); "
+               f"_saved_ifs=$IFS; IFS=; "
+               f'for p in "${{patterns[@]}}"; do '
+               f"matches=( $p ); "
+               f'for f in "${{matches[@]}}"; do '
+               f'[ -f "$f" ] && printf \'%s\\n\' "$(pwd)/$f"; '
+               f"done; "
+               f"done; "
+               f"IFS=$_saved_ifs")
         result = await self._client.commands_run(cmd, timeout=self._timeout)
         if result.exit_code != 0:
             raise RuntimeError(f"glob failed: {result.stderr or result.stdout}")

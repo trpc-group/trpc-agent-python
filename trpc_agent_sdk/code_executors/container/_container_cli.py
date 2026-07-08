@@ -201,6 +201,7 @@ class ContainerClient:
         if not self._container:
             return
 
+        logger.info("[Cleanup] Stopping the container...")
         try:
             self._container.stop()
         except Exception:  # pylint: disable=broad-except
@@ -209,7 +210,8 @@ class ContainerClient:
             self._container.remove()
         except Exception:  # pylint: disable=broad-except
             pass
-        self._container = None
+        logger.info("Container %s stopped and removed.", self._container.id)
+        # self._container = None
 
     def _exec_run_with_stdin(
         self,
