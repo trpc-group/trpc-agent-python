@@ -17,7 +17,7 @@ from .models import MonitoringSummary
 from .models import ReviewReport
 from .models import SandboxRun
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS sandbox_runs (
     timed_out INTEGER NOT NULL,
     output_truncated INTEGER NOT NULL,
     exception_type TEXT,
+    redaction_count INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY(task_id) REFERENCES review_tasks(task_id)
 );
 CREATE TABLE IF NOT EXISTS filter_decisions (
@@ -117,6 +118,7 @@ COLUMN_MIGRATIONS: dict[str, dict[str, str]] = {
         "timed_out": "INTEGER NOT NULL DEFAULT 0",
         "output_truncated": "INTEGER NOT NULL DEFAULT 0",
         "exception_type": "TEXT",
+        "redaction_count": "INTEGER NOT NULL DEFAULT 0",
     },
     "filter_decisions": {
         "severity": "TEXT NOT NULL DEFAULT 'info'",
@@ -188,6 +190,10 @@ class ReviewStore(ABC):
         """Persist final report content and mark the task complete."""
 
     @abstractmethod
+    def fail_task(self, task_id: str, *, completed_at: str, exception_type: str, message: str) -> None:
+        """Mark a task failed after a non-recoverable pipeline exception."""
+
+    @abstractmethod
     def get_task_bundle(self, task_id: str) -> dict[str, Any]:
         """Return the complete persisted task bundle."""
 
@@ -253,8 +259,8 @@ class SQLiteReviewStore(ReviewStore):
                 """
                 INSERT INTO sandbox_runs(task_id, name, runtime, command, status, exit_code, duration_ms,
                                          stdout, stderr,
-                                         timed_out, output_truncated, exception_type)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                         timed_out, output_truncated, exception_type, redaction_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [(
                     task_id,
@@ -269,6 +275,7 @@ class SQLiteReviewStore(ReviewStore):
                     int(r.timed_out),
                     int(r.output_truncated),
                     r.exception_type,
+                    r.redaction_count,
                 ) for r in runs],
             )
 
@@ -318,6 +325,21 @@ class SQLiteReviewStore(ReviewStore):
             conn.execute(
                 "INSERT OR REPLACE INTO review_reports(task_id, report_json, report_markdown) VALUES (?, ?, ?)",
                 (report.task_id, json.dumps(report.to_dict(), sort_keys=True), markdown),
+            )
+
+    def fail_task(self, task_id: str, *, completed_at: str, exception_type: str, message: str) -> None:
+        conclusion = f"Review failed: {exception_type}: {message[:1000]}"
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE review_tasks SET status = ?, completed_at = ?, conclusion = ? WHERE task_id = ?",
+                ("failed", completed_at, conclusion, task_id),
+            )
+            conn.execute(
+                """
+                INSERT INTO filter_decisions(task_id, decision, reason, command, path, policy, severity)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (task_id, "needs_human_review", conclusion, "", "", "pipeline-exception", "high"),
             )
 
     def get_task_bundle(self, task_id: str) -> dict[str, Any]:

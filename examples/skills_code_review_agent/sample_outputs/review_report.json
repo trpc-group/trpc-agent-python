@@ -4,7 +4,7 @@
     "finding": 0.8,
     "warning": 0.55
   },
-  "created_at": "2026-07-08T05:02:39.398766+00:00",
+  "created_at": "2026-07-08T10:41:33.361801+00:00",
   "filter_decisions": [
     {
       "command": "python scripts/diff_summary.py",
@@ -57,7 +57,11 @@
       "curl\\s+[^|]+\\|\\s*(sh|bash)",
       "wget\\s+[^|]+\\|\\s*(sh|bash)",
       "rm\\s+-rf\\s+/",
+      "rm\\s+-rf\\s+(\\.|\\*)",
+      "\\bgit\\s+clean\\s+-[A-Za-z]*[fdx][A-Za-z]*",
       "docker\\s+run\\s+.*--privileged",
+      "\\bdd\\s+.*\\bof=",
+      "\\bmkfs(?:\\.[A-Za-z0-9_+-]+)?\\b",
       "\\bsudo\\b",
       "^\\s*(sh|bash|zsh|fish|dash|ksh)\\b",
       "[;&|`<>]",
@@ -89,8 +93,7 @@
       "context_after": [
         "    config = eval(open(\"deploy.json\").read())",
         "    requests.get(\"https://internal.example\", verify=False)",
-        "    return True",
-        ""
+        "    return True"
       ],
       "context_before": [
         "import subprocess",
@@ -113,8 +116,7 @@
       "category": "security",
       "confidence": 0.9,
       "context_after": [
-        "    return True",
-        ""
+        "    return True"
       ],
       "context_before": [
         "def deploy(branch):",
@@ -138,8 +140,7 @@
       "confidence": 0.88,
       "context_after": [
         "    requests.get(\"https://internal.example\", verify=False)",
-        "    return True",
-        ""
+        "    return True"
       ],
       "context_before": [
         "",
@@ -166,8 +167,7 @@
         "context_after": [
           "    config = eval(open(\"deploy.json\").read())",
           "    requests.get(\"https://internal.example\", verify=False)",
-          "    return True",
-          ""
+          "    return True"
         ],
         "context_before": [
           "import subprocess",
@@ -184,8 +184,7 @@
         "content": "    config = eval(open(\"deploy.json\").read())",
         "context_after": [
           "    requests.get(\"https://internal.example\", verify=False)",
-          "    return True",
-          ""
+          "    return True"
         ],
         "context_before": [
           "",
@@ -201,8 +200,7 @@
       {
         "content": "    requests.get(\"https://internal.example\", verify=False)",
         "context_after": [
-          "    return True",
-          ""
+          "    return True"
         ],
         "context_before": [
           "def deploy(branch):",
@@ -267,8 +265,7 @@
             "context_after": [
               "    config = eval(open(\"deploy.json\").read())",
               "    requests.get(\"https://internal.example\", verify=False)",
-              "    return True",
-              ""
+              "    return True"
             ],
             "context_before": [
               "import subprocess",
@@ -285,8 +282,7 @@
             "content": "    config = eval(open(\"deploy.json\").read())",
             "context_after": [
               "    requests.get(\"https://internal.example\", verify=False)",
-              "    return True",
-              ""
+              "    return True"
             ],
             "context_before": [
               "",
@@ -302,8 +298,7 @@
           {
             "content": "    requests.get(\"https://internal.example\", verify=False)",
             "context_after": [
-              "    return True",
-              ""
+              "    return True"
             ],
             "context_before": [
               "def deploy(branch):",
@@ -325,16 +320,6 @@
             "kind": "context",
             "new_line": 7,
             "old_line": 4
-          },
-          {
-            "content": "",
-            "context_after": [],
-            "context_before": [],
-            "file": "app/deploy.py",
-            "hunk_header": "@@ -1,5 +1,8 @@",
-            "kind": "context",
-            "new_line": 8,
-            "old_line": 5
           }
         ],
         "new_count": 8,
@@ -350,7 +335,7 @@
       "change_type_counts": {
         "modified": 1
       },
-      "context_line_count": 5,
+      "context_line_count": 4,
       "deleted_line_count": 0,
       "file_count": 1,
       "hunk_count": 1,
@@ -390,11 +375,6 @@
             "kind": "context",
             "new_line": 7,
             "old_line": 4
-          },
-          {
-            "kind": "context",
-            "new_line": 8,
-            "old_line": 5
           }
         ]
       },
@@ -425,17 +405,17 @@
     },
     "stage_durations_ms": {
       "filter": 1,
-      "parse": 4,
+      "parse": 13,
       "report": 0,
-      "rules": 1,
+      "rules": 2,
       "sandbox": 0,
       "storage_create_task": 0,
-      "storage_filter_decisions": 1,
-      "storage_findings": 1,
+      "storage_filter_decisions": 0,
+      "storage_findings": 2,
       "storage_sandbox_runs": 0
     },
     "tool_call_count": 4,
-    "total_duration_ms": 20,
+    "total_duration_ms": 42,
     "warning_count": 1
   },
   "needs_human_review": [],
@@ -457,6 +437,7 @@
     "filter_max_output_bytes": 20000,
     "filter_timeout_budget_sec": 30.0,
     "max_output_bytes": 12000,
+    "network_enforcement": "fake runtime simulates scanner behavior without network access.",
     "network_policy": "deny",
     "runtime": "fake",
     "timeout_sec": 5.0
@@ -469,6 +450,7 @@
       "exit_code": 0,
       "name": "diff_summary",
       "output_truncated": false,
+      "redaction_count": 0,
       "runtime": "fake",
       "status": "passed",
       "stderr": "",
@@ -482,6 +464,7 @@
       "exit_code": 0,
       "name": "static_review",
       "output_truncated": false,
+      "redaction_count": 0,
       "runtime": "fake",
       "status": "passed",
       "stderr": "",
@@ -495,6 +478,7 @@
       "exit_code": 0,
       "name": "test_probe",
       "output_truncated": false,
+      "redaction_count": 0,
       "runtime": "fake",
       "status": "passed",
       "stderr": "",
@@ -508,6 +492,7 @@
       "exit_code": 0,
       "name": "scanner_probe",
       "output_truncated": false,
+      "redaction_count": 0,
       "runtime": "fake",
       "status": "passed",
       "stderr": "",
@@ -529,9 +514,9 @@
       }
     ],
     "filter_policy_manifest": {
-      "bytes": 802,
+      "bytes": 949,
       "name": "filter_policy.json",
-      "sha256": "374463b2570cffe4"
+      "sha256": "b6f9d2b9eef2c15b"
     },
     "name": "code-review",
     "rule_config": {
@@ -577,6 +562,10 @@
         "sha256": "d4646765faa27dd8"
       }
     ],
+    "sdk_skill_runtime": {
+      "executed": false,
+      "reason": "SDK skill_load/skill_run smoke is available through --skill-smoke; normal reviews do not execute local workspace runtime before Filter approval."
+    },
     "skill_dir": "skills/code-review",
     "skill_md": {
       "bytes": 5825,
@@ -585,7 +574,7 @@
     }
   },
   "status": "completed",
-  "task_id": "cr_39fc2e5b8c38",
+  "task_id": "cr_75601cc490fa",
   "warnings": [
     {
       "category": "missing_tests",

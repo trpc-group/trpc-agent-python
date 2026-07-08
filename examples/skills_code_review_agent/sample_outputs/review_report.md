@@ -1,12 +1,12 @@
 # Code Review Report
 
-- Task ID: `cr_39fc2e5b8c38`
+- Task ID: `cr_75601cc490fa`
 - Status: `completed`
 - Conclusion: Block merge until high-severity findings are fixed.
 - Finding schema version: 1
 - Confidence thresholds: `{'finding': 0.8, 'warning': 0.55}`
-- Sandbox policy: `{'runtime': 'fake', 'timeout_sec': 5.0, 'max_output_bytes': 12000, 'filter_timeout_budget_sec': 30.0, 'filter_max_output_bytes': 20000, 'env_whitelist': ['CR_ALLOW_TEST_COMMAND', 'CR_REPO_PATH', 'CR_TEST_COMMAND', 'CR_TEST_TIMEOUT', 'LANG', 'LC_ALL', 'PATH', 'PYTHONPATH'], 'network_policy': 'deny'}`
-- Filter policy: `{'network_policy': 'deny', 'timeout_budget_sec': 30.0, 'max_output_bytes': 20000, 'allowed_network_domains': ['semgrep.dev', 'registry.semgrep.dev'], 'schema_version': 1, 'forbidden_path_markers': ['.env', '.ssh/', 'id_rsa', 'private_key', '.aws/', '/etc/', 'secrets/'], 'high_risk_command_patterns': ['curl\\s+[^|]+\\|\\s*(sh|bash)', 'wget\\s+[^|]+\\|\\s*(sh|bash)', 'rm\\s+-rf\\s+/', 'docker\\s+run\\s+.*--privileged', '\\bsudo\\b', '^\\s*(sh|bash|zsh|fish|dash|ksh)\\b', '[;&|`<>]', '\\$\\(', ':\\(\\)\\s*\\{'], 'sandbox_path_allowlist': ['scripts/', 'work/'], 'sandbox_read_allowlist': ['scripts/', 'work/', 'repo/'], 'sandbox_write_allowlist': ['work/']}`
+- Sandbox policy: `{'runtime': 'fake', 'timeout_sec': 5.0, 'max_output_bytes': 12000, 'filter_timeout_budget_sec': 30.0, 'filter_max_output_bytes': 20000, 'env_whitelist': ['CR_ALLOW_TEST_COMMAND', 'CR_REPO_PATH', 'CR_TEST_COMMAND', 'CR_TEST_TIMEOUT', 'LANG', 'LC_ALL', 'PATH', 'PYTHONPATH'], 'network_policy': 'deny', 'network_enforcement': 'fake runtime simulates scanner behavior without network access.'}`
+- Filter policy: `{'network_policy': 'deny', 'timeout_budget_sec': 30.0, 'max_output_bytes': 20000, 'allowed_network_domains': ['semgrep.dev', 'registry.semgrep.dev'], 'schema_version': 1, 'forbidden_path_markers': ['.env', '.ssh/', 'id_rsa', 'private_key', '.aws/', '/etc/', 'secrets/'], 'high_risk_command_patterns': ['curl\\s+[^|]+\\|\\s*(sh|bash)', 'wget\\s+[^|]+\\|\\s*(sh|bash)', 'rm\\s+-rf\\s+/', 'rm\\s+-rf\\s+(\\.|\\*)', '\\bgit\\s+clean\\s+-[A-Za-z]*[fdx][A-Za-z]*', 'docker\\s+run\\s+.*--privileged', '\\bdd\\s+.*\\bof=', '\\bmkfs(?:\\.[A-Za-z0-9_+-]+)?\\b', '\\bsudo\\b', '^\\s*(sh|bash|zsh|fish|dash|ksh)\\b', '[;&|`<>]', '\\$\\(', ':\\(\\)\\s*\\{'], 'sandbox_path_allowlist': ['scripts/', 'work/'], 'sandbox_read_allowlist': ['scripts/', 'work/', 'repo/'], 'sandbox_write_allowlist': ['work/']}`
 - Files: 1
 - Findings: 3
 - Warnings: 1
@@ -25,21 +25,21 @@
   Confidence: 0.92; Source: `rule:command-injection`
   Hunk: `@@ -1,5 +1,8 @@`
   Context before: `['import subprocess', '', 'def deploy(branch):']`
-  Context after: `['    config = eval(open("deploy.json").read())', '    requests.get("https://internal.example", verify=False)', '    return True', '']`
+  Context after: `['    config = eval(open("deploy.json").read())', '    requests.get("https://internal.example", verify=False)', '    return True']`
 - `high` `security` `390bae33637bbee5` app/deploy.py:6 - TLS certificate verification disabled
   Evidence: `requests.get("https://internal.example", verify=False)`
   Recommendation: Keep certificate verification enabled and configure trusted CA roots.
   Confidence: 0.90; Source: `rule:tls-verify`
   Hunk: `@@ -1,5 +1,8 @@`
   Context before: `['def deploy(branch):', '    subprocess.run("git checkout " + branch, shell=True)', '    config = eval(open("deploy.json").read())']`
-  Context after: `['    return True', '']`
+  Context after: `['    return True']`
 - `high` `security` `ab76d82de3b40f6e` app/deploy.py:5 - Dynamic code execution introduced
   Evidence: `config = eval(open("deploy.json").read())`
   Recommendation: Replace dynamic execution with a constrained parser or explicit dispatch table.
   Confidence: 0.88; Source: `rule:dynamic-code`
   Hunk: `@@ -1,5 +1,8 @@`
   Context before: `['', 'def deploy(branch):', '    subprocess.run("git checkout " + branch, shell=True)']`
-  Context after: `['    requests.get("https://internal.example", verify=False)', '    return True', '']`
+  Context after: `['    requests.get("https://internal.example", verify=False)', '    return True']`
 
 ## Warnings
 
@@ -87,9 +87,9 @@ No manual-review items.
 
 ## Monitoring
 
-- Total duration ms: 20
+- Total duration ms: 42
 - Sandbox duration ms: 0
-- Stage durations ms: `{'parse': 4, 'storage_create_task': 0, 'filter': 1, 'storage_filter_decisions': 1, 'sandbox': 0, 'storage_sandbox_runs': 0, 'rules': 1, 'storage_findings': 1, 'report': 0}`
+- Stage durations ms: `{'parse': 13, 'storage_create_task': 0, 'filter': 1, 'storage_filter_decisions': 0, 'sandbox': 0, 'storage_sandbox_runs': 0, 'rules': 2, 'storage_findings': 2, 'report': 0}`
 - Risk level: `high`
 - Tool calls: 4
 - Filter decisions: 4

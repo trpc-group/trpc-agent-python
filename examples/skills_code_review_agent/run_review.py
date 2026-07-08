@@ -20,7 +20,6 @@ from agent.pipeline import query_task
 from agent.pipeline import run_review
 from agent.runtime_factory import create_container_sandbox_runner
 from agent.runtime_factory import create_cube_sandbox_runner_from_config
-from agent.skill_smoke import run_code_review_skill_smoke
 from agent.storage import ReviewStore
 
 
@@ -78,6 +77,8 @@ def parse_args() -> argparse.Namespace:
 async def async_main() -> None:
     args = parse_args()
     if args.skill_smoke:
+        from agent.skill_smoke import run_code_review_skill_smoke
+
         print(json.dumps(await run_code_review_skill_smoke(), indent=2, sort_keys=True))
         return
     if args.task_id:

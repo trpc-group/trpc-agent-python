@@ -13,6 +13,7 @@ from .models import DiffInput
 from .models import FilterDecision
 from .models import Finding
 from .models import ReviewReport
+from .models import SandboxRun
 from .models import utc_now
 from .redaction import redact_text
 from .reporting import render_markdown
@@ -98,6 +99,89 @@ async def run_review(
                              diff_text=diff.diff_text)
     mark_stage("storage_create_task", storage_start)
 
+    try:
+        return await _run_review_after_task_created(
+            start=start,
+            stage_durations_ms=stage_durations_ms,
+            task_id=task_id,
+            created_at=created_at,
+            diff=diff,
+            input_redactions=input_redactions,
+            skill_audit=skill_audit,
+            review_store=review_store,
+            output_dir=output_dir,
+            sandbox=sandbox,
+            dry_run=dry_run,
+            container_image=container_image,
+            docker_path=docker_path,
+            docker_base_url=docker_base_url,
+            cube_template=cube_template,
+            cube_api_url=cube_api_url,
+            cube_api_key=cube_api_key,
+            cube_sandbox_id=cube_sandbox_id,
+            timeout_sec=timeout_sec,
+            max_output_bytes=max_output_bytes,
+            filter_timeout_budget_sec=filter_timeout_budget_sec,
+            filter_max_output_bytes=filter_max_output_bytes,
+            network_policy=network_policy,
+            test_command=test_command,
+            custom_rule_script=custom_rule_script,
+            include_network_scanners=include_network_scanners,
+            sandbox_runner=sandbox_runner,
+        )
+    except Exception as exc:
+        redacted = redact_text(str(exc))
+        review_store.fail_task(
+            task_id,
+            completed_at=utc_now(),
+            exception_type=exc.__class__.__name__,
+            message=redacted.text,
+        )
+        raise
+
+
+async def _run_review_after_task_created(
+    *,
+    start: float,
+    stage_durations_ms: dict[str, int],
+    task_id: str,
+    created_at: str,
+    diff: DiffInput,
+    input_redactions: int,
+    skill_audit: dict,
+    review_store: ReviewStore,
+    output_dir: Path,
+    sandbox: str,
+    dry_run: bool,
+    container_image: str,
+    docker_path: str | None,
+    docker_base_url: str | None,
+    cube_template: str | None,
+    cube_api_url: str | None,
+    cube_api_key: str | None,
+    cube_sandbox_id: str | None,
+    timeout_sec: float,
+    max_output_bytes: int,
+    filter_timeout_budget_sec: float,
+    filter_max_output_bytes: int,
+    network_policy: str,
+    test_command: str | None,
+    custom_rule_script: str | None,
+    include_network_scanners: bool,
+    sandbox_runner: SandboxRunner | None,
+) -> ReviewReport:
+
+    def mark_stage(name: str, stage_start: float) -> None:
+        stage_durations_ms[name] = int((time.monotonic() - stage_start) * 1000)
+
+    skill_audit["sdk_skill_runtime"] = {
+        "executed": False,
+        "reason": (
+            "SDK skill_load/skill_run smoke is available through --skill-smoke; normal reviews do not execute "
+            "local workspace runtime before Filter approval."
+        ),
+    }
+
     filter_start = time.monotonic()
     sandbox_requests, request_build_decisions, request_build_redactions = _build_sandbox_requests_for_review(
         timeout_sec=timeout_sec,
@@ -143,7 +227,7 @@ async def run_review(
     sandbox_runs = []
     sandbox_start = time.monotonic()
     for request in allowed_requests:
-        run = await runner.run(request, diff, skill_dir=SKILL_DIR)
+        run = await _run_sandbox_request_safely(runner, request, diff)
         sandbox_runs.append(run)
     mark_stage("sandbox", sandbox_start)
     storage_start = time.monotonic()
@@ -164,7 +248,7 @@ async def run_review(
         needs_human_review,
     )
     deduped_finding_count += merged_deduped_count
-    sandbox_redactions = sum(redact_text(run.stdout).count + redact_text(run.stderr).count for run in sandbox_runs)
+    sandbox_redactions = sum(run.redaction_count for run in sandbox_runs)
     mark_stage("rules", rules_start)
     storage_start = time.monotonic()
     review_store.save_findings(task_id, "finding", findings)
@@ -212,6 +296,7 @@ async def run_review(
             "filter_max_output_bytes": filter_max_output_bytes,
             "env_whitelist": sorted(ENV_WHITELIST),
             "network_policy": network_policy,
+            "network_enforcement": _network_enforcement_summary(runner.runtime_name),
         },
         filter_policy=filter_policy.audit(),
         input=diff.to_dict(),
@@ -240,6 +325,31 @@ async def run_review(
     review_store.complete_task(report, markdown, completed_at=utc_now())
     review_store.save_monitoring(task_id, report.monitoring)
     return report
+
+
+async def _run_sandbox_request_safely(
+    runner: SandboxRunner,
+    request: SandboxRequest,
+    diff: DiffInput,
+) -> SandboxRun:
+    start = time.monotonic()
+    try:
+        return await runner.run(request, diff, skill_dir=SKILL_DIR)
+    except Exception as exc:  # pylint: disable=broad-except
+        redacted = redact_text(str(exc))
+        return SandboxRun(
+            name=request.name,
+            runtime=runner.runtime_name,
+            command=request.command,
+            status="failed",
+            exit_code=None,
+            duration_ms=int((time.monotonic() - start) * 1000),
+            stdout="",
+            stderr=redacted.text[:request.max_output_bytes],
+            exception_type=exc.__class__.__name__,
+            output_truncated=len(redacted.text) > request.max_output_bytes,
+            redaction_count=redacted.count,
+        )
 
 
 def query_task(db_path: Path, task_id: str) -> dict:
@@ -456,6 +566,24 @@ def _build_conclusion(findings, warnings, needs_human_review, sandbox_runs, filt
     return "No blocking issues detected by the offline review pipeline."
 
 
+def _network_enforcement_summary(runtime_name: str) -> str:
+    if runtime_name == "container":
+        return (
+            "container host_config sets network_mode=none; network-backed scanners require a separately approved "
+            "runtime image/policy."
+        )
+    if runtime_name == "cube":
+        return (
+            "Filter gates requested network domains; per-run egress enforcement must be provided by the Cube/E2B "
+            "workspace policy."
+        )
+    if runtime_name == "fake":
+        return "fake runtime simulates scanner behavior without network access."
+    if runtime_name == "local":
+        return "local runtime is development fallback only and does not enforce network isolation."
+    return "custom runtime must enforce network isolation according to the active Filter policy."
+
+
 def _dedupe_finding_buckets(
     findings: list[Finding],
     warnings: list[Finding],
@@ -506,13 +634,15 @@ def _findings_from_scanner_runs(sandbox_runs,
     needs_human_review: list[Finding] = []
     redactions = 0
     for run in sandbox_runs:
-        if run.name != "scanner_probe" or not run.stdout.strip().startswith("{"):
+        if not run.stdout.strip().startswith("{"):
             continue
         try:
             import json
 
             payload = json.loads(run.stdout)
         except Exception:
+            continue
+        if "scanner_runs" not in payload:
             continue
         for scanner_run in payload.get("scanner_runs", []):
             for item in scanner_run.get("findings", []):

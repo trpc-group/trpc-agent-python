@@ -289,6 +289,26 @@ async def test_high_risk_test_command_is_denied_and_not_executed(tmp_path: Path)
     assert not any(row["name"] == "unit_tests" for row in bundle["sandbox_runs"])
 
 
+@pytest.mark.parametrize(
+    "command",
+    ["rm -rf .", "git clean -fdx", "dd if=/dev/zero of=target.img", "mkfs.ext4 /dev/sda"],
+)
+async def test_destructive_test_commands_are_denied_before_execution(tmp_path: Path, command: str) -> None:
+    report = await run_review(
+        fixture="clean",
+        output_dir=tmp_path / "out",
+        db_path=tmp_path / "reviews.sqlite",
+        sandbox="fake",
+        dry_run=True,
+        test_command=command,
+    )
+
+    assert report.status == "completed"
+    assert any(decision.decision == "deny" and decision.policy == "high-risk-command"
+               for decision in report.filter_decisions)
+    assert not any(run.name == "unit_tests" for run in report.sandbox_runs)
+
+
 async def test_filter_decisions_are_redacted_in_report_and_database(tmp_path: Path) -> None:
     raw_secret = "not-a-real-openai-key-abcdefghijklmnopqrstuvwxyz"
     report = await run_review(
@@ -536,6 +556,23 @@ async def test_pipeline_blocks_network_scanner_without_allowlist(tmp_path: Path)
     assert any(row["policy"] == "network-policy" for row in bundle["filter_decisions"])
 
 
+async def test_pipeline_merges_allowed_network_scanner_findings(tmp_path: Path) -> None:
+    report = await run_review(
+        fixture="external_scanner",
+        output_dir=tmp_path / "out",
+        db_path=tmp_path / "reviews.sqlite",
+        sandbox="fake",
+        dry_run=True,
+        include_network_scanners=True,
+        network_policy="allowlist",
+    )
+
+    assert any(run.name == "semgrep_network_probe" for run in report.sandbox_runs)
+    assert any(item.source == "scanner:semgrep" for item in report.findings)
+    bundle = query_task(tmp_path / "reviews.sqlite", report.task_id)
+    assert any(row["source"] == "scanner:semgrep" for row in bundle["findings"])
+
+
 def test_filter_denies_timeout_and_output_budget_overruns() -> None:
     diff = parse_unified_diff(
         """diff --git a/app.py b/app.py
@@ -655,13 +692,62 @@ async def test_workspace_sandbox_adapter_uploads_diff_and_runs_script() -> None:
     )
 
     assert run.status == "passed"
-    assert [file.path for file in runtime.fs_instance.files] == ["work/input.diff", "work/static_review.py"]
+    assert [file.path for file in runtime.fs_instance.files] == [
+        "work/input.diff",
+        "work/static_review.py",
+        "work/output_cap_runner.py",
+    ]
     assert runtime.runner_instance.spec.cmd == "python"
-    assert runtime.runner_instance.spec.args == ["work/static_review.py", "work/input.diff"]
+    assert runtime.runner_instance.spec.args == [
+        "work/output_cap_runner.py",
+        "100",
+        "python",
+        "work/static_review.py",
+        "work/input.diff",
+    ]
     assert runtime.runner_instance.spec.timeout == 3
     assert runtime.runner_instance.spec.env == {"PATH": "/bin"}
     assert len(runtime.manager_instance.cleaned) == 1
     assert runtime.manager_instance.cleaned[0].startswith("static_review-")
+
+
+async def test_local_sandbox_output_cap_stops_large_stdout(tmp_path: Path) -> None:
+    report = await run_review(
+        fixture="clean",
+        output_dir=tmp_path / "out",
+        db_path=tmp_path / "reviews.sqlite",
+        sandbox="local",
+        dry_run=False,
+        test_command="python -c 'print(\"x\" * 100000)'",
+        max_output_bytes=128,
+    )
+
+    unit_runs = [run for run in report.sandbox_runs if run.name == "unit_tests"]
+    assert unit_runs
+    assert unit_runs[0].output_truncated
+    assert len(unit_runs[0].stdout) <= 128
+
+
+async def test_local_sandbox_runs_tests_in_staged_repo_snapshot(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    (repo / "app.py").write_text("value = 1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-N", "app.py"], cwd=repo, check=True, capture_output=True, text=True)
+
+    report = await run_review(
+        repo_path=repo,
+        output_dir=tmp_path / "out",
+        db_path=tmp_path / "reviews.sqlite",
+        sandbox="local",
+        dry_run=False,
+        test_command="python -c 'open(\"created-by-test\", \"w\").write(\"x\")'",
+    )
+
+    unit_runs = [run for run in report.sandbox_runs if run.name == "unit_tests"]
+    assert unit_runs
+    assert unit_runs[0].status == "passed"
+    assert not (repo / "created-by-test").exists()
 
 
 async def test_workspace_sandbox_adapter_preserves_audited_command_args_and_cleans_up() -> None:
@@ -733,7 +819,14 @@ async def test_workspace_sandbox_adapter_preserves_audited_command_args_and_clea
     )
 
     assert run.status == "passed"
-    assert runtime.runner_instance.spec.args == ["work/scanner_probe.py", "work/input.diff", "--semgrep-auto"]
+    assert runtime.runner_instance.spec.args == [
+        "work/output_cap_runner.py",
+        "100",
+        "python",
+        "work/scanner_probe.py",
+        "work/input.diff",
+        "--semgrep-auto",
+    ]
     assert len(runtime.manager_instance.cleaned) == 1
     assert runtime.manager_instance.cleaned[0].startswith("semgrep_network_probe-")
 
@@ -898,7 +991,7 @@ async def test_workspace_sandbox_adapter_does_not_stage_repo_without_repo_read_a
 
     staged_paths = {file.path for file in runtime.fs_instance.files}
     assert run.status == "passed"
-    assert staged_paths == {"work/input.diff", "work/static_review.py"}
+    assert staged_paths == {"work/input.diff", "work/static_review.py", "work/output_cap_runner.py"}
     assert "CR_REPO_PATH" not in runtime.runner_instance.spec.env
 
 
@@ -1009,6 +1102,7 @@ async def test_database_task_bundle_has_required_tables(tmp_path: Path) -> None:
     report_json = json.loads(bundle["report"]["report_json"])
     assert report_json["confidence_thresholds"] == {"finding": 0.8, "warning": 0.55}
     assert report_json["sandbox_policy"]["timeout_sec"] == 5.0
+    assert "network_enforcement" in report_json["sandbox_policy"]
     assert "PATH" in report_json["sandbox_policy"]["env_whitelist"]
     assert report_json["filter_policy"]["network_policy"] == "deny"
     monitoring = json.loads(bundle["monitoring"]["summary_json"])
@@ -1021,6 +1115,36 @@ async def test_database_task_bundle_has_required_tables(tmp_path: Path) -> None:
     assert first_finding["finding_id"]
     assert first_finding["schema_version"] == 1
     assert "context_before_json" in first_finding
+
+
+async def test_sandbox_runner_exception_is_recorded_without_crashing_review(tmp_path: Path) -> None:
+
+    class RaisingRunner:
+        runtime_name = "raising"
+
+        async def run(self, request, diff, *, skill_dir):
+            raise RuntimeError("sandbox exploded with token=not-a-real-token-value")
+
+    db_path = tmp_path / "reviews.sqlite"
+    report = await run_review(
+        fixture="clean",
+        output_dir=tmp_path / "out",
+        db_path=db_path,
+        sandbox="fake",
+        dry_run=True,
+        sandbox_runner=RaisingRunner(),
+    )
+
+    with sqlite3.connect(db_path) as conn:
+        task = conn.execute("SELECT task_id, status, conclusion FROM review_tasks").fetchone()
+        runs = conn.execute("SELECT status, exception_type, stderr, redaction_count FROM sandbox_runs").fetchall()
+    assert report.status == "completed"
+    assert task[1] == "completed"
+    assert "Needs human review" in task[2]
+    assert runs
+    assert all(row[0] == "failed" and row[1] == "RuntimeError" for row in runs)
+    assert all("not-a-real-token-value" not in row[2] for row in runs)
+    assert sum(row[3] for row in runs) >= 1
 
 
 def test_sqlite_store_records_schema_version_and_indexes(tmp_path: Path) -> None:
@@ -1153,7 +1277,8 @@ async def test_file_list_sensitive_path_is_not_read_before_filter(tmp_path: Path
 
     assert report.sandbox_runs == []
     assert any(decision.policy == "forbidden-path" for decision in report.filter_decisions)
-    assert "not-a-real-openai-key-should-not-be-read-here" not in (tmp_path / "out" / "review_report.json").read_text(encoding="utf-8")
+    report_text = (tmp_path / "out" / "review_report.json").read_text(encoding="utf-8")
+    assert "not-a-real-openai-key-should-not-be-read-here" not in report_text
     assert "not-a-real-openai-key-should-not-be-read-here" not in db_text
     assert "sensitive file-list path was not read" in report.input["parse_warnings"][0]
 
@@ -1320,9 +1445,11 @@ async def test_skill_audit_and_unit_test_request_are_reported(tmp_path: Path) ->
 
     assert report.skill_audit["name"] == "code-review"
     assert report.skill_audit["script_count"] >= 4
+    assert report.skill_audit["sdk_skill_runtime"]["executed"] is False
     assert any(run.name == "unit_tests" for run in report.sandbox_runs)
     report_json = json.loads((tmp_path / "out" / "review_report.json").read_text(encoding="utf-8"))
     assert report_json["skill_audit"]["name"] == "code-review"
+    assert report_json["skill_audit"]["sdk_skill_runtime"]["executed"] is False
 
 
 async def test_findings_include_stable_id_schema_and_hunk_context(tmp_path: Path) -> None:

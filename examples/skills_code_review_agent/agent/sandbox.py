@@ -8,6 +8,7 @@ import os
 import shlex
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from dataclasses import dataclass
@@ -97,14 +98,17 @@ class FakeSandboxRunner(SandboxRunner):
                 exit_code=0,
                 timed_out=False,
             )
-        if request.name == "scanner_probe" and "force_scanner_finding" in diff.diff_text:
+        if request.name in {"scanner_probe", "semgrep_network_probe"} and "force_scanner_finding" in diff.diff_text:
+            scanner_name = "semgrep" if request.name == "semgrep_network_probe" else "bandit"
+            rule_id = "scanner.bandit.B602"
+            line_no = 6 if scanner_name == "semgrep" else 4
             return _build_run(
                 request=request,
                 runtime=self.runtime_name,
                 start=start,
-                stdout=('{"scanner_runs":[{"name":"bandit","status":"issues_found","findings":['
-                        '{"rule_id":"scanner.bandit.B602","severity":"high","file":"app/scanner_target.py",'
-                        '"line":4,"title":"subprocess_popen_with_shell_equals_true",'
+                stdout=(f'{{"scanner_runs":[{{"name":"{scanner_name}","status":"issues_found","findings":['
+                        f'{{"rule_id":"{rule_id}","severity":"high","file":"app/scanner_target.py",'
+                        f'"line":{line_no},"title":"subprocess_popen_with_shell_equals_true",'
                         '"evidence":"subprocess.Popen(cmd, shell=True)",'
                         '"recommendation":"Avoid shell=True for subprocess calls.","confidence":0.88}]}]}'),
                 stderr="",
@@ -129,37 +133,39 @@ class LocalSandboxRunner(SandboxRunner):
     runtime_name = "local"
 
     async def run(self, request: SandboxRequest, diff: DiffInput, *, skill_dir: Path) -> SandboxRun:
-        cmd = _normalize_python_command(request.command)
+        argv = _normalize_python_argv(request.command)
         start = time.monotonic()
-        process = await asyncio.create_subprocess_shell(
-            cmd,
-            cwd=str(skill_dir),
-            env=_local_env_for_diff(request.env, diff),
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        temp_dir: tempfile.TemporaryDirectory[str] | None = None
         try:
-            stdout_b, stderr_b = await asyncio.wait_for(
-                process.communicate(diff.diff_text.encode()),
-                timeout=request.timeout_sec,
+            env, temp_dir = _local_env_for_request(request, diff)
+            process = await asyncio.create_subprocess_exec(
+                *argv,
+                cwd=str(skill_dir),
+                env=env,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
-            timed_out = False
-        except asyncio.TimeoutError:
-            process.kill()
-            with contextlib.suppress(Exception):
-                await process.wait()
-            stdout_b, stderr_b = b"", b"local sandbox timed out"
-            timed_out = True
-        return _build_run(
-            request=request,
-            runtime=self.runtime_name,
-            start=start,
-            stdout=stdout_b.decode("utf-8", errors="replace"),
-            stderr=stderr_b.decode("utf-8", errors="replace"),
-            exit_code=process.returncode,
-            timed_out=timed_out,
-        )
+            stdout_b, stderr_b, timed_out, truncated = await _communicate_limited(
+                process,
+                diff.diff_text.encode(),
+                timeout_sec=request.timeout_sec,
+                max_output_bytes=request.max_output_bytes,
+            )
+            run = _build_run(
+                request=request,
+                runtime=self.runtime_name,
+                start=start,
+                stdout=stdout_b.decode("utf-8", errors="replace"),
+                stderr=stderr_b.decode("utf-8", errors="replace"),
+                exit_code=process.returncode,
+                timed_out=timed_out,
+            )
+            run.output_truncated = run.output_truncated or truncated
+            return run
+        finally:
+            if temp_dir is not None:
+                temp_dir.cleanup()
 
 
 class WorkspaceSandboxRunner(SandboxRunner):
@@ -184,6 +190,7 @@ class WorkspaceSandboxRunner(SandboxRunner):
                     path=f"work/{Path(request.script_path).name}",
                     content=(skill_dir / request.script_path).read_bytes(),
                 ),
+                WorkspacePutFileInfo(path="work/output_cap_runner.py", content=_OUTPUT_CAP_RUNNER.encode()),
             ]
             repo_files = _workspace_repo_files(diff) if _request_allows_repo_read(request) else []
             files.extend(WorkspacePutFileInfo(path=f"repo/{rel}", content=data) for rel, data in repo_files)
@@ -195,7 +202,7 @@ class WorkspaceSandboxRunner(SandboxRunner):
                 ws,
                 WorkspaceRunProgramSpec(
                     cmd="python",
-                    args=_workspace_script_args(request),
+                    args=_workspace_capped_script_args(request),
                     timeout=request.timeout_sec,
                     env=env,
                 ),
@@ -222,6 +229,7 @@ class WorkspaceSandboxRunner(SandboxRunner):
                 stderr=redacted.text[:request.max_output_bytes],
                 exception_type=exc.__class__.__name__,
                 output_truncated=len(redacted.text) > request.max_output_bytes,
+                redaction_count=redacted.count,
             )
         finally:
             if manager is not None:
@@ -243,7 +251,12 @@ def _build_run(
     stderr_r = redact_text(stderr)
     stdout_out = stdout_r.text[:request.max_output_bytes]
     stderr_out = stderr_r.text[:request.max_output_bytes]
-    truncated = len(stdout_r.text) > request.max_output_bytes or len(stderr_r.text) > request.max_output_bytes
+    truncated = (
+        len(stdout_r.text) > request.max_output_bytes
+        or len(stderr_r.text) > request.max_output_bytes
+        or "[output truncated:" in stdout_r.text
+        or "[output truncated:" in stderr_r.text
+    )
     status = "timeout" if timed_out else ("passed" if exit_code == 0 else "failed")
     return SandboxRun(
         name=request.name,
@@ -257,11 +270,76 @@ def _build_run(
         timed_out=timed_out,
         output_truncated=truncated,
         exception_type="TimeoutError" if timed_out else None,
+        redaction_count=stdout_r.count + stderr_r.count,
     )
 
 
 def _elapsed_ms(start: float) -> int:
     return int((time.monotonic() - start) * 1000)
+
+
+async def _communicate_limited(
+    process: asyncio.subprocess.Process,
+    input_data: bytes,
+    *,
+    timeout_sec: float,
+    max_output_bytes: int,
+) -> tuple[bytes, bytes, bool, bool]:
+    assert process.stdout is not None
+    assert process.stderr is not None
+
+    async def write_stdin() -> None:
+        if process.stdin is None:
+            return
+        process.stdin.write(input_data)
+        with contextlib.suppress(BrokenPipeError, ConnectionResetError):
+            await process.stdin.drain()
+        process.stdin.close()
+        with contextlib.suppress(Exception):
+            await process.stdin.wait_closed()
+
+    stdout_task = asyncio.create_task(_read_limited_stream(process.stdout, max_output_bytes, process))
+    stderr_task = asyncio.create_task(_read_limited_stream(process.stderr, max_output_bytes, process))
+    stdin_task = asyncio.create_task(write_stdin())
+    wait_task = asyncio.create_task(process.wait())
+    timed_out = False
+    try:
+        await asyncio.wait_for(asyncio.gather(stdin_task, wait_task), timeout=timeout_sec)
+    except asyncio.TimeoutError:
+        timed_out = True
+        with contextlib.suppress(ProcessLookupError):
+            process.kill()
+        await process.wait()
+    stdout_b, stdout_truncated = await stdout_task
+    stderr_b, stderr_truncated = await stderr_task
+    if timed_out and not stderr_b:
+        stderr_b = b"local sandbox timed out"
+    return stdout_b, stderr_b, timed_out, stdout_truncated or stderr_truncated
+
+
+async def _read_limited_stream(
+    stream: asyncio.StreamReader,
+    max_output_bytes: int,
+    process: asyncio.subprocess.Process,
+) -> tuple[bytes, bool]:
+    chunks: list[bytes] = []
+    total = 0
+    truncated = False
+    cap = max(0, max_output_bytes)
+    while True:
+        chunk = await stream.read(4096)
+        if not chunk:
+            break
+        remaining = cap - total
+        if remaining > 0:
+            chunks.append(chunk[:remaining])
+            total += min(len(chunk), remaining)
+        if len(chunk) > remaining:
+            truncated = True
+            with contextlib.suppress(ProcessLookupError):
+                process.kill()
+            break
+    return b"".join(chunks), truncated
 
 
 def _local_env(request_env: dict[str, str]) -> dict[str, str]:
@@ -278,6 +356,25 @@ def _local_env_for_diff(request_env: dict[str, str], diff: DiffInput) -> dict[st
     if repo_path is not None:
         env["CR_REPO_PATH"] = str(repo_path)
     return env
+
+
+def _local_env_for_request(
+    request: SandboxRequest,
+    diff: DiffInput,
+) -> tuple[dict[str, str], tempfile.TemporaryDirectory[str] | None]:
+    env = _local_env(request.env)
+    repo_path = _repo_source_path(diff)
+    if repo_path is None or not _request_allows_repo_read(request):
+        return env, None
+    temp_dir = tempfile.TemporaryDirectory(prefix="cr-local-sandbox-")
+    staged_repo = Path(temp_dir.name) / "repo"
+    staged_repo.mkdir(parents=True, exist_ok=True)
+    for rel, data in _workspace_repo_files(diff):
+        target = staged_repo / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    env["CR_REPO_PATH"] = str(staged_repo)
+    return env, temp_dir
 
 
 def _workspace_repo_files(diff: DiffInput) -> list[tuple[str, bytes]]:
@@ -364,12 +461,86 @@ def _workspace_script_args(request: SandboxRequest) -> list[str]:
     return [f"work/{Path(request.script_path).name}", "work/input.diff", *tokens[2:]]
 
 
+def _workspace_capped_script_args(request: SandboxRequest) -> list[str]:
+    return [
+        "work/output_cap_runner.py",
+        str(max(0, request.max_output_bytes)),
+        "python",
+        *_workspace_script_args(request),
+    ]
+
+
 def _normalize_python_command(command: str) -> str:
     if command == "python":
         return shlex.quote(sys.executable)
     if command.startswith("python "):
         return f"{shlex.quote(sys.executable)} {command.removeprefix('python ')}"
     return command
+
+
+def _normalize_python_argv(command: str) -> list[str]:
+    argv = shlex.split(command)
+    if not argv:
+        raise ValueError("empty sandbox command")
+    if Path(argv[0]).name == "python":
+        argv[0] = sys.executable
+    return argv
+
+
+_OUTPUT_CAP_RUNNER = r'''from __future__ import annotations
+
+import asyncio
+import contextlib
+import sys
+
+
+async def main() -> int:
+    if len(sys.argv) < 4:
+        print("usage: output_cap_runner.py MAX_BYTES CMD ARGS...", file=sys.stderr)
+        return 2
+    max_bytes = max(0, int(sys.argv[1]))
+    argv = sys.argv[2:]
+    process = await asyncio.create_subprocess_exec(
+        *argv,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    assert process.stdout is not None
+    assert process.stderr is not None
+    stdout_task = asyncio.create_task(read_and_forward(process.stdout, sys.stdout.buffer, max_bytes, process))
+    stderr_task = asyncio.create_task(read_and_forward(process.stderr, sys.stderr.buffer, max_bytes, process))
+    await process.wait()
+    stdout_truncated, stderr_truncated = await asyncio.gather(stdout_task, stderr_task)
+    if stdout_truncated:
+        print("[output truncated: stdout exceeded cap]", file=sys.stderr)
+    if stderr_truncated:
+        print("[output truncated: stderr exceeded cap]", file=sys.stderr)
+    return process.returncode or 0
+
+
+async def read_and_forward(reader, target, max_bytes, process) -> bool:
+    total = 0
+    truncated = False
+    while True:
+        chunk = await reader.read(4096)
+        if not chunk:
+            break
+        remaining = max_bytes - total
+        if remaining > 0:
+            target.write(chunk[:remaining])
+            target.flush()
+            total += min(len(chunk), remaining)
+        if len(chunk) > remaining:
+            truncated = True
+            with contextlib.suppress(ProcessLookupError):
+                process.kill()
+            break
+    return truncated
+
+
+if __name__ == "__main__":
+    raise SystemExit(asyncio.run(main()))
+'''
 
 
 def _workspace_types():

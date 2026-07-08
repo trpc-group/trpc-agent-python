@@ -19,7 +19,12 @@ def create_container_sandbox_runner(*,
     from trpc_agent_sdk.code_executors.container import ContainerConfig
     from trpc_agent_sdk.code_executors.container import create_container_workspace_runtime
 
-    config = ContainerConfig(image=image, docker_path=docker_path or "", base_url=base_url or "")
+    config = ContainerConfig(
+        image=image,
+        docker_path=docker_path or "",
+        base_url=base_url or "",
+        host_config={"network_mode": "none"},
+    )
     runtime = create_container_workspace_runtime(container_config=config)
     return build_workspace_sandbox_runner(runtime, "container")
 

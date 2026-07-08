@@ -117,6 +117,7 @@ class SandboxRun:
     timed_out: bool = False
     output_truncated: bool = False
     exception_type: str | None = None
+    redaction_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
