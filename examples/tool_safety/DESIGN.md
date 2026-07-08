@@ -78,20 +78,16 @@ deny: 阻断
 
 ```json
 {
-  "blocked": false,
-  "categories": [
-    "safe"
-  ],
-  "decision": "allow",
-  "elapsed_ms": 0.0,
-  "expected_decision": "allow",
-  "findings": [],
-  "language": "bash",
-  "required_rule_ids": [],
-  "risk_level": "none",
-  "sample": "examples/tool_safety/samples/safe_bash.sh",
-  "sanitized": false,
   "scan_id": "manifest:030:safe_bash.sh",
+  "timestamp": "1970-01-01T00:00:00+00:00",
+  "decision": "allow",
+  "risk_level": "none",
+  "findings": [],
+  "tool_name": "safe_bash.sh",
+  "language": "bash",
+  "elapsed_ms": 0.0,
+  "sanitized": false,
+  "blocked": false,
   "summary": "No safety rules matched; execution is allowed by the current static policy.",
   "telemetry_attributes": {
     "tool.safety.blocked": false,
@@ -102,9 +98,7 @@ deny: 阻断
     "tool.safety.sanitized": false,
     "tool.safety.scan_id": "manifest:030:safe_bash.sh",
     "tool.safety.tool_name": "safe_bash.sh"
-  },
-  "timestamp": "1970-01-01T00:00:00+00:00",
-  "tool_name": "safe_bash.sh"
+  }
 }
 ```
 
@@ -112,13 +106,10 @@ deny: 阻断
 
 ```json
 {
-  "blocked": false,
-  "categories": [
-    "process_execution"
-  ],
+  "scan_id": "manifest:036:subprocess_call.py",
+  "timestamp": "1970-01-01T00:00:00+00:00",
   "decision": "needs_human_review",
-  "elapsed_ms": 0.0,
-  "expected_decision": "needs_human_review",
+  "risk_level": "medium",
   "findings": [
     {
       "column": 0,
@@ -133,14 +124,11 @@ deny: 阻断
       "rule_id": "PY_PROCESS_EXECUTION_REVIEW"
     }
   ],
+  "tool_name": "subprocess_call.py",
   "language": "python",
-  "required_rule_ids": [
-    "PY_PROCESS_EXECUTION_REVIEW"
-  ],
-  "risk_level": "medium",
-  "sample": "examples/tool_safety/samples/subprocess_call.py",
+  "elapsed_ms": 0.0,
   "sanitized": false,
-  "scan_id": "manifest:036:subprocess_call.py",
+  "blocked": false,
   "summary": "Decision needs_human_review with medium risk from rules: PY_PROCESS_EXECUTION_REVIEW.",
   "telemetry_attributes": {
     "tool.safety.blocked": false,
@@ -151,9 +139,7 @@ deny: 阻断
     "tool.safety.sanitized": false,
     "tool.safety.scan_id": "manifest:036:subprocess_call.py",
     "tool.safety.tool_name": "subprocess_call.py"
-  },
-  "timestamp": "1970-01-01T00:00:00+00:00",
-  "tool_name": "subprocess_call.py"
+  }
 }
 ```
 
@@ -161,9 +147,10 @@ deny: 阻断
 
 ```json
 {
-  "blocked": true,
+  "scan_id": "1b0bc4f6-a01e-49c6-833a-1cac1909daee",
+  "timestamp": "2026-07-02T07:07:08.956049+00:00",
   "decision": "deny",
-  "elapsed_ms": 1.054,
+  "risk_level": "critical",
   "findings": [
     {
       "column": null,
@@ -207,10 +194,11 @@ deny: 阻断
       "rule_id": "BASH_SHELL_FEATURE_REVIEW"
     }
   ],
+  "tool_name": "example_bash_tool",
   "language": "bash",
-  "risk_level": "critical",
+  "elapsed_ms": 1.054,
   "sanitized": false,
-  "scan_id": "1b0bc4f6-a01e-49c6-833a-1cac1909daee",
+  "blocked": true,
   "summary": "Decision deny with critical risk from rules: FILE_SECRET_PATH_ACCESS, NETWORK_NON_WHITELIST_DOMAIN, BASH_SHELL_FEATURE_REVIEW.",
   "telemetry_attributes": {
     "tool.safety.blocked": true,
@@ -221,9 +209,7 @@ deny: 阻断
     "tool.safety.sanitized": false,
     "tool.safety.scan_id": "1b0bc4f6-a01e-49c6-833a-1cac1909daee",
     "tool.safety.tool_name": "example_bash_tool"
-  },
-  "timestamp": "2026-07-02T07:07:08.956049+00:00",
-  "tool_name": "example_bash_tool"
+  }
 }
 ```
 
