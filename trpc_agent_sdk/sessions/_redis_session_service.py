@@ -36,6 +36,24 @@ from ._utils import session_key
 from ._utils import user_state_key
 
 
+def _session_key_prefix(app_name: str, user_id: Optional[str] = None) -> str:
+    """Generate a Redis key prefix for listing sessions.
+
+    When user_id is None, the prefix matches sessions across all users for the
+    given app; otherwise it is scoped to the specific user.
+
+    Args:
+        app_name: Application name
+        user_id: Optional user identifier
+
+    Returns:
+        Formatted session key prefix with a trailing wildcard.
+    """
+    if user_id is None:
+        return f"session:{app_name}:*"
+    return f"session:{app_name}:{user_id}:*"
+
+
 class RedisSessionService(BaseSessionService):
     """A Redis implementation of the session service.
 
@@ -129,18 +147,17 @@ class RedisSessionService(BaseSessionService):
             return self._merge_state(app_state, user_state, session)
 
     @override
-    async def list_sessions(self, *, app_name: str, user_id: str) -> ListSessionsResponse:
+    async def list_sessions(self, *, app_name: str, user_id: Optional[str] = None) -> ListSessionsResponse:
         async with self._redis_storage.create_db_session() as redis_session:
-            pattern = session_key(app_name, user_id, "*")
+            pattern = _session_key_prefix(app_name, user_id)
             command = RedisCommand(method='keys', args=(pattern, ))
             keys = await self._redis_storage.execute_command(redis_session, command)
 
             if not keys:
                 return ListSessionsResponse()
 
-            # Get app and user state once for all sessions
+            # Get app state once for all sessions
             app_state = await self._get_app_state(redis_session, app_name)
-            user_state = await self._get_user_state(redis_session, app_name, user_id)
 
             sessions_without_events = []
             for key in keys:
@@ -150,6 +167,7 @@ class RedisSessionService(BaseSessionService):
                     storage_session.events = []
                     storage_session.historical_events = []
                     # Merge state
+                    user_state = await self._get_user_state(redis_session, app_name, storage_session.user_id)
                     storage_session = self._merge_state(app_state, user_state, storage_session)
                     sessions_without_events.append(storage_session)
 

@@ -489,15 +489,17 @@ class SqlSessionService(BaseSessionService):
             return self.filter_events(session)
 
     @override
-    async def list_sessions(self, *, app_name: str, user_id: str) -> ListSessionsResponse:
+    async def list_sessions(self, *, app_name: str, user_id: Optional[str] = None) -> ListSessionsResponse:
         async with self._sql_storage.create_db_session() as sql_session:
-            filters = [StorageSession.app_name == app_name, StorageSession.user_id == user_id]
+            filters = [StorageSession.app_name == app_name]
+            if user_id is not None:
+                filters.append(StorageSession.user_id == user_id)
             conditions = SqlCondition(filters=filters)
-            session_key = SqlKey(key=(app_name, user_id), storage_cls=StorageSession)
+            session_key = SqlKey(key=(app_name, user_id) if user_id is not None else (app_name, ),
+                                 storage_cls=StorageSession)
             results: List[StorageSession] = await self._sql_storage.query(sql_session, session_key, conditions)
 
             app_state = await self._get_app_state(sql_session, app_name)
-            user_state = await self._get_user_state(sql_session, app_name, user_id)
 
             sessions = []
             for storage_session in results:
@@ -508,6 +510,7 @@ class SqlSessionService(BaseSessionService):
 
                 storage_session.events = []
 
+                user_state = await self._get_user_state(sql_session, app_name, storage_session.user_id)
                 merged_state = merge_state(
                     StateStorageEntry(app_state_delta=app_state,
                                       user_state_delta=user_state,
