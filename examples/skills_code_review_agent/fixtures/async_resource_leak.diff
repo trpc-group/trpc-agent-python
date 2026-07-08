@@ -1,0 +1,17 @@
+diff --git a/app/client.py b/app/client.py
+index 1111111..2222222 100644
+--- a/app/client.py
++++ b/app/client.py
+@@ -1,5 +1,10 @@
+ import aiohttp
++import asyncio
+ 
+ async def fetch(url):
+-    return None
++    session = aiohttp.ClientSession()
++    response = await session.get(url)
++    return await response.text()
++
++async def start_background():
++    asyncio.create_task(fetch("https://example.com"))
+

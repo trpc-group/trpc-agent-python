@@ -1,0 +1,13 @@
+diff --git a/app/billing.py b/app/billing.py
+index 1111111..2222222 100644
+--- a/app/billing.py
++++ b/app/billing.py
+@@ -1,4 +1,8 @@
+ def calculate_total(items):
+     return sum(item.price for item in items)
++
++def apply_discount(total, percent):
++    if percent > 50:
++        raise ValueError("discount too large")
++    return total * (100 - percent) / 100
+
