@@ -838,7 +838,103 @@ def build_markdown(report: dict[str, Any]) -> str:
     baseline_val = report["baseline"]["validation"]
     candidate_val = report["candidate"]["validation"]
     gate = report["gate"]
+    decision_zh = "接受" if gate["decision"] == "accepted" else "拒绝"
+
     lines = [
+        "# 优化报告",
+        "",
+        f"决策：**{decision_zh} ({gate['decision'].upper()})**",
+        "",
+        "## 分数",
+        "",
+        "| 数据集 | Baseline | Candidate | Delta |",
+        "| --- | ---: | ---: | ---: |",
+    ]
+    for split in ("train", "validation"):
+        b = report["baseline"][split]["overall_score"]
+        c = report["candidate"][split]["overall_score"]
+        d = report["delta"][f"{split}_score_delta"]
+        split_name = "训练集" if split == "train" else "验证集"
+        lines.append(f"| {split_name} | {b:.4f} | {c:.4f} | {d:+.4f} |")
+
+    lines.extend([
+        "",
+        "## Gate 原因",
+        "",
+    ])
+    lines.extend(f"- {reason}" for reason in gate["reasons"])
+
+    lines.extend([
+        "",
+        "## 验证集 Case Delta",
+        "",
+        "| Case | Baseline | Candidate | Delta | Outcome |",
+        "| --- | ---: | ---: | ---: | --- |",
+    ])
+    for delta in report["delta"]["validation_case_deltas"]:
+        lines.append(
+            f"| {delta['case_id']} | {delta['baseline_score']:.4f} | "
+            f"{delta['candidate_score']:.4f} | {delta['score_delta']:+.4f} | {delta['outcome']} |"
+        )
+
+    lines.extend([
+        "",
+        "## 失败归因",
+        "",
+    ])
+    for failure_type, count in report["failure_attribution"]["stats"].items():
+        lines.append(f"- {failure_type}: {count}")
+    if not report["failure_attribution"]["stats"]:
+        lines.append("- 没有失败 case")
+    self_check = report["failure_attribution"].get("self_check", {})
+    if self_check:
+        lines.append(
+            f"- self-check 准确率：{self_check.get('accuracy')} "
+            f"({self_check.get('matched')}/{self_check.get('labeled_failed_cases')})"
+        )
+        lines.append(
+            f"- hint-assisted cases: {self_check.get('hint_assisted_cases')} "
+            f"| rule-only accuracy: {self_check.get('rule_only_accuracy')}"
+        )
+
+    lines.extend([
+        "",
+        "## 候选 Prompt",
+        "",
+        f"- candidate_id: `{report['candidate']['candidate_id']}`",
+        f"- rationale: {report['candidate']['rationale']}",
+        f"- validation pass rate: {candidate_val['pass_rate']:.4f}",
+        f"- baseline validation pass rate: {baseline_val['pass_rate']:.4f}",
+        f"- audited rounds: {len(report['optimization_rounds'])}",
+        "",
+        "## Prompt 审计",
+        "",
+    ])
+    for name, audit in report["prompt_audit"].items():
+        lines.append(
+            f"- `{name}`: changed={audit['changed']} "
+            f"baseline={audit['baseline_sha256'][:12]} "
+            f"candidate={audit['candidate_sha256'][:12]} "
+            f"diff_lines={audit['diff']['line_count']}"
+        )
+
+    lines.extend([
+        "",
+        "## 输入审计",
+        "",
+    ])
+    for name, audit in report["input_audit"]["files"].items():
+        lines.append(f"- `{name}`: {audit['sha256'][:12]} ({audit['bytes']} bytes)")
+
+    lines.extend([
+        "",
+        "## 复现命令",
+        "",
+        "```bash",
+        "cd examples/optimization/eval_optimize_loop",
+        "PYTHONPATH=../../.. python run_pipeline.py --mode fake",
+        "```",
+        "",
         "# Optimization Report",
         "",
         f"Decision: **{gate['decision'].upper()}**",
@@ -847,7 +943,7 @@ def build_markdown(report: dict[str, Any]) -> str:
         "",
         "| Split | Baseline | Candidate | Delta |",
         "| --- | ---: | ---: | ---: |",
-    ]
+    ])
     for split in ("train", "validation"):
         b = report["baseline"][split]["overall_score"]
         c = report["candidate"][split]["overall_score"]
