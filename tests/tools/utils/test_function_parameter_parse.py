@@ -232,6 +232,17 @@ class TestParseSchemaFromParameter:
         param = self._make_param("x", Optional[List[str]])
         schema = parse_schema_from_parameter(DEFAULT_API_VARIANT, param, "test_func")
         assert schema.nullable is True
+        assert schema.type == Type.ARRAY
+        assert schema.items is not None
+        assert schema.items.type == Type.STRING
+
+    def test_pep585_optional_list(self):
+        param = self._make_param("x", list[str] | None)
+        schema = parse_schema_from_parameter(DEFAULT_API_VARIANT, param, "test_func")
+        assert schema.nullable is True
+        assert schema.type == Type.ARRAY
+        assert schema.items is not None
+        assert schema.items.type == Type.STRING
 
     def test_union_with_default(self):
         param = self._make_param("x", Union[str, int], default="hello")

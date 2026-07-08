@@ -1,0 +1,212 @@
+{
+  "schema_version": 1,
+  "categories": [
+    "security",
+    "async_error",
+    "resource_leak",
+    "missing_tests",
+    "secret_leak",
+    "db_transaction",
+    "db_lifecycle"
+  ],
+  "rules": [
+    {
+      "id": "security.subprocess.shell-true",
+      "category": "security",
+      "severity": "high",
+      "confidence": 0.92,
+      "description": "Detect subprocess calls that enable shell=True.",
+      "recommendation": "Pass command arguments as a list and avoid shell=True.",
+      "enabled": true
+    },
+    {
+      "id": "security.subprocess.multiline-shell-true",
+      "category": "security",
+      "severity": "high",
+      "confidence": 0.9,
+      "description": "Detect multi-line subprocess calls that enable shell=True.",
+      "recommendation": "Pass command arguments as a list and remove shell=True.",
+      "enabled": true
+    },
+    {
+      "id": "security.dynamic-code",
+      "category": "security",
+      "severity": "high",
+      "confidence": 0.88,
+      "description": "Detect eval/exec dynamic code execution.",
+      "recommendation": "Replace dynamic execution with a constrained parser or explicit dispatch table.",
+      "enabled": true
+    },
+    {
+      "id": "security.unsafe-deserialization",
+      "category": "security",
+      "severity": "high",
+      "confidence": 0.86,
+      "description": "Detect unsafe pickle/yaml deserialization.",
+      "recommendation": "Use safe loaders and avoid deserializing untrusted payloads.",
+      "enabled": true
+    },
+    {
+      "id": "security.tls-verify-false",
+      "category": "security",
+      "severity": "high",
+      "confidence": 0.9,
+      "description": "Detect disabled TLS certificate verification.",
+      "recommendation": "Keep certificate verification enabled and configure trusted CA roots.",
+      "enabled": true
+    },
+    {
+      "id": "security.sql-interpolation",
+      "category": "security",
+      "severity": "high",
+      "confidence": 0.84,
+      "description": "Detect SQL strings built through interpolation or concatenation.",
+      "recommendation": "Use parameterized queries or ORM bind parameters.",
+      "enabled": true
+    },
+    {
+      "id": "security.sql-interpolated-variable",
+      "category": "security",
+      "severity": "high",
+      "confidence": 0.86,
+      "description": "Detect SQL built through interpolation and executed later in the same hunk.",
+      "recommendation": "Keep SQL text static and pass untrusted values through bind parameters.",
+      "enabled": true
+    },
+    {
+      "id": "security.secret.material",
+      "category": "secret_leak",
+      "severity": "critical",
+      "confidence": 0.98,
+      "description": "Detect committed API keys, bearer tokens, passwords, GitHub tokens, and private keys.",
+      "recommendation": "Rotate exposed secrets and move them to a managed secret store.",
+      "enabled": true
+    },
+    {
+      "id": "async.untracked-create-task",
+      "category": "async_error",
+      "severity": "medium",
+      "confidence": 0.82,
+      "description": "Detect asyncio.create_task calls whose task is not tracked.",
+      "recommendation": "Store or await the task and handle exceptions explicitly.",
+      "enabled": true
+    },
+    {
+      "id": "async.gather-not-awaited",
+      "category": "async_error",
+      "severity": "medium",
+      "confidence": 0.78,
+      "description": "Detect unmanaged asyncio.gather calls.",
+      "recommendation": "Await gather and handle exceptions or use return_exceptions when appropriate.",
+      "enabled": true
+    },
+    {
+      "id": "async.stored-task-not-observed",
+      "category": "async_error",
+      "severity": "medium",
+      "confidence": 0.68,
+      "description": "Detect stored asyncio tasks that are not awaited, gathered, or observed in the changed hunk.",
+      "recommendation": "Await the task, gather it, or attach a done callback that consumes exceptions.",
+      "enabled": true
+    },
+    {
+      "id": "resource.open-without-context",
+      "category": "resource_leak",
+      "severity": "medium",
+      "confidence": 0.83,
+      "description": "Detect file handles opened without a context manager.",
+      "recommendation": "Use with open(...) or close the handle in a finally block.",
+      "enabled": true
+    },
+    {
+      "id": "resource.session-without-close",
+      "category": "resource_leak",
+      "severity": "medium",
+      "confidence": 0.81,
+      "description": "Detect HTTP sessions opened without a scoped close path.",
+      "recommendation": "Use a context manager or close the session in a finally block.",
+      "enabled": true
+    },
+    {
+      "id": "tests.changed-source-without-test",
+      "category": "missing_tests",
+      "severity": "medium",
+      "confidence": 0.72,
+      "description": "Detect source changes that do not include a test diff.",
+      "recommendation": "Add or update a focused regression test.",
+      "enabled": true
+    },
+    {
+      "id": "db.connection-lifecycle",
+      "category": "db_lifecycle",
+      "severity": "medium",
+      "confidence": 0.84,
+      "description": "Detect database connections opened without scoped lifecycle management.",
+      "recommendation": "Use a context manager or close the connection in a finally block.",
+      "enabled": true
+    },
+    {
+      "id": "db.session-lifecycle",
+      "category": "db_lifecycle",
+      "severity": "medium",
+      "confidence": 0.8,
+      "description": "Detect SQLAlchemy sessions created without scoped lifecycle management.",
+      "recommendation": "Use with Session(...) or close the session in a finally block.",
+      "enabled": true
+    },
+    {
+      "id": "db.pool-acquire-release",
+      "category": "db_lifecycle",
+      "severity": "medium",
+      "confidence": 0.81,
+      "description": "Detect async database pool acquisitions without scoped release.",
+      "recommendation": "Use async context managers or release acquired connections in finally blocks.",
+      "enabled": true
+    },
+    {
+      "id": "db.write-without-transaction",
+      "category": "db_transaction",
+      "severity": "medium",
+      "confidence": 0.76,
+      "description": "Detect database writes outside explicit transaction handling.",
+      "recommendation": "Wrap writes in a transaction and commit/rollback explicitly.",
+      "enabled": true
+    },
+    {
+      "id": "db.transaction-without-rollback",
+      "category": "db_transaction",
+      "severity": "medium",
+      "confidence": 0.74,
+      "description": "Detect transaction start without nearby rollback handling.",
+      "recommendation": "Add exception handling with rollback before propagating the error.",
+      "enabled": true
+    },
+    {
+      "id": "security.subprocess.tainted-shell",
+      "category": "security",
+      "severity": "high",
+      "confidence": 0.95,
+      "description": "Detect tainted function input or request data reaching subprocess shell execution.",
+      "recommendation": "Avoid shell=True and pass a fixed argument list; validate or reject untrusted command fragments.",
+      "enabled": true
+    },
+    {
+      "id": "security.sql-tainted-execute",
+      "category": "security",
+      "severity": "high",
+      "confidence": 0.9,
+      "description": "Detect tainted values reaching database execute calls.",
+      "recommendation": "Use parameterized SQL and pass untrusted values through bind parameters.",
+      "enabled": true
+    },
+    {
+      "id": "scanner.bandit.B602",
+      "category": "security",
+      "severity": "high",
+      "confidence": 0.88,
+      "description": "External Bandit scanner finding for subprocess calls with shell=True.",
+      "recommendation": "Avoid shell=True for subprocess calls.",
+      "enabled": true
+    }
+  ]
+}

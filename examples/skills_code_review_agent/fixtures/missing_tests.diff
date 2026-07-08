@@ -1,0 +1,10 @@
+diff --git a/app/billing.py b/app/billing.py
+index 1111111..2222222 100644
+--- a/app/billing.py
++++ b/app/billing.py
+@@ -1,4 +1,7 @@
+ def total(price, tax):
+-    return price
++    if price < 0:
++        return 0
++    return price + tax

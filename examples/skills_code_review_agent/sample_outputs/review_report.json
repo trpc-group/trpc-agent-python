@@ -1,0 +1,608 @@
+{
+  "conclusion": "Block merge until high-severity findings are fixed.",
+  "confidence_thresholds": {
+    "finding": 0.8,
+    "warning": 0.55
+  },
+  "created_at": "2026-07-08T05:02:39.398766+00:00",
+  "filter_decisions": [
+    {
+      "command": "python scripts/diff_summary.py",
+      "decision": "allow",
+      "path": "scripts/diff_summary.py",
+      "policy": "sandbox-preflight",
+      "reason": "Sandbox request passed path, read/write allowlist, command, network, timeout, and output-budget checks.",
+      "severity": "info"
+    },
+    {
+      "command": "python scripts/static_review.py",
+      "decision": "allow",
+      "path": "scripts/static_review.py",
+      "policy": "sandbox-preflight",
+      "reason": "Sandbox request passed path, read/write allowlist, command, network, timeout, and output-budget checks.",
+      "severity": "info"
+    },
+    {
+      "command": "python scripts/test_probe.py",
+      "decision": "allow",
+      "path": "scripts/test_probe.py",
+      "policy": "sandbox-preflight",
+      "reason": "Sandbox request passed path, read/write allowlist, command, network, timeout, and output-budget checks.",
+      "severity": "info"
+    },
+    {
+      "command": "python scripts/scanner_probe.py",
+      "decision": "allow",
+      "path": "scripts/scanner_probe.py",
+      "policy": "sandbox-preflight",
+      "reason": "Sandbox request passed path, read/write allowlist, command, network, timeout, and output-budget checks.",
+      "severity": "info"
+    }
+  ],
+  "filter_policy": {
+    "allowed_network_domains": [
+      "semgrep.dev",
+      "registry.semgrep.dev"
+    ],
+    "forbidden_path_markers": [
+      ".env",
+      ".ssh/",
+      "id_rsa",
+      "private_key",
+      ".aws/",
+      "/etc/",
+      "secrets/"
+    ],
+    "high_risk_command_patterns": [
+      "curl\\s+[^|]+\\|\\s*(sh|bash)",
+      "wget\\s+[^|]+\\|\\s*(sh|bash)",
+      "rm\\s+-rf\\s+/",
+      "docker\\s+run\\s+.*--privileged",
+      "\\bsudo\\b",
+      "^\\s*(sh|bash|zsh|fish|dash|ksh)\\b",
+      "[;&|`<>]",
+      "\\$\\(",
+      ":\\(\\)\\s*\\{"
+    ],
+    "max_output_bytes": 20000,
+    "network_policy": "deny",
+    "sandbox_path_allowlist": [
+      "scripts/",
+      "work/"
+    ],
+    "sandbox_read_allowlist": [
+      "scripts/",
+      "work/",
+      "repo/"
+    ],
+    "sandbox_write_allowlist": [
+      "work/"
+    ],
+    "schema_version": 1,
+    "timeout_budget_sec": 30.0
+  },
+  "finding_schema_version": 1,
+  "findings": [
+    {
+      "category": "security",
+      "confidence": 0.92,
+      "context_after": [
+        "    config = eval(open(\"deploy.json\").read())",
+        "    requests.get(\"https://internal.example\", verify=False)",
+        "    return True",
+        ""
+      ],
+      "context_before": [
+        "import subprocess",
+        "",
+        "def deploy(branch):"
+      ],
+      "evidence": "subprocess.run(\"git checkout \" + branch, shell=True)",
+      "file": "app/deploy.py",
+      "finding_id": "f297d314bad9db23",
+      "hunk_header": "@@ -1,5 +1,8 @@",
+      "line": 4,
+      "recommendation": "Pass command arguments as a list and avoid shell=True.",
+      "rule_id": "security.subprocess.shell-true",
+      "schema_version": 1,
+      "severity": "high",
+      "source": "rule:command-injection",
+      "title": "Shell command execution uses shell=True"
+    },
+    {
+      "category": "security",
+      "confidence": 0.9,
+      "context_after": [
+        "    return True",
+        ""
+      ],
+      "context_before": [
+        "def deploy(branch):",
+        "    subprocess.run(\"git checkout \" + branch, shell=True)",
+        "    config = eval(open(\"deploy.json\").read())"
+      ],
+      "evidence": "requests.get(\"https://internal.example\", verify=False)",
+      "file": "app/deploy.py",
+      "finding_id": "390bae33637bbee5",
+      "hunk_header": "@@ -1,5 +1,8 @@",
+      "line": 6,
+      "recommendation": "Keep certificate verification enabled and configure trusted CA roots.",
+      "rule_id": "security.tls-verify-false",
+      "schema_version": 1,
+      "severity": "high",
+      "source": "rule:tls-verify",
+      "title": "TLS certificate verification disabled"
+    },
+    {
+      "category": "security",
+      "confidence": 0.88,
+      "context_after": [
+        "    requests.get(\"https://internal.example\", verify=False)",
+        "    return True",
+        ""
+      ],
+      "context_before": [
+        "",
+        "def deploy(branch):",
+        "    subprocess.run(\"git checkout \" + branch, shell=True)"
+      ],
+      "evidence": "config = eval(open(\"deploy.json\").read())",
+      "file": "app/deploy.py",
+      "finding_id": "ab76d82de3b40f6e",
+      "hunk_header": "@@ -1,5 +1,8 @@",
+      "line": 5,
+      "recommendation": "Replace dynamic execution with a constrained parser or explicit dispatch table.",
+      "rule_id": "security.dynamic-code",
+      "schema_version": 1,
+      "severity": "high",
+      "source": "rule:dynamic-code",
+      "title": "Dynamic code execution introduced"
+    }
+  ],
+  "input": {
+    "added_lines": [
+      {
+        "content": "    subprocess.run(\"git checkout \" + branch, shell=True)",
+        "context_after": [
+          "    config = eval(open(\"deploy.json\").read())",
+          "    requests.get(\"https://internal.example\", verify=False)",
+          "    return True",
+          ""
+        ],
+        "context_before": [
+          "import subprocess",
+          "",
+          "def deploy(branch):"
+        ],
+        "file": "app/deploy.py",
+        "hunk_header": "@@ -1,5 +1,8 @@",
+        "kind": "add",
+        "new_line": 4,
+        "old_line": null
+      },
+      {
+        "content": "    config = eval(open(\"deploy.json\").read())",
+        "context_after": [
+          "    requests.get(\"https://internal.example\", verify=False)",
+          "    return True",
+          ""
+        ],
+        "context_before": [
+          "",
+          "def deploy(branch):",
+          "    subprocess.run(\"git checkout \" + branch, shell=True)"
+        ],
+        "file": "app/deploy.py",
+        "hunk_header": "@@ -1,5 +1,8 @@",
+        "kind": "add",
+        "new_line": 5,
+        "old_line": null
+      },
+      {
+        "content": "    requests.get(\"https://internal.example\", verify=False)",
+        "context_after": [
+          "    return True",
+          ""
+        ],
+        "context_before": [
+          "def deploy(branch):",
+          "    subprocess.run(\"git checkout \" + branch, shell=True)",
+          "    config = eval(open(\"deploy.json\").read())"
+        ],
+        "file": "app/deploy.py",
+        "hunk_header": "@@ -1,5 +1,8 @@",
+        "kind": "add",
+        "new_line": 6,
+        "old_line": null
+      }
+    ],
+    "file_changes": [
+      {
+        "change_type": "modified",
+        "is_binary": false,
+        "new_path": "app/deploy.py",
+        "old_path": "app/deploy.py"
+      }
+    ],
+    "files": [
+      "app/deploy.py"
+    ],
+    "hunks": [
+      {
+        "file": "app/deploy.py",
+        "header": "@@ -1,5 +1,8 @@",
+        "lines": [
+          {
+            "content": "import subprocess",
+            "context_after": [],
+            "context_before": [],
+            "file": "app/deploy.py",
+            "hunk_header": "@@ -1,5 +1,8 @@",
+            "kind": "context",
+            "new_line": 1,
+            "old_line": 1
+          },
+          {
+            "content": "",
+            "context_after": [],
+            "context_before": [],
+            "file": "app/deploy.py",
+            "hunk_header": "@@ -1,5 +1,8 @@",
+            "kind": "context",
+            "new_line": 2,
+            "old_line": 2
+          },
+          {
+            "content": "def deploy(branch):",
+            "context_after": [],
+            "context_before": [],
+            "file": "app/deploy.py",
+            "hunk_header": "@@ -1,5 +1,8 @@",
+            "kind": "context",
+            "new_line": 3,
+            "old_line": 3
+          },
+          {
+            "content": "    subprocess.run(\"git checkout \" + branch, shell=True)",
+            "context_after": [
+              "    config = eval(open(\"deploy.json\").read())",
+              "    requests.get(\"https://internal.example\", verify=False)",
+              "    return True",
+              ""
+            ],
+            "context_before": [
+              "import subprocess",
+              "",
+              "def deploy(branch):"
+            ],
+            "file": "app/deploy.py",
+            "hunk_header": "@@ -1,5 +1,8 @@",
+            "kind": "add",
+            "new_line": 4,
+            "old_line": null
+          },
+          {
+            "content": "    config = eval(open(\"deploy.json\").read())",
+            "context_after": [
+              "    requests.get(\"https://internal.example\", verify=False)",
+              "    return True",
+              ""
+            ],
+            "context_before": [
+              "",
+              "def deploy(branch):",
+              "    subprocess.run(\"git checkout \" + branch, shell=True)"
+            ],
+            "file": "app/deploy.py",
+            "hunk_header": "@@ -1,5 +1,8 @@",
+            "kind": "add",
+            "new_line": 5,
+            "old_line": null
+          },
+          {
+            "content": "    requests.get(\"https://internal.example\", verify=False)",
+            "context_after": [
+              "    return True",
+              ""
+            ],
+            "context_before": [
+              "def deploy(branch):",
+              "    subprocess.run(\"git checkout \" + branch, shell=True)",
+              "    config = eval(open(\"deploy.json\").read())"
+            ],
+            "file": "app/deploy.py",
+            "hunk_header": "@@ -1,5 +1,8 @@",
+            "kind": "add",
+            "new_line": 6,
+            "old_line": null
+          },
+          {
+            "content": "    return True",
+            "context_after": [],
+            "context_before": [],
+            "file": "app/deploy.py",
+            "hunk_header": "@@ -1,5 +1,8 @@",
+            "kind": "context",
+            "new_line": 7,
+            "old_line": 4
+          },
+          {
+            "content": "",
+            "context_after": [],
+            "context_before": [],
+            "file": "app/deploy.py",
+            "hunk_header": "@@ -1,5 +1,8 @@",
+            "kind": "context",
+            "new_line": 8,
+            "old_line": 5
+          }
+        ],
+        "new_count": 8,
+        "new_start": 1,
+        "old_count": 5,
+        "old_start": 1
+      }
+    ],
+    "parse_warnings": [],
+    "source": "fixture:security_issue",
+    "summary": {
+      "added_line_count": 3,
+      "change_type_counts": {
+        "modified": 1
+      },
+      "context_line_count": 5,
+      "deleted_line_count": 0,
+      "file_count": 1,
+      "hunk_count": 1,
+      "line_map": {
+        "app/deploy.py": [
+          {
+            "kind": "context",
+            "new_line": 1,
+            "old_line": 1
+          },
+          {
+            "kind": "context",
+            "new_line": 2,
+            "old_line": 2
+          },
+          {
+            "kind": "context",
+            "new_line": 3,
+            "old_line": 3
+          },
+          {
+            "kind": "add",
+            "new_line": 4,
+            "old_line": null
+          },
+          {
+            "kind": "add",
+            "new_line": 5,
+            "old_line": null
+          },
+          {
+            "kind": "add",
+            "new_line": 6,
+            "old_line": null
+          },
+          {
+            "kind": "context",
+            "new_line": 7,
+            "old_line": 4
+          },
+          {
+            "kind": "context",
+            "new_line": 8,
+            "old_line": 5
+          }
+        ]
+      },
+      "parse_warning_count": 0
+    }
+  },
+  "monitoring": {
+    "category_distribution": {
+      "missing_tests": 1,
+      "security": 3
+    },
+    "deduped_finding_count": 0,
+    "exception_distribution": {},
+    "filter_decision_count": 4,
+    "filter_decision_distribution": {
+      "allow": 4
+    },
+    "finding_count": 3,
+    "ignored_finding_count": 0,
+    "interception_count": 0,
+    "needs_human_review_count": 0,
+    "redaction_count": 0,
+    "risk_level": "high",
+    "sandbox_duration_ms": 0,
+    "severity_distribution": {
+      "high": 3,
+      "medium": 1
+    },
+    "stage_durations_ms": {
+      "filter": 1,
+      "parse": 4,
+      "report": 0,
+      "rules": 1,
+      "sandbox": 0,
+      "storage_create_task": 0,
+      "storage_filter_decisions": 1,
+      "storage_findings": 1,
+      "storage_sandbox_runs": 0
+    },
+    "tool_call_count": 4,
+    "total_duration_ms": 20,
+    "warning_count": 1
+  },
+  "needs_human_review": [],
+  "output_files": {
+    "json": "examples/skills_code_review_agent/sample_outputs/review_report.json",
+    "markdown": "examples/skills_code_review_agent/sample_outputs/review_report.md"
+  },
+  "sandbox_policy": {
+    "env_whitelist": [
+      "CR_ALLOW_TEST_COMMAND",
+      "CR_REPO_PATH",
+      "CR_TEST_COMMAND",
+      "CR_TEST_TIMEOUT",
+      "LANG",
+      "LC_ALL",
+      "PATH",
+      "PYTHONPATH"
+    ],
+    "filter_max_output_bytes": 20000,
+    "filter_timeout_budget_sec": 30.0,
+    "max_output_bytes": 12000,
+    "network_policy": "deny",
+    "runtime": "fake",
+    "timeout_sec": 5.0
+  },
+  "sandbox_runs": [
+    {
+      "command": "python scripts/diff_summary.py",
+      "duration_ms": 0,
+      "exception_type": null,
+      "exit_code": 0,
+      "name": "diff_summary",
+      "output_truncated": false,
+      "runtime": "fake",
+      "status": "passed",
+      "stderr": "",
+      "stdout": "checked_files=1 added_lines=3",
+      "timed_out": false
+    },
+    {
+      "command": "python scripts/static_review.py",
+      "duration_ms": 0,
+      "exception_type": null,
+      "exit_code": 0,
+      "name": "static_review",
+      "output_truncated": false,
+      "runtime": "fake",
+      "status": "passed",
+      "stderr": "",
+      "stdout": "checked_files=1 added_lines=3",
+      "timed_out": false
+    },
+    {
+      "command": "python scripts/test_probe.py",
+      "duration_ms": 0,
+      "exception_type": null,
+      "exit_code": 0,
+      "name": "test_probe",
+      "output_truncated": false,
+      "runtime": "fake",
+      "status": "passed",
+      "stderr": "",
+      "stdout": "checked_files=1 added_lines=3",
+      "timed_out": false
+    },
+    {
+      "command": "python scripts/scanner_probe.py",
+      "duration_ms": 0,
+      "exception_type": null,
+      "exit_code": 0,
+      "name": "scanner_probe",
+      "output_truncated": false,
+      "runtime": "fake",
+      "status": "passed",
+      "stderr": "",
+      "stdout": "checked_files=1 added_lines=3",
+      "timed_out": false
+    }
+  ],
+  "skill_audit": {
+    "docs": [
+      {
+        "bytes": 5034,
+        "name": "docs/rules.md",
+        "sha256": "28b3ab7c7e5e1cc1"
+      },
+      {
+        "bytes": 1967,
+        "name": "docs/sandbox_policy.md",
+        "sha256": "e089768c0cae6cbf"
+      }
+    ],
+    "filter_policy_manifest": {
+      "bytes": 802,
+      "name": "filter_policy.json",
+      "sha256": "374463b2570cffe4"
+    },
+    "name": "code-review",
+    "rule_config": {
+      "disabled_rules": [],
+      "enabled_rule_count": 22,
+      "rule_count": 22,
+      "schema_version": 1
+    },
+    "rule_manifest": {
+      "bytes": 7722,
+      "name": "rules.json",
+      "sha256": "75fd43814187b4d1"
+    },
+    "rules_loaded": [
+      "docs/rules.md",
+      "docs/sandbox_policy.md"
+    ],
+    "script_count": 5,
+    "scripts": [
+      {
+        "bytes": 674,
+        "name": "scripts/diff_summary.py",
+        "sha256": "7382022593d1b7d5"
+      },
+      {
+        "bytes": 6455,
+        "name": "scripts/scanner_probe.py",
+        "sha256": "ae2fca1349d2887f"
+      },
+      {
+        "bytes": 935,
+        "name": "scripts/static_review.py",
+        "sha256": "9c723637e417b34b"
+      },
+      {
+        "bytes": 968,
+        "name": "scripts/test_probe.py",
+        "sha256": "377f536d986465fd"
+      },
+      {
+        "bytes": 1807,
+        "name": "scripts/unit_test_probe.py",
+        "sha256": "d4646765faa27dd8"
+      }
+    ],
+    "skill_dir": "skills/code-review",
+    "skill_md": {
+      "bytes": 5825,
+      "name": "SKILL.md",
+      "sha256": "3e83d2443a93d7a0"
+    }
+  },
+  "status": "completed",
+  "task_id": "cr_39fc2e5b8c38",
+  "warnings": [
+    {
+      "category": "missing_tests",
+      "confidence": 0.72,
+      "context_after": [],
+      "context_before": [],
+      "evidence": "Changed source files without a tests/ or test_*.py diff in the same review input.",
+      "file": "app/deploy.py",
+      "finding_id": "b83ef1a622841df9",
+      "hunk_header": "",
+      "line": 4,
+      "recommendation": "Add or update a focused regression test.",
+      "rule_id": "tests.changed-source-without-test",
+      "schema_version": 1,
+      "severity": "medium",
+      "source": "rule:missing-tests",
+      "title": "Source change has no matching test update"
+    }
+  ]
+}

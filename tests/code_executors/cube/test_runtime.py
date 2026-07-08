@@ -14,7 +14,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from trpc_agent_sdk.code_executors._constants import (
-    DEFAULT_MAX_FILES,
     DEFAULT_TIMEOUT_SEC,
     DIR_OUT,
     DIR_RUNS,
@@ -27,7 +26,6 @@ from trpc_agent_sdk.code_executors._constants import (
     WORKSPACE_ENV_DIR_KEY,
 )
 from trpc_agent_sdk.code_executors._types import (
-    WorkspaceCapabilities,
     WorkspaceInfo,
     WorkspaceInputSpec,
     WorkspaceOutputSpec,
@@ -428,7 +426,7 @@ class TestGlob:
         mock_client.commands_run.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_patterns_issue_shell_command(self, mock_client):
+    async def test_patterns_issue_python_glob_command(self, mock_client):
         mock_client.commands_run.return_value = _ok(
             stdout=f"{_ws().path}/a.txt\n{_ws().path}/b.txt\n"
         )
@@ -437,8 +435,9 @@ class TestGlob:
         out = await fs._glob(ws.path, ["*.txt"])
         assert out == [f"{ws.path}/a.txt", f"{ws.path}/b.txt"]
         cmd = mock_client.commands_run.await_args.args[0]
-        assert "globstar" in cmd
-        assert "'*.txt'" in cmd
+        assert cmd.startswith("python3 - <<'PY'")
+        assert "glob.glob(pattern, recursive=True)" in cmd
+        assert "*.txt" in cmd
 
     @pytest.mark.asyncio
     async def test_glob_failure_raises(self, mock_client):
@@ -690,7 +689,10 @@ class TestCubeProgramRunner:
     @pytest.mark.asyncio
     async def test_provider_env_merged_when_enabled(self, mock_client):
         mock_client.commands_run.return_value = _ok()
-        provider = lambda ctx: {"EXTRA": "V"}
+
+        def provider(ctx):
+            return {"EXTRA": "V"}
+
         runner = CubeProgramRunner(mock_client, 30.0, provider=provider, enable_provider_env=True)
         spec = WorkspaceRunProgramSpec(cmd="x")
         await runner.run_program(_ws(), spec)
@@ -700,7 +702,10 @@ class TestCubeProgramRunner:
     @pytest.mark.asyncio
     async def test_provider_env_ignored_when_disabled(self, mock_client):
         mock_client.commands_run.return_value = _ok()
-        provider = lambda ctx: {"EXTRA": "V"}
+
+        def provider(ctx):
+            return {"EXTRA": "V"}
+
         # enable_provider_env=False → extras not merged.
         runner = CubeProgramRunner(mock_client, 30.0, provider=provider, enable_provider_env=False)
         spec = WorkspaceRunProgramSpec(cmd="x")
@@ -769,7 +774,10 @@ class TestCreateCubeWorkspaceRuntime:
         ex = MagicMock()
         ex.sandbox_client = mock_client
         ex.config = cfg
-        provider = lambda ctx: {}
+
+        def provider(ctx):
+            return {}
+
         rt = create_cube_workspace_runtime(ex, provider=provider, enable_provider_env=True)
         assert rt._runner._run_env_provider is provider
         assert rt._runner._enable_provider_env is True

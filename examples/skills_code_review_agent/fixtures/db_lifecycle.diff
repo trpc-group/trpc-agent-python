@@ -1,0 +1,24 @@
+diff --git a/app/repository.py b/app/repository.py
+index 1111111..2222222 100644
+--- a/app/repository.py
++++ b/app/repository.py
+@@ -1,4 +1,9 @@
+ import sqlite3
+
+ def find_user(user_id):
++    conn = sqlite3.connect("app.db")
++    cur = conn.cursor()
++    cur.execute(f"select * from users where id = {user_id}")
++    return cur.fetchone()
+     return None
+
+diff --git a/app/payments.py b/app/payments.py
+index 3333333..4444444 100644
+--- a/app/payments.py
++++ b/app/payments.py
+@@ -1,4 +1,10 @@
+ def refund(conn, payment_id):
++    conn.execute("BEGIN")
++    conn.execute(f"update payments set refunded = 1 where id = {payment_id}")
++    return True
+     return False
