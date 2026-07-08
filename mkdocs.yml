@@ -1,0 +1,105 @@
+site_name: tRPC-Agent-Python
+site_description: Python LLM agent framework with multi-model support, tool calling, session management, and service integrations.
+site_url: https://trpc-group.github.io/trpc-agent-python/
+repo_url: https://github.com/trpc-group/trpc-agent-python
+repo_name: trpc-group/trpc-agent-python
+docs_dir: docs/mkdocs
+site_dir: site
+
+theme:
+  name: readthedocs
+  locale: en
+
+markdown_extensions:
+  - admonition
+  - fenced_code
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - English:
+      - Overview: en/index.md
+      - Agent:
+          - LLM Agent: en/llm_agent.md
+          - Custom Agent: en/custom_agent.md
+          - LangGraph Agent: en/langgraph_agent.md
+          - Claude Agent: en/claude_agent.md
+          - Multi-Agent: en/multi_agents.md
+          - Team: en/team.md
+          - Graph: en/graph.md
+          - Sub Agent: en/sub_agent.md
+      - Model: en/model.md
+      - Tools:
+          - Tool: en/tool.md
+          - Code Executor: en/code_executor.md
+          - Skills: en/skill.md
+      - Session & Memory:
+          - Session: en/session.md
+          - SQL Session: en/session_sql.md
+          - Redis Session: en/session_redis.md
+          - Session Summary: en/session_summary.md
+          - Memory: en/memory.md
+      - Knowledge:
+          - Knowledge: en/knowledge.md
+          - Document Loader: en/knowledge_document_loader.md
+          - Text Splitter: en/knowledge_text_splitter.md
+          - Embedder: en/knowledge_embedder.md
+          - Vector Store: en/knowledge_vectorstore.md
+          - Retrievers: en/knowledge_retrievers.md
+          - Prompt Template: en/knowledge_prompt_template.md
+          - Custom Components: en/knowledge_custom_components.md
+      - Evaluation & Optimization:
+          - Evaluation: en/evaluation.md
+          - Optimization: en/optimization.md
+      - Integrations:
+          - A2A: en/a2a.md
+          - AG-UI: en/agui.md
+          - OpenClaw: en/openclaw.md
+      - Runtime:
+          - Filter: en/filter.md
+          - Human in the Loop: en/human_in_the_loop.md
+          - Cancellation: en/cancel.md
+  - 中文:
+      - 概览: zh/index.md
+      - Agent:
+          - LLM Agent: zh/llm_agent.md
+          - 自定义 Agent: zh/custom_agent.md
+          - LangGraph Agent: zh/langgraph_agent.md
+          - Claude Agent: zh/claude_agent.md
+          - 多 Agent: zh/multi_agents.md
+          - Team: zh/team.md
+          - Graph: zh/graph.md
+          - Sub Agent: zh/sub_agent.md
+      - 模型: zh/model.md
+      - 工具:
+          - 工具: zh/tool.md
+          - 代码执行器: zh/code_executor.md
+          - Skills: zh/skill.md
+      - Session 与 Memory:
+          - Session: zh/session.md
+          - SQL Session: zh/session_sql.md
+          - Redis Session: zh/session_redis.md
+          - Session Summary: zh/session_summary.md
+          - Memory: zh/memory.md
+      - Knowledge:
+          - Knowledge: zh/knowledge.md
+          - 文档加载器: zh/knowledge_document_loader.md
+          - 文本切分: zh/knowledge_text_splitter.md
+          - Embedder: zh/knowledge_embedder.md
+          - Vector Store: zh/knowledge_vectorstore.md
+          - Retrievers: zh/knowledge_retrievers.md
+          - Prompt Template: zh/knowledge_prompt_template.md
+          - 自定义组件: zh/knowledge_custom_components.md
+      - 评测与优化:
+          - Evaluation: zh/evaluation.md
+          - Optimization: zh/optimization.md
+      - 集成:
+          - A2A: zh/a2a.md
+          - AG-UI: zh/agui.md
+          - OpenClaw: zh/openclaw.md
+      - 运行时:
+          - Filter: zh/filter.md
+          - Human in the Loop: zh/human_in_the_loop.md
+          - Cancellation: zh/cancel.md
