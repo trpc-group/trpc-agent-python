@@ -28,7 +28,7 @@ class RuleConfig:
     @classmethod
     def load(cls, path: Path | None = None) -> "RuleConfig":
         if path is None:
-            path = Path(__file__).resolve().parents[1] / "skills" / "code-review" / "rules.json"
+            path = Path(__file__).resolve().parents[3] / "skills" / "code-review" / "rules.json"
         data = json.loads(path.read_text(encoding="utf-8"))
         rules = {
             item["id"]:

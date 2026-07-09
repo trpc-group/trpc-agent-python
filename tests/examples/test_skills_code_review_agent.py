@@ -28,6 +28,7 @@ from examples.skills_code_review_agent.agent.native_filter import create_review_
 from examples.skills_code_review_agent.agent.pipeline import build_workspace_sandbox_runner  # noqa: E402
 from examples.skills_code_review_agent.agent.pipeline import query_task  # noqa: E402
 from examples.skills_code_review_agent.agent.pipeline import run_review  # noqa: E402
+from examples.skills_code_review_agent.agent.pipeline import SKILL_DIR  # noqa: E402
 from examples.skills_code_review_agent.agent.redaction import contains_unredacted_secret  # noqa: E402
 from examples.skills_code_review_agent.agent.rule_engine import RuleEngine  # noqa: E402
 from examples.skills_code_review_agent.agent.skill_smoke import run_code_review_skill_smoke  # noqa: E402
@@ -897,7 +898,7 @@ async def test_workspace_sandbox_adapter_uploads_diff_and_runs_script() -> None:
     run = await build_workspace_sandbox_runner(runtime, "container").run(
         request,
         diff,
-        skill_dir=EXAMPLE_DIR / "skills" / "code-review",
+        skill_dir=SKILL_DIR,
     )
 
     assert run.status == "passed"
@@ -1042,7 +1043,7 @@ async def test_workspace_sandbox_adapter_preserves_audited_command_args_and_clea
     run = await build_workspace_sandbox_runner(runtime, "container").run(
         request,
         diff,
-        skill_dir=EXAMPLE_DIR / "skills" / "code-review",
+        skill_dir=SKILL_DIR,
     )
 
     assert run.status == "passed"
@@ -1137,7 +1138,7 @@ async def test_workspace_sandbox_adapter_stages_repo_snapshot_for_tests(tmp_path
     run = await build_workspace_sandbox_runner(runtime, "container").run(
         request,
         diff,
-        skill_dir=EXAMPLE_DIR / "skills" / "code-review",
+        skill_dir=SKILL_DIR,
     )
 
     staged_paths = {file.path for file in runtime.fs_instance.files}
@@ -1235,7 +1236,7 @@ async def test_workspace_sandbox_adapter_does_not_stage_repo_without_repo_read_a
     run = await build_workspace_sandbox_runner(runtime, "container").run(
         request,
         diff,
-        skill_dir=EXAMPLE_DIR / "skills" / "code-review",
+        skill_dir=SKILL_DIR,
     )
 
     staged_paths = {file.path for file in runtime.fs_instance.files}
@@ -1254,7 +1255,7 @@ def test_scanner_probe_does_not_materialize_paths_outside_scan_root(tmp_path: Pa
     result = subprocess.run(
         [
             sys.executable,
-            str(EXAMPLE_DIR / "skills" / "code-review" / "scripts" / "scanner_probe.py"),
+            str(SKILL_DIR / "scripts" / "scanner_probe.py"),
         ],
         input=diff_text,
         text=True,
@@ -1813,7 +1814,11 @@ def test_large_diff_limit_records_parse_warning() -> None:
 
 
 def test_code_review_skill_rule_manifest_covers_all_required_categories() -> None:
-    manifest_path = EXAMPLE_DIR / "skills" / "code-review" / "rules.json"
+    assert (SKILL_DIR / "SKILL.md").exists()
+    assert (SKILL_DIR / "docs" / "rules.md").exists()
+    assert (SKILL_DIR / "scripts" / "static_review.py").exists()
+
+    manifest_path = SKILL_DIR / "rules.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     required = {
         "security",
@@ -2209,7 +2214,7 @@ def test_closed_resource_lifecycle_does_not_raise_session_leak() -> None:
 
 
 def test_filter_policy_loads_policy_as_code() -> None:
-    policy = ReviewFilterPolicy.load(EXAMPLE_DIR / "skills" / "code-review" / "filter_policy.json")
+    policy = ReviewFilterPolicy.load(SKILL_DIR / "filter_policy.json")
     audit = policy.audit()
 
     assert audit["schema_version"] == 1

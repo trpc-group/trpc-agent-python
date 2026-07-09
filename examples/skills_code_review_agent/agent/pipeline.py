@@ -36,7 +36,7 @@ from .telemetry import build_monitoring_summary
 
 DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[1] / "sample_outputs"
 DEFAULT_DB_PATH = DEFAULT_OUTPUT_DIR / "review_tasks.sqlite"
-SKILL_DIR = Path(__file__).resolve().parents[1] / "skills" / "code-review"
+SKILL_DIR = Path(__file__).resolve().parents[3] / "skills" / "code-review"
 FILTER_POLICY_PATH = SKILL_DIR / "filter_policy.json"
 
 
