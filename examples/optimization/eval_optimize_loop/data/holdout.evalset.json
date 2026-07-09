@@ -1,0 +1,254 @@
+{
+  "eval_set_id": "holdout-hidden",
+  "name": "Holdout Set — Hidden Test Cases",
+  "description": "12 hidden cases never seen during optimization. 8 straightforward cases that should pass easily, 4 tricky cases to test robustness. Used for final evaluation only.",
+  "eval_cases": [
+    {
+      "eval_id": "holdout_easy_math_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-h001",
+          "user_content": {"parts": [{"text": "What is 48 + 93?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "141"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-h001",
+          "user_content": {"parts": [{"text": "What is 48 + 93?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "48 + 93 = 141"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "holdout_easy_math_002",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-h002",
+          "user_content": {"parts": [{"text": "Calculate 360 / 8"}], "role": "user"},
+          "final_response": {"parts": [{"text": "45"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-h002",
+          "user_content": {"parts": [{"text": "Calculate 360 / 8"}], "role": "user"},
+          "final_response": {"parts": [{"text": "360 / 8 = 45"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "holdout_easy_reasoning_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-h003",
+          "user_content": {"parts": [{"text": "A pizza has 8 slices. If 3 people eat 2 slices each, how many slices are left?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "2 slices"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-h003",
+          "user_content": {"parts": [{"text": "A pizza has 8 slices. If 3 people eat 2 slices each, how many slices are left?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "People eat: 3 * 2 = 6 slices. Remaining: 8 - 6 = 2 slices."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "holdout_easy_reasoning_002",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-h004",
+          "user_content": {"parts": [{"text": "If x + 5 = 12, what is the value of 3x?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "21"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-h004",
+          "user_content": {"parts": [{"text": "If x + 5 = 12, what is the value of 3x?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "x + 5 = 12, so x = 7. Then 3x = 3 * 7 = 21."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "holdout_easy_tool_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-h005",
+          "user_content": {"parts": [{"text": "Calculate the area of a circle with radius 5. Use pi = 3.14159."}], "role": "user"},
+          "final_response": {"parts": [{"text": "78.53975"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-h005",
+          "user_content": {"parts": [{"text": "Calculate the area of a circle with radius 5. Use pi = 3.14159."}], "role": "user"},
+          "final_response": {"parts": [{"text": "Area = pi * r^2 = 3.14159 * 25 = 78.53975"}], "role": "model"},
+          "intermediate_data": {
+            "tool_uses": [{"tool_name": "calculate", "arguments": {"expression": "3.14159 * 25"}}],
+            "tool_responses": [{"result": "78.53975"}],
+            "intermediate_responses": []
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "holdout_easy_tool_002",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-h006",
+          "user_content": {"parts": [{"text": "If you invest $2000 at 5% simple interest per year, how much total interest do you earn after 4 years?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "$400"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-h006",
+          "user_content": {"parts": [{"text": "If you invest $2000 at 5% simple interest per year, how much total interest do you earn after 4 years?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "Simple interest: I = P * r * t = 2000 * 0.05 * 4 = $400."}], "role": "model"},
+          "intermediate_data": {
+            "tool_uses": [{"tool_name": "calculate", "arguments": {"expression": "2000 * 0.05 * 4"}}],
+            "tool_responses": [{"result": "400"}],
+            "intermediate_responses": []
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "holdout_easy_multiturn_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-h007",
+          "user_content": {"parts": [{"text": "Add 25 and 75"}], "role": "user"},
+          "final_response": {"parts": [{"text": "100"}], "role": "model"}
+        },
+        {
+          "invocation_id": "inv-h008",
+          "user_content": {"parts": [{"text": "Now find 20% of that result"}], "role": "user"},
+          "final_response": {"parts": [{"text": "20"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-h007",
+          "user_content": {"parts": [{"text": "Add 25 and 75"}], "role": "user"},
+          "final_response": {"parts": [{"text": "25 + 75 = 100"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        },
+        {
+          "invocation_id": "inv-h008",
+          "user_content": {"parts": [{"text": "Now find 20% of that result"}], "role": "user"},
+          "final_response": {"parts": [{"text": "20% of 100 = 20"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "holdout_easy_chinese_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-h009",
+          "user_content": {"parts": [{"text": "请计算八百除以二十等于多少？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "40"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-h009",
+          "user_content": {"parts": [{"text": "请计算八百除以二十等于多少？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "八百 = 800, 800 / 20 = 40。答案是40。"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "holdout_tricky_edge_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-h010",
+          "user_content": {"parts": [{"text": "What is the largest number that is less than 0? If none exists, explain why."}], "role": "user"},
+          "final_response": {"parts": [{"text": "There is no largest number less than 0. For any negative number x, x/2 is a larger number that is still less than 0. The set of negative numbers has no maximum; 0 is its supremum but not a member."}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-h010",
+          "user_content": {"parts": [{"text": "What is the largest number that is less than 0? If none exists, explain why."}], "role": "user"},
+          "final_response": {"parts": [{"text": "There is no largest number less than 0. This is because the set of negative real numbers is open at 0. For any negative number x, we can always find a larger negative number, e.g., x/2, that is still less than 0. In mathematical terms, 0 is the supremum (least upper bound) of the negative numbers but is not itself a negative number."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "holdout_tricky_edge_002",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-h011",
+          "user_content": {"parts": [{"text": "In Python, does 0.1 + 0.2 == 0.3 evaluate to True or False? Explain why, and name what standard causes this."}], "role": "user"},
+          "final_response": {"parts": [{"text": "False. 0.1 + 0.2 evaluates to 0.30000000000000004 due to IEEE 754 double-precision floating-point representation. The binary representation of 0.1 and 0.2 are repeating fractions, so they cannot be stored exactly, leading to a small rounding error when added."}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-h011",
+          "user_content": {"parts": [{"text": "In Python, does 0.1 + 0.2 == 0.3 evaluate to True or False? Explain why, and name what standard causes this."}], "role": "user"},
+          "final_response": {"parts": [{"text": "False. In Python, 0.1 + 0.2 evaluates to 0.30000000000000004, not exactly 0.3. This is caused by the IEEE 754 double-precision floating-point standard, which cannot represent 0.1 or 0.2 exactly in binary (they have repeating binary fractions). The small accumulation of rounding error makes the sum slightly larger than 0.3, so the equality check fails."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "holdout_tricky_format_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-h012",
+          "user_content": {"parts": [{"text": "Calculate the result: (144 / 12) + (15 * 3) - (2^5). Return a JSON object with keys: \"question\" (string copy of the expression), \"steps\" (array of strings, one per operation), \"final_answer\" (number)."}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"question\": \"(144 / 12) + (15 * 3) - (2^5)\", \"steps\": [\"144 / 12 = 12\", \"15 * 3 = 45\", \"2^5 = 32\", \"12 + 45 - 32 = 25\"], \"final_answer\": 25}"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-h012",
+          "user_content": {"parts": [{"text": "Calculate the result: (144 / 12) + (15 * 3) - (2^5). Return a JSON object with keys: \"question\" (string copy of the expression), \"steps\" (array of strings, one per operation), \"final_answer\" (number)."}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"question\": \"(144 / 12) + (15 * 3) - (2^5)\", \"steps\": [\"144 / 12 = 12\", \"15 * 3 = 45\", \"2^5 = 32\", \"12 + 45 - 32 = 25\"], \"final_answer\": 25}"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "holdout_tricky_reasoning_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-h013",
+          "user_content": {"parts": [{"text": "The product of three consecutive positive integers is 60. What are the three integers? Show your reasoning."}], "role": "user"},
+          "final_response": {"parts": [{"text": "3, 4, and 5"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-h013",
+          "user_content": {"parts": [{"text": "The product of three consecutive positive integers is 60. What are the three integers? Show your reasoning."}], "role": "user"},
+          "final_response": {"parts": [{"text": "Let the numbers be n-1, n, n+1. Their product: (n-1)(n)(n+1) = n(n^2 - 1) = n^3 - n = 60. Testing: n=4 gives 4^3 - 4 = 64 - 4 = 60. So n=4, and the numbers are 3, 4, 5. Check: 3 * 4 * 5 = 60."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    }
+  ]
+}
