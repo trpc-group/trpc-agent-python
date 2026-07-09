@@ -1,0 +1,41 @@
+{
+    "case_id": "05_memory_write_read",
+    "description": "Memory write and read: store session content in memory and search for stored facts",
+    "session_setup": {
+        "app_name": "replay_test",
+        "user_id": "test_user",
+        "session_id": "s-005"
+    },
+    "operations": [
+        {
+            "op": "append_event",
+            "author": "user",
+            "text": "My name is Alice and my favorite food is pizza."
+        },
+        {
+            "op": "append_event",
+            "author": "assistant",
+            "text": "Nice to meet you, Alice! Pizza is a great choice."
+        },
+        {
+            "op": "append_event",
+            "author": "user",
+            "text": "I also enjoy hiking on weekends."
+        },
+        {
+            "op": "append_event",
+            "author": "assistant",
+            "text": "Hiking is wonderful exercise. Where do you usually hike?"
+        },
+        {
+            "op": "store_memory"
+        },
+        {
+            "op": "search_memory",
+            "query": "What food does Alice like?"
+        },
+        {
+            "op": "read_back"
+        }
+    ]
+}

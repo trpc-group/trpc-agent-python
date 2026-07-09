@@ -1,0 +1,52 @@
+{
+    "case_id": "06_summary_generation",
+    "description": "Summary generation and retrieval: inject a session summary and verify its content and metadata",
+    "session_setup": {
+        "app_name": "replay_test",
+        "user_id": "test_user",
+        "session_id": "s-006"
+    },
+    "operations": [
+        {
+            "op": "append_event",
+            "author": "user",
+            "text": "Let's discuss the new project."
+        },
+        {
+            "op": "append_event",
+            "author": "assistant",
+            "text": "Sure, what kind of project are you planning?"
+        },
+        {
+            "op": "append_event",
+            "author": "user",
+            "text": "A web application for task management with real-time collaboration."
+        },
+        {
+            "op": "append_event",
+            "author": "assistant",
+            "text": "That sounds ambitious. We should use React for the frontend and WebSocket for real-time features."
+        },
+        {
+            "op": "append_event",
+            "author": "user",
+            "text": "Agreed. Let's also add file sharing capabilities."
+        },
+        {
+            "op": "append_event",
+            "author": "assistant",
+            "text": "Good idea. We can integrate cloud storage APIs for that."
+        },
+        {
+            "op": "inject_summary",
+            "session_id": "s-006",
+            "summary_text": "The user and assistant are planning a task management web application. Key decisions: use React frontend, WebSocket for real-time collaboration, and integrate cloud storage APIs for file sharing.",
+            "original_event_count": 6,
+            "compressed_event_count": 2
+        },
+        {
+            "op": "read_back",
+            "expected_event_count": 6
+        }
+    ]
+}

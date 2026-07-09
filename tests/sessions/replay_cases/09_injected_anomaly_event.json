@@ -1,0 +1,35 @@
+{
+    "case_id": "09_injected_anomaly_event",
+    "description": "Anomaly detection: an extra event is injected into one backend's result. The comparator must detect this difference.",
+    "session_setup": {
+        "app_name": "replay_test",
+        "user_id": "test_user",
+        "session_id": "s-009"
+    },
+    "operations": [
+        {
+            "op": "append_event",
+            "author": "user",
+            "text": "Hello"
+        },
+        {
+            "op": "append_event",
+            "author": "assistant",
+            "text": "Hi there"
+        },
+        {
+            "op": "read_back",
+            "expected_event_count": 2
+        }
+    ],
+    "expect_pass": false,
+    "inject_anomaly": {
+        "category": "events",
+        "action": "insert_extra",
+        "event_index": 1,
+        "extra_event": {
+            "author": "intruder",
+            "text": "This event should not exist"
+        }
+    }
+}
