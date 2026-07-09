@@ -39,8 +39,9 @@ def build_calculator_subgraph():
     api_key, url, model_name = get_model_config()
     model = init_chat_model(
         model_name,
+        model_provider="openai",
         api_key=api_key,
-        api_base=url,
+        base_url=url,
     )
 
     tools = [calculate]
