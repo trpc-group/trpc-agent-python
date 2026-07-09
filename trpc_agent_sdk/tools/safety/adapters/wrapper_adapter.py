@@ -125,9 +125,7 @@ class SafeCodeExecutor(BaseCodeExecutor):
                 result = self.guard.check(check_input)
             except Exception as e:
                 # Guard should never raise, but fail-open if it does
-                logger.error(
-                    "SafeCodeExecutor: guard.check() raised: %s", e, exc_info=True
-                )
+                logger.error("SafeCodeExecutor: guard.check() raised: %s", e, exc_info=True)
                 continue
 
             if result.decision == Decision.DENY:
@@ -185,17 +183,14 @@ def _make_blocked_result(blocked_results: list[SafetyCheckResult]) -> CodeExecut
         all_findings.extend(r.findings)
 
     # Build a human-readable error message
-    findings_summary = "\n".join(
-        f"  - [{f.rule_id}] {f.severity.value.upper()}: {f.description}"
-        for f in all_findings[:5]  # Show at most 5 findings
-    )
+    findings_summary = "\n".join(f"  - [{f.rule_id}] {f.severity.value.upper()}: {f.description}"
+                                 for f in all_findings[:5]  # Show at most 5 findings
+                                 )
     if len(all_findings) > 5:
         findings_summary += f"\n  ... and {len(all_findings) - 5} more findings"
 
-    error_msg = (
-        f"Script Safety Guard blocked code execution.\n"
-        f"Decision: DENY\n"
-        f"Findings ({len(all_findings)}):\n{findings_summary}"
-    )
+    error_msg = (f"Script Safety Guard blocked code execution.\n"
+                 f"Decision: DENY\n"
+                 f"Findings ({len(all_findings)}):\n{findings_summary}")
 
     return create_code_execution_result(stderr=error_msg)

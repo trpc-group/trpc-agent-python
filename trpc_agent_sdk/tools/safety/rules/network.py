@@ -139,16 +139,17 @@ class NetworkRequestRule(BaseRule):
                 if domain:
                     domain_found = True
                     if not _domain_matches_whitelist(domain, allowed_domains):
-                        findings.append(Finding(
-                            rule_id=self.rule_id,
-                            category=self.category,
-                            severity=self.severity,
-                            decision=Decision.NEEDS_HUMAN_REVIEW,
-                            evidence=f"{call_name}({arg!r})",
-                            line_number=call.lineno,
-                            description=f"Network request to non-whitelisted domain: {domain}",
-                            recommendation=f"Add '{domain}' to network.allowed_domains if this is expected.",
-                        ))
+                        findings.append(
+                            Finding(
+                                rule_id=self.rule_id,
+                                category=self.category,
+                                severity=self.severity,
+                                decision=Decision.NEEDS_HUMAN_REVIEW,
+                                evidence=f"{call_name}({arg!r})",
+                                line_number=call.lineno,
+                                description=f"Network request to non-whitelisted domain: {domain}",
+                                recommendation=f"Add '{domain}' to network.allowed_domains if this is expected.",
+                            ))
 
             # If no domain could be extracted (dynamic URL), flag as lower confidence
             if not domain_found and str_args:
@@ -156,17 +157,18 @@ class NetworkRequestRule(BaseRule):
                 pass
             elif not domain_found and not str_args:
                 # No static args at all — could be dynamic URL
-                findings.append(Finding(
-                    rule_id=self.rule_id,
-                    category=self.category,
-                    severity=Severity.MEDIUM,
-                    decision=Decision.NEEDS_HUMAN_REVIEW,
-                    confidence=0.6,
-                    evidence=call_name,
-                    line_number=call.lineno,
-                    description=f"Network call with non-static URL: {call_name}",
-                    recommendation="Ensure the target URL is safe and expected.",
-                ))
+                findings.append(
+                    Finding(
+                        rule_id=self.rule_id,
+                        category=self.category,
+                        severity=Severity.MEDIUM,
+                        decision=Decision.NEEDS_HUMAN_REVIEW,
+                        confidence=0.6,
+                        evidence=call_name,
+                        line_number=call.lineno,
+                        description=f"Network call with non-static URL: {call_name}",
+                        recommendation="Ensure the target URL is safe and expected.",
+                    ))
 
         return findings
 
@@ -185,16 +187,17 @@ class NetworkRequestRule(BaseRule):
             for url in urls:
                 domain = bash_scanner.extract_domain_from_url(url)
                 if domain and not _domain_matches_whitelist(domain, allowed_domains):
-                    findings.append(Finding(
-                        rule_id=self.rule_id,
-                        category=self.category,
-                        severity=self.severity,
-                        decision=Decision.NEEDS_HUMAN_REVIEW,
-                        evidence=effective,
-                        line_number=line_num,
-                        description=f"Network request to non-whitelisted domain: {domain}",
-                        recommendation=f"Add '{domain}' to network.allowed_domains if this is expected.",
-                    ))
+                    findings.append(
+                        Finding(
+                            rule_id=self.rule_id,
+                            category=self.category,
+                            severity=self.severity,
+                            decision=Decision.NEEDS_HUMAN_REVIEW,
+                            evidence=effective,
+                            line_number=line_num,
+                            description=f"Network request to non-whitelisted domain: {domain}",
+                            recommendation=f"Add '{domain}' to network.allowed_domains if this is expected.",
+                        ))
 
         return findings
 
@@ -231,16 +234,17 @@ class RawSocketRule(BaseRule):
         calls = python_scanner.find_function_calls(tree, _PYTHON_SOCKET_FUNCS)
         for call in calls:
             call_name = python_scanner.get_call_name(call)
-            findings.append(Finding(
-                rule_id=self.rule_id,
-                category=self.category,
-                severity=self.severity,
-                decision=Decision.NEEDS_HUMAN_REVIEW,
-                evidence=call_name,
-                line_number=call.lineno,
-                description=f"Low-level network API usage: {call_name}",
-                recommendation="Prefer high-level HTTP libraries. Verify socket usage is necessary.",
-            ))
+            findings.append(
+                Finding(
+                    rule_id=self.rule_id,
+                    category=self.category,
+                    severity=self.severity,
+                    decision=Decision.NEEDS_HUMAN_REVIEW,
+                    evidence=call_name,
+                    line_number=call.lineno,
+                    description=f"Low-level network API usage: {call_name}",
+                    recommendation="Prefer high-level HTTP libraries. Verify socket usage is necessary.",
+                ))
         return findings
 
     def _scan_bash(self, ctx: "ScanContext") -> list[Finding]:
@@ -254,14 +258,15 @@ class RawSocketRule(BaseRule):
         matches = bash_scanner.scan_lines(ctx.source_code, low_level_patterns)
 
         for m in matches:
-            findings.append(Finding(
-                rule_id=self.rule_id,
-                category=self.category,
-                severity=self.severity,
-                decision=Decision.NEEDS_HUMAN_REVIEW,
-                evidence=m.line_content,
-                line_number=m.line_number,
-                description=f"Low-level network tool usage: {m.pattern_name}",
-                recommendation="Verify this network access is necessary and targets are safe.",
-            ))
+            findings.append(
+                Finding(
+                    rule_id=self.rule_id,
+                    category=self.category,
+                    severity=self.severity,
+                    decision=Decision.NEEDS_HUMAN_REVIEW,
+                    evidence=m.line_content,
+                    line_number=m.line_number,
+                    description=f"Low-level network tool usage: {m.pattern_name}",
+                    recommendation="Verify this network access is necessary and targets are safe.",
+                ))
         return findings

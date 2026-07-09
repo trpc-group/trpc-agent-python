@@ -145,16 +145,17 @@ class ForbiddenPathRule(BaseRule):
             for arg in str_args:
                 matched = _path_matches_forbidden(arg, forbidden_paths)
                 if matched:
-                    findings.append(Finding(
-                        rule_id=self.rule_id,
-                        category=self.category,
-                        severity=self.severity,
-                        decision=Decision.DENY,
-                        evidence=f"{python_scanner.get_call_name(call)}({arg!r})",
-                        line_number=call.lineno,
-                        description=f"File operation targets forbidden path: {matched}",
-                        recommendation="Remove or change the file path to a permitted location.",
-                    ))
+                    findings.append(
+                        Finding(
+                            rule_id=self.rule_id,
+                            category=self.category,
+                            severity=self.severity,
+                            decision=Decision.DENY,
+                            evidence=f"{python_scanner.get_call_name(call)}({arg!r})",
+                            line_number=call.lineno,
+                            description=f"File operation targets forbidden path: {matched}",
+                            recommendation="Remove or change the file path to a permitted location.",
+                        ))
         return findings
 
     def _scan_bash(self, ctx: "ScanContext", forbidden_paths: list[str]) -> list[Finding]:
@@ -169,16 +170,17 @@ class ForbiddenPathRule(BaseRule):
             for forbidden in forbidden_paths:
                 expanded = _expand_path(forbidden)
                 if expanded in effective or forbidden in effective:
-                    findings.append(Finding(
-                        rule_id=self.rule_id,
-                        category=self.category,
-                        severity=self.severity,
-                        decision=Decision.DENY,
-                        evidence=effective,
-                        line_number=line_num,
-                        description=f"Script references forbidden path: {forbidden}",
-                        recommendation="Remove or change the file path to a permitted location.",
-                    ))
+                    findings.append(
+                        Finding(
+                            rule_id=self.rule_id,
+                            category=self.category,
+                            severity=self.severity,
+                            decision=Decision.DENY,
+                            evidence=effective,
+                            line_number=line_num,
+                            description=f"Script references forbidden path: {forbidden}",
+                            recommendation="Remove or change the file path to a permitted location.",
+                        ))
                     break  # One finding per line
         return findings
 
@@ -217,16 +219,17 @@ class DestructiveFileOpRule(BaseRule):
             call_name = python_scanner.get_call_name(call)
             str_args = python_scanner.get_string_args(call)
             evidence = f"{call_name}({', '.join(repr(a) for a in str_args)})" if str_args else call_name
-            findings.append(Finding(
-                rule_id=self.rule_id,
-                category=self.category,
-                severity=self.severity,
-                decision=Decision.NEEDS_HUMAN_REVIEW,
-                evidence=evidence,
-                line_number=call.lineno,
-                description=f"Destructive file operation: {call_name}",
-                recommendation="Ensure this deletion is intentional and targets the correct path.",
-            ))
+            findings.append(
+                Finding(
+                    rule_id=self.rule_id,
+                    category=self.category,
+                    severity=self.severity,
+                    decision=Decision.NEEDS_HUMAN_REVIEW,
+                    evidence=evidence,
+                    line_number=call.lineno,
+                    description=f"Destructive file operation: {call_name}",
+                    recommendation="Ensure this deletion is intentional and targets the correct path.",
+                ))
         return findings
 
     def _scan_bash(self, ctx: "ScanContext") -> list[Finding]:
@@ -235,14 +238,16 @@ class DestructiveFileOpRule(BaseRule):
         matches = bash_scanner.scan_lines(ctx.source_code, patterns)
 
         for m in matches:
-            findings.append(Finding(
-                rule_id=self.rule_id,
-                category=self.category,
-                severity=Severity.HIGH if m.pattern_name in ("rm_root", "dd_of", "mkfs") else self.severity,
-                decision=Decision.DENY if m.pattern_name in ("rm_root", "dd_of", "mkfs") else Decision.NEEDS_HUMAN_REVIEW,
-                evidence=m.line_content,
-                line_number=m.line_number,
-                description=f"Destructive file operation detected ({m.pattern_name})",
-                recommendation="Verify this operation is intentional and will not cause data loss.",
-            ))
+            findings.append(
+                Finding(
+                    rule_id=self.rule_id,
+                    category=self.category,
+                    severity=Severity.HIGH if m.pattern_name in ("rm_root", "dd_of", "mkfs") else self.severity,
+                    decision=Decision.DENY if m.pattern_name in ("rm_root", "dd_of",
+                                                                 "mkfs") else Decision.NEEDS_HUMAN_REVIEW,
+                    evidence=m.line_content,
+                    line_number=m.line_number,
+                    description=f"Destructive file operation detected ({m.pattern_name})",
+                    recommendation="Verify this operation is intentional and will not cause data loss.",
+                ))
         return findings

@@ -39,7 +39,6 @@ _CONVENTION_SUBDIRS = [
     "config",
 ]
 
-
 # ---------------------------------------------------------------------------
 # Sub-policy models
 # ---------------------------------------------------------------------------
@@ -220,51 +219,45 @@ def _default_policy() -> PolicyConfig:
     No external file is needed — the guard works out-of-the-box.
     """
     return PolicyConfig(
-        network=NetworkPolicy(
-            allowed_domains=[
-                "api.openai.com",
-                "*.openai.com",
-                "*.googleapis.com",
-                "*.anthropic.com",
-                "*.githubusercontent.com",
-                "github.com",
-                "pypi.org",
-                "*.python.org",
-                "registry.npmjs.org",
-                "*.huggingface.co",
-            ]
-        ),
-        process=ProcessPolicy(
-            allowed_commands=[
-                "python3",
-                "python",
-                "node",
-                "cat",
-                "ls",
-                "find",
-                "grep",
-                "echo",
-                "head",
-                "tail",
-                "wc",
-                "sort",
-                "mkdir",
-                "cp",
-                "mv",
-            ]
-        ),
-        file_operations=FileOperationsPolicy(
-            forbidden_paths=[
-                "/etc/",
-                "~/.ssh/",
-                "~/.aws/",
-                "~/.gnupg/",
-                "~/.config/",
-                "~/.env",
-                "/root/",
-                "/var/log/",
-            ]
-        ),
+        network=NetworkPolicy(allowed_domains=[
+            "api.openai.com",
+            "*.openai.com",
+            "*.googleapis.com",
+            "*.anthropic.com",
+            "*.githubusercontent.com",
+            "github.com",
+            "pypi.org",
+            "*.python.org",
+            "registry.npmjs.org",
+            "*.huggingface.co",
+        ]),
+        process=ProcessPolicy(allowed_commands=[
+            "python3",
+            "python",
+            "node",
+            "cat",
+            "ls",
+            "find",
+            "grep",
+            "echo",
+            "head",
+            "tail",
+            "wc",
+            "sort",
+            "mkdir",
+            "cp",
+            "mv",
+        ]),
+        file_operations=FileOperationsPolicy(forbidden_paths=[
+            "/etc/",
+            "~/.ssh/",
+            "~/.aws/",
+            "~/.gnupg/",
+            "~/.config/",
+            "~/.env",
+            "/root/",
+            "/var/log/",
+        ]),
         resources=ResourcePolicy(
             max_timeout_seconds=300,
             max_output_size_mb=100,
@@ -321,16 +314,10 @@ def _merge_policies(default: PolicyConfig, user: PolicyConfig) -> PolicyConfig:
     # Resources: scalars — user overrides default
     # Only override if user provided non-default values (check against ResourcePolicy defaults)
     resource_defaults = ResourcePolicy()
-    max_timeout = (
-        user.resources.max_timeout_seconds
-        if user.resources.max_timeout_seconds != resource_defaults.max_timeout_seconds
-        else default.resources.max_timeout_seconds
-    )
-    max_output = (
-        user.resources.max_output_size_mb
-        if user.resources.max_output_size_mb != resource_defaults.max_output_size_mb
-        else default.resources.max_output_size_mb
-    )
+    max_timeout = (user.resources.max_timeout_seconds if user.resources.max_timeout_seconds
+                   != resource_defaults.max_timeout_seconds else default.resources.max_timeout_seconds)
+    max_output = (user.resources.max_output_size_mb if user.resources.max_output_size_mb
+                  != resource_defaults.max_output_size_mb else default.resources.max_output_size_mb)
 
     return PolicyConfig(
         version=user.version if user.version != "1.0" else default.version,
@@ -390,28 +377,20 @@ def load_policy(path: Optional[str | Path] = None) -> PolicyConfig:
         with policy_path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
     except yaml.YAMLError as e:
-        logger.warning(
-            "Failed to parse policy file '%s': %s. Using default policy.", policy_path, e
-        )
+        logger.warning("Failed to parse policy file '%s': %s. Using default policy.", policy_path, e)
         return default
     except OSError as e:
-        logger.warning(
-            "Failed to read policy file '%s': %s. Using default policy.", policy_path, e
-        )
+        logger.warning("Failed to read policy file '%s': %s. Using default policy.", policy_path, e)
         return default
 
     if not isinstance(data, dict):
-        logger.warning(
-            "Policy file '%s' does not contain a mapping. Using default policy.", policy_path
-        )
+        logger.warning("Policy file '%s' does not contain a mapping. Using default policy.", policy_path)
         return default
 
     try:
         user_policy = PolicyConfig(**data)
     except Exception as e:
-        logger.warning(
-            "Failed to validate policy file '%s': %s. Using default policy.", policy_path, e
-        )
+        logger.warning("Failed to validate policy file '%s': %s. Using default policy.", policy_path, e)
         return default
 
     return _merge_policies(default, user_policy)

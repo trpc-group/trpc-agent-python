@@ -132,8 +132,7 @@ def scan_lines(
                     line_content=raw_line.strip(),
                     matched_text=match.group(0),
                     pattern_name=pattern_name,
-                )
-            )
+                ))
     return results
 
 

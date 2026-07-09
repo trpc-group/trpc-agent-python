@@ -80,7 +80,6 @@ _BASH_UNTRUSTED_PATTERNS: dict[str, str] = {
     "npm_url": r"\bnpm\s+install\s+https?://",
 }
 
-
 # ---------------------------------------------------------------------------
 # Rule: DEP-001 — Package installation detected
 # ---------------------------------------------------------------------------
@@ -118,16 +117,17 @@ class PackageInstallRule(BaseRule):
                 for keyword in _INSTALL_KEYWORDS:
                     if keyword in arg_lower:
                         call_name = python_scanner.get_call_name(call)
-                        findings.append(Finding(
-                            rule_id=self.rule_id,
-                            category=self.category,
-                            severity=self.severity,
-                            decision=Decision.NEEDS_HUMAN_REVIEW,
-                            evidence=f"{call_name}({arg!r})",
-                            line_number=call.lineno,
-                            description=f"Package installation detected: {arg}",
-                            recommendation="Verify the package is trusted and version-pinned.",
-                        ))
+                        findings.append(
+                            Finding(
+                                rule_id=self.rule_id,
+                                category=self.category,
+                                severity=self.severity,
+                                decision=Decision.NEEDS_HUMAN_REVIEW,
+                                evidence=f"{call_name}({arg!r})",
+                                line_number=call.lineno,
+                                description=f"Package installation detected: {arg}",
+                                recommendation="Verify the package is trusted and version-pinned.",
+                            ))
                         break
 
         return findings
@@ -138,16 +138,17 @@ class PackageInstallRule(BaseRule):
         matches = bash_scanner.scan_lines(ctx.source_code, patterns)
 
         for m in matches:
-            findings.append(Finding(
-                rule_id=self.rule_id,
-                category=self.category,
-                severity=self.severity,
-                decision=Decision.NEEDS_HUMAN_REVIEW,
-                evidence=m.line_content,
-                line_number=m.line_number,
-                description=f"Package installation detected ({m.pattern_name})",
-                recommendation="Verify the package is trusted and version-pinned.",
-            ))
+            findings.append(
+                Finding(
+                    rule_id=self.rule_id,
+                    category=self.category,
+                    severity=self.severity,
+                    decision=Decision.NEEDS_HUMAN_REVIEW,
+                    evidence=m.line_content,
+                    line_number=m.line_number,
+                    description=f"Package installation detected ({m.pattern_name})",
+                    recommendation="Verify the package is trusted and version-pinned.",
+                ))
 
         return findings
 
@@ -188,20 +189,20 @@ class UntrustedSourceRule(BaseRule):
                 arg_lower = arg.lower()
                 # Check for URL-based installation
                 if ("pip install" in arg_lower or "pip3 install" in arg_lower):
-                    if ("http://" in arg_lower or "https://" in arg_lower or
-                            "git+" in arg_lower or "--index-url" in arg_lower or
-                            "--extra-index-url" in arg_lower):
+                    if ("http://" in arg_lower or "https://" in arg_lower or "git+" in arg_lower
+                            or "--index-url" in arg_lower or "--extra-index-url" in arg_lower):
                         call_name = python_scanner.get_call_name(call)
-                        findings.append(Finding(
-                            rule_id=self.rule_id,
-                            category=self.category,
-                            severity=self.severity,
-                            decision=Decision.DENY,
-                            evidence=f"{call_name}({arg!r})",
-                            line_number=call.lineno,
-                            description=f"Installation from untrusted source: {arg}",
-                            recommendation="Only install packages from official registries (PyPI).",
-                        ))
+                        findings.append(
+                            Finding(
+                                rule_id=self.rule_id,
+                                category=self.category,
+                                severity=self.severity,
+                                decision=Decision.DENY,
+                                evidence=f"{call_name}({arg!r})",
+                                line_number=call.lineno,
+                                description=f"Installation from untrusted source: {arg}",
+                                recommendation="Only install packages from official registries (PyPI).",
+                            ))
 
         return findings
 
@@ -215,15 +216,16 @@ class UntrustedSourceRule(BaseRule):
             decision = Decision.DENY if "pipe_bash" in m.pattern_name else Decision.NEEDS_HUMAN_REVIEW
             severity = Severity.HIGH
 
-            findings.append(Finding(
-                rule_id=self.rule_id,
-                category=self.category,
-                severity=severity,
-                decision=decision,
-                evidence=m.line_content,
-                line_number=m.line_number,
-                description=f"Installation from untrusted source ({m.pattern_name})",
-                recommendation="Avoid installing from URLs or piping scripts. Use official registries.",
-            ))
+            findings.append(
+                Finding(
+                    rule_id=self.rule_id,
+                    category=self.category,
+                    severity=severity,
+                    decision=decision,
+                    evidence=m.line_content,
+                    line_number=m.line_number,
+                    description=f"Installation from untrusted source ({m.pattern_name})",
+                    recommendation="Avoid installing from URLs or piping scripts. Use official registries.",
+                ))
 
         return findings

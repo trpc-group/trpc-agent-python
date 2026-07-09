@@ -119,13 +119,10 @@ class ScriptSafetyGuard:
                         decision=Decision.NEEDS_HUMAN_REVIEW,
                         confidence=0.8,
                         evidence=_truncate(input.script_content, 100),
-                        description=(
-                            "Python AST parsing failed. Script may contain syntax errors "
-                            "or use features unsupported by static analysis."
-                        ),
+                        description=("Python AST parsing failed. Script may contain syntax errors "
+                                     "or use features unsupported by static analysis."),
                         recommendation="Manually review the script before execution.",
-                    )
-                )
+                    ))
 
         # --- Step 2: Build ScanContext ---
         ctx = ScanContext.from_input(input, ast_tree)
@@ -156,8 +153,7 @@ class ScriptSafetyGuard:
                         confidence=0.5,
                         description=f"Rule execution error: {type(e).__name__}: {e}",
                         recommendation="Investigate rule failure; consider manual review.",
-                    )
-                )
+                    ))
 
         # --- Step 5: Aggregate decision ---
         final_decision = _aggregate_decision(all_findings)
@@ -227,19 +223,16 @@ def _emit_audit_log(input: SafetyCheckInput, result: SafetyCheckResult) -> None:
     - Desensitized evidence (truncated, secrets masked)
     - Tool and invocation metadata for correlation
     """
-    findings_summary = [
-        {
-            "rule_id": f.rule_id,
-            "category": f.category.value if hasattr(f.category, "value") else str(f.category),
-            "severity": f.severity.value,
-            "decision": f.decision.value,
-            "confidence": f.confidence,
-            "evidence": _sanitize_evidence(f.evidence),
-            "line_number": f.line_number,
-            "description": f.description,
-        }
-        for f in result.findings
-    ]
+    findings_summary = [{
+        "rule_id": f.rule_id,
+        "category": f.category.value if hasattr(f.category, "value") else str(f.category),
+        "severity": f.severity.value,
+        "decision": f.decision.value,
+        "confidence": f.confidence,
+        "evidence": _sanitize_evidence(f.evidence),
+        "line_number": f.line_number,
+        "description": f.description,
+    } for f in result.findings]
 
     audit_entry = {
         "event": "safety_check",
@@ -300,9 +293,7 @@ def _record_otel(input: SafetyCheckInput, result: SafetyCheckResult) -> None:
         decision=result.decision.value,
     )
     for finding in result.findings:
-        category_value = (
-            finding.category.value if hasattr(finding.category, "value") else str(finding.category)
-        )
+        category_value = (finding.category.value if hasattr(finding.category, "value") else str(finding.category))
         record_rule_hit(
             rule_id=finding.rule_id,
             category=category_value,
@@ -386,9 +377,7 @@ def _write_report_and_audit(
                 finding["evidence"] = _sanitize_evidence(finding.get("evidence", ""))
 
             # Atomic write: write to temp file then rename
-            fd, tmp_path = tempfile.mkstemp(
-                dir=str(report_dir), suffix=".tmp", prefix=".report_"
-            )
+            fd, tmp_path = tempfile.mkstemp(dir=str(report_dir), suffix=".tmp", prefix=".report_")
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as tmp_f:
                     json.dump(report_data, tmp_f, indent=2, ensure_ascii=False)

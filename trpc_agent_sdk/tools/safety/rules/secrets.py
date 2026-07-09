@@ -130,16 +130,17 @@ class HardcodedSecretsRule(BaseRule):
         assignments = python_scanner.find_string_assignments(tree)
         for var_name, value in assignments.items():
             if _is_secret_var_name(var_name) and len(value) >= 8:
-                findings.append(Finding(
-                    rule_id=self.rule_id,
-                    category=self.category,
-                    severity=self.severity,
-                    decision=Decision.DENY,
-                    evidence=f'{var_name} = "{value[:20]}..."' if len(value) > 20 else f'{var_name} = "{value}"',
-                    line_number=0,  # find_string_assignments doesn't track line numbers
-                    description=f"Hardcoded secret in variable: {var_name}",
-                    recommendation="Use environment variables or a secrets manager instead.",
-                ))
+                findings.append(
+                    Finding(
+                        rule_id=self.rule_id,
+                        category=self.category,
+                        severity=self.severity,
+                        decision=Decision.DENY,
+                        evidence=f'{var_name} = "{value[:20]}..."' if len(value) > 20 else f'{var_name} = "{value}"',
+                        line_number=0,  # find_string_assignments doesn't track line numbers
+                        description=f"Hardcoded secret in variable: {var_name}",
+                        recommendation="Use environment variables or a secrets manager instead.",
+                    ))
 
         # Check all string constants for known secret patterns
         for node in ast.walk(tree):
@@ -147,16 +148,17 @@ class HardcodedSecretsRule(BaseRule):
                 is_secret, pattern_name = _looks_like_real_secret(node.value)
                 if is_secret:
                     truncated = node.value[:30] + "..." if len(node.value) > 30 else node.value
-                    findings.append(Finding(
-                        rule_id=self.rule_id,
-                        category=self.category,
-                        severity=self.severity,
-                        decision=Decision.DENY,
-                        evidence=f'"{truncated}"',
-                        line_number=node.lineno if hasattr(node, "lineno") else 0,
-                        description=f"Hardcoded secret detected ({pattern_name})",
-                        recommendation="Remove the secret. Use environment variables or a secrets manager.",
-                    ))
+                    findings.append(
+                        Finding(
+                            rule_id=self.rule_id,
+                            category=self.category,
+                            severity=self.severity,
+                            decision=Decision.DENY,
+                            evidence=f'"{truncated}"',
+                            line_number=node.lineno if hasattr(node, "lineno") else 0,
+                            description=f"Hardcoded secret detected ({pattern_name})",
+                            recommendation="Remove the secret. Use environment variables or a secrets manager.",
+                        ))
 
         return findings
 
@@ -166,16 +168,17 @@ class HardcodedSecretsRule(BaseRule):
         matches = bash_scanner.scan_lines(ctx.source_code, patterns)
 
         for m in matches:
-            findings.append(Finding(
-                rule_id=self.rule_id,
-                category=self.category,
-                severity=self.severity,
-                decision=Decision.DENY,
-                evidence=m.line_content,
-                line_number=m.line_number,
-                description=f"Hardcoded secret detected ({m.pattern_name})",
-                recommendation="Use environment variables or a secrets manager instead.",
-            ))
+            findings.append(
+                Finding(
+                    rule_id=self.rule_id,
+                    category=self.category,
+                    severity=self.severity,
+                    decision=Decision.DENY,
+                    evidence=m.line_content,
+                    line_number=m.line_number,
+                    description=f"Hardcoded secret detected ({m.pattern_name})",
+                    recommendation="Use environment variables or a secrets manager instead.",
+                ))
 
         # Also scan for known secret value patterns in all lines
         for line_num, line in enumerate(ctx.lines, start=1):
@@ -185,16 +188,17 @@ class HardcodedSecretsRule(BaseRule):
             if is_secret:
                 # Avoid duplicate if already caught by pattern above
                 if not any(f.line_number == line_num for f in findings):
-                    findings.append(Finding(
-                        rule_id=self.rule_id,
-                        category=self.category,
-                        severity=self.severity,
-                        decision=Decision.DENY,
-                        evidence=line.strip()[:80],
-                        line_number=line_num,
-                        description=f"Secret pattern detected in code ({pattern_name})",
-                        recommendation="Remove the secret. Use environment variables or a secrets manager.",
-                    ))
+                    findings.append(
+                        Finding(
+                            rule_id=self.rule_id,
+                            category=self.category,
+                            severity=self.severity,
+                            decision=Decision.DENY,
+                            evidence=line.strip()[:80],
+                            line_number=line_num,
+                            description=f"Secret pattern detected in code ({pattern_name})",
+                            recommendation="Remove the secret. Use environment variables or a secrets manager.",
+                        ))
 
         return findings
 
@@ -229,26 +233,25 @@ class EnvLeakageRule(BaseRule):
         tree = ctx.ast_tree
 
         # Detect os.environ dumping (print(os.environ), logging os.environ)
-        print_calls = python_scanner.find_function_calls(tree, {"print", "logging.info",
-                                                                 "logging.debug", "logger.info",
-                                                                 "logger.debug"})
+        print_calls = python_scanner.find_function_calls(
+            tree, {"print", "logging.info", "logging.debug", "logger.info", "logger.debug"})
         for call in print_calls:
             # Check if any argument is os.environ
             for arg in call.args:
                 if isinstance(arg, ast.Attribute):
-                    if (isinstance(arg.value, ast.Name) and arg.value.id == "os"
-                            and arg.attr == "environ"):
+                    if (isinstance(arg.value, ast.Name) and arg.value.id == "os" and arg.attr == "environ"):
                         call_name = python_scanner.get_call_name(call)
-                        findings.append(Finding(
-                            rule_id=self.rule_id,
-                            category=self.category,
-                            severity=self.severity,
-                            decision=Decision.NEEDS_HUMAN_REVIEW,
-                            evidence=f"{call_name}(os.environ)",
-                            line_number=call.lineno,
-                            description="Environment variables may be leaked via output",
-                            recommendation="Avoid printing full os.environ. Access specific variables only.",
-                        ))
+                        findings.append(
+                            Finding(
+                                rule_id=self.rule_id,
+                                category=self.category,
+                                severity=self.severity,
+                                decision=Decision.NEEDS_HUMAN_REVIEW,
+                                evidence=f"{call_name}(os.environ)",
+                                line_number=call.lineno,
+                                description="Environment variables may be leaked via output",
+                                recommendation="Avoid printing full os.environ. Access specific variables only.",
+                            ))
 
         return findings
 
@@ -258,15 +261,16 @@ class EnvLeakageRule(BaseRule):
         matches = bash_scanner.scan_lines(ctx.source_code, patterns)
 
         for m in matches:
-            findings.append(Finding(
-                rule_id=self.rule_id,
-                category=self.category,
-                severity=self.severity,
-                decision=Decision.NEEDS_HUMAN_REVIEW,
-                evidence=m.line_content,
-                line_number=m.line_number,
-                description=f"Potential secret leakage via environment ({m.pattern_name})",
-                recommendation="Avoid dumping all environment variables. They may contain secrets.",
-            ))
+            findings.append(
+                Finding(
+                    rule_id=self.rule_id,
+                    category=self.category,
+                    severity=self.severity,
+                    decision=Decision.NEEDS_HUMAN_REVIEW,
+                    evidence=m.line_content,
+                    line_number=m.line_number,
+                    description=f"Potential secret leakage via environment ({m.pattern_name})",
+                    recommendation="Avoid dumping all environment variables. They may contain secrets.",
+                ))
 
         return findings

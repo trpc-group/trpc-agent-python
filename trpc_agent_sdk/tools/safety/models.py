@@ -51,9 +51,7 @@ class ToolMetadata(BaseModel):
     invocation_id: str = Field(default="", description="Unique invocation identifier for tracing.")
     agent_name: str = Field(default="", description="Name of the agent invoking the tool.")
     user_id: str = Field(default="", description="User identifier.")
-    parameters: dict[str, Any] = Field(
-        default_factory=dict, description="Tool parameters passed by the caller."
-    )
+    parameters: dict[str, Any] = Field(default_factory=dict, description="Tool parameters passed by the caller.")
 
 
 class Finding(BaseModel):
@@ -63,9 +61,7 @@ class Finding(BaseModel):
     category: RiskCategory = Field(description="Risk category this finding belongs to.")
     severity: Severity = Field(description="Severity level of the finding.")
     decision: Decision = Field(description="Suggested decision for this finding.")
-    confidence: float = Field(
-        default=1.0, ge=0.0, le=1.0, description="Confidence score between 0 and 1."
-    )
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Confidence score between 0 and 1.")
     evidence: str = Field(default="", description="Code snippet that triggered the finding.")
     line_number: int = Field(default=0, ge=0, description="Line number where the risk was found.")
     description: str = Field(default="", description="Human-readable description of the risk.")
@@ -77,28 +73,19 @@ class SafetyCheckInput(BaseModel):
 
     script_content: str = Field(description="The script source code to be checked.")
     language: Language = Field(description="Script language: 'python' or 'bash'.")
-    command_args: list[str] = Field(
-        default_factory=list, description="Command-line arguments for execution."
-    )
+    command_args: list[str] = Field(default_factory=list, description="Command-line arguments for execution.")
     working_directory: str = Field(default="", description="Working directory for script execution.")
-    environment_variables: dict[str, str] = Field(
-        default_factory=dict, description="Environment variables passed to the script."
-    )
-    tool_metadata: ToolMetadata = Field(
-        default_factory=ToolMetadata, description="Metadata about the invoking tool."
-    )
+    environment_variables: dict[str, str] = Field(default_factory=dict,
+                                                  description="Environment variables passed to the script.")
+    tool_metadata: ToolMetadata = Field(default_factory=ToolMetadata, description="Metadata about the invoking tool.")
 
 
 class SafetyCheckResult(BaseModel):
     """Output of the ScriptSafetyGuard.check() method."""
 
     decision: Decision = Field(description="Final aggregated decision.")
-    findings: list[Finding] = Field(
-        default_factory=list, description="All findings from rule scans."
-    )
-    scan_duration_ms: float = Field(
-        default=0.0, ge=0.0, description="Time spent scanning in milliseconds."
-    )
+    findings: list[Finding] = Field(default_factory=list, description="All findings from rule scans.")
+    scan_duration_ms: float = Field(default=0.0, ge=0.0, description="Time spent scanning in milliseconds.")
     scanned_language: Language = Field(description="Language that was scanned.")
     tool_name: str = Field(default="", description="Tool name that triggered the check.")
     invocation_id: str = Field(default="", description="Invocation ID for correlation.")
@@ -122,28 +109,33 @@ class SafetyCheckResult(BaseModel):
     def to_report_dict(self) -> dict:
         """Convert to a structured report dictionary suitable for JSON serialization."""
         return {
-            "tool_name": self.tool_name,
-            "invocation_id": self.invocation_id,
-            "language": self.scanned_language.value,
-            "decision": self.decision.value,
-            "risk_level": self.max_severity,
-            "is_blocked": self.is_blocked,
-            "scan_duration_ms": self.scan_duration_ms,
-            "findings_count": len(self.findings),
-            "findings": [
-                {
-                    "rule_id": f.rule_id,
-                    "risk_category": f.category.value,
-                    "severity": f.severity.value,
-                    "decision": f.decision.value,
-                    "confidence": f.confidence,
-                    "evidence": f.evidence,
-                    "line_number": f.line_number,
-                    "description": f.description,
-                    "recommendation": f.recommendation,
-                }
-                for f in self.findings
-            ],
+            "tool_name":
+            self.tool_name,
+            "invocation_id":
+            self.invocation_id,
+            "language":
+            self.scanned_language.value,
+            "decision":
+            self.decision.value,
+            "risk_level":
+            self.max_severity,
+            "is_blocked":
+            self.is_blocked,
+            "scan_duration_ms":
+            self.scan_duration_ms,
+            "findings_count":
+            len(self.findings),
+            "findings": [{
+                "rule_id": f.rule_id,
+                "risk_category": f.category.value,
+                "severity": f.severity.value,
+                "decision": f.decision.value,
+                "confidence": f.confidence,
+                "evidence": f.evidence,
+                "line_number": f.line_number,
+                "description": f.description,
+                "recommendation": f.recommendation,
+            } for f in self.findings],
         }
 
     def to_audit_dict(self) -> dict:
@@ -158,7 +150,8 @@ class SafetyCheckResult(BaseModel):
             "invocation_id": self.invocation_id,
             "decision": self.decision.value,
             "risk_level": self.max_severity,
-            "rule_ids": list({f.rule_id for f in self.findings}),
+            "rule_ids": list({f.rule_id
+                              for f in self.findings}),
             "duration_ms": self.scan_duration_ms,
             "is_desensitized": True,  # Evidence is always sanitized in audit output
             "is_blocked": self.is_blocked,
@@ -177,12 +170,8 @@ class ScanContext(BaseModel):
     )
     lines: list[str] = Field(default_factory=list, description="Source code split into lines.")
     working_directory: str = Field(default="", description="Working directory for execution.")
-    environment_variables: dict[str, str] = Field(
-        default_factory=dict, description="Environment variables."
-    )
-    tool_metadata: ToolMetadata = Field(
-        default_factory=ToolMetadata, description="Tool metadata."
-    )
+    environment_variables: dict[str, str] = Field(default_factory=dict, description="Environment variables.")
+    tool_metadata: ToolMetadata = Field(default_factory=ToolMetadata, description="Tool metadata.")
 
     model_config = {"arbitrary_types_allowed": True}
 

@@ -194,13 +194,9 @@ class SafetyCheckBlockedError(Exception):
 
     def __init__(self, result: SafetyCheckResult) -> None:
         self.result = result
-        findings_desc = "; ".join(
-            f"[{f.rule_id}] {f.description}" for f in result.findings[:3]
-        )
-        super().__init__(
-            f"Safety check blocked execution (decision={result.decision.value}, "
-            f"findings={len(result.findings)}): {findings_desc}"
-        )
+        findings_desc = "; ".join(f"[{f.rule_id}] {f.description}" for f in result.findings[:3])
+        super().__init__(f"Safety check blocked execution (decision={result.decision.value}, "
+                         f"findings={len(result.findings)}): {findings_desc}")
 
 
 def _make_blocked_error(result: SafetyCheckResult) -> SafetyCheckBlockedError:

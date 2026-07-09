@@ -126,29 +126,31 @@ class ProcessExecutionRule(BaseRule):
                 # Extract just the binary name (strip path)
                 binary = command.rsplit("/", 1)[-1]
                 if binary not in allowed_commands:
-                    findings.append(Finding(
+                    findings.append(
+                        Finding(
+                            rule_id=self.rule_id,
+                            category=self.category,
+                            severity=self.severity,
+                            decision=Decision.NEEDS_HUMAN_REVIEW,
+                            evidence=f"{call_name}({str_args[0]!r})",
+                            line_number=call.lineno,
+                            description=f"Execution of non-allowed command: {binary}",
+                            recommendation=f"Add '{binary}' to process.allowed_commands if this is expected.",
+                        ))
+            else:
+                # Cannot determine command statically
+                findings.append(
+                    Finding(
                         rule_id=self.rule_id,
                         category=self.category,
                         severity=self.severity,
                         decision=Decision.NEEDS_HUMAN_REVIEW,
-                        evidence=f"{call_name}({str_args[0]!r})",
+                        confidence=0.7,
+                        evidence=call_name,
                         line_number=call.lineno,
-                        description=f"Execution of non-allowed command: {binary}",
-                        recommendation=f"Add '{binary}' to process.allowed_commands if this is expected.",
+                        description=f"Subprocess call with non-static command: {call_name}",
+                        recommendation="Ensure the executed command is safe and expected.",
                     ))
-            else:
-                # Cannot determine command statically
-                findings.append(Finding(
-                    rule_id=self.rule_id,
-                    category=self.category,
-                    severity=self.severity,
-                    decision=Decision.NEEDS_HUMAN_REVIEW,
-                    confidence=0.7,
-                    evidence=call_name,
-                    line_number=call.lineno,
-                    description=f"Subprocess call with non-static command: {call_name}",
-                    recommendation="Ensure the executed command is safe and expected.",
-                ))
 
         return findings
 
@@ -160,16 +162,17 @@ class ProcessExecutionRule(BaseRule):
         for m in matches:
             # Check if the matched command is in allowed list
             if m.pattern_name not in allowed_commands:
-                findings.append(Finding(
-                    rule_id=self.rule_id,
-                    category=self.category,
-                    severity=self.severity,
-                    decision=Decision.NEEDS_HUMAN_REVIEW,
-                    evidence=m.line_content,
-                    line_number=m.line_number,
-                    description=f"Dangerous command execution: {m.pattern_name}",
-                    recommendation="Verify this command execution is intentional and safe.",
-                ))
+                findings.append(
+                    Finding(
+                        rule_id=self.rule_id,
+                        category=self.category,
+                        severity=self.severity,
+                        decision=Decision.NEEDS_HUMAN_REVIEW,
+                        evidence=m.line_content,
+                        line_number=m.line_number,
+                        description=f"Dangerous command execution: {m.pattern_name}",
+                        recommendation="Verify this command execution is intentional and safe.",
+                    ))
 
         return findings
 
@@ -207,20 +210,22 @@ class ShellInjectionRule(BaseRule):
         shell_calls = python_scanner.find_function_calls(tree, _PYTHON_SHELL_FUNCS)
         for call in shell_calls:
             call_name = python_scanner.get_call_name(call)
-            findings.append(Finding(
-                rule_id=self.rule_id,
-                category=self.category,
-                severity=self.severity,
-                decision=Decision.NEEDS_HUMAN_REVIEW,
-                evidence=call_name,
-                line_number=call.lineno,
-                description=f"Shell injection risk: {call_name} executes commands through shell",
-                recommendation="Use subprocess.run([...]) with shell=False for safer execution.",
-            ))
+            findings.append(
+                Finding(
+                    rule_id=self.rule_id,
+                    category=self.category,
+                    severity=self.severity,
+                    decision=Decision.NEEDS_HUMAN_REVIEW,
+                    evidence=call_name,
+                    line_number=call.lineno,
+                    description=f"Shell injection risk: {call_name} executes commands through shell",
+                    recommendation="Use subprocess.run([...]) with shell=False for safer execution.",
+                ))
 
         # Detect subprocess calls with shell=True keyword arg
-        subprocess_funcs = {"subprocess.run", "subprocess.call", "subprocess.check_call",
-                           "subprocess.check_output", "subprocess.Popen"}
+        subprocess_funcs = {
+            "subprocess.run", "subprocess.call", "subprocess.check_call", "subprocess.check_output", "subprocess.Popen"
+        }
         subprocess_calls = python_scanner.find_function_calls(tree, subprocess_funcs)
         for call in subprocess_calls:
             for kw in call.keywords:
@@ -228,31 +233,33 @@ class ShellInjectionRule(BaseRule):
                     # Check if shell=True
                     if hasattr(kw.value, "value") and kw.value.value is True:
                         call_name = python_scanner.get_call_name(call)
-                        findings.append(Finding(
-                            rule_id=self.rule_id,
-                            category=self.category,
-                            severity=self.severity,
-                            decision=Decision.NEEDS_HUMAN_REVIEW,
-                            evidence=f"{call_name}(shell=True)",
-                            line_number=call.lineno,
-                            description=f"Shell injection risk: {call_name} with shell=True",
-                            recommendation="Use shell=False and pass command as a list.",
-                        ))
+                        findings.append(
+                            Finding(
+                                rule_id=self.rule_id,
+                                category=self.category,
+                                severity=self.severity,
+                                decision=Decision.NEEDS_HUMAN_REVIEW,
+                                evidence=f"{call_name}(shell=True)",
+                                line_number=call.lineno,
+                                description=f"Shell injection risk: {call_name} with shell=True",
+                                recommendation="Use shell=False and pass command as a list.",
+                            ))
 
         # Detect eval/exec builtins
         eval_funcs = python_scanner.find_function_calls(tree, {"eval", "exec", "compile"})
         for call in eval_funcs:
             call_name = python_scanner.get_call_name(call)
-            findings.append(Finding(
-                rule_id=self.rule_id,
-                category=self.category,
-                severity=self.severity,
-                decision=Decision.DENY,
-                evidence=call_name,
-                line_number=call.lineno,
-                description=f"Code injection risk: {call_name}() allows arbitrary code execution",
-                recommendation="Avoid eval/exec. Use safer alternatives for dynamic behavior.",
-            ))
+            findings.append(
+                Finding(
+                    rule_id=self.rule_id,
+                    category=self.category,
+                    severity=self.severity,
+                    decision=Decision.DENY,
+                    evidence=call_name,
+                    line_number=call.lineno,
+                    description=f"Code injection risk: {call_name}() allows arbitrary code execution",
+                    recommendation="Avoid eval/exec. Use safer alternatives for dynamic behavior.",
+                ))
 
         return findings
 
@@ -268,27 +275,29 @@ class ShellInjectionRule(BaseRule):
 
         for m in matches:
             if m.pattern_name == "eval":
-                findings.append(Finding(
-                    rule_id=self.rule_id,
-                    category=self.category,
-                    severity=self.severity,
-                    decision=Decision.DENY,
-                    evidence=m.line_content,
-                    line_number=m.line_number,
-                    description="Shell injection risk: eval executes arbitrary strings",
-                    recommendation="Avoid eval. Use functions or direct commands.",
-                ))
+                findings.append(
+                    Finding(
+                        rule_id=self.rule_id,
+                        category=self.category,
+                        severity=self.severity,
+                        decision=Decision.DENY,
+                        evidence=m.line_content,
+                        line_number=m.line_number,
+                        description="Shell injection risk: eval executes arbitrary strings",
+                        recommendation="Avoid eval. Use functions or direct commands.",
+                    ))
             elif m.pattern_name == "backtick_expansion":
-                findings.append(Finding(
-                    rule_id=self.rule_id,
-                    category=self.category,
-                    severity=Severity.MEDIUM,
-                    decision=Decision.NEEDS_HUMAN_REVIEW,
-                    confidence=0.7,
-                    evidence=m.line_content,
-                    line_number=m.line_number,
-                    description="Backtick command substitution detected",
-                    recommendation="Use $(...) for clarity, and ensure substituted content is safe.",
-                ))
+                findings.append(
+                    Finding(
+                        rule_id=self.rule_id,
+                        category=self.category,
+                        severity=Severity.MEDIUM,
+                        decision=Decision.NEEDS_HUMAN_REVIEW,
+                        confidence=0.7,
+                        evidence=m.line_content,
+                        line_number=m.line_number,
+                        description="Backtick command substitution detected",
+                        recommendation="Use $(...) for clarity, and ensure substituted content is safe.",
+                    ))
 
         return findings

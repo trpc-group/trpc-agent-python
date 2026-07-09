@@ -46,7 +46,6 @@ _PYTHON_MULTIPROCESS_FUNCS: set[str] = {
     "threading.Thread",
 }
 
-
 # ---------------------------------------------------------------------------
 # Rule: RES-001 — Fork bomb / infinite loop
 # ---------------------------------------------------------------------------
@@ -84,30 +83,32 @@ class ForkBombRule(BaseRule):
                     # Check if loop body has a break/return
                     has_exit = self._has_exit_statement(node)
                     if not has_exit:
-                        findings.append(Finding(
-                            rule_id=self.rule_id,
-                            category=self.category,
-                            severity=self.severity,
-                            decision=Decision.NEEDS_HUMAN_REVIEW,
-                            evidence="while True: (no break/return found)",
-                            line_number=node.lineno,
-                            description="Potential infinite loop: while True without break",
-                            recommendation="Ensure the loop has a termination condition.",
-                        ))
+                        findings.append(
+                            Finding(
+                                rule_id=self.rule_id,
+                                category=self.category,
+                                severity=self.severity,
+                                decision=Decision.NEEDS_HUMAN_REVIEW,
+                                evidence="while True: (no break/return found)",
+                                line_number=node.lineno,
+                                description="Potential infinite loop: while True without break",
+                                recommendation="Ensure the loop has a termination condition.",
+                            ))
 
         # Detect os.fork
         fork_calls = python_scanner.find_function_calls(tree, {"os.fork"})
         for call in fork_calls:
-            findings.append(Finding(
-                rule_id=self.rule_id,
-                category=self.category,
-                severity=self.severity,
-                decision=Decision.DENY,
-                evidence="os.fork()",
-                line_number=call.lineno,
-                description="Process forking detected — potential fork bomb risk",
-                recommendation="Avoid os.fork(). Use multiprocessing with controlled pool size.",
-            ))
+            findings.append(
+                Finding(
+                    rule_id=self.rule_id,
+                    category=self.category,
+                    severity=self.severity,
+                    decision=Decision.DENY,
+                    evidence="os.fork()",
+                    line_number=call.lineno,
+                    description="Process forking detected — potential fork bomb risk",
+                    recommendation="Avoid os.fork(). Use multiprocessing with controlled pool size.",
+                ))
 
         return findings
 
@@ -133,16 +134,17 @@ class ForkBombRule(BaseRule):
 
         for m in matches:
             is_fork_bomb = "fork_bomb" in m.pattern_name
-            findings.append(Finding(
-                rule_id=self.rule_id,
-                category=self.category,
-                severity=Severity.HIGH,
-                decision=Decision.DENY if is_fork_bomb else Decision.NEEDS_HUMAN_REVIEW,
-                evidence=m.line_content,
-                line_number=m.line_number,
-                description=f"Resource exhaustion pattern: {m.pattern_name}",
-                recommendation="Remove this pattern. It may cause system resource exhaustion.",
-            ))
+            findings.append(
+                Finding(
+                    rule_id=self.rule_id,
+                    category=self.category,
+                    severity=Severity.HIGH,
+                    decision=Decision.DENY if is_fork_bomb else Decision.NEEDS_HUMAN_REVIEW,
+                    evidence=m.line_content,
+                    line_number=m.line_number,
+                    description=f"Resource exhaustion pattern: {m.pattern_name}",
+                    recommendation="Remove this pattern. It may cause system resource exhaustion.",
+                ))
 
         return findings
 
@@ -182,32 +184,34 @@ class ResourceConsumptionRule(BaseRule):
                 # Detect patterns like "x" * 10000000 or [0] * huge_number
                 if isinstance(node.right, ast.Constant) and isinstance(node.right.value, int):
                     if node.right.value > 10_000_000:
-                        findings.append(Finding(
-                            rule_id=self.rule_id,
-                            category=self.category,
-                            severity=self.severity,
-                            decision=Decision.NEEDS_HUMAN_REVIEW,
-                            evidence=f"multiplication with large constant: {node.right.value}",
-                            line_number=node.lineno,
-                            description="Potential excessive memory allocation",
-                            recommendation="Verify this large allocation is intentional and bounded.",
-                        ))
+                        findings.append(
+                            Finding(
+                                rule_id=self.rule_id,
+                                category=self.category,
+                                severity=self.severity,
+                                decision=Decision.NEEDS_HUMAN_REVIEW,
+                                evidence=f"multiplication with large constant: {node.right.value}",
+                                line_number=node.lineno,
+                                description="Potential excessive memory allocation",
+                                recommendation="Verify this large allocation is intentional and bounded.",
+                            ))
 
         # Detect multiprocessing without pool size limits
         mp_calls = python_scanner.find_function_calls(tree, _PYTHON_MULTIPROCESS_FUNCS)
         for call in mp_calls:
             call_name = python_scanner.get_call_name(call)
-            findings.append(Finding(
-                rule_id=self.rule_id,
-                category=self.category,
-                severity=Severity.LOW,
-                decision=Decision.ALLOW,
-                confidence=0.5,
-                evidence=call_name,
-                line_number=call.lineno,
-                description=f"Process/thread creation: {call_name}",
-                recommendation="Ensure bounded concurrency (use Pool with max_workers).",
-            ))
+            findings.append(
+                Finding(
+                    rule_id=self.rule_id,
+                    category=self.category,
+                    severity=Severity.LOW,
+                    decision=Decision.ALLOW,
+                    confidence=0.5,
+                    evidence=call_name,
+                    line_number=call.lineno,
+                    description=f"Process/thread creation: {call_name}",
+                    recommendation="Ensure bounded concurrency (use Pool with max_workers).",
+                ))
 
         return findings
 
@@ -223,15 +227,16 @@ class ResourceConsumptionRule(BaseRule):
         matches = bash_scanner.scan_lines(ctx.source_code, large_file_patterns)
 
         for m in matches:
-            findings.append(Finding(
-                rule_id=self.rule_id,
-                category=self.category,
-                severity=self.severity,
-                decision=Decision.NEEDS_HUMAN_REVIEW,
-                evidence=m.line_content,
-                line_number=m.line_number,
-                description=f"Large resource allocation: {m.pattern_name}",
-                recommendation="Verify the resource allocation size is reasonable.",
-            ))
+            findings.append(
+                Finding(
+                    rule_id=self.rule_id,
+                    category=self.category,
+                    severity=self.severity,
+                    decision=Decision.NEEDS_HUMAN_REVIEW,
+                    evidence=m.line_content,
+                    line_number=m.line_number,
+                    description=f"Large resource allocation: {m.pattern_name}",
+                    recommendation="Verify the resource allocation size is reasonable.",
+                ))
 
         return findings
