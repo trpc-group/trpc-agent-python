@@ -1,6 +1,13 @@
 .idea
 .vscode
 .DS_Store
+
+# 环境变量与密钥，禁止提交
+.env
+.env.*
+
+# spec-workflow tooling (local, not for version control)
+.spec-workflow/
 *.lock
 *.log
 examples/*.log
