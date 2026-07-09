@@ -1,0 +1,24 @@
+{
+  "tool_name": "06_subprocess_call",
+  "invocation_id": "sample-06_subprocess_call",
+  "language": "python",
+  "decision": "needs_human_review",
+  "risk_level": "high",
+  "is_blocked": false,
+  "scan_duration_ms": 0.459,
+  "findings_count": 1,
+  "findings": [
+    {
+      "rule_id": "PROC-001",
+      "risk_category": "process",
+      "severity": "high",
+      "decision": "needs_human_review",
+      "confidence": 0.7,
+      "evidence": "subprocess.run",
+      "line_number": 12,
+      "description": "Subprocess call with non-static command: subprocess.run",
+      "recommendation": "Ensure the executed command is safe and expected."
+    }
+  ],
+  "timestamp": "2026-07-09T03:33:33.447592+00:00"
+}

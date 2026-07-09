@@ -1,0 +1,79 @@
+{
+  "tool_name": "02_dangerous_delete",
+  "invocation_id": "sample-02_dangerous_delete",
+  "language": "python",
+  "decision": "deny",
+  "risk_level": "high",
+  "is_blocked": true,
+  "scan_duration_ms": 0.318,
+  "findings_count": 6,
+  "findings": [
+    {
+      "rule_id": "FS-001",
+      "risk_category": "file_operations",
+      "severity": "high",
+      "decision": "deny",
+      "confidence": 1.0,
+      "evidence": "os.remove('/etc/passwd')",
+      "line_number": 12,
+      "description": "File operation targets forbidden path: /etc/",
+      "recommendation": "Remove or change the file path to a permitted location."
+    },
+    {
+      "rule_id": "FS-001",
+      "risk_category": "file_operations",
+      "severity": "high",
+      "decision": "deny",
+      "confidence": 1.0,
+      "evidence": "os.remove('/etc/shadow')",
+      "line_number": 13,
+      "description": "File operation targets forbidden path: /etc/",
+      "recommendation": "Remove or change the file path to a permitted location."
+    },
+    {
+      "rule_id": "FS-001",
+      "risk_category": "file_operations",
+      "severity": "high",
+      "decision": "deny",
+      "confidence": 1.0,
+      "evidence": "os.remove('/etc/hosts')",
+      "line_number": 14,
+      "description": "File operation targets forbidden path: /etc/",
+      "recommendation": "Remove or change the file path to a permitted location."
+    },
+    {
+      "rule_id": "FS-002",
+      "risk_category": "file_operations",
+      "severity": "medium",
+      "decision": "needs_human_review",
+      "confidence": 1.0,
+      "evidence": "os.remove('/etc/passwd')",
+      "line_number": 12,
+      "description": "Destructive file operation: os.remove",
+      "recommendation": "Ensure this deletion is intentional and targets the correct path."
+    },
+    {
+      "rule_id": "FS-002",
+      "risk_category": "file_operations",
+      "severity": "medium",
+      "decision": "needs_human_review",
+      "confidence": 1.0,
+      "evidence": "os.remove('/etc/shadow')",
+      "line_number": 13,
+      "description": "Destructive file operation: os.remove",
+      "recommendation": "Ensure this deletion is intentional and targets the correct path."
+    },
+    {
+      "rule_id": "FS-002",
+      "risk_category": "file_operations",
+      "severity": "medium",
+      "decision": "needs_human_review",
+      "confidence": 1.0,
+      "evidence": "os.remove('/etc/hosts')",
+      "line_number": 14,
+      "description": "Destructive file operation: os.remove",
+      "recommendation": "Ensure this deletion is intentional and targets the correct path."
+    }
+  ],
+  "timestamp": "2026-07-09T03:33:33.443550+00:00"
+}

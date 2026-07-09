@@ -1,0 +1,24 @@
+{
+  "tool_name": "10_sensitive_output",
+  "invocation_id": "sample-10_sensitive_output",
+  "language": "python",
+  "decision": "needs_human_review",
+  "risk_level": "medium",
+  "is_blocked": false,
+  "scan_duration_ms": 0.411,
+  "findings_count": 1,
+  "findings": [
+    {
+      "rule_id": "SEC-002",
+      "risk_category": "secrets",
+      "severity": "medium",
+      "decision": "needs_human_review",
+      "confidence": 1.0,
+      "evidence": "print(os.environ)",
+      "line_number": 12,
+      "description": "Environment variables may be leaked via output",
+      "recommendation": "Avoid printing full os.environ. Access specific variables only."
+    }
+  ],
+  "timestamp": "2026-07-09T03:33:33.451672+00:00"
+}

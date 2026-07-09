@@ -1,0 +1,12 @@
+{
+  "tool_name": "05_whitelisted_network",
+  "invocation_id": "sample-05_whitelisted_network",
+  "language": "python",
+  "decision": "allow",
+  "risk_level": "none",
+  "is_blocked": false,
+  "scan_duration_ms": 0.588,
+  "findings_count": 0,
+  "findings": [],
+  "timestamp": "2026-07-09T03:33:33.446691+00:00"
+}

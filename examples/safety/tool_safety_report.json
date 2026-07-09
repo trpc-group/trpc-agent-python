@@ -1,0 +1,68 @@
+{
+  "_schema_description": "Script Safety Guard 结构化报告示例。每次工具调用经过安全扫描后产出一份此报告。",
+  "_field_descriptions": {
+    "tool_name": "被扫描的工具名称",
+    "invocation_id": "本次调用的唯一标识（UUID），用于关联审计日志",
+    "language": "脚本语言类型，如 python / bash / javascript",
+    "decision": "最终决策：allow（放行）| deny（拦截）| needs_human_review（需人工审批）",
+    "risk_level": "综合风险等级：none | low | medium | high | critical",
+    "is_blocked": "是否实际阻断了执行（deny 时为 true）",
+    "scan_duration_ms": "扫描耗时（毫秒）",
+    "findings_count": "发现的安全问题数量",
+    "findings[].rule_id": "触发的规则 ID，对应 policy 中的规则定义",
+    "findings[].risk_category": "风险分类：process | filesystem | network | secret | resource | dependency",
+    "findings[].severity": "该条发现的严重程度：low | medium | high | critical",
+    "findings[].decision": "该条发现的单独决策",
+    "findings[].confidence": "置信度 0.0~1.0，静态匹配为 1.0，启发式匹配 < 1.0",
+    "findings[].evidence": "触发的关键证据（函数名、模式等）",
+    "findings[].line_number": "问题所在行号",
+    "findings[].description": "问题的自然语言描述",
+    "findings[].recommendation": "修复建议",
+    "timestamp": "报告生成时间（ISO 8601 UTC）"
+  },
+
+  "tool_name": "execute_code",
+  "invocation_id": "inv-a3f8c91b-7d2e-4b5a-9c01-example001",
+  "language": "python",
+  "decision": "deny",
+  "risk_level": "high",
+  "is_blocked": true,
+  "scan_duration_ms": 1.24,
+  "findings_count": 3,
+  "findings": [
+    {
+      "rule_id": "PROC-001",
+      "risk_category": "process",
+      "severity": "high",
+      "decision": "needs_human_review",
+      "confidence": 0.7,
+      "evidence": "os.system",
+      "line_number": 12,
+      "description": "Subprocess call with non-static command: os.system",
+      "recommendation": "Ensure the executed command is safe and expected."
+    },
+    {
+      "rule_id": "PROC-002",
+      "risk_category": "process",
+      "severity": "high",
+      "decision": "deny",
+      "confidence": 1.0,
+      "evidence": "os.system",
+      "line_number": 12,
+      "description": "Shell injection risk: os.system executes commands through shell",
+      "recommendation": "Use subprocess.run([...]) with shell=False for safer execution."
+    },
+    {
+      "rule_id": "PROC-002",
+      "risk_category": "process",
+      "severity": "high",
+      "decision": "deny",
+      "confidence": 1.0,
+      "evidence": "eval",
+      "line_number": 17,
+      "description": "Code injection risk: eval() allows arbitrary code execution",
+      "recommendation": "Avoid eval/exec. Use safer alternatives for dynamic behavior."
+    }
+  ],
+  "timestamp": "2026-07-09T03:33:33.448384+00:00"
+}

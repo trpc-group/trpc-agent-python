@@ -1,0 +1,12 @@
+{
+  "tool_name": "01_safe_python",
+  "invocation_id": "sample-01_safe_python",
+  "language": "python",
+  "decision": "allow",
+  "risk_level": "none",
+  "is_blocked": false,
+  "scan_duration_ms": 0.989,
+  "findings_count": 0,
+  "findings": [],
+  "timestamp": "2026-07-09T03:33:33.442521+00:00"
+}

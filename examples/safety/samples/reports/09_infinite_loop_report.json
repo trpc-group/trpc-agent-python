@@ -1,0 +1,24 @@
+{
+  "tool_name": "09_infinite_loop",
+  "invocation_id": "sample-09_infinite_loop",
+  "language": "python",
+  "decision": "needs_human_review",
+  "risk_level": "high",
+  "is_blocked": false,
+  "scan_duration_ms": 0.292,
+  "findings_count": 1,
+  "findings": [
+    {
+      "rule_id": "RES-001",
+      "risk_category": "resource",
+      "severity": "high",
+      "decision": "needs_human_review",
+      "confidence": 1.0,
+      "evidence": "while True: (no break/return found)",
+      "line_number": 13,
+      "description": "Potential infinite loop: while True without break",
+      "recommendation": "Ensure the loop has a termination condition."
+    }
+  ],
+  "timestamp": "2026-07-09T03:33:33.450948+00:00"
+}

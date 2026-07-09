@@ -1,0 +1,46 @@
+{
+  "tool_name": "07_shell_injection",
+  "invocation_id": "sample-07_shell_injection",
+  "language": "python",
+  "decision": "deny",
+  "risk_level": "high",
+  "is_blocked": true,
+  "scan_duration_ms": 0.458,
+  "findings_count": 3,
+  "findings": [
+    {
+      "rule_id": "PROC-001",
+      "risk_category": "process",
+      "severity": "high",
+      "decision": "needs_human_review",
+      "confidence": 0.7,
+      "evidence": "os.system",
+      "line_number": 12,
+      "description": "Subprocess call with non-static command: os.system",
+      "recommendation": "Ensure the executed command is safe and expected."
+    },
+    {
+      "rule_id": "PROC-002",
+      "risk_category": "process",
+      "severity": "high",
+      "decision": "needs_human_review",
+      "confidence": 1.0,
+      "evidence": "os.system",
+      "line_number": 12,
+      "description": "Shell injection risk: os.system executes commands through shell",
+      "recommendation": "Use subprocess.run([...]) with shell=False for safer execution."
+    },
+    {
+      "rule_id": "PROC-002",
+      "risk_category": "process",
+      "severity": "high",
+      "decision": "deny",
+      "confidence": 1.0,
+      "evidence": "eval",
+      "line_number": 17,
+      "description": "Code injection risk: eval() allows arbitrary code execution",
+      "recommendation": "Avoid eval/exec. Use safer alternatives for dynamic behavior."
+    }
+  ],
+  "timestamp": "2026-07-09T03:33:33.448384+00:00"
+}
