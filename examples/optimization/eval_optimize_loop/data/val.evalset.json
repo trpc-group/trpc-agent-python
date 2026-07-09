@@ -1,110 +1,354 @@
 {
-  "eval_set_id": "val-math-validation",
-  "name": "Validation Set — Math Problems",
-  "description": "3 validation cases to detect overfitting. Case 1 is a variation of train_case_001. Case 2 is a harder problem. Case 3 is an edge case (zero/negative).",
+  "eval_set_id": "val-mixed-v2",
+  "name": "Validation Set — Mixed Domains V2",
+  "description": "15 validation cases to detect overfitting during optimization. Different from train cases but covers same domains. Includes intentionally tricky cases.",
   "eval_cases": [
     {
-      "eval_id": "val_case_001",
+      "eval_id": "val_simple_math_001",
       "eval_mode": "trace",
       "conversation": [
         {
           "invocation_id": "inv-v001",
-          "user_content": {
-            "parts": [{"text": "What is 12 + 35?"}],
-            "role": "user"
-          },
-          "final_response": {
-            "parts": [{"text": "47"}],
-            "role": "model"
-          }
+          "user_content": {"parts": [{"text": "What is 67 + 89?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "156"}], "role": "model"}
         }
       ],
       "actual_conversation": [
         {
           "invocation_id": "inv-v001",
-          "user_content": {
-            "parts": [{"text": "What is 12 + 35?"}],
-            "role": "user"
-          },
-          "final_response": {
-            "parts": [{"text": "12 + 35 = 47"}],
-            "role": "model"
-          },
+          "user_content": {"parts": [{"text": "What is 67 + 89?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "67 + 89 = 156"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "val_simple_math_002",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-v002",
+          "user_content": {"parts": [{"text": "Calculate 225 / 15"}], "role": "user"},
+          "final_response": {"parts": [{"text": "15"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-v002",
+          "user_content": {"parts": [{"text": "Calculate 225 / 15"}], "role": "user"},
+          "final_response": {"parts": [{"text": "225 / 15 = 15 because 15 * 15 = 225"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "val_reasoning_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-v003",
+          "user_content": {"parts": [{"text": "If a car uses 8 liters per 100 km, how many liters does it need for a 350 km trip?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "28 liters"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-v003",
+          "user_content": {"parts": [{"text": "If a car uses 8 liters per 100 km, how many liters does it need for a 350 km trip?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "8 L / 100 km = 0.08 L/km. For 350 km: 0.08 * 350 = 28 liters."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "val_reasoning_002_tricky",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-v004",
+          "user_content": {"parts": [{"text": "A store has a 20% off sale, then an extra 10% off the discounted price. How much do you pay for a $100 item?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "$72.00"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-v004",
+          "user_content": {"parts": [{"text": "A store has a 20% off sale, then an extra 10% off the discounted price. How much do you pay for a $100 item?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "First discount: $100 * 0.80 = $80. Second discount: $80 * 0.90 = $72.00. Total savings is 28%, not 30%."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "val_reasoning_003_tricky",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-v005",
+          "user_content": {"parts": [{"text": "I think of a number. I multiply it by 3, subtract 7, and get 20. What is the number?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "9"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-v005",
+          "user_content": {"parts": [{"text": "I think of a number. I multiply it by 3, subtract 7, and get 20. What is the number?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "Let n be the number. 3n - 7 = 20, 3n = 27, n = 9."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "val_tool_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-v006",
+          "user_content": {"parts": [{"text": "Calculate the monthly payment on a $20000 loan at 6% annual interest over 5 years using the formula: P * r * (1+r)^n / ((1+r)^n - 1)"}], "role": "user"},
+          "final_response": {"parts": [{"text": "$386.66"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-v006",
+          "user_content": {"parts": [{"text": "Calculate the monthly payment on a $20000 loan at 6% annual interest over 5 years using the formula: P * r * (1+r)^n / ((1+r)^n - 1)"}], "role": "user"},
+          "final_response": {"parts": [{"text": "P=20000, r=0.06/12=0.005, n=5*12=60. M = 20000 * 0.005 * (1.005)^60 / ((1.005)^60 - 1) = 100 * 1.34885 / 0.34885 = $386.66/month."}], "role": "model"},
           "intermediate_data": {
-            "tool_uses": [],
-            "tool_responses": [],
+            "tool_uses": [
+              {"tool_name": "calculate", "arguments": {"expression": "20000 * 0.005 * (1.005)^60 / ((1.005)^60 - 1)"}}
+            ],
+            "tool_responses": [{"result": "386.66"}],
             "intermediate_responses": []
           }
         }
       ]
     },
     {
-      "eval_id": "val_case_002",
+      "eval_id": "val_tool_002_tricky",
       "eval_mode": "trace",
       "conversation": [
         {
-          "invocation_id": "inv-v002",
-          "user_content": {
-            "parts": [{"text": "Compute 15 * (3 + 2) step by step"}],
-            "role": "user"
-          },
-          "final_response": {
-            "parts": [{"text": "75"}],
-            "role": "model"
-          }
+          "invocation_id": "inv-v007",
+          "user_content": {"parts": [{"text": "Calculate the BMI for a person weighing 70 kg with a height of 1.75 meters. BMI = weight / height^2"}], "role": "user"},
+          "final_response": {"parts": [{"text": "22.86"}], "role": "model"}
         }
       ],
       "actual_conversation": [
         {
-          "invocation_id": "inv-v002",
-          "user_content": {
-            "parts": [{"text": "Compute 15 * (3 + 2) step by step"}],
-            "role": "user"
-          },
-          "final_response": {
-            "parts": [{"text": "3 + 2 = 5, then 15 * 5 = 75"}],
-            "role": "model"
-          },
+          "invocation_id": "inv-v007",
+          "user_content": {"parts": [{"text": "Calculate the BMI for a person weighing 70 kg with a height of 1.75 meters. BMI = weight / height^2"}], "role": "user"},
+          "final_response": {"parts": [{"text": "BMI = 70 / (1.75)^2 = 70 / 3.0625 = 22.86 kg/m^2 (normal weight range)"}], "role": "model"},
           "intermediate_data": {
-            "tool_uses": [],
-            "tool_responses": [],
+            "tool_uses": [
+              {"tool_name": "calculate", "arguments": {"expression": "70 / (1.75^2)"}}
+            ],
+            "tool_responses": [{"result": "22.8571"}],
             "intermediate_responses": []
           }
         }
       ]
     },
     {
-      "eval_id": "val_case_003",
+      "eval_id": "val_multiturn_001",
       "eval_mode": "trace",
       "conversation": [
         {
-          "invocation_id": "inv-v003",
-          "user_content": {
-            "parts": [{"text": "What is -5 * 3?"}],
-            "role": "user"
-          },
-          "final_response": {
-            "parts": [{"text": "-15"}],
-            "role": "model"
-          }
+          "invocation_id": "inv-v008",
+          "user_content": {"parts": [{"text": "Calculate 120 multiplied by 3"}], "role": "user"},
+          "final_response": {"parts": [{"text": "360"}], "role": "model"}
+        },
+        {
+          "invocation_id": "inv-v009",
+          "user_content": {"parts": [{"text": "Now subtract 50 from that result"}], "role": "user"},
+          "final_response": {"parts": [{"text": "310"}], "role": "model"}
+        },
+        {
+          "invocation_id": "inv-v010",
+          "user_content": {"parts": [{"text": "Divide the current value by 2"}], "role": "user"},
+          "final_response": {"parts": [{"text": "155"}], "role": "model"}
         }
       ],
       "actual_conversation": [
         {
-          "invocation_id": "inv-v003",
-          "user_content": {
-            "parts": [{"text": "What is -5 * 3?"}],
-            "role": "user"
-          },
-          "final_response": {
-            "parts": [{"text": "-5 * 3 = -15"}],
-            "role": "model"
-          },
-          "intermediate_data": {
-            "tool_uses": [],
-            "tool_responses": [],
-            "intermediate_responses": []
-          }
+          "invocation_id": "inv-v008",
+          "user_content": {"parts": [{"text": "Calculate 120 multiplied by 3"}], "role": "user"},
+          "final_response": {"parts": [{"text": "120 * 3 = 360"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        },
+        {
+          "invocation_id": "inv-v009",
+          "user_content": {"parts": [{"text": "Now subtract 50 from that result"}], "role": "user"},
+          "final_response": {"parts": [{"text": "360 - 50 = 310"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        },
+        {
+          "invocation_id": "inv-v010",
+          "user_content": {"parts": [{"text": "Divide the current value by 2"}], "role": "user"},
+          "final_response": {"parts": [{"text": "310 / 2 = 155"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "val_multiturn_002_tricky",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-v011",
+          "user_content": {"parts": [{"text": "A farmer has 48 chickens and 12 cows. How many total legs?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "144 legs"}], "role": "model"}
+        },
+        {
+          "invocation_id": "inv-v012",
+          "user_content": {"parts": [{"text": "If half the chickens are sold, what is the new total number of legs?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "96 legs"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-v011",
+          "user_content": {"parts": [{"text": "A farmer has 48 chickens and 12 cows. How many total legs?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "Chickens: 48 * 2 = 96 legs. Cows: 12 * 4 = 48 legs. Total: 96 + 48 = 144 legs."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        },
+        {
+          "invocation_id": "inv-v012",
+          "user_content": {"parts": [{"text": "If half the chickens are sold, what is the new total number of legs?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "Half chickens: 48/2 = 24 chickens remaining. Chicken legs: 24 * 2 = 48. Cow legs: 12 * 4 = 48. Total: 48 + 48 = 96 legs."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "val_chinese_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-v013",
+          "user_content": {"parts": [{"text": "请计算四百五十六除以十二等于多少？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "38"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-v013",
+          "user_content": {"parts": [{"text": "请计算四百五十六除以十二等于多少？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "456 / 12 = 38。答案是38。"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "val_chinese_002",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-v014",
+          "user_content": {"parts": [{"text": "一箱苹果有24个，买3箱送1箱，一共能得到多少个苹果？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "96个"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-v014",
+          "user_content": {"parts": [{"text": "一箱苹果有24个，买3箱送1箱，一共能得到多少个苹果？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "买3箱得3箱，再送1箱，共4箱。4 * 24 = 96个苹果。"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "val_edge_001_tricky",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-v015",
+          "user_content": {"parts": [{"text": "What is 0^0? Explain your reasoning."}], "role": "user"},
+          "final_response": {"parts": [{"text": "0^0 is indeterminate. In calculus and limits it is an indeterminate form, though in combinatorics and some programming contexts it is defined as 1 for convenience."}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-v015",
+          "user_content": {"parts": [{"text": "What is 0^0? Explain your reasoning."}], "role": "user"},
+          "final_response": {"parts": [{"text": "0^0 is an indeterminate form in mathematics. In limits, its value depends on how the limit is approached. However, in discrete mathematics, combinatorics, and many programming languages, 0^0 is defined as 1 by convention (since the empty product equals 1, and 0^0 represents the number of functions from the empty set to itself)."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "val_edge_002_tricky",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-v016",
+          "user_content": {"parts": [{"text": "Calculate 1/3 + 1/3 + 1/3 as a decimal. Is the result exactly 1? Explain."}], "role": "user"},
+          "final_response": {"parts": [{"text": "In exact math, 1/3 + 1/3 + 1/3 = 1. In floating-point, 0.333... + 0.333... + 0.333... may not equal exactly 1.0 due to binary representation."}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-v016",
+          "user_content": {"parts": [{"text": "Calculate 1/3 + 1/3 + 1/3 as a decimal. Is the result exactly 1? Explain."}], "role": "user"},
+          "final_response": {"parts": [{"text": "Mathematically: 1/3 + 1/3 + 1/3 = 3/3 = 1 exactly. In decimal: each 1/3 = 0.333..., sum = 0.999... which equals 1 (by the mathematical fact that 0.999... = 1). In floating-point (e.g., Python), 0.3333333333333333 * 3 = 1.0 in Python 3, but this is not universally true in all languages/representations."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "val_edge_003_tricky",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-v017",
+          "user_content": {"parts": [{"text": "What is (-5)^2 vs -5^2? Are they the same? Show your work."}], "role": "user"},
+          "final_response": {"parts": [{"text": "No. (-5)^2 = 25 because both the negative and the 5 are squared. -5^2 = -25 because only 5 is squared and then the negative is applied (exponent before negation per PEMDAS)."}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-v017",
+          "user_content": {"parts": [{"text": "What is (-5)^2 vs -5^2? Are they the same? Show your work."}], "role": "user"},
+          "final_response": {"parts": [{"text": "Different! (-5)^2 = (-5) * (-5) = 25. -5^2 = -(5^2) = -(25) = -25. The difference is order of operations: parentheses force the negative to be squared; without them, exponentiation has higher precedence than negation."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "val_format_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-v018",
+          "user_content": {"parts": [{"text": "Calculate the mean of [2, 7, 15, 23, 3] and then double the result. Return your answer as a Python dictionary: {\"mean\": ..., \"doubled\": ...}"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"mean\": 10, \"doubled\": 20}"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-v018",
+          "user_content": {"parts": [{"text": "Calculate the mean of [2, 7, 15, 23, 3] and then double the result. Return your answer as a Python dictionary: {\"mean\": ..., \"doubled\": ...}"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"mean\": 10, \"doubled\": 20}"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "val_format_002",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-v019",
+          "user_content": {"parts": [{"text": "Calculate 256 * 3 / 4 step by step. Use bullet points (-) for each step, then give the final answer as 'Final Answer: <number>'"}], "role": "user"},
+          "final_response": {"parts": [{"text": "- Step 1: 256 * 3 = 768\n- Step 2: 768 / 4 = 192\n\nFinal Answer: 192"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-v019",
+          "user_content": {"parts": [{"text": "Calculate 256 * 3 / 4 step by step. Use bullet points (-) for each step, then give the final answer as 'Final Answer: <number>'"}], "role": "user"},
+          "final_response": {"parts": [{"text": "- Step 1: 256 * 3 = 768\n- Step 2: 768 / 4 = 192\n\nFinal Answer: 192"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
         }
       ]
     }

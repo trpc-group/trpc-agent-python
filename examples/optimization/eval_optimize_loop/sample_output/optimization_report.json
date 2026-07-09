@@ -1,0 +1,255 @@
+{
+  "task_id": "opt-20260709-001700-469da632",
+  "generated_at": "2026-07-09T00:17:00.265480+00:00",
+  "baseline": {
+    "train": {
+      "evalset_id": "train-mixed-v2",
+      "pass_rate": 1.0,
+      "total_cases": 34,
+      "passed_cases": 34,
+      "failed_cases": 0,
+      "failed_case_ids": [],
+      "metric_breakdown": {
+        "overall_pass_rate": 1.0
+      }
+    },
+    "validation": {
+      "evalset_id": "val-mixed-v2",
+      "pass_rate": 1.0,
+      "total_cases": 16,
+      "passed_cases": 16,
+      "failed_cases": 0,
+      "failed_case_ids": [],
+      "metric_breakdown": {
+        "overall_pass_rate": 1.0
+      }
+    }
+  },
+  "attribution": {
+    "total_failures": 0,
+    "by_category": {},
+    "entries": []
+  },
+  "gate": {
+    "decision": "needs_review",
+    "reason": "Improvement +0.00% below threshold +5%",
+    "checks": [
+      {
+        "check": "improvement_threshold",
+        "passed": false,
+        "detail": "Improvement: +0.00% (threshold: +5%)"
+      },
+      {
+        "check": "critical_cases",
+        "passed": true,
+        "detail": "No critical cases regressed"
+      },
+      {
+        "check": "new_failures",
+        "passed": true,
+        "detail": "No new failures"
+      },
+      {
+        "check": "overfitting",
+        "passed": true,
+        "detail": "Validation set comparison handled separately"
+      },
+      {
+        "check": "cost_budget",
+        "passed": true,
+        "detail": "Cost: $0.00 / $10.00"
+      }
+    ]
+  },
+  "validation_delta": {
+    "new_passes": 0,
+    "new_failures": 0,
+    "unchanged": 16,
+    "is_overfitting": false,
+    "deltas": [
+      {
+        "eval_id": "val_chinese_001",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_chinese_002",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_edge_001_tricky",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_edge_002_tricky",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_edge_003_tricky",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_format_001",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_format_002",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_multiturn_001",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_multiturn_002_tricky",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_reasoning_001",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_reasoning_002_tricky",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_reasoning_003_tricky",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_simple_math_001",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_simple_math_002",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_tool_001",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      },
+      {
+        "eval_id": "val_tool_002_tricky",
+        "baseline_passed": true,
+        "candidate_passed": true,
+        "change": "unchanged"
+      }
+    ]
+  },
+  "optimizer": {
+    "algorithm": "gepa_reflective",
+    "mode": "fake",
+    "optimized_fields": [],
+    "optimization_cost": 0.0,
+    "total_iterations": 0,
+    "converged": true,
+    "best_score": 0.0
+  },
+  "audit": {
+    "reproducibility": {
+      "seed": 42,
+      "mode": "fake",
+      "algorithm": "gepa_reflective",
+      "reproduce_command": "python run_pipeline.py --mode fake"
+    },
+    "timing": {
+      "stages": [
+        {
+          "stage": "config",
+          "duration_ms": 0.0,
+          "duration_s": 0.0
+        },
+        {
+          "stage": "baseline",
+          "duration_ms": 0.0,
+          "duration_s": 0.0
+        },
+        {
+          "stage": "attribution",
+          "duration_ms": 0.0,
+          "duration_s": 0.0
+        },
+        {
+          "stage": "optimization",
+          "duration_ms": 0.0,
+          "duration_s": 0.0
+        },
+        {
+          "stage": "validate",
+          "duration_ms": 0.0,
+          "duration_s": 0.0
+        },
+        {
+          "stage": "gate",
+          "duration_ms": 0.0,
+          "duration_s": 0.0
+        }
+      ],
+      "total_duration_s": 0.0
+    },
+    "cost": {
+      "optimization_usd": 0.0,
+      "evaluation_usd": 0.0,
+      "total_usd": 0.0
+    },
+    "environment": {
+      "python_version": "3.12.10",
+      "platform": "Windows 11"
+    },
+    "results": {
+      "baseline_train_pass_rate": 1.0,
+      "candidate_train_pass_rate": 1.0,
+      "improvement": 0.0
+    },
+    "input_files": {
+      "train_evalset": "data/train.evalset.json",
+      "val_evalset": "data/val.evalset.json",
+      "optimizer_config": "data/optimizer.json"
+    },
+    "input_file_hashes": {
+      "train_evalset": "b2c7a0eb5a67",
+      "val_evalset": "0ad806f95890",
+      "optimizer_config": "cef8b721b1c5"
+    },
+    "output_files": {},
+    "errors": [],
+    "warnings": [],
+    "seed": 42,
+    "mode": "fake",
+    "duration_seconds": 0.0,
+    "optimization_cost": 0.0,
+    "improvement": 0.0,
+    "baseline_train_pass_rate": 1.0,
+    "candidate_train_pass_rate": 1.0,
+    "reproduce_command": "python run_pipeline.py --mode fake"
+  }
+}

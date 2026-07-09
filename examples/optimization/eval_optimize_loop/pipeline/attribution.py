@@ -160,12 +160,12 @@ def _categorize_failure(reason: str) -> FailureCategory:
     if any(kw in reason_lower for kw in ["format", "pattern", "regex", "schema"]):
         return FailureCategory.FORMAT_NOT_AS_REQUIRED
 
+    # Missing reference (check BEFORE response mismatch to avoid false match)
+    if any(kw in reason_lower for kw in ["missing", "no reference"]):
+        return FailureCategory.MISSING_EXPECTED_OUTPUT
+
     # Response mismatch
     if any(kw in reason_lower for kw in ["response", "output", "answer", "match"]):
         return FailureCategory.FINAL_RESPONSE_MISMATCH
-
-    # Missing reference
-    if any(kw in reason_lower for kw in ["missing", "no reference", "expected"]):
-        return FailureCategory.MISSING_EXPECTED_OUTPUT
 
     return FailureCategory.UNKNOWN
