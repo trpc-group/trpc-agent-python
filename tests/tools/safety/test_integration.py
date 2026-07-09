@@ -16,7 +16,6 @@ Test categories:
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -382,26 +381,24 @@ curl -H "Authorization: token $API_KEY" https://api.github.com/user
 class TestAuditAndTelemetry:
     """Verify audit logging and OTel recording fires correctly."""
 
-    def test_audit_log_emitted(self, default_guard: ScriptSafetyGuard, caplog):
+    def test_audit_log_emitted(self, default_guard: ScriptSafetyGuard):
         """Guard should emit structured audit log on every check."""
         code = 'print("hello")'
-        with caplog.at_level(logging.INFO, logger="trpc_agent_sdk.tools.safety.audit"):
+        with patch("trpc_agent_sdk.tools.safety.guard._audit_logger") as mock_audit:
             default_guard.check(_make_input(code))
 
-        # Verify audit log was emitted
-        audit_records = [r for r in caplog.records if r.name == "trpc_agent_sdk.tools.safety.audit"]
-        assert len(audit_records) == 1
-        assert "safety_check" in audit_records[0].getMessage()
+        mock_audit.info.assert_called_once()
+        msg = mock_audit.info.call_args[0][0]
+        assert "safety_check" in msg
 
-    def test_audit_log_contains_decision(self, default_guard: ScriptSafetyGuard, caplog):
+    def test_audit_log_contains_decision(self, default_guard: ScriptSafetyGuard):
         """Audit log should contain decision and findings info."""
         code = 'result = eval("1+1")'
-        with caplog.at_level(logging.INFO, logger="trpc_agent_sdk.tools.safety.audit"):
+        with patch("trpc_agent_sdk.tools.safety.guard._audit_logger") as mock_audit:
             default_guard.check(_make_input(code))
 
-        audit_records = [r for r in caplog.records if r.name == "trpc_agent_sdk.tools.safety.audit"]
-        assert len(audit_records) == 1
-        msg = audit_records[0].getMessage()
+        mock_audit.info.assert_called_once()
+        msg = mock_audit.info.call_args[0][0]
         assert '"decision": "deny"' in msg
         assert '"PROC-002"' in msg
 

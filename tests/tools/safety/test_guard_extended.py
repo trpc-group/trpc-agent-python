@@ -206,10 +206,8 @@ class TestWriteReportAndAudit:
 class TestEmitAuditLogExtended:
     """Extended tests for the Python logger audit log."""
 
-    def test_audit_log_with_findings(self, caplog):
+    def test_audit_log_with_findings(self):
         """Audit log includes sanitized findings."""
-        import logging
-
         input_data = _make_input(script="api_key = 'sk-secret1234567890abcdefgh'")
         finding = Finding(
             rule_id="SEC-001",
@@ -229,12 +227,11 @@ class TestEmitAuditLogExtended:
             invocation_id="inv-x",
         )
 
-        with caplog.at_level(logging.INFO, logger="trpc_agent_sdk.tools.safety.audit"):
+        with patch("trpc_agent_sdk.tools.safety.guard._audit_logger") as mock_audit:
             _emit_audit_log(input_data, result)
 
-        audit_records = [r for r in caplog.records if r.name == "trpc_agent_sdk.tools.safety.audit"]
-        assert len(audit_records) == 1
-        entry = json.loads(audit_records[0].message)
+        mock_audit.info.assert_called_once()
+        entry = json.loads(mock_audit.info.call_args[0][0])
         assert entry["decision"] == "deny"
         assert entry["findings_count"] == 1
         # Evidence should be sanitized in audit log
@@ -242,18 +239,16 @@ class TestEmitAuditLogExtended:
         assert "****" in f["evidence"]
         assert f["line_number"] == 1
 
-    def test_audit_log_metadata_fields(self, caplog):
+    def test_audit_log_metadata_fields(self):
         """Audit log contains agent_name, user_id, script_length."""
-        import logging
-
         input_data = _make_input(script="x = 42")
         result = _make_result()
 
-        with caplog.at_level(logging.INFO, logger="trpc_agent_sdk.tools.safety.audit"):
+        with patch("trpc_agent_sdk.tools.safety.guard._audit_logger") as mock_audit:
             _emit_audit_log(input_data, result)
 
-        audit_records = [r for r in caplog.records if r.name == "trpc_agent_sdk.tools.safety.audit"]
-        entry = json.loads(audit_records[0].message)
+        mock_audit.info.assert_called_once()
+        entry = json.loads(mock_audit.info.call_args[0][0])
         assert entry["agent_name"] == "test_agent"
         assert entry["user_id"] == "user-001"
         assert entry["script_length"] == len("x = 42")

@@ -7,7 +7,6 @@ Rule IDs:
 
 from __future__ import annotations
 
-import ast
 import fnmatch
 import os
 from typing import TYPE_CHECKING

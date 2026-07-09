@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
-from trpc_agent_sdk.abc import FilterResult, FilterType
+from trpc_agent_sdk.abc import FilterResult
 from trpc_agent_sdk.context import AgentContext
 from trpc_agent_sdk.filter import BaseFilter, register_tool_filter
 from trpc_agent_sdk.tools.safety.guard import ScriptSafetyGuard

@@ -1,7 +1,6 @@
 """Unit tests for ScriptSafetyGuard — the core coordination engine."""
 
 import json
-import logging
 from unittest.mock import patch
 
 import pytest
@@ -257,19 +256,16 @@ class TestAggregateDecision:
 class TestAuditLog:
     """Test that audit logging is emitted correctly."""
 
-    def test_audit_log_emitted_on_check(self, caplog):
+    def test_audit_log_emitted_on_check(self):
         """Verify audit log is produced with expected structure."""
         guard = ScriptSafetyGuard()
         input = _make_input(script="x = 1")
 
-        with caplog.at_level(logging.INFO, logger="trpc_agent_sdk.tools.safety.audit"):
+        with patch("trpc_agent_sdk.tools.safety.guard._audit_logger") as mock_audit:
             guard.check(input)
 
-        # Find the audit log record
-        audit_records = [r for r in caplog.records if r.name == "trpc_agent_sdk.tools.safety.audit"]
-        assert len(audit_records) == 1
-
-        entry = json.loads(audit_records[0].message)
+        mock_audit.info.assert_called_once()
+        entry = json.loads(mock_audit.info.call_args[0][0])
         assert entry["event"] == "safety_check"
         assert entry["decision"] == "allow"
         assert entry["language"] == "python"
@@ -279,18 +275,16 @@ class TestAuditLog:
         assert "findings_count" in entry
         assert "script_length" in entry
 
-    def test_audit_log_contains_findings_summary(self, caplog):
+    def test_audit_log_contains_findings_summary(self):
         """Audit log findings are present with desensitized evidence."""
         guard = ScriptSafetyGuard()
         input = _make_input(script="import os\nos.system('rm -rf /')")
 
-        with caplog.at_level(logging.INFO, logger="trpc_agent_sdk.tools.safety.audit"):
+        with patch("trpc_agent_sdk.tools.safety.guard._audit_logger") as mock_audit:
             guard.check(input)
 
-        audit_records = [r for r in caplog.records if r.name == "trpc_agent_sdk.tools.safety.audit"]
-        assert len(audit_records) == 1
-
-        entry = json.loads(audit_records[0].message)
+        mock_audit.info.assert_called_once()
+        entry = json.loads(mock_audit.info.call_args[0][0])
         assert entry["findings_count"] > 0
         assert len(entry["findings"]) > 0
         # Each finding has expected fields

@@ -1,0 +1,30 @@
+# Strict policy for integration testing — very restrictive
+# Override mode: fully replace default lists with minimal allowlists
+version: "1.0"
+
+network:
+  allowed_domains:
+    - "pypi.org"
+  override: true  # Only pypi.org allowed, all others blocked
+
+process:
+  allowed_commands:
+    - "echo"
+    - "cat"
+  override: true  # Only echo and cat allowed
+
+file_operations:
+  forbidden_paths:
+    - "/etc/"
+    - "/root/"
+    - "~/.ssh/"
+    - "~/.aws/"
+    - "~/.gnupg/"
+    - "~/.config/"
+    - "/var/"
+    - "/tmp/"
+  override: true  # Strictest set
+
+resources:
+  max_timeout_seconds: 60
+  max_output_size_mb: 10

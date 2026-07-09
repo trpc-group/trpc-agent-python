@@ -1,0 +1,26 @@
+# Sample policy for integration testing
+# This adds extra allowed domains and commands beyond the built-in defaults.
+version: "1.0"
+
+network:
+  allowed_domains:
+    - "*.example.com"
+    - "custom-api.mycompany.io"
+  override: false  # Append to defaults
+
+process:
+  allowed_commands:
+    - "docker"
+    - "go"
+    - "cargo"
+  override: false
+
+file_operations:
+  forbidden_paths:
+    - "/tmp/sensitive/"
+    - "~/secrets/"
+  override: false
+
+resources:
+  max_timeout_seconds: 600
+  max_output_size_mb: 200
