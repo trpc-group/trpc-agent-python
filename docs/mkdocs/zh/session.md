@@ -109,11 +109,18 @@ session = await session_service.get_session(
 
 **列出会话**：
 ```python
+# 指定 user_id：返回该用户的所有会话（不含 events）
 session_list = await session_service.list_sessions(
     app_name="my_app",
     user_id="user_001"
 )
-# 返回 ListSessionsResponse，包含该用户的所有会话（不含 events）
+
+# user_id 为 None：返回该 app 下所有用户的会话
+all_session_list = await session_service.list_sessions(
+    app_name="my_app",
+    user_id=None
+)
+# 返回 ListSessionsResponse，包含符合条件的所有会话（不含 events）
 ```
 
 **删除会话**：
@@ -128,7 +135,7 @@ await session_service.delete_session(
 **实现逻辑**（`_base_session_service.py`）：
 - `create_session`：创建会话，分离并存储 app/user/session 状态
 - `get_session`：获取会话，合并 app/user/session 状态，应用事件过滤
-- `list_sessions`：列出会话列表（不包含 events，减少数据传输）
+- `list_sessions`：列出会话列表（不包含 events，减少数据传输）；`user_id` 传 `None` 时返回该 app 下所有用户的会话
 - `delete_session`：删除会话及其关联数据
 
 ---
@@ -611,6 +618,7 @@ session = await session_service.get_session(
 )
 
 # 列出存在的 Session
+# 指定 user_id 返回该用户的会话；user_id=None 返回该 app 下所有用户的会话
 session_list = await session_service.list_sessions(
     app_name=app_name,
     user_id=user_id

@@ -43,8 +43,9 @@ def _make_config(ttl_seconds=0,
                                   max_events=max_events,
                                   store_historical_events=store_historical_events)
     if enable_ttl:
-        config.ttl = SessionServiceConfig.create_ttl_config(
-            enable=True, ttl_seconds=ttl_seconds, cleanup_interval_seconds=cleanup_interval)
+        config.ttl = SessionServiceConfig.create_ttl_config(enable=True,
+                                                            ttl_seconds=ttl_seconds,
+                                                            cleanup_interval_seconds=cleanup_interval)
     else:
         config.clean_ttl_config()
     return config
@@ -81,7 +82,9 @@ async def _create_service(config=None):
 # SessionStorageEvent — from_event / to_event
 # ---------------------------------------------------------------------------
 
+
 class TestSessionStorageEvent:
+
     def test_from_event_basic(self):
         session = Session(id="s1", app_name="app", user_id="user", save_key="k")
         event = _make_event(author="user", text="hello world")
@@ -125,7 +128,10 @@ class TestSessionStorageEvent:
             long_running_tool_ids=set(),
             timestamp=datetime.now(),
             model_flags=1,
-            content={"parts": [{}], "role": "model"},
+            content={
+                "parts": [{}],
+                "role": "model"
+            },
         )
         event = storage_event.to_event()
         assert event.content is None
@@ -157,7 +163,9 @@ class TestSessionStorageEvent:
 # SqlSessionService — create_session
 # ---------------------------------------------------------------------------
 
+
 class TestSqlCreateSession:
+
     async def test_create_basic(self):
         svc = await _create_service()
         session = await svc.create_session(app_name="app", user_id="user")
@@ -174,13 +182,14 @@ class TestSqlCreateSession:
 
     async def test_create_with_state(self):
         svc = await _create_service()
-        session = await svc.create_session(
-            app_name="app", user_id="user", session_id="s1",
-            state={
-                "sk": "sv",
-                f"{State.APP_PREFIX}ak": "av",
-                f"{State.USER_PREFIX}uk": "uv",
-            })
+        session = await svc.create_session(app_name="app",
+                                           user_id="user",
+                                           session_id="s1",
+                                           state={
+                                               "sk": "sv",
+                                               f"{State.APP_PREFIX}ak": "av",
+                                               f"{State.USER_PREFIX}uk": "uv",
+                                           })
         assert session.state["sk"] == "sv"
         assert session.state[f"{State.APP_PREFIX}ak"] == "av"
         assert session.state[f"{State.USER_PREFIX}uk"] == "uv"
@@ -205,7 +214,9 @@ class TestSqlCreateSession:
 # SqlSessionService — get_session
 # ---------------------------------------------------------------------------
 
+
 class TestSqlGetSession:
+
     async def test_get_existing(self):
         svc = await _create_service()
         await svc.create_session(app_name="app", user_id="user", session_id="s1")
@@ -242,13 +253,14 @@ class TestSqlGetSession:
 
     async def test_get_with_merged_state(self):
         svc = await _create_service()
-        await svc.create_session(
-            app_name="app", user_id="user", session_id="s1",
-            state={
-                "sk": "sv",
-                f"{State.APP_PREFIX}ak": "av",
-                f"{State.USER_PREFIX}uk": "uv",
-            })
+        await svc.create_session(app_name="app",
+                                 user_id="user",
+                                 session_id="s1",
+                                 state={
+                                     "sk": "sv",
+                                     f"{State.APP_PREFIX}ak": "av",
+                                     f"{State.USER_PREFIX}uk": "uv",
+                                 })
         result = await svc.get_session(app_name="app", user_id="user", session_id="s1")
         assert result.state["sk"] == "sv"
         assert result.state[f"{State.APP_PREFIX}ak"] == "av"
@@ -260,7 +272,9 @@ class TestSqlGetSession:
 # SqlSessionService — list_sessions
 # ---------------------------------------------------------------------------
 
+
 class TestSqlListSessions:
+
     async def test_list_empty(self):
         svc = await _create_service()
         result = await svc.list_sessions(app_name="app", user_id="user")
@@ -286,12 +300,23 @@ class TestSqlListSessions:
             assert s.historical_events == []
         await svc.close()
 
+    async def test_list_all_users_when_user_id_none(self):
+        svc = await _create_service()
+        await svc.create_session(app_name="app", user_id="user1", session_id="s1")
+        await svc.create_session(app_name="app", user_id="user2", session_id="s2")
+        result = await svc.list_sessions(app_name="app", user_id=None)
+        ids = sorted(s.id for s in result.sessions)
+        assert ids == ["s1", "s2"]
+        await svc.close()
+
 
 # ---------------------------------------------------------------------------
 # SqlSessionService — delete_session
 # ---------------------------------------------------------------------------
 
+
 class TestSqlDeleteSession:
+
     async def test_delete_existing(self):
         svc = await _create_service()
         await svc.create_session(app_name="app", user_id="user", session_id="s1")
@@ -305,7 +330,9 @@ class TestSqlDeleteSession:
 # SqlSessionService — append_event
 # ---------------------------------------------------------------------------
 
+
 class TestSqlAppendEvent:
+
     async def test_append_basic(self):
         svc = await _create_service()
         session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
@@ -387,7 +414,9 @@ class TestSqlAppendEvent:
 # SqlSessionService — update_session
 # ---------------------------------------------------------------------------
 
+
 class TestSqlUpdateSession:
+
     async def test_update_existing(self):
         svc = await _create_service()
         session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
@@ -410,7 +439,9 @@ class TestSqlUpdateSession:
 # SqlSessionService — cleanup
 # ---------------------------------------------------------------------------
 
+
 class TestSqlCleanup:
+
     def test_no_cleanup_task_when_disabled(self):
         config = _make_config()
         with patch("trpc_agent_sdk.sessions._sql_session_service.SqlStorage"):
