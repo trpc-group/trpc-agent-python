@@ -129,6 +129,15 @@ class TestFalsePositiveRate:
         ]
         assert _compute_false_positive_rate(results) == 1.0
 
+    def test_ignores_anomaly_cases(self):
+        anomaly = _case("09", status="pass", diffs=[_diff()])
+        anomaly.is_anomaly_case = True
+        results = [
+            _case("01", status="pass"),
+            anomaly,
+        ]
+        assert _compute_false_positive_rate(results) == 0.0
+
 
 # ── generate_report ────────────────────────────────────────────────────
 

@@ -54,6 +54,9 @@ class CaseResult(BaseModel):
     diffs: list[DiffEntry] = Field(default_factory=list)
     """All diffs found for this case."""
 
+    is_anomaly_case: bool = False
+    """True for injected-anomaly cases whose diffs are expected."""
+
 
 class ReportSummary(BaseModel):
     """Aggregate statistics for the report."""
@@ -88,8 +91,8 @@ class DiffReport(BaseModel):
 
 
 def _compute_false_positive_rate(results: list[CaseResult]) -> float:
-    """Compute false-positive rate for passing cases."""
-    passing = [r for r in results if r.status == "pass"]
+    """Compute false-positive rate for non-anomaly passing cases."""
+    passing = [r for r in results if r.status == "pass" and not r.is_anomaly_case]
     if not passing:
         return 0.0
     false_positive_count = sum(1 for r in passing if r.diffs)
