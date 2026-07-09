@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import uuid
+import contextlib
 from pathlib import Path
 
 from .diff_parser import load_diff
@@ -49,8 +50,8 @@ async def run_review(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     db_path: Path = DEFAULT_DB_PATH,
     db_url: str | None = None,
-    sandbox: str = "fake",
-    dry_run: bool = True,
+    sandbox: str = "container",
+    dry_run: bool = False,
     container_image: str = "python:3-slim",
     docker_path: str | None = None,
     docker_base_url: str | None = None,
@@ -130,14 +131,24 @@ async def run_review(
             sandbox_runner=sandbox_runner,
         )
     except Exception as exc:
-        redacted = redact_text(str(exc))
-        review_store.fail_task(
-            task_id,
-            completed_at=utc_now(),
-            exception_type=exc.__class__.__name__,
-            message=redacted.text,
+        return _complete_pipeline_failure_report(
+            start=start,
+            stage_durations_ms=stage_durations_ms,
+            task_id=task_id,
+            created_at=created_at,
+            diff=diff,
+            input_redactions=input_redactions,
+            skill_audit=skill_audit,
+            review_store=review_store,
+            output_dir=output_dir,
+            sandbox=sandbox,
+            timeout_sec=timeout_sec,
+            max_output_bytes=max_output_bytes,
+            filter_timeout_budget_sec=filter_timeout_budget_sec,
+            filter_max_output_bytes=filter_max_output_bytes,
+            network_policy=network_policy,
+            exc=exc,
         )
-        raise
 
 
 async def _run_review_after_task_created(
@@ -174,14 +185,6 @@ async def _run_review_after_task_created(
     def mark_stage(name: str, stage_start: float) -> None:
         stage_durations_ms[name] = int((time.monotonic() - stage_start) * 1000)
 
-    skill_audit["sdk_skill_runtime"] = {
-        "executed": False,
-        "reason": (
-            "SDK skill_load/skill_run smoke is available through --skill-smoke; normal reviews do not execute "
-            "local workspace runtime before Filter approval."
-        ),
-    }
-
     filter_start = time.monotonic()
     sandbox_requests, request_build_decisions, request_build_redactions = _build_sandbox_requests_for_review(
         timeout_sec=timeout_sec,
@@ -213,22 +216,57 @@ async def _run_review_after_task_created(
     review_store.save_filter_decisions(task_id, filter_decisions)
     mark_stage("storage_filter_decisions", storage_start)
 
-    runner = sandbox_runner or await _make_runner(
+    skill_audit["sdk_skill_runtime"] = await _build_sdk_skill_runtime_audit(
         sandbox=sandbox,
         dry_run=dry_run,
-        container_image=container_image,
-        docker_path=docker_path,
-        docker_base_url=docker_base_url,
-        cube_template=cube_template,
-        cube_api_url=cube_api_url,
-        cube_api_key=cube_api_key,
-        cube_sandbox_id=cube_sandbox_id,
     )
+
+    runner_start = time.monotonic()
+    runner_created_by_pipeline = sandbox_runner is None
+    try:
+        runner = sandbox_runner or await _make_runner(
+            sandbox=sandbox,
+            dry_run=dry_run,
+            container_image=container_image,
+            docker_path=docker_path,
+            docker_base_url=docker_base_url,
+            cube_template=cube_template,
+            cube_api_url=cube_api_url,
+            cube_api_key=cube_api_key,
+            cube_sandbox_id=cube_sandbox_id,
+        )
+    except Exception as exc:  # pylint: disable=broad-except
+        mark_stage("sandbox_runner_create", runner_start)
+        return _complete_sandbox_start_failure_report(
+            start=start,
+            stage_durations_ms=stage_durations_ms,
+            task_id=task_id,
+            created_at=created_at,
+            diff=diff,
+            input_redactions=input_redactions,
+            request_build_redactions=request_build_redactions,
+            filter_policy=filter_policy,
+            filter_decisions=filter_decisions,
+            review_store=review_store,
+            output_dir=output_dir,
+            sandbox=sandbox,
+            timeout_sec=timeout_sec,
+            max_output_bytes=max_output_bytes,
+            filter_timeout_budget_sec=filter_timeout_budget_sec,
+            filter_max_output_bytes=filter_max_output_bytes,
+            network_policy=network_policy,
+            skill_audit=skill_audit,
+            exc=exc,
+        )
     sandbox_runs = []
     sandbox_start = time.monotonic()
-    for request in allowed_requests:
-        run = await _run_sandbox_request_safely(runner, request, diff)
-        sandbox_runs.append(run)
+    try:
+        for request in allowed_requests:
+            run = await _run_sandbox_request_safely(runner, request, diff)
+            sandbox_runs.append(run)
+    finally:
+        if runner_created_by_pipeline:
+            await _close_pipeline_runner(runner, destroy_cube=sandbox == "cube" and cube_sandbox_id is None)
     mark_stage("sandbox", sandbox_start)
     storage_start = time.monotonic()
     review_store.save_sandbox_runs(task_id, sandbox_runs)
@@ -267,12 +305,8 @@ async def _run_review_after_task_created(
         filter_decisions=filter_decisions,
         filter_decision_count=len(filter_decisions),
         redaction_count=(
-            input_redactions
-            + request_build_redactions
-            + filter_policy.last_redaction_count
-            + rule_redactions
-            + scanner_redactions
-            + sandbox_redactions
+            input_redactions + request_build_redactions + filter_policy.last_redaction_count + rule_redactions
+            + scanner_redactions + sandbox_redactions
         ),
         deduped_finding_count=deduped_finding_count,
         ignored_finding_count=rule_engine.ignored_count,
@@ -327,6 +361,241 @@ async def _run_review_after_task_created(
     return report
 
 
+def _complete_sandbox_start_failure_report(
+    *,
+    start: float,
+    stage_durations_ms: dict[str, int],
+    task_id: str,
+    created_at: str,
+    diff: DiffInput,
+    input_redactions: int,
+    request_build_redactions: int,
+    filter_policy: ReviewFilterPolicy,
+    filter_decisions: list[FilterDecision],
+    review_store: ReviewStore,
+    output_dir: Path,
+    sandbox: str,
+    timeout_sec: float,
+    max_output_bytes: int,
+    filter_timeout_budget_sec: float,
+    filter_max_output_bytes: int,
+    network_policy: str,
+    skill_audit: dict,
+    exc: Exception,
+) -> ReviewReport:
+    redacted = redact_text(str(exc))
+    start_failure_decision = FilterDecision(
+        decision="needs_human_review",
+        reason=f"Sandbox runtime could not be created: {redacted.text}",
+        command="",
+        path="",
+        policy="sandbox-runner-create",
+        severity="high",
+    )
+    filter_decisions = [*filter_decisions, start_failure_decision]
+    review_store.save_filter_decisions(task_id, [start_failure_decision])
+
+    sandbox_runs = [
+        SandboxRun(
+            name="sandbox_runner_create",
+            runtime=sandbox,
+            command="create sandbox runtime",
+            status="failed",
+            exit_code=None,
+            duration_ms=stage_durations_ms.get("sandbox_runner_create", 0),
+            stdout="",
+            stderr=redacted.text[:max_output_bytes],
+            exception_type=exc.__class__.__name__,
+            output_truncated=len(redacted.text.encode("utf-8")) > max_output_bytes,
+            redaction_count=redacted.count,
+        )
+    ]
+    review_store.save_sandbox_runs(task_id, sandbox_runs)
+
+    rules_start = time.monotonic()
+    rule_engine = RuleEngine()
+    findings, warnings, needs_human_review, rule_redactions, deduped_finding_count = rule_engine.review(diff)
+    mark_duration = int((time.monotonic() - rules_start) * 1000)
+    stage_durations_ms["rules"] = mark_duration
+    review_store.save_findings(task_id, "finding", findings)
+    review_store.save_findings(task_id, "warning", warnings)
+    review_store.save_findings(task_id, "needs_human_review", needs_human_review)
+
+    total_duration_ms = int((time.monotonic() - start) * 1000)
+    stage_durations_ms.setdefault("sandbox", stage_durations_ms.get("sandbox_runner_create", 0))
+    monitoring = build_monitoring_summary(
+        total_duration_ms=total_duration_ms,
+        stage_durations_ms=stage_durations_ms,
+        sandbox_runs=sandbox_runs,
+        findings=findings,
+        warnings=warnings,
+        needs_human_review=needs_human_review,
+        filter_decisions=filter_decisions,
+        filter_decision_count=len(filter_decisions),
+        redaction_count=(
+            input_redactions + request_build_redactions + filter_policy.last_redaction_count + redacted.count
+            + rule_redactions
+        ),
+        deduped_finding_count=deduped_finding_count,
+        ignored_finding_count=rule_engine.ignored_count,
+    )
+    conclusion = _build_conclusion(findings, warnings, needs_human_review, sandbox_runs, filter_decisions)
+    if any(finding.severity in {"critical", "high"} for finding in findings):
+        conclusion = f"{conclusion} Also needs human review because the sandbox runtime could not be created."
+    else:
+        conclusion = "Needs human review before merge because the sandbox runtime could not be created."
+    report = ReviewReport(
+        task_id=task_id,
+        status="completed",
+        created_at=created_at,
+        finding_schema_version=FINDING_SCHEMA_VERSION,
+        confidence_thresholds={
+            "finding": FINDING_CONFIDENCE_THRESHOLD,
+            "warning": WARNING_CONFIDENCE_THRESHOLD,
+        },
+        sandbox_policy={
+            "runtime": sandbox,
+            "timeout_sec": timeout_sec,
+            "max_output_bytes": max_output_bytes,
+            "filter_timeout_budget_sec": filter_timeout_budget_sec,
+            "filter_max_output_bytes": filter_max_output_bytes,
+            "env_whitelist": sorted(ENV_WHITELIST),
+            "network_policy": network_policy,
+            "network_enforcement": _network_enforcement_summary(sandbox),
+        },
+        filter_policy=filter_policy.audit(),
+        input=diff.to_dict(),
+        findings=findings,
+        warnings=warnings,
+        needs_human_review=needs_human_review,
+        filter_decisions=filter_decisions,
+        sandbox_runs=sandbox_runs,
+        monitoring=monitoring,
+        conclusion=conclusion,
+        skill_audit={
+            **skill_audit, "rule_config": rule_engine.rule_config.audit()
+        },
+    )
+    report_start = time.monotonic()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report.output_files.update({
+        "json": str(output_dir / "review_report.json"),
+        "markdown": str(output_dir / "review_report.md"),
+    })
+    _ = render_markdown(report)
+    stage_durations_ms["report"] = int((time.monotonic() - report_start) * 1000)
+    report.monitoring.stage_durations_ms = stage_durations_ms
+    report.monitoring.total_duration_ms = int((time.monotonic() - start) * 1000)
+    _, _, markdown = write_reports(report, output_dir)
+    review_store.complete_task(report, markdown, completed_at=utc_now())
+    review_store.save_monitoring(task_id, report.monitoring)
+    return report
+
+
+def _complete_pipeline_failure_report(
+    *,
+    start: float,
+    stage_durations_ms: dict[str, int],
+    task_id: str,
+    created_at: str,
+    diff: DiffInput,
+    input_redactions: int,
+    skill_audit: dict,
+    review_store: ReviewStore,
+    output_dir: Path,
+    sandbox: str,
+    timeout_sec: float,
+    max_output_bytes: int,
+    filter_timeout_budget_sec: float,
+    filter_max_output_bytes: int,
+    network_policy: str,
+    exc: Exception,
+) -> ReviewReport:
+    redacted = redact_text(str(exc))
+    failure_decision = FilterDecision(
+        decision="needs_human_review",
+        reason=f"Review pipeline failed after task creation: {redacted.text}",
+        command="",
+        path="",
+        policy="pipeline-exception",
+        severity="high",
+    )
+    review_store.save_filter_decisions(task_id, [failure_decision])
+
+    total_duration_ms = int((time.monotonic() - start) * 1000)
+    monitoring = build_monitoring_summary(
+        total_duration_ms=total_duration_ms,
+        stage_durations_ms=stage_durations_ms,
+        sandbox_runs=[],
+        findings=[],
+        warnings=[],
+        needs_human_review=[],
+        filter_decisions=[failure_decision],
+        filter_decision_count=1,
+        redaction_count=input_redactions + redacted.count,
+    )
+    monitoring.exception_distribution[exc.__class__.__name__] = 1
+
+    report = ReviewReport(
+        task_id=task_id,
+        status="failed",
+        created_at=created_at,
+        finding_schema_version=FINDING_SCHEMA_VERSION,
+        confidence_thresholds={
+            "finding": FINDING_CONFIDENCE_THRESHOLD,
+            "warning": WARNING_CONFIDENCE_THRESHOLD,
+        },
+        sandbox_policy={
+            "runtime": sandbox,
+            "timeout_sec": timeout_sec,
+            "max_output_bytes": max_output_bytes,
+            "filter_timeout_budget_sec": filter_timeout_budget_sec,
+            "filter_max_output_bytes": filter_max_output_bytes,
+            "env_whitelist": sorted(ENV_WHITELIST),
+            "network_policy": network_policy,
+            "network_enforcement": _network_enforcement_summary(sandbox),
+        },
+        filter_policy={
+            "failure_mode": "pipeline-exception"
+        },
+        input=diff.to_dict(),
+        findings=[],
+        warnings=[],
+        needs_human_review=[],
+        filter_decisions=[failure_decision],
+        sandbox_runs=[],
+        monitoring=monitoring,
+        conclusion=f"Review failed and needs human review before merge: {exc.__class__.__name__}.",
+        skill_audit=skill_audit,
+    )
+    report_start = time.monotonic()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report.output_files.update({
+        "json": str(output_dir / "review_report.json"),
+        "markdown": str(output_dir / "review_report.md"),
+    })
+    report.monitoring.stage_durations_ms["report"] = int((time.monotonic() - report_start) * 1000)
+    report.monitoring.total_duration_ms = int((time.monotonic() - start) * 1000)
+    _, _, markdown = write_reports(report, output_dir)
+    review_store.complete_task(report, markdown, completed_at=utc_now())
+    review_store.save_monitoring(task_id, report.monitoring)
+    return report
+
+
+async def _close_pipeline_runner(runner: SandboxRunner, *, destroy_cube: bool) -> None:
+    runtime = getattr(runner, "runtime", None)
+    if destroy_cube and runtime is not None:
+        destroy = getattr(runtime, "destroy", None)
+        if callable(destroy):
+            with contextlib.suppress(Exception):
+                await destroy()
+            return
+    close = getattr(runner, "close", None)
+    if callable(close):
+        with contextlib.suppress(Exception):
+            close()
+
+
 async def _run_sandbox_request_safely(
     runner: SandboxRunner,
     request: SandboxRequest,
@@ -354,6 +623,19 @@ async def _run_sandbox_request_safely(
 
 def query_task(db_path: Path, task_id: str) -> dict:
     return SQLiteReviewStore(db_path).get_task_bundle(task_id)
+
+
+async def _build_sdk_skill_runtime_audit(*, sandbox: str, dry_run: bool) -> dict:
+    """Record SDK-native Skill smoke availability without executing outside the sandbox policy."""
+    mode = "dry-run" if dry_run or sandbox == "fake" else sandbox
+    return {
+        "executed":
+        False,
+        "mode":
+        mode,
+        "reason": ("Skipped during normal review so every review check remains behind Filter and the selected sandbox "
+                   "runtime; run --skill-smoke to explicitly verify SDK skill_load/skill_run."),
+    }
 
 
 def _redact_diff(diff: DiffInput) -> tuple[DiffInput, int]:
@@ -568,15 +850,11 @@ def _build_conclusion(findings, warnings, needs_human_review, sandbox_runs, filt
 
 def _network_enforcement_summary(runtime_name: str) -> str:
     if runtime_name == "container":
-        return (
-            "container host_config sets network_mode=none; network-backed scanners require a separately approved "
-            "runtime image/policy."
-        )
+        return ("container host_config sets network_mode=none; network-backed scanners require a separately approved "
+                "runtime image/policy.")
     if runtime_name == "cube":
-        return (
-            "Filter gates requested network domains; per-run egress enforcement must be provided by the Cube/E2B "
-            "workspace policy."
-        )
+        return ("Filter gates requested network domains; per-run egress enforcement must be provided by the Cube/E2B "
+                "workspace policy.")
     if runtime_name == "fake":
         return "fake runtime simulates scanner behavior without network access."
     if runtime_name == "local":

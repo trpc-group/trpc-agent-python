@@ -6,13 +6,15 @@
 
 - 提供 `skills/code-review/SKILL.md`、规则文档和沙箱脚本。
 - 支持 unified diff、PR patch、本地 git 工作区、文件列表、stdin 和 fixture 输入。
-- 默认 fake/dry-run 模式，适合 CI 和无模型 API Key 的本地开发。
+- CLI 和 `run_review()` API 默认生产沙箱为 `container`；显式 `--dry-run` 或 `--sandbox fake` 使用 fake sandbox，适合 CI 和无模型 API Key 的本地开发。
 - 支持 Container/Cube workspace runtime，`local` 只作为显式开发 fallback。
 - SQLite 记录任务、输入摘要、沙箱执行、Filter 决策、finding、监控摘要和最终报告。
 - 报告和数据库写入前执行敏感信息脱敏。
+- 普通评审不会在沙箱策略外执行 SDK `skill_run`；`--skill-smoke` 可单独验证 SDK `skill_load` / `skill_run` 链路。
 - Finding 去重，并按置信度分流到 `warnings` 和 `needs_human_review`。
 - 规则覆盖安全风险、异步错误、资源泄漏、测试缺失、敏感信息泄漏、数据库事务、数据库连接生命周期七类问题，并包含 Python AST/taint 辅助分析。
-- 沙箱侧默认聚合离线 bandit、ruff、detect-secrets；网络型 semgrep auto 需要显式开启并先经过 Filter。
+- 沙箱侧默认聚合离线 bandit、ruff、detect-secrets；网络型 semgrep auto、测试命令中的 URL/domain，以及 pip/git/npm/ssh 等隐式联网命令需要先经过 Filter。
+- 沙箱输出按 stdout/stderr 合计字节预算截断；scanner 物化 diff 文件时拒绝路径逃逸。
 - `rules.json` 和 `filter_policy.json` 提供规则配置、Filter policy-as-code 和 workspace 路径 allowlist。
 - 支持 `# cr-agent: ignore=<rule_id>` 忽略特定规则并记录 ignored count。
 - 提供 `agent/native_agent.py`，可把完整评审流水线作为 `FunctionTool` 挂载到 `LlmAgent`。
@@ -25,60 +27,61 @@
 在仓库根目录执行：
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --fixture security_issue --dry-run
+python3 examples/skills_code_review_agent/run_review.py --fixture security_issue --dry-run
 ```
 
 运行公开样例：
 
 ```bash
 for f in clean security_issue async_resource_leak db_lifecycle missing_tests duplicate_findings sandbox_failure secret_redaction sandbox_timeout sandbox_large_output sandbox_secret_output; do
-  python examples/skills_code_review_agent/run_review.py --fixture "$f" --dry-run --output-dir /tmp/cr-agent-"$f"
+  python3 examples/skills_code_review_agent/run_review.py --fixture "$f" --dry-run --output-dir /tmp/cr-agent-"$f"
 done
 ```
 
 验证 SDK 原生 Skill 链路。该命令会真实调用 `skill_load(skill_name="code-review")`，再通过
-`skill_run` 执行 Skill 目录下的 `scripts/diff_summary.py`：
+`skill_run` 执行 Skill 目录下的 `scripts/diff_summary.py`。这是独立 smoke check；普通审查流水线不会在 Filter
+和所选沙箱策略外执行 SDK `skill_run`：
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --skill-smoke
+python3 examples/skills_code_review_agent/run_review.py --skill-smoke
 ```
 
 审查 diff 文件：
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --diff-file /path/to/change.diff --dry-run
+python3 examples/skills_code_review_agent/run_review.py --diff-file /path/to/change.diff --dry-run
 ```
 
 从 stdin 或 PR patch 文件读取：
 
 ```bash
-git diff | python examples/skills_code_review_agent/run_review.py --diff-file - --dry-run
-python examples/skills_code_review_agent/run_review.py --patch-file /path/to/pr.patch --dry-run
+git diff | python3 examples/skills_code_review_agent/run_review.py --diff-file - --dry-run
+python3 examples/skills_code_review_agent/run_review.py --patch-file /path/to/pr.patch --dry-run
 ```
 
 审查本地 git 工作区：
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --repo-path /path/to/repo --dry-run
+python3 examples/skills_code_review_agent/run_review.py --repo-path /path/to/repo --dry-run
 ```
 
 审查文件路径列表：
 
 ```bash
 printf "app/service.py\napp/repository.py\n" > /tmp/changed-files.txt
-python examples/skills_code_review_agent/run_review.py --file-list /tmp/changed-files.txt --dry-run
+python3 examples/skills_code_review_agent/run_review.py --file-list /tmp/changed-files.txt --dry-run
 ```
 
 在通过 Filter 的沙箱请求中执行单元测试命令：
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --fixture clean --dry-run --test-command "python -m pytest -q tests/examples/test_skills_code_review_agent.py"
+python3 examples/skills_code_review_agent/run_review.py --fixture clean --dry-run --test-command "python3 -m pytest -q tests/examples/test_skills_code_review_agent.py"
 ```
 
 执行 Skill 下通过 Filter 的自定义规则脚本：
 
 ```bash
-python examples/skills_code_review_agent/run_review.py \
+python3 examples/skills_code_review_agent/run_review.py \
   --fixture security_issue \
   --dry-run \
   --custom-rule-script scripts/static_review.py
@@ -87,7 +90,7 @@ python examples/skills_code_review_agent/run_review.py \
 验证网络 scanner 拦截：
 
 ```bash
-python examples/skills_code_review_agent/run_review.py \
+python3 examples/skills_code_review_agent/run_review.py \
   --fixture clean \
   --dry-run \
   --include-network-scanners
@@ -96,7 +99,7 @@ python examples/skills_code_review_agent/run_review.py \
 验证 Filter 超预算拦截：
 
 ```bash
-python examples/skills_code_review_agent/run_review.py \
+python3 examples/skills_code_review_agent/run_review.py \
   --fixture clean \
   --dry-run \
   --timeout-sec 10 \
@@ -106,7 +109,7 @@ python examples/skills_code_review_agent/run_review.py \
 运行 fixture 回归评测：
 
 ```bash
-python examples/skills_code_review_agent/evaluate_fixtures.py --json
+python3 examples/skills_code_review_agent/evaluate_fixtures.py --json
 ```
 
 作为 tRPC-Agent 工具使用：
@@ -122,13 +125,13 @@ agent = create_code_review_agent(model=my_model, skill_workspace_runtime=runtime
 按 task id 查询数据库记录：
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --task-id cr_xxxxx --db-path examples/skills_code_review_agent/sample_outputs/review_tasks.sqlite
+python3 examples/skills_code_review_agent/run_review.py --task-id cr_xxxxx --db-path examples/skills_code_review_agent/sample_outputs/review_tasks.sqlite
 ```
 
 使用 SQLite URL：
 
 ```bash
-python examples/skills_code_review_agent/run_review.py \
+python3 examples/skills_code_review_agent/run_review.py \
   --fixture security_issue \
   --dry-run \
   --db-url sqlite:////tmp/review_tasks.sqlite
@@ -146,29 +149,29 @@ python examples/skills_code_review_agent/run_review.py \
 
 ## 沙箱模式
 
-- `fake`：默认 dry-run 模式，确定性、可离线、适合 CI。
-- `container`：Docker backed workspace runtime，作为本地可验证的生产沙箱路径。
+- `container`：CLI 和 `run_review()` API 默认生产沙箱，Docker backed workspace runtime，作为本地可验证的生产沙箱路径。
 - `cube`：Cube/E2B workspace runtime，可对接 E2B-compatible CubeSandbox 服务。
+- `fake`：显式 dry-run 模式，确定性、可离线、适合 CI。
 - `local`：仅用于显式开发 fallback。
 
 Docker 可用时可以运行 Container 模式：
 
 ```bash
-python examples/skills_code_review_agent/run_review.py \
+python3 examples/skills_code_review_agent/run_review.py \
   --fixture security_issue \
   --sandbox container \
   --container-image python:3-slim \
-  --test-command "python -m pytest -q"
+  --test-command "python3 -m pytest -q"
 ```
 
-默认 `python:3-slim` 能验证 Container workspace、超时和输出限制链路，但不内置
-`bandit`、`ruff`、`detect-secrets`。如需在容器中实际运行这些离线 scanner，可先构建示例镜像：
+默认 `python:3-slim` 是可直接拉取的生产沙箱基线，用来验证 Container workspace、隔离、超时和输出限制链路；
+它不内置 `bandit`、`ruff`、`detect-secrets`。如需在容器中实际运行这些离线 scanner，可先构建示例镜像：
 
 ```bash
 docker build -f examples/skills_code_review_agent/Dockerfile.scanners \
   -t trpc-agent-code-review-scanners examples/skills_code_review_agent
 
-python examples/skills_code_review_agent/run_review.py \
+python3 examples/skills_code_review_agent/run_review.py \
   --fixture security_issue \
   --sandbox container \
   --container-image trpc-agent-code-review-scanners
@@ -177,13 +180,13 @@ python examples/skills_code_review_agent/run_review.py \
 设置 `CR_AGENT_RUN_DOCKER_SMOKE=1` 且 Docker daemon 可用时，可显式执行 Container smoke：
 
 ```bash
-CR_AGENT_RUN_DOCKER_SMOKE=1 python -m pytest -q tests/examples/test_skills_code_review_agent.py::test_container_runtime_smoke_executes_skill_script
+CR_AGENT_RUN_DOCKER_SMOKE=1 python3 -m pytest -q tests/examples/test_skills_code_review_agent.py::test_container_runtime_smoke_executes_skill_script
 ```
 
 Cube 模式需要安装可选依赖并提供 Cube/E2B 配置：
 
 ```bash
-python examples/skills_code_review_agent/run_review.py \
+python3 examples/skills_code_review_agent/run_review.py \
   --fixture security_issue \
   --sandbox cube \
   --cube-template "$CUBE_TEMPLATE_ID" \
@@ -220,13 +223,15 @@ This example demonstrates an automatic code review agent built from a reusable S
 
 - `skills/code-review/SKILL.md` with rule docs and sandbox scripts.
 - Unified diff, PR patch, repo path, file-list, stdin, and fixture input parsing.
-- Fake/offline mode for CI and no-key development.
+- CLI and `run_review()` default to the production `container` sandbox; explicit `--dry-run` or `--sandbox fake` uses the fake sandbox for CI and no-key development.
 - Container/Cube-ready sandbox adapter boundary, with local mode only as explicit fallback.
 - SQLite records for task, diff, sandbox run, filter decision, finding, monitoring summary, and final report.
 - Secret redaction before report and database writes.
+- Normal reviews do not execute SDK `skill_run` outside the sandbox policy; `--skill-smoke` verifies SDK `skill_load` / `skill_run` separately.
 - Deduped findings plus warnings and `needs_human_review`.
 - Review rules cover seven categories: security risks, async errors, resource leaks, test gaps, secret leaks, database transactions, and database connection lifecycle, with Python AST/taint assistance.
-- Sandbox-side scanner aggregation runs offline bandit, ruff, and detect-secrets by default; network-backed semgrep auto scanning is opt-in and must pass Filter.
+- Sandbox-side scanner aggregation runs offline bandit, ruff, and detect-secrets by default; network-backed semgrep auto scanning, URLs/domains in test commands, and implicit network commands such as pip/git/npm/ssh must pass Filter.
+- Sandbox output uses a combined stdout/stderr byte budget; scanner materialization rejects path escapes.
 - `rules.json` and `filter_policy.json` provide rule configuration, Filter policy-as-code, and workspace path allowlists.
 - `# cr-agent: ignore=<rule_id>` suppresses a specific rule and records ignored counts.
 - `agent/native_agent.py` exposes the complete review pipeline as a `FunctionTool` for `LlmAgent`.
@@ -239,60 +244,61 @@ This example demonstrates an automatic code review agent built from a reusable S
 From the repository root:
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --fixture security_issue --dry-run
+python3 examples/skills_code_review_agent/run_review.py --fixture security_issue --dry-run
 ```
 
 Run all public fixtures:
 
 ```bash
 for f in clean security_issue async_resource_leak db_lifecycle missing_tests duplicate_findings sandbox_failure secret_redaction sandbox_timeout sandbox_large_output sandbox_secret_output; do
-  python examples/skills_code_review_agent/run_review.py --fixture "$f" --dry-run --output-dir /tmp/cr-agent-"$f"
+  python3 examples/skills_code_review_agent/run_review.py --fixture "$f" --dry-run --output-dir /tmp/cr-agent-"$f"
 done
 ```
 
 Verify the SDK-native Skill path. This calls `skill_load(skill_name="code-review")`
-and then runs `scripts/diff_summary.py` through `skill_run`:
+and then runs `scripts/diff_summary.py` through `skill_run`. This is a standalone smoke check;
+normal reviews do not execute SDK `skill_run` outside the Filter and selected sandbox policy:
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --skill-smoke
+python3 examples/skills_code_review_agent/run_review.py --skill-smoke
 ```
 
 Review a diff file:
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --diff-file /path/to/change.diff --dry-run
+python3 examples/skills_code_review_agent/run_review.py --diff-file /path/to/change.diff --dry-run
 ```
 
 Read a diff from stdin or a PR patch file:
 
 ```bash
-git diff | python examples/skills_code_review_agent/run_review.py --diff-file - --dry-run
-python examples/skills_code_review_agent/run_review.py --patch-file /path/to/pr.patch --dry-run
+git diff | python3 examples/skills_code_review_agent/run_review.py --diff-file - --dry-run
+python3 examples/skills_code_review_agent/run_review.py --patch-file /path/to/pr.patch --dry-run
 ```
 
 Review a local git working tree:
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --repo-path /path/to/repo --dry-run
+python3 examples/skills_code_review_agent/run_review.py --repo-path /path/to/repo --dry-run
 ```
 
 Review a file list:
 
 ```bash
 printf "app/service.py\napp/repository.py\n" > /tmp/changed-files.txt
-python examples/skills_code_review_agent/run_review.py --file-list /tmp/changed-files.txt --dry-run
+python3 examples/skills_code_review_agent/run_review.py --file-list /tmp/changed-files.txt --dry-run
 ```
 
 Run a configured unit test command inside an approved sandbox request:
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --fixture clean --dry-run --test-command "python -m pytest -q tests/examples/test_skills_code_review_agent.py"
+python3 examples/skills_code_review_agent/run_review.py --fixture clean --dry-run --test-command "python3 -m pytest -q tests/examples/test_skills_code_review_agent.py"
 ```
 
 Run a custom rule script from the Skill after Filter approval:
 
 ```bash
-python examples/skills_code_review_agent/run_review.py \
+python3 examples/skills_code_review_agent/run_review.py \
   --fixture security_issue \
   --dry-run \
   --custom-rule-script scripts/static_review.py
@@ -301,7 +307,7 @@ python examples/skills_code_review_agent/run_review.py \
 Verify Filter budget interception:
 
 ```bash
-python examples/skills_code_review_agent/run_review.py \
+python3 examples/skills_code_review_agent/run_review.py \
   --fixture clean \
   --dry-run \
   --timeout-sec 10 \
@@ -311,7 +317,7 @@ python examples/skills_code_review_agent/run_review.py \
 Run fixture regression evaluation:
 
 ```bash
-python examples/skills_code_review_agent/evaluate_fixtures.py --json
+python3 examples/skills_code_review_agent/evaluate_fixtures.py --json
 ```
 
 Use as a tRPC-Agent tool:
@@ -327,13 +333,13 @@ agent = create_code_review_agent(model=my_model, skill_workspace_runtime=runtime
 Query stored task data:
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --task-id cr_xxxxx --db-path examples/skills_code_review_agent/sample_outputs/review_tasks.sqlite
+python3 examples/skills_code_review_agent/run_review.py --task-id cr_xxxxx --db-path examples/skills_code_review_agent/sample_outputs/review_tasks.sqlite
 ```
 
 Use a SQLite URL:
 
 ```bash
-python examples/skills_code_review_agent/run_review.py \
+python3 examples/skills_code_review_agent/run_review.py \
   --fixture security_issue \
   --dry-run \
   --db-url sqlite:////tmp/review_tasks.sqlite
@@ -351,31 +357,31 @@ The report includes findings, severity statistics, warnings, human-review items,
 
 ## Sandbox Modes
 
-- `fake`: default dry-run mode, deterministic and CI-safe.
-- `container`: production target for Docker-backed workspace execution.
+- `container`: CLI and `run_review()` default production target for Docker-backed workspace execution.
 - `cube`: production target for Cube/E2B workspace execution.
+- `fake`: explicit dry-run mode, deterministic and CI-safe.
 - `local`: explicit development fallback only.
 
 Container mode can be invoked when Docker is available:
 
 ```bash
-python examples/skills_code_review_agent/run_review.py \
+python3 examples/skills_code_review_agent/run_review.py \
   --fixture security_issue \
   --sandbox container \
   --container-image python:3-slim \
-  --test-command "python -m pytest -q"
+  --test-command "python3 -m pytest -q"
 ```
 
-The default `python:3-slim` image verifies the Container workspace path,
-timeouts, and output caps, but it does not include `bandit`, `ruff`, or
-`detect-secrets`. Build the example scanner image when you want those offline
-scanners to run inside the container:
+The default `python:3-slim` image is a directly pullable production sandbox baseline
+for verifying the Container workspace path, isolation, timeouts, and output caps; it
+does not include `bandit`, `ruff`, or `detect-secrets`. Build the example scanner
+image when you want those offline scanners to run inside the container:
 
 ```bash
 docker build -f examples/skills_code_review_agent/Dockerfile.scanners \
   -t trpc-agent-code-review-scanners examples/skills_code_review_agent
 
-python examples/skills_code_review_agent/run_review.py \
+python3 examples/skills_code_review_agent/run_review.py \
   --fixture security_issue \
   --sandbox container \
   --container-image trpc-agent-code-review-scanners
@@ -384,13 +390,13 @@ python examples/skills_code_review_agent/run_review.py \
 Set `CR_AGENT_RUN_DOCKER_SMOKE=1` with Docker reachable to run the Container smoke explicitly:
 
 ```bash
-CR_AGENT_RUN_DOCKER_SMOKE=1 python -m pytest -q tests/examples/test_skills_code_review_agent.py::test_container_runtime_smoke_executes_skill_script
+CR_AGENT_RUN_DOCKER_SMOKE=1 python3 -m pytest -q tests/examples/test_skills_code_review_agent.py::test_container_runtime_smoke_executes_skill_script
 ```
 
 Cube mode requires the optional Cube/E2B dependency and credentials:
 
 ```bash
-python examples/skills_code_review_agent/run_review.py \
+python3 examples/skills_code_review_agent/run_review.py \
   --fixture security_issue \
   --sandbox cube \
   --cube-template "$CUBE_TEMPLATE_ID" \

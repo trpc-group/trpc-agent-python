@@ -23,6 +23,7 @@
   - 输入：unified diff。
   - 输出：scanner run 摘要和规范化 findings 的 JSON。
   - 用途：可选聚合 bandit、ruff、detect-secrets 和 semgrep；未安装的 scanner 会标记为 `skipped`。
+  - 安全：只物化安全相对路径，拒绝 `..`、绝对路径和扫描根目录逃逸。
 
 - `unit_test_probe.py`
   - 输入：环境变量 `CR_TEST_COMMAND`。
@@ -31,7 +32,7 @@
 
 ## 安全契约
 
-Agent 必须先运行 Filter preflight，再调用任何脚本。脚本不能读取 secret，不能使用未授权网络访问，也不能修改沙箱 workspace 外部文件。输出在持久化前会被截断并脱敏。
+Agent 必须先运行 Filter preflight，再调用任何脚本。脚本不能读取 secret，不能使用未授权网络访问，也不能修改沙箱 workspace 外部文件。stdout/stderr 使用合计输出预算，持久化前会被截断并脱敏。
 
 # Code Review Skill Scripts
 
@@ -58,6 +59,7 @@ Scripts in this directory are sandbox targets. They read a unified diff path fro
   - Input: unified diff.
   - Output: JSON object with scanner run summaries and normalized findings.
   - Purpose: optional aggregation for bandit, ruff, detect-secrets, and semgrep; missing scanners are marked as `skipped`.
+  - Safety: materializes only safe relative paths and rejects `..`, absolute paths, and scan-root escapes.
 
 - `unit_test_probe.py`
   - Input: environment variable `CR_TEST_COMMAND`.
@@ -66,4 +68,4 @@ Scripts in this directory are sandbox targets. They read a unified diff path fro
 
 ## Safety Contract
 
-The agent must run Filter preflight before invoking any script. Scripts must not read secrets, use network access, or mutate files outside the sandbox workspace. Output is capped and redacted before persistence.
+The agent must run Filter preflight before invoking any script. Scripts must not read secrets, use network access, or mutate files outside the sandbox workspace. stdout/stderr share one output budget and are capped and redacted before persistence.

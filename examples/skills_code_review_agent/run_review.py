@@ -4,23 +4,30 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 EXAMPLE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = EXAMPLE_DIR.parents[1]
-for import_path in (EXAMPLE_DIR, REPO_ROOT):
-    if str(import_path) not in sys.path:
-        sys.path.insert(0, str(import_path))
+if __package__:
+    from .agent.pipeline import DEFAULT_DB_PATH
+    from .agent.pipeline import DEFAULT_OUTPUT_DIR
+    from .agent.pipeline import query_task
+    from .agent.pipeline import run_review
+    from .agent.storage import ReviewStore
+else:
+    for import_path in (EXAMPLE_DIR, REPO_ROOT):
+        if str(import_path) not in sys.path:
+            sys.path.insert(0, str(import_path))
 
-from agent.pipeline import DEFAULT_DB_PATH
-from agent.pipeline import DEFAULT_OUTPUT_DIR
-from agent.pipeline import query_task
-from agent.pipeline import run_review
-from agent.runtime_factory import create_container_sandbox_runner
-from agent.runtime_factory import create_cube_sandbox_runner_from_config
-from agent.storage import ReviewStore
+    from agent.pipeline import DEFAULT_DB_PATH
+    from agent.pipeline import DEFAULT_OUTPUT_DIR
+    from agent.pipeline import query_task
+    from agent.pipeline import run_review
+    from agent.storage import ReviewStore
 
 
 def query_review_store(args: argparse.Namespace, task_id: str) -> dict:
@@ -42,7 +49,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--db-path", type=Path, default=DEFAULT_DB_PATH)
     parser.add_argument("--db-url",
                         help="SQL-style review store URL. Supports sqlite:///path/to/reviews.sqlite by default.")
-    parser.add_argument("--sandbox", choices=["container", "cube", "fake", "local"], default="fake")
+    parser.add_argument("--sandbox", choices=["container", "cube", "fake", "local"], default="container")
     parser.add_argument("--container-image", default="python:3-slim")
     parser.add_argument("--docker-path")
     parser.add_argument("--docker-base-url")
@@ -50,9 +57,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cube-api-url")
     parser.add_argument("--cube-api-key")
     parser.add_argument("--cube-sandbox-id")
-    parser.add_argument("--dry-run",
-                        action="store_true",
-                        help="Use fake model/sandbox mode. This is the default for offline demos.")
+    parser.add_argument("--dry-run", action="store_true", help="Use fake model/sandbox mode for offline demos and CI.")
     parser.add_argument("--timeout-sec", type=float, default=5.0)
     parser.add_argument("--max-output-bytes", type=int, default=12000)
     parser.add_argument("--filter-timeout-budget-sec", type=float, default=30.0)
@@ -84,21 +89,6 @@ async def async_main() -> None:
     if args.task_id:
         print(json.dumps(query_review_store(args, args.task_id), indent=2, sort_keys=True))
         return
-    sandbox_runner = None
-    if args.sandbox == "container" and not args.dry_run:
-        sandbox_runner = create_container_sandbox_runner(
-            image=args.container_image,
-            docker_path=args.docker_path,
-            base_url=args.docker_base_url,
-        )
-    elif args.sandbox == "cube" and not args.dry_run:
-        sandbox_runner = await create_cube_sandbox_runner_from_config(
-            template=args.cube_template,
-            api_url=args.cube_api_url,
-            api_key=args.cube_api_key,
-            sandbox_id=args.cube_sandbox_id,
-        )
-
     report = await run_review(
         diff_file=args.diff_file,
         patch_file=args.patch_file,
@@ -126,7 +116,6 @@ async def async_main() -> None:
         custom_rule_script=args.custom_rule_script,
         include_network_scanners=args.include_network_scanners,
         max_diff_bytes=args.max_diff_bytes,
-        sandbox_runner=sandbox_runner,
     )
     print(
         json.dumps(
@@ -139,6 +128,28 @@ async def async_main() -> None:
             indent=2))
     if args.show_db:
         print(json.dumps(query_review_store(args, report.task_id), indent=2, sort_keys=True))
+
+
+async def _close_cli_sandbox_runner(runner: Any, *, destroy_cube: bool) -> None:
+    if runner is None:
+        return
+    runtime = getattr(runner, "runtime", None)
+    if destroy_cube and runtime is not None:
+        destroy = getattr(runtime, "destroy", None)
+        if callable(destroy):
+            with contextlib.suppress(Exception):
+                await destroy()
+            return
+    close = getattr(runner, "close", None)
+    if callable(close):
+        with contextlib.suppress(Exception):
+            close()
+        return
+    if runtime is not None:
+        close_runtime = getattr(runtime, "close", None)
+        if callable(close_runtime):
+            with contextlib.suppress(Exception):
+                close_runtime()
 
 
 def main() -> None:

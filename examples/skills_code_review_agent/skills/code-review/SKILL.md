@@ -22,7 +22,7 @@
 
 自定义规则脚本必须位于本 Skill 的 `scripts/` 目录下，并通过 Filter preflight 后才能通过 `--custom-rule-script` 执行。
 
-`filter_policy.json` 定义 Filter policy-as-code，包括禁止路径、高风险命令、预算和 workspace 路径 allowlist。代码中可使用 `# cr-agent: ignore=<rule_id>` 忽略当前行或下一行的特定规则。
+`filter_policy.json` 定义 Filter policy-as-code，包括禁止路径、高风险命令、测试命令 URL/domain 与 pip/git/npm/ssh 等隐式联网命令治理、预算和 workspace 路径 allowlist。代码中可使用 `# cr-agent: ignore=<rule_id>` 忽略当前行或下一行的特定规则。
 
 `agent/native_agent.py` 提供 `code_review_tool` 和 `create_code_review_agent(model=..., skill_workspace_runtime=...)`，可把完整流水线挂载为 tRPC-Agent `FunctionTool`，并在传入 workspace runtime 后暴露 SDK 原生 `skill_load` / `skill_run`。
 
@@ -33,19 +33,19 @@
 dry-run 审查：
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --fixture security_issue --dry-run
+python3 examples/skills_code_review_agent/run_review.py --fixture security_issue --dry-run
 ```
 
 Container 沙箱审查：
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --fixture security_issue --sandbox container --container-image python:3-slim
+python3 examples/skills_code_review_agent/run_review.py --fixture security_issue --sandbox container --container-image python:3-slim
 ```
 
 自定义规则脚本：
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --fixture security_issue --dry-run --custom-rule-script scripts/static_review.py
+python3 examples/skills_code_review_agent/run_review.py --fixture security_issue --dry-run --custom-rule-script scripts/static_review.py
 ```
 
 ## 安全约束
@@ -76,7 +76,7 @@ The skill is designed for offline dry-run mode first. Production use should run 
 
 Custom rule scripts can be selected with `--custom-rule-script` when they live under this Skill's `scripts/` directory and pass Filter preflight.
 
-`filter_policy.json` defines Filter policy-as-code, including forbidden paths, high-risk commands, budgets, and workspace path allowlists. Changed code can use `# cr-agent: ignore=<rule_id>` to suppress a specific rule on the current or next line.
+`filter_policy.json` defines Filter policy-as-code, including forbidden paths, high-risk commands, URL/domain and implicit pip/git/npm/ssh network governance for test commands, budgets, and workspace path allowlists. Changed code can use `# cr-agent: ignore=<rule_id>` to suppress a specific rule on the current or next line.
 
 `agent/native_agent.py` provides `code_review_tool` and `create_code_review_agent(model=..., skill_workspace_runtime=...)` so the full pipeline can be attached as a tRPC-Agent `FunctionTool`; when a workspace runtime is supplied, the agent also exposes SDK-native `skill_load` / `skill_run`.
 
@@ -87,19 +87,19 @@ Custom rule scripts can be selected with `--custom-rule-script` when they live u
 Dry-run review:
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --fixture security_issue --dry-run
+python3 examples/skills_code_review_agent/run_review.py --fixture security_issue --dry-run
 ```
 
 Container sandbox review:
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --fixture security_issue --sandbox container --container-image python:3-slim
+python3 examples/skills_code_review_agent/run_review.py --fixture security_issue --sandbox container --container-image python:3-slim
 ```
 
 Custom rule script:
 
 ```bash
-python examples/skills_code_review_agent/run_review.py --fixture security_issue --dry-run --custom-rule-script scripts/static_review.py
+python3 examples/skills_code_review_agent/run_review.py --fixture security_issue --dry-run --custom-rule-script scripts/static_review.py
 ```
 
 ## Safety

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import atexit
 import contextlib
 import os
 import shlex
@@ -236,6 +237,23 @@ class WorkspaceSandboxRunner(SandboxRunner):
                 with contextlib.suppress(Exception):
                     await manager.cleanup(workspace_exec_id)
 
+    def close(self) -> None:
+        close = getattr(self.runtime, "close", None)
+        if callable(close):
+            close()
+            return
+        container = getattr(self.runtime, "container", None)
+        cleanup = getattr(container, "_cleanup_container", None)
+        if callable(cleanup):
+            with contextlib.suppress(AttributeError, ValueError):
+                atexit.unregister(cleanup)
+            cleanup()
+            return
+        client = getattr(self.runtime, "_client", None)
+        client_close = getattr(client, "close", None)
+        if callable(client_close):
+            client_close()
+
 
 def _build_run(
     *,
@@ -249,11 +267,11 @@ def _build_run(
 ) -> SandboxRun:
     stdout_r = redact_text(stdout)
     stderr_r = redact_text(stderr)
-    stdout_out = stdout_r.text[:request.max_output_bytes]
-    stderr_out = stderr_r.text[:request.max_output_bytes]
+    stdout_out, stdout_truncated, remaining = _take_text_budget(stdout_r.text, request.max_output_bytes)
+    stderr_out, stderr_truncated, _ = _take_text_budget(stderr_r.text, remaining)
     truncated = (
-        len(stdout_r.text) > request.max_output_bytes
-        or len(stderr_r.text) > request.max_output_bytes
+        stdout_truncated
+        or stderr_truncated
         or "[output truncated:" in stdout_r.text
         or "[output truncated:" in stderr_r.text
     )
@@ -278,6 +296,14 @@ def _elapsed_ms(start: float) -> int:
     return int((time.monotonic() - start) * 1000)
 
 
+def _take_text_budget(text: str, remaining_bytes: int) -> tuple[str, bool, int]:
+    encoded = text.encode("utf-8")
+    budget = max(0, remaining_bytes)
+    if len(encoded) <= budget:
+        return text, False, budget - len(encoded)
+    return encoded[:budget].decode("utf-8", errors="replace"), True, 0
+
+
 async def _communicate_limited(
     process: asyncio.subprocess.Process,
     input_data: bytes,
@@ -298,8 +324,9 @@ async def _communicate_limited(
         with contextlib.suppress(Exception):
             await process.stdin.wait_closed()
 
-    stdout_task = asyncio.create_task(_read_limited_stream(process.stdout, max_output_bytes, process))
-    stderr_task = asyncio.create_task(_read_limited_stream(process.stderr, max_output_bytes, process))
+    output_budget = _SharedOutputBudget(max_output_bytes)
+    stdout_task = asyncio.create_task(_read_limited_stream(process.stdout, output_budget, process))
+    stderr_task = asyncio.create_task(_read_limited_stream(process.stderr, output_budget, process))
     stdin_task = asyncio.create_task(write_stdin())
     wait_task = asyncio.create_task(process.wait())
     timed_out = False
@@ -310,36 +337,49 @@ async def _communicate_limited(
         with contextlib.suppress(ProcessLookupError):
             process.kill()
         await process.wait()
-    stdout_b, stdout_truncated = await stdout_task
-    stderr_b, stderr_truncated = await stderr_task
+    stdout_b = await stdout_task
+    stderr_b = await stderr_task
     if timed_out and not stderr_b:
         stderr_b = b"local sandbox timed out"
-    return stdout_b, stderr_b, timed_out, stdout_truncated or stderr_truncated
+    return stdout_b, stderr_b, timed_out, output_budget.truncated
+
+
+class _SharedOutputBudget:
+
+    def __init__(self, max_output_bytes: int):
+        self.remaining = max(0, max_output_bytes)
+        self.truncated = False
+        self._lock = asyncio.Lock()
+
+    async def take(self, chunk: bytes, process: asyncio.subprocess.Process) -> bytes:
+        async with self._lock:
+            if len(chunk) <= self.remaining:
+                self.remaining -= len(chunk)
+                return chunk
+            allowed = chunk[:self.remaining]
+            self.remaining = 0
+            self.truncated = True
+            with contextlib.suppress(ProcessLookupError):
+                process.kill()
+            return allowed
 
 
 async def _read_limited_stream(
     stream: asyncio.StreamReader,
-    max_output_bytes: int,
+    output_budget: _SharedOutputBudget,
     process: asyncio.subprocess.Process,
-) -> tuple[bytes, bool]:
+) -> bytes:
     chunks: list[bytes] = []
-    total = 0
-    truncated = False
-    cap = max(0, max_output_bytes)
     while True:
         chunk = await stream.read(4096)
         if not chunk:
             break
-        remaining = cap - total
-        if remaining > 0:
-            chunks.append(chunk[:remaining])
-            total += min(len(chunk), remaining)
-        if len(chunk) > remaining:
-            truncated = True
-            with contextlib.suppress(ProcessLookupError):
-                process.kill()
+        allowed = await output_budget.take(chunk, process)
+        if allowed:
+            chunks.append(allowed)
+        if output_budget.truncated:
             break
-    return b"".join(chunks), truncated
+    return b"".join(chunks)
 
 
 def _local_env(request_env: dict[str, str]) -> dict[str, str]:
@@ -381,20 +421,30 @@ def _workspace_repo_files(diff: DiffInput) -> list[tuple[str, bytes]]:
     repo_path = _repo_source_path(diff)
     if repo_path is None:
         return []
+    repo_root = repo_path.resolve()
     candidates = _git_candidate_files(repo_path)
     files: list[tuple[str, bytes]] = []
     total = 0
     for rel in candidates:
         normalized = rel.replace("\\", "/").lstrip("/")
-        if not normalized or normalized.startswith("../") or _is_forbidden_repo_path(normalized):
+        rel_path = Path(normalized)
+        if (not normalized or normalized.startswith("../") or rel_path.is_absolute() or ".." in rel_path.parts
+                or _is_forbidden_repo_path(normalized)):
             continue
-        path = repo_path / normalized
-        if not path.is_file():
+        path = repo_root / rel_path
+        if _path_has_symlink_component(path, repo_root):
             continue
-        size = path.stat().st_size
+        try:
+            resolved = path.resolve()
+            resolved.relative_to(repo_root)
+        except (OSError, ValueError):
+            continue
+        if not resolved.is_file():
+            continue
+        size = resolved.stat().st_size
         if size > REPO_STAGE_MAX_FILE_BYTES or total + size > REPO_STAGE_MAX_TOTAL_BYTES:
             continue
-        files.append((normalized, path.read_bytes()))
+        files.append((normalized, resolved.read_bytes()))
         total += size
         if len(files) >= REPO_STAGE_MAX_FILES:
             break
@@ -435,6 +485,19 @@ def _git_candidate_files(repo_path: Path) -> list[str]:
 def _is_forbidden_repo_path(path: str) -> bool:
     lowered = path.lower()
     return lowered.startswith(".git/") or any(marker in lowered for marker in REPO_STAGE_FORBIDDEN_MARKERS)
+
+
+def _path_has_symlink_component(path: Path, root: Path) -> bool:
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        return True
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            return True
+    return False
 
 
 def _request_env(request_env: dict[str, str]) -> dict[str, str]:
@@ -507,35 +570,47 @@ async def main() -> int:
     )
     assert process.stdout is not None
     assert process.stderr is not None
-    stdout_task = asyncio.create_task(read_and_forward(process.stdout, sys.stdout.buffer, max_bytes, process))
-    stderr_task = asyncio.create_task(read_and_forward(process.stderr, sys.stderr.buffer, max_bytes, process))
+    output_budget = OutputBudget(max_bytes)
+    stdout_task = asyncio.create_task(read_and_forward(process.stdout, sys.stdout.buffer, output_budget, process))
+    stderr_task = asyncio.create_task(read_and_forward(process.stderr, sys.stderr.buffer, output_budget, process))
     await process.wait()
-    stdout_truncated, stderr_truncated = await asyncio.gather(stdout_task, stderr_task)
-    if stdout_truncated:
-        print("[output truncated: stdout exceeded cap]", file=sys.stderr)
-    if stderr_truncated:
-        print("[output truncated: stderr exceeded cap]", file=sys.stderr)
+    await asyncio.gather(stdout_task, stderr_task)
+    if output_budget.truncated:
+        print("[output truncated: combined stdout/stderr exceeded cap]", file=sys.stderr)
     return process.returncode or 0
 
 
-async def read_and_forward(reader, target, max_bytes, process) -> bool:
-    total = 0
-    truncated = False
+class OutputBudget:
+
+    def __init__(self, max_bytes):
+        self.remaining = max_bytes
+        self.truncated = False
+        self.lock = asyncio.Lock()
+
+    async def take(self, chunk, process):
+        async with self.lock:
+            if len(chunk) <= self.remaining:
+                self.remaining -= len(chunk)
+                return chunk
+            allowed = chunk[:self.remaining]
+            self.remaining = 0
+            self.truncated = True
+            with contextlib.suppress(ProcessLookupError):
+                process.kill()
+            return allowed
+
+
+async def read_and_forward(reader, target, output_budget, process) -> None:
     while True:
         chunk = await reader.read(4096)
         if not chunk:
             break
-        remaining = max_bytes - total
-        if remaining > 0:
-            target.write(chunk[:remaining])
+        allowed = await output_budget.take(chunk, process)
+        if allowed:
+            target.write(allowed)
             target.flush()
-            total += min(len(chunk), remaining)
-        if len(chunk) > remaining:
-            truncated = True
-            with contextlib.suppress(ProcessLookupError):
-                process.kill()
+        if output_budget.truncated:
             break
-    return truncated
 
 
 if __name__ == "__main__":

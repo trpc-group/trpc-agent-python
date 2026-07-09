@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from pathlib import PurePosixPath
 
 SCANNERS = {
     "bandit": ["bandit", "-r", "{root}", "-f", "json"],
@@ -62,11 +63,12 @@ def _run_scanner(name: str, command_template: list[str], root: Path) -> dict[str
 def _materialize_added_files(diff_text: str, root: Path) -> None:
     current: Path | None = None
     lines: list[str] = []
+    root_resolved = root.resolve()
     for raw in diff_text.splitlines():
         if raw.startswith("+++ b/"):
             if current is not None:
                 _write_file(current, lines)
-            current = root / raw.removeprefix("+++ b/").strip()
+            current = _safe_added_file_path(root_resolved, raw.removeprefix("+++ b/").strip())
             lines = []
             continue
         if current is None:
@@ -82,6 +84,21 @@ def _materialize_added_files(diff_text: str, root: Path) -> None:
 def _write_file(path: Path, lines: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _safe_added_file_path(root: Path, raw_path: str) -> Path | None:
+    path = raw_path.split("\t", 1)[0].strip()
+    if not path or "\x00" in path or path == "/dev/null":
+        return None
+    rel = PurePosixPath(path)
+    if rel.is_absolute() or ".." in rel.parts:
+        return None
+    target = (root / rel.as_posix()).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError:
+        return None
+    return target
 
 
 def _normalize_findings(name: str, stdout: str) -> list[dict[str, object]]:

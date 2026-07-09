@@ -4,7 +4,7 @@
     "finding": 0.8,
     "warning": 0.55
   },
-  "created_at": "2026-07-08T10:41:33.361801+00:00",
+  "created_at": "2026-07-09T04:06:43.309712+00:00",
   "filter_decisions": [
     {
       "command": "python scripts/diff_summary.py",
@@ -69,6 +69,14 @@
       ":\\(\\)\\s*\\{"
     ],
     "max_output_bytes": 20000,
+    "network_command_patterns": [
+      "\\b(pip|pip3|python(?:3)?\\s+-m\\s+pip)\\s+install\\b",
+      "\\b(npm|pnpm|yarn)\\s+(install|add|ci)\\b",
+      "\\b(go\\s+get|cargo\\s+install)\\b",
+      "\\b(git)\\s+(clone|fetch|pull|submodule\\s+update)\\b",
+      "\\b(ssh|scp|sftp|rsync)\\b",
+      "\\b(apt-get|apt|apk|yum|dnf|brew)\\s+(install|update|upgrade)\\b"
+    ],
     "network_policy": "deny",
     "sandbox_path_allowlist": [
       "scripts/",
@@ -404,18 +412,18 @@
       "medium": 1
     },
     "stage_durations_ms": {
-      "filter": 1,
-      "parse": 13,
+      "filter": 2,
+      "parse": 19,
       "report": 0,
       "rules": 2,
       "sandbox": 0,
-      "storage_create_task": 0,
-      "storage_filter_decisions": 0,
-      "storage_findings": 2,
+      "storage_create_task": 1,
+      "storage_filter_decisions": 1,
+      "storage_findings": 1,
       "storage_sandbox_runs": 0
     },
     "tool_call_count": 4,
-    "total_duration_ms": 42,
+    "total_duration_ms": 34,
     "warning_count": 1
   },
   "needs_human_review": [],
@@ -508,15 +516,15 @@
         "sha256": "28b3ab7c7e5e1cc1"
       },
       {
-        "bytes": 1967,
+        "bytes": 2670,
         "name": "docs/sandbox_policy.md",
-        "sha256": "e089768c0cae6cbf"
+        "sha256": "288a23ff9e76f705"
       }
     ],
     "filter_policy_manifest": {
-      "bytes": 949,
+      "bytes": 1304,
       "name": "filter_policy.json",
-      "sha256": "b6f9d2b9eef2c15b"
+      "sha256": "cbf7550d2d8ae580"
     },
     "name": "code-review",
     "rule_config": {
@@ -542,9 +550,9 @@
         "sha256": "7382022593d1b7d5"
       },
       {
-        "bytes": 6455,
+        "bytes": 6997,
         "name": "scripts/scanner_probe.py",
-        "sha256": "ae2fca1349d2887f"
+        "sha256": "9e92699189cf4c26"
       },
       {
         "bytes": 935,
@@ -564,17 +572,18 @@
     ],
     "sdk_skill_runtime": {
       "executed": false,
-      "reason": "SDK skill_load/skill_run smoke is available through --skill-smoke; normal reviews do not execute local workspace runtime before Filter approval."
+      "mode": "dry-run",
+      "reason": "Skipped during normal review so every review check remains behind Filter and the selected sandbox runtime; run --skill-smoke to explicitly verify SDK skill_load/skill_run."
     },
     "skill_dir": "skills/code-review",
     "skill_md": {
-      "bytes": 5825,
+      "bytes": 5983,
       "name": "SKILL.md",
-      "sha256": "3e83d2443a93d7a0"
+      "sha256": "0475da77c1cfd2aa"
     }
   },
   "status": "completed",
-  "task_id": "cr_75601cc490fa",
+  "task_id": "cr_92346b42f379",
   "warnings": [
     {
       "category": "missing_tests",

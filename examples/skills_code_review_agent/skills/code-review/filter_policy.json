@@ -31,6 +31,14 @@
     "\\$\\(",
     ":\\(\\)\\s*\\{"
   ],
+  "network_command_patterns": [
+    "\\b(pip|pip3|python(?:3)?\\s+-m\\s+pip)\\s+install\\b",
+    "\\b(npm|pnpm|yarn)\\s+(install|add|ci)\\b",
+    "\\b(go\\s+get|cargo\\s+install)\\b",
+    "\\b(git)\\s+(clone|fetch|pull|submodule\\s+update)\\b",
+    "\\b(ssh|scp|sftp|rsync)\\b",
+    "\\b(apt-get|apt|apk|yum|dnf|brew)\\s+(install|update|upgrade)\\b"
+  ],
   "sandbox_path_allowlist": [
     "scripts/",
     "work/"

@@ -6,6 +6,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 from .models import DiffInput
 from .models import FilterDecision
@@ -37,6 +38,15 @@ HIGH_RISK_COMMAND_PATTERNS = (
     r":\(\)\s*\{",
 )
 
+NETWORK_COMMAND_PATTERNS = (
+    r"\b(pip|pip3|python(?:3)?\s+-m\s+pip)\s+install\b",
+    r"\b(npm|pnpm|yarn)\s+(install|add|ci)\b",
+    r"\b(go\s+get|cargo\s+install)\b",
+    r"\b(git)\s+(clone|fetch|pull|submodule\s+update)\b",
+    r"\b(ssh|scp|sftp|rsync)\b",
+    r"\b(apt-get|apt|apk|yum|dnf|brew)\s+(install|update|upgrade)\b",
+)
+
 
 @dataclass(slots=True)
 class SandboxRequest:
@@ -66,6 +76,7 @@ class ReviewFilterPolicy:
             sandbox_path_allowlist: tuple[str, ...] = ("scripts/", "work/"),
             sandbox_read_allowlist: tuple[str, ...] = ("scripts/", "work/", "repo/"),
             sandbox_write_allowlist: tuple[str, ...] = ("work/", ),
+            network_command_patterns: tuple[str, ...] = NETWORK_COMMAND_PATTERNS,
             schema_version: int = 1,
     ):
         self.network_policy = network_policy
@@ -77,6 +88,7 @@ class ReviewFilterPolicy:
         self.sandbox_path_allowlist = sandbox_path_allowlist
         self.sandbox_read_allowlist = sandbox_read_allowlist
         self.sandbox_write_allowlist = sandbox_write_allowlist
+        self.network_command_patterns = network_command_patterns
         self.schema_version = schema_version
         self.last_redaction_count = 0
 
@@ -102,6 +114,7 @@ class ReviewFilterPolicy:
             sandbox_path_allowlist=tuple(data.get("sandbox_path_allowlist", ("scripts/", "work/"))),
             sandbox_read_allowlist=tuple(data.get("sandbox_read_allowlist", ("scripts/", "work/", "repo/"))),
             sandbox_write_allowlist=tuple(data.get("sandbox_write_allowlist", ("work/", ))),
+            network_command_patterns=tuple(data.get("network_command_patterns", NETWORK_COMMAND_PATTERNS)),
             schema_version=int(data.get("schema_version", 1)),
         )
 
@@ -117,6 +130,7 @@ class ReviewFilterPolicy:
             "sandbox_path_allowlist": list(self.sandbox_path_allowlist),
             "sandbox_read_allowlist": list(self.sandbox_read_allowlist),
             "sandbox_write_allowlist": list(self.sandbox_write_allowlist),
+            "network_command_patterns": list(self.network_command_patterns),
         }
 
     def evaluate(
@@ -241,6 +255,41 @@ class ReviewFilterPolicy:
                 policy="high-risk-command",
                 severity="high",
             )
+        command_domains = _network_domains_in_command(command_to_check)
+        if command_domains:
+            if self.network_policy != "allowlist":
+                return self._decision(
+                    decision="needs_human_review",
+                    reason="Command references network domains while the active review policy denies network access: "
+                    f"{', '.join(command_domains)}.",
+                    command=command_to_check,
+                    path=request.script_path,
+                    policy="network-command",
+                    severity="high",
+                )
+            disallowed = sorted(set(command_domains) - set(self.allowed_network_domains))
+            if disallowed:
+                return self._decision(
+                    decision="needs_human_review",
+                    reason=f"Command references network domains outside the configured allowlist: "
+                    f"{', '.join(disallowed)}.",
+                    command=command_to_check,
+                    path=request.script_path,
+                    policy="network-command-allowlist",
+                    severity="high",
+                )
+        if not command_domains and _is_network_command(command_to_check, self.network_command_patterns):
+            return self._decision(
+                decision="needs_human_review",
+                reason=(
+                    "Command appears to require network access but does not declare reviewable allowlisted "
+                    "network domains."
+                ),
+                command=command_to_check,
+                path=request.script_path,
+                policy="network-command-implicit",
+                severity="high",
+            )
         return self._decision(
             decision="allow",
             reason=(
@@ -283,7 +332,20 @@ def _is_forbidden_path(path: str, markers: tuple[str, ...] = FORBIDDEN_PATH_MARK
 
 
 def _is_high_risk_command(command: str, patterns: tuple[str, ...] = HIGH_RISK_COMMAND_PATTERNS) -> bool:
-    return any(re.search(pattern, command) for pattern in patterns)
+    return any(re.search(pattern, command, re.IGNORECASE) for pattern in patterns)
+
+
+def _network_domains_in_command(command: str) -> tuple[str, ...]:
+    domains: set[str] = set()
+    for match in re.finditer(r"https?://[^\s'\"),]+", command, re.IGNORECASE):
+        parsed = urlparse(match.group(0))
+        if parsed.hostname:
+            domains.add(parsed.hostname.lower())
+    return tuple(sorted(domains))
+
+
+def _is_network_command(command: str, patterns: tuple[str, ...] = NETWORK_COMMAND_PATTERNS) -> bool:
+    return any(re.search(pattern, command, re.IGNORECASE) for pattern in patterns)
 
 
 def _path_is_allowed(path: str, allowlist: tuple[str, ...]) -> bool:

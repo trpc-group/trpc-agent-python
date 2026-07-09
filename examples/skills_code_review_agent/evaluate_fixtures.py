@@ -11,11 +11,14 @@ from pathlib import Path
 
 EXAMPLE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = EXAMPLE_DIR.parents[1]
-for import_path in (EXAMPLE_DIR, REPO_ROOT):
-    if str(import_path) not in sys.path:
-        sys.path.insert(0, str(import_path))
+if __package__:
+    from .agent.pipeline import run_review
+else:
+    for import_path in (EXAMPLE_DIR, REPO_ROOT):
+        if str(import_path) not in sys.path:
+            sys.path.insert(0, str(import_path))
 
-from agent.pipeline import run_review  # noqa: E402
+    from agent.pipeline import run_review  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:

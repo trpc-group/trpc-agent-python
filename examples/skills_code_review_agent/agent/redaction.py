@@ -16,11 +16,27 @@ class RedactionResult:
 SECRET_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.DOTALL), "[REDACTED]"),
     (re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"), "[REDACTED]"),
+    (re.compile(r"\brk_(?:live|test)_[A-Za-z0-9]{16,}\b"), "[REDACTED]"),
+    (re.compile(r"\bAIza[A-Za-z0-9_-]{20,}\b"), "[REDACTED]"),
     (re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"), "[REDACTED]"),
     (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "[REDACTED]"),
     (re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b"), "[REDACTED]"),
     (re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"), "[REDACTED]"),
     (re.compile(r"(?i)\b(bearer\s+)[A-Za-z0-9._~+/=-]{16,}"), r"\1[REDACTED]"),
+    (re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://[^/\s:@]+:)[^@\s/]{3,}(@)"), r"\1[REDACTED]\2"),
+    (re.compile(r"(?i)\b(basic\s+)[A-Za-z0-9+/=]{12,}"), r"\1[REDACTED]"),
+    (re.compile(r"(?im)^(\s*[+ -]?\s*[A-Za-z0-9_]*(?:api[_-]?key|token|secret|password)[A-Za-z0-9_]*\s*[:=]\s*)"
+                r"(?P<value>[^\r\n#;,\\]{6,}(?:\\\r?\n\s*[+ -]?\s*[^\r\n#;,]{2,})*)"), r"\1[REDACTED]"),
+    (re.compile(r"(?im)^(\s*[+ -]?\s*(?:passwd|pwd)\s*[:=]\s*)"
+                r"(?P<value>[^\r\n#;,\\]{6,}(?:\\\r?\n\s*[+ -]?\s*[^\r\n#;,]{2,})*)"), r"\1[REDACTED]"),
+    (
+        re.compile(
+            r"(?i)\b([A-Za-z0-9_]*(?:api[_-]?key|token|secret|password)[A-Za-z0-9_]*)\s*[:=]\s*"
+            r"(?:\"[^\"\r\n]*\"|'[^'\r\n]*')"
+        ),
+        r"\1=[REDACTED]",
+    ),
+    (re.compile(r"(?i)\b(passwd|pwd)\s*[:=]\s*(?:\"[^\"\r\n]*\"|'[^'\r\n]*')"), r"\1=[REDACTED]"),
     (re.compile(
         r"(?i)\b([A-Za-z0-9_]*(?:api[_-]?key|token|secret|password)[A-Za-z0-9_]*)\s*[:=]\s*['\"]?[^'\"\s,;]{6,}['\"]?"),
      r"\1=[REDACTED]"),
@@ -46,11 +62,15 @@ def contains_unredacted_secret(text: str | None) -> bool:
         return False
     direct_secret_patterns = [
         re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
+        re.compile(r"\brk_(?:live|test)_[A-Za-z0-9]{16,}\b"),
+        re.compile(r"\bAIza[A-Za-z0-9_-]{20,}\b"),
         re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
         re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
         re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b"),
         re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"),
         re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{16,}"),
+        re.compile(r"(?i)\b[a-z][a-z0-9+.-]*://[^/\s:@]+:[^@\s/]{3,}@"),
+        re.compile(r"(?i)\bbasic\s+[A-Za-z0-9+/=]{12,}"),
         re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
         re.compile(r"super-secret-password"),
     ]
