@@ -18,6 +18,8 @@ class ReviewTaskRecord:
     medium_count: int = 0
     low_count: int = 0
     info_count: int = 0
+    warning_count: int = 0
+    needs_human_review_count: int = 0
     sandbox_runs: int = 0
     filter_intercepts: int = 0
     duration_ms: int = 0
@@ -36,7 +38,9 @@ class FindingRecord:
     evidence: str = ""
     recommendation: str = ""
     confidence: float = 0.0
+    confidence_tier: str = ""
     source: str = ""
+    fingerprint: str = ""
     id: int | None = None
 
 
@@ -52,6 +56,7 @@ class SandboxRunRecord:
     timed_out: bool = False
     output_truncated: bool = False
     error: str = ""
+    runner_mode: str = "local"
     id: int | None = None
 
 

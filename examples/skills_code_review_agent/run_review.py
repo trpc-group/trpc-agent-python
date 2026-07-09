@@ -128,7 +128,7 @@ Examples:
 
     if filter_decision.action == "deny":
         tel.filter_intercepts = 1
-        print(f"  ❌ DENIED: {filter_decision.reason}")
+        print(f"  [DENIED] {filter_decision.reason}")
 
         # Save filter log to DB
         db = ReviewDatabase(cfg.db_path)
@@ -151,10 +151,10 @@ Examples:
         return 1
 
     if filter_decision.action == "needs_human_review":
-        print(f"  ⚠️  Flagged for human review: {filter_decision.reason}")
+        print(f"  [WARNING] Flagged for human review: {filter_decision.reason}")
         tel.filter_intercepts = 1
     else:
-        print(f"  ✅ Safety checks passed ({filter_chain.get_filters_summary()['total_filters']} filters)")
+        print(f"  [OK] Safety checks passed ({filter_chain.get_filters_summary()['total_filters']} filters)")
 
     # ── Stage 4: Scan ──────────────────────────────────────────
     print(f"[4/8] Scanning code with {len(cfg.enabled_scanners)} scanners...")
@@ -181,10 +181,12 @@ Examples:
     for f in files:
         if f.is_binary or not f.filename.endswith(".py"):
             continue
-        script_path = os.path.join(
-            os.path.dirname(__file__),
-            "skills/code-review/scripts/run_checks.py"
-        )
+        # Resolve skill script from repo root (skills/ is at repo root, not here)
+        _this_dir = os.path.dirname(os.path.abspath(__file__))
+        _repo_root = os.path.dirname(os.path.dirname(_this_dir))  # examples/ -> repo root
+        script_path = os.path.join(_repo_root, "skills", "code-review", "scripts", "run_checks.py")
+        if not os.path.exists(script_path):
+            script_path = os.path.join(_this_dir, "skills", "code-review", "scripts", "run_checks.py")
         # Check if any scanner found issues in this file
         file_findings = [x for x in all_findings if x.file == f.filename]
         if file_findings:

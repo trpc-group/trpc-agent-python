@@ -259,7 +259,113 @@ def scan_secret_info(diff_file: DiffFile) -> list[Finding]:
     return findings
 
 
-# ── Scanner registry ──────────────────────────────────────────────
+# ── Bare except scanner ─────────────────────────────────────────────
+
+_BARE_EXCEPT_RE = re.compile(r'^\s*except\s*:', re.MULTILINE)
+
+
+def scan_bare_except(diff_file: DiffFile) -> list[Finding]:
+    """Flag bare except: clauses (catches KeyboardInterrupt, SystemExit)."""
+    findings: list[Finding] = []
+    changed = get_changed_lines(diff_file)
+    for lineno, line in changed:
+        if _BARE_EXCEPT_RE.match(line):
+            findings.append(Finding(
+                severity=Severity.MEDIUM,
+                category=FindingCategory.SECURITY,
+                file=diff_file.filename,
+                line=lineno,
+                title="Bare 'except:' clause — catches unexpected exceptions",
+                evidence=line.strip(),
+                recommendation="Use 'except Exception as e:' to avoid catching "
+                               "KeyboardInterrupt and SystemExit.",
+                confidence=0.75,
+                source="bare_except_scanner",
+            ))
+    return findings
+
+
+# ── Mutable default argument scanner ─────────────────────────────────
+
+_MUTABLE_DEFAULT_RE = re.compile(
+    r'def\s+\w+\s*\([^)]*(?:=\s*\[\s*\]|=\s*\{\s*\}|=\s*set\s*\(\s*\))',
+)
+
+
+def scan_mutable_defaults(diff_file: DiffFile) -> list[Finding]:
+    """Flag mutable default arguments (list, dict, set)."""
+    findings: list[Finding] = []
+    changed = get_changed_lines(diff_file)
+    for lineno, line in changed:
+        if _MUTABLE_DEFAULT_RE.search(line):
+            findings.append(Finding(
+                severity=Severity.MEDIUM,
+                category=FindingCategory.RESOURCE_LEAK,
+                file=diff_file.filename,
+                line=lineno,
+                title="Mutable default argument — shared across all calls",
+                evidence=line.strip(),
+                recommendation="Use 'arg=None' and initialize inside function body.",
+                confidence=0.85,
+                source="mutable_default_scanner",
+            ))
+    return findings
+
+
+# ── Assert for control flow scanner ──────────────────────────────────
+
+_ASSERT_CONTROL_RE = re.compile(r'^\s*assert\s+(?!.*isinstance)', re.MULTILINE)
+
+
+def scan_assert_control_flow(diff_file: DiffFile) -> list[Finding]:
+    """Flag assert used for validation (stripped with -O flag)."""
+    findings: list[Finding] = []
+    changed = get_changed_lines(diff_file)
+    for lineno, line in changed:
+        if _ASSERT_CONTROL_RE.search(line):
+            findings.append(Finding(
+                severity=Severity.LOW,
+                category=FindingCategory.SECURITY,
+                file=diff_file.filename,
+                line=lineno,
+                title="assert used for validation — removed with -O flag",
+                evidence=line.strip(),
+                recommendation="Use explicit 'if/raise' instead of assert for "
+                               "production validation logic.",
+                confidence=0.7,
+                source="assert_control_flow_scanner",
+            ))
+    return findings
+
+
+# ── Hardcoded path scanner ───────────────────────────────────────────
+
+_HARDCODED_PATH_RE = re.compile(
+    r'["\'](?:/home/|/root/|/etc/|/tmp/|C:\\)[^"\']*["\']',
+)
+
+
+def scan_hardcoded_paths(diff_file: DiffFile) -> list[Finding]:
+    """Flag hardcoded absolute paths (portability issue)."""
+    findings: list[Finding] = []
+    changed = get_changed_lines(diff_file)
+    for lineno, line in changed:
+        if _HARDCODED_PATH_RE.search(line):
+            findings.append(Finding(
+                severity=Severity.LOW,
+                category=FindingCategory.SECURITY,
+                file=diff_file.filename,
+                line=lineno,
+                title="Hardcoded absolute path — portability issue",
+                evidence=line.strip(),
+                recommendation="Use os.path.join() or pathlib with relative paths.",
+                confidence=0.6,
+                source="hardcoded_path_scanner",
+            ))
+    return findings
+
+
+# ── Scanner registry ─────────────────────────────────────────────────
 
 _SCANNERS = {
     "security": scan_security,
@@ -268,7 +374,34 @@ _SCANNERS = {
     "db_lifecycle": scan_db_lifecycle,
     "missing_tests": scan_missing_tests,
     "secret_info": scan_secret_info,
+    "bare_except": scan_bare_except,
+    "mutable_defaults": scan_mutable_defaults,
+    "assert_control_flow": scan_assert_control_flow,
+    "hardcoded_paths": scan_hardcoded_paths,
 }
+
+# Per-scanner confidence thresholds (override global min_confidence)
+_SCANNER_THRESHOLDS: dict[str, float] = {
+    "bare_except": 0.5,
+    "mutable_defaults": 0.6,
+    "assert_control_flow": 0.4,
+    "hardcoded_paths": 0.4,
+    "missing_tests": 0.4,
+    "db_lifecycle": 0.4,
+}
+
+
+def get_scanner_threshold(scanner_name: str, global_threshold: float = 0.5) -> float:
+    """Get the confidence threshold for a specific scanner.
+
+    Args:
+        scanner_name: Name of the scanner.
+        global_threshold: Fallback threshold if scanner has no specific setting.
+
+    Returns:
+        Confidence threshold for this scanner.
+    """
+    return _SCANNER_THRESHOLDS.get(scanner_name, global_threshold)
 
 
 def run_scanners(diff_file: DiffFile, enabled: list[str] | None = None,
@@ -278,7 +411,7 @@ def run_scanners(diff_file: DiffFile, enabled: list[str] | None = None,
     Args:
         diff_file: The parsed diff file to scan.
         enabled: List of scanner names to enable (default: all).
-        min_confidence: Minimum confidence threshold for findings.
+        min_confidence: Minimum confidence threshold for findings (global default).
 
     Returns:
         Combined list of Findings from all scanners.
@@ -290,8 +423,9 @@ def run_scanners(diff_file: DiffFile, enabled: list[str] | None = None,
     for name in enabled:
         scanner = _SCANNERS.get(name)
         if scanner:
+            threshold = get_scanner_threshold(name, min_confidence)
             findings = scanner(diff_file)
-            all_findings.extend(f for f in findings if f.confidence >= min_confidence)
+            all_findings.extend(f for f in findings if f.confidence >= threshold)
 
     return all_findings
 

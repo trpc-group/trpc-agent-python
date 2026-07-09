@@ -1,0 +1,28 @@
+{
+  "clean": [],
+  "security": [
+    {"file": "app.py", "line": 3, "category": "security", "title": "eval() on dynamic input"},
+    {"file": "app.py", "line": 5, "category": "security", "title": "os.system() with potentially unsanitized input"}
+  ],
+  "async_resource_leak": [
+    {"file": "worker.py", "line": 4, "category": "async_error", "title": "time.sleep() in async context"},
+    {"file": "worker.py", "line": 7, "category": "resource_leak", "title": "open() without context manager"}
+  ],
+  "db_lifecycle": [
+    {"file": "db_handler.py", "line": 3, "category": "db_lifecycle", "title": "Database cursor/connection created"},
+    {"file": "db_handler.py", "line": 6, "category": "db_lifecycle", "title": "DB execute without visible commit/close"}
+  ],
+  "missing_tests": [
+    {"file": "utils.py", "line": 2, "category": "missing_tests", "title": "New function 'calculate' may need tests"}
+  ],
+  "duplicate_finding": [
+    {"file": "dup.py", "line": 3, "category": "security", "title": "subprocess with shell=True"}
+  ],
+  "sandbox_failure": [
+    {"file": "dangerous.py", "line": 2, "category": "security", "title": "os.system() with potentially unsanitized input"}
+  ],
+  "secret_redaction": [
+    {"file": "config.py", "line": 1, "category": "secret_info", "title": "Hardcoded API key detected"},
+    {"file": "config.py", "line": 3, "category": "secret_info", "title": "GitHub personal access token in code"}
+  ]
+}

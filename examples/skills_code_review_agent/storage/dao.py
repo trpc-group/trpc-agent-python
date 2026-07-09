@@ -1,4 +1,7 @@
-"""Data Access Object — SQLite CRUD operations for review data."""
+"""Data Access Object — SQLite CRUD operations for review data.
+
+Supports schema versioning with automatic column migration.
+"""
 
 import sqlite3
 import os
@@ -7,6 +10,24 @@ from typing import Optional
 from .models import FilterLogRecord, FindingRecord, ReviewTaskRecord, SandboxRunRecord
 
 _SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schema.sql")
+
+# Current schema version
+SCHEMA_VERSION = 4
+
+# Column migrations: version -> (table, column, type, default)
+COLUMN_MIGRATIONS: dict[int, list[tuple[str, str, str, str]]] = {
+    2: [
+        ("findings", "confidence_tier", "TEXT NOT NULL DEFAULT ''", ""),
+    ],
+    3: [
+        ("review_tasks", "warning_count", "INTEGER NOT NULL DEFAULT 0", "0"),
+        ("review_tasks", "needs_human_review_count", "INTEGER NOT NULL DEFAULT 0", "0"),
+    ],
+    4: [
+        ("findings", "fingerprint", "TEXT NOT NULL DEFAULT ''", ""),
+        ("sandbox_runs", "runner_mode", "TEXT NOT NULL DEFAULT 'local'", "local"),
+    ],
+}
 
 
 class ReviewDatabase:
@@ -33,14 +54,52 @@ class ReviewDatabase:
             self._conn = None
 
     def _init_schema(self) -> None:
-        """Run DDL to create tables if they don't exist."""
+        """Run DDL to create tables if they don't exist, then migrate."""
         try:
             with open(_SCHEMA_PATH, "r") as f:
                 self._conn.executescript(f.read())
         except FileNotFoundError:
-            # Fallback: inline schema
             self._conn.executescript(_INLINE_SCHEMA)
         self._conn.commit()
+        self._migrate_schema()
+
+    def _migrate_schema(self) -> None:
+        """Apply column migrations for schema evolution."""
+        current = self._get_schema_version()
+        for version in range(current + 1, SCHEMA_VERSION + 1):
+            if version in COLUMN_MIGRATIONS:
+                for table, column, col_type, default in COLUMN_MIGRATIONS[version]:
+                    try:
+                        self._conn.execute(
+                            f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"
+                        )
+                    except sqlite3.OperationalError:
+                        pass  # Column may already exist
+            self._set_schema_version(version)
+        self._conn.commit()
+
+    def _get_schema_version(self) -> int:
+        """Get current schema version from the database."""
+        try:
+            row = self._conn.execute(
+                "SELECT version FROM schema_version ORDER BY version DESC LIMIT 1"
+            ).fetchone()
+            return row[0] if row else 1
+        except sqlite3.OperationalError:
+            # schema_version table doesn't exist yet — create it
+            self._conn.execute(
+                "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY)"
+            )
+            self._conn.execute("INSERT INTO schema_version (version) VALUES (1)")
+            self._conn.commit()
+            return 1
+
+    def _set_schema_version(self, version: int) -> None:
+        """Record a schema version upgrade."""
+        self._conn.execute(
+            "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
+            (version,),
+        )
 
     # ── Task operations ────────────────────────────────────────
 

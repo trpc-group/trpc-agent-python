@@ -1,0 +1,148 @@
+{
+  "rules": [
+    {
+      "id": "SEC-001",
+      "category": "security",
+      "title": "Shell command injection via concatenation",
+      "pattern": "os\\.system\\s*\\([^)]*\\+",
+      "severity": "critical",
+      "confidence": 0.92,
+      "recommendation": "Use subprocess.run() with a list of arguments instead of string concatenation."
+    },
+    {
+      "id": "SEC-002",
+      "category": "security",
+      "title": "subprocess with shell=True",
+      "pattern": "subprocess\\.(?:call|run|Popen)\\s*\\(\\s*shell\\s*=\\s*True",
+      "severity": "critical",
+      "confidence": 0.95,
+      "recommendation": "Avoid shell=True. Pass arguments as a list to subprocess."
+    },
+    {
+      "id": "SEC-003",
+      "category": "security",
+      "title": "Dynamic eval() with concatenation",
+      "pattern": "eval\\s*\\([^)]*\\+",
+      "severity": "critical",
+      "confidence": 0.90,
+      "recommendation": "Avoid eval() with dynamic input. Use safer alternatives like ast.literal_eval()."
+    },
+    {
+      "id": "SEC-004",
+      "category": "security",
+      "title": "Dynamic exec() with concatenation",
+      "pattern": "exec\\s*\\([^)]*\\+",
+      "severity": "critical",
+      "confidence": 0.90,
+      "recommendation": "Avoid exec() with dynamic input. Consider using importlib or other safe alternatives."
+    },
+    {
+      "id": "SEC-005",
+      "category": "security",
+      "title": "Unsafe pickle deserialization",
+      "pattern": "pickle\\.load",
+      "severity": "high",
+      "confidence": 0.85,
+      "recommendation": "Do not unpickle untrusted data. Use JSON or other safe serialization formats."
+    },
+    {
+      "id": "SEC-006",
+      "category": "security",
+      "title": "Hardcoded API key or secret",
+      "pattern": "(?:api_?key|API_?KEY|apikey)\\s*=\\s*['\"][^'\"]+['\"]",
+      "severity": "critical",
+      "confidence": 0.88,
+      "recommendation": "Move secrets to environment variables or a secrets manager."
+    },
+    {
+      "id": "SEC-007",
+      "category": "security",
+      "title": "Hardcoded password",
+      "pattern": "(?:password|PASSWORD|passwd)\\s*=\\s*['\"][^'\"]+['\"]",
+      "severity": "critical",
+      "confidence": 0.90,
+      "recommendation": "Never hardcode passwords. Use environment variables or a vault service."
+    },
+    {
+      "id": "SEC-008",
+      "category": "security",
+      "title": "Hardcoded token or secret",
+      "pattern": "(?:token|TOKEN|secret|SECRET)\\s*=\\s*['\"][^'\"]{8,}['\"]",
+      "severity": "critical",
+      "confidence": 0.85,
+      "recommendation": "Tokens and secrets should be stored in environment variables."
+    },
+    {
+      "id": "SEC-009",
+      "category": "security",
+      "title": "GitHub PAT in code",
+      "pattern": "(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}",
+      "severity": "critical",
+      "confidence": 0.95,
+      "recommendation": "Remove the GitHub token immediately and rotate it on GitHub."
+    },
+    {
+      "id": "SEC-010",
+      "category": "security",
+      "title": "AWS access key in code",
+      "pattern": "AKIA[0-9A-Z]{16}",
+      "severity": "critical",
+      "confidence": 0.95,
+      "recommendation": "Remove AWS access key. Use IAM roles or environment variables."
+    },
+    {
+      "id": "RES-001",
+      "category": "resource_leak",
+      "title": "File opened without context manager",
+      "pattern": "(?<!with\\s)\\\\bopen\\s*\\([^)]*\\)(?!.*\\bas\\b)",
+      "severity": "medium",
+      "confidence": 0.72,
+      "recommendation": "Use 'with open() as f:' context manager to ensure proper cleanup."
+    },
+    {
+      "id": "DB-001",
+      "category": "db_lifecycle",
+      "title": "Database cursor not closed",
+      "pattern": "\\.cursor\\s*\\([^)]*\\)(?!.*\\bclose\\b)",
+      "severity": "medium",
+      "confidence": 0.68,
+      "recommendation": "Always close cursors, preferably with a context manager."
+    },
+    {
+      "id": "DB-002",
+      "category": "db_lifecycle",
+      "title": "Database connection not closed",
+      "pattern": "\\.connect\\s*\\([^)]*\\)(?!.*\\bclose\\b)",
+      "severity": "medium",
+      "confidence": 0.70,
+      "recommendation": "Use connection pooling or ensure connections are properly closed."
+    },
+    {
+      "id": "AST-001",
+      "category": "async_error",
+      "title": "time.sleep() blocks async event loop",
+      "pattern": "\\btime\\.sleep\\s*\\(",
+      "severity": "medium",
+      "confidence": 0.80,
+      "recommendation": "Use 'await asyncio.sleep()' instead of 'time.sleep()' in async code."
+    },
+    {
+      "id": "TEST-001",
+      "category": "missing_tests",
+      "title": "New function without corresponding test",
+      "pattern": "^\\+.*def\\s+(?!test_)(\\w+)\\s*\\([^)]*\\):",
+      "severity": "low",
+      "confidence": 0.60,
+      "recommendation": "Consider adding unit tests for this new function."
+    },
+    {
+      "id": "SEC-011",
+      "category": "security",
+      "title": "Dynamic import with string concatenation",
+      "pattern": "__import__\\s*\\([^)]*\\+",
+      "severity": "high",
+      "confidence": 0.85,
+      "recommendation": "Dynamic imports with string concatenation are dangerous. Use importlib with validated module names."
+    }
+  ]
+}

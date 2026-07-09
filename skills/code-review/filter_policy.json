@@ -1,0 +1,56 @@
+{
+  "forbidden_commands": [
+    "rm -rf /",
+    "rm -rf --no-preserve-root",
+    "mkfs.",
+    "dd if=",
+    "> /dev/sda",
+    "chmod 777 /",
+    ":(){ :|:& };:",
+    "wget.*|.*sh",
+    "curl.*|.*bash"
+  ],
+  "forbidden_paths": [
+    "/etc/passwd",
+    "/etc/shadow",
+    "/etc/ssh",
+    "/root/",
+    "~/.ssh",
+    "/proc/",
+    "/sys/",
+    "C:\\Windows\\System32\\config"
+  ],
+  "network_policy": {
+    "default": "deny",
+    "allowed_domains": [
+      "pypi.org",
+      "files.pythonhosted.org",
+      "github.com",
+      "api.github.com"
+    ],
+    "implicit_network_commands": [
+      "pip install",
+      "pip3 install",
+      "python -m pip",
+      "npm install",
+      "yarn add",
+      "git clone",
+      "git fetch",
+      "git pull",
+      "wget ",
+      "curl "
+    ]
+  },
+  "sandbox": {
+    "timeout_seconds": 30,
+    "max_output_bytes": 1048576,
+    "allowlist_env": ["PATH", "HOME", "USER", "LANG", "PYTHONPATH", "VIRTUAL_ENV"],
+    "readonly_paths": ["/usr", "/lib", "/etc/ssl"],
+    "writable_paths": ["/tmp", "/var/tmp"]
+  },
+  "budget": {
+    "max_sandbox_runs": 50,
+    "max_total_timeout_seconds": 300,
+    "max_finding_count": 500
+  }
+}

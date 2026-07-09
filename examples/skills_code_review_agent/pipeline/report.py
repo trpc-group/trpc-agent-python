@@ -177,10 +177,20 @@ def _count_by_severity(findings: list[Finding]) -> dict[str, int]:
     return counts
 
 
+def _count_by_category(findings: list[Finding]) -> dict[str, int]:
+    """Count findings by category."""
+    counts: dict[str, int] = {}
+    for f in findings:
+        key = f.category.value
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
 def build_recommendations(findings: list[Finding]) -> list[str]:
     """Generate actionable recommendations from findings."""
     recs: list[str] = []
     sev = _count_by_severity(findings)
+    cat = _count_by_category(findings)
 
     if sev.get("critical", 0) > 0:
         recs.append(f"Address {sev['critical']} critical finding(s) before merging — "
@@ -188,7 +198,7 @@ def build_recommendations(findings: list[Finding]) -> list[str]:
     if sev.get("high", 0) > 0:
         recs.append(f"Review {sev['high']} high-severity finding(s) — "
                      "potential security or stability risks.")
-    if sev.get("secret_info", 0) > 0:
+    if cat.get("secret_info", 0) > 0:
         recs.append("Rotate any hardcoded credentials immediately and "
                      "move them to environment variables.")
     if sev.get("medium", 0) > 0:
