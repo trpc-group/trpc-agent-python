@@ -216,3 +216,5 @@ def __getattr__(name):
 
 def __dir__():
     return sorted(set(list(globals()) + list(_LAZY_REEXPORTS)))
+
+from trpc_agent_sdk.tools import safety  # noqa: F401
