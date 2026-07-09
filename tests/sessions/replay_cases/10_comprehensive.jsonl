@@ -1,0 +1,9 @@
+# Comprehensive: combines events, state, memory, and summary in one case
+{"op": "create_session", "app": "test_app", "user": "test_user", "session_id": "s10", "state": {"session_key": "session_val"}}
+{"op": "append_event", "session_id": "s10", "event": {"author": "user", "content": {"parts": [{"text": "I need to plan a trip to Beijing"}]}}}
+{"op": "append_event", "session_id": "s10", "event": {"author": "assistant", "content": {"parts": [{"text": "Sure, I can help you plan your trip to Beijing. When do you plan to go?"}]}}}
+{"op": "append_event", "session_id": "s10", "event": {"author": "user", "content": {"parts": [{"text": "Next month. I prefer budget hotels."}]}}}
+{"op": "append_event", "session_id": "s10", "event": {"author": "assistant", "content": {"parts": [{"text": "Noted. I will search for budget hotels in Beijing for next month."}]}, "state_delta": {"preference": "budget", "destination": "Beijing"}}}
+{"op": "store_memory", "session_id": "s10"}
+{"op": "search_memory", "key": "test_app/test_user", "query": "Beijing", "limit": 10}
+{"op": "get_session", "session_id": "s10"}

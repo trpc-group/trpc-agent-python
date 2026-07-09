@@ -1,0 +1,3 @@
+# Nested state: session with nested dict state
+{"op": "create_session", "app": "test_app", "user": "test_user", "session_id": "s14", "state": {"nested": {"key": "value", "deep": {"a": 1, "b": 2}}}}
+{"op": "get_session", "session_id": "s14"}

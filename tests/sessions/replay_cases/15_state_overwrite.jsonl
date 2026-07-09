@@ -1,0 +1,3 @@
+# State overwrite: state written via create_session should be retrievable
+{"op": "create_session", "app": "test_app", "user": "test_user", "session_id": "s15", "state": {"key": "initial", "version": 1}}
+{"op": "get_session", "session_id": "s15"}

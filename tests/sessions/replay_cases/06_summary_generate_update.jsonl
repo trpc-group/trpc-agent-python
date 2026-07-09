@@ -1,0 +1,7 @@
+# Summary generation and update: conversation with multiple turns
+{"op": "create_session", "app": "test_app", "user": "test_user", "session_id": "s6", "state": {}}
+{"op": "append_event", "session_id": "s6", "event": {"author": "user", "content": {"parts": [{"text": "Tell me about machine learning"}]}}}
+{"op": "append_event", "session_id": "s6", "event": {"author": "assistant", "content": {"parts": [{"text": "Machine learning is a subset of artificial intelligence that enables systems to learn from data."}]}}}
+{"op": "append_event", "session_id": "s6", "event": {"author": "user", "content": {"parts": [{"text": "What are the main types?"}]}}}
+{"op": "append_event", "session_id": "s6", "event": {"author": "assistant", "content": {"parts": [{"text": "The main types are supervised learning, unsupervised learning, and reinforcement learning."}]}}}
+{"op": "get_session", "session_id": "s6"}

@@ -1,0 +1,23 @@
+# Many events: stress test with 20 alternating user/assistant messages
+{"op": "create_session", "app": "test_app", "user": "test_user", "session_id": "s16", "state": {}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "user", "content": {"parts": [{"text": "Message 0"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "assistant", "content": {"parts": [{"text": "Message 1"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "user", "content": {"parts": [{"text": "Message 2"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "assistant", "content": {"parts": [{"text": "Message 3"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "user", "content": {"parts": [{"text": "Message 4"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "assistant", "content": {"parts": [{"text": "Message 5"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "user", "content": {"parts": [{"text": "Message 6"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "assistant", "content": {"parts": [{"text": "Message 7"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "user", "content": {"parts": [{"text": "Message 8"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "assistant", "content": {"parts": [{"text": "Message 9"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "user", "content": {"parts": [{"text": "Message 10"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "assistant", "content": {"parts": [{"text": "Message 11"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "user", "content": {"parts": [{"text": "Message 12"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "assistant", "content": {"parts": [{"text": "Message 13"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "user", "content": {"parts": [{"text": "Message 14"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "assistant", "content": {"parts": [{"text": "Message 15"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "user", "content": {"parts": [{"text": "Message 16"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "assistant", "content": {"parts": [{"text": "Message 17"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "user", "content": {"parts": [{"text": "Message 18"}]}}}
+{"op": "append_event", "session_id": "s16", "event": {"author": "assistant", "content": {"parts": [{"text": "Message 19"}]}}}
+{"op": "get_session", "session_id": "s16"}

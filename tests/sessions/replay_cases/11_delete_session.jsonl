@@ -1,0 +1,5 @@
+# Delete session: create, add events, delete, verify gone
+{"op": "create_session", "app": "test_app", "user": "test_user", "session_id": "s11", "state": {}}
+{"op": "append_event", "session_id": "s11", "event": {"author": "user", "content": {"parts": [{"text": "This session will be deleted"}]}}}
+{"op": "append_event", "session_id": "s11", "event": {"author": "assistant", "content": {"parts": [{"text": "Understood, cleaning up"}]}}}
+{"op": "delete_session", "session_id": "s11"}

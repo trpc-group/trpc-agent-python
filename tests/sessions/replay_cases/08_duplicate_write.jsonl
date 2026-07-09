@@ -1,0 +1,6 @@
+# Duplicate write recovery: same event appended multiple times
+{"op": "create_session", "app": "test_app", "user": "test_user", "session_id": "s8", "state": {}}
+{"op": "append_event", "session_id": "s8", "event": {"author": "user", "content": {"parts": [{"text": "Unique message"}]}}}
+{"op": "append_event", "session_id": "s8", "event": {"author": "user", "content": {"parts": [{"text": "Unique message"}]}}}
+{"op": "append_event", "session_id": "s8", "event": {"author": "user", "content": {"parts": [{"text": "Unique message"}]}}}
+{"op": "get_session", "session_id": "s8"}

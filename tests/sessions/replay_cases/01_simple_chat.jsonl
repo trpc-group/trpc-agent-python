@@ -1,0 +1,5 @@
+# Simple single-turn chat: user message + assistant response
+{"op": "create_session", "app": "test_app", "user": "test_user", "session_id": "s1", "state": {}}
+{"op": "append_event", "session_id": "s1", "event": {"author": "user", "content": {"parts": [{"text": "Hello"}]}}}
+{"op": "append_event", "session_id": "s1", "event": {"author": "assistant", "content": {"parts": [{"text": "Hi there! How can I help you?"}]}}}
+{"op": "get_session", "session_id": "s1"}

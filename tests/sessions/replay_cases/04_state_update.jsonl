@@ -1,0 +1,5 @@
+# State updates: multiple writes and overwrites within a session
+{"op": "create_session", "app": "test_app", "user": "test_user", "session_id": "s4", "state": {"key1": "initial_value"}}
+{"op": "append_event", "session_id": "s4", "event": {"author": "user", "content": {"parts": [{"text": "Update state"}]}, "state_delta": {"key1": "updated_value", "key2": "new_key"}}}
+{"op": "append_event", "session_id": "s4", "event": {"author": "assistant", "content": {"parts": [{"text": "State updated"}]}, "state_delta": {"key1": "final_value"}}}
+{"op": "get_session", "session_id": "s4"}

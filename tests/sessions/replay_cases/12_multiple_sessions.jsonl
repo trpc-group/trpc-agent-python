@@ -1,0 +1,7 @@
+# Multiple independent sessions: verify isolation between sessions
+{"op": "create_session", "app": "test_app", "user": "test_user", "session_id": "s12_a", "state": {"key": "v1"}}
+{"op": "create_session", "app": "test_app", "user": "test_user", "session_id": "s12_b", "state": {"key": "v2"}}
+{"op": "append_event", "session_id": "s12_a", "event": {"author": "user", "content": {"parts": [{"text": "Event for session A"}]}}}
+{"op": "append_event", "session_id": "s12_b", "event": {"author": "user", "content": {"parts": [{"text": "Event for session B"}]}}}
+{"op": "get_session", "session_id": "s12_a"}
+{"op": "get_session", "session_id": "s12_b"}

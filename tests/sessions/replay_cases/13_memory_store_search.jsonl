@@ -1,0 +1,7 @@
+# Memory store and search: store conversation context then search it
+{"op": "create_session", "app": "test_app", "user": "test_user", "session_id": "s13", "state": {}}
+{"op": "append_event", "session_id": "s13", "event": {"author": "user", "content": {"parts": [{"text": "My favorite color is blue"}]}}}
+{"op": "append_event", "session_id": "s13", "event": {"author": "assistant", "content": {"parts": [{"text": "I will remember that your favorite color is blue"}]}}}
+{"op": "store_memory", "session_id": "s13"}
+{"op": "search_memory", "key": "test_app/test_user", "query": "favorite color", "limit": 10}
+{"op": "get_session", "session_id": "s13"}

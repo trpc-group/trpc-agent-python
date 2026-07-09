@@ -1,0 +1,5 @@
+# Update session before get: update session then verify state is preserved
+{"op": "create_session", "app": "test_app", "user": "test_user", "session_id": "s17", "state": {}}
+{"op": "append_event", "session_id": "s17", "event": {"author": "user", "content": {"parts": [{"text": "Hello, please update"}]}}}
+{"op": "update_session", "session_id": "s17"}
+{"op": "get_session", "session_id": "s17"}
