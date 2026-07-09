@@ -1,0 +1,13 @@
+diff --git a/app/fetcher.py b/app/fetcher.py
+--- a/app/fetcher.py
++++ b/app/fetcher.py
+@@ -1,6 +1,8 @@
+ async def fetch(url):
+     resp = await httpx.get(url)
+     return resp.json()
+ 
+ def run_pipeline():
+-    return fetch_all()
++    task = asyncio.create_task(fetch("http://example.com"))
++    session = aiohttp.ClientSession()
++    return task

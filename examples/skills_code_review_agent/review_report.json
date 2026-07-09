@@ -1,0 +1,103 @@
+{
+  "task_id": "70c2a283fdb8468cac5a31908a348a2c",
+  "1_findings": [
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "app/secret.py",
+      "line": 1,
+      "title": "SEC003: 硬编码密钥 — 密钥类变量直接赋字面量,应从环境变量/密钥管理读取",
+      "evidence": "API_KEY = \"***REDACTED***\"",
+      "recommendation": "使用参数化查询/参数列表替代字符串拼接；密钥从环境变量或密钥管理服务读取",
+      "confidence": 0.8,
+      "source": "rule"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "app/secret.py",
+      "line": 2,
+      "title": "SEC003: 硬编码密钥 — 密钥类变量直接赋字面量,应从环境变量/密钥管理读取",
+      "evidence": "TOKEN = \"***REDACTED***\"",
+      "recommendation": "使用参数化查询/参数列表替代字符串拼接；密钥从环境变量或密钥管理服务读取",
+      "confidence": 0.8,
+      "source": "rule"
+    },
+    {
+      "severity": "critical",
+      "category": "sensitive",
+      "file": "app/secret.py",
+      "line": 1,
+      "title": "SEN002: OpenAI API key 明文",
+      "evidence": "API_KEY = \"***REDACTED***\"",
+      "recommendation": "立即轮换该凭证并从代码中移除，改用密钥管理服务注入",
+      "confidence": 0.95,
+      "source": "rule"
+    },
+    {
+      "severity": "critical",
+      "category": "sensitive",
+      "file": "app/secret.py",
+      "line": 2,
+      "title": "SEN003: GitHub personal access token 明文",
+      "evidence": "TOKEN = \"***REDACTED***\"",
+      "recommendation": "立即轮换该凭证并从代码中移除，改用密钥管理服务注入",
+      "confidence": 0.95,
+      "source": "rule"
+    }
+  ],
+  "2_severity_stats": {
+    "critical": 2,
+    "high": 2,
+    "medium": 0,
+    "low": 0
+  },
+  "3_needs_human_review": [],
+  "4_filter_blocks": [],
+  "5_monitor": {
+    "total_duration_ms": 5994,
+    "sandbox_duration_ms": 14,
+    "tool_calls": 0,
+    "blocks": 0,
+    "finding_count": 4,
+    "sev_critical": 2,
+    "sev_high": 2,
+    "sev_medium": 0,
+    "sev_low": 0,
+    "exception_types": {}
+  },
+  "6_sandbox_runs": [
+    {
+      "runtime": "fake",
+      "status": "ok",
+      "duration_ms": 0,
+      "exit_code": 0,
+      "output_bytes": 0,
+      "timed_out": 0,
+      "masked_count": 0
+    }
+  ],
+  "7_recommendations": [
+    {
+      "file": "app/secret.py",
+      "line": 1,
+      "recommendation": "使用参数化查询/参数列表替代字符串拼接；密钥从环境变量或密钥管理服务读取"
+    },
+    {
+      "file": "app/secret.py",
+      "line": 2,
+      "recommendation": "使用参数化查询/参数列表替代字符串拼接；密钥从环境变量或密钥管理服务读取"
+    },
+    {
+      "file": "app/secret.py",
+      "line": 1,
+      "recommendation": "立即轮换该凭证并从代码中移除，改用密钥管理服务注入"
+    },
+    {
+      "file": "app/secret.py",
+      "line": 2,
+      "recommendation": "立即轮换该凭证并从代码中移除，改用密钥管理服务注入"
+    }
+  ],
+  "8_warnings": []
+}

@@ -1,0 +1,13 @@
+diff --git a/app/config.py b/app/config.py
+--- a/app/config.py
++++ b/app/config.py
+@@ -1,2 +1,10 @@
++# 敏感信息脱敏样本
++AWS_KEY = "AKIAIOSFODNN7EXAMPLE"
++OPENAI_KEY = "sk-1234567890abcdef1234567890ab"
++GH_TOKEN = "ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890"
++db_password = "SuperSecret123!"
++PRIV_KEY = """-----BEGIN RSA PRIVATE KEY-----
++MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA
++-----END RSA PRIVATE KEY-----"""
++DB_URL = "postgres://admin:pa55w0rd@localhost:5432/app"
