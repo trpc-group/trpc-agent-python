@@ -5,10 +5,13 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Unit tests for agent evaluator (agent_evaluator)."""
 
+import json
+
 import pytest
 
 import trpc_agent_sdk.runners  # noqa: F401
 
+from trpc_agent_sdk.evaluation import _agent_evaluator as agent_evaluator_module
 from trpc_agent_sdk.evaluation import EvalStatus
 from trpc_agent_sdk.evaluation import EvalCaseResult
 from trpc_agent_sdk.evaluation import EvalMetricResult
@@ -16,6 +19,68 @@ from trpc_agent_sdk.evaluation import EvalSetAggregateResult
 from trpc_agent_sdk.evaluation import EvaluateResult
 from trpc_agent_sdk.evaluation import AgentEvaluator
 from trpc_agent_sdk.evaluation import PassNC
+
+
+def test_evaluation_cases_failed_is_public_with_private_alias():
+    from trpc_agent_sdk import evaluation
+    from trpc_agent_sdk.evaluation._agent_evaluator import _EvaluationCasesFailed
+
+    assert evaluation.EvaluationCasesFailed is _EvaluationCasesFailed
+    assert issubclass(evaluation.EvaluationCasesFailed, AssertionError)
+
+
+@pytest.mark.parametrize(
+    ("raw_path", "expected"),
+    [
+        (r"C:\x\a.evalset.json", (r"C:\x\a.evalset.json", None)),
+        (
+            r"C:\x\a.evalset.json:case-1",
+            (r"C:\x\a.evalset.json", "case-1"),
+        ),
+        (
+            "/tmp/a.evalset.json:case-1",
+            ("/tmp/a.evalset.json", "case-1"),
+        ),
+    ],
+)
+def test_split_eval_set_selector_is_drive_safe(raw_path, expected):
+    assert agent_evaluator_module._split_eval_set_selector(raw_path) == expected
+
+
+def test_load_eval_set_from_absolute_path_and_selector(tmp_path):
+    evalset_path = (tmp_path / "sample.evalset.json").resolve()
+    evalset_path.write_text(
+        json.dumps({
+            "eval_set_id": "set",
+            "eval_cases": [{
+                "eval_id": "case-1",
+                "conversation": [{
+                    "invocation_id": "turn-1",
+                    "user_content": {
+                        "role": "user",
+                        "parts": [{"text": "query"}],
+                    },
+                    "final_response": {
+                        "role": "model",
+                        "parts": [{"text": "expected"}],
+                    },
+                }],
+            }],
+        }),
+        encoding="utf-8",
+    )
+
+    loaded = AgentEvaluator._load_eval_set_from_file(
+        str(evalset_path),
+        agent_evaluator_module.EvalConfig(criteria={}),
+    )
+    selected = AgentEvaluator._load_eval_set_from_file(
+        f"{evalset_path}:case-1",
+        agent_evaluator_module.EvalConfig(criteria={}),
+    )
+
+    assert [case.eval_id for case in loaded.eval_cases] == ["case-1"]
+    assert [case.eval_id for case in selected.eval_cases] == ["case-1"]
 
 
 class TestPassNC:

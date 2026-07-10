@@ -218,10 +218,12 @@ class SDKBackend:
         """Compatibility async wrapper returning the historical candidate list."""
 
         target_paths = self._target_prompt_paths()
-        if set(target_paths) == {"system_prompt"}:
-            baseline_prompts = {"system_prompt": baseline_prompt}
-        else:
+        try:
             baseline_prompts = _read_prompt_bundle(target_paths)
+        except FileNotFoundError:
+            # Let optimize_candidates report dependency/import failures before
+            # it reaches its authoritative source snapshot.
+            baseline_prompts = {name: baseline_prompt for name in target_paths}
         result = await self.optimize_candidates(
             baseline_prompts=baseline_prompts,
             baseline_train=EvalResult(
@@ -260,12 +262,13 @@ class SDKBackend:
             raise ValueError(f"sdk mode could not import AgentOptimizer/TargetPrompt: {exc}") from exc
 
         target_paths = self._target_prompt_paths()
+        snapshot = snapshot_prompt_files(target_paths)
+        source_bundle = _prompt_bundle_from_snapshot(snapshot)
         baseline_bundle = _validated_prompt_bundle(
             baseline_prompts,
             target_paths,
             context="baseline prompt bundle",
         )
-        source_bundle = _read_prompt_bundle(target_paths)
         mismatched = sorted(
             name for name in target_paths if baseline_bundle[name] != source_bundle[name]
         )
@@ -279,7 +282,6 @@ class SDKBackend:
         for name, path in target_paths.items():
             target_prompt.add_path(name, str(path))
 
-        snapshot = snapshot_prompt_files(target_paths)
         try:
             sdk_result = await AgentOptimizer.optimize(
                 config_path=str(config_path),
@@ -299,9 +301,26 @@ class SDKBackend:
                     + ", ".join(changed_sources)
                 )
 
-        total_llm_cost = _finite_result_field(
+        _require_successful_optimize_result(sdk_result)
+        total_llm_cost = _nonnegative_result_field(
             "total_llm_cost",
             getattr(sdk_result, "total_llm_cost", 0.0),
+        )
+        _pass_rate_result_field(
+            "baseline_pass_rate",
+            getattr(sdk_result, "baseline_pass_rate", 0.0),
+        )
+        _pass_rate_result_field(
+            "best_pass_rate",
+            getattr(sdk_result, "best_pass_rate", 0.0),
+        )
+        _finite_result_field(
+            "pass_rate_improvement",
+            getattr(sdk_result, "pass_rate_improvement", 0.0),
+        )
+        _nonnegative_result_field(
+            "duration_seconds",
+            getattr(sdk_result, "duration_seconds", 0.0),
         )
         best_raw = getattr(sdk_result, "best_prompts", None)
         if not best_raw:
@@ -315,8 +334,12 @@ class SDKBackend:
         candidates: list[CandidatePrompt] = []
         rounds: list[OptimizationRound] = []
         seen_bundles: set[tuple[tuple[str, str], ...]] = set()
+        seen_round_ids: set[int] = set()
         for index, sdk_round in enumerate(getattr(sdk_result, "rounds", []) or [], start=1):
             round_id = _round_id(sdk_round, fallback=index)
+            if round_id in seen_round_ids:
+                raise ValueError(f"duplicate SDK round id: {round_id}")
+            seen_round_ids.add(round_id)
             candidate_id = f"sdk_round_{round_id:03d}"
             round_raw_prompts = getattr(sdk_round, "candidate_prompts", {}) or {}
             round_prompts = (
@@ -333,11 +356,19 @@ class SDKBackend:
                 getattr(sdk_round, "metric_breakdown", {}) or {},
                 context=f"SDK round {round_id} metric_breakdown",
             )
-            round_cost_value = _finite_number(
+            _pass_rate_number(
+                getattr(sdk_round, "train_pass_rate", 0.0),
+                context=f"SDK round {round_id} train_pass_rate",
+            )
+            _pass_rate_number(
+                getattr(sdk_round, "validation_pass_rate", 0.0),
+                context=f"SDK round {round_id} validation_pass_rate",
+            )
+            round_cost_value = _nonnegative_number(
                 getattr(sdk_round, "round_llm_cost", 0.0),
                 context=f"SDK round {round_id} round_llm_cost",
             )
-            duration_seconds = _finite_number(
+            duration_seconds = _nonnegative_number(
                 getattr(sdk_round, "duration_seconds", 0.0),
                 context=f"SDK round {round_id} duration_seconds",
             )
@@ -413,6 +444,8 @@ class SDKBackend:
         call_agent = self._load_required_call_agent(for_evaluation=True)
         try:
             from trpc_agent_sdk.evaluation import AgentEvaluator
+            from trpc_agent_sdk.evaluation import EvalConfig
+            from trpc_agent_sdk.evaluation import EvaluationCasesFailed
         except Exception as exc:  # pragma: no cover - depends on optional SDK import health
             raise ValueError(f"sdk mode could not import AgentEvaluator: {exc}") from exc
 
@@ -423,6 +456,15 @@ class SDKBackend:
             context=f"cannot evaluate {prompt_id}",
         )
         expected_cases = _load_sdk_expected_cases(dataset_path, split=split)
+        artifact_path = Path(artifact_dir)
+        artifact_path.mkdir(parents=True, exist_ok=True)
+        eval_config_path = artifact_path / "eval_config.json"
+        eval_config_path.write_text(
+            EvalConfig(
+                criteria={"final_response_avg_score": 1.0}
+            ).model_dump_json(indent=2),
+            encoding="utf-8",
+        )
         snapshot = snapshot_prompt_files(target_paths)
         result: Any | None = None
         with temporary_prompt_bundle(snapshot, candidate_prompts):
@@ -432,10 +474,11 @@ class SDKBackend:
                 print_detailed_results=False,
                 print_summary_report=False,
                 eval_result_output_dir=str(artifact_dir),
+                eval_metrics_file_path_or_dir=str(eval_config_path),
             )
             try:
                 await executer.evaluate()
-            except Exception:
+            except EvaluationCasesFailed:
                 result = executer.get_result()
                 if result is None:
                     raise
@@ -551,10 +594,28 @@ def _validated_prompt_bundle(
 
 
 def _read_prompt_bundle(paths: dict[str, str | Path]) -> dict[str, str]:
-    return {
-        name: Path(path).read_text(encoding="utf-8")
-        for name, path in paths.items()
-    }
+    prompts: dict[str, str] = {}
+    for name, path in paths.items():
+        prompt_path = Path(path)
+        try:
+            prompts[name] = prompt_path.read_bytes().decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError(
+                f"source prompt field {name!r} is not valid UTF-8: {prompt_path}"
+            ) from exc
+    return prompts
+
+
+def _prompt_bundle_from_snapshot(snapshot: Any) -> dict[str, str]:
+    prompts: dict[str, str] = {}
+    for name, prompt_file in snapshot.files.items():
+        try:
+            prompts[name] = prompt_file.content.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError(
+                f"source prompt field {name!r} is not valid UTF-8: {prompt_file.path}"
+            ) from exc
+    return prompts
 
 
 def _changed_snapshot_files(snapshot: Any) -> list[str]:
@@ -575,6 +636,30 @@ def _round_id(round_record: Any, *, fallback: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise ValueError("SDK round id must be a positive integer")
     return value
+
+
+def _require_successful_optimize_result(result: Any) -> None:
+    status = _sdk_result_text(getattr(result, "status", None)).upper()
+    if status == "SUCCEEDED":
+        return
+    raise ValueError(
+        "SDK optimization did not succeed: "
+        f"status={status}; "
+        f"error_message={_sdk_result_text(getattr(result, 'error_message', None))}; "
+        f"finish_reason={_sdk_result_text(getattr(result, 'finish_reason', None))}; "
+        f"stop_reason={_sdk_result_text(getattr(result, 'stop_reason', None))}"
+    )
+
+
+def _sdk_result_text(value: Any) -> str:
+    enum_value = getattr(value, "value", None)
+    if enum_value is not None:
+        value = enum_value
+    else:
+        enum_name = getattr(value, "name", None)
+        if enum_name is not None:
+            value = enum_name
+    return str(value).split(".")[-1]
 
 
 def _prompt_bundle_key(prompts: dict[str, str]) -> tuple[tuple[str, str], ...]:
@@ -609,11 +694,11 @@ def _summarize_sdk_result(result: Any) -> dict[str, Any]:
         "finish_reason": _safe_jsonable(getattr(result, "finish_reason", None)),
         "stop_reason": _safe_jsonable(getattr(result, "stop_reason", None)),
         "error_message": _safe_jsonable(getattr(result, "error_message", None)),
-        "baseline_pass_rate": _finite_result_field(
+        "baseline_pass_rate": _pass_rate_result_field(
             "baseline_pass_rate",
             getattr(result, "baseline_pass_rate", 0.0),
         ),
-        "best_pass_rate": _finite_result_field(
+        "best_pass_rate": _pass_rate_result_field(
             "best_pass_rate",
             getattr(result, "best_pass_rate", 0.0),
         ),
@@ -636,12 +721,12 @@ def _summarize_sdk_result(result: Any) -> dict[str, Any]:
         "per_metric_best_candidates": _safe_jsonable(
             getattr(result, "per_metric_best_candidates", {})
         ),
-        "total_llm_cost": _finite_result_field(
+        "total_llm_cost": _nonnegative_result_field(
             "total_llm_cost",
             getattr(result, "total_llm_cost", 0.0),
         ),
         "total_token_usage": _safe_jsonable(getattr(result, "total_token_usage", {})),
-        "duration_seconds": _finite_result_field(
+        "duration_seconds": _nonnegative_result_field(
             "duration_seconds",
             getattr(result, "duration_seconds", 0.0),
         ),
@@ -686,6 +771,22 @@ def _finite_result_field(field_name: str, value: Any) -> float:
         raise ValueError(f"SDK OptimizeResult field {field_name} must be a finite number") from exc
 
 
+def _nonnegative_result_field(field_name: str, value: Any) -> float:
+    number = _finite_result_field(field_name, value)
+    if number < 0.0:
+        raise ValueError(f"SDK OptimizeResult field {field_name} must be non-negative")
+    return number
+
+
+def _pass_rate_result_field(field_name: str, value: Any) -> float:
+    number = _finite_result_field(field_name, value)
+    if not 0.0 <= number <= 1.0:
+        raise ValueError(
+            f"SDK OptimizeResult field {field_name} must be between 0 and 1"
+        )
+    return number
+
+
 def _finite_metric_map(value: Any, *, context: str) -> dict[str, float]:
     if not isinstance(value, dict):
         raise ValueError(f"{context} must be a metric mapping")
@@ -701,6 +802,20 @@ def _finite_number(value: Any, *, context: str) -> float:
     number = float(value)
     if not math.isfinite(number):
         raise ValueError(f"{context} must be a finite number")
+    return number
+
+
+def _nonnegative_number(value: Any, *, context: str) -> float:
+    number = _finite_number(value, context=context)
+    if number < 0.0:
+        raise ValueError(f"{context} must be non-negative")
+    return number
+
+
+def _pass_rate_number(value: Any, *, context: str) -> float:
+    number = _finite_number(value, context=context)
+    if not 0.0 <= number <= 1.0:
+        raise ValueError(f"{context} must be between 0 and 1")
     return number
 
 
@@ -744,6 +859,8 @@ def _load_sdk_expected_cases(
     raw_cases = payload["eval_cases"]
     if not isinstance(raw_cases, list):
         raise ValueError(f"SDK evalset {dataset_path} eval_cases must be a list")
+    if not raw_cases:
+        raise ValueError(f"SDK evalset {dataset_path} eval_cases must not be empty")
 
     expected_cases: dict[str, EvalCase] = {}
     for index, raw_case in enumerate(raw_cases):
@@ -872,13 +989,29 @@ def _eval_result_from_sdk_result(
 
     sdk_runs_by_id: dict[str, list[Any]] = {}
     results_by_eval_set_id = getattr(result, "results_by_eval_set_id", {}) or {}
-    for set_result in results_by_eval_set_id.values():
+    if not results_by_eval_set_id:
+        raise ValueError("SDK EvaluateResult contains no eval set results")
+    for raw_eval_set_id, set_result in results_by_eval_set_id.items():
+        eval_set_id = str(raw_eval_set_id)
+        num_runs = _optional_num_runs(set_result, eval_set_id=eval_set_id)
         eval_results_by_eval_id = getattr(set_result, "eval_results_by_eval_id", {}) or {}
         for raw_eval_id, runs in eval_results_by_eval_id.items():
             eval_id = str(raw_eval_id)
             if eval_id in sdk_runs_by_id:
                 raise ValueError(f"SDK evaluation result contains duplicate case id: {eval_id}")
-            sdk_runs_by_id[eval_id] = list(runs or [])
+            run_list = list(runs or [])
+            if num_runs is not None and len(run_list) != num_runs:
+                raise ValueError(
+                    f"SDK eval set {eval_set_id!r} declares num_runs={num_runs}, "
+                    f"but case {eval_id!r} contains {len(run_list)} runs"
+                )
+            _validate_sdk_run_ids(
+                run_list,
+                eval_set_id=eval_set_id,
+                eval_id=eval_id,
+                num_runs=num_runs,
+            )
+            sdk_runs_by_id[eval_id] = run_list
 
     expected_ids = set(expected_by_id)
     sdk_ids = set(sdk_runs_by_id)
@@ -964,6 +1097,58 @@ def _eval_result_from_sdk_result(
         cost=0.0,
         cases=case_results,
     )
+
+
+def _optional_num_runs(set_result: Any, *, eval_set_id: str) -> int | None:
+    if not hasattr(set_result, "num_runs"):
+        return None
+    num_runs = getattr(set_result, "num_runs")
+    if isinstance(num_runs, bool) or not isinstance(num_runs, int) or num_runs <= 0:
+        raise ValueError(
+            f"SDK eval set {eval_set_id!r} num_runs must be a positive integer"
+        )
+    return num_runs
+
+
+def _validate_sdk_run_ids(
+    runs: list[Any],
+    *,
+    eval_set_id: str,
+    eval_id: str,
+    num_runs: int | None,
+) -> None:
+    seen_run_ids: set[int] = set()
+    for run in runs:
+        internal_eval_id = getattr(run, "eval_id", None)
+        if internal_eval_id not in (None, "") and str(internal_eval_id) != eval_id:
+            raise ValueError(
+                f"SDK run internal eval_id {internal_eval_id!r} does not match "
+                f"container case id {eval_id!r}"
+            )
+        internal_eval_set_id = getattr(run, "eval_set_id", None)
+        if (
+            internal_eval_set_id not in (None, "")
+            and str(internal_eval_set_id) != eval_set_id
+        ):
+            raise ValueError(
+                f"SDK run internal eval_set_id {internal_eval_set_id!r} does not match "
+                f"container eval set id {eval_set_id!r}"
+            )
+
+        run_id = getattr(run, "run_id", None)
+        if run_id is None:
+            continue
+        if isinstance(run_id, bool) or not isinstance(run_id, int) or run_id <= 0:
+            raise ValueError(
+                f"SDK case {eval_id!r} run_id must be a positive integer or None"
+            )
+        if num_runs is not None and run_id > num_runs:
+            raise ValueError(
+                f"SDK case {eval_id!r} run_id {run_id} exceeds num_runs={num_runs}"
+            )
+        if run_id in seen_run_ids:
+            raise ValueError(f"SDK evaluation result contains duplicate run_id {run_id} for case {eval_id}")
+        seen_run_ids.add(run_id)
 
 
 def _aggregate_case_metrics(runs: list[Any], *, case_id: str) -> dict[str, float]:

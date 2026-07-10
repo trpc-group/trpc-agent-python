@@ -34,6 +34,7 @@ Main Components:
 
 # Main evaluation entry point
 from ._agent_evaluator import AgentEvaluator
+from ._agent_evaluator import EvaluationCasesFailed
 from ._agent_evaluator import PassNC
 from ._common import EvalBaseModel
 from ._criterion_registry import CRITERION_REGISTRY
@@ -220,6 +221,7 @@ __all__ = [
     "DEFAULT_OPTIMIZE_MAX_TOKENS",
     "DEFAULT_OPTIMIZE_TEMPERATURE",
     "EvaluationOutcome",
+    "EvaluationCasesFailed",
     "FinishReason",
     "FrameworkStopConfig",
     "GepaReflectiveAlgo",
