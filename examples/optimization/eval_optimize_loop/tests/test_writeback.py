@@ -10,6 +10,7 @@ from examples.optimization.eval_optimize_loop.eval_loop import writeback
 from examples.optimization.eval_optimize_loop.eval_loop.writeback import (
     ConcurrentPromptUpdateError,
 )
+from examples.optimization.eval_optimize_loop.eval_loop.writeback import PromptRestorationError
 from examples.optimization.eval_optimize_loop.eval_loop.writeback import (
     commit_prompt_bundle,
 )
@@ -110,7 +111,7 @@ def test_temporary_restore_preserves_external_update_and_reports_conflict(tmp_pa
     snapshot = snapshot_prompt_files(paths)
     external_content = b"external during temporary evaluation"
 
-    with pytest.raises(RuntimeError, match="restore"):
+    with pytest.raises(PromptRestorationError, match="restore"):
         with temporary_prompt_bundle(
             snapshot,
             {"system": "candidate system", "user": "candidate user"},
@@ -142,6 +143,7 @@ def test_temporary_body_error_remains_primary_when_restore_conflicts(tmp_path: P
 
     assert "restore" in diagnostics
     assert "user" in diagnostics
+    assert isinstance(error_info.value.__cause__, PromptRestorationError)
     assert paths["system"].read_bytes() == baseline["system"]
     assert paths["user"].read_bytes() == external_content
 

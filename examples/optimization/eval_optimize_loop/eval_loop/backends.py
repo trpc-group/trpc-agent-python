@@ -442,6 +442,7 @@ class SDKBackend:
             optimizer=total_llm_cost,
             total=total_llm_cost,
             complete=False,
+            reported_optimizer_cost=total_llm_cost,
         )
         result = OptimizationResult(
             candidates=candidates,

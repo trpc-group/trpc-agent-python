@@ -110,6 +110,7 @@ class CostSummary:
     agent: float = 0.0
     total: float = 0.0
     complete: bool = True
+    reported_optimizer_cost: float | None = None
 
 
 @dataclass(frozen=True)
@@ -177,13 +178,13 @@ class GateDecision:
     candidate_id: str
     accepted: bool
     reasons: list[str]
-    train_score_delta: float
-    validation_score_delta: float
+    train_score_delta: float | None
+    validation_score_delta: float | None
     new_hard_failures: list[str]
     protected_regressions: list[str]
     validation_new_failures: list[str]
     excessive_score_drops: list[str]
-    overfit_detected: bool
+    overfit_detected: bool | None
     candidate_cost: float
     cumulative_cost: float
     total_run_cost: float

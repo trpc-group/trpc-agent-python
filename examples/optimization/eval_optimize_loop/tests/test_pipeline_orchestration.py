@@ -23,6 +23,7 @@ from examples.optimization.eval_optimize_loop.eval_loop.schemas import Optimizat
 from examples.optimization.eval_optimize_loop.eval_loop.schemas import OptimizationRound
 from examples.optimization.eval_optimize_loop.eval_loop.schemas import WritebackResult
 from examples.optimization.eval_optimize_loop.eval_loop.writeback import ConcurrentPromptUpdateError
+from examples.optimization.eval_optimize_loop.eval_loop.writeback import PromptRestorationError
 from examples.optimization.eval_optimize_loop.run_pipeline import build_pipeline_request_and_backend
 
 
@@ -78,6 +79,67 @@ class RecordingBackend:
         )
 
 
+class MutatingBundleBackend(RecordingBackend):
+    async def evaluate(self, **kwargs: Any) -> EvalResult:
+        result = await super().evaluate(**kwargs)
+        kwargs["prompts"]["system_prompt"] = "backend-mutated prompt"
+        return result
+
+    async def optimize_candidates(self, **kwargs: Any) -> OptimizationResult:
+        result = await super().optimize_candidates(**kwargs)
+        kwargs["baseline_prompts"]["system_prompt"] = "optimizer-mutated baseline"
+        return result
+
+
+class FailingCandidateBackend(RecordingBackend):
+    def __init__(
+        self,
+        *,
+        fail_on: tuple[str, str],
+        failure: Exception,
+        delegate: RecordingBackend,
+    ) -> None:
+        super().__init__(
+            candidates=delegate.candidates,
+            results=delegate.results,
+            optimization_cost=delegate.optimization_cost,
+        )
+        self.fail_on = fail_on
+        self.failure = failure
+
+    async def evaluate(self, **kwargs: Any) -> EvalResult:
+        if (kwargs["prompt_id"], kwargs["split"]) == self.fail_on:
+            self.calls.append(
+                (
+                    "evaluate",
+                    kwargs["prompt_id"],
+                    kwargs["split"],
+                    dict(kwargs["prompts"]),
+                    Path(kwargs["artifact_dir"]),
+                    kwargs["trace"],
+                )
+            )
+            raise self.failure
+        return await super().evaluate(**kwargs)
+
+
+class AllCandidatesFailingBackend(RecordingBackend):
+    async def evaluate(self, **kwargs: Any) -> EvalResult:
+        if kwargs["prompt_id"] != "baseline":
+            self.calls.append(
+                (
+                    "evaluate",
+                    kwargs["prompt_id"],
+                    kwargs["split"],
+                    dict(kwargs["prompts"]),
+                    Path(kwargs["artifact_dir"]),
+                    kwargs["trace"],
+                )
+            )
+            raise RuntimeError(f"{kwargs['prompt_id']} evaluation unavailable")
+        return await super().evaluate(**kwargs)
+
+
 @pytest.mark.asyncio
 async def test_execute_pipeline_uses_train_only_evidence_and_full_candidate_reevaluation(tmp_path: Path):
     request = _request(tmp_path, update_source=False)
@@ -106,6 +168,265 @@ async def test_execute_pipeline_uses_train_only_evidence_and_full_candidate_reev
     assert len(artifact_dirs) == len(set(artifact_dirs)) == 6
     assert report.audit["sdk_result_availability"]["full_train_eval_result"] is True
     assert report.audit["sdk_result_availability"]["full_per_case_validation_delta"] is True
+
+
+@pytest.mark.asyncio
+async def test_backend_cannot_mutate_canonical_baseline_or_candidate_bundles(tmp_path: Path):
+    request = _request(tmp_path, update_source=True)
+    delegate = _safe_backend(candidate_count=1)
+    backend = MutatingBundleBackend(
+        candidates=delegate.candidates,
+        results=delegate.results,
+        optimization_cost=delegate.optimization_cost,
+    )
+
+    report = await execute_pipeline(request, evaluator=backend, optimizer=backend)
+
+    prompt_calls = [
+        (call[1], call[2], call[3]["system_prompt"])
+        for call in backend.calls
+        if call[0] == "evaluate"
+    ]
+    assert prompt_calls == [
+        ("baseline", "train", "baseline\n"),
+        ("baseline", "validation", "baseline\n"),
+        ("candidate_a", "train", "safe prompt"),
+        ("candidate_a", "validation", "safe prompt"),
+    ]
+    optimize_call = next(call for call in backend.calls if call[0] == "optimize")
+    assert optimize_call[1] == {"system_prompt": "baseline\n"}
+    assert report.candidates[0]["candidate"].bundle() == {"system_prompt": "safe prompt"}
+    assert report.candidates[0]["prompt_bundle"] == {"system_prompt": "safe prompt"}
+    assert report.audit["candidate_prompts"]["candidate_a"] == {
+        "system_prompt": "safe prompt"
+    }
+    assert report.audit["candidate_prompt_hashes"]["candidate_a"] == {
+        "system_prompt": hashlib.sha256(b"safe prompt").hexdigest()
+    }
+    candidate_artifact = report.audit["candidate_artifacts"]["candidate_a"]
+    artifact_prompt = (
+        Path(request.output_dir)
+        / "runs"
+        / request.run_id
+        / "candidate_prompts"
+        / candidate_artifact
+        / "system_prompt.txt"
+    )
+    assert artifact_prompt.read_text(encoding="utf-8") == "safe prompt"
+    assert Path(request.target_prompt_paths["system_prompt"]).read_text(encoding="utf-8") == "safe prompt"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failed_split", ["train", "validation"])
+async def test_candidate_evaluation_error_rejects_candidate_and_continues(
+    tmp_path: Path,
+    failed_split: str,
+):
+    request = _request(tmp_path, update_source=True)
+    backend = FailingCandidateBackend(
+        fail_on=("candidate_a", failed_split),
+        failure=RuntimeError(f"synthetic {failed_split} evaluation failure"),
+        delegate=_safe_backend(candidate_count=2),
+    )
+
+    report = await execute_pipeline(request, evaluator=backend, optimizer=backend)
+
+    candidate_calls = [
+        (call[1], call[2]) for call in backend.calls if call[0] == "evaluate" and call[1] != "baseline"
+    ]
+    expected_a_calls = [("candidate_a", "train")]
+    if failed_split == "validation":
+        expected_a_calls.append(("candidate_a", "validation"))
+    assert candidate_calls == expected_a_calls + [
+        ("candidate_b", "train"),
+        ("candidate_b", "validation"),
+    ]
+    assert report.selected_candidate == "candidate_b"
+    assert report.writeback.status == "applied"
+    assert Path(request.target_prompt_paths["system_prompt"]).read_text(encoding="utf-8") == "other prompt"
+
+    failed_record = report.candidates[0]
+    assert failed_record["candidate"].candidate_id == "candidate_a"
+    assert failed_record["evaluation_error"]["stage"] == failed_split
+    assert failed_record["evaluation_error"]["type"] == "RuntimeError"
+    assert failed_record["evaluation_error"]["cost_complete"] is False
+    assert ("train_result" in failed_record) is (failed_split == "validation")
+    assert "validation_result" not in failed_record
+
+    failed_decision = report.gate_decisions[0]
+    assert failed_decision.accepted is False
+    assert failed_decision.gate_status == "not_applied"
+    assert failed_decision.gate_not_applied_reason == "evaluation_error"
+    assert failed_decision.train_score_delta is None
+    assert failed_decision.validation_score_delta is None
+    assert any("evaluation_error" in reason and failed_split in reason for reason in failed_decision.reasons)
+    assert failed_decision.not_applied_checks
+
+    audit_failure = report.audit["candidate_evaluation_failures"]["candidate_a"]
+    assert audit_failure == failed_record["evaluation_error"]
+    assert report.cost_summary.complete is False
+    expected_known_cost = 0.05 if failed_split == "validation" else 0.04
+    assert report.cost_summary.total == expected_known_cost
+    assert report.audit["cost"]["total"] is None
+    assert report.audit["cost"]["known_run_cost"] == expected_known_cost
+    markdown = report_module.render_markdown(report)
+    assert "evaluation_error" in markdown
+    assert "n/a" in markdown
+
+
+@pytest.mark.asyncio
+async def test_candidate_evaluation_error_makes_later_budget_gate_fail_closed(
+    tmp_path: Path,
+):
+    request = _request(
+        tmp_path,
+        update_source=True,
+        gate_config={
+            "min_val_score_improvement": 0.0,
+            "max_score_drop_per_case": 1.0,
+            "max_total_cost": 10.0,
+        },
+    )
+    backend = FailingCandidateBackend(
+        fail_on=("candidate_a", "train"),
+        failure=RuntimeError("unknown failed evaluation cost"),
+        delegate=_safe_backend(candidate_count=2),
+    )
+
+    report = await execute_pipeline(request, evaluator=backend, optimizer=backend)
+
+    assert report.selected_candidate is None
+    assert report.writeback.status == "rejected"
+    assert report.gate_decisions[0].gate_not_applied_reason == "evaluation_error"
+    assert any("cost_unavailable" in reason for reason in report.gate_decisions[1].reasons)
+    assert report.cost_summary.complete is False
+    assert Path(request.target_prompt_paths["system_prompt"]).read_bytes() == b"baseline\n"
+
+
+@pytest.mark.asyncio
+async def test_all_candidate_evaluation_errors_finalize_rejected_audit_without_writeback(
+    tmp_path: Path,
+):
+    request = _request(tmp_path, update_source=True)
+    delegate = _safe_backend(candidate_count=2)
+    backend = AllCandidatesFailingBackend(
+        candidates=delegate.candidates,
+        results=delegate.results,
+        optimization_cost=delegate.optimization_cost,
+    )
+
+    report = await execute_pipeline(request, evaluator=backend, optimizer=backend)
+
+    assert report.selected_candidate is None
+    assert report.writeback.status == "rejected"
+    assert report.audit["writeback_journal"]["state"] == "rejected"
+    assert report.audit["writeback_journal"]["report_phase"] == "final"
+    assert set(report.audit["candidate_evaluation_failures"]) == {
+        "candidate_a",
+        "candidate_b",
+    }
+    assert all("evaluation_error" in record for record in report.candidates)
+    assert all("train_result" not in record for record in report.candidates)
+    assert all(decision.gate_status == "not_applied" for decision in report.gate_decisions)
+    assert report.cost_summary.complete is False
+    assert report.cost_summary.total == 0.02
+    assert Path(request.target_prompt_paths["system_prompt"]).read_bytes() == b"baseline\n"
+    run_dir = Path(request.output_dir) / "runs" / request.run_id
+    assert (run_dir / "optimization_report.json").is_file()
+    assert (run_dir / "audit.json").is_file()
+    assert (run_dir / "writeback.json").is_file()
+
+
+@pytest.mark.asyncio
+async def test_candidate_evaluation_error_does_not_persist_backend_secret_text(
+    tmp_path: Path,
+):
+    request = _request(tmp_path)
+    secret = "api_key=sk-private-value token=github-private-value"
+    backend = FailingCandidateBackend(
+        fail_on=("candidate_a", "train"),
+        failure=RuntimeError(secret),
+        delegate=_safe_backend(candidate_count=2),
+    )
+
+    report = await execute_pipeline(request, evaluator=backend, optimizer=backend)
+
+    failure = report.candidates[0]["evaluation_error"]
+    assert failure["message"] == "candidate evaluation failed; backend details withheld"
+    assert failure["message_sha256"] == hashlib.sha256(secret.encode("utf-8")).hexdigest()
+    serialized = report_module.report_to_json(report) + report_module.render_markdown(report)
+    serialized += (Path(request.output_dir) / "runs" / request.run_id / "audit.json").read_text(
+        encoding="utf-8"
+    )
+    assert "sk-private-value" not in serialized
+    assert "github-private-value" not in serialized
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure_kind", ["cas", "direct_restore", "chained_restore"])
+async def test_candidate_prompt_integrity_failures_abort_run(
+    tmp_path: Path,
+    failure_kind: str,
+):
+    request = _request(tmp_path, update_source=True)
+    if failure_kind == "cas":
+        failure: Exception = ConcurrentPromptUpdateError("source changed")
+    elif failure_kind == "direct_restore":
+        failure = PromptRestorationError("restore failed")
+    else:
+        failure = RuntimeError("candidate evaluation failed")
+        failure.__cause__ = PromptRestorationError("restore failed")
+    backend = FailingCandidateBackend(
+        fail_on=("candidate_a", "train"),
+        failure=failure,
+        delegate=_safe_backend(candidate_count=2),
+    )
+
+    with pytest.raises(Exception) as error_info:
+        await execute_pipeline(request, evaluator=backend, optimizer=backend)
+
+    assert error_info.value is failure
+    assert not any(call[0] == "evaluate" and call[1] == "candidate_b" for call in backend.calls)
+    assert Path(request.target_prompt_paths["system_prompt"]).read_bytes() == b"baseline\n"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("mutation_target", "error_pattern"),
+    [
+        ("prompt", "source prompt integrity changed"),
+        ("input", "immutable input snapshot.*train"),
+    ],
+)
+async def test_candidate_failure_with_state_drift_aborts_run(
+    tmp_path: Path,
+    mutation_target: str,
+    error_pattern: str,
+):
+    request = _request(tmp_path, update_source=True)
+
+    class StateDriftBackend(FailingCandidateBackend):
+        async def evaluate(self, **kwargs: Any) -> EvalResult:
+            if (kwargs["prompt_id"], kwargs["split"]) == self.fail_on:
+                if mutation_target == "prompt":
+                    Path(request.target_prompt_paths["system_prompt"]).write_text(
+                        "external prompt update",
+                        encoding="utf-8",
+                    )
+                else:
+                    Path(kwargs["dataset_path"]).write_text("{}", encoding="utf-8")
+            return await super().evaluate(**kwargs)
+
+    backend = StateDriftBackend(
+        fail_on=("candidate_a", "train"),
+        failure=RuntimeError("ordinary evaluation failure"),
+        delegate=_safe_backend(candidate_count=2),
+    )
+
+    with pytest.raises((ConcurrentPromptUpdateError, ValueError), match=error_pattern):
+        await execute_pipeline(request, evaluator=backend, optimizer=backend)
+
+    assert not any(call[0] == "evaluate" and call[1] == "candidate_b" for call in backend.calls)
 
 
 @pytest.mark.asyncio
@@ -264,6 +585,15 @@ async def test_incomplete_optimizer_cost_is_fail_closed_only_when_budget_configu
         assert any(reason_fragment in reason for reason in report.gate_decisions[0].reasons)
     else:
         assert all("cost_unavailable" not in reason for reason in report.gate_decisions[0].reasons)
+        payload = json.loads(report_module.report_to_json(report))
+        assert payload["cost_summary"]["complete"] is False
+        assert payload["cost_summary"]["reported_optimizer_cost"] == 0.2
+        assert report.audit["cost"]["complete"] is False
+        assert report.audit["cost"]["total"] is None
+        assert report.audit["cost"]["reported_optimizer_cost"] == 0.2
+        markdown = report_module.render_markdown(report)
+        assert "Reported optimizer cost (incomplete; not total run cost): 0.200" in markdown
+        assert "Total cost:" not in markdown
 
 
 @pytest.mark.asyncio
@@ -287,6 +617,14 @@ async def test_optimizer_cost_is_counted_once_across_candidates(tmp_path: Path):
         total=0.78,
         complete=True,
     )
+    assert report.audit["total_run_cost"] == 0.78
+    assert report.audit["known_run_cost"] is None
+    assert report.audit["total_run_cost_complete"] is True
+    assert report.audit["cost"]["total"] == 0.78
+    assert report.audit["cost"]["reported_optimizer_cost"] is None
+    markdown = report_module.render_markdown(report)
+    assert "Total cost: 0.780" in markdown
+    assert "Reported optimizer cost" not in markdown
 
 
 @pytest.mark.asyncio

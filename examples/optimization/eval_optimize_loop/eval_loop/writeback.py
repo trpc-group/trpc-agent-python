@@ -22,6 +22,10 @@ class ConcurrentPromptUpdateError(RuntimeError):
     """Raised when source prompts no longer match their captured snapshot."""
 
 
+class PromptRestorationError(RuntimeError):
+    """Raised when temporarily installed prompts cannot be restored safely."""
+
+
 @dataclass(frozen=True)
 class PromptFileSnapshot:
     """Byte-for-byte snapshot of one source prompt file."""
@@ -209,17 +213,19 @@ def temporary_prompt_bundle(
         restoration_error = _restoration_error(snapshot, failures)
         if restoration_error is not None:
             diagnostic = f"failed to restore prompt snapshot: {restoration_error}"
+            restore_error = PromptRestorationError(diagnostic)
             add_note = getattr(primary_error, "add_note", None)
             if add_note is not None:
                 add_note(diagnostic)
-            else:
-                raise primary_error from RuntimeError(diagnostic)
+            raise primary_error from restore_error
         raise
     else:
         failures = _restore_snapshot(snapshot, written_hashes)
         restoration_error = _restoration_error(snapshot, failures)
         if restoration_error is not None:
-            raise RuntimeError(f"failed to restore prompt snapshot: {restoration_error}")
+            raise PromptRestorationError(
+                f"failed to restore prompt snapshot: {restoration_error}"
+            )
 
 
 def commit_prompt_bundle(

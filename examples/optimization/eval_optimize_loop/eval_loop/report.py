@@ -105,8 +105,10 @@ def build_report(
 ) -> OptimizationReport:
     all_results: list[EvalResult] = [baseline_train, baseline_validation]
     for record in candidate_records:
-        all_results.append(record["train_result"])
-        all_results.append(record["validation_result"])
+        for result_name in ("train_result", "validation_result"):
+            result = record.get(result_name)
+            if isinstance(result, EvalResult):
+                all_results.append(result)
     return OptimizationReport(
         schema_version="eval_optimize_loop.v1",
         run=run,
@@ -313,12 +315,20 @@ def render_markdown(report: OptimizationReport) -> str:
         "",
     ])
     availability = report.audit.get("sdk_result_availability", {})
-    lines.extend([
-        "Fake and SDK modes perform complete AgentEvaluator-compatible reevaluation for baseline "
-        "and every candidate on both train and validation; optimizer aggregates are never used "
-        "as gate evidence.",
-        "",
-    ])
+    if report.audit.get("candidate_evaluation_failures"):
+        lines.extend([
+            "Fake and SDK modes require complete AgentEvaluator-compatible train and validation "
+            "reevaluation before gating a candidate; evaluation errors are recorded as explicit "
+            "rejections and optimizer aggregates are never used as gate evidence.",
+            "",
+        ])
+    else:
+        lines.extend([
+            "Fake and SDK modes perform complete AgentEvaluator-compatible reevaluation for baseline "
+            "and every candidate on both train and validation; optimizer aggregates are never used "
+            "as gate evidence.",
+            "",
+        ])
     if report.run.get("mode") == "sdk":
         lines.extend([
             "SDK availability: "
@@ -350,9 +360,17 @@ def render_markdown(report: OptimizationReport) -> str:
         candidate: CandidatePrompt = record["candidate"]
         gate = decision_by_id[candidate.candidate_id]
         verdict = "accept" if gate.accepted else "reject"
+        train_result = record.get("train_result")
+        validation_result = record.get("validation_result")
+        train_score = f"{train_result.score:.3f}" if isinstance(train_result, EvalResult) else "n/a"
+        validation_score = (
+            f"{validation_result.score:.3f}"
+            if isinstance(validation_result, EvalResult)
+            else "n/a"
+        )
         lines.append(
-            f"| {candidate.candidate_id} | {record['train_result'].score:.3f} | "
-            f"{record['validation_result'].score:.3f} | {verdict} |"
+            f"| {candidate.candidate_id} | {train_score} | "
+            f"{validation_score} | {verdict} |"
         )
 
     lines.extend([
@@ -390,11 +408,24 @@ def render_markdown(report: OptimizationReport) -> str:
         lines.append("")
         lines.append(f"Attribution accuracy: {summary['attribution_accuracy']:.3f}")
 
+    cost_audit = report.audit.get("cost", {})
+    lines.extend(["", "## Cost And Audit", ""])
+    if cost_audit.get("complete"):
+        lines.append(f"Total cost: {cost_audit.get('total', 0):.3f}")
+    else:
+        reported_optimizer_cost = cost_audit.get("reported_optimizer_cost")
+        if reported_optimizer_cost is not None:
+            lines.append(
+                "Reported optimizer cost (incomplete; not total run cost): "
+                f"{reported_optimizer_cost:.3f}"
+            )
+        lines.append(f"Known evaluator cost: {cost_audit.get('evaluator', 0):.3f}")
+        lines.append(
+            "Known run cost (incomplete; not total run cost): "
+            f"{cost_audit.get('known_run_cost', 0):.3f}"
+        )
+        lines.append("Complete run cost: unavailable")
     lines.extend([
-        "",
-        "## Cost And Audit",
-            "",
-        f"Total cost: {report.audit.get('cost', {}).get('total', 0):.3f}",
         f"Config hash: `{report.audit.get('config_hash', '')}`",
         f"Run id: `{report.run.get('run_id', '')}`",
     ])
@@ -456,12 +487,17 @@ def write_audit_artifacts(report: OptimizationReport, output_path: Path) -> None
         candidate_name = _candidate_artifact_name(index, candidate.candidate_id)
         candidate_dir = prompt_dir / candidate_name
         candidate_dir.mkdir(exist_ok=True)
-        for field_name, prompt_text in candidate.bundle().items():
+        prompt_bundle = record.get("prompt_bundle")
+        if prompt_bundle is None:
+            prompt_bundle = candidate.bundle()
+        for field_name, prompt_text in prompt_bundle.items():
             field_artifact = _safe_artifact_name(str(field_name))
             _atomic_write_text(candidate_dir / f"{field_artifact}.txt", prompt_text)
         _atomic_write_text(diffs_dir / f"{candidate_name}.diff", candidate.prompt_diff)
         for split_name in ("train_result", "validation_result"):
-            split_result = record[split_name]
+            split_result = record.get(split_name)
+            if not isinstance(split_result, EvalResult):
+                continue
             split_artifact = _safe_artifact_name(str(split_result.split))
             path = results_dir / f"{candidate_name}_{split_artifact}.json"
             _atomic_write_text(path, _json_text(split_result))

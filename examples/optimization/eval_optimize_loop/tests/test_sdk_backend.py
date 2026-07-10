@@ -214,6 +214,7 @@ async def test_sdk_backend_maps_rounds_deduplicates_bundles_and_marks_cost_incom
     assert result.rounds[1].cost.total == 0.2
     assert result.cost.total == 0.3
     assert result.cost.complete is False
+    assert result.cost.reported_optimizer_cost == 0.3
     assert result.raw_summary["rounds"][1]["acceptance_reason"] == "duplicate proposal"
     assert result.raw_summary["rounds"][1]["accepted"] is True
 
@@ -1207,7 +1208,7 @@ def test_run_pipeline_mode_sdk_writes_report_without_fallback(tmp_path: Path, mo
     )
 
     output_dir = tmp_path / "sdk_run"
-    payload = (output_dir / "optimization_report.json").read_text(encoding="utf-8")
+    payload = json.loads((output_dir / "optimization_report.json").read_text(encoding="utf-8"))
     markdown = (output_dir / "optimization_report.md").read_text(encoding="utf-8")
     assert report.run["mode"] == "sdk"
     assert report.run["update_source"] is False
@@ -1219,8 +1220,16 @@ def test_run_pipeline_mode_sdk_writes_report_without_fallback(tmp_path: Path, mo
     assert report.gate_decisions[0].gate_status == "applied"
     assert report.gate_decisions[0].not_applied_checks == []
     assert report.audit["duration_seconds"] > 0
-    assert report.audit["total_run_cost"] == 0.123
-    assert report.audit["cost"]["total"] == 0.123
+    assert report.audit["total_run_cost"] is None
+    assert report.audit["known_run_cost"] == 0.123
+    assert report.audit["total_run_cost_complete"] is False
+    assert report.audit["cost"]["total"] is None
+    assert report.audit["cost"]["complete"] is False
+    assert report.audit["cost"]["reported_optimizer_cost"] == 0.123
+    assert payload["cost_summary"]["reported_optimizer_cost"] == 0.123
+    assert payload["cost_summary"]["complete"] is False
+    assert "Reported optimizer cost (incomplete; not total run cost): 0.123" in markdown
+    assert "Total cost:" not in markdown
     assert report.audit["sdk_result_summary"]["status"] == "SUCCEEDED"
     assert report.audit["sdk_result_summary"]["baseline_metric_breakdown"] == {"exact_match": 0.5}
     assert report.audit["sdk_result_summary"]["best_metric_breakdown"] == {"exact_match": 0.75}

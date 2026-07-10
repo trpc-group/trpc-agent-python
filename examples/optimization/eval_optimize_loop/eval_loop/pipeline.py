@@ -9,9 +9,11 @@ import os
 import re
 import tempfile
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import replace
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from .attribution import summarize_failures
@@ -33,12 +35,14 @@ from .report import prepare_run_artifacts
 from .schemas import CandidatePrompt
 from .schemas import CostSummary
 from .schemas import EvalResult
+from .schemas import GateDecision
 from .schemas import OptimizationReport
 from .schemas import OptimizationResult
 from .schemas import WritebackResult
 from .schemas import to_jsonable
 from .writeback import commit_prompt_bundle
 from .writeback import ConcurrentPromptUpdateError
+from .writeback import PromptRestorationError
 from .writeback import snapshot_prompt_files
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
@@ -167,7 +171,7 @@ async def _execute_with_snapshots(
     input_snapshots: _InputSnapshots,
 ) -> OptimizationReport:
     prompt_snapshot = snapshot_prompt_files(request.target_prompt_paths)
-    baseline_prompts = _decode_snapshot(prompt_snapshot)
+    baseline_prompts = MappingProxyType(_decode_snapshot(prompt_snapshot))
     raw_config = read_json(input_snapshots.path("optimizer"))
     effective_seed = resolve_effective_seed(
         raw_config,
@@ -198,7 +202,7 @@ async def _execute_with_snapshots(
     _verify_snapshot_integrity(input_snapshots, "train")
     baseline_train = await evaluator.evaluate(
         prompt_id="baseline",
-        prompts=baseline_prompts,
+        prompts=dict(baseline_prompts),
         dataset_path=train_path,
         split="train",
         trace=request.trace,
@@ -214,7 +218,7 @@ async def _execute_with_snapshots(
     _verify_snapshot_integrity(input_snapshots, "validation")
     baseline_validation = await evaluator.evaluate(
         prompt_id="baseline",
-        prompts=baseline_prompts,
+        prompts=dict(baseline_prompts),
         dataset_path=validation_path,
         split="validation",
         trace=request.trace,
@@ -231,7 +235,7 @@ async def _execute_with_snapshots(
     failure_summary = summarize_failures([baseline_train])
     _verify_snapshot_integrity(input_snapshots, "train", "validation", "optimizer")
     optimization = await optimizer.optimize_candidates(
-        baseline_prompts=baseline_prompts,
+        baseline_prompts=dict(baseline_prompts),
         baseline_train=baseline_train,
         failure_summary=failure_summary,
         train_path=train_path,
@@ -249,45 +253,117 @@ async def _execute_with_snapshots(
     gate = AcceptanceGate(effective_gate_config)
     baseline_evaluator_cost = round(baseline_train.cost + baseline_validation.cost, 6)
     explicit_evaluator_cost = baseline_evaluator_cost
-    cumulative_cost = round(baseline_evaluator_cost + optimization.cost.total, 6)
     candidate_records: list[dict[str, Any]] = []
     all_deltas = []
     gate_decisions = []
     all_results_comparable = True
+    candidate_evaluation_failed = False
 
     for index, candidate in enumerate(optimization.candidates, start=1):
         bundle = candidate_bundles[candidate.candidate_id]
-        path_label = _candidate_artifact_component(index, candidate.candidate_id)
-        _verify_snapshot_integrity(input_snapshots, "train")
-        train_result = await evaluator.evaluate(
-            prompt_id=candidate.candidate_id,
-            prompts=bundle,
-            dataset_path=train_path,
-            split="train",
-            trace=request.trace,
-            artifact_dir=_artifact_dir(run_root, "evaluations", path_label, "train"),
+        canonical_candidate = CandidatePrompt(
+            candidate_id=candidate.candidate_id,
+            prompt=candidate.prompt,
+            rationale=candidate.rationale,
+            prompt_diff=candidate.prompt_diff,
+            prompt_fields=dict(bundle),
         )
+        path_label = _candidate_artifact_component(index, candidate.candidate_id)
+        record: dict[str, Any] = {
+            "candidate": canonical_candidate,
+            "prompt_bundle": dict(bundle),
+        }
+        _verify_snapshot_integrity(input_snapshots, "train")
+        train_artifact_dir = _artifact_dir(
+            run_root,
+            "evaluations",
+            path_label,
+            "train",
+        )
+        try:
+            train_result = await evaluator.evaluate(
+                prompt_id=candidate.candidate_id,
+                prompts=dict(bundle),
+                dataset_path=train_path,
+                split="train",
+                trace=request.trace,
+                artifact_dir=train_artifact_dir,
+            )
+        except Exception as error:
+            record["evaluation_error"] = _recoverable_candidate_evaluation_failure(
+                error,
+                stage="train",
+                completed_results=[],
+                input_snapshots=input_snapshots,
+                prompt_snapshot=prompt_snapshot,
+            )
+            candidate_records.append(record)
+            candidate_evaluation_failed = True
+            all_results_comparable = False
+            continue
         _verify_snapshot_integrity(input_snapshots, "train")
         _validate_eval_result(
             train_result,
             expected_prompt_id=candidate.candidate_id,
             expected_split="train",
         )
+        record["train_result"] = train_result
+        explicit_evaluator_cost = round(explicit_evaluator_cost + train_result.cost, 6)
         _verify_snapshot_integrity(input_snapshots, "validation")
-        validation_result = await evaluator.evaluate(
-            prompt_id=candidate.candidate_id,
-            prompts=bundle,
-            dataset_path=validation_path,
-            split="validation",
-            trace=request.trace,
-            artifact_dir=_artifact_dir(run_root, "evaluations", path_label, "validation"),
+        validation_artifact_dir = _artifact_dir(
+            run_root,
+            "evaluations",
+            path_label,
+            "validation",
         )
+        try:
+            validation_result = await evaluator.evaluate(
+                prompt_id=candidate.candidate_id,
+                prompts=dict(bundle),
+                dataset_path=validation_path,
+                split="validation",
+                trace=request.trace,
+                artifact_dir=validation_artifact_dir,
+            )
+        except Exception as error:
+            record["evaluation_error"] = _recoverable_candidate_evaluation_failure(
+                error,
+                stage="validation",
+                completed_results=[train_result],
+                input_snapshots=input_snapshots,
+                prompt_snapshot=prompt_snapshot,
+            )
+            candidate_records.append(record)
+            candidate_evaluation_failed = True
+            all_results_comparable = False
+            continue
         _verify_snapshot_integrity(input_snapshots, "validation")
         _validate_eval_result(
             validation_result,
             expected_prompt_id=candidate.candidate_id,
             expected_split="validation",
         )
+        record["validation_result"] = validation_result
+        explicit_evaluator_cost = round(explicit_evaluator_cost + validation_result.cost, 6)
+        candidate_records.append(record)
+
+    run_cost_complete = optimization.cost.complete and not candidate_evaluation_failed
+    gate_cost_summary = replace(optimization.cost, complete=run_cost_complete)
+    cumulative_cost = round(baseline_evaluator_cost + optimization.cost.total, 6)
+    for record in candidate_records:
+        candidate = record["candidate"]
+        if "evaluation_error" in record:
+            decision = _evaluation_error_gate_decision(
+                candidate_id=candidate.candidate_id,
+                failure=record["evaluation_error"],
+                cumulative_cost=cumulative_cost,
+            )
+            gate_decisions.append(decision)
+            cumulative_cost = decision.total_run_cost
+            continue
+
+        train_result = record["train_result"]
+        validation_result = record["validation_result"]
         comparable = _result_pair_is_comparable(baseline_train, train_result) and (
             _result_pair_is_comparable(baseline_validation, validation_result)
         )
@@ -310,22 +386,11 @@ async def _execute_with_snapshots(
             candidate_train=train_result,
             candidate_validation=validation_result,
             deltas=deltas,
-            cost_summary=optimization.cost,
+            cost_summary=gate_cost_summary,
             cumulative_cost=cumulative_cost,
-        )
-        candidate_records.append(
-            {
-                "candidate": candidate,
-                "train_result": train_result,
-                "validation_result": validation_result,
-            }
         )
         all_deltas.extend(deltas)
         gate_decisions.append(decision)
-        explicit_evaluator_cost = round(
-            explicit_evaluator_cost + train_result.cost + validation_result.cost,
-            6,
-        )
         cumulative_cost = decision.total_run_cost
 
     selected_candidate = _select_candidate(candidate_records, gate_decisions)
@@ -334,7 +399,8 @@ async def _execute_with_snapshots(
         evaluator=round(optimization.cost.evaluator + explicit_evaluator_cost, 6),
         agent=optimization.cost.agent,
         total=cumulative_cost,
-        complete=optimization.cost.complete,
+        complete=run_cost_complete,
+        reported_optimizer_cost=_reported_optimizer_cost(optimization.cost),
     )
     _validate_cost_summary(cost_summary, context="pipeline cost summary")
     input_hashes: dict[str, Any] = {
@@ -436,7 +502,7 @@ async def _execute_with_snapshots(
     try:
         writeback = commit_prompt_bundle(
             prompt_snapshot,
-            candidate_bundles[selected_candidate],
+            dict(candidate_bundles[selected_candidate]),
         )
     except ConcurrentPromptUpdateError as error:
         writeback = WritebackResult(
@@ -687,7 +753,7 @@ def _public_input_drift(
     return public
 
 
-def _prompt_bundle_hashes(bundle: dict[str, str]) -> dict[str, str]:
+def _prompt_bundle_hashes(bundle: Mapping[str, str]) -> dict[str, str]:
     return {name: hashlib.sha256(prompt.encode("utf-8")).hexdigest() for name, prompt in bundle.items()}
 
 
@@ -780,12 +846,122 @@ def _decode_snapshot(snapshot: Any) -> dict[str, str]:
     return prompts
 
 
+def _recoverable_candidate_evaluation_failure(
+    error: Exception,
+    *,
+    stage: str,
+    completed_results: list[EvalResult],
+    input_snapshots: _InputSnapshots,
+    prompt_snapshot: Any,
+) -> dict[str, Any]:
+    """Return a public failure record only after proving prompt state is safe.
+
+    Candidate backend errors are recoverable, but source-prompt restoration,
+    CAS, immutable-input, and cancellation failures remain run-fatal.
+    """
+
+    _verify_snapshot_integrity(input_snapshots)
+    if _exception_chain_contains(
+        error,
+        (ConcurrentPromptUpdateError, PromptRestorationError),
+    ):
+        raise error
+
+    expected_prompt_hashes = prompt_snapshot.hashes()
+    observed_prompt_hashes = _current_prompt_hashes(prompt_snapshot)
+    if observed_prompt_hashes != expected_prompt_hashes:
+        changed = sorted(
+            name
+            for name in set(expected_prompt_hashes) | set(observed_prompt_hashes)
+            if expected_prompt_hashes.get(name) != observed_prompt_hashes.get(name)
+        )
+        raise ConcurrentPromptUpdateError(
+            "source prompt integrity changed during failed candidate evaluation: "
+            + ", ".join(changed)
+        ) from error
+
+    raw_message = str(error)
+    return {
+        "stage": stage,
+        "type": type(error).__name__,
+        "message": "candidate evaluation failed; backend details withheld",
+        "message_sha256": hashlib.sha256(
+            raw_message.encode("utf-8", errors="replace")
+        ).hexdigest(),
+        "completed_splits": [result.split for result in completed_results],
+        "known_evaluator_cost": round(sum(result.cost for result in completed_results), 6),
+        "cost_complete": False,
+    }
+
+
+def _exception_chain_contains(
+    error: BaseException,
+    exception_types: tuple[type[BaseException], ...],
+) -> bool:
+    pending: list[BaseException] = [error]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if isinstance(current, exception_types):
+            return True
+        if current.__cause__ is not None:
+            pending.append(current.__cause__)
+        if current.__context__ is not None:
+            pending.append(current.__context__)
+    return False
+
+
+def _evaluation_error_gate_decision(
+    *,
+    candidate_id: str,
+    failure: dict[str, Any],
+    cumulative_cost: float,
+) -> GateDecision:
+    candidate_cost = round(float(failure["known_evaluator_cost"]), 6)
+    total_run_cost = round(cumulative_cost + candidate_cost, 6)
+    stage = str(failure["stage"])
+    reason = (
+        f"reject: evaluation_error during {stage}: "
+        f"{failure['type']}: {failure['message']}"
+    )
+    return GateDecision(
+        candidate_id=candidate_id,
+        accepted=False,
+        reasons=[reason],
+        train_score_delta=None,
+        validation_score_delta=None,
+        new_hard_failures=[],
+        protected_regressions=[],
+        validation_new_failures=[],
+        excessive_score_drops=[],
+        overfit_detected=None,
+        candidate_cost=candidate_cost,
+        cumulative_cost=round(cumulative_cost, 6),
+        total_run_cost=total_run_cost,
+        cost=candidate_cost,
+        gate_status="not_applied",
+        gate_not_applied_reason="evaluation_error",
+        not_applied_checks=[
+            "score_delta",
+            "validation_improvement",
+            "new_failures",
+            "hard_failures",
+            "protected_regressions",
+            "per_case_score_drop",
+            "overfit",
+        ],
+    )
+
+
 def _validated_candidate_bundles(
     candidates: list[CandidatePrompt],
     *,
     expected_fields: set[str],
-) -> dict[str, dict[str, str]]:
-    bundles: dict[str, dict[str, str]] = {}
+) -> dict[str, Mapping[str, str]]:
+    bundles: dict[str, Mapping[str, str]] = {}
     casefold_ids: set[str] = set()
     for candidate in candidates:
         candidate_id = candidate.candidate_id
@@ -823,7 +999,7 @@ def _validated_candidate_bundles(
                 prompt_text,
                 context=f"candidate {candidate_id!r} bundle field {field_name!r}",
             )
-        bundles[candidate_id] = dict(bundle)
+        bundles[candidate_id] = MappingProxyType(dict(bundle))
     return bundles
 
 
@@ -980,6 +1156,12 @@ def _validate_cost_summary(summary: CostSummary, *, context: str) -> None:
     total = _finite_number(summary.total, context=f"{context} total", minimum=0.0)
     if not isinstance(summary.complete, bool):
         raise ValueError(f"{context} complete must be a boolean")
+    if summary.reported_optimizer_cost is not None:
+        _finite_number(
+            summary.reported_optimizer_cost,
+            context=f"{context} reported_optimizer_cost",
+            minimum=0.0,
+        )
     if summary.complete and not math.isclose(
         total,
         sum(components.values()),
@@ -987,6 +1169,14 @@ def _validate_cost_summary(summary: CostSummary, *, context: str) -> None:
         abs_tol=1e-6,
     ):
         raise ValueError(f"{context} total must equal components when complete")
+
+
+def _reported_optimizer_cost(summary: CostSummary) -> float | None:
+    if summary.complete:
+        return None
+    if summary.reported_optimizer_cost is not None:
+        return float(summary.reported_optimizer_cost)
+    return float(summary.total)
 
 
 def _validate_nested_numbers(value: Any, *, context: str) -> None:
@@ -1058,7 +1248,12 @@ def _select_candidate(
     accepted: list[tuple[int, dict[str, Any]]] = []
     for index, record in enumerate(candidate_records):
         candidate = record["candidate"]
-        if decisions_by_id[candidate.candidate_id].accepted:
+        decision = decisions_by_id[candidate.candidate_id]
+        if (
+            decision.accepted
+            and "train_result" in record
+            and "validation_result" in record
+        ):
             accepted.append((index, record))
     if not accepted:
         return None
@@ -1113,7 +1308,7 @@ def _build_audit(
     baseline_train: EvalResult,
     baseline_validation: EvalResult,
     candidate_records: list[dict[str, Any]],
-    candidate_bundles: dict[str, dict[str, str]],
+    candidate_bundles: dict[str, Mapping[str, str]],
     optimization_raw_summary: dict[str, Any],
     optimization_cost: CostSummary,
     cost_summary: CostSummary,
@@ -1123,15 +1318,35 @@ def _build_audit(
 ) -> dict[str, Any]:
     candidate_costs = {
         record["candidate"].candidate_id: round(
-            record["train_result"].cost + record["validation_result"].cost,
+            sum(
+                record[result_name].cost
+                for result_name in ("train_result", "validation_result")
+                if result_name in record
+            ),
             6,
         )
         for record in candidate_records
+    }
+    candidate_evaluation_failures = {
+        record["candidate"].candidate_id: dict(record["evaluation_error"])
+        for record in candidate_records
+        if "evaluation_error" in record
     }
     candidate_prompt_hashes = {
         candidate_id: {name: hashlib.sha256(prompt.encode("utf-8")).hexdigest() for name, prompt in bundle.items()}
         for candidate_id, bundle in candidate_bundles.items()
     }
+    cost_audit: dict[str, Any] = {
+        "baseline": round(baseline_train.cost + baseline_validation.cost, 6),
+        "candidates": candidate_costs,
+        "optimization": to_jsonable(optimization_cost),
+        "evaluator": cost_summary.evaluator,
+        "total": cost_summary.total if cost_summary.complete else None,
+        "complete": cost_summary.complete,
+        "reported_optimizer_cost": cost_summary.reported_optimizer_cost,
+    }
+    if not cost_summary.complete:
+        cost_audit["known_run_cost"] = cost_summary.total
     duration = max(time.perf_counter() - started, 1e-9)
     target_paths = {name: _display_path(path) for name, path in request.target_prompt_paths.items()}
     return {
@@ -1163,23 +1378,24 @@ def _build_audit(
             )
             for index, record in enumerate(candidate_records, start=1)
         },
-        "candidate_prompts": candidate_bundles,
+        "candidate_prompts": {
+            candidate_id: dict(bundle) for candidate_id, bundle in candidate_bundles.items()
+        },
+        "candidate_evaluation_failures": candidate_evaluation_failures,
         "prompt_diffs": {
             record["candidate"].candidate_id: record["candidate"].prompt_diff for record in candidate_records
         },
-        "total_run_cost": cost_summary.total,
-        "cost": {
-            "baseline": round(baseline_train.cost + baseline_validation.cost, 6),
-            "candidates": candidate_costs,
-            "optimization": to_jsonable(optimization_cost),
-            "evaluator": cost_summary.evaluator,
-            "total": cost_summary.total,
-            "complete": cost_summary.complete,
-        },
+        "total_run_cost": cost_summary.total if cost_summary.complete else None,
+        "known_run_cost": cost_summary.total if not cost_summary.complete else None,
+        "total_run_cost_complete": cost_summary.complete,
+        "cost": cost_audit,
         "sdk_result_summary": _sanitize_public_value(to_jsonable(optimization_raw_summary)),
         "sdk_result_availability": {
             "aggregate_validation_result": bool(request.mode == "sdk" and optimization_raw_summary),
-            "full_train_eval_result": True,
+            "full_train_eval_result": not any(
+                failure.get("stage") == "train"
+                for failure in candidate_evaluation_failures.values()
+            ),
             "full_per_case_validation_delta": all_results_comparable,
         },
         "reproducibility_shell": "powershell",
