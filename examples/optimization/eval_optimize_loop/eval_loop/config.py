@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
@@ -16,7 +17,7 @@ class GateConfig:
     allow_new_hard_fail: bool = False
     protected_case_ids: list[str] = field(default_factory=list)
     max_score_drop_per_case: float = 0.0
-    max_total_cost: float = 1.0
+    max_total_cost: float | None = 1.0
     extras: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -125,9 +126,12 @@ def _parse_gate_config(payload: dict[str, Any], *, path: str) -> GateConfig:
     }
     extras = {key: value for key, value in payload.items() if key not in allowed}
 
-    min_val = payload.get("min_val_score_improvement", 0.01)
-    if not isinstance(min_val, (int, float)) or min_val < 0 or min_val > 1:
-        raise ValueError(f"{path}: field 'gate.min_val_score_improvement' must be a number between 0 and 1")
+    min_val = _finite_number(
+        payload.get("min_val_score_improvement", 0.01),
+        f"{path}: field 'gate.min_val_score_improvement'",
+        0.0,
+        1.0,
+    )
 
     allow_new_hard_fail = payload.get("allow_new_hard_fail", False)
     if not isinstance(allow_new_hard_fail, bool):
@@ -137,22 +141,54 @@ def _parse_gate_config(payload: dict[str, Any], *, path: str) -> GateConfig:
     if not isinstance(protected_case_ids, list) or not all(isinstance(item, str) for item in protected_case_ids):
         raise ValueError(f"{path}: field 'gate.protected_case_ids' must be a list of strings")
 
-    max_drop = payload.get("max_score_drop_per_case", 0.0)
-    if not isinstance(max_drop, (int, float)) or max_drop < 0:
-        raise ValueError(f"{path}: field 'gate.max_score_drop_per_case' must be a non-negative number")
+    max_drop = _finite_number(
+        payload.get("max_score_drop_per_case", 0.0),
+        f"{path}: field 'gate.max_score_drop_per_case'",
+        0.0,
+    )
 
-    max_total_cost = payload.get("max_total_cost", 1.0)
-    if not isinstance(max_total_cost, (int, float)) or max_total_cost < 0:
-        raise ValueError(f"{path}: field 'gate.max_total_cost' must be a non-negative number")
+    max_total_cost_value = payload.get("max_total_cost", 1.0)
+    max_total_cost = (
+        None
+        if max_total_cost_value is None
+        else _finite_number(
+            max_total_cost_value,
+            f"{path}: field 'gate.max_total_cost'",
+            0.0,
+        )
+    )
 
     return GateConfig(
-        min_val_score_improvement=float(min_val),
+        min_val_score_improvement=min_val,
         allow_new_hard_fail=allow_new_hard_fail,
         protected_case_ids=list(protected_case_ids),
-        max_score_drop_per_case=float(max_drop),
-        max_total_cost=float(max_total_cost),
+        max_score_drop_per_case=max_drop,
+        max_total_cost=max_total_cost,
         extras=extras,
     )
+
+
+def _finite_number(
+    value: Any,
+    field_name: str,
+    minimum: float,
+    maximum: float | None = None,
+) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field_name} must be a finite number")
+    try:
+        number = float(value)
+    except OverflowError as exc:
+        raise ValueError(f"{field_name} must be a finite number") from exc
+    if not math.isfinite(number):
+        raise ValueError(f"{field_name} must be a finite number")
+    if number < minimum:
+        raise ValueError(f"{field_name} must be a finite number greater than or equal to {minimum:g}")
+    if maximum is not None and number > maximum:
+        raise ValueError(
+            f"{field_name} must be a finite number between {minimum:g} and {maximum:g}"
+        )
+    return number
 
 
 def _validate_cases(cases: list[EvalCase], *, split: str, path: str | Path) -> None:

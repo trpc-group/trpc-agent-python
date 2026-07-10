@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from dataclasses import field
 from dataclasses import is_dataclass
 from typing import Any
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -27,12 +28,16 @@ class EvalCase:
         case_id = payload.get("case_id") or payload.get("id")
         if not case_id:
             raise ValueError(f"eval case is missing id/case_id: {payload!r}")
+        if "split" in payload and str(payload["split"]) != str(split):
+            raise ValueError(
+                f"eval case {case_id!r} split mismatch: payload has {payload['split']!r}, expected {split!r}"
+            )
         expectation = payload.get("expectation")
         if not isinstance(expectation, dict):
             raise ValueError(f"eval case {case_id!r} is missing expectation object")
         return cls(
             case_id=str(case_id),
-            split=str(payload.get("split") or split),
+            split=str(split),
             input=str(payload.get("input") or payload.get("user_input") or ""),
             expectation=dict(expectation),
             tags=list(payload.get("tags") or []),
@@ -52,7 +57,9 @@ class CaseResult:
     score: float
     passed: bool
     output: str
+    metrics: dict[str, float] = field(default_factory=dict)
     trace: dict[str, Any] = field(default_factory=dict)
+    trace_available: bool = False
     failure_category: str | None = None
     failure_reason: str | None = None
     evidence: str | None = None
@@ -84,6 +91,67 @@ class CandidatePrompt:
     prompt: str
     rationale: str
     prompt_diff: str
+    prompt_fields: dict[str, str] = field(default_factory=dict)
+
+    def bundle(self) -> dict[str, str]:
+        """Return this candidate's complete prompt bundle."""
+
+        if self.prompt_fields:
+            return dict(self.prompt_fields)
+        return {"system_prompt": self.prompt}
+
+
+@dataclass(frozen=True)
+class CostSummary:
+    """Cost attribution for an optimization run."""
+
+    optimizer: float = 0.0
+    evaluator: float = 0.0
+    agent: float = 0.0
+    total: float = 0.0
+    complete: bool = True
+
+
+@dataclass(frozen=True)
+class OptimizationRound:
+    """One auditable optimizer round."""
+
+    round_id: int
+    candidate_id: str
+    prompts: dict[str, str]
+    rationale: str
+    metrics: dict[str, float]
+    cost: CostSummary
+    duration_seconds: float
+
+
+WritebackStatus = Literal[
+    "rejected",
+    "not_requested",
+    "applied",
+    "rolled_back",
+    "rollback_failed",
+]
+
+
+@dataclass(frozen=True)
+class WritebackResult:
+    """Outcome of an optional source prompt writeback."""
+
+    status: WritebackStatus
+    before_hashes: dict[str, str] = field(default_factory=dict)
+    after_hashes: dict[str, str] = field(default_factory=dict)
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class OptimizationResult:
+    """Backend-neutral optimization output."""
+
+    candidates: list[CandidatePrompt]
+    rounds: list[OptimizationRound]
+    cost: CostSummary
+    raw_summary: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -141,6 +209,11 @@ class OptimizationReport:
     gate_decisions: list[GateDecision]
     selected_candidate: str | None
     audit: dict[str, Any]
+    rounds: list[OptimizationRound] = field(default_factory=list)
+    cost_summary: CostSummary = field(default_factory=CostSummary)
+    writeback: WritebackResult = field(
+        default_factory=lambda: WritebackResult(status="not_requested")
+    )
 
 
 def to_jsonable(value: Any) -> Any:
