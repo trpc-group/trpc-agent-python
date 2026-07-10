@@ -1,0 +1,5 @@
+{"record_type":"case","name":"state_update","app_name":"replay_app","user_id":"user-1","session_id":"session-state-update","session_config":{"store_historical_events":true}}
+{"record_type":"event","id":"event-1","invocation_id":"inv-1","author":"user","timestamp_offset_ms":0,"parts":[{"text":"Remember that my name is Alice and my favorite color is blue."}]}
+{"record_type":"event","id":"event-2","invocation_id":"inv-2","author":"agent","timestamp_offset_ms":1,"actions":{"state_delta":{"profile.name":"Alice","preference.color":"blue"}},"parts":[{"text":"I saved your name and favorite color."}]}
+{"record_type":"event","id":"event-3","invocation_id":"inv-3","author":"user","timestamp_offset_ms":2,"parts":[{"text":"Actually my favorite color is green."}]}
+{"record_type":"event","id":"event-4","invocation_id":"inv-4","author":"agent","timestamp_offset_ms":3,"actions":{"state_delta":{"preference.color":"green"}},"parts":[{"text":"Updated your favorite color to green."}]}
