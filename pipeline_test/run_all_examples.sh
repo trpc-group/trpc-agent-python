@@ -25,12 +25,6 @@ CURRENT_TASK=0
 SKIPPED_EXAMPLES=(
     "examples/claude_agent_with_travel_planner/run_agent.py"
     "examples/dsl/classifier_mcp/run_agent.py"
-    "examples/evaluation/llm_final_response/test_llm_final_response.py"
-    "examples/evaluation/llm_judge_tools/test_llm_judge_tools.py"
-    "examples/evaluation/llm_rubric_knowledge_recall/test_llm_rubric_knowledge_recall.py"
-    "examples/evaluation/llm_rubric_response/test_llm_rubric_response.py"
-    "examples/evaluation/pass_at_k/test_pass_at_k.py"
-    "examples/evaluation/webui/test_book_finder.py"
     "examples/knowledge_with_vectorstore/run_agent.py"
     "examples/mem0_tools/run_agent.py"
     "examples/memory_service_with_mem0/run_agent.py"
@@ -41,6 +35,7 @@ SKIPPED_EXAMPLES=(
     "examples/session_service_with_redis/run_agent.py"
     "examples/session_service_with_sql/run_agent.py"
     "examples/skills_hub/run_agent.py"
+    "examples/skills_with_container/run_agent.py"
     "examples/skills_with_cube/run_agent.py"
 )
 
