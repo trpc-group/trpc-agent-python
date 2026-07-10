@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import builtins
+import inspect
 import json
 import sys
 import types
@@ -8,7 +9,11 @@ from pathlib import Path
 
 import pytest
 
+from examples.optimization.eval_optimize_loop.eval_loop import backends as backend_module
 from examples.optimization.eval_optimize_loop.eval_loop.backends import SDKBackend
+from examples.optimization.eval_optimize_loop.eval_loop.schemas import EvalCase
+from examples.optimization.eval_optimize_loop.eval_loop.schemas import EvalResult
+from examples.optimization.eval_optimize_loop.eval_loop.schemas import OptimizationResult
 from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_OPTIMIZER_CONFIG
 from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_PROMPT
 from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_TRAIN
@@ -16,6 +21,370 @@ from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_VAL
 from examples.optimization.eval_optimize_loop.run_pipeline import _parse_target_prompt_paths
 from examples.optimization.eval_optimize_loop.run_pipeline import _sdk_gate_decision
 from examples.optimization.eval_optimize_loop.run_pipeline import run_pipeline
+
+
+def test_backend_protocols_expose_unified_async_api():
+    assert inspect.iscoroutinefunction(backend_module.EvaluationBackend.evaluate)
+    assert inspect.iscoroutinefunction(backend_module.OptimizationBackend.optimize_candidates)
+    assert inspect.iscoroutinefunction(backend_module.FakeBackend.evaluate)
+    assert inspect.iscoroutinefunction(backend_module.FakeBackend.optimize_candidates)
+    assert inspect.iscoroutinefunction(backend_module.SDKBackend.evaluate)
+    assert inspect.iscoroutinefunction(backend_module.SDKBackend.optimize_candidates)
+
+
+@pytest.mark.asyncio
+async def test_fake_backend_implements_unified_contract_with_real_trace(tmp_path: Path):
+    prompt = "baseline prompt"
+    dataset_path = tmp_path / "fake_train.evalset.json"
+    dataset_path.write_text(
+        json.dumps({
+            "split": "train",
+            "cases": [{
+                "case_id": "case_a",
+                "input": "Mention latency and retries.",
+                "expectation": {
+                    "type": "rubric",
+                    "must_include": ["latency", "retries"],
+                },
+            }],
+        }),
+        encoding="utf-8",
+    )
+    backend = backend_module.FakeBackend(seed=91)
+
+    result = await backend.evaluate(
+        prompt_id="baseline",
+        prompts={"system_prompt": prompt},
+        dataset_path=dataset_path,
+        split="train",
+        trace=True,
+        artifact_dir=tmp_path / "fake_eval",
+    )
+
+    assert result.cases
+    assert all(case.metrics == {"fake_judge_score": case.score} for case in result.cases)
+    assert all(case.trace_available is True and case.trace for case in result.cases)
+
+    without_trace = await backend.evaluate(
+        prompt_id="baseline_without_trace",
+        prompts={"system_prompt": prompt},
+        dataset_path=dataset_path,
+        split="train",
+        trace=False,
+        artifact_dir=tmp_path / "fake_eval_without_trace",
+    )
+    assert all(case.trace_available is False and not case.trace for case in without_trace.cases)
+
+    with pytest.raises(ValueError, match="system_prompt"):
+        await backend.evaluate(
+            prompt_id="missing_system_prompt",
+            prompts={},
+            dataset_path=dataset_path,
+            split="train",
+            trace=False,
+            artifact_dir=tmp_path / "missing",
+        )
+
+
+@pytest.mark.asyncio
+async def test_fake_backend_wraps_candidates_in_complete_optimization_result(tmp_path: Path):
+    baseline_prompt = DEFAULT_PROMPT.read_text(encoding="utf-8")
+    baseline_train = _empty_eval_result("baseline", "train")
+
+    result = await backend_module.FakeBackend(seed=91).optimize_candidates(
+        baseline_prompts={"system_prompt": baseline_prompt},
+        baseline_train=baseline_train,
+        failure_summary={"failed_case_ids": ["train_json_strict"]},
+        train_path=DEFAULT_TRAIN,
+        validation_path=DEFAULT_VAL,
+        config_path=DEFAULT_OPTIMIZER_CONFIG,
+        artifact_dir=tmp_path / "fake_optimize",
+    )
+
+    assert isinstance(result, OptimizationResult)
+    assert result.candidates
+    assert result.cost.complete is True
+    assert result.cost.total == 0.0
+    assert len(result.rounds) == len(result.candidates)
+    assert all(candidate.bundle() == {"system_prompt": candidate.prompt} for candidate in result.candidates)
+
+
+@pytest.mark.asyncio
+async def test_sdk_backend_maps_rounds_deduplicates_bundles_and_marks_cost_incomplete(
+    tmp_path: Path,
+    monkeypatch,
+):
+    round_prompts = {
+        "system_prompt": "round system",
+        "router_prompt": "round router",
+    }
+    rounds = [
+        _sdk_round(
+            1,
+            round_prompts,
+            acceptance_reason="first proposal",
+            metric_breakdown={"quality": 0.6},
+            round_llm_cost=0.1,
+            duration_seconds=0.5,
+            accepted=False,
+        ),
+        _sdk_round(
+            2,
+            dict(round_prompts),
+            acceptance_reason="duplicate proposal",
+            metric_breakdown={"quality": 0.7},
+            round_llm_cost=0.2,
+            duration_seconds=0.75,
+            accepted=True,
+        ),
+    ]
+    calls = _install_fake_sdk(
+        monkeypatch,
+        best_prompts=round_prompts,
+        rounds=rounds,
+        total_llm_cost=0.3,
+    )
+    system_path = tmp_path / "system.txt"
+    router_path = tmp_path / "router.txt"
+    system_path.write_text("baseline system", encoding="utf-8")
+    router_path.write_text("baseline router", encoding="utf-8")
+    baseline_prompts = {
+        "system_prompt": "baseline system",
+        "router_prompt": "baseline router",
+    }
+    backend = SDKBackend(
+        prompt_path=system_path,
+        call_agent_path="fake_call_agent_module:call_agent",
+        target_prompt_paths={"system_prompt": system_path, "router_prompt": router_path},
+    )
+
+    result = await backend.optimize_candidates(
+        baseline_prompts=baseline_prompts,
+        baseline_train=_empty_eval_result("baseline", "train"),
+        failure_summary={"failed_case_ids": ["case_a"]},
+        train_path=tmp_path / "train.evalset.json",
+        validation_path=tmp_path / "validation.evalset.json",
+        config_path=tmp_path / "optimizer.json",
+        artifact_dir=tmp_path / "sdk_optimize",
+    )
+
+    assert calls["update_source"] is False
+    assert [candidate.candidate_id for candidate in result.candidates] == ["sdk_round_001"]
+    assert result.candidates[0].prompt_fields == round_prompts
+    assert result.candidates[0].bundle() == round_prompts
+    assert result.candidates[0].rationale == "first proposal"
+    assert "router_prompt" in result.candidates[0].prompt_diff
+    assert [round_record.round_id for round_record in result.rounds] == [1, 2]
+    assert result.rounds[0].metrics == {"quality": 0.6}
+    assert result.rounds[1].cost.total == 0.2
+    assert result.cost.total == 0.3
+    assert result.cost.complete is False
+    assert result.raw_summary["rounds"][1]["acceptance_reason"] == "duplicate proposal"
+    assert result.raw_summary["rounds"][1]["accepted"] is True
+
+
+@pytest.mark.asyncio
+async def test_sdk_backend_appends_best_when_no_round_contains_it(tmp_path: Path, monkeypatch):
+    round_prompts = {"system_prompt": "round prompt"}
+    best_prompts = {"system_prompt": "best prompt"}
+    _install_fake_sdk(
+        monkeypatch,
+        best_prompts=best_prompts,
+        rounds=[_sdk_round(4, round_prompts, acceptance_reason="explored")],
+    )
+    prompt_path = tmp_path / "prompt.txt"
+    prompt_path.write_text("baseline", encoding="utf-8")
+
+    result = await SDKBackend(
+        prompt_path=prompt_path,
+        call_agent_path="fake_call_agent_module:call_agent",
+    ).optimize_candidates(
+        baseline_prompts={"system_prompt": "baseline"},
+        baseline_train=_empty_eval_result("baseline", "train"),
+        failure_summary={},
+        train_path=tmp_path / "train.evalset.json",
+        validation_path=tmp_path / "validation.evalset.json",
+        config_path=tmp_path / "optimizer.json",
+        artifact_dir=tmp_path / "sdk_optimize",
+    )
+
+    assert [candidate.candidate_id for candidate in result.candidates] == ["sdk_round_004", "sdk_best"]
+    assert result.candidates[1].prompt_fields == best_prompts
+
+
+def test_sdk_result_mapping_preserves_metrics_trace_and_expected_label():
+    expected_case = EvalCase(
+        case_id="case_a",
+        split="validation",
+        input="question",
+        expectation={"answer": "expected"},
+        expected_failure_category="format_violation",
+    )
+    first_run = _sdk_case_run(
+        "case_a",
+        status="FAILED",
+        metrics=[
+            _sdk_metric("response_match", 0.5, status="FAILED", reason="wrong response"),
+            _sdk_metric("style", 0.25, status="PASSED"),
+        ],
+        output="first output",
+        user_content="first question",
+        intermediate_data={"step": 1},
+    )
+    last_run = _sdk_case_run(
+        "case_a",
+        status="FAILED",
+        metrics=[
+            _sdk_metric("response_match", 1.0, status="PASSED"),
+            _sdk_metric("style", 0.75, status="PASSED"),
+        ],
+        output="last output",
+        user_content="last question",
+        intermediate_data={"step": 2},
+    )
+
+    mapped = backend_module._eval_result_from_sdk_result(
+        _sdk_evaluate_result({"case_a": [first_run, last_run]}),
+        prompt_id="candidate",
+        split="validation",
+        expected_cases=[expected_case],
+    )
+
+    case = mapped.cases[0]
+    assert case.metrics == {"response_match": 0.75, "style": 0.5}
+    assert case.score == 0.625
+    assert case.output == "last output"
+    assert case.trace_available is True
+    assert case.trace == {
+        "user_content": {"parts": [{"text": "last question"}]},
+        "final_response": {"parts": [{"text": "last output"}]},
+        "intermediate_data": {"step": 2},
+    }
+    assert case.expected_failure_category == "format_violation"
+    assert case.failure_category == "final_response_mismatch"
+    assert case.failure_reason == "wrong response"
+    assert case.hard_failed is False
+
+
+@pytest.mark.parametrize(
+    ("sdk_case_ids", "expected_case_ids", "message"),
+    [
+        (["case_a"], ["case_a", "case_b"], "missing.*case_b"),
+        (["case_a", "case_b"], ["case_a"], "extra.*case_b"),
+    ],
+)
+def test_sdk_result_mapping_rejects_case_id_set_mismatch(sdk_case_ids, expected_case_ids, message):
+    sdk_runs = {
+        case_id: [_sdk_case_run(case_id, status="PASSED", metrics=[])]
+        for case_id in sdk_case_ids
+    }
+    expected_cases = [
+        EvalCase(case_id=case_id, split="validation", input="", expectation={})
+        for case_id in expected_case_ids
+    ]
+
+    with pytest.raises(ValueError, match=message):
+        backend_module._eval_result_from_sdk_result(
+            _sdk_evaluate_result(sdk_runs),
+            prompt_id="candidate",
+            split="validation",
+            expected_cases=expected_cases,
+        )
+
+
+def test_sdk_result_mapping_rejects_duplicate_case_ids_across_eval_sets():
+    run = _sdk_case_run("case_a", status="PASSED", metrics=[])
+    result = types.SimpleNamespace(
+        results_by_eval_set_id={
+            "set_a": types.SimpleNamespace(eval_results_by_eval_id={"case_a": [run]}),
+            "set_b": types.SimpleNamespace(eval_results_by_eval_id={"case_a": [run]}),
+        }
+    )
+    expected = [EvalCase(case_id="case_a", split="validation", input="", expectation={})]
+
+    with pytest.raises(ValueError, match="duplicate.*case_a"):
+        backend_module._eval_result_from_sdk_result(
+            result,
+            prompt_id="candidate",
+            split="validation",
+            expected_cases=expected,
+        )
+
+
+def test_sdk_result_mapping_rejects_non_finite_metric_scores():
+    expected = [EvalCase(case_id="case_a", split="validation", input="", expectation={})]
+    run = _sdk_case_run(
+        "case_a",
+        status="FAILED",
+        metrics=[_sdk_metric("quality", float("nan"), status="FAILED")],
+    )
+
+    with pytest.raises(ValueError, match="finite"):
+        backend_module._eval_result_from_sdk_result(
+            _sdk_evaluate_result({"case_a": [run]}),
+            prompt_id="candidate",
+            split="validation",
+            expected_cases=expected,
+        )
+
+
+@pytest.mark.asyncio
+async def test_sdk_backend_evaluate_temporarily_installs_and_restores_prompt_bytes(
+    tmp_path: Path,
+    monkeypatch,
+):
+    dataset_path = tmp_path / "validation.evalset.json"
+    dataset_path.write_text(
+        json.dumps({
+            "split": "validation",
+            "cases": [{
+                "case_id": "case_a",
+                "input": "question",
+                "expectation": {"answer": "answer"},
+                "expected_failure_category": "format_violation",
+            }],
+        }),
+        encoding="utf-8",
+    )
+    prompt_path = tmp_path / "prompt.txt"
+    original_bytes = b"original prompt\r\n"
+    prompt_path.write_bytes(original_bytes)
+    sdk_result = _sdk_evaluate_result({
+        "case_a": [
+            _sdk_case_run(
+                "case_a",
+                status="PASSED",
+                metrics=[_sdk_metric("quality", 1.0, status="PASSED")],
+                output="answer",
+                user_content="question",
+                intermediate_data={"tool": "none"},
+            )
+        ]
+    })
+    calls = _install_fake_agent_evaluator(
+        monkeypatch,
+        result=sdk_result,
+        on_evaluate=lambda: prompt_path.read_text(encoding="utf-8") == "candidate prompt",
+        raise_after_evaluate=True,
+    )
+    backend = SDKBackend(
+        prompt_path=prompt_path,
+        call_agent_path="fake_call_agent_module:call_agent",
+    )
+
+    mapped = await backend.evaluate(
+        prompt_id="candidate",
+        prompts={"system_prompt": "candidate prompt"},
+        dataset_path=dataset_path,
+        split="validation",
+        trace=False,
+        artifact_dir=tmp_path / "sdk_eval",
+    )
+
+    assert calls["observed_candidate"] is True
+    assert calls["eval_result_output_dir"] == str(tmp_path / "sdk_eval")
+    assert prompt_path.read_bytes() == original_bytes
+    assert mapped.cases[0].trace_available is True
 
 
 def test_sdk_backend_requires_call_agent_path(tmp_path: Path):
@@ -157,24 +526,32 @@ def test_sdk_backend_empty_best_prompts_dict_error_is_clear(tmp_path: Path, monk
         )
 
 
-def test_sdk_backend_passes_update_source_true(tmp_path: Path, monkeypatch):
-    calls = _install_fake_sdk(monkeypatch, best_prompt="optimized prompt")
+def test_sdk_backend_never_delegates_source_writeback(tmp_path: Path, monkeypatch):
+    calls = _install_fake_sdk(
+        monkeypatch,
+        best_prompt="optimized prompt",
+        write_source_when_requested=True,
+    )
     prompt_path = tmp_path / "prompt.txt"
-    prompt_path.write_text("baseline", encoding="utf-8")
+    original_bytes = b"baseline\r\n"
+    prompt_path.write_bytes(original_bytes)
 
-    SDKBackend(
+    backend = SDKBackend(
         prompt_path=prompt_path,
         call_agent_path="fake_call_agent_module:call_agent",
         update_source=True,
-    ).optimize(
-        baseline_prompt="baseline",
+    )
+    backend.optimize(
+        baseline_prompt="baseline\n",
         train_path=tmp_path / "train.evalset.json",
         val_path=tmp_path / "val.evalset.json",
         optimizer_config_path=tmp_path / "optimizer.json",
         output_dir=tmp_path / "out",
     )
 
-    assert calls["update_source"] is True
+    assert calls["update_source"] is False
+    assert prompt_path.read_bytes() == original_bytes
+    assert "update_source" not in vars(backend)
 
 
 def test_sdk_backend_call_agent_import_failure_names_target(tmp_path: Path):
@@ -798,7 +1175,7 @@ def test_run_pipeline_mode_sdk_registers_multiple_target_prompt_paths(tmp_path: 
     assert "--gate-config" in command
 
 
-def test_run_pipeline_mode_sdk_passes_update_source_true(tmp_path: Path, monkeypatch):
+def test_run_pipeline_mode_sdk_keeps_source_writeback_outside_backend(tmp_path: Path, monkeypatch):
     calls = _install_fake_sdk(monkeypatch, best_prompt="optimized prompt")
 
     report = run_pipeline(
@@ -813,7 +1190,7 @@ def test_run_pipeline_mode_sdk_passes_update_source_true(tmp_path: Path, monkeyp
     )
 
     assert report.run["update_source"] is True
-    assert calls["update_source"] is True
+    assert calls["update_source"] is False
     assert "--update-source" in report.run["reproducibility_command"]
 
 
@@ -841,6 +1218,8 @@ def _install_fake_sdk(
     total_llm_cost: float = 0.123,
     duration_seconds: float = 12.3,
     started_at: str | None = None,
+    rounds: list[object] | None = None,
+    write_source_when_requested: bool = False,
 ):
     calls = {}
 
@@ -856,9 +1235,24 @@ def _install_fake_sdk(
         @staticmethod
         async def optimize(**kwargs):
             calls.update(kwargs)
+            if write_source_when_requested and kwargs.get("update_source"):
+                for _, path in kwargs["target_prompt"].paths:
+                    Path(path).write_bytes(b"optimizer mutated source")
             result_prompts = best_prompts if best_prompts is not None else {
                 "system_prompt": "optimized prompt" if best_prompt is None else best_prompt
             }
+            effective_rounds = rounds if rounds is not None else [
+                _sdk_round(
+                    1,
+                    {},
+                    acceptance_reason="accepted",
+                    validation_pass_rate=best_pass_rate,
+                    accepted=True,
+                    failed_case_ids=["case_a"],
+                    round_llm_cost=total_llm_cost,
+                    duration_seconds=duration_seconds,
+                )
+            ]
             return types.SimpleNamespace(
                 best_prompts=result_prompts,
                 status=status,
@@ -872,22 +1266,164 @@ def _install_fake_sdk(
                 total_token_usage={"prompt": 100, "completion": 25, "total": 125},
                 duration_seconds=duration_seconds,
                 started_at=started_at,
-                total_rounds=1,
-                rounds=[
-                    types.SimpleNamespace(
-                        validation_pass_rate=best_pass_rate,
-                        accepted=True,
-                        failed_case_ids=["case_a"],
-                        round_llm_cost=total_llm_cost,
-                        budget_used=3,
-                        budget_total=10,
-                    )
-                ],
+                total_rounds=len(effective_rounds),
+                rounds=effective_rounds,
             )
 
     fake_eval_module = types.ModuleType("trpc_agent_sdk.evaluation")
     fake_eval_module.AgentOptimizer = FakeAgentOptimizer
     fake_eval_module.TargetPrompt = FakeTargetPrompt
+    monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", fake_eval_module)
+
+    call_agent_module = types.ModuleType("fake_call_agent_module")
+
+    async def call_agent(query: str) -> str:
+        return query
+
+    call_agent_module.call_agent = call_agent
+    monkeypatch.setitem(sys.modules, "fake_call_agent_module", call_agent_module)
+    return calls
+
+
+def _empty_eval_result(prompt_id: str, split: str) -> EvalResult:
+    return EvalResult(
+        prompt_id=prompt_id,
+        split=split,
+        score=0.0,
+        passed=False,
+        cost=0.0,
+        cases=[],
+    )
+
+
+def _sdk_round(
+    round_id: int,
+    candidate_prompts: dict[str, str],
+    *,
+    acceptance_reason: str = "",
+    metric_breakdown: dict[str, float] | None = None,
+    validation_pass_rate: float = 0.0,
+    round_llm_cost: float = 0.0,
+    duration_seconds: float = 0.0,
+    accepted: bool = False,
+    failed_case_ids: list[str] | None = None,
+):
+    return types.SimpleNamespace(
+        round=round_id,
+        optimized_field_names=list(candidate_prompts),
+        candidate_prompts=dict(candidate_prompts),
+        train_pass_rate=0.0,
+        validation_pass_rate=validation_pass_rate,
+        metric_breakdown=dict(metric_breakdown or {}),
+        accepted=accepted,
+        acceptance_reason=acceptance_reason,
+        failed_case_ids=list(failed_case_ids or []),
+        failed_cases_truncated=0,
+        per_field_diagnosis={},
+        reflection_lm_calls=1,
+        round_llm_cost=round_llm_cost,
+        round_token_usage={"prompt": 0, "completion": 0, "total": 0},
+        started_at="2026-07-04T12:00:00+00:00",
+        duration_seconds=duration_seconds,
+        kind="reflective",
+        train_minibatch_size=0,
+        train_subsample_parent_score=None,
+        train_subsample_candidate_score=None,
+        skip_reason=None,
+        error_message=None,
+        budget_used=3,
+        budget_total=10,
+        extras={},
+    )
+
+
+def _sdk_metric(metric_name: str, score: float, *, status: str, reason: str | None = None):
+    return types.SimpleNamespace(
+        metric_name=metric_name,
+        threshold=0.5,
+        score=score,
+        eval_status=status,
+        details=types.SimpleNamespace(reason=reason, score=score, rubric_scores=None),
+    )
+
+
+def _sdk_case_run(
+    case_id: str,
+    *,
+    status: str,
+    metrics: list[object],
+    output: str | None = None,
+    user_content: str | None = None,
+    intermediate_data: object | None = None,
+):
+    per_invocation = []
+    if output is not None or user_content is not None or intermediate_data is not None:
+        actual_invocation = types.SimpleNamespace(
+            invocation_id=f"{case_id}_invocation",
+            user_content={"parts": [{"text": user_content or ""}]},
+            final_response={"parts": [{"text": output or ""}]} if output is not None else None,
+            intermediate_data=intermediate_data,
+            creation_timestamp=0.0,
+        )
+        per_invocation.append(
+            types.SimpleNamespace(
+                actual_invocation=actual_invocation,
+                expected_invocation=None,
+                eval_metric_results=list(metrics),
+            )
+        )
+    return types.SimpleNamespace(
+        eval_set_id="set_a",
+        eval_id=case_id,
+        run_id=1,
+        final_eval_status=status,
+        error_message=None if status == "PASSED" else "case failed",
+        overall_eval_metric_results=list(metrics),
+        eval_metric_result_per_invocation=per_invocation,
+        session_id=f"session_{case_id}",
+        user_id="test_user",
+        session_details=None,
+    )
+
+
+def _sdk_evaluate_result(runs_by_case_id: dict[str, list[object]]):
+    return types.SimpleNamespace(
+        results_by_eval_set_id={
+            "set_a": types.SimpleNamespace(
+                eval_results_by_eval_id=dict(runs_by_case_id),
+                num_runs=max((len(runs) for runs in runs_by_case_id.values()), default=1),
+            )
+        }
+    )
+
+
+def _install_fake_agent_evaluator(
+    monkeypatch,
+    *,
+    result: object,
+    on_evaluate,
+    raise_after_evaluate: bool,
+):
+    calls: dict[str, object] = {}
+
+    class FakeExecuter:
+        async def evaluate(self):
+            calls["observed_candidate"] = bool(on_evaluate())
+            if raise_after_evaluate:
+                raise RuntimeError("case failed after producing a structured result")
+
+        def get_result(self):
+            return result
+
+    class FakeAgentEvaluator:
+        @staticmethod
+        def get_executer(dataset_path, **kwargs):
+            calls["dataset_path"] = dataset_path
+            calls.update(kwargs)
+            return FakeExecuter()
+
+    fake_eval_module = types.ModuleType("trpc_agent_sdk.evaluation")
+    fake_eval_module.AgentEvaluator = FakeAgentEvaluator
     monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", fake_eval_module)
 
     call_agent_module = types.ModuleType("fake_call_agent_module")

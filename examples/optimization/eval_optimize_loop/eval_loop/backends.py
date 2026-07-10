@@ -1,36 +1,141 @@
-"""Backend adapters for fake and SDK optimization paths."""
+"""Backend-neutral adapters for fake and SDK optimization paths."""
 
 from __future__ import annotations
 
 import asyncio
 import importlib
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from typing import Iterable
+from typing import Protocol
 
 from .diffing import make_unified_diff
 from .evaluator import ExampleEvaluator
 from .fake_judge import FakeJudge
 from .fake_model import FakeModel
+from .loader import load_eval_cases
 from .optimizer import FakeOptimizer
 from .schemas import CandidatePrompt
+from .schemas import CaseResult
+from .schemas import CostSummary
 from .schemas import EvalCase
 from .schemas import EvalResult
+from .schemas import OptimizationResult
+from .schemas import OptimizationRound
+from .writeback import snapshot_prompt_files
+from .writeback import temporary_prompt_bundle
+
+
+class EvaluationBackend(Protocol):
+    """Common asynchronous evaluation contract."""
+
+    async def evaluate(
+        self,
+        *,
+        prompt_id: str,
+        prompts: dict[str, str],
+        dataset_path: str | Path,
+        split: str,
+        trace: bool,
+        artifact_dir: str | Path,
+    ) -> EvalResult:
+        ...
+
+
+class OptimizationBackend(Protocol):
+    """Common asynchronous optimization contract."""
+
+    async def optimize_candidates(
+        self,
+        *,
+        baseline_prompts: dict[str, str],
+        baseline_train: EvalResult,
+        failure_summary: dict[str, object],
+        train_path: str | Path,
+        validation_path: str | Path,
+        config_path: str | Path,
+        artifact_dir: str | Path,
+    ) -> OptimizationResult:
+        ...
 
 
 @dataclass
 class FakeBackend:
+    """Deterministic backend used by the self-contained example."""
+
     seed: int = 91
     trace_enabled: bool = False
 
     def __post_init__(self) -> None:
-        self._evaluator = ExampleEvaluator(FakeModel(seed=self.seed), FakeJudge(), trace_enabled=self.trace_enabled)
         self._optimizer = FakeOptimizer()
 
-    def evaluate(self, *, prompt_id: str, prompt: str, cases: Iterable[EvalCase], split: str) -> EvalResult:
-        return self._evaluator.evaluate(prompt_id=prompt_id, prompt=prompt, cases=cases, split=split)
+    async def evaluate(
+        self,
+        *,
+        prompt_id: str,
+        prompts: dict[str, str],
+        dataset_path: str | Path,
+        split: str,
+        trace: bool,
+        artifact_dir: str | Path,
+    ) -> EvalResult:
+        del artifact_dir
+        prompt = _required_system_prompt(prompts, context=f"cannot evaluate {prompt_id}")
+        cases = load_eval_cases(dataset_path, split=split)
+        evaluator = ExampleEvaluator(
+            FakeModel(seed=self.seed),
+            FakeJudge(),
+            trace_enabled=trace,
+        )
+        return evaluator.evaluate(
+            prompt_id=prompt_id,
+            prompt=prompt,
+            cases=cases,
+            split=split,
+        )
+
+    async def optimize_candidates(
+        self,
+        *,
+        baseline_prompts: dict[str, str],
+        baseline_train: EvalResult,
+        failure_summary: dict[str, object],
+        train_path: str | Path,
+        validation_path: str | Path,
+        config_path: str | Path,
+        artifact_dir: str | Path,
+    ) -> OptimizationResult:
+        del train_path, validation_path, config_path, artifact_dir
+        baseline_prompt = _required_system_prompt(
+            baseline_prompts,
+            context="cannot optimize fake prompt bundle",
+        )
+        candidates = _normalize_fake_candidates(self._optimizer.propose(baseline_prompt))
+        zero_cost = CostSummary(complete=True)
+        rounds = [
+            OptimizationRound(
+                round_id=index,
+                candidate_id=candidate.candidate_id,
+                prompts=candidate.bundle(),
+                rationale=candidate.rationale,
+                metrics={},
+                cost=zero_cost,
+                duration_seconds=0.0,
+            )
+            for index, candidate in enumerate(candidates, start=1)
+        ]
+        return OptimizationResult(
+            candidates=candidates,
+            rounds=rounds,
+            cost=zero_cost,
+            raw_summary={
+                "backend": "fake",
+                "baseline_prompt_id": baseline_train.prompt_id,
+                "failure_summary": _safe_jsonable(failure_summary),
+            },
+        )
 
     def optimize(
         self,
@@ -41,24 +146,38 @@ class FakeBackend:
         optimizer_config_path: str | Path,
         output_dir: str | Path,
     ) -> list[CandidatePrompt]:
-        return self._optimizer.propose(baseline_prompt)
+        """Compatibility wrapper for the pre-async fake pipeline."""
+
+        del train_path, val_path, optimizer_config_path, output_dir
+        return _normalize_fake_candidates(self._optimizer.propose(baseline_prompt))
 
 
-@dataclass
 class SDKBackend:
-    """Thin optimizer adapter around AgentOptimizer/TargetPrompt for SDK runs.
+    """Adapter around SDK AgentEvaluator, AgentOptimizer, and TargetPrompt.
 
-    SDK mode relies on AgentOptimizer's internal evaluation loop. It does not
-    implement the fake per-case ``evaluate`` API.
+    update_source is accepted only through legacy keyword forwarding so the
+    current synchronous pipeline can transition independently. It is never
+    stored or delegated; source writeback belongs to the wrapper after gating.
     """
 
-    prompt_path: str | Path
-    call_agent_path: str | None = None
-    update_source: bool = False
-    target_prompt_paths: dict[str, str | Path] | None = None
-    last_result: Any | None = None
-    last_result_summary: dict[str, Any] | None = None
-    last_artifact_dir: str | None = None
+    def __init__(
+        self,
+        prompt_path: str | Path,
+        call_agent_path: str | None = None,
+        target_prompt_paths: dict[str, str | Path] | None = None,
+        **legacy_options: object,
+    ) -> None:
+        unexpected = sorted(set(legacy_options) - {"update_source"})
+        if unexpected:
+            raise TypeError(f"unexpected SDKBackend options: {', '.join(unexpected)}")
+        self.prompt_path = prompt_path
+        self.call_agent_path = call_agent_path
+        self.target_prompt_paths = dict(target_prompt_paths) if target_prompt_paths else None
+        self.last_result: Any | None = None
+        self.last_result_summary: dict[str, Any] | None = None
+        self.last_artifact_dir: str | None = None
+        self.last_baseline_prompts: dict[str, str] | None = None
+        self.last_best_prompts: dict[str, str] | None = None
 
     def optimize(
         self,
@@ -69,6 +188,8 @@ class SDKBackend:
         optimizer_config_path: str | Path,
         output_dir: str | Path,
     ) -> list[CandidatePrompt]:
+        """Safely bridge old synchronous callers to the async implementation."""
+
         if _has_running_loop():
             raise ValueError(
                 "SDKBackend.optimize() cannot be called while an event loop is already running; "
@@ -93,71 +214,281 @@ class SDKBackend:
         optimizer_config_path: str | Path,
         output_dir: str | Path,
     ) -> list[CandidatePrompt]:
-        if not self.call_agent_path:
-            raise ValueError(
-                "sdk mode requires --sdk-call-agent module:function. The callable must be async and compatible "
-                "with AgentOptimizer.optimize(call_agent=...). Also configure real model credentials required "
-                "by that callable, such as TRPC_AGENT_API_KEY/TRPC_AGENT_BASE_URL/TRPC_AGENT_MODEL_NAME."
-            )
-        call_agent = _load_call_agent(self.call_agent_path)
+        """Compatibility async wrapper returning the historical candidate list."""
+
+        target_paths = self._target_prompt_paths()
+        if set(target_paths) == {"system_prompt"}:
+            baseline_prompts = {"system_prompt": baseline_prompt}
+        else:
+            baseline_prompts = _read_prompt_bundle(target_paths)
+        result = await self.optimize_candidates(
+            baseline_prompts=baseline_prompts,
+            baseline_train=EvalResult(
+                prompt_id="baseline",
+                split="train",
+                score=0.0,
+                passed=False,
+                cost=0.0,
+                cases=[],
+            ),
+            failure_summary={},
+            train_path=train_path,
+            validation_path=val_path,
+            config_path=optimizer_config_path,
+            artifact_dir=output_dir,
+        )
+        return result.candidates
+
+    async def optimize_candidates(
+        self,
+        *,
+        baseline_prompts: dict[str, str],
+        baseline_train: EvalResult,
+        failure_summary: dict[str, object],
+        train_path: str | Path,
+        validation_path: str | Path,
+        config_path: str | Path,
+        artifact_dir: str | Path,
+    ) -> OptimizationResult:
+        del baseline_train, failure_summary
+        call_agent = self._load_required_call_agent(for_evaluation=False)
         try:
             from trpc_agent_sdk.evaluation import AgentOptimizer
             from trpc_agent_sdk.evaluation import TargetPrompt
         except Exception as exc:  # pragma: no cover - depends on optional SDK import health
             raise ValueError(f"sdk mode could not import AgentOptimizer/TargetPrompt: {exc}") from exc
 
-        target_prompt_paths = self._target_prompt_paths()
-        target_prompt = TargetPrompt()
-        for name, path in target_prompt_paths.items():
-            target_prompt.add_path(name, str(path))
-        result = await AgentOptimizer.optimize(
-            config_path=str(optimizer_config_path),
-            call_agent=call_agent,
-            target_prompt=target_prompt,
-            train_dataset_path=str(train_path),
-            validation_dataset_path=str(val_path),
-            output_dir=str(output_dir),
-            update_source=self.update_source,
-            verbose=0,
+        target_paths = self._target_prompt_paths()
+        baseline_bundle = _validated_prompt_bundle(
+            baseline_prompts,
+            target_paths,
+            context="baseline prompt bundle",
         )
-        best_prompts = dict(getattr(result, "best_prompts", {}) or {})
-        if not best_prompts:
+        source_bundle = _read_prompt_bundle(target_paths)
+        mismatched = sorted(
+            name for name in target_paths if baseline_bundle[name] != source_bundle[name]
+        )
+        if mismatched:
+            raise ValueError(
+                "baseline prompt bundle does not match registered source prompt files: "
+                + ", ".join(mismatched)
+            )
+
+        target_prompt = TargetPrompt()
+        for name, path in target_paths.items():
+            target_prompt.add_path(name, str(path))
+
+        snapshot = snapshot_prompt_files(target_paths)
+        try:
+            sdk_result = await AgentOptimizer.optimize(
+                config_path=str(config_path),
+                call_agent=call_agent,
+                target_prompt=target_prompt,
+                train_dataset_path=str(train_path),
+                validation_dataset_path=str(validation_path),
+                output_dir=str(artifact_dir),
+                update_source=False,
+                verbose=0,
+            )
+        finally:
+            changed_sources = _changed_snapshot_files(snapshot)
+            if changed_sources:
+                raise RuntimeError(
+                    "AgentOptimizer modified source prompt files despite update_source=False: "
+                    + ", ".join(changed_sources)
+                )
+
+        total_llm_cost = _finite_result_field(
+            "total_llm_cost",
+            getattr(sdk_result, "total_llm_cost", 0.0),
+        )
+        best_raw = getattr(sdk_result, "best_prompts", None)
+        if not best_raw:
             raise ValueError("sdk mode completed but OptimizeResult.best_prompts was empty")
-        missing_fields = [name for name in target_prompt_paths if name not in best_prompts]
-        if missing_fields:
-            missing = ", ".join(sorted(missing_fields))
-            raise ValueError(
-                "sdk mode completed but OptimizeResult.best_prompts is missing registered target fields: "
-                f"{missing}"
+        best_prompts = _validated_prompt_bundle(
+            best_raw,
+            target_paths,
+            context="OptimizeResult.best_prompts",
+        )
+
+        candidates: list[CandidatePrompt] = []
+        rounds: list[OptimizationRound] = []
+        seen_bundles: set[tuple[tuple[str, str], ...]] = set()
+        for index, sdk_round in enumerate(getattr(sdk_result, "rounds", []) or [], start=1):
+            round_id = _round_id(sdk_round, fallback=index)
+            candidate_id = f"sdk_round_{round_id:03d}"
+            round_raw_prompts = getattr(sdk_round, "candidate_prompts", {}) or {}
+            round_prompts = (
+                _validated_prompt_bundle(
+                    round_raw_prompts,
+                    target_paths,
+                    context=f"SDK round {round_id} candidate_prompts",
+                )
+                if round_raw_prompts
+                else {}
             )
-        empty_fields = [
-            name
-            for name in target_prompt_paths
-            if not isinstance(best_prompts[name], str) or not best_prompts[name].strip()
-        ]
-        if empty_fields:
-            empty = ", ".join(sorted(empty_fields))
-            raise ValueError(
-                "sdk mode completed but OptimizeResult.best_prompts contained empty registered target fields: "
-                f"{empty}"
+            rationale = str(getattr(sdk_round, "acceptance_reason", "") or "")
+            round_metrics = _finite_metric_map(
+                getattr(sdk_round, "metric_breakdown", {}) or {},
+                context=f"SDK round {round_id} metric_breakdown",
             )
-        self.last_result = result
-        self.last_result_summary = _summarize_sdk_result(result)
-        self.last_artifact_dir = str(output_dir)
-        baseline_prompts = _read_prompt_bundle(target_prompt_paths)
-        return [
-            CandidatePrompt(
-                candidate_id="sdk_best",
-                prompt=_render_prompt_bundle(best_prompts),
-                rationale="Best prompt returned by AgentOptimizer.optimize.",
-                prompt_diff=_render_prompt_bundle_diff(baseline_prompts, best_prompts),
+            round_cost_value = _finite_number(
+                getattr(sdk_round, "round_llm_cost", 0.0),
+                context=f"SDK round {round_id} round_llm_cost",
             )
-        ]
+            duration_seconds = _finite_number(
+                getattr(sdk_round, "duration_seconds", 0.0),
+                context=f"SDK round {round_id} duration_seconds",
+            )
+            rounds.append(
+                OptimizationRound(
+                    round_id=round_id,
+                    candidate_id=candidate_id,
+                    prompts=round_prompts,
+                    rationale=rationale,
+                    metrics=round_metrics,
+                    cost=CostSummary(
+                        optimizer=round_cost_value,
+                        total=round_cost_value,
+                        complete=False,
+                    ),
+                    duration_seconds=duration_seconds,
+                )
+            )
+            if round_prompts:
+                bundle_key = _prompt_bundle_key(round_prompts)
+                if bundle_key not in seen_bundles:
+                    seen_bundles.add(bundle_key)
+                    candidates.append(
+                        _candidate_from_bundle(
+                            candidate_id=candidate_id,
+                            prompts=round_prompts,
+                            rationale=rationale,
+                            baseline_prompts=baseline_bundle,
+                        )
+                    )
+
+        best_key = _prompt_bundle_key(best_prompts)
+        if best_key not in seen_bundles:
+            candidates.append(
+                _candidate_from_bundle(
+                    candidate_id="sdk_best",
+                    prompts=best_prompts,
+                    rationale="Best prompt returned by AgentOptimizer.optimize.",
+                    baseline_prompts=baseline_bundle,
+                )
+            )
+
+        raw_summary = _summarize_sdk_result(sdk_result)
+        cost = CostSummary(
+            optimizer=total_llm_cost,
+            total=total_llm_cost,
+            complete=False,
+        )
+        result = OptimizationResult(
+            candidates=candidates,
+            rounds=rounds,
+            cost=cost,
+            raw_summary=raw_summary,
+        )
+        self.last_result = sdk_result
+        self.last_result_summary = raw_summary
+        self.last_artifact_dir = str(artifact_dir)
+        self.last_baseline_prompts = baseline_bundle
+        self.last_best_prompts = best_prompts
+        return result
+
+    async def evaluate(
+        self,
+        *,
+        prompt_id: str,
+        prompts: dict[str, str],
+        dataset_path: str | Path,
+        split: str,
+        trace: bool,
+        artifact_dir: str | Path,
+    ) -> EvalResult:
+        del trace
+        call_agent = self._load_required_call_agent(for_evaluation=True)
+        try:
+            from trpc_agent_sdk.evaluation import AgentEvaluator
+        except Exception as exc:  # pragma: no cover - depends on optional SDK import health
+            raise ValueError(f"sdk mode could not import AgentEvaluator: {exc}") from exc
+
+        target_paths = self._target_prompt_paths()
+        candidate_prompts = _validated_prompt_bundle(
+            prompts,
+            target_paths,
+            context=f"cannot evaluate {prompt_id}",
+        )
+        expected_cases = load_eval_cases(dataset_path, split=split)
+        snapshot = snapshot_prompt_files(target_paths)
+        result: Any | None = None
+        with temporary_prompt_bundle(snapshot, candidate_prompts):
+            executer = AgentEvaluator.get_executer(
+                str(dataset_path),
+                call_agent=call_agent,
+                print_detailed_results=False,
+                print_summary_report=False,
+                eval_result_output_dir=str(artifact_dir),
+            )
+            try:
+                await executer.evaluate()
+            except Exception:
+                result = executer.get_result()
+                if result is None:
+                    raise
+            else:
+                result = executer.get_result()
+
+        if result is None:
+            raise ValueError(f"AgentEvaluator returned no result for {dataset_path}")
+        return _eval_result_from_sdk_result(
+            result,
+            prompt_id=prompt_id,
+            split=split,
+            expected_cases=expected_cases,
+        )
+
+    def _load_required_call_agent(self, *, for_evaluation: bool):
+        if not self.call_agent_path:
+            suffix = " for AgentEvaluator runs" if for_evaluation else (
+                ". The callable must be async and compatible with "
+                "AgentOptimizer.optimize(call_agent=...). Also configure real model credentials required "
+                "by that callable, such as TRPC_AGENT_API_KEY/TRPC_AGENT_BASE_URL/TRPC_AGENT_MODEL_NAME."
+            )
+            raise ValueError(f"sdk mode requires --sdk-call-agent module:function{suffix}")
+        return _load_call_agent(self.call_agent_path)
 
     def _target_prompt_paths(self) -> dict[str, str | Path]:
         if self.target_prompt_paths:
             return dict(self.target_prompt_paths)
         return {"system_prompt": self.prompt_path}
+
+
+def _required_system_prompt(prompts: dict[str, str], *, context: str) -> str:
+    if "system_prompt" not in prompts:
+        raise ValueError(f"{context}: missing required prompt field 'system_prompt'")
+    prompt = prompts["system_prompt"]
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError(f"{context}: prompt field 'system_prompt' must be a non-empty string")
+    return prompt
+
+
+def _normalize_fake_candidates(candidates: Iterable[CandidatePrompt]) -> list[CandidatePrompt]:
+    normalized: list[CandidatePrompt] = []
+    for candidate in candidates:
+        bundle = candidate.bundle()
+        normalized.append(
+            CandidatePrompt(
+                candidate_id=candidate.candidate_id,
+                prompt=candidate.prompt,
+                rationale=candidate.rationale,
+                prompt_diff=candidate.prompt_diff,
+                prompt_fields=bundle,
+            )
+        )
+    return normalized
 
 
 def _load_call_agent(path: str):
@@ -184,45 +515,192 @@ def _has_running_loop() -> bool:
     return True
 
 
+def _validated_prompt_bundle(
+    prompts: Any,
+    paths: dict[str, str | Path],
+    *,
+    context: str,
+) -> dict[str, str]:
+    if not isinstance(prompts, dict):
+        raise ValueError(f"{context} must be a prompt mapping")
+    missing_fields = sorted(name for name in paths if name not in prompts)
+    if missing_fields:
+        if context == "OptimizeResult.best_prompts":
+            raise ValueError(
+                "sdk mode completed but OptimizeResult.best_prompts is missing registered target fields: "
+                + ", ".join(missing_fields)
+            )
+        raise ValueError(f"{context} is missing registered target fields: {', '.join(missing_fields)}")
+    extra_fields = sorted(name for name in prompts if name not in paths)
+    if extra_fields:
+        raise ValueError(f"{context} contains unregistered target fields: {', '.join(extra_fields)}")
+    empty_fields = sorted(
+        name
+        for name in paths
+        if not isinstance(prompts[name], str) or not prompts[name].strip()
+    )
+    if empty_fields:
+        if context == "OptimizeResult.best_prompts":
+            raise ValueError(
+                "sdk mode completed but OptimizeResult.best_prompts contained empty registered target fields: "
+                + ", ".join(empty_fields)
+            )
+        raise ValueError(f"{context} contains empty registered target fields: {', '.join(empty_fields)}")
+    return {name: prompts[name] for name in paths}
+
+
+def _read_prompt_bundle(paths: dict[str, str | Path]) -> dict[str, str]:
+    return {
+        name: Path(path).read_text(encoding="utf-8")
+        for name, path in paths.items()
+    }
+
+
+def _changed_snapshot_files(snapshot: Any) -> list[str]:
+    changed: list[str] = []
+    for name, prompt_file in snapshot.files.items():
+        try:
+            current = prompt_file.path.read_bytes()
+        except OSError:
+            changed.append(name)
+        else:
+            if current != prompt_file.content:
+                changed.append(name)
+    return changed
+
+
+def _round_id(round_record: Any, *, fallback: int) -> int:
+    value = getattr(round_record, "round", fallback)
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError("SDK round id must be a positive integer")
+    return value
+
+
+def _prompt_bundle_key(prompts: dict[str, str]) -> tuple[tuple[str, str], ...]:
+    return tuple(sorted(prompts.items()))
+
+
+def _candidate_from_bundle(
+    *,
+    candidate_id: str,
+    prompts: dict[str, str],
+    rationale: str,
+    baseline_prompts: dict[str, str],
+) -> CandidatePrompt:
+    return CandidatePrompt(
+        candidate_id=candidate_id,
+        prompt=_render_prompt_bundle(prompts),
+        rationale=rationale,
+        prompt_diff=_render_prompt_bundle_diff(
+            baseline_prompts,
+            prompts,
+            candidate_id=candidate_id,
+        ),
+        prompt_fields=dict(prompts),
+    )
+
+
 def _summarize_sdk_result(result: Any) -> dict[str, Any]:
     return {
+        "schema_version": _safe_jsonable(getattr(result, "schema_version", None)),
+        "algorithm": _safe_jsonable(getattr(result, "algorithm", None)),
         "status": _safe_jsonable(getattr(result, "status", None)),
-        "baseline_pass_rate": _safe_result_field(
-            "baseline_pass_rate", getattr(result, "baseline_pass_rate", None)
+        "finish_reason": _safe_jsonable(getattr(result, "finish_reason", None)),
+        "stop_reason": _safe_jsonable(getattr(result, "stop_reason", None)),
+        "error_message": _safe_jsonable(getattr(result, "error_message", None)),
+        "baseline_pass_rate": _finite_result_field(
+            "baseline_pass_rate",
+            getattr(result, "baseline_pass_rate", 0.0),
         ),
-        "best_pass_rate": _safe_result_field("best_pass_rate", getattr(result, "best_pass_rate", None)),
-        "pass_rate_improvement": _safe_result_field(
-            "pass_rate_improvement", getattr(result, "pass_rate_improvement", None)
+        "best_pass_rate": _finite_result_field(
+            "best_pass_rate",
+            getattr(result, "best_pass_rate", 0.0),
         ),
-        "baseline_metric_breakdown": _safe_jsonable(getattr(result, "baseline_metric_breakdown", {})),
-        "best_metric_breakdown": _safe_jsonable(getattr(result, "best_metric_breakdown", {})),
-        "metric_thresholds": _safe_jsonable(getattr(result, "metric_thresholds", {})),
-        "total_llm_cost": _safe_result_field("total_llm_cost", getattr(result, "total_llm_cost", 0.0)),
+        "pass_rate_improvement": _finite_result_field(
+            "pass_rate_improvement",
+            getattr(result, "pass_rate_improvement", 0.0),
+        ),
+        "baseline_metric_breakdown": _finite_metric_map(
+            getattr(result, "baseline_metric_breakdown", {}) or {},
+            context="SDK OptimizeResult baseline_metric_breakdown",
+        ),
+        "best_metric_breakdown": _finite_metric_map(
+            getattr(result, "best_metric_breakdown", {}) or {},
+            context="SDK OptimizeResult best_metric_breakdown",
+        ),
+        "metric_thresholds": _finite_metric_map(
+            getattr(result, "metric_thresholds", {}) or {},
+            context="SDK OptimizeResult metric_thresholds",
+        ),
+        "per_metric_best_candidates": _safe_jsonable(
+            getattr(result, "per_metric_best_candidates", {})
+        ),
+        "total_llm_cost": _finite_result_field(
+            "total_llm_cost",
+            getattr(result, "total_llm_cost", 0.0),
+        ),
         "total_token_usage": _safe_jsonable(getattr(result, "total_token_usage", {})),
-        "duration_seconds": _safe_jsonable(getattr(result, "duration_seconds", 0.0)),
+        "duration_seconds": _finite_result_field(
+            "duration_seconds",
+            getattr(result, "duration_seconds", 0.0),
+        ),
         "started_at": _safe_jsonable(getattr(result, "started_at", None)),
+        "finished_at": _safe_jsonable(getattr(result, "finished_at", None)),
         "total_rounds": _safe_jsonable(getattr(result, "total_rounds", 0)),
         "baseline_prompts": _safe_jsonable(getattr(result, "baseline_prompts", {})),
         "best_prompts": _safe_jsonable(getattr(result, "best_prompts", {})),
         "rounds": [
-            {
-                "validation_pass_rate": _safe_jsonable(getattr(round_record, "validation_pass_rate", None)),
-                "accepted": _safe_jsonable(getattr(round_record, "accepted", None)),
-                "failed_case_ids": _safe_jsonable(getattr(round_record, "failed_case_ids", [])),
-                "round_llm_cost": _safe_jsonable(getattr(round_record, "round_llm_cost", 0.0)),
-                "budget_used": _safe_jsonable(getattr(round_record, "budget_used", None)),
-                "budget_total": _safe_jsonable(getattr(round_record, "budget_total", None)),
-            }
+            _round_raw_summary(round_record)
             for round_record in getattr(result, "rounds", []) or []
         ],
+        "extras": _safe_jsonable(getattr(result, "extras", {})),
     }
 
 
-def _safe_result_field(field_name: str, value: Any) -> Any:
+def _round_raw_summary(round_record: Any) -> dict[str, Any]:
+    serialized = _safe_jsonable(round_record)
+    if isinstance(serialized, dict):
+        return serialized
+    return {
+        "round": _safe_jsonable(getattr(round_record, "round", None)),
+        "candidate_prompts": _safe_jsonable(getattr(round_record, "candidate_prompts", {})),
+        "validation_pass_rate": _safe_jsonable(
+            getattr(round_record, "validation_pass_rate", None)
+        ),
+        "metric_breakdown": _safe_jsonable(getattr(round_record, "metric_breakdown", {})),
+        "accepted": _safe_jsonable(getattr(round_record, "accepted", None)),
+        "acceptance_reason": _safe_jsonable(
+            getattr(round_record, "acceptance_reason", "")
+        ),
+        "failed_case_ids": _safe_jsonable(getattr(round_record, "failed_case_ids", [])),
+        "round_llm_cost": _safe_jsonable(getattr(round_record, "round_llm_cost", 0.0)),
+        "duration_seconds": _safe_jsonable(getattr(round_record, "duration_seconds", 0.0)),
+    }
+
+
+def _finite_result_field(field_name: str, value: Any) -> float:
     try:
-        return _safe_jsonable(value)
+        return _finite_number(value, context=f"SDK OptimizeResult field {field_name}")
     except ValueError as exc:
         raise ValueError(f"SDK OptimizeResult field {field_name} must be a finite number") from exc
+
+
+def _finite_metric_map(value: Any, *, context: str) -> dict[str, float]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{context} must be a metric mapping")
+    return {
+        str(name): _finite_number(score, context=f"{context}.{name}")
+        for name, score in value.items()
+    }
+
+
+def _finite_number(value: Any, *, context: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{context} must be a finite number")
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"{context} must be a finite number")
+    return number
 
 
 def _safe_jsonable(value: Any) -> Any:
@@ -236,18 +714,219 @@ def _safe_jsonable(value: Any) -> Any:
         return [_safe_jsonable(item) for item in value]
     if isinstance(value, float):
         if not math.isfinite(value):
-            raise ValueError("value must be a finite number")
+            raise ValueError("SDK result values must be finite")
         return value
     if isinstance(value, (str, int, bool)) or value is None:
         return value
     return repr(value)
 
 
-def _read_prompt_bundle(paths: dict[str, str | Path]) -> dict[str, str]:
+def _eval_result_from_sdk_result(
+    result: Any,
+    *,
+    prompt_id: str,
+    split: str,
+    expected_cases: Iterable[EvalCase],
+) -> EvalResult:
+    expected_by_id: dict[str, EvalCase] = {}
+    expected_order: list[str] = []
+    for expected_case in expected_cases:
+        case_id = str(expected_case.case_id)
+        if case_id in expected_by_id:
+            raise ValueError(f"expected cases contain duplicate case id: {case_id}")
+        expected_by_id[case_id] = expected_case
+        expected_order.append(case_id)
+
+    sdk_runs_by_id: dict[str, list[Any]] = {}
+    results_by_eval_set_id = getattr(result, "results_by_eval_set_id", {}) or {}
+    for set_result in results_by_eval_set_id.values():
+        eval_results_by_eval_id = getattr(set_result, "eval_results_by_eval_id", {}) or {}
+        for raw_eval_id, runs in eval_results_by_eval_id.items():
+            eval_id = str(raw_eval_id)
+            if eval_id in sdk_runs_by_id:
+                raise ValueError(f"SDK evaluation result contains duplicate case id: {eval_id}")
+            sdk_runs_by_id[eval_id] = list(runs or [])
+
+    expected_ids = set(expected_by_id)
+    sdk_ids = set(sdk_runs_by_id)
+    if expected_ids != sdk_ids:
+        details: list[str] = []
+        missing = sorted(expected_ids - sdk_ids)
+        extra = sorted(sdk_ids - expected_ids)
+        if missing:
+            details.append("missing SDK result IDs: " + ", ".join(missing))
+        if extra:
+            details.append("extra SDK result IDs: " + ", ".join(extra))
+        raise ValueError("SDK evaluation case IDs do not match expected cases; " + "; ".join(details))
+
+    case_results: list[CaseResult] = []
+    for case_id in expected_order:
+        expected_case = expected_by_id[case_id]
+        run_list = sdk_runs_by_id[case_id]
+        metrics = _aggregate_case_metrics(run_list, case_id=case_id)
+        if metrics:
+            score = _mean(list(metrics.values()))
+        else:
+            score = _mean([
+                1.0 if _status_passed(getattr(run, "final_eval_status", None)) else 0.0
+                for run in run_list
+            ])
+        score = round(score, 6)
+        passed = bool(run_list) and all(
+            _status_passed(getattr(run, "final_eval_status", None))
+            for run in run_list
+        )
+        failure_reason, evidence, failure_category = _failure_details(run_list)
+        actual_invocation = _last_actual_invocation(run_list)
+        trace_available = actual_invocation is not None
+        trace_payload = (
+            {
+                "user_content": _safe_jsonable(
+                    getattr(actual_invocation, "user_content", None)
+                ),
+                "final_response": _safe_jsonable(
+                    getattr(actual_invocation, "final_response", None)
+                ),
+                "intermediate_data": _safe_jsonable(
+                    getattr(actual_invocation, "intermediate_data", None)
+                ),
+            }
+            if actual_invocation is not None
+            else {}
+        )
+        output = (
+            _content_text(getattr(actual_invocation, "final_response", None))
+            if actual_invocation is not None
+            else ""
+        )
+        case_results.append(
+            CaseResult(
+                case_id=case_id,
+                split=split,
+                score=score,
+                passed=passed,
+                output=output,
+                metrics=metrics,
+                trace=trace_payload,
+                trace_available=trace_available,
+                failure_category=None if passed else failure_category,
+                failure_reason=None if passed else failure_reason,
+                evidence=None if passed else evidence,
+                cost=0.0,
+                hard_failed=(not passed and score <= 0.0),
+                expected_failure_category=expected_case.expected_failure_category,
+            )
+        )
+
+    aggregate_score = (
+        round(_mean([case.score for case in case_results]), 6)
+        if case_results
+        else 0.0
+    )
+    return EvalResult(
+        prompt_id=prompt_id,
+        split=split,
+        score=aggregate_score,
+        passed=all(case.passed for case in case_results),
+        cost=0.0,
+        cases=case_results,
+    )
+
+
+def _aggregate_case_metrics(runs: list[Any], *, case_id: str) -> dict[str, float]:
+    scores_by_metric: dict[str, list[float]] = {}
+    for run in runs:
+        for metric in getattr(run, "overall_eval_metric_results", []) or []:
+            raw_score = getattr(metric, "score", None)
+            if raw_score is None:
+                continue
+            metric_name = str(getattr(metric, "metric_name", "") or "")
+            if not metric_name:
+                raise ValueError(f"SDK case {case_id} contains a scored metric without a name")
+            score = _finite_number(
+                raw_score,
+                context=f"SDK case {case_id} metric {metric_name} score",
+            )
+            scores_by_metric.setdefault(metric_name, []).append(score)
     return {
-        name: Path(path).read_text(encoding="utf-8")
-        for name, path in paths.items()
+        metric_name: round(_mean(scores), 6)
+        for metric_name, scores in scores_by_metric.items()
     }
+
+
+def _mean(values: list[float]) -> float:
+    return sum(values) / len(values) if values else 0.0
+
+
+def _status_passed(status: Any) -> bool:
+    name = getattr(status, "name", None)
+    if name:
+        return str(name).upper() == "PASSED"
+    return str(status).split(".")[-1].upper() == "PASSED"
+
+
+def _failure_details(runs: list[Any]) -> tuple[str, str, str]:
+    for run in runs:
+        if _status_passed(getattr(run, "final_eval_status", None)):
+            continue
+        error_message = getattr(run, "error_message", None)
+        for metric in getattr(run, "overall_eval_metric_results", []) or []:
+            if _status_passed(getattr(metric, "eval_status", None)):
+                continue
+            details = getattr(metric, "details", None)
+            reason = getattr(details, "reason", None) if details is not None else None
+            metric_name = str(getattr(metric, "metric_name", "") or "")
+            score = getattr(metric, "score", None)
+            evidence = f"{metric_name} score={score}" if metric_name else f"score={score}"
+            return (
+                str(reason or error_message or "evaluation metric failed"),
+                evidence,
+                _metric_failure_category(metric_name),
+            )
+        if error_message:
+            return (str(error_message), str(error_message), "evaluation_error")
+    return ("evaluation failed", "no failed metric detail available", "unknown_failure")
+
+
+def _metric_failure_category(metric_name: str) -> str:
+    lowered = metric_name.lower()
+    if "parameter" in lowered or "arg" in lowered:
+        return "parameter_error"
+    if "tool" in lowered:
+        return "tool_call_error"
+    if "knowledge" in lowered or "recall" in lowered:
+        return "knowledge_recall_insufficient"
+    if "rubric" in lowered or "judge" in lowered or "llm" in lowered:
+        return "llm_rubric_not_met"
+    if "format" in lowered:
+        return "format_violation"
+    if "response" in lowered or "match" in lowered or "exact" in lowered:
+        return "final_response_mismatch"
+    return "unknown_failure"
+
+
+def _last_actual_invocation(runs: list[Any]) -> Any | None:
+    for run in reversed(runs):
+        invocation_results = getattr(run, "eval_metric_result_per_invocation", []) or []
+        for invocation_result in reversed(invocation_results):
+            actual = getattr(invocation_result, "actual_invocation", None)
+            if actual is not None:
+                return actual
+    return None
+
+
+def _content_text(content: Any) -> str:
+    if content is None:
+        return ""
+    if hasattr(content, "model_dump"):
+        content = content.model_dump(mode="json")
+    if not isinstance(content, dict):
+        return ""
+    texts = []
+    for part in content.get("parts") or []:
+        if isinstance(part, dict) and part.get("text") is not None:
+            texts.append(str(part["text"]))
+    return "\n".join(texts)
 
 
 def _render_prompt_bundle(prompts: dict[str, str]) -> str:
@@ -259,22 +938,27 @@ def _render_prompt_bundle(prompts: dict[str, str]) -> str:
     return "\n\n".join(sections)
 
 
-def _render_prompt_bundle_diff(baseline_prompts: dict[str, str], best_prompts: dict[str, str]) -> str:
-    if set(baseline_prompts) == {"system_prompt"} and set(best_prompts) == {"system_prompt"}:
+def _render_prompt_bundle_diff(
+    baseline_prompts: dict[str, str],
+    candidate_prompts: dict[str, str],
+    *,
+    candidate_id: str,
+) -> str:
+    if set(baseline_prompts) == {"system_prompt"} and set(candidate_prompts) == {"system_prompt"}:
         return make_unified_diff(
             baseline_prompts.get("system_prompt", ""),
-            best_prompts.get("system_prompt", ""),
+            candidate_prompts.get("system_prompt", ""),
             before_name="baseline_system_prompt.txt",
-            after_name="sdk_best/system_prompt.txt",
+            after_name=f"{candidate_id}/system_prompt.txt",
         )
     diffs = []
-    for name in sorted(set(baseline_prompts) | set(best_prompts)):
+    for name in sorted(set(baseline_prompts) | set(candidate_prompts)):
         diffs.append(
             make_unified_diff(
                 baseline_prompts.get(name, ""),
-                best_prompts.get(name, ""),
+                candidate_prompts.get(name, ""),
                 before_name=f"baseline/{name}.txt",
-                after_name=f"sdk_best/{name}.txt",
+                after_name=f"{candidate_id}/{name}.txt",
             )
         )
     return "\n\n".join(diffs)
