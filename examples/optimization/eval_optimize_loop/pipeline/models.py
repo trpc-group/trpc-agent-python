@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -104,11 +105,18 @@ class ReproducibilitySettings(StrictModel):
     seed: int = 42
 
 
+class DatasetSettings(StrictModel):
+    train_path: Path = Path("train.evalset.json")
+    validation_path: Path = Path("val.evalset.json")
+
+
 class PipelineSettings(StrictModel):
+    datasets: DatasetSettings = Field(default_factory=DatasetSettings)
     reproducibility: ReproducibilitySettings = Field(default_factory=ReproducibilitySettings)
     gate: GateSettings = Field(default_factory=GateSettings)
     scoring_epsilon: float = 0.000001
     metric_weights: dict[str, float] = Field(default_factory=lambda: {"final_response_avg_score": 0.6, "fake_rubric_score": 0.4})
+    metric_floors: dict[str, float] = Field(default_factory=dict)
 
 
 class CandidateRecord(StrictModel):
