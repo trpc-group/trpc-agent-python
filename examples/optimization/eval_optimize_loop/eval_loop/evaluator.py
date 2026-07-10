@@ -29,7 +29,7 @@ class ExampleEvaluator:
     def evaluate(self, *, prompt_id: str, prompt: str, cases: Iterable[EvalCase], split: str) -> EvalResult:
         case_results: list[CaseResult] = []
         for case in cases:
-            output, model_trace, cost = self.model.generate(prompt_id, prompt, case)
+            output, model_trace, cost = self.model.generate(prompt_id, prompt, case.input)
             judged = self.judge.score(case, output)
             failure_category = None
             failure_reason = None

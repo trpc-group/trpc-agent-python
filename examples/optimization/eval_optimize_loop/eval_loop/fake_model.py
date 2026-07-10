@@ -7,8 +7,6 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from .schemas import EvalCase
-
 _ASSIGNMENT_PATTERN = re.compile(r"(?<![A-Za-z0-9_-])([A-Za-z_][A-Za-z0-9_]*)=([A-Za-z0-9_-]+)" r"(?![A-Za-z0-9_-])")
 _RETURN_ONLY_PATTERN = re.compile(
     r"\breturn\s+only\s+([A-Za-z0-9_-]+)\b",
@@ -40,10 +38,13 @@ class FakeModel:
         self,
         prompt_id: str,
         prompt: str,
-        case: EvalCase,
+        user_input: str,
     ) -> tuple[str, dict[str, Any], float]:
+        if not isinstance(user_input, str):
+            raise TypeError("user_input must be a string")
+
         mode = self._mode(prompt)
-        request = self._parse_request(case.input)
+        request = self._parse_request(user_input)
         output = self._render(request, mode=mode)
         trace = {
             "seed": self.seed,

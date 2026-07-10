@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -7,7 +8,10 @@ from pathlib import Path
 import pytest
 from trpc_agent_sdk.evaluation import EvalSet
 
+from examples.optimization.eval_optimize_loop.eval_loop import fake_model as fake_model_module
 from examples.optimization.eval_optimize_loop.eval_loop.backends import FakeBackend
+from examples.optimization.eval_optimize_loop.eval_loop.evaluator import ExampleEvaluator
+from examples.optimization.eval_optimize_loop.eval_loop.fake_judge import FakeJudge
 from examples.optimization.eval_optimize_loop.eval_loop.fake_model import FakeModel
 from examples.optimization.eval_optimize_loop.eval_loop.optimizer import FakeOptimizer
 from examples.optimization.eval_optimize_loop.eval_loop.schemas import CaseResult
@@ -25,34 +29,14 @@ OVERFIT_PROMPT = f"{BASELINE_PROMPT}\n\n{OVERFIT_INSTRUCTION}."
 SAFE_PROMPT = f"{BASELINE_PROMPT}\n\n{SAFE_INSTRUCTION}."
 
 
-def test_model_output_and_trace_ignore_all_evaluator_only_case_fields():
-    input_text = "Return strict JSON with intent=refund and priority=high."
-    base = EvalCase(
-        case_id="oracle_case_a",
-        split="train",
-        input=input_text,
-        expectation={
-            "type": "json",
-            "expected_values": {"secret": "first-oracle"},
-        },
-        tags=["first-tag"],
-        protected=False,
-        simulated_outputs={"safe": "FIRST SIMULATED ORACLE"},
-    )
-    variants = [
-        base,
-        replace(base, case_id="oracle_case_b"),
-        replace(
-            base,
-            expectation={"type": "exact", "expected": "SECOND ORACLE"},
-        ),
-        replace(base, split="validation"),
-        replace(base, protected=True),
-        replace(base, tags=["different", "oracle-tag"]),
-        replace(base, simulated_outputs={"safe": "SECOND SIMULATED ORACLE"}),
-    ]
+def test_model_output_and_trace_are_stable_for_the_same_public_input():
+    public_input = "Return strict JSON with intent=refund and priority=high."
+    same_inputs = [public_input, f"{public_input}", "".join([public_input])]
 
-    generated = [FakeModel(seed=91).generate("candidate", SAFE_PROMPT, case) for case in variants]
+    generated = [
+        FakeModel(seed=91).generate("candidate", SAFE_PROMPT, user_input)
+        for user_input in same_inputs
+    ]
 
     assert {output for output, _, _ in generated} == {'{"intent": "refund", "priority": "high"}'}
     assert {json.dumps(trace, sort_keys=True) for _, trace, _ in generated} == {
@@ -61,19 +45,72 @@ def test_model_output_and_trace_ignore_all_evaluator_only_case_fields():
             sort_keys=True,
         )
     }
-    serialized_traces = json.dumps([trace for _, trace, _ in generated])
-    assert "ORACLE" not in serialized_traces
-    assert "oracle_case" not in serialized_traces
+
+
+def test_example_evaluator_only_exposes_public_user_input_to_model():
+    class SpyModel:
+        def __init__(self) -> None:
+            self.user_inputs: list[str] = []
+
+        def generate(
+            self,
+            prompt_id: str,
+            prompt: str,
+            user_input: str,
+        ) -> tuple[str, dict[str, object], float]:
+            assert isinstance(user_input, str)
+            self.user_inputs.append(user_input)
+            return "SECRET_EXPECTATION", {"prompt_id": prompt_id, "prompt": prompt}, 0.0
+
+    spy = SpyModel()
+    secret_case = EvalCase(
+        case_id="SECRET_CASE_ID",
+        split="validation",
+        input="PUBLIC USER INPUT",
+        expectation={"type": "exact", "expected": "SECRET_EXPECTATION"},
+        tags=["SECRET_TAG"],
+        protected=True,
+        simulated_outputs={"safe": "SECRET_SIMULATED_OUTPUT"},
+    )
+
+    result = ExampleEvaluator(spy, FakeJudge()).evaluate(
+        prompt_id="candidate",
+        prompt="PUBLIC SYSTEM PROMPT",
+        cases=[secret_case],
+        split="validation",
+    )
+
+    assert result.passed is True
+    assert spy.user_inputs == ["PUBLIC USER INPUT"]
+    assert "SECRET" not in json.dumps(spy.user_inputs)
+
+
+def test_fake_model_source_has_no_evaluator_oracle_capability():
+    model_source = inspect.getsource(fake_model_module)
+    evaluator_source = inspect.getsource(ExampleEvaluator.evaluate)
+
+    assert "EvalCase" not in model_source
+    assert ".expectation" not in model_source
+    assert ".tags" not in model_source
+    assert ".protected" not in model_source
+    assert ".simulated_outputs" not in model_source
+    assert "self.model.generate(prompt_id, prompt, case.input)" in evaluator_source
+
+
+@pytest.mark.parametrize("user_input", [None, b"bytes", object()])
+def test_fake_model_rejects_non_string_user_input(user_input: object):
+    with pytest.raises(TypeError, match="^user_input must be a string$"):
+        FakeModel(seed=91).generate("candidate", SAFE_PROMPT, user_input)
 
 
 def test_model_is_deterministic_and_prompt_id_or_seed_cannot_change_output():
-    case = _case("Return strict JSON with status=READY and next_step=ship.")
+    user_input = "Return strict JSON with status=READY and next_step=ship."
     model = FakeModel(seed=91)
 
-    first = model.generate("first-id", SAFE_PROMPT, case)
-    repeated = model.generate("first-id", SAFE_PROMPT, case)
-    different_prompt_id = model.generate("second-id", SAFE_PROMPT, case)
-    different_seed = FakeModel(seed=999).generate("first-id", SAFE_PROMPT, case)
+    first = model.generate("first-id", SAFE_PROMPT, user_input)
+    repeated = model.generate("first-id", SAFE_PROMPT, user_input)
+    different_prompt_id = model.generate("second-id", SAFE_PROMPT, user_input)
+    different_seed = FakeModel(seed=999).generate("first-id", SAFE_PROMPT, user_input)
 
     assert first == repeated
     assert first[0] == different_prompt_id[0] == different_seed[0]
@@ -95,9 +132,9 @@ def test_strict_json_rendering_uses_assignments_from_user_input(
     prompt: str,
     expected: str,
 ):
-    case = _case("Return StRiCt JsOn with intent=refund and priority=high.")
+    user_input = "Return StRiCt JsOn with intent=refund and priority=high."
 
-    output, _, _ = FakeModel(seed=91).generate("arbitrary-id", prompt, case)
+    output, _, _ = FakeModel(seed=91).generate("arbitrary-id", prompt, user_input)
 
     assert output == expected
 
@@ -111,9 +148,9 @@ def test_strict_json_rendering_uses_assignments_from_user_input(
     ],
 )
 def test_return_only_rendering_is_prompt_mode_sensitive(prompt: str, expected: str):
-    case = _case("ReTuRn OnLy YES; do not use JSON.")
+    user_input = "ReTuRn OnLy YES; do not use JSON."
 
-    output, _, _ = FakeModel(seed=91).generate("arbitrary-id", prompt, case)
+    output, _, _ = FakeModel(seed=91).generate("arbitrary-id", prompt, user_input)
 
     assert output == expected
 
@@ -133,11 +170,9 @@ def test_return_only_rendering_is_prompt_mode_sensitive(prompt: str, expected: s
     ],
 )
 def test_natural_and_unknown_requests_are_deterministic(input_text: str, natural: str):
-    case = _case(input_text)
-
-    baseline, _, _ = FakeModel(seed=91).generate("baseline", BASELINE_PROMPT, case)
-    safe, _, _ = FakeModel(seed=91).generate("safe", SAFE_PROMPT, case)
-    overfit, _, _ = FakeModel(seed=91).generate("overfit", OVERFIT_PROMPT, case)
+    baseline, _, _ = FakeModel(seed=91).generate("baseline", BASELINE_PROMPT, input_text)
+    safe, _, _ = FakeModel(seed=91).generate("safe", SAFE_PROMPT, input_text)
+    overfit, _, _ = FakeModel(seed=91).generate("overfit", OVERFIT_PROMPT, input_text)
 
     assert baseline == safe == natural
     assert json.loads(overfit) == {"answer": natural}
@@ -159,15 +194,23 @@ def test_optimizer_returns_no_candidates_without_observed_target_failures():
             failure_category="llm_rubric_not_met",
         )
     )
+    unclassified_failure = _eval_result(
+        _case_result(
+            "unclassified_failure",
+            passed=False,
+            failure_category=None,
+        )
+    )
 
     assert (
         optimizer.propose(
             BASELINE_PROMPT,
             all_pass,
-            {"by_category": {"format_violation": 1}},
+            {},
         )
         == []
     )
+    assert optimizer.propose(BASELINE_PROMPT, unclassified_failure, {}) == []
     assert (
         optimizer.propose(
             BASELINE_PROMPT,
@@ -178,22 +221,149 @@ def test_optimizer_returns_no_candidates_without_observed_target_failures():
     )
 
 
+def test_optimizer_rejects_validation_result_as_training_evidence():
+    baseline_validation = replace(_eval_result(), split="validation")
+
+    with pytest.raises(ValueError, match="baseline_train.split.*train.*validation"):
+        FakeOptimizer().propose(
+            BASELINE_PROMPT,
+            baseline_validation,
+            {},
+        )
+
+
+def test_optimizer_rejects_validation_case_mixed_into_training_evidence():
+    mixed_result = _eval_result(
+        _case_result(
+            "train_case",
+            passed=False,
+            failure_category="format_violation",
+        ),
+        replace(
+            _case_result(
+                "validation_case",
+                passed=False,
+                failure_category="format_violation",
+            ),
+            split="validation",
+        ),
+    )
+
+    with pytest.raises(ValueError, match="case.*validation_case.*split.*validation"):
+        FakeOptimizer().propose(
+            BASELINE_PROMPT,
+            mixed_result,
+            {},
+        )
+
+
+@pytest.mark.parametrize("failure_summary", [None, [], "not-a-summary"])
+def test_optimizer_rejects_non_mapping_failure_summary(
+    failure_summary: object,
+):
+    observed_failure = _eval_result(
+        _case_result(
+            "observed_failure",
+            passed=False,
+            failure_category="format_violation",
+        )
+    )
+
+    with pytest.raises(TypeError, match="^failure_summary must be a dict$"):
+        FakeOptimizer().propose(
+            BASELINE_PROMPT,
+            observed_failure,
+            failure_summary,
+        )
+
+
+def test_optimizer_rejects_summary_category_not_observed_in_failed_cases():
+    unclassified_failure = _eval_result(
+        _case_result(
+            "unclassified_failure",
+            passed=False,
+            failure_category=None,
+        )
+    )
+
+    with pytest.raises(ValueError, match="by_category.*failed train cases"):
+        FakeOptimizer().propose(
+            BASELINE_PROMPT,
+            unclassified_failure,
+            {"by_category": {"format_violation": 1}},
+        )
+
+
 @pytest.mark.parametrize(
-    ("case_failure_category", "failure_summary"),
+    "by_category",
     [
-        ("format_violation", {}),
-        (None, {"by_category": {"final_response_mismatch": 2}}),
+        {"final_response_mismatch": 1},
+        {"format_violation": 2},
+        {},
     ],
 )
-def test_optimizer_proposes_natural_language_candidates_from_observed_failures(
-    case_failure_category: str | None,
+def test_optimizer_rejects_summary_category_or_count_mismatch(
+    by_category: dict[str, object],
+):
+    observed_failure = _eval_result(
+        _case_result(
+            "observed_failure",
+            passed=False,
+            failure_category="format_violation",
+        )
+    )
+
+    with pytest.raises(ValueError, match="by_category.*failed train cases"):
+        FakeOptimizer().propose(
+            BASELINE_PROMPT,
+            observed_failure,
+            {"by_category": by_category},
+        )
+
+
+@pytest.mark.parametrize("by_category", [None, [], "format_violation"])
+def test_optimizer_rejects_non_mapping_by_category(by_category: object):
+    with pytest.raises(ValueError, match="failure_summary.*by_category.*dict"):
+        FakeOptimizer().propose(
+            BASELINE_PROMPT,
+            _eval_result(),
+            {"by_category": by_category},
+        )
+
+
+@pytest.mark.parametrize("count", [True, 0, -1, 1.0, 1.5, "1", None])
+def test_optimizer_rejects_non_positive_integer_summary_counts(count: object):
+    observed_failure = _eval_result(
+        _case_result(
+            "observed_failure",
+            passed=False,
+            failure_category="format_violation",
+        )
+    )
+
+    with pytest.raises(ValueError, match="count.*positive integer"):
+        FakeOptimizer().propose(
+            BASELINE_PROMPT,
+            observed_failure,
+            {"by_category": {"format_violation": count}},
+        )
+
+
+@pytest.mark.parametrize(
+    "failure_summary",
+    [
+        {},
+        {"by_category": {"format_violation": 1}},
+    ],
+)
+def test_optimizer_proposes_two_candidates_for_observed_train_format_failure(
     failure_summary: dict[str, object],
 ):
     baseline_train = _eval_result(
         _case_result(
             "random_training_case",
             passed=False,
-            failure_category=case_failure_category,
+            failure_category="format_violation",
         )
     )
     candidates = FakeOptimizer().propose(
@@ -336,15 +506,6 @@ async def test_fake_backend_scores_baseline_overfit_and_safe_on_official_data(
                 }
                 for case in result.cases
             )
-
-
-def _case(input_text: str) -> EvalCase:
-    return EvalCase(
-        case_id="arbitrary-case-id",
-        split="train",
-        input=input_text,
-        expectation={"type": "exact", "expected": "EVALUATOR ORACLE"},
-    )
 
 
 def _case_result(
