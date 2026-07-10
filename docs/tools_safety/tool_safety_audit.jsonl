@@ -1,0 +1,2 @@
+{"timestamp":"2026-07-10T12:00:00.000Z","tool_name":"bash_tool","decision":"deny","risk_level":"critical","rule_ids":["DANGEROUS_DELETE_001"],"scan_duration_ms":3.2,"sanitized":false,"intercepted":true,"script_hash":"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"}
+{"timestamp":"2026-07-10T12:01:00.000Z","tool_name":"python_tool","decision":"allow","risk_level":null,"rule_ids":[],"scan_duration_ms":1.1,"sanitized":false,"intercepted":false,"script_hash":"d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4"}

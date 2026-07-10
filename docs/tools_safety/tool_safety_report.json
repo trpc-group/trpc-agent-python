@@ -1,0 +1,17 @@
+{
+  "decision": "deny",
+  "risk_level": "critical",
+  "findings": [
+    {
+      "rule_id": "DANGEROUS_DELETE_001",
+      "risk_type": "dangerous_file_operation",
+      "risk_level": "critical",
+      "evidence": "rm -rf /home/user/data",
+      "message": "Dangerous file deletion detected",
+      "recommendation": "Use temporary directories or confirm deletion intent"
+    }
+  ],
+  "scan_duration_ms": 3.2,
+  "script_snippet": "rm -rf /home/user/data\n",
+  "scan_error": null
+}
