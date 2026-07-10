@@ -3,135 +3,102 @@
 from __future__ import annotations
 
 import json
+import re
+from dataclasses import dataclass
 from typing import Any
 
 from .schemas import EvalCase
 
+_ASSIGNMENT_PATTERN = re.compile(r"(?<![A-Za-z0-9_-])([A-Za-z_][A-Za-z0-9_]*)=([A-Za-z0-9_-]+)" r"(?![A-Za-z0-9_-])")
+_RETURN_ONLY_PATTERN = re.compile(
+    r"\breturn\s+only\s+([A-Za-z0-9_-]+)\b",
+    re.IGNORECASE,
+)
+_STRICT_JSON_PATTERN = re.compile(r"\bstrict\s+json\b", re.IGNORECASE)
+
+_OVERFIT_INSTRUCTION = "Always force every final answer into JSON"
+_SAFE_INSTRUCTION = "Use strict JSON only when the user explicitly asks"
+
+
+@dataclass(frozen=True)
+class _ParsedRequest:
+    assignments: dict[str, str]
+    only_value: str | None
+    strict_json: bool
+    natural_answer: str
+
 
 class FakeModel:
-    """Prompt-sensitive deterministic model.
-
-    Markers injected by ``FakeOptimizer`` select behavior:
-    - no marker: baseline; adds prose around strict JSON/exact outputs.
-    - ALWAYS_OUTPUT_JSON: overfits to train formatting and forces JSON on
-      validation natural-language/exact cases.
-    - STRICT_WHEN_REQUESTED: applies JSON/exact constraints only when the case
-      explicitly asks for them.
-    """
+    """Render deterministic responses from prompt text and user input only."""
 
     COST_PER_CALL = 0.001
 
     def __init__(self, seed: int = 91) -> None:
         self.seed = seed
 
-    def generate(self, prompt_id: str, prompt: str, case: EvalCase) -> tuple[str, dict[str, Any], float]:
+    def generate(
+        self,
+        prompt_id: str,
+        prompt: str,
+        case: EvalCase,
+    ) -> tuple[str, dict[str, Any], float]:
         mode = self._mode(prompt)
-        output_override = self._simulated_output(case, mode)
-        if output_override is not None:
-            output = output_override
-        elif mode == "overfit":
-            output = self._overfit_output(case)
-        elif mode == "safe":
-            output = self._safe_output(case)
-        else:
-            output = self._baseline_output(case)
+        request = self._parse_request(case.input)
+        output = self._render(request, mode=mode)
         trace = {
             "seed": self.seed,
             "prompt_id": prompt_id,
             "prompt_mode": mode,
-            "case_id": case.case_id,
-            "expectation_type": case.expectation.get("type"),
         }
         return output, trace, self.COST_PER_CALL
 
-    def _mode(self, prompt: str) -> str:
-        if "ALWAYS_OUTPUT_JSON" in prompt:
+    @staticmethod
+    def _mode(prompt: str) -> str:
+        if _OVERFIT_INSTRUCTION in prompt:
             return "overfit"
-        if "STRICT_WHEN_REQUESTED" in prompt:
+        if _SAFE_INSTRUCTION in prompt:
             return "safe"
         return "baseline"
 
-    def _baseline_output(self, case: EvalCase) -> str:
-        expectation_type = case.expectation.get("type")
-        if expectation_type == "json":
-            return f"Here is the JSON you requested: {self._expected_json(case)}"
-        if expectation_type == "exact":
-            expected = str(case.expectation.get("expected", ""))
-            if case.protected or "baseline_pass" in case.tags:
-                return expected
-            return f"{expected} - confirmed."
-        if expectation_type == "rubric":
-            return self._rubric_sentence(case)
-        if expectation_type == "tool":
-            return self._tool_json(case)
-        if expectation_type == "knowledge":
-            return self._knowledge_sentence(case)
-        return self._rubric_sentence(case)
+    @staticmethod
+    def _parse_request(user_input: str) -> _ParsedRequest:
+        assignments = {match.group(1): match.group(2) for match in _ASSIGNMENT_PATTERN.finditer(user_input)}
+        only_match = _RETURN_ONLY_PATTERN.search(user_input)
+        return _ParsedRequest(
+            assignments=assignments,
+            only_value=only_match.group(1) if only_match else None,
+            strict_json=bool(_STRICT_JSON_PATTERN.search(user_input)),
+            natural_answer=FakeModel._natural_answer(user_input),
+        )
 
-    def _overfit_output(self, case: EvalCase) -> str:
-        expectation_type = case.expectation.get("type")
-        if case.split == "train":
-            return self._ideal_output(case)
-        if expectation_type == "json":
-            return self._expected_json(case)
-        if expectation_type == "exact":
-            return json.dumps({"answer": str(case.expectation.get("expected", ""))}, sort_keys=True)
-        if expectation_type == "rubric" or "prose" in case.tags:
-            return json.dumps({"answer": self._rubric_sentence(case)}, sort_keys=True)
-        if expectation_type == "tool":
-            return self._tool_json(case)
-        if expectation_type == "knowledge":
-            return self._knowledge_sentence(case)
-        return json.dumps({"answer": self._rubric_sentence(case)}, sort_keys=True)
+    @staticmethod
+    def _natural_answer(user_input: str) -> str:
+        lowered = user_input.lower()
+        if "latency" in lowered and "retries" in lowered:
+            return "Latency can trigger retries."
+        if "cache" in lowered and "stale data" in lowered:
+            return "Cache invalidation refreshes stale data."
+        return "Here is a natural response."
 
-    def _safe_output(self, case: EvalCase) -> str:
-        user_asked = case.input.lower()
-        expectation_type = case.expectation.get("type")
-        if expectation_type == "json" or "json" in user_asked:
-            return self._expected_json(case)
-        if expectation_type == "exact" or "exactly" in user_asked:
-            return str(case.expectation.get("expected", ""))
-        return self._ideal_output(case)
+    @staticmethod
+    def _render(request: _ParsedRequest, *, mode: str) -> str:
+        if mode == "overfit":
+            payload: dict[str, str]
+            if request.assignments:
+                payload = request.assignments
+            else:
+                payload = {
+                    "answer": request.only_value or request.natural_answer,
+                }
+            return json.dumps(payload, sort_keys=True)
 
-    def _ideal_output(self, case: EvalCase) -> str:
-        expectation_type = case.expectation.get("type")
-        if expectation_type == "json":
-            return self._expected_json(case)
-        if expectation_type == "exact":
-            return str(case.expectation.get("expected", ""))
-        if expectation_type == "rubric":
-            return self._rubric_sentence(case)
-        if expectation_type == "tool":
-            return self._tool_json(case)
-        if expectation_type == "knowledge":
-            return self._knowledge_sentence(case)
-        return self._rubric_sentence(case)
+        if request.strict_json:
+            payload_json = json.dumps(request.assignments, sort_keys=True)
+            if mode == "safe":
+                return payload_json
+            return f"Here is the JSON you requested: {payload_json}"
 
-    def _expected_json(self, case: EvalCase) -> str:
-        values = dict(case.expectation.get("expected_values") or {})
-        return json.dumps(values, sort_keys=True)
+        if request.only_value is not None:
+            return request.only_value
 
-    def _simulated_output(self, case: EvalCase, mode: str) -> str | None:
-        return case.simulated_outputs.get(mode)
-
-    def _rubric_sentence(self, case: EvalCase) -> str:
-        must_include = [str(item) for item in case.expectation.get("must_include") or []]
-        if must_include:
-            sentence = " ".join(must_include)
-        else:
-            sentence = "The answer satisfies the rubric"
-        max_chars = case.expectation.get("max_chars")
-        if max_chars is not None and len(sentence) > int(max_chars):
-            sentence = sentence[:int(max_chars)].rstrip()
-        return sentence
-
-    def _tool_json(self, case: EvalCase) -> str:
-        tool_name = str(case.expectation.get("expected_tool", "lookup"))
-        args = dict(case.expectation.get("expected_args") or {})
-        return json.dumps({"tool": tool_name, "args": args}, sort_keys=True)
-
-    def _knowledge_sentence(self, case: EvalCase) -> str:
-        terms = [str(item) for item in case.expectation.get("must_include_knowledge_terms") or []]
-        sources = [str(item) for item in case.expectation.get("required_sources") or []]
-        parts = terms + sources
-        return " ".join(parts) if parts else "knowledge source recalled"
+        return request.natural_answer

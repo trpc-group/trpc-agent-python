@@ -11,6 +11,7 @@ import pytest
 
 from examples.optimization.eval_optimize_loop.eval_loop import backends as backend_module
 from examples.optimization.eval_optimize_loop.eval_loop.backends import SDKBackend
+from examples.optimization.eval_optimize_loop.eval_loop.schemas import CaseResult
 from examples.optimization.eval_optimize_loop.eval_loop.schemas import EvalCase
 from examples.optimization.eval_optimize_loop.eval_loop.schemas import EvalResult
 from examples.optimization.eval_optimize_loop.eval_loop.schemas import OptimizationResult
@@ -89,12 +90,28 @@ async def test_fake_backend_implements_unified_contract_with_real_trace(tmp_path
 @pytest.mark.asyncio
 async def test_fake_backend_wraps_candidates_in_complete_optimization_result(tmp_path: Path):
     baseline_prompt = DEFAULT_PROMPT.read_text(encoding="utf-8")
-    baseline_train = _empty_eval_result("baseline", "train")
+    baseline_train = EvalResult(
+        prompt_id="baseline",
+        split="train",
+        score=0.0,
+        passed=False,
+        cost=0.0,
+        cases=[
+            CaseResult(
+                case_id="observed_training_failure",
+                split="train",
+                score=0.0,
+                passed=False,
+                output="not-json",
+                failure_category="format_violation",
+            )
+        ],
+    )
 
     result = await backend_module.FakeBackend(seed=91).optimize_candidates(
         baseline_prompts={"system_prompt": baseline_prompt},
         baseline_train=baseline_train,
-        failure_summary={"failed_case_ids": ["train_json_strict"]},
+        failure_summary={"by_category": {"format_violation": 1}},
         train_path=DEFAULT_TRAIN,
         validation_path=DEFAULT_VAL,
         config_path=DEFAULT_OPTIMIZER_CONFIG,
@@ -107,6 +124,24 @@ async def test_fake_backend_wraps_candidates_in_complete_optimization_result(tmp
     assert result.cost.total == 0.0
     assert len(result.rounds) == len(result.candidates)
     assert all(candidate.bundle() == {"system_prompt": candidate.prompt} for candidate in result.candidates)
+
+
+@pytest.mark.asyncio
+async def test_fake_backend_returns_no_candidates_without_failure_categories(tmp_path: Path):
+    baseline_prompt = DEFAULT_PROMPT.read_text(encoding="utf-8")
+
+    result = await backend_module.FakeBackend(seed=91).optimize_candidates(
+        baseline_prompts={"system_prompt": baseline_prompt},
+        baseline_train=_empty_eval_result("baseline", "train"),
+        failure_summary={"failed_case_ids": ["unclassified_training_failure"]},
+        train_path=DEFAULT_TRAIN,
+        validation_path=DEFAULT_VAL,
+        config_path=DEFAULT_OPTIMIZER_CONFIG,
+        artifact_dir=tmp_path / "fake_optimize_without_categories",
+    )
+
+    assert result.candidates == []
+    assert result.rounds == []
 
 
 @pytest.mark.asyncio

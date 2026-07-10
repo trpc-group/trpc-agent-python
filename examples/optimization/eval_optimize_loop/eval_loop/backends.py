@@ -7,6 +7,7 @@ import importlib
 import math
 from collections.abc import Iterable
 from dataclasses import dataclass
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 from typing import Protocol
@@ -84,18 +85,33 @@ class FakeBackend:
     ) -> EvalResult:
         del artifact_dir
         prompt = _required_system_prompt(prompts, context=f"cannot evaluate {prompt_id}")
-        cases = load_eval_cases(dataset_path, split=split)
+        cases = _load_sdk_expected_cases(dataset_path, split=split).values()
         evaluator = ExampleEvaluator(
             FakeModel(seed=self.seed),
             FakeJudge(),
             trace_enabled=trace,
         )
-        return evaluator.evaluate(
+        result = evaluator.evaluate(
             prompt_id=prompt_id,
             prompt=prompt,
             cases=cases,
             split=split,
         )
+        if not trace:
+            return result
+
+        sanitized_cases = []
+        for case_result in result.cases:
+            model_trace = case_result.trace.get("model")
+            sanitized_trace = dict(model_trace) if isinstance(model_trace, dict) else {}
+            sanitized_cases.append(
+                replace(
+                    case_result,
+                    trace=sanitized_trace,
+                    trace_available=bool(sanitized_trace),
+                )
+            )
+        return replace(result, cases=sanitized_cases)
 
     async def optimize_candidates(
         self,
@@ -113,7 +129,13 @@ class FakeBackend:
             baseline_prompts,
             context="cannot optimize fake prompt bundle",
         )
-        candidates = _normalize_fake_candidates(self._optimizer.propose(baseline_prompt))
+        candidates = _normalize_fake_candidates(
+            self._optimizer.propose(
+                baseline_prompt,
+                baseline_train,
+                failure_summary,
+            )
+        )
         zero_cost = CostSummary(complete=True)
         rounds = [
             OptimizationRound(
@@ -147,10 +169,14 @@ class FakeBackend:
         optimizer_config_path: str | Path,
         output_dir: str | Path,
     ) -> list[CandidatePrompt]:
-        """Compatibility wrapper for the pre-async fake pipeline."""
+        """Reject legacy optimization that has no observed failure evidence."""
 
-        del train_path, val_path, optimizer_config_path, output_dir
-        return _normalize_fake_candidates(self._optimizer.propose(baseline_prompt))
+        del baseline_prompt, train_path, val_path, optimizer_config_path, output_dir
+        raise RuntimeError(
+            "FakeBackend.optimize() cannot invent training failure evidence; "
+            "use await FakeBackend.optimize_candidates(...) with baseline_train "
+            "and failure_summary."
+        )
 
 
 class SDKBackend:

@@ -4,35 +4,50 @@ from __future__ import annotations
 
 from .diffing import make_unified_diff
 from .schemas import CandidatePrompt
+from .schemas import EvalResult
+
+_TARGET_FAILURE_CATEGORIES = {
+    "format_violation",
+    "final_response_mismatch",
+}
+_OVERFIT_INSTRUCTION = "Always force every final answer into JSON."
+_SAFE_INSTRUCTION = "Use strict JSON only when the user explicitly asks."
 
 
 class FakeOptimizer:
-    """Produce the two candidates required by the example issue."""
+    """Propose candidates only for observed train formatting failures."""
 
-    def propose(self, baseline_prompt: str) -> list[CandidatePrompt]:
-        overfit_prompt = (
-            baseline_prompt.rstrip()
-            + "\n\n"
-            + "# Optimizer patch\n"
-            + "OPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\n"
-            + "Always force every final answer into JSON, even when the user asks for prose.\n"
-        )
-        safe_prompt = (
-            baseline_prompt.rstrip()
-            + "\n\n"
-            + "# Optimizer patch\n"
-            + "OPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\n"
-            + "Use strict JSON only when the user explicitly asks for JSON.\n"
-            + "Use exact answers only when the user explicitly asks for an exact answer.\n"
-            + "Otherwise answer naturally and honor rubric constraints.\n"
-        )
+    def propose(
+        self,
+        baseline_prompt: str,
+        baseline_train: EvalResult,
+        failure_summary: dict[str, object],
+    ) -> list[CandidatePrompt]:
+        failed_cases = [case for case in baseline_train.cases if not case.passed]
+        if not failed_cases:
+            return []
+
+        observed_categories = {case.failure_category for case in failed_cases if case.failure_category}
+        by_category = failure_summary.get("by_category")
+        if isinstance(by_category, dict):
+            observed_categories.update(
+                str(category) for category, count in by_category.items() if _is_positive_count(count)
+            )
+
+        targeted = sorted(observed_categories & _TARGET_FAILURE_CATEGORIES)
+        if not targeted:
+            return []
+
+        overfit_prompt = f"{baseline_prompt.rstrip()}\n\n{_OVERFIT_INSTRUCTION}\n"
+        safe_prompt = f"{baseline_prompt.rstrip()}\n\n{_SAFE_INSTRUCTION}\n"
+        evidence = ", ".join(targeted)
         return [
             CandidatePrompt(
                 candidate_id="candidate_001_overfit",
                 prompt=overfit_prompt,
                 rationale=(
-                    "The train failures are strict JSON/exact formatting failures, so this candidate "
-                    "over-corrects by forcing JSON globally."
+                    f"Observed training failures ({evidence}); this candidate deliberately "
+                    "tests the risky global-JSON correction."
                 ),
                 prompt_diff=make_unified_diff(
                     baseline_prompt,
@@ -40,13 +55,14 @@ class FakeOptimizer:
                     before_name="baseline_system_prompt.txt",
                     after_name="candidate_001_overfit/system_prompt.txt",
                 ),
+                prompt_fields={"system_prompt": overfit_prompt},
             ),
             CandidatePrompt(
                 candidate_id="candidate_002_safe",
                 prompt=safe_prompt,
                 rationale=(
-                    "This candidate fixes observed strict-format failures without changing "
-                    "natural-language behavior on validation cases."
+                    f"Observed training failures ({evidence}); this candidate limits strict "
+                    "JSON behavior to explicit user requests."
                 ),
                 prompt_diff=make_unified_diff(
                     baseline_prompt,
@@ -54,5 +70,10 @@ class FakeOptimizer:
                     before_name="baseline_system_prompt.txt",
                     after_name="candidate_002_safe/system_prompt.txt",
                 ),
+                prompt_fields={"system_prompt": safe_prompt},
             ),
         ]
+
+
+def _is_positive_count(value: object) -> bool:
+    return not isinstance(value, bool) and isinstance(value, (int, float)) and value > 0

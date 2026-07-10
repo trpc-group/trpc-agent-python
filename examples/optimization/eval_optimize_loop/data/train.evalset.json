@@ -1,59 +1,144 @@
 {
-  "evalset_id": "eval_optimize_loop_train_v1",
-  "split": "train",
-  "description": "Training cases used for failure attribution and fake prompt optimization.",
-  "cases": [
+  "eval_set_id": "eval_optimize_loop_train_v1",
+  "name": "Evaluation optimization loop train set",
+  "description": "Training cases used for failure attribution and prompt optimization.",
+  "eval_cases": [
     {
-      "id": "train_json_refund",
-      "input": "Return strict JSON for a refund escalation. Use keys intent and priority.",
-      "expectation": {
-        "type": "json",
-        "required_keys": [
-          "intent",
-          "priority"
-        ],
-        "expected_values": {
-          "intent": "refund",
-          "priority": "high"
-        },
-        "expected_failure_category": "format_violation"
-      },
-      "tags": [
-        "json",
-        "format"
-      ]
+      "eval_id": "train_json_refund",
+      "conversation": [
+        {
+          "invocation_id": "train_json_refund_turn_1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Return strict JSON with intent=refund and priority=high."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"intent\":\"refund\",\"priority\":\"high\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "trainer",
+        "state": {
+          "eval_optimize_expectation": {
+            "type": "json",
+            "required_keys": [
+              "intent",
+              "priority"
+            ],
+            "expected_values": {
+              "intent": "refund",
+              "priority": "high"
+            },
+            "expected_failure_category": "format_violation"
+          },
+          "eval_optimize_tags": [
+            "json",
+            "format"
+          ]
+        }
+      }
     },
     {
-      "id": "train_exact_order_status",
-      "input": "Answer exactly READY when the order can ship.",
-      "expectation": {
-        "type": "exact",
-        "expected": "READY",
-        "expected_failure_category": "final_response_mismatch"
-      },
-      "tags": [
-        "exact",
-        "format"
-      ]
+      "eval_id": "train_exact_order_status",
+      "conversation": [
+        {
+          "invocation_id": "train_json_order_turn_1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Return strict JSON with status=READY and next_step=ship."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"next_step\":\"ship\",\"status\":\"READY\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "trainer",
+        "state": {
+          "eval_optimize_expectation": {
+            "type": "json",
+            "required_keys": [
+              "status",
+              "next_step"
+            ],
+            "expected_values": {
+              "status": "READY",
+              "next_step": "ship"
+            },
+            "expected_failure_category": "format_violation"
+          },
+          "eval_optimize_tags": [
+            "json",
+            "format"
+          ]
+        }
+      }
     },
     {
-      "id": "train_rubric_retry_summary",
-      "input": "In 80 chars or less, mention latency and retries.",
-      "expectation": {
-        "type": "rubric",
-        "must_include": [
-          "latency",
-          "retries"
-        ],
-        "forbidden": [
-          "database"
-        ],
-        "max_chars": 80
-      },
-      "tags": [
-        "rubric",
-        "no_effect"
-      ]
+      "eval_id": "train_rubric_retry_summary",
+      "conversation": [
+        {
+          "invocation_id": "train_latency_retries_turn_1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Explain latency and retries naturally in under 80 characters."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Latency can trigger retries."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "trainer",
+        "state": {
+          "eval_optimize_expectation": {
+            "type": "rubric",
+            "must_include": [
+              "latency",
+              "retries"
+            ],
+            "forbidden": [
+              "database"
+            ],
+            "max_chars": 80
+          },
+          "eval_optimize_tags": [
+            "rubric",
+            "no_effect"
+          ]
+        }
+      }
     }
   ]
 }
