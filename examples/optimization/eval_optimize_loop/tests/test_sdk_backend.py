@@ -3,6 +3,7 @@ from __future__ import annotations
 import builtins
 import inspect
 import json
+import shlex
 import sys
 import types
 from pathlib import Path
@@ -20,7 +21,6 @@ from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_PROMPT
 from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_TRAIN
 from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_VAL
 from examples.optimization.eval_optimize_loop.run_pipeline import _parse_target_prompt_paths
-from examples.optimization.eval_optimize_loop.run_pipeline import _sdk_gate_decision
 from examples.optimization.eval_optimize_loop.run_pipeline import run_pipeline
 
 
@@ -1188,6 +1188,11 @@ async def test_sdk_backend_async_api_works_inside_active_event_loop(tmp_path: Pa
 
 def test_run_pipeline_mode_sdk_writes_report_without_fallback(tmp_path: Path, monkeypatch):
     calls = _install_fake_sdk(monkeypatch, best_prompt="optimized prompt")
+    gate_path = _write_gate_config(
+        tmp_path,
+        min_val_score_improvement=0.01,
+        max_total_cost=None,
+    )
 
     report = run_pipeline(
         mode="sdk",
@@ -1197,6 +1202,7 @@ def test_run_pipeline_mode_sdk_writes_report_without_fallback(tmp_path: Path, mo
         prompt_path=DEFAULT_PROMPT,
         output_dir=tmp_path / "sdk_run",
         sdk_call_agent="fake_call_agent_module:call_agent",
+        gate_config_path=gate_path,
         run_id="sdk_test_run",
     )
 
@@ -1209,15 +1215,10 @@ def test_run_pipeline_mode_sdk_writes_report_without_fallback(tmp_path: Path, mo
     assert report.baseline_validation.score == 0.5
     assert report.candidates[0]["validation_result"].score == 0.75
     assert report.gate_decisions[0].validation_score_delta == 0.25
-    assert report.gate_decisions[0].candidate_cost == 0.123
-    assert report.gate_decisions[0].gate_status == "partial_applied"
-    assert report.gate_decisions[0].not_applied_checks == [
-        "per_case_delta",
-        "protected_regression",
-        "new_hard_failure",
-        "max_score_drop_per_case",
-    ]
-    assert report.audit["duration_seconds"] == 12.3
+    assert report.gate_decisions[0].candidate_cost == 0.0
+    assert report.gate_decisions[0].gate_status == "applied"
+    assert report.gate_decisions[0].not_applied_checks == []
+    assert report.audit["duration_seconds"] > 0
     assert report.audit["total_run_cost"] == 0.123
     assert report.audit["cost"]["total"] == 0.123
     assert report.audit["sdk_result_summary"]["status"] == "SUCCEEDED"
@@ -1232,21 +1233,24 @@ def test_run_pipeline_mode_sdk_writes_report_without_fallback(tmp_path: Path, mo
     assert report.audit["sdk_result_summary"]["rounds"][0]["validation_pass_rate"] == 0.75
     assert report.audit["sdk_result_availability"] == {
         "aggregate_validation_result": True,
-        "full_train_eval_result": False,
-        "full_per_case_validation_delta": False,
+        "full_train_eval_result": True,
+        "full_per_case_validation_delta": True,
     }
-    assert "train EvalResult compatibility field is unavailable" in report.audit["sdk_score_explanation"]
-    assert "partial_applied" in payload
-    assert "sdk_best (partial_applied)" in markdown
-    assert "not applied checks: per_case_delta" in markdown
-    assert "SDK mode uses OptimizeResult aggregate validation metrics" in markdown
-    assert "fake_call_agent_module:call_agent" in report.run["reproducibility_command"]
-    assert "module:function" not in report.run["reproducibility_command"]
+    assert "partial_applied" not in payload
+    assert "sdk_best (accepted)" in markdown
+    assert "complete AgentEvaluator-compatible reevaluation" in markdown
     assert (output_dir / "runs" / "sdk_test_run" / "input_hashes.json").is_file()
     assert (output_dir / "runs" / "sdk_test_run" / "prompt_diffs" / "sdk_best.diff").is_file()
     assert calls["update_source"] is False
-    assert calls["output_dir"].endswith("sdk_optimizer")
-    assert report.run["sdk_artifact_dir"].endswith("sdk_optimizer")
+    assert calls["output_dir"].endswith("runs\\sdk_test_run\\optimizer") or calls[
+        "output_dir"
+    ].endswith("runs/sdk_test_run/optimizer")
+    assert calls["evaluation_count"] == 4
+    command = report.run["reproducibility_command"]
+    assert "--sdk-call-agent fake_call_agent_module:call_agent" in command
+    command_args = shlex.split(command)
+    gate_index = command_args.index("--gate-config")
+    assert command_args[gate_index + 1] == str(gate_path)
 
 
 def test_run_pipeline_mode_sdk_accepts_sdk_shaped_inputs_without_fake_schema(tmp_path: Path, monkeypatch):
@@ -1255,8 +1259,14 @@ def test_run_pipeline_mode_sdk_accepts_sdk_shaped_inputs_without_fake_schema(tmp
     val_path = tmp_path / "sdk_val.evalset.json"
     optimizer_path = tmp_path / "sdk_optimizer.json"
     prompt_path = tmp_path / "system_prompt.txt"
-    train_path.write_text(json.dumps({"eval_cases": []}), encoding="utf-8")
-    val_path.write_text(json.dumps({"eval_cases": []}), encoding="utf-8")
+    train_path.write_text(
+        json.dumps(_sdk_evalset_payload([_sdk_eval_case_payload("sdk_train_case")])),
+        encoding="utf-8",
+    )
+    val_path.write_text(
+        json.dumps(_sdk_evalset_payload([_sdk_eval_case_payload("sdk_val_case")])),
+        encoding="utf-8",
+    )
     optimizer_path.write_text(
         json.dumps({"seed": "sdk-owned-seed", "optimize": {"algorithm": {"name": "gepa_reflective"}}}),
         encoding="utf-8",
@@ -1271,14 +1281,22 @@ def test_run_pipeline_mode_sdk_accepts_sdk_shaped_inputs_without_fake_schema(tmp
         prompt_path=prompt_path,
         output_dir=tmp_path / "sdk_run",
         sdk_call_agent="fake_call_agent_module:call_agent",
+        gate_config_path=_write_gate_config(
+            tmp_path,
+            min_val_score_improvement=0.01,
+            max_total_cost=None,
+        ),
     )
 
     assert report.run["mode"] == "sdk"
-    assert report.run["train_cases"] == 0
+    assert report.run["train_cases"] == 1
     assert report.selected_candidate == "sdk_best"
 
 
-def test_run_pipeline_mode_sdk_default_run_id_uses_sdk_started_at(tmp_path: Path, monkeypatch):
+def test_run_pipeline_mode_sdk_default_run_id_uses_utc_timestamp_and_random_suffix(
+    tmp_path: Path,
+    monkeypatch,
+):
     _install_fake_sdk(
         monkeypatch,
         best_prompt="optimized prompt",
@@ -1295,12 +1313,13 @@ def test_run_pipeline_mode_sdk_default_run_id_uses_sdk_started_at(tmp_path: Path
         sdk_call_agent="fake_call_agent_module:call_agent",
     )
 
-    assert report.run["run_id"] == "eval_optimize_loop_sdk_20260704T123456Z"
+    assert report.run["run_id"].startswith("eval_optimize_loop_sdk_")
+    assert report.run["run_id"] != "eval_optimize_loop_sdk_20260704T123456Z"
     assert (tmp_path / "sdk_run" / "runs" / report.run["run_id"]).is_dir()
-    assert "--run-id" not in report.run["reproducibility_command"]
+    assert f"--run-id {report.run['run_id']}" in report.run["reproducibility_command"]
 
 
-def test_run_pipeline_mode_sdk_default_run_id_collision_gets_suffix(tmp_path: Path, monkeypatch):
+def test_run_pipeline_mode_sdk_default_run_ids_are_unique(tmp_path: Path, monkeypatch):
     _install_fake_sdk(
         monkeypatch,
         best_prompt="optimized prompt",
@@ -1326,8 +1345,9 @@ def test_run_pipeline_mode_sdk_default_run_id_collision_gets_suffix(tmp_path: Pa
         sdk_call_agent="fake_call_agent_module:call_agent",
     )
 
-    assert first.run["run_id"] == "eval_optimize_loop_sdk_20260704T123456Z"
-    assert second.run["run_id"] == "eval_optimize_loop_sdk_20260704T123456Z-1"
+    assert first.run["run_id"].startswith("eval_optimize_loop_sdk_")
+    assert second.run["run_id"].startswith("eval_optimize_loop_sdk_")
+    assert first.run["run_id"] != second.run["run_id"]
     assert (tmp_path / "sdk_run" / "runs" / first.run["run_id"]).is_dir()
     assert (tmp_path / "sdk_run" / "runs" / second.run["run_id"]).is_dir()
 
@@ -1387,12 +1407,14 @@ def test_run_pipeline_mode_sdk_uses_default_wrapper_gate_when_sdk_config_has_no_
     decision = report.gate_decisions[0]
     assert report.selected_candidate is None
     assert decision.accepted is False
-    assert decision.gate_status == "partial_applied"
+    assert decision.gate_status == "applied"
+    assert decision.not_applied_checks == []
     assert decision.validation_score_delta == 0.005
     assert any("validation improvement" in reason for reason in decision.reasons)
+    assert any("cost_unavailable" in reason for reason in decision.reasons)
 
 
-def test_run_pipeline_mode_sdk_custom_gate_rejects_low_aggregate_validation_improvement(
+def test_run_pipeline_mode_sdk_custom_gate_uses_full_validation_evaluation(
     tmp_path: Path,
     monkeypatch,
 ):
@@ -1401,10 +1423,10 @@ def test_run_pipeline_mode_sdk_custom_gate_rejects_low_aggregate_validation_impr
         best_prompt="optimized prompt",
         baseline_pass_rate=0.5,
         best_pass_rate=0.75,
-        pass_rate_improvement=0.25,
+        pass_rate_improvement=0.9,
         total_llm_cost=0.123,
     )
-    gate_path = _write_gate_config(tmp_path, min_val_score_improvement=0.3, max_total_cost=1.0)
+    gate_path = _write_gate_config(tmp_path, min_val_score_improvement=0.3, max_total_cost=None)
 
     report = run_pipeline(
         mode="sdk",
@@ -1421,6 +1443,7 @@ def test_run_pipeline_mode_sdk_custom_gate_rejects_low_aggregate_validation_impr
     assert report.selected_candidate is None
     assert decision.accepted is False
     assert decision.validation_score_delta == 0.25
+    assert report.audit["sdk_result_summary"]["pass_rate_improvement"] == 0.9
     assert any("validation improvement" in reason for reason in decision.reasons)
 
 
@@ -1449,26 +1472,42 @@ def test_run_pipeline_mode_sdk_custom_gate_rejects_cost_over_budget(tmp_path: Pa
     decision = report.gate_decisions[0]
     assert report.selected_candidate is None
     assert decision.accepted is False
-    assert decision.gate_status == "partial_applied"
+    assert decision.gate_status == "applied"
     assert decision.total_run_cost == 2.0
-    assert any("cost" in reason for reason in decision.reasons)
+    assert any("cost_unavailable" in reason for reason in decision.reasons)
 
 
-def test_sdk_gate_decision_skips_disabled_cost_gate_but_keeps_quality_threshold():
-    decision = _sdk_gate_decision(
-        candidate_id="sdk_best",
-        sdk_summary={
-            "status": "SUCCEEDED",
-            "pass_rate_improvement": 0.005,
-            "total_llm_cost": 1000.0,
-        },
-        gate_config={
-            "min_val_score_improvement": 0.01,
-            "max_total_cost": None,
-        },
+def test_sdk_pipeline_skips_disabled_cost_gate_but_keeps_quality_threshold(
+    tmp_path: Path,
+    monkeypatch,
+):
+    _install_fake_sdk(
+        monkeypatch,
+        best_prompt="optimized prompt",
+        baseline_pass_rate=0.5,
+        best_pass_rate=0.505,
+        pass_rate_improvement=0.9,
+        total_llm_cost=1000.0,
     )
 
+    report = run_pipeline(
+        mode="sdk",
+        train_path=DEFAULT_TRAIN,
+        val_path=DEFAULT_VAL,
+        optimizer_config_path=_write_sdk_optimizer_config(tmp_path),
+        prompt_path=DEFAULT_PROMPT,
+        output_dir=tmp_path / "sdk_run",
+        sdk_call_agent="fake_call_agent_module:call_agent",
+        gate_config_path=_write_gate_config(
+            tmp_path,
+            min_val_score_improvement=0.01,
+            max_total_cost=None,
+        ),
+    )
+    decision = report.gate_decisions[0]
+
     assert decision.accepted is False
+    assert decision.validation_score_delta == 0.005
     assert any("validation improvement" in reason for reason in decision.reasons)
     assert not any("cost" in reason for reason in decision.reasons)
     assert decision.total_run_cost == 1000.0
@@ -1672,7 +1711,7 @@ def test_run_pipeline_mode_sdk_registers_multiple_target_prompt_paths(tmp_path: 
         "skill_prompt": "optimized skill",
     }
     assert "router_prompt" in report.candidates[0]["candidate"].prompt_diff
-    assert set(report.audit["candidate_prompt_hashes_by_field"]["sdk_best"]) == {
+    assert set(report.audit["candidate_prompt_hashes"]["sdk_best"]) == {
         "system_prompt",
         "router_prompt",
         "skill_prompt",
@@ -1687,12 +1726,15 @@ def test_run_pipeline_mode_sdk_registers_multiple_target_prompt_paths(tmp_path: 
     assert (run_dir / "candidate_prompts" / "sdk_best" / "skill_prompt.txt").read_text(
         encoding="utf-8"
     ) == "optimized skill"
-    assert (run_dir / "candidate_prompts" / "sdk_best" / "bundle.txt").read_text(
-        encoding="utf-8"
-    ) == report.candidates[0]["candidate"].prompt
     input_hashes = json.loads((run_dir / "input_hashes.json").read_text(encoding="utf-8"))
-    assert set(input_hashes["target_prompts"]) == {"system_prompt", "router_prompt", "skill_prompt"}
-    assert "gate_config" in input_hashes
+    assert set(input_hashes["target_prompts"]) == {
+        "system_prompt",
+        "router_prompt",
+        "skill_prompt",
+    }
+    assert report.audit["gate_config_hash"]
+    assert report.audit["sdk_result_availability"]["full_train_eval_result"] is True
+    assert calls["evaluation_count"] == 4
     command = report.run["reproducibility_command"]
     assert "--sdk-call-agent fake_call_agent_module:call_agent" in command
     assert "--target-prompt" in command
@@ -1702,20 +1744,29 @@ def test_run_pipeline_mode_sdk_registers_multiple_target_prompt_paths(tmp_path: 
 
 def test_run_pipeline_mode_sdk_keeps_source_writeback_outside_backend(tmp_path: Path, monkeypatch):
     calls = _install_fake_sdk(monkeypatch, best_prompt="optimized prompt")
+    prompt_path = tmp_path / "system_prompt.txt"
+    prompt_path.write_bytes(b"baseline prompt\r\n")
 
     report = run_pipeline(
         mode="sdk",
         train_path=DEFAULT_TRAIN,
         val_path=DEFAULT_VAL,
         optimizer_config_path=DEFAULT_OPTIMIZER_CONFIG,
-        prompt_path=DEFAULT_PROMPT,
+        prompt_path=prompt_path,
         output_dir=tmp_path / "sdk_run",
         sdk_call_agent="fake_call_agent_module:call_agent",
         update_source=True,
+        gate_config_path=_write_gate_config(
+            tmp_path,
+            min_val_score_improvement=0.01,
+            max_total_cost=None,
+        ),
     )
 
     assert report.run["update_source"] is True
     assert calls["update_source"] is False
+    assert report.writeback.status == "applied"
+    assert prompt_path.read_text(encoding="utf-8") == "optimized prompt"
     assert "--update-source" in report.run["reproducibility_command"]
 
 
@@ -1798,9 +1849,59 @@ def _install_fake_sdk(
                 rounds=effective_rounds,
             )
 
+    class FakeEvalConfig:
+        def __init__(self, **kwargs):
+            self.payload = kwargs
+
+        def model_dump_json(self, indent=2):
+            return json.dumps(self.payload, indent=indent)
+
+    class FakeEvaluationCasesFailed(Exception):
+        pass
+
+    class FakeAgentEvaluator:
+        @staticmethod
+        def get_executer(dataset_path, **kwargs):
+            evaluation_index = int(calls.get("evaluation_count", 0))
+            calls["evaluation_count"] = evaluation_index + 1
+            calls.setdefault("evaluation_calls", []).append({
+                "dataset_path": dataset_path,
+                **kwargs,
+            })
+            payload = json.loads(Path(dataset_path).read_text(encoding="utf-8"))
+            if "eval_cases" in payload:
+                case_ids = [str(case["eval_id"]) for case in payload["eval_cases"]]
+            else:
+                case_ids = [str(case.get("case_id") or case.get("id")) for case in payload["cases"]]
+            is_baseline = evaluation_index % 4 < 2
+            score = baseline_pass_rate if is_baseline else best_pass_rate
+            result = _sdk_evaluate_result({
+                case_id: [
+                    _sdk_case_run(
+                        case_id,
+                        status="PASSED",
+                        metrics=[_sdk_metric("final_response_avg_score", score, status="PASSED")],
+                        output="evaluated output",
+                    )
+                ]
+                for case_id in case_ids
+            })
+
+            class FakeExecuter:
+                async def evaluate(self):
+                    return None
+
+                def get_result(self):
+                    return result
+
+            return FakeExecuter()
+
     fake_eval_module = types.ModuleType("trpc_agent_sdk.evaluation")
     fake_eval_module.AgentOptimizer = FakeAgentOptimizer
     fake_eval_module.TargetPrompt = FakeTargetPrompt
+    fake_eval_module.AgentEvaluator = FakeAgentEvaluator
+    fake_eval_module.EvalConfig = FakeEvalConfig
+    fake_eval_module.EvaluationCasesFailed = FakeEvaluationCasesFailed
     monkeypatch.setitem(sys.modules, "trpc_agent_sdk.evaluation", fake_eval_module)
 
     call_agent_module = types.ModuleType("fake_call_agent_module")
@@ -2031,7 +2132,7 @@ def _write_gate_config(
     tmp_path: Path,
     *,
     min_val_score_improvement: float,
-    max_total_cost: float,
+    max_total_cost: float | None,
 ) -> Path:
     path = tmp_path / "wrapper_gate.json"
     path.write_text(

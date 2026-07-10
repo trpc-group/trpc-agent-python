@@ -5,15 +5,19 @@ from __future__ import annotations
 import json
 import re
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from .attribution import summarize_failures
 from .schemas import CandidatePrompt
 from .schemas import CaseDelta
+from .schemas import CostSummary
 from .schemas import EvalResult
 from .schemas import GateDecision
 from .schemas import OptimizationReport
+from .schemas import OptimizationRound
+from .schemas import WritebackResult
 from .schemas import to_jsonable
 
 
@@ -27,6 +31,23 @@ REPRODUCIBILITY_COMMAND = (
     "--fake-model --fake-judge --trace"
 )
 ARTIFACT_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+
+@dataclass(frozen=True)
+class RunArtifactPaths:
+    """Locations written by the audit-first report lifecycle."""
+
+    output_dir: Path
+    run_dir: Path
+    prewrite_json: Path
+    prewrite_markdown: Path
+    audit_json: Path
+    final_json: Path
+    final_markdown: Path
+    writeback_json: Path
+    writeback_journal: Path
+    top_level_json: Path
+    top_level_markdown: Path
 
 
 def compute_case_deltas(
@@ -75,6 +96,9 @@ def build_report(
     gate_decisions: list[GateDecision],
     selected_candidate: str | None,
     audit: dict[str, Any],
+    rounds: list[OptimizationRound] | None = None,
+    cost_summary: CostSummary | None = None,
+    writeback: WritebackResult | None = None,
 ) -> OptimizationReport:
     all_results: list[EvalResult] = [baseline_train, baseline_validation]
     for record in candidate_records:
@@ -93,18 +117,121 @@ def build_report(
         gate_decisions=gate_decisions,
         selected_candidate=selected_candidate,
         audit=audit,
+        rounds=list(rounds or []),
+        cost_summary=cost_summary or CostSummary(),
+        writeback=writeback or WritebackResult(status="not_requested"),
     )
 
 
 def write_reports(report: OptimizationReport, output_dir: str | Path) -> tuple[Path, Path]:
+    """Compatibility helper for callers that do not perform source writeback."""
+
+    paths = prepare_run_artifacts(report, output_dir)
+    finalize_run_artifacts(report, paths)
+    return paths.top_level_json, paths.top_level_markdown
+
+
+def prepare_run_artifacts(
+    report: OptimizationReport,
+    output_dir: str | Path,
+) -> RunArtifactPaths:
+    """Persist a complete pre-write audit before any source prompt commit."""
+
     output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-    json_path = output_path / "optimization_report.json"
-    md_path = output_path / "optimization_report.md"
-    json_path.write_text(report_to_json(report), encoding="utf-8")
-    md_path.write_text(render_markdown(report), encoding="utf-8")
+    run_id = _safe_artifact_name(str(report.run.get("run_id") or "run"))
+    run_dir = output_path / "runs" / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    paths = RunArtifactPaths(
+        output_dir=output_path,
+        run_dir=run_dir,
+        prewrite_json=run_dir / "pre_write_report.json",
+        prewrite_markdown=run_dir / "pre_write_report.md",
+        audit_json=run_dir / "audit.json",
+        final_json=run_dir / "optimization_report.json",
+        final_markdown=run_dir / "optimization_report.md",
+        writeback_json=run_dir / "writeback.json",
+        writeback_journal=run_dir / "writeback_journal.json",
+        top_level_json=output_path / "optimization_report.json",
+        top_level_markdown=output_path / "optimization_report.md",
+    )
+    paths.prewrite_json.write_text(report_to_json(report), encoding="utf-8")
+    paths.prewrite_markdown.write_text(render_markdown(report), encoding="utf-8")
+    paths.audit_json.write_text(
+        json.dumps(
+            to_jsonable(report.audit),
+            indent=2,
+            ensure_ascii=False,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    journal = dict(report.audit.get("writeback_journal", {}))
+    if journal.get("state") == "pending":
+        journal["state"] = "prepared"
+    paths.writeback_journal.write_text(
+        json.dumps(
+            to_jsonable(journal),
+            indent=2,
+            ensure_ascii=False,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     write_audit_artifacts(report, output_path)
-    return json_path, md_path
+    return paths
+
+
+def finalize_run_artifacts(report: OptimizationReport, paths: RunArtifactPaths) -> None:
+    """Persist final writeback state and refresh top-level convenience copies."""
+
+    expected_run_dir = paths.output_dir / "runs" / _safe_artifact_name(
+        str(report.run.get("run_id") or "run")
+    )
+    if paths.run_dir != expected_run_dir:
+        raise ValueError("run artifact paths do not match report run_id")
+    paths.writeback_json.write_text(
+        json.dumps(
+            to_jsonable(report.writeback),
+            indent=2,
+            ensure_ascii=False,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    paths.writeback_journal.write_text(
+        json.dumps(
+            to_jsonable(report.audit.get("writeback_journal", {})),
+            indent=2,
+            ensure_ascii=False,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    paths.audit_json.write_text(
+        json.dumps(
+            to_jsonable(report.audit),
+            indent=2,
+            ensure_ascii=False,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    paths.final_json.write_text(report_to_json(report), encoding="utf-8")
+    paths.final_markdown.write_text(render_markdown(report), encoding="utf-8")
+    paths.output_dir.mkdir(parents=True, exist_ok=True)
+    paths.top_level_json.write_text(report_to_json(report), encoding="utf-8")
+    paths.top_level_markdown.write_text(render_markdown(report), encoding="utf-8")
+    write_audit_artifacts(report, paths.output_dir)
 
 
 def report_to_json(report: OptimizationReport) -> str:
@@ -130,12 +257,15 @@ def render_markdown(report: OptimizationReport) -> str:
         + ("yes" if report.run.get("update_source") else "no (default)"),
         "",
     ])
+    availability = report.audit.get("sdk_result_availability", {})
+    lines.extend([
+        "Fake and SDK modes perform complete AgentEvaluator-compatible reevaluation for baseline "
+        "and every candidate on both train and validation; optimizer aggregates are never used "
+        "as gate evidence.",
+        "",
+    ])
     if report.run.get("mode") == "sdk":
-        availability = report.audit.get("sdk_result_availability", {})
         lines.extend([
-            "SDK mode uses OptimizeResult aggregate validation metrics. "
-            "Full train scores and full per-case validation deltas are not exposed by the SDK result.",
-            "",
             "SDK availability: "
             f"aggregate_validation_result={availability.get('aggregate_validation_result')}, "
             f"full_train_eval_result={availability.get('full_train_eval_result')}, "
@@ -148,16 +278,10 @@ def render_markdown(report: OptimizationReport) -> str:
         "",
     ])
     for decision in report.gate_decisions:
-        verdict = (
-            decision.gate_status
-            if decision.gate_status != "applied"
-            else ("accepted" if decision.accepted else "rejected")
-        )
+        verdict = "accepted" if decision.accepted else "rejected"
         lines.append(f"### {decision.candidate_id} ({verdict})")
         for reason in decision.reasons:
             lines.append(f"- {reason}")
-        if decision.not_applied_checks:
-            lines.append(f"- not applied checks: {', '.join(decision.not_applied_checks)}")
         lines.append("")
 
     lines.extend([
@@ -170,7 +294,7 @@ def render_markdown(report: OptimizationReport) -> str:
     for record in report.candidates:
         candidate: CandidatePrompt = record["candidate"]
         gate = decision_by_id[candidate.candidate_id]
-        verdict = gate.gate_status if gate.gate_status != "applied" else ("accept" if gate.accepted else "reject")
+        verdict = "accept" if gate.accepted else "reject"
         lines.append(
             f"| {candidate.candidate_id} | {record['train_result'].score:.3f} | "
             f"{record['validation_result'].score:.3f} | {verdict} |"
@@ -252,8 +376,6 @@ def render_markdown(report: OptimizationReport) -> str:
 def write_audit_artifacts(report: OptimizationReport, output_path: Path) -> None:
     run_id = _safe_artifact_name(str(report.run.get("run_id") or "run"))
     run_dir = output_path / "runs" / run_id
-    if run_dir.exists() and report.run.get("mode") == "fake":
-        shutil.rmtree(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
 
     input_paths = report.audit.get("input_paths", {})
@@ -280,14 +402,12 @@ def write_audit_artifacts(report: OptimizationReport, output_path: Path) -> None
         candidate_name = _safe_artifact_name(candidate.candidate_id)
         candidate_dir = prompt_dir / candidate_name
         candidate_dir.mkdir(exist_ok=True)
-        best_prompts = report.audit.get("sdk_result_summary", {}).get("best_prompts", {})
-        if report.run.get("mode") == "sdk" and isinstance(best_prompts, dict) and best_prompts:
-            for field_name, prompt_text in best_prompts.items():
-                field_artifact = _safe_artifact_name(str(field_name))
-                (candidate_dir / f"{field_artifact}.txt").write_text(str(prompt_text), encoding="utf-8")
-            (candidate_dir / "bundle.txt").write_text(candidate.prompt, encoding="utf-8")
-        else:
-            (candidate_dir / "system_prompt.txt").write_text(candidate.prompt, encoding="utf-8")
+        for field_name, prompt_text in candidate.bundle().items():
+            field_artifact = _safe_artifact_name(str(field_name))
+            (candidate_dir / f"{field_artifact}.txt").write_text(
+                prompt_text,
+                encoding="utf-8",
+            )
         (diffs_dir / f"{candidate_name}.diff").write_text(candidate.prompt_diff, encoding="utf-8")
         for split_name in ("train_result", "validation_result"):
             split_result = record[split_name]

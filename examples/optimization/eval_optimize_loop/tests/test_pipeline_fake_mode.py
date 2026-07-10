@@ -69,12 +69,18 @@ def test_fake_mode_pipeline_generates_json_and_markdown_reports(tmp_path: Path):
         "candidate_prompt_hashes",
         "total_run_cost",
     }
+    assert payload["audit"]["seed"] == 91
+    assert payload["audit"]["duration_seconds"] > 0
+    assert payload["run"]["trace"] is True
     assert payload["run"]["reproducibility_command"].startswith("python examples/optimization")
-    assert payload["run"]["run_id"] == "eval_optimize_loop_seed_91"
+    assert payload["run"]["run_id"].startswith("eval_optimize_loop_fake_")
     assert payload["audit"]["total_run_cost"] == payload["audit"]["cost"]["total"]
     assert "candidate_001_overfit" in payload["audit"]["prompt_diffs"]
     assert "candidate_002_safe" in payload["audit"]["prompt_diffs"]
     assert payload["candidates"][0]["candidate"]["prompt_diff"].startswith("--- baseline_system_prompt.txt")
+    assert all(len(record["train_result"]["cases"]) == 3 for record in payload["candidates"])
+    assert all(len(record["validation_result"]["cases"]) == 3 for record in payload["candidates"])
+    assert payload["writeback"]["status"] == "not_requested"
 
     decisions = {item["candidate_id"]: item for item in payload["gate_decisions"]}
     assert not decisions["candidate_001_overfit"]["accepted"]
@@ -96,7 +102,7 @@ def test_fake_mode_pipeline_generates_json_and_markdown_reports(tmp_path: Path):
     assert "Reproducibility" in markdown
     assert "Cost And Audit" in markdown
 
-    run_dir = output_dir / "runs" / "eval_optimize_loop_seed_91"
+    run_dir = output_dir / "runs" / payload["run"]["run_id"]
     assert (run_dir / "config.snapshot.json").is_file()
     assert (run_dir / "input_hashes.json").is_file()
     assert (run_dir / "candidate_prompts" / "candidate_001_overfit" / "system_prompt.txt").is_file()
@@ -113,12 +119,23 @@ def test_pipeline_is_deterministic_with_same_seed(tmp_path: Path):
     run_pipeline(output_dir=first_dir, fake_model=True, fake_judge=True, trace=True)
     run_pipeline(output_dir=second_dir, fake_model=True, fake_judge=True, trace=True)
 
-    assert (first_dir / "optimization_report.json").read_text(encoding="utf-8") == (
-        second_dir / "optimization_report.json"
-    ).read_text(encoding="utf-8")
-    assert (first_dir / "optimization_report.md").read_text(encoding="utf-8") == (
-        second_dir / "optimization_report.md"
-    ).read_text(encoding="utf-8")
+    first_payload = json.loads((first_dir / "optimization_report.json").read_text(encoding="utf-8"))
+    second_payload = json.loads((second_dir / "optimization_report.json").read_text(encoding="utf-8"))
+    first_run_id = first_payload["run"]["run_id"]
+    second_run_id = second_payload["run"]["run_id"]
+
+    assert _normalized_payload(first_payload) == _normalized_payload(second_payload)
+    first_markdown = (first_dir / "optimization_report.md").read_text(encoding="utf-8")
+    second_markdown = (second_dir / "optimization_report.md").read_text(encoding="utf-8")
+    normalized_first_markdown = first_markdown.replace(first_run_id, "<run_id>").replace(
+        str(first_dir),
+        "<output_dir>",
+    )
+    normalized_second_markdown = second_markdown.replace(second_run_id, "<run_id>").replace(
+        str(second_dir),
+        "<output_dir>",
+    )
+    assert normalized_first_markdown == normalized_second_markdown
 
 
 def test_pipeline_accepts_mode_fake_without_legacy_flags(tmp_path: Path):
@@ -130,6 +147,12 @@ def test_pipeline_accepts_mode_fake_without_legacy_flags(tmp_path: Path):
 def test_pipeline_selected_candidate_is_null_when_all_candidates_rejected(tmp_path: Path):
     config_path = tmp_path / "optimizer.json"
     config = json.loads(Path(DEFAULT_OPTIMIZER_CONFIG).read_text(encoding="utf-8"))
+    config["gate"] = {
+        "allow_new_hard_fail": False,
+        "protected_case_ids": ["val_protected_yes_no"],
+        "max_score_drop_per_case": 0.0,
+        "max_total_cost": 1.0,
+    }
     config["gate"]["min_val_score_improvement"] = 1.0
     config_path.write_text(json.dumps(config), encoding="utf-8")
 
@@ -180,3 +203,12 @@ def test_fake_report_json_remains_strict_json(tmp_path: Path):
     assert "NaN" not in payload
     assert "Infinity" not in payload
     assert json.loads(payload)["selected_candidate"] == "candidate_002_safe"
+
+
+def _normalized_payload(payload: dict) -> dict:
+    normalized = json.loads(json.dumps(payload))
+    normalized["run"].pop("run_id", None)
+    normalized["run"].pop("reproducibility_command", None)
+    normalized["audit"].pop("duration_seconds", None)
+    normalized["audit"].pop("reproducibility_command", None)
+    return normalized
