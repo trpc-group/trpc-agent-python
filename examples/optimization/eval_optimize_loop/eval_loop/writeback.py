@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from .artifacts import validate_distinct_file_paths
 from .schemas import WritebackResult
 
 
@@ -55,6 +56,7 @@ def _hash_bytes(content: bytes) -> str:
 def snapshot_prompt_files(paths: dict[str, str | Path]) -> PromptSnapshot:
     """Read source prompt files and capture their exact bytes and hashes."""
 
+    validate_distinct_file_paths(paths, context="prompt snapshot files")
     files: dict[str, PromptFileSnapshot] = {}
     for name, raw_path in paths.items():
         path = Path(raw_path)

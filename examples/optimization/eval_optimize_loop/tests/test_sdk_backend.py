@@ -3,6 +3,7 @@ from __future__ import annotations
 import builtins
 import inspect
 import json
+import os
 import shlex
 import sys
 import types
@@ -1616,7 +1617,24 @@ def test_target_prompt_paths_reject_same_resolved_file(tmp_path: Path):
             default_prompt_path=prompt_path,
         )
 
-    assert str(exc_info.value) == "--target-prompt fields must not reference the same resolved file"
+    assert "--target-prompt fields must be different physical files" in str(exc_info.value)
+
+
+def test_target_prompt_paths_reject_hardlink_aliases(tmp_path: Path):
+    prompt_path = tmp_path / "prompt.txt"
+    hardlink_path = tmp_path / "prompt-hardlink.txt"
+    prompt_path.write_text("baseline", encoding="utf-8")
+    os.link(prompt_path, hardlink_path)
+    assert prompt_path.samefile(hardlink_path)
+
+    with pytest.raises(ValueError, match="different physical files"):
+        _parse_target_prompt_paths(
+            [
+                f"system_prompt={prompt_path}",
+                f"router_prompt={hardlink_path}",
+            ],
+            default_prompt_path=prompt_path,
+        )
 
 
 @pytest.mark.parametrize(

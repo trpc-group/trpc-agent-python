@@ -21,6 +21,7 @@ if str(HERE) not in sys.path:
 
 try:  # Package import during tests.
     from .eval_loop.artifacts import validate_artifact_component
+    from .eval_loop.artifacts import validate_distinct_file_paths
     from .eval_loop.backends import FakeBackend
     from .eval_loop.backends import SDKBackend
     from .eval_loop.config import _parse_gate_config
@@ -32,6 +33,7 @@ try:  # Package import during tests.
     from .eval_loop.schemas import OptimizationReport
 except ImportError:  # Direct script execution.
     from eval_loop.artifacts import validate_artifact_component
+    from eval_loop.artifacts import validate_distinct_file_paths
     from eval_loop.backends import FakeBackend
     from eval_loop.backends import SDKBackend
     from eval_loop.config import _parse_gate_config
@@ -170,10 +172,10 @@ def build_pipeline_request_and_backend(
             "--fake-judge or use --mode sdk with --sdk-call-agent module:function."
         )
 
-    train_resolved = Path(train_path).resolve()
-    validation_resolved = Path(val_path).resolve()
-    if train_resolved == validation_resolved:
-        raise ValueError("train and validation evalset paths must be different")
+    validate_distinct_file_paths(
+        {"train": train_path, "validation": val_path},
+        context="train and validation evalset paths",
+    )
 
     target_prompt_paths = _parse_target_prompt_paths(
         target_prompts,
@@ -282,7 +284,6 @@ def _parse_target_prompt_paths(
         return {"system_prompt": Path(default_prompt_path).resolve()}
     parsed: dict[str, str | Path] = {}
     casefold_names: set[str] = set()
-    resolved_paths: set[Path] = set()
     for item in target_prompts:
         if "=" not in item:
             raise ValueError("--target-prompt must use name=path format")
@@ -303,12 +304,12 @@ def _parse_target_prompt_paths(
             raise ValueError(f"--target-prompt duplicate field name {name!r}")
         if name.casefold() in casefold_names:
             raise ValueError("--target-prompt field names must be case-insensitively unique")
-        resolved_path = Path(path).resolve()
-        if resolved_path in resolved_paths:
-            raise ValueError("--target-prompt fields must not reference the same resolved file")
-        resolved_paths.add(resolved_path)
         casefold_names.add(name.casefold())
-        parsed[name] = resolved_path
+        parsed[name] = Path(path).resolve()
+    validate_distinct_file_paths(
+        parsed,
+        context="--target-prompt fields",
+    )
     return parsed
 
 

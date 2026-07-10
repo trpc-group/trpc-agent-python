@@ -8,6 +8,7 @@ from dataclasses import field
 from pathlib import Path
 from typing import Any
 
+from .artifacts import validate_distinct_file_paths
 from .schemas import EvalCase
 
 
@@ -141,10 +142,10 @@ def validate_inputs(
     validation_cases: list[EvalCase],
     config: OptimizerConfig,
 ) -> None:
-    train_resolved = Path(train_path).resolve()
-    val_resolved = Path(val_path).resolve()
-    if train_resolved == val_resolved:
-        raise ValueError(f"{train_path}: train and validation evalset paths must be different")
+    validate_distinct_file_paths(
+        {"train": train_path, "validation": val_path},
+        context="train and validation evalset paths",
+    )
 
     _validate_cases(train_cases, split="train", path=train_path)
     _validate_cases(validation_cases, split="validation", path=val_path)

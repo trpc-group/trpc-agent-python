@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import math
@@ -96,7 +97,7 @@ class FailingCandidateBackend(RecordingBackend):
         self,
         *,
         fail_on: tuple[str, str],
-        failure: Exception,
+        failure: BaseException,
         delegate: RecordingBackend,
     ) -> None:
         super().__init__(
@@ -138,6 +139,47 @@ class AllCandidatesFailingBackend(RecordingBackend):
             )
             raise RuntimeError(f"{kwargs['prompt_id']} evaluation unavailable")
         return await super().evaluate(**kwargs)
+
+
+class SourceMutatingBackend(RecordingBackend):
+    def __init__(
+        self,
+        *,
+        request: PipelineRequest,
+        mutate_on: tuple[str, str] | str,
+        failure: BaseException | None,
+        delegate: RecordingBackend,
+    ) -> None:
+        super().__init__(
+            candidates=delegate.candidates,
+            results=delegate.results,
+            optimization_cost=delegate.optimization_cost,
+        )
+        self.request = request
+        self.mutate_on = mutate_on
+        self.failure = failure
+
+    def _mutate_source(self) -> None:
+        Path(self.request.target_prompt_paths["system_prompt"]).write_text(
+            "backend source mutation",
+            encoding="utf-8",
+        )
+
+    async def evaluate(self, **kwargs: Any) -> EvalResult:
+        result = await super().evaluate(**kwargs)
+        if (kwargs["prompt_id"], kwargs["split"]) == self.mutate_on:
+            self._mutate_source()
+            if self.failure is not None:
+                raise self.failure
+        return result
+
+    async def optimize_candidates(self, **kwargs: Any) -> OptimizationResult:
+        result = await super().optimize_candidates(**kwargs)
+        if self.mutate_on == "optimizer":
+            self._mutate_source()
+            if self.failure is not None:
+                raise self.failure
+        return result
 
 
 @pytest.mark.asyncio
@@ -214,6 +256,114 @@ async def test_backend_cannot_mutate_canonical_baseline_or_candidate_bundles(tmp
     )
     assert artifact_prompt.read_text(encoding="utf-8") == "safe prompt"
     assert Path(request.target_prompt_paths["system_prompt"]).read_text(encoding="utf-8") == "safe prompt"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("mutate_on", "update_source"),
+    [
+        (("baseline", "train"), False),
+        (("baseline", "validation"), False),
+        ("optimizer", False),
+        (("candidate_a", "train"), False),
+        (("candidate_a", "validation"), True),
+    ],
+)
+async def test_successful_backend_source_mutation_is_fatal(
+    tmp_path: Path,
+    mutate_on: tuple[str, str] | str,
+    update_source: bool,
+):
+    request = _request(tmp_path, update_source=update_source)
+    backend = SourceMutatingBackend(
+        request=request,
+        mutate_on=mutate_on,
+        failure=None,
+        delegate=_safe_backend(candidate_count=1),
+    )
+
+    with pytest.raises(ConcurrentPromptUpdateError, match="source prompt.*changed"):
+        await execute_pipeline(request, evaluator=backend, optimizer=backend)
+
+    assert Path(request.target_prompt_paths["system_prompt"]).read_text(
+        encoding="utf-8"
+    ) == "backend source mutation"
+    assert not (Path(request.output_dir) / "optimization_report.json").exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "failure",
+    [RuntimeError("backend error after mutation"), asyncio.CancelledError()],
+    ids=["error", "cancellation"],
+)
+async def test_backend_error_or_cancellation_with_source_mutation_is_integrity_fatal(
+    tmp_path: Path,
+    failure: BaseException,
+):
+    request = _request(tmp_path, update_source=False)
+    backend = SourceMutatingBackend(
+        request=request,
+        mutate_on=("candidate_a", "train"),
+        failure=failure,
+        delegate=_safe_backend(candidate_count=2),
+    )
+
+    with pytest.raises(
+        ConcurrentPromptUpdateError,
+        match="source prompt.*changed",
+    ) as error_info:
+        await execute_pipeline(request, evaluator=backend, optimizer=backend)
+
+    assert error_info.value.__cause__ is failure
+    assert not any(
+        call[0] == "evaluate" and call[1] == "candidate_b"
+        for call in backend.calls
+    )
+    assert not (Path(request.output_dir) / "optimization_report.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_clean_backend_cancellation_preserves_cancelled_error(tmp_path: Path):
+    request = _request(tmp_path, update_source=False)
+    cancellation = asyncio.CancelledError()
+    backend = FailingCandidateBackend(
+        fail_on=("candidate_a", "train"),
+        failure=cancellation,
+        delegate=_safe_backend(candidate_count=2),
+    )
+
+    with pytest.raises(asyncio.CancelledError) as error_info:
+        await execute_pipeline(request, evaluator=backend, optimizer=backend)
+
+    assert error_info.value is cancellation
+    assert Path(request.target_prompt_paths["system_prompt"]).read_bytes() == b"baseline\n"
+    assert not any(
+        call[0] == "evaluate" and call[1] == "candidate_b"
+        for call in backend.calls
+    )
+
+
+@pytest.mark.asyncio
+async def test_unreadable_source_prompt_is_integrity_fatal_without_path_leak(tmp_path: Path):
+    request = _request(tmp_path, update_source=False)
+    backend = SourceMutatingBackend(
+        request=request,
+        mutate_on=("baseline", "train"),
+        failure=None,
+        delegate=_safe_backend(candidate_count=1),
+    )
+
+    def remove_source() -> None:
+        Path(request.target_prompt_paths["system_prompt"]).unlink()
+
+    backend._mutate_source = remove_source  # type: ignore[method-assign]
+
+    with pytest.raises(PromptRestorationError, match="source prompt field") as error_info:
+        await execute_pipeline(request, evaluator=backend, optimizer=backend)
+
+    assert str(tmp_path) not in str(error_info.value)
+    assert isinstance(error_info.value.__cause__, OSError)
 
 
 @pytest.mark.asyncio
@@ -859,16 +1009,13 @@ async def test_writeback_journal_is_committing_before_source_commit(
 ):
     request = _request(tmp_path, update_source=True)
     backend = _safe_backend(candidate_count=1)
+    real_commit = pipeline_module.commit_prompt_bundle
 
     def commit(snapshot, prompts):
         journal_path = Path(request.output_dir) / "runs" / request.run_id / "writeback_journal.json"
         journal = json.loads(journal_path.read_text(encoding="utf-8"))
         assert journal["state"] == "committing"
-        return WritebackResult(
-            status="applied",
-            before_hashes=snapshot.hashes(),
-            after_hashes={name: hashlib.sha256(prompts[name].encode("utf-8")).hexdigest() for name in prompts},
-        )
+        return real_commit(snapshot, prompts)
 
     monkeypatch.setattr(pipeline_module, "commit_prompt_bundle", commit)
 
@@ -997,6 +1144,48 @@ async def test_backend_neutral_core_rejects_same_resolved_train_and_validation_p
 
 
 @pytest.mark.asyncio
+async def test_backend_neutral_core_rejects_hardlinked_train_and_validation(
+    tmp_path: Path,
+):
+    request = _request(tmp_path)
+    validation_path = Path(request.validation_path)
+    validation_path.unlink()
+    os.link(request.train_path, validation_path)
+    assert Path(request.train_path).samefile(validation_path)
+    backend = _safe_backend(candidate_count=1)
+
+    with pytest.raises(ValueError, match="train and validation.*different physical files"):
+        await execute_pipeline(request, evaluator=backend, optimizer=backend)
+
+    assert backend.calls == []
+    assert not (Path(request.output_dir) / "runs").exists()
+
+
+def test_factory_rejects_hardlinked_train_and_validation_before_backend_creation(
+    tmp_path: Path,
+):
+    request = _request(tmp_path)
+    validation_path = Path(request.validation_path)
+    validation_path.unlink()
+    os.link(request.train_path, validation_path)
+    backend = _safe_backend(candidate_count=1)
+
+    with pytest.raises(ValueError, match="train and validation.*different physical files"):
+        build_pipeline_request_and_backend(
+            train_path=request.train_path,
+            val_path=validation_path,
+            optimizer_config_path=request.optimizer_config_path,
+            prompt_path=request.target_prompt_paths["system_prompt"],
+            output_dir=request.output_dir,
+            mode="fake",
+            backend=backend,
+        )
+
+    assert backend.calls == []
+    assert not Path(request.output_dir).exists()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("field_names", [["Foo", "foo"], ["CON"]])
 async def test_backend_neutral_core_rejects_unsafe_or_colliding_target_fields(
     tmp_path: Path,
@@ -1029,10 +1218,53 @@ async def test_backend_neutral_core_rejects_target_fields_for_same_resolved_file
     )
     backend = _safe_backend(candidate_count=1)
 
-    with pytest.raises(ValueError, match="target prompt fields.*same resolved file"):
+    with pytest.raises(ValueError, match="target prompt fields.*different physical files"):
         await execute_pipeline(request, evaluator=backend, optimizer=backend)
 
     assert backend.calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("alias_kind", ["hardlink", "casefold"])
+async def test_backend_neutral_core_rejects_physical_or_casefold_target_aliases(
+    tmp_path: Path,
+    alias_kind: str,
+):
+    request = _request(tmp_path)
+    if alias_kind == "hardlink":
+        first_path = Path(request.target_prompt_paths["system_prompt"])
+        second_path = tmp_path / "prompt-hardlink.txt"
+        os.link(first_path, second_path)
+        assert first_path.samefile(second_path)
+    else:
+        first_path = tmp_path / "CasePrompt.txt"
+        second_path = tmp_path / "caseprompt.txt"
+        first_path.write_text("first", encoding="utf-8")
+        second_path.write_text("second", encoding="utf-8")
+    request = replace(
+        request,
+        target_prompt_paths={"system_prompt": first_path, "router_prompt": second_path},
+    )
+    backend = _safe_backend(candidate_count=1)
+
+    with pytest.raises(ValueError, match="target prompt fields.*different physical files"):
+        await execute_pipeline(request, evaluator=backend, optimizer=backend)
+
+    assert backend.calls == []
+    assert not (Path(request.output_dir) / "runs").exists()
+
+
+def test_shared_path_validator_handles_missing_casefold_collisions(tmp_path: Path):
+    pipeline_module.validate_distinct_file_paths(
+        {"first": tmp_path / "first.txt", "second": tmp_path / "second.txt"},
+        context="test paths",
+    )
+
+    with pytest.raises(ValueError, match="case-insensitively"):
+        pipeline_module.validate_distinct_file_paths(
+            {"first": tmp_path / "Missing.txt", "second": tmp_path / "missing.txt"},
+            context="test paths",
+        )
 
 
 @pytest.mark.asyncio
@@ -1441,6 +1673,145 @@ def test_atomic_artifact_write_fsyncs_before_durable_replace(
     assert any(event[0] == "fsync" for event in events[:replace_index])
     assert path.read_text(encoding="utf-8") == "durable\n"
     assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_powershell_reproducibility_placeholders_remain_expandable(tmp_path: Path):
+    request = _request(tmp_path)
+    router_path = tmp_path / "router prompt.txt"
+    router_path.write_text("router", encoding="utf-8")
+    request = replace(
+        request,
+        target_prompt_paths={
+            "system_prompt": request.target_prompt_paths["system_prompt"],
+            "router_prompt": router_path,
+        },
+    )
+
+    command = pipeline_module._reproducibility_command(request)
+
+    assert '--output-dir "$OUTPUT_DIR"' in command
+    assert '"$EXTERNAL/train.evalset.json"' in command
+    assert '"router_prompt=$EXTERNAL/router prompt.txt"' in command
+    assert "'$OUTPUT_DIR'" not in command
+    assert "'$EXTERNAL" not in command
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows MoveFileExW contract")
+def test_windows_durable_replace_does_not_resolve_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    source = tmp_path / "source.tmp"
+    target = tmp_path / "target.json"
+    source.write_text("content", encoding="utf-8")
+    calls: list[tuple[str, str, int]] = []
+
+    class FakeMoveFileEx:
+        argtypes: object = None
+        restype: object = None
+
+        def __call__(self, source_name: str, target_name: str, flags: int) -> int:
+            calls.append((source_name, target_name, flags))
+            return 1
+
+    fake_move = FakeMoveFileEx()
+    fake_kernel = type("FakeKernel", (), {"MoveFileExW": fake_move})()
+    monkeypatch.setattr(report_module.ctypes, "WinDLL", lambda *args, **kwargs: fake_kernel)
+    monkeypatch.setattr(report_module, "_is_reparse_point", lambda path: False)
+    real_resolve = Path.resolve
+
+    def reject_target_resolve(path: Path, *args: Any, **kwargs: Any) -> Path:
+        if path == target:
+            raise AssertionError("durable replace must not resolve the target leaf")
+        return real_resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", reject_target_resolve)
+
+    report_module._durable_replace(source, target)
+
+    assert calls
+    assert calls[0][1] == str(target.absolute())
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows reparse-point contract")
+def test_windows_durable_replace_rejects_existing_reparse_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    source = tmp_path / "source.tmp"
+    target = tmp_path / "target.json"
+    source.write_text("content", encoding="utf-8")
+    target.write_text("old", encoding="utf-8")
+    monkeypatch.setattr(report_module, "_is_reparse_point", lambda path: path == target)
+    monkeypatch.setattr(
+        report_module.ctypes,
+        "WinDLL",
+        lambda *args, **kwargs: pytest.fail("MoveFileExW must not follow a reparse target"),
+    )
+
+    with pytest.raises(OSError, match="reparse-point target"):
+        report_module._durable_replace(source, target)
+
+
+@pytest.mark.asyncio
+async def test_prompt_integrity_is_checked_immediately_before_prepare(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    request = _request(tmp_path, update_source=False)
+    backend = _safe_backend(candidate_count=1)
+    original_build_report = pipeline_module.build_report
+
+    def mutate_after_report_build(**kwargs: Any):
+        report = original_build_report(**kwargs)
+        Path(request.target_prompt_paths["system_prompt"]).write_text(
+            "late source mutation",
+            encoding="utf-8",
+        )
+        return report
+
+    monkeypatch.setattr(pipeline_module, "build_report", mutate_after_report_build)
+
+    with pytest.raises(ConcurrentPromptUpdateError, match="source prompt integrity changed"):
+        await execute_pipeline(request, evaluator=backend, optimizer=backend)
+
+    run_dir = Path(request.output_dir) / "runs" / request.run_id
+    assert not (run_dir / "pre_write_report.json").exists()
+    assert not (Path(request.output_dir) / "optimization_report.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_late_no_write_source_mutation_downgrades_journal_to_unknown(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    request = _request(tmp_path, update_source=False)
+    backend = _safe_backend(candidate_count=1)
+    original_finalize = pipeline_module.finalize_run_artifacts
+
+    def mutate_after_finalize(report, paths):
+        original_finalize(report, paths)
+        Path(request.target_prompt_paths["system_prompt"]).write_text(
+            "mutation after final artifacts",
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(pipeline_module, "finalize_run_artifacts", mutate_after_finalize)
+
+    with pytest.raises(ConcurrentPromptUpdateError, match="source prompt integrity changed"):
+        await execute_pipeline(request, evaluator=backend, optimizer=backend)
+
+    journal_path = (
+        Path(request.output_dir)
+        / "runs"
+        / request.run_id
+        / "writeback_journal.json"
+    )
+    journal = json.loads(journal_path.read_text(encoding="utf-8"))
+    assert journal["state"] == "unknown"
+    assert journal["after_hashes"] == {
+        "system_prompt": hashlib.sha256(b"mutation after final artifacts").hexdigest()
+    }
 
 
 @pytest.mark.asyncio

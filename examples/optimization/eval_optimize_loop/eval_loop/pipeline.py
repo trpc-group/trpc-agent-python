@@ -9,6 +9,8 @@ import os
 import re
 import tempfile
 import time
+from collections.abc import Awaitable
+from collections.abc import Callable
 from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import replace
@@ -18,6 +20,7 @@ from typing import Any
 
 from .attribution import summarize_failures
 from .artifacts import validate_artifact_component
+from .artifacts import validate_distinct_file_paths
 from .backends import EvaluationBackend
 from .backends import OptimizationBackend
 from .config import _parse_gate_config
@@ -112,8 +115,10 @@ async def execute_pipeline(
     if not request.target_prompt_paths:
         raise ValueError("target_prompt_paths must not be empty")
     _validate_target_prompt_fields(request.target_prompt_paths)
-    if Path(request.train_path).resolve() == Path(request.validation_path).resolve():
-        raise ValueError("train and validation evalset paths must be different")
+    validate_distinct_file_paths(
+        {"train": request.train_path, "validation": request.validation_path},
+        context="train and validation evalset paths",
+    )
     run_root = _claim_run_directory(request.output_dir, run_id=run_id)
 
     input_snapshots = _snapshot_pipeline_inputs(request, run_id=run_id)
@@ -142,7 +147,6 @@ async def execute_pipeline(
 
 def _validate_target_prompt_fields(target_prompt_paths: dict[str, str | Path]) -> None:
     seen: set[str] = set()
-    resolved_paths: set[Path] = set()
     for field_name, prompt_path in target_prompt_paths.items():
         try:
             validate_artifact_component(field_name, context="target prompt field")
@@ -154,10 +158,10 @@ def _validate_target_prompt_fields(target_prompt_paths: dict[str, str | Path]) -
             raise ValueError("target prompt field names must be case-insensitively unique")
         seen.add(normalized_name)
 
-        resolved_path = Path(prompt_path).resolve()
-        if resolved_path in resolved_paths:
-            raise ValueError("target prompt fields must not reference the same resolved file")
-        resolved_paths.add(resolved_path)
+    validate_distinct_file_paths(
+        target_prompt_paths,
+        context="target prompt fields",
+    )
 
 
 async def _execute_with_snapshots(
@@ -200,13 +204,17 @@ async def _execute_with_snapshots(
     _verify_snapshot_integrity(input_snapshots)
 
     _verify_snapshot_integrity(input_snapshots, "train")
-    baseline_train = await evaluator.evaluate(
-        prompt_id="baseline",
-        prompts=dict(baseline_prompts),
-        dataset_path=train_path,
-        split="train",
-        trace=request.trace,
-        artifact_dir=_artifact_dir(run_root, "evaluations", "000_baseline", "train"),
+    baseline_train = await _await_backend_with_prompt_integrity(
+        lambda: evaluator.evaluate(
+            prompt_id="baseline",
+            prompts=dict(baseline_prompts),
+            dataset_path=train_path,
+            split="train",
+            trace=request.trace,
+            artifact_dir=_artifact_dir(run_root, "evaluations", "000_baseline", "train"),
+        ),
+        prompt_snapshot=prompt_snapshot,
+        context="baseline train evaluation",
     )
     _verify_snapshot_integrity(input_snapshots, "train")
     _validate_eval_result(
@@ -216,13 +224,17 @@ async def _execute_with_snapshots(
         expected_case_ids=set(train_metadata),
     )
     _verify_snapshot_integrity(input_snapshots, "validation")
-    baseline_validation = await evaluator.evaluate(
-        prompt_id="baseline",
-        prompts=dict(baseline_prompts),
-        dataset_path=validation_path,
-        split="validation",
-        trace=request.trace,
-        artifact_dir=_artifact_dir(run_root, "evaluations", "000_baseline", "validation"),
+    baseline_validation = await _await_backend_with_prompt_integrity(
+        lambda: evaluator.evaluate(
+            prompt_id="baseline",
+            prompts=dict(baseline_prompts),
+            dataset_path=validation_path,
+            split="validation",
+            trace=request.trace,
+            artifact_dir=_artifact_dir(run_root, "evaluations", "000_baseline", "validation"),
+        ),
+        prompt_snapshot=prompt_snapshot,
+        context="baseline validation evaluation",
     )
     _verify_snapshot_integrity(input_snapshots, "validation")
     _validate_eval_result(
@@ -234,14 +246,18 @@ async def _execute_with_snapshots(
 
     failure_summary = summarize_failures([baseline_train])
     _verify_snapshot_integrity(input_snapshots, "train", "validation", "optimizer")
-    optimization = await optimizer.optimize_candidates(
-        baseline_prompts=dict(baseline_prompts),
-        baseline_train=baseline_train,
-        failure_summary=failure_summary,
-        train_path=train_path,
-        validation_path=validation_path,
-        config_path=optimizer_path,
-        artifact_dir=_artifact_dir(run_root, "optimizer"),
+    optimization = await _await_backend_with_prompt_integrity(
+        lambda: optimizer.optimize_candidates(
+            baseline_prompts=dict(baseline_prompts),
+            baseline_train=baseline_train,
+            failure_summary=failure_summary,
+            train_path=train_path,
+            validation_path=validation_path,
+            config_path=optimizer_path,
+            artifact_dir=_artifact_dir(run_root, "optimizer"),
+        ),
+        prompt_snapshot=prompt_snapshot,
+        context="candidate optimization",
     )
     _verify_snapshot_integrity(input_snapshots, "train", "validation", "optimizer")
     _validate_optimization_result(optimization)
@@ -281,13 +297,17 @@ async def _execute_with_snapshots(
             "train",
         )
         try:
-            train_result = await evaluator.evaluate(
-                prompt_id=candidate.candidate_id,
-                prompts=dict(bundle),
-                dataset_path=train_path,
-                split="train",
-                trace=request.trace,
-                artifact_dir=train_artifact_dir,
+            train_result = await _await_backend_with_prompt_integrity(
+                lambda: evaluator.evaluate(
+                    prompt_id=candidate.candidate_id,
+                    prompts=dict(bundle),
+                    dataset_path=train_path,
+                    split="train",
+                    trace=request.trace,
+                    artifact_dir=train_artifact_dir,
+                ),
+                prompt_snapshot=prompt_snapshot,
+                context=f"candidate {candidate.candidate_id!r} train evaluation",
             )
         except Exception as error:
             record["evaluation_error"] = _recoverable_candidate_evaluation_failure(
@@ -317,13 +337,17 @@ async def _execute_with_snapshots(
             "validation",
         )
         try:
-            validation_result = await evaluator.evaluate(
-                prompt_id=candidate.candidate_id,
-                prompts=dict(bundle),
-                dataset_path=validation_path,
-                split="validation",
-                trace=request.trace,
-                artifact_dir=validation_artifact_dir,
+            validation_result = await _await_backend_with_prompt_integrity(
+                lambda: evaluator.evaluate(
+                    prompt_id=candidate.candidate_id,
+                    prompts=dict(bundle),
+                    dataset_path=validation_path,
+                    split="validation",
+                    trace=request.trace,
+                    artifact_dir=validation_artifact_dir,
+                ),
+                prompt_snapshot=prompt_snapshot,
+                context=f"candidate {candidate.candidate_id!r} validation evaluation",
             )
         except Exception as error:
             record["evaluation_error"] = _recoverable_candidate_evaluation_failure(
@@ -464,6 +488,10 @@ async def _execute_with_snapshots(
         writeback=provisional_writeback,
     )
 
+    _verify_prompt_integrity(
+        prompt_snapshot,
+        context="immediately before preparing run artifacts",
+    )
     artifact_paths = prepare_run_artifacts(report, request.output_dir)
     if selected_candidate is None or not request.update_source:
         terminal_journal = _terminal_journal(
@@ -472,8 +500,32 @@ async def _execute_with_snapshots(
             state=provisional_writeback.status,
         )
         final_report = _with_writeback(report, terminal_journal, provisional_writeback)
+        _verify_terminal_writeback_integrity(
+            prompt_snapshot,
+            expected_hashes=prompt_snapshot.hashes(),
+            context="before persisting no-write outcome",
+            artifact_paths=artifact_paths,
+            journal=terminal_journal,
+            request=request,
+        )
         persist_writeback_outcome(final_report, artifact_paths)
+        _verify_terminal_writeback_integrity(
+            prompt_snapshot,
+            expected_hashes=prompt_snapshot.hashes(),
+            context="immediately before finalizing no-write run",
+            artifact_paths=artifact_paths,
+            journal=terminal_journal,
+            request=request,
+        )
         finalize_run_artifacts(final_report, artifact_paths)
+        _verify_terminal_writeback_integrity(
+            prompt_snapshot,
+            expected_hashes=prompt_snapshot.hashes(),
+            context="immediately before returning no-write run",
+            artifact_paths=artifact_paths,
+            journal=terminal_journal,
+            request=request,
+        )
         return final_report
 
     input_drift = _public_input_drift(_input_drift(input_snapshots), request)
@@ -492,8 +544,32 @@ async def _execute_with_snapshots(
             input_drift=input_drift,
         )
         final_report = _with_writeback(report, final_journal, writeback, input_drift=input_drift)
+        _verify_terminal_writeback_integrity(
+            prompt_snapshot,
+            expected_hashes=prompt_snapshot.hashes(),
+            context="before persisting input-drift outcome",
+            artifact_paths=artifact_paths,
+            journal=final_journal,
+            request=request,
+        )
         persist_writeback_outcome(final_report, artifact_paths)
+        _verify_terminal_writeback_integrity(
+            prompt_snapshot,
+            expected_hashes=prompt_snapshot.hashes(),
+            context="immediately before finalizing input-drift run",
+            artifact_paths=artifact_paths,
+            journal=final_journal,
+            request=request,
+        )
         finalize_run_artifacts(final_report, artifact_paths)
+        _verify_terminal_writeback_integrity(
+            prompt_snapshot,
+            expected_hashes=prompt_snapshot.hashes(),
+            context="immediately before returning input-drift run",
+            artifact_paths=artifact_paths,
+            journal=final_journal,
+            request=request,
+        )
         return final_report
 
     committing_journal = dict(writeback_journal)
@@ -518,6 +594,15 @@ async def _execute_with_snapshots(
     else:
         writeback = _sanitize_writeback_result(writeback, request)
         terminal_state = writeback.status
+    terminal_prompt_hashes = dict(writeback.after_hashes or prompt_snapshot.hashes())
+    _verify_terminal_writeback_integrity(
+        prompt_snapshot,
+        expected_hashes=terminal_prompt_hashes,
+        context="immediately after source writeback",
+        artifact_paths=artifact_paths,
+        journal=committing_journal,
+        request=request,
+    )
     final_journal = _terminal_journal(
         committing_journal,
         writeback,
@@ -543,8 +628,32 @@ async def _execute_with_snapshots(
         except Exception:
             pass
         raise
+    _verify_terminal_writeback_integrity(
+        prompt_snapshot,
+        expected_hashes=terminal_prompt_hashes,
+        context="after persisting terminal writeback journal",
+        artifact_paths=artifact_paths,
+        journal=final_journal,
+        request=request,
+    )
     persist_writeback_outcome(final_report, artifact_paths)
+    _verify_terminal_writeback_integrity(
+        prompt_snapshot,
+        expected_hashes=terminal_prompt_hashes,
+        context="immediately before finalizing writeback run",
+        artifact_paths=artifact_paths,
+        journal=final_journal,
+        request=request,
+    )
     finalize_run_artifacts(final_report, artifact_paths)
+    _verify_terminal_writeback_integrity(
+        prompt_snapshot,
+        expected_hashes=terminal_prompt_hashes,
+        context="immediately before returning writeback run",
+        artifact_paths=artifact_paths,
+        journal=final_journal,
+        request=request,
+    )
     return final_report
 
 
@@ -767,6 +876,96 @@ def _current_prompt_hashes(snapshot: Any) -> dict[str, str]:
     return hashes
 
 
+def _verify_prompt_integrity(
+    snapshot: Any,
+    *,
+    context: str,
+    expected_hashes: Mapping[str, str] | None = None,
+) -> None:
+    expected = dict(expected_hashes or snapshot.hashes())
+    observed: dict[str, str] = {}
+    for name, prompt_file in snapshot.files.items():
+        try:
+            observed[name] = hashlib.sha256(prompt_file.path.read_bytes()).hexdigest()
+        except OSError as error:
+            raise PromptRestorationError(
+                f"source prompt field {name!r} is unreadable {context}"
+            ) from error
+    if observed != expected:
+        changed = sorted(
+            name
+            for name in set(expected) | set(observed)
+            if expected.get(name) != observed.get(name)
+        )
+        raise ConcurrentPromptUpdateError(
+            f"source prompt integrity changed {context}: {', '.join(changed)}"
+        )
+
+
+async def _await_backend_with_prompt_integrity(
+    operation: Callable[[], Awaitable[Any]],
+    *,
+    prompt_snapshot: Any,
+    context: str,
+) -> Any:
+    """Run one backend await while making source-prompt drift run-fatal."""
+
+    _verify_prompt_integrity(
+        prompt_snapshot,
+        context=f"before {context}",
+    )
+    try:
+        result = await operation()
+    except BaseException as backend_error:
+        try:
+            _verify_prompt_integrity(
+                prompt_snapshot,
+                context=f"after failed {context}",
+            )
+        except (ConcurrentPromptUpdateError, PromptRestorationError) as integrity_error:
+            raise integrity_error from backend_error
+        raise
+    _verify_prompt_integrity(
+        prompt_snapshot,
+        context=f"after {context}",
+    )
+    return result
+
+
+def _verify_terminal_writeback_integrity(
+    snapshot: Any,
+    *,
+    expected_hashes: Mapping[str, str],
+    context: str,
+    artifact_paths: Any,
+    journal: dict[str, Any],
+    request: PipelineRequest,
+) -> None:
+    try:
+        _verify_prompt_integrity(
+            snapshot,
+            context=context,
+            expected_hashes=expected_hashes,
+        )
+    except (ConcurrentPromptUpdateError, PromptRestorationError) as integrity_error:
+        unknown_journal = dict(journal)
+        unknown_journal.update(
+            {
+                "state": "unknown",
+                "report_phase": "final",
+                "after_hashes": _current_prompt_hashes(snapshot),
+                "error": _sanitize_error_message(str(integrity_error), request),
+            }
+        )
+        try:
+            persist_writeback_journal(artifact_paths, unknown_journal)
+        except Exception as persist_error:
+            add_note = getattr(integrity_error, "add_note", None)
+            if add_note is not None:
+                add_note(f"failed to persist unknown writeback state: {persist_error}")
+        raise
+
+
 def _terminal_journal(
     journal: dict[str, Any],
     writeback: WritebackResult,
@@ -866,19 +1065,13 @@ def _recoverable_candidate_evaluation_failure(
         (ConcurrentPromptUpdateError, PromptRestorationError),
     ):
         raise error
-
-    expected_prompt_hashes = prompt_snapshot.hashes()
-    observed_prompt_hashes = _current_prompt_hashes(prompt_snapshot)
-    if observed_prompt_hashes != expected_prompt_hashes:
-        changed = sorted(
-            name
-            for name in set(expected_prompt_hashes) | set(observed_prompt_hashes)
-            if expected_prompt_hashes.get(name) != observed_prompt_hashes.get(name)
+    try:
+        _verify_prompt_integrity(
+            prompt_snapshot,
+            context="after failed candidate evaluation",
         )
-        raise ConcurrentPromptUpdateError(
-            "source prompt integrity changed during failed candidate evaluation: "
-            + ", ".join(changed)
-        ) from error
+    except (ConcurrentPromptUpdateError, PromptRestorationError) as integrity_error:
+        raise integrity_error from error
 
     raw_message = str(error)
     return {
@@ -1547,6 +1740,21 @@ def _powershell_quote(value: str) -> str:
 
 
 def _powershell_arg(value: str) -> str:
+    placeholder = re.search(r"\$(OUTPUT_DIR|EXTERNAL)", value)
+    if placeholder is not None:
+        prefix = value[: placeholder.start()]
+        suffix = value[placeholder.end() :]
+
+        def escape_literal(text: str) -> str:
+            return text.replace("`", "``").replace("$", "`$").replace('"', '`"')
+
+        return (
+            '"'
+            + escape_literal(prefix)
+            + placeholder.group(0)
+            + escape_literal(suffix)
+            + '"'
+        )
     if re.fullmatch(r"[A-Za-z0-9_./:-]+", value):
         return value
     return _powershell_quote(value)

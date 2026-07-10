@@ -6,6 +6,7 @@ import ctypes
 import json
 import hashlib
 import os
+import stat
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -278,14 +279,16 @@ def _durable_replace(source: Path, target: Path) -> None:
     """Atomically replace a file and wait for rename metadata to reach storage."""
 
     if os.name == "nt":
+        if _is_reparse_point(target):
+            raise OSError(f"refusing to replace reparse-point target: {target}")
         move_file_ex = ctypes.WinDLL("kernel32", use_last_error=True).MoveFileExW
         move_file_ex.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32]
         move_file_ex.restype = ctypes.c_int
         movefile_replace_existing = 0x00000001
         movefile_write_through = 0x00000008
         succeeded = move_file_ex(
-            str(source.resolve()),
-            str(target.resolve()),
+            os.path.abspath(source),
+            os.path.abspath(target),
             movefile_replace_existing | movefile_write_through,
         )
         if not succeeded:
@@ -293,6 +296,15 @@ def _durable_replace(source: Path, target: Path) -> None:
         return
     os.replace(source, target)
     _fsync_directory(target.parent)
+
+
+def _is_reparse_point(path: Path) -> bool:
+    try:
+        metadata = os.lstat(path)
+    except FileNotFoundError:
+        return False
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x00000400)
+    return bool(getattr(metadata, "st_file_attributes", 0) & reparse_flag)
 
 
 def render_markdown(report: OptimizationReport) -> str:

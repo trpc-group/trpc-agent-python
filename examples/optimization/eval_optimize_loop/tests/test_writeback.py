@@ -52,6 +52,17 @@ def test_snapshot_prompt_files_preserves_bytes_and_returns_hash_copy(tmp_path: P
     assert snapshot.hashes()["system"] == system.sha256
 
 
+def test_snapshot_prompt_files_rejects_hardlink_aliases(tmp_path: Path):
+    prompt_path = tmp_path / "prompt.txt"
+    alias_path = tmp_path / "prompt-hardlink.txt"
+    prompt_path.write_text("baseline", encoding="utf-8")
+    os.link(prompt_path, alias_path)
+    assert prompt_path.samefile(alias_path)
+
+    with pytest.raises(ValueError, match="different physical files"):
+        snapshot_prompt_files({"system": prompt_path, "router": alias_path})
+
+
 def test_temporary_prompt_bundle_restores_exact_bytes_after_body_error(tmp_path: Path):
     paths, baseline = _prompt_files(tmp_path)
     snapshot = snapshot_prompt_files(paths)

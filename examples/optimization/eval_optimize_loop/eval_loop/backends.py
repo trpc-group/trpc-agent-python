@@ -13,6 +13,7 @@ from typing import Any
 from typing import Protocol
 
 from .diffing import make_unified_diff
+from .artifacts import validate_distinct_file_paths
 from .evaluator import ExampleEvaluator
 from .fake_judge import FakeJudge
 from .fake_model import FakeModel
@@ -532,9 +533,13 @@ class SDKBackend:
         return _load_call_agent(self.call_agent_path)
 
     def _target_prompt_paths(self) -> dict[str, str | Path]:
-        if self.target_prompt_paths:
-            return dict(self.target_prompt_paths)
-        return {"system_prompt": self.prompt_path}
+        paths = (
+            dict(self.target_prompt_paths)
+            if self.target_prompt_paths
+            else {"system_prompt": self.prompt_path}
+        )
+        validate_distinct_file_paths(paths, context="SDK target prompt fields")
+        return paths
 
 
 def _required_system_prompt(prompts: dict[str, str], *, context: str) -> str:
