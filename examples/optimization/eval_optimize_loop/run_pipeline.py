@@ -1227,7 +1227,7 @@ def build_candidate_report(
         duration_seconds=duration_seconds,
         cost_usd=cost_usd,
     )
-    return {
+    return _json_safe({
         "id": candidate_id,
         "prompt_patch_summary": fixture.get("prompt_patch_summary", ""),
         "prompt_artifacts": prompt_artifacts or [],
@@ -1246,7 +1246,7 @@ def build_candidate_report(
         "gate": gate,
         "failure_attribution": attribution_for(validation),
         "artifacts": artifacts or {},
-    }
+    })
 
 
 def pick_winner(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:

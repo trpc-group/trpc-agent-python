@@ -81,6 +81,52 @@ git diff --check
 
 Result: passed.
 
+## High-Finding Follow-Up
+
+### RED
+
+Added `test_build_candidate_report_sanitizes_nonfinite_case_reasons` using a failed validation case with `reasons=[float("nan")]` and requiring strict JSON serialization.
+
+Command:
+
+```powershell
+python -m pytest tests/evaluation/test_eval_optimize_loop_example.py::test_build_candidate_report_sanitizes_nonfinite_case_reasons -q
+```
+
+Result: `1 failed` with `ValueError: Out of range float values are not JSON compliant`.
+
+### GREEN
+
+Wrapped the complete candidate report in `_json_safe` after constructing `case_deltas` and `failure_attribution`. This sanitizes raw nested reason values while preserving the gate result and its rejected decision.
+
+Focused regression:
+
+```powershell
+python -m pytest tests/evaluation/test_eval_optimize_loop_example.py::test_build_candidate_report_sanitizes_nonfinite_case_reasons -q
+```
+
+Result: `1 passed`.
+
+Relevant malformed/gate suite:
+
+```powershell
+python -m pytest tests/evaluation/test_eval_optimize_loop_example.py -k "malformed or gate or regression or cost_budget or case_set_mismatch or required_metric" -q
+```
+
+Result: `39 passed`.
+
+Full example test file:
+
+```powershell
+python -m pytest tests/evaluation/test_eval_optimize_loop_example.py -q
+```
+
+Result: `61 passed, 1 skipped`.
+
+The skip remains the existing opt-in online smoke test; the existing LangGraph/LangChain deprecation warning remains non-blocking.
+
+Final `git diff --check`: passed.
+
 No report schema changes were made.
 
 ## Reopened Review Fix

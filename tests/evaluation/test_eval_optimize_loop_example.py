@@ -312,6 +312,41 @@ def test_build_candidate_report_is_total_for_malformed_validation_cases(candidat
     json.dumps(report, allow_nan=False)
 
 
+def test_build_candidate_report_sanitizes_nonfinite_case_reasons():
+    module = load_pipeline_module()
+    baseline = _gate_summary(
+        0.25,
+        [{"case_id": "a", "score": 0.25, "passed": True, "tags": []}],
+    )
+    validation = _gate_summary(
+        0.75,
+        [{
+            "case_id": "a",
+            "score": 0.0,
+            "passed": False,
+            "tags": [],
+            "reasons": [float("nan")],
+        }],
+    )
+
+    report = module.build_candidate_report(
+        candidate_id="nonfinite_reasons",
+        fixture={},
+        train=baseline,
+        optimizer_dev=baseline,
+        validation=validation,
+        baseline_train=baseline,
+        baseline_optimizer_dev=baseline,
+        baseline_val=baseline,
+        gate_config={},
+        duration_seconds=1.0,
+        cost_usd=0.0,
+    )
+
+    assert report["gate"]["accepted"] is False
+    json.dumps(report, allow_nan=False)
+
+
 def load_report(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
