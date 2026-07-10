@@ -35,4 +35,6 @@ def compare_case(
         metric_deltas={name: candidate.metric_scores.get(name, 0.0) - baseline.metric_scores.get(name, 0.0) for name in metric_names},
         critical=critical,
         hard_fail_added=(not baseline.hard_failed and candidate.hard_failed) or (critical and transition == "REGRESSION"),
+        new_failure_types=sorted(set(candidate.failure_types) - set(baseline.failure_types), key=lambda item: item.value),
+        resolved_failure_types=sorted(set(baseline.failure_types) - set(candidate.failure_types), key=lambda item: item.value),
     )

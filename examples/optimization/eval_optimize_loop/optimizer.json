@@ -1,6 +1,9 @@
 {
   "evaluate": {
-    "metrics": [{"metric_name": "final_response_avg_score", "threshold": 1.0, "criterion": {"final_response": {"text": {"match": "exact"}}}}],
+    "metrics": [
+      {"metric_name": "final_response_avg_score", "threshold": 1.0, "criterion": {"final_response": {"text": {"match": "exact"}}}},
+      {"metric_name": "fake_rubric_score", "threshold": 0.75}
+    ],
     "num_runs": 1
   },
   "pipeline": {

@@ -40,6 +40,7 @@ class CaseSnapshot(StrictModel):
     trace_digest: str
     metric_reasons: dict[str, list[str]] = Field(default_factory=dict)
     failure_reasons: list[str] = Field(default_factory=list)
+    failure_types: list[FailureType] = Field(default_factory=list)
     final_response: str | None = None
     expected_response: str | None = None
     tool_calls: list[ToolCallSnapshot] = Field(default_factory=list)
@@ -57,6 +58,8 @@ class CaseDelta(StrictModel):
     metric_deltas: dict[str, float]
     critical: bool
     hard_fail_added: bool
+    new_failure_types: list[FailureType] = Field(default_factory=list)
+    resolved_failure_types: list[FailureType] = Field(default_factory=list)
 
 
 class SplitReport(StrictModel):
