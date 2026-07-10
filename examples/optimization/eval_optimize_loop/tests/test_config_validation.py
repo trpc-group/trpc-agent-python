@@ -399,6 +399,31 @@ def test_optimization_report_preserves_legacy_construction_with_new_defaults():
     assert report.cost_summary == schemas.CostSummary()
     assert report.writeback == schemas.WritebackResult(status="not_requested")
 
+    legacy_rounds = [object()]
+    legacy_cost = schemas.CostSummary(total=0.5, complete=False)
+    legacy_writeback = schemas.WritebackResult(status="rejected")
+    positional_report = schemas.OptimizationReport(
+        "1",
+        {},
+        {},
+        empty_eval,
+        empty_eval,
+        [],
+        {},
+        [],
+        {},
+        [],
+        None,
+        {},
+        legacy_rounds,
+        legacy_cost,
+        legacy_writeback,
+    )
+    assert positional_report.rounds is legacy_rounds
+    assert positional_report.cost_summary is legacy_cost
+    assert positional_report.writeback is legacy_writeback
+    assert positional_report.baseline_prompts == {}
+
 
 def test_validate_inputs_rejects_same_train_val_path(tmp_path: Path):
     eval_path = _write_evalset(tmp_path / "train.evalset.json", "train", ["a", "b", "c"])

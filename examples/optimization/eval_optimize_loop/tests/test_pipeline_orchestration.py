@@ -192,7 +192,11 @@ async def test_execute_pipeline_uses_train_only_evidence_and_full_candidate_reev
     assert [(call[0], *call[1:3]) for call in backend.calls] == [
         ("evaluate", "baseline", "train"),
         ("evaluate", "baseline", "validation"),
-        ("optimize", {"system_prompt": "baseline\n"}, tmp_path / "out" / "runs" / "ordered_run" / "optimizer"),
+        (
+            "optimize",
+            {"system_prompt": "baseline\n"},
+            tmp_path / "out" / "runs" / ".ordered_run.tmp" / "optimizer",
+        ),
         ("evaluate", "candidate_a", "train"),
         ("evaluate", "candidate_a", "validation"),
         ("evaluate", "candidate_b", "train"),
@@ -624,13 +628,16 @@ async def test_writeback_happens_only_after_prewrite_audit_succeeds(
     request = _request(tmp_path, update_source=True)
     backend = _safe_backend()
     events: list[str] = []
-    artifact_paths = object()
+    artifact_paths: report_module.RunArtifactPaths | None = None
 
-    def prepare(report, output_dir):
+    def prepare(report, paths):
+        nonlocal artifact_paths
         events.append("prepare")
         assert report.selected_candidate == "candidate_a"
-        assert Path(output_dir) == tmp_path / "out"
-        return artifact_paths
+        assert paths.output_dir == tmp_path / "out"
+        assert paths.temp_run_dir == tmp_path / "out" / "runs" / ".ordered_run.tmp"
+        artifact_paths = paths
+        return paths
 
     def commit(snapshot, prompts):
         events.append("commit")
@@ -641,10 +648,11 @@ async def test_writeback_happens_only_after_prewrite_audit_succeeds(
             after_hashes=snapshot.hashes(),
         )
 
-    def finalize(report, paths):
+    def finalize(report, paths, *, before_publish):
         events.append("finalize")
         assert paths is artifact_paths
         assert report.writeback.status == "applied"
+        before_publish()
 
     def persist_journal(paths, journal):
         events.append(f"journal:{journal['state']}")
@@ -905,7 +913,7 @@ async def test_finalize_failure_leaves_explicit_prepared_writeback_journal(
     request = _request(tmp_path, update_source=True)
     backend = _safe_backend(candidate_count=1)
 
-    def fail_finalize(report, paths):
+    def fail_finalize(report, paths, *, before_publish):
         raise OSError("final report unavailable")
 
     monkeypatch.setattr(pipeline_module, "finalize_run_artifacts", fail_finalize)
@@ -913,7 +921,7 @@ async def test_finalize_failure_leaves_explicit_prepared_writeback_journal(
     with pytest.raises(OSError, match="final report unavailable"):
         await execute_pipeline(request, evaluator=backend, optimizer=backend)
 
-    run_dir = Path(request.output_dir) / "runs" / request.run_id
+    run_dir = Path(request.output_dir) / "runs" / f".{request.run_id}.tmp"
     prewrite = json.loads((run_dir / "pre_write_report.json").read_text(encoding="utf-8"))
     journal = json.loads((run_dir / "writeback_journal.json").read_text(encoding="utf-8"))
     assert prewrite["audit"]["writeback_journal"]["state"] == "pending"
@@ -923,6 +931,7 @@ async def test_finalize_failure_leaves_explicit_prepared_writeback_journal(
     assert journal["after_hashes"] == {
         "system_prompt": hashlib.sha256(b"safe prompt").hexdigest(),
     }
+    assert not (Path(request.output_dir) / "runs" / request.run_id).exists()
 
 
 @pytest.mark.asyncio
@@ -993,7 +1002,9 @@ async def test_terminal_journal_survives_nonessential_writeback_artifact_failure
     with pytest.raises(OSError, match="convenience artifact"):
         await execute_pipeline(request, evaluator=backend, optimizer=backend)
 
-    journal_path = Path(request.output_dir) / "runs" / request.run_id / "writeback_journal.json"
+    journal_path = (
+        Path(request.output_dir) / "runs" / f".{request.run_id}.tmp" / "writeback_journal.json"
+    )
     journal = json.loads(journal_path.read_text(encoding="utf-8"))
     assert (tmp_path / "prompt.txt").read_bytes() == b"safe prompt"
     assert journal["state"] == "applied"
@@ -1012,7 +1023,12 @@ async def test_writeback_journal_is_committing_before_source_commit(
     real_commit = pipeline_module.commit_prompt_bundle
 
     def commit(snapshot, prompts):
-        journal_path = Path(request.output_dir) / "runs" / request.run_id / "writeback_journal.json"
+        journal_path = (
+            Path(request.output_dir)
+            / "runs"
+            / f".{request.run_id}.tmp"
+            / "writeback_journal.json"
+        )
         journal = json.loads(journal_path.read_text(encoding="utf-8"))
         assert journal["state"] == "committing"
         return real_commit(snapshot, prompts)
@@ -1398,7 +1414,11 @@ async def test_candidate_prompts_must_be_valid_utf8_before_evaluation(tmp_path: 
     assert [call[:3] for call in backend.calls] == [
         ("evaluate", "baseline", "train"),
         ("evaluate", "baseline", "validation"),
-        ("optimize", {"system_prompt": "baseline\n"}, Path(request.output_dir) / "runs" / request.run_id / "optimizer"),
+        (
+            "optimize",
+            {"system_prompt": "baseline\n"},
+            Path(request.output_dir) / "runs" / f".{request.run_id}.tmp" / "optimizer",
+        ),
     ]
 
 
@@ -1789,14 +1809,17 @@ async def test_late_no_write_source_mutation_downgrades_journal_to_unknown(
     backend = _safe_backend(candidate_count=1)
     original_finalize = pipeline_module.finalize_run_artifacts
 
-    def mutate_after_finalize(report, paths):
-        original_finalize(report, paths)
-        Path(request.target_prompt_paths["system_prompt"]).write_text(
-            "mutation after final artifacts",
-            encoding="utf-8",
-        )
+    def mutate_after_final_writes(report, paths, *, before_publish):
+        def mutate_then_verify():
+            Path(request.target_prompt_paths["system_prompt"]).write_text(
+                "mutation after final artifacts",
+                encoding="utf-8",
+            )
+            before_publish()
 
-    monkeypatch.setattr(pipeline_module, "finalize_run_artifacts", mutate_after_finalize)
+        original_finalize(report, paths, before_publish=mutate_then_verify)
+
+    monkeypatch.setattr(pipeline_module, "finalize_run_artifacts", mutate_after_final_writes)
 
     with pytest.raises(ConcurrentPromptUpdateError, match="source prompt integrity changed"):
         await execute_pipeline(request, evaluator=backend, optimizer=backend)
@@ -1804,7 +1827,7 @@ async def test_late_no_write_source_mutation_downgrades_journal_to_unknown(
     journal_path = (
         Path(request.output_dir)
         / "runs"
-        / request.run_id
+        / f".{request.run_id}.tmp"
         / "writeback_journal.json"
     )
     journal = json.loads(journal_path.read_text(encoding="utf-8"))
@@ -1812,6 +1835,7 @@ async def test_late_no_write_source_mutation_downgrades_journal_to_unknown(
     assert journal["after_hashes"] == {
         "system_prompt": hashlib.sha256(b"mutation after final artifacts").hexdigest()
     }
+    assert not (Path(request.output_dir) / "runs" / request.run_id).exists()
 
 
 @pytest.mark.asyncio

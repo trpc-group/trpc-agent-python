@@ -29,12 +29,15 @@ from .config import resolve_effective_seed
 from .gate import AcceptanceGate
 from .loader import read_json
 from .loader import stable_config_hash
+from .report import RunArtifactPaths
 from .report import build_report
 from .report import compute_case_deltas
 from .report import finalize_run_artifacts
 from .report import persist_writeback_journal
 from .report import persist_writeback_outcome
 from .report import prepare_run_artifacts
+from .report import reserve_run_artifacts
+from .report import validate_unique_round_ids
 from .schemas import CandidatePrompt
 from .schemas import CostSummary
 from .schemas import EvalResult
@@ -119,7 +122,8 @@ async def execute_pipeline(
         {"train": request.train_path, "validation": request.validation_path},
         context="train and validation evalset paths",
     )
-    run_root = _claim_run_directory(request.output_dir, run_id=run_id)
+    artifact_paths = reserve_run_artifacts(request.output_dir, run_id=run_id)
+    run_root = artifact_paths.temp_run_dir
 
     input_snapshots = _snapshot_pipeline_inputs(request, run_id=run_id)
     try:
@@ -130,6 +134,7 @@ async def execute_pipeline(
             started=started,
             run_id=run_id,
             run_root=run_root,
+            artifact_paths=artifact_paths,
             input_snapshots=input_snapshots,
         )
     except BaseException as primary_error:
@@ -172,6 +177,7 @@ async def _execute_with_snapshots(
     started: float,
     run_id: str,
     run_root: Path,
+    artifact_paths: RunArtifactPaths,
     input_snapshots: _InputSnapshots,
 ) -> OptimizationReport:
     prompt_snapshot = snapshot_prompt_files(request.target_prompt_paths)
@@ -483,6 +489,7 @@ async def _execute_with_snapshots(
         gate_decisions=gate_decisions,
         selected_candidate=selected_candidate,
         audit=audit,
+        baseline_prompts=dict(baseline_prompts),
         rounds=optimization.rounds,
         cost_summary=cost_summary,
         writeback=provisional_writeback,
@@ -492,7 +499,7 @@ async def _execute_with_snapshots(
         prompt_snapshot,
         context="immediately before preparing run artifacts",
     )
-    artifact_paths = prepare_run_artifacts(report, request.output_dir)
+    prepare_run_artifacts(report, artifact_paths)
     if selected_candidate is None or not request.update_source:
         terminal_journal = _terminal_journal(
             writeback_journal,
@@ -509,22 +516,17 @@ async def _execute_with_snapshots(
             request=request,
         )
         persist_writeback_outcome(final_report, artifact_paths)
-        _verify_terminal_writeback_integrity(
-            prompt_snapshot,
-            expected_hashes=prompt_snapshot.hashes(),
-            context="immediately before finalizing no-write run",
-            artifact_paths=artifact_paths,
-            journal=terminal_journal,
-            request=request,
-        )
-        finalize_run_artifacts(final_report, artifact_paths)
-        _verify_terminal_writeback_integrity(
-            prompt_snapshot,
-            expected_hashes=prompt_snapshot.hashes(),
-            context="immediately before returning no-write run",
-            artifact_paths=artifact_paths,
-            journal=terminal_journal,
-            request=request,
+        finalize_run_artifacts(
+            final_report,
+            artifact_paths,
+            before_publish=lambda: _verify_terminal_writeback_integrity(
+                prompt_snapshot,
+                expected_hashes=prompt_snapshot.hashes(),
+                context="immediately before publishing no-write run",
+                artifact_paths=artifact_paths,
+                journal=terminal_journal,
+                request=request,
+            ),
         )
         return final_report
 
@@ -553,22 +555,17 @@ async def _execute_with_snapshots(
             request=request,
         )
         persist_writeback_outcome(final_report, artifact_paths)
-        _verify_terminal_writeback_integrity(
-            prompt_snapshot,
-            expected_hashes=prompt_snapshot.hashes(),
-            context="immediately before finalizing input-drift run",
-            artifact_paths=artifact_paths,
-            journal=final_journal,
-            request=request,
-        )
-        finalize_run_artifacts(final_report, artifact_paths)
-        _verify_terminal_writeback_integrity(
-            prompt_snapshot,
-            expected_hashes=prompt_snapshot.hashes(),
-            context="immediately before returning input-drift run",
-            artifact_paths=artifact_paths,
-            journal=final_journal,
-            request=request,
+        finalize_run_artifacts(
+            final_report,
+            artifact_paths,
+            before_publish=lambda: _verify_terminal_writeback_integrity(
+                prompt_snapshot,
+                expected_hashes=prompt_snapshot.hashes(),
+                context="immediately before publishing input-drift run",
+                artifact_paths=artifact_paths,
+                journal=final_journal,
+                request=request,
+            ),
         )
         return final_report
 
@@ -637,22 +634,17 @@ async def _execute_with_snapshots(
         request=request,
     )
     persist_writeback_outcome(final_report, artifact_paths)
-    _verify_terminal_writeback_integrity(
-        prompt_snapshot,
-        expected_hashes=terminal_prompt_hashes,
-        context="immediately before finalizing writeback run",
-        artifact_paths=artifact_paths,
-        journal=final_journal,
-        request=request,
-    )
-    finalize_run_artifacts(final_report, artifact_paths)
-    _verify_terminal_writeback_integrity(
-        prompt_snapshot,
-        expected_hashes=terminal_prompt_hashes,
-        context="immediately before returning writeback run",
-        artifact_paths=artifact_paths,
-        journal=final_journal,
-        request=request,
+    finalize_run_artifacts(
+        final_report,
+        artifact_paths,
+        before_publish=lambda: _verify_terminal_writeback_integrity(
+            prompt_snapshot,
+            expected_hashes=terminal_prompt_hashes,
+            context="immediately before publishing writeback run",
+            artifact_paths=artifact_paths,
+            journal=final_journal,
+            request=request,
+        ),
     )
     return final_report
 
@@ -709,17 +701,6 @@ def _snapshot_pipeline_inputs(request: PipelineRequest, *, run_id: str) -> _Inpu
                 add_note(str(cleanup_error))
         raise
     return _InputSnapshots(snapshots)
-
-
-def _claim_run_directory(output_dir: str | Path, *, run_id: str) -> Path:
-    runs_root = Path(output_dir) / "runs"
-    runs_root.mkdir(parents=True, exist_ok=True)
-    run_root = runs_root / run_id
-    try:
-        run_root.mkdir()
-    except FileExistsError as error:
-        raise ValueError(f"run_id {run_id!r} already exists in {runs_root}") from error
-    return run_root
 
 
 def _verify_snapshot_integrity(
@@ -1335,6 +1316,7 @@ def _validate_optimization_result(result: OptimizationResult) -> None:
             round_record.cost,
             context=f"optimization round {round_record.round_id} cost",
         )
+    validate_unique_round_ids(result.rounds)
     if not isinstance(result.raw_summary, dict):
         raise ValueError("optimization raw_summary must be an object")
     _validate_nested_numbers(result.raw_summary, context="optimization raw_summary")

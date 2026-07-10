@@ -215,6 +215,7 @@ class OptimizationReport:
     writeback: WritebackResult = field(
         default_factory=lambda: WritebackResult(status="not_requested")
     )
+    baseline_prompts: dict[str, str] = field(default_factory=dict)
 
 
 def to_jsonable(value: Any) -> Any:

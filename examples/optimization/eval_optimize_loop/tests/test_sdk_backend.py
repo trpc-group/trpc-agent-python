@@ -1253,9 +1253,9 @@ def test_run_pipeline_mode_sdk_writes_report_without_fallback(tmp_path: Path, mo
     candidate_artifact = report.audit["candidate_artifacts"]["sdk_best"]
     assert (output_dir / "runs" / "sdk_test_run" / "prompt_diffs" / f"{candidate_artifact}.diff").is_file()
     assert calls["update_source"] is False
-    assert calls["output_dir"].endswith("runs\\sdk_test_run\\optimizer") or calls[
+    assert calls["output_dir"].endswith("runs\\.sdk_test_run.tmp\\optimizer") or calls[
         "output_dir"
-    ].endswith("runs/sdk_test_run/optimizer")
+    ].endswith("runs/.sdk_test_run.tmp/optimizer")
     assert calls["evaluation_count"] == 4
     command = report.run["reproducibility_command"]
     assert "--sdk-call-agent fake_call_agent_module:call_agent" in command
@@ -1377,7 +1377,7 @@ def test_run_pipeline_mode_sdk_explicit_run_id_is_stable_and_exclusive(tmp_path:
         sdk_call_agent="fake_call_agent_module:call_agent",
         run_id="valid_20260704-1.ok",
     )
-    with pytest.raises(ValueError, match="run_id.*already exists"):
+    with pytest.raises(FileExistsError, match="run ID.*already reserved or published"):
         run_pipeline(
             mode="sdk",
             train_path=DEFAULT_TRAIN,
