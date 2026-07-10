@@ -15,6 +15,7 @@ single-field config change.
 from __future__ import annotations
 
 import inspect
+import json
 import logging
 import os
 import signal
@@ -51,6 +52,56 @@ _DISALLOWED_METRICS_IN_CALL_AGENT_MODE = frozenset({
 })
 
 _PROMPT_FILE_LOGGER = logging.getLogger("trpc_agent_sdk.optimizer")
+
+_REDACTED_CONFIG_VALUE = "<redacted>"
+_SENSITIVE_CONFIG_KEY_SUFFIXES = (
+    "apikey",
+    "authorization",
+    "authtoken",
+    "bearertoken",
+    "clientsecret",
+    "credential",
+    "credentials",
+    "idtoken",
+    "password",
+    "passwd",
+    "privatekey",
+    "refreshtoken",
+    "secret",
+    "secretaccesskey",
+    "secretkey",
+    "token",
+    "accesstoken",
+)
+
+
+def _reject_non_finite_json_constant(value: str) -> Any:
+    """Reject Python's non-standard JSON constants (NaN and infinities)."""
+    raise ValueError(f"non-finite JSON constant is not allowed: {value}")
+
+
+def _redact_config_secrets(value: Any) -> Any:
+    """Return a JSON-compatible copy with credential values redacted.
+
+    Key matching is case-insensitive, ignores separators and accepts
+    namespaced credential suffixes, so ``api_key``, ``API-Key`` and
+    ``openai_api_key`` share the same policy without redacting safe fields
+    such as ``max_tokens``.
+    """
+    if isinstance(value, dict):
+        redacted = {}
+        for key, child in value.items():
+            normalized_key = "".join(
+                character for character in key.casefold() if character.isalnum()
+            )
+            if normalized_key.endswith(_SENSITIVE_CONFIG_KEY_SUFFIXES):
+                redacted[key] = _REDACTED_CONFIG_VALUE
+            else:
+                redacted[key] = _redact_config_secrets(child)
+        return redacted
+    if isinstance(value, list):
+        return [_redact_config_secrets(child) for child in value]
+    return value
 
 
 def _atomic_write_text(path: str, content: str) -> None:
@@ -157,8 +208,8 @@ class AgentOptimizer:
             output_dir: Required artifact directory. The facade creates it when
                 missing and persists ``result.json``, ``summary.txt``,
                 ``rounds/`` records, ``baseline_prompts/`` and ``best_prompts/``
-                directories, a ``config.snapshot.json`` copy of the input
-                config, and a ``run.log`` summary line.
+                directories, a redacted ``config.snapshot.json`` copy of the
+                input config, and a ``run.log`` summary line.
             callbacks: Optional evaluator lifecycle callbacks.
             update_source: When True, persist the best candidate back to
                 every registered TargetPrompt field after a SUCCEEDED
@@ -393,7 +444,7 @@ class AgentOptimizer:
                                             (regardless of update_source).
           - ``best_prompts/<name>.md``     Best candidate per field
                                             (only when a result was produced).
-          - ``config.snapshot.json``       Copy of the input config.
+          - ``config.snapshot.json``       Redacted copy of the input config.
           - ``run.log``                    One-line status footer.
 
         SIGINT (Ctrl+C) is masked for the duration of this method so a
@@ -473,12 +524,25 @@ class AgentOptimizer:
     def _copy_config_snapshot(config_path: str, output_dir: str) -> None:
         target = os.path.join(output_dir, "config.snapshot.json")
         try:
-            # Read + atomic-write rather than shutil.copyfile so an interrupted
-            # copy cannot leave a half-written ``config.snapshot.json``.
-            content = Path(config_path).read_text(encoding="utf-8")
+            # Parse and redact fully before the first write so neither the
+            # destination nor its temporary sibling can ever contain the raw
+            # credential-bearing config. Invalid/non-finite JSON therefore
+            # fails closed instead of falling back to a plaintext copy.
+            raw_config = json.loads(
+                Path(config_path).read_text(encoding="utf-8"),
+                parse_constant=_reject_non_finite_json_constant,
+            )
+            redacted_config = _redact_config_secrets(raw_config)
+            content = json.dumps(
+                redacted_config,
+                ensure_ascii=False,
+                sort_keys=True,
+                indent=2,
+                allow_nan=False,
+            ) + "\n"
             _atomic_write_text(target, content)
         except Exception:  # pragma: no cover
-            _PROMPT_FILE_LOGGER.warning("failed to copy config snapshot", exc_info=True)
+            _PROMPT_FILE_LOGGER.warning("failed to write redacted config snapshot", exc_info=True)
 
     @staticmethod
     def _write_run_log(*, output_dir: str, line: str) -> None:
