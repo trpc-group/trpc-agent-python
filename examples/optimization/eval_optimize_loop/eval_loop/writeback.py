@@ -1,3 +1,9 @@
+"""Best-effort prompt CAS with per-file atomic replacement.
+
+Hash checks narrow concurrency windows but cannot make a multi-file operation
+transactional. A non-cooperating writer can still race after the last check.
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -62,8 +68,13 @@ def _current_hashes(snapshot: PromptSnapshot) -> dict[str, str]:
     return {name: _hash_bytes(prompt_file.path.read_bytes()) for name, prompt_file in snapshot.files.items()}
 
 
-def _atomic_replace_bytes(path: Path, content: bytes) -> None:
-    """Replace one file atomically after durably flushing a same-directory temp."""
+def _atomic_replace_bytes(
+    path: Path,
+    content: bytes,
+    *,
+    expected_sha256: str | None = None,
+) -> None:
+    """Replace one file atomically if its last observed hash is still expected."""
 
     fd, temp_name = tempfile.mkstemp(
         dir=path.parent,
@@ -78,6 +89,10 @@ def _atomic_replace_bytes(path: Path, content: bytes) -> None:
             temp_file.write(content)
             temp_file.flush()
             os.fsync(temp_file.fileno())
+        if expected_sha256 is not None:
+            current_sha256 = _hash_bytes(path.read_bytes())
+            if current_sha256 != expected_sha256:
+                raise ConcurrentPromptUpdateError(f"source prompt file changed before replace: {path}")
         os.replace(temp_path, path)
     finally:
         active_exception = sys.exc_info()[0] is not None
@@ -98,13 +113,31 @@ def _atomic_replace_bytes(path: Path, content: bytes) -> None:
             raise cleanup_error
 
 
-def _restore_snapshot(snapshot: PromptSnapshot) -> list[str]:
+def _restore_snapshot(
+    snapshot: PromptSnapshot,
+    written_hashes: dict[str, str],
+) -> list[str]:
+    """Conditionally restore only files this operation successfully replaced."""
+
     failures: list[str] = []
-    for name, prompt_file in snapshot.files.items():
+    for name, candidate_hash in written_hashes.items():
+        prompt_file = snapshot.files[name]
         try:
-            _atomic_replace_bytes(prompt_file.path, prompt_file.content)
+            current_hash = _hash_bytes(prompt_file.path.read_bytes())
         except OSError as error:
-            failures.append(f"{name}: {error}")
+            failures.append(f"{name}: restore precondition failed: {error}")
+            continue
+        if current_hash != candidate_hash:
+            failures.append(f"{name}: restore conflict; current hash changed from candidate")
+            continue
+        try:
+            _atomic_replace_bytes(
+                prompt_file.path,
+                prompt_file.content,
+                expected_sha256=candidate_hash,
+            )
+        except (OSError, ConcurrentPromptUpdateError) as error:
+            failures.append(f"{name}: restore failed: {error}")
     return failures
 
 
@@ -143,15 +176,39 @@ def temporary_prompt_bundle(
     snapshot: PromptSnapshot,
     prompts: dict[str, str],
 ) -> Iterator[None]:
-    """Temporarily install candidate prompts and always restore the snapshot."""
+    """Install candidates temporarily using best-effort CAS and conditional restore."""
 
     encoded_prompts = _encode_prompt_bundle(snapshot, prompts)
+    expected_hashes = snapshot.hashes()
+    current_hashes = _current_hashes(snapshot)
+    if current_hashes != expected_hashes:
+        changed = [name for name, expected_hash in expected_hashes.items() if current_hashes[name] != expected_hash]
+        raise ConcurrentPromptUpdateError(f"source prompt files changed since snapshot: {', '.join(changed)}")
+
+    candidate_hashes = {name: _hash_bytes(content) for name, content in encoded_prompts.items()}
+    written_hashes: dict[str, str] = {}
     try:
         for name, prompt_file in snapshot.files.items():
-            _atomic_replace_bytes(prompt_file.path, encoded_prompts[name])
+            _atomic_replace_bytes(
+                prompt_file.path,
+                encoded_prompts[name],
+                expected_sha256=expected_hashes[name],
+            )
+            written_hashes[name] = candidate_hashes[name]
         yield
-    finally:
-        failures = _restore_snapshot(snapshot)
+    except BaseException as primary_error:
+        failures = _restore_snapshot(snapshot, written_hashes)
+        restoration_error = _restoration_error(snapshot, failures)
+        if restoration_error is not None:
+            diagnostic = f"failed to restore prompt snapshot: {restoration_error}"
+            add_note = getattr(primary_error, "add_note", None)
+            if add_note is not None:
+                add_note(diagnostic)
+            else:
+                raise primary_error from RuntimeError(diagnostic)
+        raise
+    else:
+        failures = _restore_snapshot(snapshot, written_hashes)
         restoration_error = _restoration_error(snapshot, failures)
         if restoration_error is not None:
             raise RuntimeError(f"failed to restore prompt snapshot: {restoration_error}")
@@ -161,7 +218,7 @@ def commit_prompt_bundle(
     snapshot: PromptSnapshot,
     prompts: dict[str, str],
 ) -> WritebackResult:
-    """Apply a complete prompt bundle with CAS and compensating rollback."""
+    """Apply a bundle with best-effort CAS and conditional compensating rollback."""
 
     before_hashes = _current_hashes(snapshot)
     expected_hashes = snapshot.hashes()
@@ -170,12 +227,29 @@ def commit_prompt_bundle(
         raise ConcurrentPromptUpdateError(f"source prompt files changed since snapshot: {', '.join(changed)}")
 
     encoded_prompts = _encode_prompt_bundle(snapshot, prompts)
+    candidate_hashes = {name: _hash_bytes(content) for name, content in encoded_prompts.items()}
+    written_hashes: dict[str, str] = {}
     try:
         for name, prompt_file in snapshot.files.items():
-            _atomic_replace_bytes(prompt_file.path, encoded_prompts[name])
+            _atomic_replace_bytes(
+                prompt_file.path,
+                encoded_prompts[name],
+                expected_sha256=expected_hashes[name],
+            )
+            written_hashes[name] = candidate_hashes[name]
         applied_hashes = _current_hashes(snapshot)
-    except OSError as error:
-        rollback_failures = _restore_snapshot(snapshot)
+        candidate_mismatches = [
+            name for name, candidate_hash in candidate_hashes.items() if applied_hashes[name] != candidate_hash
+        ]
+        if candidate_mismatches:
+            raise ConcurrentPromptUpdateError(
+                "candidate prompt files changed before final verification: " f"{', '.join(candidate_mismatches)}"
+            )
+    except (OSError, ConcurrentPromptUpdateError) as error:
+        if isinstance(error, ConcurrentPromptUpdateError) and not written_hashes:
+            raise
+
+        rollback_failures = _restore_snapshot(snapshot, written_hashes)
         try:
             after_hashes = _current_hashes(snapshot)
         except OSError as hash_error:
@@ -183,7 +257,7 @@ def commit_prompt_bundle(
             rollback_failures.append(f"hash verification: {hash_error}")
         else:
             rollback_failures.extend(
-                f"{name}: restored hash differs from snapshot"
+                f"{name}: final hash differs from snapshot"
                 for name, expected_hash in expected_hashes.items()
                 if after_hashes[name] != expected_hash
             )
@@ -192,7 +266,7 @@ def commit_prompt_bundle(
         if rollback_failures:
             error_message += f"; rollback failures: {'; '.join(rollback_failures)}"
         return WritebackResult(
-            status="rollback_failed" if rollback_failures else "rolled_back",
+            status="rolled_back" if after_hashes == expected_hashes else "rollback_failed",
             before_hashes=before_hashes,
             after_hashes=after_hashes,
             error=error_message,

@@ -78,6 +78,101 @@ def test_temporary_prompt_bundle_rejects_missing_prompt_before_writing(tmp_path:
     assert {name: path.read_bytes() for name, path in paths.items()} == baseline
 
 
+def test_temporary_rejects_stale_snapshot_without_overwriting_external_update(tmp_path: Path, monkeypatch):
+    paths, baseline = _prompt_files(tmp_path)
+    snapshot = snapshot_prompt_files(paths)
+    external_content = b"external before temporary entry"
+    paths["user"].write_bytes(external_content)
+    original_replace = os.replace
+    replace_calls = 0
+
+    def count_replace(source: str | bytes | Path, destination: str | bytes | Path):
+        nonlocal replace_calls
+        replace_calls += 1
+        return original_replace(source, destination)
+
+    monkeypatch.setattr(writeback.os, "replace", count_replace)
+
+    with pytest.raises(ConcurrentPromptUpdateError, match="changed"):
+        with temporary_prompt_bundle(
+            snapshot,
+            {"system": "candidate system", "user": "candidate user"},
+        ):
+            pass
+
+    assert replace_calls == 0
+    assert paths["system"].read_bytes() == baseline["system"]
+    assert paths["user"].read_bytes() == external_content
+
+
+def test_temporary_restore_preserves_external_update_and_reports_conflict(tmp_path: Path):
+    paths, baseline = _prompt_files(tmp_path)
+    snapshot = snapshot_prompt_files(paths)
+    external_content = b"external during temporary evaluation"
+
+    with pytest.raises(RuntimeError, match="restore"):
+        with temporary_prompt_bundle(
+            snapshot,
+            {"system": "candidate system", "user": "candidate user"},
+        ):
+            paths["user"].write_bytes(external_content)
+
+    assert paths["system"].read_bytes() == baseline["system"]
+    assert paths["user"].read_bytes() == external_content
+
+
+def test_temporary_body_error_remains_primary_when_restore_conflicts(tmp_path: Path):
+    paths, baseline = _prompt_files(tmp_path)
+    snapshot = snapshot_prompt_files(paths)
+    external_content = b"external before failed body exits"
+
+    with pytest.raises(RuntimeError, match="candidate failed") as error_info:
+        with temporary_prompt_bundle(
+            snapshot,
+            {"system": "candidate system", "user": "candidate user"},
+        ):
+            paths["user"].write_bytes(external_content)
+            raise RuntimeError("candidate failed")
+
+    diagnostics = " ".join(getattr(error_info.value, "__notes__", []))
+    if error_info.value.__cause__ is not None:
+        diagnostics += f" {error_info.value.__cause__}"
+    if error_info.value.__context__ is not None:
+        diagnostics += f" {error_info.value.__context__}"
+
+    assert "restore" in diagnostics
+    assert "user" in diagnostics
+    assert paths["system"].read_bytes() == baseline["system"]
+    assert paths["user"].read_bytes() == external_content
+
+
+def test_temporary_partial_install_restores_written_file_and_preserves_external_update(tmp_path: Path, monkeypatch):
+    paths, baseline = _prompt_files(tmp_path)
+    snapshot = snapshot_prompt_files(paths)
+    external_content = b"external before second temporary replace"
+    original_fsync = os.fsync
+    fsync_calls = 0
+
+    def inject_external_before_second_precondition(file_descriptor: int):
+        nonlocal fsync_calls
+        original_fsync(file_descriptor)
+        fsync_calls += 1
+        if fsync_calls == 2:
+            paths["user"].write_bytes(external_content)
+
+    monkeypatch.setattr(writeback.os, "fsync", inject_external_before_second_precondition)
+
+    with pytest.raises(ConcurrentPromptUpdateError, match="changed"):
+        with temporary_prompt_bundle(
+            snapshot,
+            {"system": "candidate system", "user": "candidate user"},
+        ):
+            pass
+
+    assert paths["system"].read_bytes() == baseline["system"]
+    assert paths["user"].read_bytes() == external_content
+
+
 def test_commit_rejects_concurrent_update_before_any_write(tmp_path: Path, monkeypatch):
     paths, baseline = _prompt_files(tmp_path)
     snapshot = snapshot_prompt_files(paths)
@@ -97,6 +192,128 @@ def test_commit_rejects_concurrent_update_before_any_write(tmp_path: Path, monke
 
     assert paths["system"].read_bytes() == baseline["system"]
     assert paths["user"].read_bytes() == external_content
+
+
+def test_commit_rechecks_first_file_after_flush_before_replace(tmp_path: Path, monkeypatch):
+    paths, baseline = _prompt_files(tmp_path)
+    snapshot = snapshot_prompt_files(paths)
+    external_content = b"external between bundle CAS and first replace"
+    original_fsync = os.fsync
+    external_injected = False
+
+    def inject_external_before_precondition(file_descriptor: int):
+        nonlocal external_injected
+        original_fsync(file_descriptor)
+        if not external_injected:
+            paths["system"].write_bytes(external_content)
+            external_injected = True
+
+    monkeypatch.setattr(writeback.os, "fsync", inject_external_before_precondition)
+
+    with pytest.raises(ConcurrentPromptUpdateError, match="changed"):
+        commit_prompt_bundle(
+            snapshot,
+            {"system": "candidate system", "user": "candidate user"},
+        )
+
+    assert external_injected
+    assert paths["system"].read_bytes() == external_content
+    assert paths["user"].read_bytes() == baseline["user"]
+
+
+def test_commit_rolls_back_written_file_and_preserves_external_unwritten_file(tmp_path: Path, monkeypatch):
+    paths, baseline = _prompt_files(tmp_path)
+    snapshot = snapshot_prompt_files(paths)
+    external_content = b"external before second file replace"
+    original_fsync = os.fsync
+    fsync_calls = 0
+
+    def inject_external_before_second_precondition(file_descriptor: int):
+        nonlocal fsync_calls
+        original_fsync(file_descriptor)
+        fsync_calls += 1
+        if fsync_calls == 2:
+            paths["user"].write_bytes(external_content)
+
+    monkeypatch.setattr(writeback.os, "fsync", inject_external_before_second_precondition)
+
+    result = commit_prompt_bundle(
+        snapshot,
+        {"system": "candidate system", "user": "candidate user"},
+    )
+
+    assert result.status == "rollback_failed"
+    assert result.error is not None
+    assert "changed" in result.error
+    assert paths["system"].read_bytes() == baseline["system"]
+    assert paths["user"].read_bytes() == external_content
+
+
+def test_commit_rejects_final_candidate_hash_mismatch_and_preserves_external_update(tmp_path: Path, monkeypatch):
+    paths, baseline = _prompt_files(tmp_path)
+    snapshot = snapshot_prompt_files(paths)
+    external_content = b"external after final candidate replace"
+    original_replace = os.replace
+    replace_calls = 0
+
+    def update_after_second_replace(source: str | bytes | Path, destination: str | bytes | Path):
+        nonlocal replace_calls
+        original_replace(source, destination)
+        replace_calls += 1
+        if replace_calls == 2:
+            paths["user"].write_bytes(external_content)
+
+    monkeypatch.setattr(writeback.os, "replace", update_after_second_replace)
+
+    result = commit_prompt_bundle(
+        snapshot,
+        {"system": "candidate system", "user": "candidate user"},
+    )
+
+    assert result.status == "rollback_failed"
+    assert result.after_hashes["user"] == hashlib.sha256(external_content).hexdigest()
+    assert result.error is not None
+    assert "candidate" in result.error
+    assert paths["system"].read_bytes() == baseline["system"]
+    assert paths["user"].read_bytes() == external_content
+
+
+def test_commit_restore_rechecks_candidate_hash_after_flush(tmp_path: Path, monkeypatch):
+    paths, baseline = _prompt_files(tmp_path)
+    snapshot = snapshot_prompt_files(paths)
+    external_content = b"external between restore checks"
+    original_fsync = os.fsync
+    original_replace = os.replace
+    fsync_calls = 0
+    replace_calls = 0
+
+    def inject_external_during_restore(file_descriptor: int):
+        nonlocal fsync_calls
+        original_fsync(file_descriptor)
+        fsync_calls += 1
+        if fsync_calls == 3:
+            paths["system"].write_bytes(external_content)
+
+    def fail_second_replace(source: str | bytes | Path, destination: str | bytes | Path):
+        nonlocal replace_calls
+        replace_calls += 1
+        if replace_calls == 2:
+            raise OSError("second candidate replace failed")
+        return original_replace(source, destination)
+
+    monkeypatch.setattr(writeback.os, "fsync", inject_external_during_restore)
+    monkeypatch.setattr(writeback.os, "replace", fail_second_replace)
+
+    result = commit_prompt_bundle(
+        snapshot,
+        {"system": "candidate system", "user": "candidate user"},
+    )
+
+    assert result.status == "rollback_failed"
+    assert result.error is not None
+    assert "changed" in result.error
+    assert paths["system"].read_bytes() == external_content
+    assert paths["user"].read_bytes() == baseline["user"]
 
 
 def test_commit_rejects_missing_prompt_before_writing(tmp_path: Path, monkeypatch):
@@ -209,7 +426,7 @@ def test_atomic_replace_preserves_replace_error_when_temp_unlink_fails(tmp_path:
     assert target.read_bytes() == baseline
 
 
-def test_commit_rolls_back_all_files_when_second_replace_fails(tmp_path: Path, monkeypatch):
+def test_commit_rolls_back_written_file_when_second_replace_fails(tmp_path: Path, monkeypatch):
     paths, baseline = _prompt_files(tmp_path)
     snapshot = snapshot_prompt_files(paths)
     original_replace = os.replace
@@ -234,7 +451,6 @@ def test_commit_rolls_back_all_files_when_second_replace_fails(tmp_path: Path, m
     assert result.after_hashes == snapshot.hashes()
     assert result.error is not None
     assert "second replace failed" in result.error
-    assert replace_calls == 4
     assert {name: path.read_bytes() for name, path in paths.items()} == baseline
 
 
@@ -252,8 +468,8 @@ def test_commit_reports_rollback_failed_when_restored_hashes_differ(tmp_path: Pa
             raise OSError("candidate write failed")
         return original_replace(source, destination)
 
-    def restore_then_concurrently_update(snapshot_to_restore):
-        failures = original_restore(snapshot_to_restore)
+    def restore_then_concurrently_update(snapshot_to_restore, written_hashes):
+        failures = original_restore(snapshot_to_restore, written_hashes)
         paths["system"].write_bytes(b"concurrent update after restore")
         return failures
 
@@ -268,10 +484,10 @@ def test_commit_reports_rollback_failed_when_restored_hashes_differ(tmp_path: Pa
     assert result.status == "rollback_failed"
     assert result.after_hashes["system"] != snapshot.hashes()["system"]
     assert result.error is not None
-    assert "system: restored hash differs from snapshot" in result.error
+    assert "system: final hash differs from snapshot" in result.error
 
 
-def test_commit_reports_rollback_failed_and_attempts_every_restore(tmp_path: Path, monkeypatch):
+def test_commit_reports_rollback_failed_when_written_file_restore_fails(tmp_path: Path, monkeypatch):
     paths, baseline = _prompt_files(tmp_path)
     snapshot = snapshot_prompt_files(paths)
     original_replace = os.replace
@@ -302,7 +518,6 @@ def test_commit_reports_rollback_failed_and_attempts_every_restore(tmp_path: Pat
     assert result.after_hashes["user"] == snapshot.hashes()["user"]
     assert result.error is not None
     assert "candidate write failed" in result.error
-    assert "system: system restore failed" in result.error
-    assert replace_calls == 4
+    assert "system restore failed" in result.error
     assert paths["system"].read_bytes() == b"candidate system"
     assert paths["user"].read_bytes() == baseline["user"]
