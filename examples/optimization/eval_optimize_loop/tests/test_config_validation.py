@@ -6,12 +6,16 @@ from pathlib import Path
 import pytest
 
 from examples.optimization.eval_optimize_loop.eval_loop import schemas
+from examples.optimization.eval_optimize_loop.eval_loop.backends import FakeBackend
 from examples.optimization.eval_optimize_loop.eval_loop.config import parse_optimizer_config
 from examples.optimization.eval_optimize_loop.eval_loop.config import validate_inputs
 from examples.optimization.eval_optimize_loop.eval_loop.loader import load_eval_cases
 from examples.optimization.eval_optimize_loop.eval_loop.loader import load_optimizer_config
 from examples.optimization.eval_optimize_loop.eval_loop.loader import read_json
 from examples.optimization.eval_optimize_loop.run_pipeline import _load_sdk_gate_config
+from examples.optimization.eval_optimize_loop.run_pipeline import _parse_target_prompt_paths
+from examples.optimization.eval_optimize_loop.run_pipeline import build_pipeline_request_and_backend
+from examples.optimization.eval_optimize_loop.run_pipeline import validate_run_id
 
 
 def test_optimizer_config_defaults_metrics_and_gate(tmp_path: Path):
@@ -80,6 +84,150 @@ def test_sdk_gate_config_allows_disabling_cost_gate(tmp_path: Path):
     gate = _load_sdk_gate_config(path)
 
     assert gate["max_total_cost"] is None
+
+
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_sdk_gate_config_rejects_non_standard_constants(tmp_path: Path, constant: str):
+    path = tmp_path / "gate.json"
+    path.write_text(f'{{"gate": {{"max_total_cost": {constant}}}}}', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="non-standard JSON constant"):
+        _load_sdk_gate_config(path)
+
+
+def test_factory_rejects_same_resolved_train_and_validation_path(tmp_path: Path):
+    eval_path = tmp_path / "same.evalset.json"
+    eval_path.write_text('{"eval_cases": []}', encoding="utf-8")
+    optimizer_path = tmp_path / "optimizer.json"
+    optimizer_path.write_text('{"seed": 91}', encoding="utf-8")
+    prompt_path = tmp_path / "prompt.txt"
+    prompt_path.write_text("baseline", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="train and validation.*different"):
+        build_pipeline_request_and_backend(
+            train_path=eval_path,
+            val_path=eval_path,
+            optimizer_config_path=optimizer_path,
+            prompt_path=prompt_path,
+            output_dir=tmp_path / "out",
+            mode="fake",
+        )
+
+
+@pytest.mark.parametrize("run_id", ["CON", "NUL.txt", "trailing.", "x" * 129])
+def test_run_id_rejects_windows_unsafe_or_oversized_components(run_id: str):
+    with pytest.raises(ValueError, match="run-id.*invalid"):
+        validate_run_id(run_id)
+
+
+@pytest.mark.parametrize(
+    "targets",
+    [
+        ["CON=one.txt"],
+        ["Foo=one.txt", "foo=two.txt"],
+        [f"{'x' * 129}=one.txt"],
+    ],
+)
+def test_target_prompt_fields_are_windows_safe_and_casefold_unique(
+    tmp_path: Path,
+    targets: list[str],
+):
+    with pytest.raises(ValueError, match="target-prompt.*invalid|case-insensitively unique"):
+        _parse_target_prompt_paths(targets, default_prompt_path=tmp_path / "prompt.txt")
+
+
+def test_nested_optimizer_seed_drives_backend_and_audit_request(tmp_path: Path):
+    train_path = tmp_path / "train.evalset.json"
+    val_path = tmp_path / "val.evalset.json"
+    for path in (train_path, val_path):
+        path.write_text('{"eval_cases": []}', encoding="utf-8")
+    optimizer_path = tmp_path / "optimizer.json"
+    optimizer_path.write_text('{"optimize": {"algorithm": {"seed": 7}}}', encoding="utf-8")
+    prompt_path = tmp_path / "prompt.txt"
+    prompt_path.write_text("baseline", encoding="utf-8")
+
+    request, backend = build_pipeline_request_and_backend(
+        train_path=train_path,
+        val_path=val_path,
+        optimizer_config_path=optimizer_path,
+        prompt_path=prompt_path,
+        output_dir=tmp_path / "out",
+        mode="fake",
+    )
+
+    assert backend.seed == 7
+    assert request.effective_seed == 7
+
+
+def test_conflicting_top_level_and_nested_optimizer_seeds_are_rejected(tmp_path: Path):
+    train_path = tmp_path / "train.evalset.json"
+    val_path = tmp_path / "val.evalset.json"
+    for path in (train_path, val_path):
+        path.write_text('{"eval_cases": []}', encoding="utf-8")
+    optimizer_path = tmp_path / "optimizer.json"
+    optimizer_path.write_text(
+        '{"seed": 91, "optimize": {"algorithm": {"seed": 7}}}',
+        encoding="utf-8",
+    )
+    prompt_path = tmp_path / "prompt.txt"
+    prompt_path.write_text("baseline", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="conflicting.*seed"):
+        build_pipeline_request_and_backend(
+            train_path=train_path,
+            val_path=val_path,
+            optimizer_config_path=optimizer_path,
+            prompt_path=prompt_path,
+            output_dir=tmp_path / "out",
+            mode="fake",
+        )
+
+
+def test_official_nested_seed_ignores_unrelated_string_top_level_seed(tmp_path: Path):
+    train_path = tmp_path / "train.evalset.json"
+    val_path = tmp_path / "val.evalset.json"
+    for path in (train_path, val_path):
+        path.write_text('{"eval_cases": []}', encoding="utf-8")
+    optimizer_path = tmp_path / "optimizer.json"
+    optimizer_path.write_text(
+        '{"seed": "sdk-owned-label", "optimize": {"algorithm": {"seed": 7}}}',
+        encoding="utf-8",
+    )
+    prompt_path = tmp_path / "prompt.txt"
+    prompt_path.write_text("baseline", encoding="utf-8")
+
+    request, backend = build_pipeline_request_and_backend(
+        train_path=train_path,
+        val_path=val_path,
+        optimizer_config_path=optimizer_path,
+        prompt_path=prompt_path,
+        output_dir=tmp_path / "out",
+        mode="fake",
+    )
+
+    assert request.effective_seed == backend.seed == 7
+
+
+def test_factory_rejects_injected_fake_backend_seed_mismatch(tmp_path: Path):
+    train_path = tmp_path / "train.evalset.json"
+    val_path = tmp_path / "val.evalset.json"
+    for path in (train_path, val_path):
+        path.write_text('{"eval_cases": []}', encoding="utf-8")
+    optimizer_path = tmp_path / "optimizer.json"
+    optimizer_path.write_text('{"seed": 91}', encoding="utf-8")
+    prompt_path = tmp_path / "prompt.txt"
+    prompt_path.write_text("baseline", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="backend seed.*effective seed"):
+        build_pipeline_request_and_backend(
+            train_path=train_path,
+            val_path=val_path,
+            optimizer_config_path=optimizer_path,
+            prompt_path=prompt_path,
+            output_dir=tmp_path / "out",
+            mode="fake",
+            backend=FakeBackend(seed=7),
+        )
 
 
 @pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])

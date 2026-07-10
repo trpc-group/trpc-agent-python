@@ -1240,7 +1240,8 @@ def test_run_pipeline_mode_sdk_writes_report_without_fallback(tmp_path: Path, mo
     assert "sdk_best (accepted)" in markdown
     assert "complete AgentEvaluator-compatible reevaluation" in markdown
     assert (output_dir / "runs" / "sdk_test_run" / "input_hashes.json").is_file()
-    assert (output_dir / "runs" / "sdk_test_run" / "prompt_diffs" / "sdk_best.diff").is_file()
+    candidate_artifact = report.audit["candidate_artifacts"]["sdk_best"]
+    assert (output_dir / "runs" / "sdk_test_run" / "prompt_diffs" / f"{candidate_artifact}.diff").is_file()
     assert calls["update_source"] is False
     assert calls["output_dir"].endswith("runs\\sdk_test_run\\optimizer") or calls[
         "output_dir"
@@ -1250,7 +1251,8 @@ def test_run_pipeline_mode_sdk_writes_report_without_fallback(tmp_path: Path, mo
     assert "--sdk-call-agent fake_call_agent_module:call_agent" in command
     command_args = shlex.split(command)
     gate_index = command_args.index("--gate-config")
-    assert command_args[gate_index + 1] == str(gate_path)
+    assert command_args[gate_index + 1] == "$EXTERNAL/wrapper_gate.json"
+    assert str(gate_path.parent.resolve()) not in command
 
 
 def test_run_pipeline_mode_sdk_accepts_sdk_shaped_inputs_without_fake_schema(tmp_path: Path, monkeypatch):
@@ -1352,7 +1354,7 @@ def test_run_pipeline_mode_sdk_default_run_ids_are_unique(tmp_path: Path, monkey
     assert (tmp_path / "sdk_run" / "runs" / second.run["run_id"]).is_dir()
 
 
-def test_run_pipeline_mode_sdk_explicit_run_id_stays_stable(tmp_path: Path, monkeypatch):
+def test_run_pipeline_mode_sdk_explicit_run_id_is_stable_and_exclusive(tmp_path: Path, monkeypatch):
     _install_fake_sdk(monkeypatch, best_prompt="optimized prompt")
 
     first = run_pipeline(
@@ -1365,19 +1367,19 @@ def test_run_pipeline_mode_sdk_explicit_run_id_stays_stable(tmp_path: Path, monk
         sdk_call_agent="fake_call_agent_module:call_agent",
         run_id="valid_20260704-1.ok",
     )
-    second = run_pipeline(
-        mode="sdk",
-        train_path=DEFAULT_TRAIN,
-        val_path=DEFAULT_VAL,
-        optimizer_config_path=DEFAULT_OPTIMIZER_CONFIG,
-        prompt_path=DEFAULT_PROMPT,
-        output_dir=tmp_path / "sdk_run",
-        sdk_call_agent="fake_call_agent_module:call_agent",
-        run_id="valid_20260704-1.ok",
-    )
+    with pytest.raises(ValueError, match="run_id.*already exists"):
+        run_pipeline(
+            mode="sdk",
+            train_path=DEFAULT_TRAIN,
+            val_path=DEFAULT_VAL,
+            optimizer_config_path=DEFAULT_OPTIMIZER_CONFIG,
+            prompt_path=DEFAULT_PROMPT,
+            output_dir=tmp_path / "sdk_run",
+            sdk_call_agent="fake_call_agent_module:call_agent",
+            run_id="valid_20260704-1.ok",
+        )
 
     assert first.run["run_id"] == "valid_20260704-1.ok"
-    assert second.run["run_id"] == "valid_20260704-1.ok"
 
 
 def test_run_pipeline_mode_sdk_uses_default_wrapper_gate_when_sdk_config_has_no_gate(
@@ -1662,8 +1664,11 @@ def test_run_pipeline_mode_sdk_does_not_pass_wrapper_gate_config_to_agent_optimi
         gate_config_path=gate_path,
     )
 
-    assert Path(calls["config_path"]).resolve() == optimizer_path.resolve()
-    assert "gate" not in json.loads(Path(calls["config_path"]).read_text(encoding="utf-8"))
+    optimizer_snapshot = Path(calls["config_path"])
+    assert optimizer_snapshot.resolve() != optimizer_path.resolve()
+    assert optimizer_snapshot.parent.resolve() == optimizer_path.parent.resolve()
+    assert optimizer_snapshot.name.endswith(f".snapshot-{optimizer_path.name}")
+    assert "gate" not in calls["config_payload"]
     assert json.loads(gate_path.read_text(encoding="utf-8"))["gate"]["max_total_cost"] == 0.05
 
 
@@ -1717,13 +1722,14 @@ def test_run_pipeline_mode_sdk_registers_multiple_target_prompt_paths(tmp_path: 
         "skill_prompt",
     }
     run_dir = tmp_path / "sdk_run" / "runs" / "sdk_multi_target"
-    assert (run_dir / "candidate_prompts" / "sdk_best" / "system_prompt.txt").read_text(
+    candidate_artifact = report.audit["candidate_artifacts"]["sdk_best"]
+    assert (run_dir / "candidate_prompts" / candidate_artifact / "system_prompt.txt").read_text(
         encoding="utf-8"
     ) == "optimized system"
-    assert (run_dir / "candidate_prompts" / "sdk_best" / "router_prompt.txt").read_text(
+    assert (run_dir / "candidate_prompts" / candidate_artifact / "router_prompt.txt").read_text(
         encoding="utf-8"
     ) == "optimized router"
-    assert (run_dir / "candidate_prompts" / "sdk_best" / "skill_prompt.txt").read_text(
+    assert (run_dir / "candidate_prompts" / candidate_artifact / "skill_prompt.txt").read_text(
         encoding="utf-8"
     ) == "optimized skill"
     input_hashes = json.loads((run_dir / "input_hashes.json").read_text(encoding="utf-8"))
@@ -1738,7 +1744,8 @@ def test_run_pipeline_mode_sdk_registers_multiple_target_prompt_paths(tmp_path: 
     command = report.run["reproducibility_command"]
     assert "--sdk-call-agent fake_call_agent_module:call_agent" in command
     assert "--target-prompt" in command
-    assert f"router_prompt={router_path}" in command
+    assert "router_prompt=$EXTERNAL/router.txt" in command
+    assert str(tmp_path.resolve()) not in command
     assert "--gate-config" in command
 
 
@@ -1812,6 +1819,9 @@ def _install_fake_sdk(
         @staticmethod
         async def optimize(**kwargs):
             calls.update(kwargs)
+            config_path = Path(kwargs["config_path"])
+            if config_path.is_file():
+                calls["config_payload"] = json.loads(config_path.read_text(encoding="utf-8"))
             if result_override is not None:
                 return result_override
             if write_source_when_requested and kwargs.get("update_source"):

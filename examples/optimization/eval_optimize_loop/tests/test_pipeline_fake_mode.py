@@ -103,12 +103,14 @@ def test_fake_mode_pipeline_generates_json_and_markdown_reports(tmp_path: Path):
     assert "Cost And Audit" in markdown
 
     run_dir = output_dir / "runs" / payload["run"]["run_id"]
+    overfit_artifact = payload["audit"]["candidate_artifacts"]["candidate_001_overfit"]
+    safe_artifact = payload["audit"]["candidate_artifacts"]["candidate_002_safe"]
     assert (run_dir / "config.snapshot.json").is_file()
     assert (run_dir / "input_hashes.json").is_file()
-    assert (run_dir / "candidate_prompts" / "candidate_001_overfit" / "system_prompt.txt").is_file()
-    assert (run_dir / "case_results" / "candidate_002_safe_validation.json").is_file()
-    assert (run_dir / "prompt_diffs" / "candidate_002_safe.diff").is_file()
-    assert (run_dir / "prompt_diffs" / "candidate_002_safe.diff").read_text(encoding="utf-8") == (
+    assert (run_dir / "candidate_prompts" / overfit_artifact / "system_prompt.txt").is_file()
+    assert (run_dir / "case_results" / f"{safe_artifact}_validation.json").is_file()
+    assert (run_dir / "prompt_diffs" / f"{safe_artifact}.diff").is_file()
+    assert (run_dir / "prompt_diffs" / f"{safe_artifact}.diff").read_text(encoding="utf-8") == (
         payload["candidates"][1]["candidate"]["prompt_diff"]
     )
 
@@ -211,4 +213,5 @@ def _normalized_payload(payload: dict) -> dict:
     normalized["run"].pop("reproducibility_command", None)
     normalized["audit"].pop("duration_seconds", None)
     normalized["audit"].pop("reproducibility_command", None)
+    normalized["audit"].get("writeback_journal", {}).pop("run_id", None)
     return normalized

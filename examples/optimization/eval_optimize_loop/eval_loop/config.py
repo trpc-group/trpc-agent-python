@@ -56,9 +56,7 @@ def parse_optimizer_config(payload: dict[str, Any], *, path: str | Path) -> Opti
     allowed = {"seed", "optimizer", "metrics", "gate"}
     extras = {key: value for key, value in payload.items() if key not in allowed}
 
-    seed = payload.get("seed", 91)
-    if not isinstance(seed, int):
-        raise ValueError(f"{path_text}: field 'seed' must be an integer")
+    seed = resolve_effective_seed(payload, path=path)
 
     optimizer = payload.get("optimizer", {})
     if not isinstance(optimizer, dict):
@@ -80,6 +78,58 @@ def parse_optimizer_config(payload: dict[str, Any], *, path: str | Path) -> Opti
         gate=gate,
         extras=extras,
     )
+
+
+def resolve_effective_seed(
+    payload: dict[str, Any],
+    *,
+    path: str | Path,
+    default: int = 91,
+    strict_legacy: bool = True,
+) -> int:
+    """Resolve the legacy or official optimizer seed without audit drift.
+
+    The official SDK schema owns ``optimize.algorithm.seed``.  A non-integer
+    top-level ``seed`` may be unrelated SDK metadata and is ignored when the
+    official nested seed is present.  Two integer seed declarations must agree.
+    """
+
+    path_text = str(path)
+    nested_present = False
+    nested_seed: Any = None
+    optimize = payload.get("optimize")
+    if isinstance(optimize, dict):
+        algorithm = optimize.get("algorithm")
+        if isinstance(algorithm, dict) and "seed" in algorithm:
+            nested_present = True
+            nested_seed = algorithm["seed"]
+
+    top_present = "seed" in payload
+    top_seed = payload.get("seed")
+    if nested_present:
+        nested = _validated_seed(
+            nested_seed,
+            field_name=f"{path_text}: field 'optimize.algorithm.seed'",
+        )
+        if top_present and isinstance(top_seed, int) and not isinstance(top_seed, bool):
+            if top_seed != nested:
+                raise ValueError(
+                    f"{path_text}: conflicting seed values: top-level seed={top_seed}, "
+                    f"optimize.algorithm.seed={nested}"
+                )
+        return nested
+
+    if not top_present:
+        return default
+    if not strict_legacy and (isinstance(top_seed, bool) or not isinstance(top_seed, int)):
+        return default
+    return _validated_seed(top_seed, field_name=f"{path_text}: field 'seed'")
+
+
+def _validated_seed(value: Any, *, field_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{field_name} must be an integer")
+    return value
 
 
 def validate_inputs(

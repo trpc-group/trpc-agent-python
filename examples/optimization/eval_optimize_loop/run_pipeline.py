@@ -20,19 +20,23 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 try:  # Package import during tests.
+    from .eval_loop.artifacts import validate_artifact_component
     from .eval_loop.backends import FakeBackend
     from .eval_loop.backends import SDKBackend
     from .eval_loop.config import _parse_gate_config
     from .eval_loop.config import parse_optimizer_config
+    from .eval_loop.config import resolve_effective_seed
     from .eval_loop.loader import read_json
     from .eval_loop.pipeline import PipelineRequest
     from .eval_loop.pipeline import execute_pipeline
     from .eval_loop.schemas import OptimizationReport
 except ImportError:  # Direct script execution.
+    from eval_loop.artifacts import validate_artifact_component
     from eval_loop.backends import FakeBackend
     from eval_loop.backends import SDKBackend
     from eval_loop.config import _parse_gate_config
     from eval_loop.config import parse_optimizer_config
+    from eval_loop.config import resolve_effective_seed
     from eval_loop.loader import read_json
     from eval_loop.pipeline import PipelineRequest
     from eval_loop.pipeline import execute_pipeline
@@ -166,14 +170,34 @@ def build_pipeline_request_and_backend(
             "--fake-judge or use --mode sdk with --sdk-call-agent module:function."
         )
 
+    train_resolved = Path(train_path).resolve()
+    validation_resolved = Path(val_path).resolve()
+    if train_resolved == validation_resolved:
+        raise ValueError("train and validation evalset paths must be different")
+
     target_prompt_paths = _parse_target_prompt_paths(
         target_prompts,
         default_prompt_path=prompt_path,
     )
     effective_run_id = validate_run_id(run_id) if run_id is not None else _default_run_id(mode)
 
+    optimizer_payload = read_json(optimizer_config_path)
+    effective_seed = resolve_effective_seed(
+        optimizer_payload,
+        path=optimizer_config_path,
+        strict_legacy=mode == "fake",
+    )
+    if mode == "fake" and backend is not None and hasattr(backend, "seed"):
+        backend_seed = getattr(backend, "seed")
+        if (
+            isinstance(backend_seed, bool)
+            or not isinstance(backend_seed, int)
+            or backend_seed != effective_seed
+        ):
+            raise ValueError(
+                f"fake backend seed {backend_seed!r} does not match effective seed {effective_seed}"
+            )
     if mode == "fake":
-        optimizer_payload = read_json(optimizer_config_path)
         optimizer_config = parse_optimizer_config(
             optimizer_payload,
             path=optimizer_config_path,
@@ -183,12 +207,14 @@ def build_pipeline_request_and_backend(
             if gate_config_path is not None
             else optimizer_config.gate.to_dict()
         )
+        gate_config_source = "file" if gate_config_path is not None else "optimizer"
         selected_backend = backend or FakeBackend(
-            seed=optimizer_config.seed,
+            seed=effective_seed,
             trace_enabled=trace,
         )
     else:
         gate_config = _load_sdk_gate_config(gate_config_path)
+        gate_config_source = "file" if gate_config_path is not None else "request"
         if backend is None:
             if not sdk_call_agent:
                 raise ValueError("sdk mode requires --sdk-call-agent module:function")
@@ -213,6 +239,8 @@ def build_pipeline_request_and_backend(
         run_id=effective_run_id,
         sdk_call_agent=sdk_call_agent,
         gate_config_path=Path(gate_config_path) if gate_config_path is not None else None,
+        effective_seed=effective_seed,
+        gate_config_source=gate_config_source,
     )
     return request, selected_backend
 
@@ -225,11 +253,12 @@ def _load_sdk_gate_config(gate_config_path: str | Path | None) -> dict[str, Any]
         path_text = "--gate-config"
     else:
         try:
-            payload = json.loads(Path(gate_config_path).read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError) as exc:
-            raise ValueError(f"--gate-config {gate_config_path}: invalid JSON: {exc}") from exc
-        if not isinstance(payload, dict):
-            raise ValueError(f"--gate-config {gate_config_path}: expected a JSON object")
+            payload = read_json(gate_config_path)
+        except ValueError as exc:
+            raise ValueError(
+                f"--gate-config {gate_config_path}: invalid JSON for gate numeric fields "
+                f"(including max_total_cost): {exc}"
+            ) from exc
         gate_payload = payload.get("gate", payload)
         path_text = str(gate_config_path)
     if gate_payload is None:
@@ -252,6 +281,7 @@ def _parse_target_prompt_paths(
     if not target_prompts:
         return {"system_prompt": Path(default_prompt_path).resolve()}
     parsed: dict[str, str | Path] = {}
+    casefold_names: set[str] = set()
     resolved_paths: set[Path] = set()
     for item in target_prompts:
         if "=" not in item:
@@ -263,14 +293,21 @@ def _parse_target_prompt_paths(
                 f"--target-prompt field name {name!r} is invalid; "
                 "use /^[A-Za-z_][A-Za-z0-9_]*$/"
             )
+        try:
+            validate_artifact_component(name, context="target-prompt field")
+        except ValueError as error:
+            raise ValueError(f"--target-prompt field name {name!r} is invalid") from error
         if not path:
             raise ValueError("--target-prompt must use non-empty name=path values")
         if name in parsed:
             raise ValueError(f"--target-prompt duplicate field name {name!r}")
+        if name.casefold() in casefold_names:
+            raise ValueError("--target-prompt field names must be case-insensitively unique")
         resolved_path = Path(path).resolve()
         if resolved_path in resolved_paths:
             raise ValueError("--target-prompt fields must not reference the same resolved file")
         resolved_paths.add(resolved_path)
+        casefold_names.add(name.casefold())
         parsed[name] = resolved_path
     return parsed
 
@@ -280,9 +317,12 @@ def validate_run_id(run_id: str) -> str:
 
     if not isinstance(run_id, str):
         raise ValueError(f"--run-id value {run_id!r} must be a string")
-    if run_id in {"", ".", ".."} or not RUN_ID_RE.fullmatch(run_id):
+    if not RUN_ID_RE.fullmatch(run_id):
         raise ValueError(f"--run-id value {run_id!r} is invalid")
-    return run_id
+    try:
+        return validate_artifact_component(run_id, context="run_id")
+    except ValueError as error:
+        raise ValueError(f"--run-id value {run_id!r} is invalid") from error
 
 
 def _default_run_id(mode: str) -> str:

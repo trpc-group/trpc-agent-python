@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import ctypes
 import json
-import re
-import shutil
+import hashlib
+import os
+import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from .attribution import summarize_failures
+from .artifacts import validate_artifact_component
 from .schemas import CandidatePrompt
 from .schemas import CaseDelta
 from .schemas import CostSummary
@@ -30,7 +34,6 @@ REPRODUCIBILITY_COMMAND = (
     "--output-dir /tmp/eval-optimize-loop "
     "--fake-model --fake-judge --trace"
 )
-ARTIFACT_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 @dataclass(frozen=True)
@@ -154,34 +157,16 @@ def prepare_run_artifacts(
         top_level_json=output_path / "optimization_report.json",
         top_level_markdown=output_path / "optimization_report.md",
     )
-    paths.prewrite_json.write_text(report_to_json(report), encoding="utf-8")
-    paths.prewrite_markdown.write_text(render_markdown(report), encoding="utf-8")
-    paths.audit_json.write_text(
-        json.dumps(
-            to_jsonable(report.audit),
-            indent=2,
-            ensure_ascii=False,
-            sort_keys=True,
-            allow_nan=False,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    _atomic_write_text(paths.prewrite_json, report_to_json(report))
+    _atomic_write_text(paths.prewrite_markdown, render_markdown(report))
+    _atomic_write_text(paths.audit_json, _json_text(report.audit))
+    write_audit_artifacts(report, output_path)
     journal = dict(report.audit.get("writeback_journal", {}))
     if journal.get("state") == "pending":
         journal["state"] = "prepared"
-    paths.writeback_journal.write_text(
-        json.dumps(
-            to_jsonable(journal),
-            indent=2,
-            ensure_ascii=False,
-            sort_keys=True,
-            allow_nan=False,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    write_audit_artifacts(report, output_path)
+    # This durable journal is the completion marker for the whole prepare phase,
+    # so it must be replaced only after every prerequisite artifact exists.
+    persist_writeback_journal(paths, journal)
     return paths
 
 
@@ -193,49 +178,119 @@ def finalize_run_artifacts(report: OptimizationReport, paths: RunArtifactPaths) 
     )
     if paths.run_dir != expected_run_dir:
         raise ValueError("run artifact paths do not match report run_id")
-    paths.writeback_json.write_text(
-        json.dumps(
-            to_jsonable(report.writeback),
-            indent=2,
-            ensure_ascii=False,
-            sort_keys=True,
-            allow_nan=False,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    paths.writeback_journal.write_text(
-        json.dumps(
-            to_jsonable(report.audit.get("writeback_journal", {})),
-            indent=2,
-            ensure_ascii=False,
-            sort_keys=True,
-            allow_nan=False,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    paths.audit_json.write_text(
-        json.dumps(
-            to_jsonable(report.audit),
-            indent=2,
-            ensure_ascii=False,
-            sort_keys=True,
-            allow_nan=False,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    paths.final_json.write_text(report_to_json(report), encoding="utf-8")
-    paths.final_markdown.write_text(render_markdown(report), encoding="utf-8")
+    # The terminal outcome is authoritative and is persisted before convenience
+    # reports.  A later rendering failure cannot erase knowledge of source state.
+    persist_writeback_outcome(report, paths)
+    _atomic_write_text(paths.audit_json, _json_text(report.audit))
+    _atomic_write_text(paths.final_json, report_to_json(report))
+    _atomic_write_text(paths.final_markdown, render_markdown(report))
     paths.output_dir.mkdir(parents=True, exist_ok=True)
-    paths.top_level_json.write_text(report_to_json(report), encoding="utf-8")
-    paths.top_level_markdown.write_text(render_markdown(report), encoding="utf-8")
+    _atomic_write_text(paths.top_level_json, report_to_json(report))
+    _atomic_write_text(paths.top_level_markdown, render_markdown(report))
     write_audit_artifacts(report, paths.output_dir)
+
+
+def persist_writeback_journal(paths: RunArtifactPaths, journal: dict[str, Any]) -> None:
+    """Atomically persist the authoritative writeback state machine record."""
+
+    _atomic_write_text(paths.writeback_journal, _json_text(journal))
+
+
+def persist_writeback_outcome(report: OptimizationReport, paths: RunArtifactPaths) -> None:
+    """Persist a terminal writeback outcome before any nonessential artifact."""
+
+    persist_writeback_journal(paths, dict(report.audit.get("writeback_journal", {})))
+    _atomic_write_text(paths.writeback_json, _json_text(report.writeback))
 
 
 def report_to_json(report: OptimizationReport) -> str:
     return json.dumps(to_jsonable(report), indent=2, ensure_ascii=False, sort_keys=True, allow_nan=False) + "\n"
+
+
+def _json_text(value: Any) -> str:
+    return (
+        json.dumps(
+            to_jsonable(value),
+            indent=2,
+            ensure_ascii=False,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        + "\n"
+    )
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    _atomic_write_bytes(path, content.encode("utf-8"))
+
+
+def _atomic_write_bytes(path: Path, content: bytes) -> None:
+    """Durably replace a critical artifact without exposing a partial file."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+    )
+    temp_path = Path(temp_name)
+    try:
+        stream = os.fdopen(fd, "wb")
+        fd = -1
+        with stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        _durable_replace(temp_path, path)
+    finally:
+        active_exception = sys.exc_info()[0] is not None
+        cleanup_error: OSError | None = None
+        if fd >= 0:
+            try:
+                os.close(fd)
+            except OSError as error:
+                cleanup_error = error
+        try:
+            temp_path.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError as error:
+            if cleanup_error is None:
+                cleanup_error = error
+        if cleanup_error is not None and not active_exception:
+            raise cleanup_error
+
+
+def _fsync_directory(directory: Path) -> None:
+    """Synchronize a POSIX directory entry after atomic replacement."""
+
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    fd = os.open(directory, flags)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _durable_replace(source: Path, target: Path) -> None:
+    """Atomically replace a file and wait for rename metadata to reach storage."""
+
+    if os.name == "nt":
+        move_file_ex = ctypes.WinDLL("kernel32", use_last_error=True).MoveFileExW
+        move_file_ex.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32]
+        move_file_ex.restype = ctypes.c_int
+        movefile_replace_existing = 0x00000001
+        movefile_write_through = 0x00000008
+        succeeded = move_file_ex(
+            str(source.resolve()),
+            str(target.resolve()),
+            movefile_replace_existing | movefile_write_through,
+        )
+        if not succeeded:
+            raise ctypes.WinError(ctypes.get_last_error())
+        return
+    os.replace(source, target)
+    _fsync_directory(target.parent)
 
 
 def render_markdown(report: OptimizationReport) -> str:
@@ -320,7 +375,7 @@ def render_markdown(report: OptimizationReport) -> str:
         "",
         "## Failure Attribution Summary",
         "",
-        f"Total failed case evaluations: {summary['total_failed_cases']}",
+            f"Total failed case evaluations: {summary['total_failed_cases']}",
         "",
         "| category | count |",
         "| --- | ---: |",
@@ -338,7 +393,7 @@ def render_markdown(report: OptimizationReport) -> str:
     lines.extend([
         "",
         "## Cost And Audit",
-        "",
+            "",
         f"Total cost: {report.audit.get('cost', {}).get('total', 0):.3f}",
         f"Config hash: `{report.audit.get('config_hash', '')}`",
         f"Run id: `{report.run.get('run_id', '')}`",
@@ -353,8 +408,8 @@ def render_markdown(report: OptimizationReport) -> str:
         candidate = record["candidate"]
         lines.extend([
             f"### {candidate.candidate_id}",
-            "",
-            "```diff",
+                "",
+                "```diff",
             candidate.prompt_diff,
             "```",
             "",
@@ -363,9 +418,9 @@ def render_markdown(report: OptimizationReport) -> str:
     lines.extend([
         "## Reproducibility",
         "",
-        "```bash",
-        report.run.get("reproducibility_command")
-        or report.audit.get("reproducibility_command")
+        f"```{report.run.get('reproducibility_shell') or 'bash'}",
+            report.run.get("reproducibility_command")
+            or report.audit.get("reproducibility_command")
         or REPRODUCIBILITY_COMMAND,
         "```",
         "",
@@ -378,16 +433,15 @@ def write_audit_artifacts(report: OptimizationReport, output_path: Path) -> None
     run_dir = output_path / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    input_paths = report.audit.get("input_paths", {})
-    config_path = input_paths.get("optimizer")
-    if config_path and Path(config_path).is_file():
-        shutil.copyfile(config_path, run_dir / "config.snapshot.json")
-    else:
-        (run_dir / "config.snapshot.json").write_text("{}", encoding="utf-8")
-
-    (run_dir / "input_hashes.json").write_text(
-        json.dumps(report.audit.get("input_hashes", {}), indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
+    # Never copy the raw optimizer file: it may contain API keys.  The original
+    # byte hash remains in input_hashes while this human-readable snapshot is redacted.
+    _atomic_write_text(
+        run_dir / "config.snapshot.json",
+        _json_text(report.audit.get("config_snapshot", {})),
+    )
+    _atomic_write_text(
+        run_dir / "input_hashes.json",
+        _json_text(report.audit.get("input_hashes", {})),
     )
 
     prompt_dir = run_dir / "candidate_prompts"
@@ -397,26 +451,25 @@ def write_audit_artifacts(report: OptimizationReport, output_path: Path) -> None
     results_dir.mkdir(exist_ok=True)
     diffs_dir.mkdir(exist_ok=True)
 
-    for record in report.candidates:
+    for index, record in enumerate(report.candidates, start=1):
         candidate: CandidatePrompt = record["candidate"]
-        candidate_name = _safe_artifact_name(candidate.candidate_id)
+        candidate_name = _candidate_artifact_name(index, candidate.candidate_id)
         candidate_dir = prompt_dir / candidate_name
         candidate_dir.mkdir(exist_ok=True)
         for field_name, prompt_text in candidate.bundle().items():
             field_artifact = _safe_artifact_name(str(field_name))
-            (candidate_dir / f"{field_artifact}.txt").write_text(
-                prompt_text,
-                encoding="utf-8",
-            )
-        (diffs_dir / f"{candidate_name}.diff").write_text(candidate.prompt_diff, encoding="utf-8")
+            _atomic_write_text(candidate_dir / f"{field_artifact}.txt", prompt_text)
+        _atomic_write_text(diffs_dir / f"{candidate_name}.diff", candidate.prompt_diff)
         for split_name in ("train_result", "validation_result"):
             split_result = record[split_name]
             split_artifact = _safe_artifact_name(str(split_result.split))
             path = results_dir / f"{candidate_name}_{split_artifact}.json"
-            path.write_text(
-                json.dumps(to_jsonable(split_result), indent=2, sort_keys=True, allow_nan=False) + "\n",
-                encoding="utf-8",
-            )
+            _atomic_write_text(path, _json_text(split_result))
+
+
+def _candidate_artifact_name(index: int, candidate_id: str) -> str:
+    digest = hashlib.sha256(candidate_id.encode("utf-8")).hexdigest()[:12]
+    return f"{index:03d}-{digest}"
 
 
 def _delta_type(*, baseline_passed: bool, candidate_passed: bool, delta: float) -> str:
@@ -432,6 +485,4 @@ def _delta_type(*, baseline_passed: bool, candidate_passed: bool, delta: float) 
 
 
 def _safe_artifact_name(name: str) -> str:
-    if name in {"", ".", ".."} or not ARTIFACT_NAME_RE.fullmatch(name):
-        raise ValueError(f"unsafe audit artifact name: {name!r}")
-    return name
+    return validate_artifact_component(name, context="audit artifact name")
