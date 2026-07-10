@@ -180,7 +180,7 @@ class TargetPrompt:
         for name, src in self._sources.items():
             if isinstance(src, _PathSource):
                 try:
-                    snapshot[name] = Path(src.path).read_text(encoding="utf-8")
+                    snapshot[name] = self._read_path(src.path)
                 except FileNotFoundError:
                     snapshot[name] = None
         return snapshot
@@ -232,12 +232,18 @@ class TargetPrompt:
     @staticmethod
     def _atomic_write_path(path: str, content: str) -> None:
         tmp = path + ".tmp"
-        Path(tmp).write_text(content, encoding="utf-8")
+        with Path(tmp).open("w", encoding="utf-8", newline="") as prompt_file:
+            prompt_file.write(content)
         os.replace(tmp, path)
+
+    @staticmethod
+    def _read_path(path: str) -> str:
+        with Path(path).open("r", encoding="utf-8", newline="") as prompt_file:
+            return prompt_file.read()
 
     async def _read_one(self, src: _Source) -> str:
         if isinstance(src, _PathSource):
-            return Path(src.path).read_text(encoding="utf-8")
+            return self._read_path(src.path)
         if isinstance(src, _CallbackSource):
             return await src.read_fn()
         raise TypeError(f"unknown source type: {type(src).__name__}")

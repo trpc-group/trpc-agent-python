@@ -129,6 +129,30 @@ async def test_read_all_with_paths(tmp_path: Path):
     assert await target.read_all() == {"a": "alpha", "b": "beta"}
 
 
+@pytest.mark.parametrize(
+    "original_bytes",
+    [
+        "system prompt\nkeep exact bytes\n".encode("utf-8"),
+        "system prompt\r\nkeep exact bytes\r\n".encode("utf-8"),
+        "lf\ncrlf\r\nlone carriage return\rend".encode("utf-8"),
+    ],
+    ids=["lf", "crlf", "mixed"],
+)
+@pytest.mark.asyncio
+async def test_path_read_write_round_trip_preserves_newline_bytes(
+    tmp_path: Path,
+    original_bytes: bytes,
+):
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_bytes(original_bytes)
+    target = TargetPrompt().add_path("prompt", str(prompt_path))
+
+    snapshot = await target.read_all()
+    await target.write_all(snapshot)
+
+    assert prompt_path.read_bytes() == original_bytes
+
+
 @pytest.mark.asyncio
 async def test_read_all_path_not_exist_raises_file_not_found(tmp_path: Path):
     target = TargetPrompt().add_path("missing", str(tmp_path / "ghost.md"))
