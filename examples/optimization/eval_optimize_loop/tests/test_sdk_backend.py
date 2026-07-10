@@ -328,6 +328,92 @@ def test_sdk_result_mapping_rejects_non_finite_metric_scores():
         )
 
 
+def test_sdk_expected_cases_parse_standard_evalset_metadata(tmp_path: Path):
+    dataset_path = tmp_path / "validation.evalset.json"
+    case_payload = _sdk_eval_case_payload(
+        "case-1",
+        query="query",
+        expected="expected",
+        tags=["x"],
+        protected=True,
+    )
+    case_payload["conversation"].insert(
+        0,
+        {
+            "invocation_id": "case-1-turn-0",
+            "user_content": {
+                "role": "user",
+                "parts": [{"text": "earlier query"}],
+            },
+            "final_response": {
+                "role": "model",
+                "parts": [{"text": "earlier expected"}],
+            },
+        },
+    )
+    dataset_path.write_text(
+        json.dumps(
+            _sdk_evalset_payload([case_payload])
+        ),
+        encoding="utf-8",
+    )
+
+    expected_cases = backend_module._load_sdk_expected_cases(
+        dataset_path,
+        split="validation",
+    )
+
+    assert set(expected_cases) == {"case-1"}
+    expected_case = expected_cases["case-1"]
+    assert expected_case.input == "query"
+    assert expected_case.expectation == {
+        "type": "exact",
+        "expected": "expected",
+        "expected_failure_category": "final_response_mismatch",
+    }
+    assert expected_case.tags == ["x"]
+    assert expected_case.protected is True
+    assert expected_case.expected_failure_category == "final_response_mismatch"
+    assert expected_case.split == "validation"
+
+
+def test_sdk_expected_cases_reject_duplicate_eval_ids(tmp_path: Path):
+    dataset_path = tmp_path / "duplicate.evalset.json"
+    dataset_path.write_text(
+        json.dumps(
+            _sdk_evalset_payload([
+                _sdk_eval_case_payload("case-1"),
+                _sdk_eval_case_payload("case-1"),
+            ])
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="duplicate.*case-1"):
+        backend_module._load_sdk_expected_cases(dataset_path, split="validation")
+
+
+def test_sdk_expected_cases_require_expectation_metadata(tmp_path: Path):
+    payload = _sdk_evalset_payload([_sdk_eval_case_payload("case-1")])
+    del payload["eval_cases"][0]["session_input"]["state"]["eval_optimize_expectation"]
+    dataset_path = tmp_path / "missing_expectation.evalset.json"
+    dataset_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="case-1.*eval_optimize_expectation"):
+        backend_module._load_sdk_expected_cases(dataset_path, split="validation")
+
+
+def test_sdk_expected_cases_reject_invalid_eval_cases_shape(tmp_path: Path):
+    dataset_path = tmp_path / "invalid_shape.evalset.json"
+    dataset_path.write_text(
+        json.dumps({"eval_set_id": "set", "eval_cases": {}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="eval_cases.*list"):
+        backend_module._load_sdk_expected_cases(dataset_path, split="validation")
+
+
 @pytest.mark.asyncio
 async def test_sdk_backend_evaluate_temporarily_installs_and_restores_prompt_bytes(
     tmp_path: Path,
@@ -335,17 +421,21 @@ async def test_sdk_backend_evaluate_temporarily_installs_and_restores_prompt_byt
 ):
     dataset_path = tmp_path / "validation.evalset.json"
     dataset_path.write_text(
-        json.dumps({
-            "split": "validation",
-            "cases": [{
-                "case_id": "case_a",
-                "input": "question",
-                "expectation": {"answer": "answer"},
-                "expected_failure_category": "format_violation",
-            }],
-        }),
+        json.dumps(
+            _sdk_evalset_payload([
+                _sdk_eval_case_payload(
+                    "case_a",
+                    query="question",
+                    expected="answer",
+                    expected_failure_category="format_violation",
+                )
+            ])
+        ),
         encoding="utf-8",
     )
+    from trpc_agent_sdk.evaluation import EvalSet
+
+    assert EvalSet.model_validate_json(dataset_path.read_text(encoding="utf-8")).eval_cases[0].eval_id == "case_a"
     prompt_path = tmp_path / "prompt.txt"
     original_bytes = b"original prompt\r\n"
     prompt_path.write_bytes(original_bytes)
@@ -385,6 +475,7 @@ async def test_sdk_backend_evaluate_temporarily_installs_and_restores_prompt_byt
     assert calls["eval_result_output_dir"] == str(tmp_path / "sdk_eval")
     assert prompt_path.read_bytes() == original_bytes
     assert mapped.cases[0].trace_available is True
+    assert mapped.cases[0].expected_failure_category == "format_violation"
 
 
 def test_sdk_backend_requires_call_agent_path(tmp_path: Path):
@@ -1395,6 +1486,51 @@ def _sdk_evaluate_result(runs_by_case_id: dict[str, list[object]]):
             )
         }
     )
+
+
+def _sdk_evalset_payload(eval_cases: list[dict[str, object]]) -> dict[str, object]:
+    return {
+        "eval_set_id": "set",
+        "eval_cases": eval_cases,
+    }
+
+
+def _sdk_eval_case_payload(
+    eval_id: str,
+    *,
+    query: str = "query",
+    expected: str = "expected",
+    expected_failure_category: str = "final_response_mismatch",
+    tags: list[str] | None = None,
+    protected: bool = False,
+) -> dict[str, object]:
+    return {
+        "eval_id": eval_id,
+        "conversation": [{
+            "invocation_id": f"{eval_id}-turn-1",
+            "user_content": {
+                "role": "user",
+                "parts": [{"text": query}],
+            },
+            "final_response": {
+                "role": "model",
+                "parts": [{"text": expected}],
+            },
+        }],
+        "session_input": {
+            "app_name": "eval_optimize_loop",
+            "user_id": "test-user",
+            "state": {
+                "eval_optimize_expectation": {
+                    "type": "exact",
+                    "expected": expected,
+                    "expected_failure_category": expected_failure_category,
+                },
+                "eval_optimize_tags": list(tags or []),
+                "eval_optimize_protected": protected,
+            },
+        },
+    }
 
 
 def _install_fake_agent_evaluator(

@@ -16,6 +16,7 @@ from .evaluator import ExampleEvaluator
 from .fake_judge import FakeJudge
 from .fake_model import FakeModel
 from .loader import load_eval_cases
+from .loader import read_json
 from .optimizer import FakeOptimizer
 from .schemas import CandidatePrompt
 from .schemas import CaseResult
@@ -421,7 +422,7 @@ class SDKBackend:
             target_paths,
             context=f"cannot evaluate {prompt_id}",
         )
-        expected_cases = load_eval_cases(dataset_path, split=split)
+        expected_cases = _load_sdk_expected_cases(dataset_path, split=split)
         snapshot = snapshot_prompt_files(target_paths)
         result: Any | None = None
         with temporary_prompt_bundle(snapshot, candidate_prompts):
@@ -447,7 +448,7 @@ class SDKBackend:
             result,
             prompt_id=prompt_id,
             split=split,
-            expected_cases=expected_cases,
+            expected_cases=expected_cases.values(),
         )
 
     def _load_required_call_agent(self, *, for_evaluation: bool):
@@ -719,6 +720,138 @@ def _safe_jsonable(value: Any) -> Any:
     if isinstance(value, (str, int, bool)) or value is None:
         return value
     return repr(value)
+
+
+def _load_sdk_expected_cases(
+    dataset_path: str | Path,
+    *,
+    split: str,
+) -> dict[str, EvalCase]:
+    """Load wrapper metadata from an SDK EvalSet without changing the SDK file."""
+
+    payload = read_json(dataset_path)
+    if "eval_cases" not in payload:
+        if "cases" in payload:
+            return _eval_cases_by_id(
+                load_eval_cases(dataset_path, split=split),
+                context=f"legacy evalset {dataset_path}",
+            )
+        raise ValueError(f"SDK evalset {dataset_path} must contain an eval_cases list")
+
+    eval_set_id = payload.get("eval_set_id")
+    if not isinstance(eval_set_id, str) or not eval_set_id.strip():
+        raise ValueError(f"SDK evalset {dataset_path} is missing non-empty eval_set_id")
+    raw_cases = payload["eval_cases"]
+    if not isinstance(raw_cases, list):
+        raise ValueError(f"SDK evalset {dataset_path} eval_cases must be a list")
+
+    expected_cases: dict[str, EvalCase] = {}
+    for index, raw_case in enumerate(raw_cases):
+        if not isinstance(raw_case, dict):
+            raise ValueError(
+                f"SDK evalset {dataset_path} eval_cases[{index}] must be an object"
+            )
+        eval_id = raw_case.get("eval_id")
+        if not isinstance(eval_id, str) or not eval_id.strip():
+            raise ValueError(
+                f"SDK evalset {dataset_path} eval_cases[{index}] is missing non-empty eval_id"
+            )
+        if eval_id in expected_cases:
+            raise ValueError(f"SDK evalset {dataset_path} contains duplicate eval_id {eval_id!r}")
+        expected_cases[eval_id] = _expected_case_from_sdk_case(
+            raw_case,
+            eval_id=eval_id,
+            split=split,
+            dataset_path=dataset_path,
+        )
+    return expected_cases
+
+
+def _expected_case_from_sdk_case(
+    raw_case: dict[str, Any],
+    *,
+    eval_id: str,
+    split: str,
+    dataset_path: str | Path,
+) -> EvalCase:
+    context = f"SDK evalset {dataset_path} case {eval_id!r}"
+    conversation = raw_case.get("conversation")
+    if not isinstance(conversation, list) or not conversation:
+        raise ValueError(f"{context} must contain a non-empty conversation list")
+
+    input_text = ""
+    for turn_index, invocation in reversed(list(enumerate(conversation))):
+        if not isinstance(invocation, dict):
+            raise ValueError(f"{context} conversation[{turn_index}] must be an object")
+        user_content = invocation.get("user_content")
+        if user_content is None:
+            continue
+        if not isinstance(user_content, dict):
+            raise ValueError(
+                f"{context} conversation[{turn_index}].user_content must be an object"
+            )
+        candidate_text = _content_text(user_content)
+        if candidate_text.strip():
+            input_text = candidate_text
+            break
+    if not input_text:
+        raise ValueError(f"{context} conversation has no user_content text")
+
+    session_input = raw_case.get("session_input")
+    if not isinstance(session_input, dict):
+        raise ValueError(f"{context} must contain a session_input object")
+    state = session_input.get("state")
+    if not isinstance(state, dict):
+        raise ValueError(f"{context} session_input.state must be an object")
+    expectation = state.get("eval_optimize_expectation")
+    if not isinstance(expectation, dict):
+        raise ValueError(
+            f"{context} session_input.state must contain eval_optimize_expectation object"
+        )
+
+    tags = state.get("eval_optimize_tags", [])
+    if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
+        raise ValueError(f"{context} eval_optimize_tags must be a list of strings")
+    protected = state.get("eval_optimize_protected", False)
+    if not isinstance(protected, bool):
+        raise ValueError(f"{context} eval_optimize_protected must be a boolean")
+
+    expected_failure_category = state.get("eval_optimize_expected_failure_category")
+    if expected_failure_category is None:
+        expected_failure_category = state.get("expected_failure_category")
+    if expected_failure_category is None:
+        expected_failure_category = expectation.get("expected_failure_category")
+    if (
+        expected_failure_category is not None
+        and (
+            not isinstance(expected_failure_category, str)
+            or not expected_failure_category.strip()
+        )
+    ):
+        raise ValueError(f"{context} expected_failure_category must be a non-empty string")
+
+    return EvalCase(
+        case_id=eval_id,
+        split=split,
+        input=input_text,
+        expectation=dict(expectation),
+        tags=list(tags),
+        protected=protected,
+        expected_failure_category=expected_failure_category,
+    )
+
+
+def _eval_cases_by_id(
+    cases: Iterable[EvalCase],
+    *,
+    context: str,
+) -> dict[str, EvalCase]:
+    by_id: dict[str, EvalCase] = {}
+    for case in cases:
+        if case.case_id in by_id:
+            raise ValueError(f"{context} contains duplicate case id {case.case_id!r}")
+        by_id[case.case_id] = case
+    return by_id
 
 
 def _eval_result_from_sdk_result(
