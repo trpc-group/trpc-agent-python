@@ -9,8 +9,11 @@
 from __future__ import annotations
 
 from typing import Any
+from typing import AsyncIterator
 from typing import List
 from typing import Optional
+from typing import Tuple
+from typing import Union
 from typing_extensions import override
 
 from trpc_agent_sdk.context import InvocationContext
@@ -23,6 +26,7 @@ from trpc_agent_sdk.types import Type
 
 from ._archetype import SubAgentArchetype
 from ._runner import run_subagent
+from ._runner import run_subagent_streaming
 from ._sub_agent_config import SubAgentConfig
 
 _DESCRIPTION = ("Run one short-lived sub-agent for a single focused task and return "
@@ -86,7 +90,34 @@ class DynamicSubAgentTool(BaseTool):
         self._agent_config = agent_config
         self._skip_summarization = skip_summarization
         self._expose_tool_selection = expose_tool_selection
+        # When the config asks to forward the sub-agent's events, this tool
+        # behaves as a progress-streaming tool (see is_progress_streaming /
+        # run_streaming). Resolved once at construction because
+        # is_progress_streaming is read before execution to route the call
+        # onto the streaming path.
+        self._forward_events = bool(agent_config is not None and agent_config.forward_events)
         super().__init__(name=name, description=description or _DESCRIPTION, filters_name=filters_name, filters=filters)
+
+    @property
+    @override
+    def is_progress_streaming(self) -> bool:
+        """Route through the progress-streaming path when event forwarding is on.
+
+        Statically determined by ``SubAgentConfig.forward_events`` so
+        the tools processor can partition this call onto the streaming path
+        (which drives :meth:`run_streaming`) before execution begins.
+        """
+        return self._forward_events
+
+    @property
+    def skip_summarization(self) -> bool:
+        """Whether the streamed sub-agent result is the parent's final answer.
+
+        Read by the progress-streaming execution path (which bypasses
+        ``_run_async_impl``) to set ``skip_summarization`` on the final
+        ``function_response`` event.
+        """
+        return self._skip_summarization
 
     @override
     def _get_declaration(self) -> FunctionDeclaration:
@@ -155,16 +186,12 @@ class DynamicSubAgentTool(BaseTool):
                            "or constraints for this run.")
         llm_request.append_instructions([instruction])
 
-    @override
-    async def _run_async_impl(
-        self,
-        *,
-        tool_context: InvocationContext,
-        args: dict[str, Any],
-    ) -> Any:
-        if self._skip_summarization:
-            tool_context.event_actions.skip_summarization = True
+    def _resolve_call(self, args: dict[str, Any]) -> Union[Tuple[SubAgentArchetype, str, Optional[list]], dict]:
+        """Parse and validate call args into ``(archetype, prompt, tool_filter)``.
 
+        Returns an error dict when ``prompt`` is missing/empty so both the
+        streaming and non-streaming paths surface the same failure shape.
+        """
         instruction = args.get("instruction")
         prompt = args.get("prompt")
 
@@ -192,6 +219,23 @@ class DynamicSubAgentTool(BaseTool):
             instruction=instruction,
             tools=self._tools,  # None=inherit, tuple=fixed set
         )
+        return synthetic, prompt, tool_filter
+
+    @override
+    async def _run_async_impl(
+        self,
+        *,
+        tool_context: InvocationContext,
+        args: dict[str, Any],
+    ) -> Any:
+        if self._skip_summarization:
+            tool_context.event_actions.skip_summarization = True
+
+        resolved = self._resolve_call(args)
+        if isinstance(resolved, dict):
+            return resolved
+        synthetic, prompt, tool_filter = resolved
+
         return await run_subagent(
             parent_ctx=tool_context,
             archetype=synthetic,
@@ -199,6 +243,34 @@ class DynamicSubAgentTool(BaseTool):
             agent_config=self._agent_config,
             tool_filter=tool_filter,
         )
+
+    async def run_streaming(
+        self,
+        *,
+        tool_context: InvocationContext,
+        args: dict[str, Any],
+    ) -> AsyncIterator[Any]:
+        """Progress-streaming entrypoint used when event forwarding is enabled.
+
+        Yields one progress projection per sub-agent event and, as the final
+        value, the sub-agent's result (which the tools processor turns into the
+        ``function_response`` fed back to the parent LLM). See
+        :func:`run_subagent_streaming` for the per-value contract.
+        """
+        resolved = self._resolve_call(args)
+        if isinstance(resolved, dict):
+            yield resolved
+            return
+        synthetic, prompt, tool_filter = resolved
+
+        async for value in run_subagent_streaming(
+                parent_ctx=tool_context,
+                archetype=synthetic,
+                prompt=prompt,
+                agent_config=self._agent_config,
+                tool_filter=tool_filter,
+        ):
+            yield value
 
 
 def _tool_names(tools: tuple) -> list[str]:

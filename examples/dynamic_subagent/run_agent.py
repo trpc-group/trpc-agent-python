@@ -33,12 +33,43 @@ if EXAMPLE_DIR not in sys.path:
 
 def _truncate(text: str, max_len: int = 200) -> str:
     """Truncate long tool output for display."""
-    return text
     if not isinstance(text, str):
         text = str(text)
     if len(text) <= max_len:
         return text
     return text[:max_len] + f"\n... (truncated, total {len(text)} chars)"
+
+
+def _print_subagent_progress(payload: dict) -> None:
+    """Render one forwarded sub-agent execution event.
+
+    ``payload`` is a :class:`SubAgentProgress` dict: ``author`` / ``partial``,
+    the framework-native ``content`` dump (``parts`` with ``function_call`` /
+    ``function_response`` / ``text`` / ``thought``), and optional ``error`` /
+    ``usage``. Indented under the parent output so the sub-agent's steps are
+    visually distinct from the orchestrator's.
+    """
+    name = payload.get("author") or "subagent"
+    # Errors first — always surface them, even on an otherwise-partial event.
+    err = payload.get("error")
+    if err:
+        print(f"\n   \U0001F9E9 [{name}] !! error {err.get('code')}: {err.get('message')}")
+    if payload.get("partial"):
+        # Skip streaming text deltas to keep the demo output readable; the
+        # non-partial steps below already summarize the sub-agent's work.
+        return
+    parts = (payload.get("content") or {}).get("parts") or []
+    has_calls = any(p.get("function_call") or p.get("function_response") for p in parts)
+    for p in parts:
+        fc = p.get("function_call")
+        if fc:
+            print(f"\n   \U0001F9E9 [{name}] -> tool {fc.get('name')}({_truncate(fc.get('args'))})")
+        fr = p.get("function_response")
+        if fr:
+            print(f"   \U0001F9E9 [{name}] <- {_truncate(fr.get('response'))}")
+        text = p.get("text")
+        if text and not p.get("thought") and not has_calls:
+            print(f"\n   \U0001F9E9 [{name}] {_truncate(text)}")
 
 
 _QUERIES = {
@@ -93,6 +124,18 @@ async def run_demo(mode: str):
             session_id=current_session_id,
             new_message=user_content,
         ):
+            # Forwarded sub-agent execution events (SubAgentConfig
+            # forward_events=True). These are partial progress events carrying
+            # the sub-agent's own steps under custom_metadata.payload; they
+            # never reach the parent LLM's context. This demo registers only the
+            # sub-agent tool, so tool_progress alone identifies them; an app with
+            # several progress tools would also branch on meta["tool_name"].
+            meta = event.custom_metadata or {}
+            payload = meta.get("payload")
+            if meta.get("tool_progress") and isinstance(payload, dict):
+                _print_subagent_progress(payload)
+                continue
+
             if event.content and event.content.parts and event.author != "user":
                 if event.partial:
                     for part in event.content.parts:

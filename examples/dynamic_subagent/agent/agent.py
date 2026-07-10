@@ -45,7 +45,12 @@ def create_minimal_agent() -> LlmAgent:
             temperature=0.7,
             max_output_tokens=2000,
         ),
-        tools=workspace_tools + [DynamicSubAgentTool()],
+        tools=workspace_tools + [
+            DynamicSubAgentTool(
+                # Stream the sub-agent's execution to the parent consumer.
+                agent_config=SubAgentConfig(forward_events=True),
+            ),
+        ],
     )
 
 
@@ -69,6 +74,8 @@ def create_bounded_agent() -> LlmAgent:
                         temperature=0.3,
                         max_output_tokens=1000,
                     ),
+                    # Stream the sub-agent's execution to the parent consumer.
+                    forward_events=True,
                 ),
             ),
         ],
