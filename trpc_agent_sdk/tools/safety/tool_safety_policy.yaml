@@ -1,0 +1,115 @@
+version: "1.0"
+max_script_size_bytes: 1048576
+max_scan_time_ms: 1000
+default_decision: deny
+
+rules:
+  - rule_id: DANGEROUS_DELETE_001
+    enabled: true
+    risk_type: dangerous_file_operation
+    severity: critical
+    decision: deny
+  - rule_id: SENSITIVE_PATH_002
+    enabled: true
+    risk_type: dangerous_file_operation
+    severity: critical
+    decision: deny
+  - rule_id: NETWORK_CURL_003
+    enabled: true
+    risk_type: network_access
+    severity: high
+    decision: deny
+  - rule_id: NETWORK_PYTHON_004
+    enabled: true
+    risk_type: network_access
+    severity: high
+    decision: deny
+  - rule_id: NETWORK_SOCKET_005
+    enabled: true
+    risk_type: network_access
+    severity: high
+    decision: deny
+  - rule_id: SUBPROCESS_006
+    enabled: true
+    risk_type: system_command
+    severity: high
+    decision: deny
+  - rule_id: OS_SYSTEM_007
+    enabled: true
+    risk_type: system_command
+    severity: high
+    decision: deny
+  - rule_id: DEP_INSTALL_008
+    enabled: true
+    risk_type: dependency_install
+    severity: high
+    decision: deny
+  - rule_id: PRIVILEGE_ESCALA_009
+    enabled: true
+    risk_type: system_command
+    severity: critical
+    decision: deny
+  - rule_id: SENSITIVE_LOG_010
+    enabled: true
+    risk_type: sensitive_info_leak
+    severity: high
+    decision: deny
+  - rule_id: FORK_BOMB_011
+    enabled: true
+    risk_type: resource_abuse
+    severity: critical
+    decision: deny
+  - rule_id: INFINITE_LOOP_012
+    enabled: true
+    risk_type: resource_abuse
+    severity: medium
+    decision: needs_human_review
+
+whitelist:
+  domains:
+    - api.example.com
+    - trusted.internal.org
+    - localhost
+    - 127.0.0.1
+  commands:
+    - ls
+    - cat
+    - echo
+    - pwd
+    - mkdir
+    - cd
+    - cp
+    - mv
+    - head
+    - tail
+    - find
+    - grep
+  paths:
+    - /tmp/
+    - /workspace/
+    - ./
+
+blocklist:
+  paths:
+    - ~/.ssh
+    - ~/.aws
+    - /etc/passwd
+    - /etc/shadow
+    - .env
+    - ~/.gitconfig
+    - ~/.gnupg
+    - ~/.docker
+    - /root/
+    - /var/run/docker.sock
+  commands:
+    - sudo
+    - su
+    - chmod 777
+    - chmod -R 777
+    - chown
+    - mount
+    - umount
+    - iptables
+    - systemctl
+    - shutdown
+    - reboot
