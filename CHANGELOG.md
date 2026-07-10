@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.1.12](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.12) (2026-07-10)
+
+### Features
+
+* Agent: Added support for dynamically created sub-agents to forward runtime events directly into the parent agent event stream, so callers can observe child-agent progress, tool activity, and final outputs without waiting for the whole delegated task to finish.
+* Agent: Added dynamic sub-agent creation support, allowing agents to create and use child agents at runtime for more flexible task decomposition and delegation.
+* Goal: Added Goal support aligned with the Go implementation, giving agents a structured way to carry task objectives through the execution flow.
+* A2A: Added optional `app_name` support to `TrpcA2aAgentService`, allowing the Runner app identity to differ from the exposed A2A service name while keeping the existing `service_name` fallback behavior.
+* Session: Updated `list_sessions()` so `user_id` can be omitted. When `user_id=None`, InMemory, SQL, Redis, and Eval session services now return all sessions under the specified `app_name` without loading session events.
+* Skill: Added the `skills_hub` module to support centralized skill discovery and management.
+
+### Bug Fixes
+
+* Graph: Fixed `GraphAgent` `AgentNode.last_response` so it no longer records thinking text or intermediate tool-call round text as the node's final response. The graph now uses `Event.is_final_response()` and removes thinking content before saving the last response.
+* A2A: Fixed internal pipeline example scripts and paths so the example workflow can be triggered and run with the expected files.
+* Docs: Fixed README optional dependency installation commands by quoting extras, removing extra spaces, and normalizing package-extra casing so shell parsing works correctly.
+
+### Docs
+
+* Docs: Added MkDocs site entry pages and navigation for the existing English and Chinese documentation, plus a GitHub Pages workflow so the README documentation badge can point to a published documentation site.
+* Docs: Added documentation and test coverage for listing sessions across all users under an app by passing `user_id=None`.
+
+### Internal
+
+* CI: Added and adjusted internal pipeline test trigger files used by repository automation.
+
 ## [1.1.11](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.11) (2026-06-26)
 
 ### Features
