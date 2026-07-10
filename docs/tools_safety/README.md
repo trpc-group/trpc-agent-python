@@ -21,19 +21,15 @@ The scanner also integrates as a `BaseFilter` in the tool filter chain, so it ru
 ### Filter Mode (automatic)
 
 ```python
-from trpc_agent_sdk.filter import register_filter, FilterType
 from trpc_agent_sdk.tools.safety import ToolSafetyScanner, ToolSafetyFilter, SafetyAuditLogger
 from trpc_agent_sdk.tools import FunctionTool
 
 scanner = ToolSafetyScanner("path/to/tool_safety_policy.yaml")
 audit = SafetyAuditLogger("tool_safety_audit.jsonl")
 
-# Register the filter globally
+# Create filter and attach directly to a tool
 filter_instance = ToolSafetyFilter(scanner=scanner, audit_logger=audit)
-register_filter(FilterType.TOOL, "tool_safety")(type(filter_instance))
-
-# Attach to a tool
-tool = FunctionTool(func=my_func, filters=["tool_safety"])
+tool = FunctionTool(func=my_func, filters=[filter_instance])
 ```
 
 ### Standalone Mode

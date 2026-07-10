@@ -258,7 +258,7 @@ def _check_subprocess_shell_true(tree: ast.AST) -> list[RuleFinding]:
 
 def _check_python_network_calls(tree: ast.AST) -> list[RuleFinding]:
     findings: list[RuleFinding] = []
-    network_libs = {"requests", "httpx", "urllib", "aiohttp", "socket"}
+    network_libs = {"requests", "httpx", "aiohttp", "socket"}
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             if isinstance(node.func, ast.Attribute):

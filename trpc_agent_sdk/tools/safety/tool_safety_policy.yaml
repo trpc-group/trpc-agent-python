@@ -64,6 +64,26 @@ rules:
     risk_type: resource_abuse
     severity: medium
     decision: needs_human_review
+  - rule_id: SYSTEM_COMMAND_013
+    enabled: true
+    risk_type: system_command
+    severity: medium
+    decision: needs_human_review
+  - rule_id: SUBPROCESS_SHELL_001
+    enabled: true
+    risk_type: system_command
+    severity: critical
+    decision: deny
+  - rule_id: NETWORK_AST_001
+    enabled: true
+    risk_type: network_access
+    severity: high
+    decision: deny
+  - rule_id: SENSITIVE_AST_001
+    enabled: true
+    risk_type: sensitive_info_leak
+    severity: high
+    decision: deny
 
 whitelist:
   domains:
