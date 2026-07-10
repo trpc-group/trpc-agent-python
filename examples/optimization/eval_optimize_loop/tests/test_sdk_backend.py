@@ -14,6 +14,7 @@ from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_PROMPT
 from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_TRAIN
 from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_VAL
 from examples.optimization.eval_optimize_loop.run_pipeline import _parse_target_prompt_paths
+from examples.optimization.eval_optimize_loop.run_pipeline import _sdk_gate_decision
 from examples.optimization.eval_optimize_loop.run_pipeline import run_pipeline
 
 
@@ -549,6 +550,26 @@ def test_run_pipeline_mode_sdk_custom_gate_rejects_cost_over_budget(tmp_path: Pa
     assert decision.gate_status == "partial_applied"
     assert decision.total_run_cost == 2.0
     assert any("cost" in reason for reason in decision.reasons)
+
+
+def test_sdk_gate_decision_skips_disabled_cost_gate_but_keeps_quality_threshold():
+    decision = _sdk_gate_decision(
+        candidate_id="sdk_best",
+        sdk_summary={
+            "status": "SUCCEEDED",
+            "pass_rate_improvement": 0.005,
+            "total_llm_cost": 1000.0,
+        },
+        gate_config={
+            "min_val_score_improvement": 0.01,
+            "max_total_cost": None,
+        },
+    )
+
+    assert decision.accepted is False
+    assert any("validation improvement" in reason for reason in decision.reasons)
+    assert not any("cost" in reason for reason in decision.reasons)
+    assert decision.total_run_cost == 1000.0
 
 
 @pytest.mark.parametrize(

@@ -594,11 +594,12 @@ def _sdk_gate_decision(
             f"accept: validation improvement {improvement:.3f} meets threshold {min_improvement:.3f}"
         )
 
-    if total_cost > max_cost:
-        accepted = False
-        reasons.append(f"reject: total SDK cost {total_cost:.3f} exceeds budget {max_cost:.3f}")
-    else:
-        reasons.append(f"accept: total SDK cost {total_cost:.3f} is within budget {max_cost:.3f}")
+    if max_cost is not None:
+        if total_cost > max_cost:
+            accepted = False
+            reasons.append(f"reject: total SDK cost {total_cost:.3f} exceeds budget {max_cost:.3f}")
+        else:
+            reasons.append(f"accept: total SDK cost {total_cost:.3f} is within budget {max_cost:.3f}")
 
     if accepted:
         reasons.append("accept: SDK aggregate gate passed")
