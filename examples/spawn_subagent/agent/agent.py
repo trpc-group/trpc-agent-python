@@ -25,7 +25,6 @@ from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.agents.sub_agent import EXPLORE_AGENT
 from trpc_agent_sdk.agents.sub_agent import PLAN_AGENT
 from trpc_agent_sdk.agents.sub_agent import SubAgentArchetype
-from trpc_agent_sdk.agents.sub_agent import SubAgentConfig
 from trpc_agent_sdk.tools import SpawnSubAgentTool
 from trpc_agent_sdk.models import LLMModel
 from trpc_agent_sdk.models import OpenAIModel
@@ -53,11 +52,7 @@ def create_default_agent() -> LlmAgent:
         description="Coding assistant with spawn_subagent in zero-config mode.",
         model=_create_model(),
         instruction=INSTRUCTION,
-        tools=[ReadTool(), GlobTool(), GrepTool(),
-               SpawnSubAgentTool(
-                   # Stream the sub-agent's execution to the parent consumer.
-                   agent_config=SubAgentConfig(forward_events=True),
-               )],
+        tools=[ReadTool(), GlobTool(), GrepTool(), SpawnSubAgentTool()],
     )
 
 
@@ -93,11 +88,7 @@ def create_code_agent() -> LlmAgent:
         instruction=INSTRUCTION,
         tools=[
             ReadTool(), GlobTool(), GrepTool(),
-            SpawnSubAgentTool(
-                agents=[_SECURITY_AUDITOR, EXPLORE_AGENT, PLAN_AGENT],
-                # Stream the sub-agent's execution to the parent consumer.
-                agent_config=SubAgentConfig(forward_events=True),
-            ),
+            SpawnSubAgentTool(agents=[_SECURITY_AUDITOR, EXPLORE_AGENT, PLAN_AGENT]),
         ],
     )
 
@@ -118,11 +109,7 @@ def create_md_agent() -> LlmAgent:
         instruction=INSTRUCTION,
         tools=[
             ReadTool(), GlobTool(), GrepTool(),
-            SpawnSubAgentTool(
-                agents=[EXPLORE_AGENT, PLAN_AGENT], agent_paths=[_AGENTS_PATH],
-                # Stream the sub-agent's execution to the parent consumer.
-                agent_config=SubAgentConfig(forward_events=True),
-            ),
+            SpawnSubAgentTool(agents=[EXPLORE_AGENT, PLAN_AGENT], agent_paths=[_AGENTS_PATH]),
         ],
     )
 

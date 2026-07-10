@@ -39,57 +39,6 @@ def test_constructor_with_config() -> None:
 def test_constructor_skip_summarization() -> None:
     t = DynamicSubAgentTool(skip_summarization=True)
     assert t._skip_summarization is True
-    # Exposed as a property for the progress-streaming execution path.
-    assert t.skip_summarization is True
-
-
-def test_is_progress_streaming_default_off() -> None:
-    """Without forward_events, the tool runs on the non-streaming path."""
-    assert DynamicSubAgentTool().is_progress_streaming is False
-    assert DynamicSubAgentTool(agent_config=SubAgentConfig()).is_progress_streaming is False
-
-
-def test_is_progress_streaming_on_when_forwarding() -> None:
-    t = DynamicSubAgentTool(agent_config=SubAgentConfig(forward_events=True))
-    assert t.is_progress_streaming is True
-
-
-@pytest.mark.asyncio
-async def test_run_streaming_empty_prompt_yields_error() -> None:
-    """run_streaming surfaces the prompt validation error as its only value."""
-    t = DynamicSubAgentTool(agent_config=SubAgentConfig(forward_events=True))
-    ctx = MagicMock()
-    yielded = [v async for v in t.run_streaming(tool_context=ctx, args={"prompt": "  "})]
-    assert len(yielded) == 1
-    assert yielded[0]["status"] == "error"
-    assert "prompt" in yielded[0]["message"]
-
-
-@pytest.mark.asyncio
-async def test_run_streaming_forwards_projections_then_result() -> None:
-    """run_streaming delegates to run_subagent_streaming, yielding its values in order."""
-    from unittest.mock import patch
-
-    t = DynamicSubAgentTool(agent_config=SubAgentConfig(forward_events=True))
-    ctx = MagicMock()
-
-    async def _fake_stream(**kwargs):
-        yield {"author": "subagent_dynamic", "partial": True, "content": {"parts": [{"text": "step 1"}]}}
-        yield "final result"
-
-    with patch(
-        "trpc_agent_sdk.agents.sub_agent._dynamic_sub_agent_tool.run_subagent_streaming",
-        _fake_stream,
-    ):
-        yielded = [v async for v in t.run_streaming(
-            tool_context=ctx,
-            args={"instruction": "You are a helper.", "prompt": "do it"},
-        )]
-
-    assert yielded == [
-        {"author": "subagent_dynamic", "partial": True, "content": {"parts": [{"text": "step 1"}]}},
-        "final result",
-    ]
 
 
 def test_constructor_custom_name() -> None:

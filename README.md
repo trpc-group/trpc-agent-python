@@ -84,7 +84,7 @@ pip install trpc-agent-py
 Install optional capabilities as needed:
 
 ```bash
-pip install "trpc-agent-py[a2a,ag-ui,knowledge,agent-claude,mem0,mempalace,langfuse]"
+pip install trpc-agent-py[a2a,ag-ui,knowledge,agent-claude,mem0, Mempalace, langfuse]
 ```
 
 ### Develop Weather Agent

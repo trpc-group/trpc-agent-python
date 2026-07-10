@@ -42,11 +42,5 @@ class SubAgentConfig:
     """Max LLM calls the sub-agent may make.  ``None`` = unlimited.
     Each LLM request counts as one turn, including those with tool calls."""
 
-    forward_events: bool = False
-    """Stream sub-agent events to the parent consumer as progress updates.
-
-    ``True``: orchestrator can display sub-agent execution live.
-    ``False`` (default): sub-agent runs silently."""
-
 
 __all__ = ["SubAgentConfig"]

@@ -21,19 +21,6 @@ A **short-lived sub-agent** is a natural fit for these problems: a fresh context
 
 The difference is *who defines the role*: the developer (Spawn) or the LLM (Dynamic).
 
-### How this differs from other multi-agent mechanisms
-
-The framework already offers several ways to compose agents (see [Multi Agents](multi_agents.md)). Spawned Sub-Agents solve a different problem:
-
-| Mechanism | Agents involved | Who decides when to invoke | Context | Typical use |
-| --- | --- | --- | --- | --- |
-| **Chain / Parallel / Cycle Agent** | **Pre-built** fixed agent instances | **Deterministic** orchestration — run in list order / in parallel / in a loop, regardless of input | Each agent independent | Fixed multi-step workflows |
-| **Sub Agents (transfer)** | Pre-registered agents | Parent **transfers control** at runtime; the sub-agent then takes over the conversation | Shared session | **Hand off** the whole conversation to a better-suited agent |
-| **AgentTool** | Wraps **an existing agent instance** as a tool | Parent LLM calls it on demand | Shares/syncs state & artifacts back to parent | Reuse a **specific, already-built** agent |
-| **Spawned Sub-Agents** | **Created on the fly** per call, destroyed after | Parent LLM calls it on demand | **Strictly isolated**: fresh ephemeral session, history/state not shared by default | Delegate a **one-off** subtask while keeping the parent context clean |
-
-In one line: **Chain/Parallel/Cycle** deterministically orchestrate a fixed set of agents; **transfer** hands the conversation off; **AgentTool** reuses one existing agent as a tool; while **Spawned Sub-Agents** create an **isolated, short-lived** sub-agent on the spot for a single task and discard it afterward — the emphasis is on **on-demand runtime creation** and **context isolation**, not reusing an existing agent or transferring control.
-
 ## Quick Start
 
 ```python
@@ -186,18 +173,7 @@ class SubAgentConfig:
 
     max_turns: int | None = None
     """Max LLM calls the sub-agent may make. None = unlimited."""
-
-    forward_events: bool = False
-    """Whether to forward the sub-agent's execution events to the parent
-    runner's consumer as progress updates.
-
-    True: the orchestrator can display the sub-agent's execution live (model
-    output, tool calls, tool results); the parent agent's LLM still receives
-    only the sub-agent's final result. False (default): the sub-agent runs
-    silently and only its final result is returned."""
 ```
-
-Forwarded events reach the consumer as progress events; they are **not** written to the parent session and **never** enter the parent agent's LLM context. Consumers identify them via `tool_progress=True` on `event.custom_metadata` and read the execution from `payload` (`author` / `partial` / `content`, plus optional `error` / `usage`).
 
 ## Usage
 
@@ -294,4 +270,3 @@ orchestrator = LlmAgent(
 - **Session isolation**: sub-agents run in a fresh ephemeral session. Parent history is not shared by default; opt in via `include_parent_history=True`.
 - **Nesting**: 1-level hard cap. Sub-agents cannot spawn further sub-agents.
 - **Result shape**: the sub-agent's final text is returned as the tool result string.
-- **Live execution (`forward_events`)**: set `SubAgentConfig(forward_events=True)` to stream the sub-agent's execution to the parent runner's consumer for display. Forwarded events are progress events — they never enter the parent LLM's context, which still receives only the final result. Consumers detect them via `tool_progress=True` on `event.custom_metadata` and read `payload`. See `examples/dynamic_subagent` and `examples/spawn_subagent` for a working consumer.
