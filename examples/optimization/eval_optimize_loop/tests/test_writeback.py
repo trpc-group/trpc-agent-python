@@ -158,6 +158,57 @@ def test_commit_rolls_back_when_post_write_hashing_fails(tmp_path: Path, monkeyp
     assert {name: path.read_bytes() for name, path in paths.items()} == baseline
 
 
+def test_commit_removes_temp_file_when_replace_fails(tmp_path: Path, monkeypatch):
+    target = tmp_path / "system.txt"
+    baseline = b"system baseline"
+    target.write_bytes(baseline)
+    snapshot = snapshot_prompt_files({"system": target})
+    original_replace = os.replace
+    replace_calls = 0
+
+    def fail_first_replace(source: str | bytes | Path, destination: str | bytes | Path):
+        nonlocal replace_calls
+        replace_calls += 1
+        if replace_calls == 1:
+            raise OSError("candidate replace failed")
+        return original_replace(source, destination)
+
+    monkeypatch.setattr(writeback.os, "replace", fail_first_replace)
+
+    result = commit_prompt_bundle(snapshot, {"system": "candidate system"})
+
+    assert result.status == "rolled_back"
+    assert target.read_bytes() == baseline
+    assert list(tmp_path.glob(f".{target.name}.*.tmp")) == []
+
+
+def test_atomic_replace_preserves_replace_error_when_temp_unlink_fails(tmp_path: Path, monkeypatch):
+    target = tmp_path / "system.txt"
+    baseline = b"system baseline"
+    target.write_bytes(baseline)
+    original_unlink = Path.unlink
+
+    def fail_replace(source: str | bytes | Path, destination: str | bytes | Path):
+        raise OSError("primary replace failed")
+
+    def fail_temp_unlink(path: Path, missing_ok: bool = False):
+        if path.parent == tmp_path and path.name.startswith(f".{target.name}.") and path.suffix == ".tmp":
+            raise OSError("temp unlink failed")
+        return original_unlink(path, missing_ok=missing_ok)
+
+    with monkeypatch.context() as injected_failure:
+        injected_failure.setattr(writeback.os, "replace", fail_replace)
+        injected_failure.setattr(Path, "unlink", fail_temp_unlink)
+        with pytest.raises(OSError) as error_info:
+            writeback._atomic_replace_bytes(target, b"candidate system")
+
+    for temp_path in tmp_path.glob(f".{target.name}.*.tmp"):
+        original_unlink(temp_path)
+
+    assert str(error_info.value) == "primary replace failed"
+    assert target.read_bytes() == baseline
+
+
 def test_commit_rolls_back_all_files_when_second_replace_fails(tmp_path: Path, monkeypatch):
     paths, baseline = _prompt_files(tmp_path)
     snapshot = snapshot_prompt_files(paths)
