@@ -173,6 +173,35 @@ def test_temporary_partial_install_restores_written_file_and_preserves_external_
     assert paths["user"].read_bytes() == external_content
 
 
+def test_temporary_verifies_complete_candidate_bundle_before_entering_body(tmp_path: Path, monkeypatch):
+    paths, baseline = _prompt_files(tmp_path)
+    snapshot = snapshot_prompt_files(paths)
+    external_content = b"external after second candidate replace"
+    original_replace = os.replace
+    replace_calls = 0
+    body_entered = False
+
+    def update_first_file_after_second_replace(source: str | bytes | Path, destination: str | bytes | Path):
+        nonlocal replace_calls
+        original_replace(source, destination)
+        replace_calls += 1
+        if replace_calls == 2:
+            paths["system"].write_bytes(external_content)
+
+    monkeypatch.setattr(writeback.os, "replace", update_first_file_after_second_replace)
+
+    with pytest.raises((ConcurrentPromptUpdateError, RuntimeError)):
+        with temporary_prompt_bundle(
+            snapshot,
+            {"system": "candidate system", "user": "candidate user"},
+        ):
+            body_entered = True
+
+    assert not body_entered
+    assert paths["system"].read_bytes() == external_content
+    assert paths["user"].read_bytes() == baseline["user"]
+
+
 def test_commit_rejects_concurrent_update_before_any_write(tmp_path: Path, monkeypatch):
     paths, baseline = _prompt_files(tmp_path)
     snapshot = snapshot_prompt_files(paths)

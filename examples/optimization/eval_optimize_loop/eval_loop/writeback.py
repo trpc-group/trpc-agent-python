@@ -195,6 +195,14 @@ def temporary_prompt_bundle(
                 expected_sha256=expected_hashes[name],
             )
             written_hashes[name] = candidate_hashes[name]
+        installed_hashes = _current_hashes(snapshot)
+        candidate_mismatches = [
+            name for name, candidate_hash in candidate_hashes.items() if installed_hashes[name] != candidate_hash
+        ]
+        if candidate_mismatches:
+            raise ConcurrentPromptUpdateError(
+                "candidate prompt files changed before temporary evaluation: " f"{', '.join(candidate_mismatches)}"
+            )
         yield
     except BaseException as primary_error:
         failures = _restore_snapshot(snapshot, written_hashes)
