@@ -143,6 +143,7 @@ def _compute_exponential_backoff(
 
 
 def _build_error_response(ex: Exception, error_code: str) -> LlmResponse:
+    logger.error("Model call failed: %s", ex, exc_info=True)
     return LlmResponse(
         content=None,
         error_code=error_code,
