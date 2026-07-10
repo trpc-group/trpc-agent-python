@@ -5,7 +5,6 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Shared test fixtures for safety tests."""
 
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -117,6 +116,27 @@ def policy():
                 enabled=True,
                 risk_type=RiskType.SYSTEM_COMMAND,
                 severity=RiskLevel.MEDIUM,
+                decision=Decision.DENY,
+            ),
+            PolicyRuleConfig(
+                rule_id="SUBPROCESS_SHELL_001",
+                enabled=True,
+                risk_type=RiskType.SYSTEM_COMMAND,
+                severity=RiskLevel.CRITICAL,
+                decision=Decision.DENY,
+            ),
+            PolicyRuleConfig(
+                rule_id="NETWORK_AST_001",
+                enabled=True,
+                risk_type=RiskType.NETWORK_ACCESS,
+                severity=RiskLevel.HIGH,
+                decision=Decision.DENY,
+            ),
+            PolicyRuleConfig(
+                rule_id="SENSITIVE_AST_001",
+                enabled=True,
+                risk_type=RiskType.SENSITIVE_INFO_LEAK,
+                severity=RiskLevel.HIGH,
                 decision=Decision.DENY,
             ),
         ],

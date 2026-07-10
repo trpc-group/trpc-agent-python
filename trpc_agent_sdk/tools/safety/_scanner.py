@@ -23,6 +23,7 @@ from ._rules import BUILTIN_AST_RULES
 from ._rules import BUILTIN_PATTERN_RULES
 from ._types import Decision
 from ._types import RiskLevel
+from ._types import RuleFinding
 from ._types import ScanReport
 from ._types import _DECISION_ORDER
 from ._types import _RISK_LEVEL_ORDER
@@ -107,7 +108,8 @@ class ToolSafetyScanner:
         script: str,
         args: Optional[dict[str, Any]],
         env_vars: Optional[dict[str, str]],
-    ) -> list:
+    ) -> list[RuleFinding]:
+        await asyncio.sleep(0)
         text_to_scan = script
         if args:
             for key, value in args.items():
@@ -140,41 +142,55 @@ class ToolSafetyScanner:
 
         return findings
 
-    def _apply_whitelist_filter(self, findings: list, script: str) -> list:
+    def _apply_whitelist_filter(self, findings: list[RuleFinding], script: str) -> list[RuleFinding]:
         if not findings:
             return findings
 
         whitelisted_domains = set(self._policy.whitelist.domains)
         whitelisted_paths = set(self._policy.whitelist.paths)
 
+        if self._is_script_whitelisted(script, whitelisted_domains, whitelisted_paths):
+            return []
+
         filtered = []
         for finding in findings:
-            if self._is_whitelisted(finding, script, whitelisted_domains, whitelisted_paths):
+            if self._is_whitelisted(finding.evidence, whitelisted_domains, whitelisted_paths):
                 continue
             filtered.append(finding)
         return filtered
 
-    def _is_whitelisted(self, finding, script, whitelisted_domains, whitelisted_paths) -> bool:
-        evidence = finding.evidence
-        combined = f"{evidence}\n{script}"
+    def _is_script_whitelisted(
+        self, script: str, whitelisted_domains: set[str], whitelisted_paths: set[str]
+    ) -> bool:
         for domain in whitelisted_domains:
-            if domain in combined:
+            if domain in script:
                 return True
         for path in whitelisted_paths:
-            if path in combined:
+            if path in script:
                 return True
         return False
 
-    def _resolve_decision(self, findings: list):
+    def _is_whitelisted(
+        self, evidence: str, whitelisted_domains: set[str], whitelisted_paths: set[str]
+    ) -> bool:
+        for domain in whitelisted_domains:
+            if domain in evidence:
+                return True
+        for path in whitelisted_paths:
+            if path in evidence:
+                return True
+        return False
+
+    def _resolve_decision(self, findings: list[RuleFinding]) -> tuple[Decision, Optional[RiskLevel]]:
         if not findings:
             return Decision.ALLOW, None
-
-        risk_level = max(findings, key=lambda f: _RISK_LEVEL_ORDER[f.risk_level]).risk_level
 
         policy_rules_by_id = {r.rule_id: r for r in self._policy.get_enabled_rules()}
         for finding in findings:
             if finding.rule_id in policy_rules_by_id:
                 finding.risk_level = policy_rules_by_id[finding.rule_id].severity
+
+        risk_level = max(findings, key=lambda f: _RISK_LEVEL_ORDER[f.risk_level]).risk_level
 
         decisions = []
         for finding in findings:
