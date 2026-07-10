@@ -1,0 +1,10 @@
+{
+  "evaluate": {
+    "metrics": [{"metric_name": "final_response_avg_score", "threshold": 1.0, "criterion": {"final_response": {"text": {"match": "exact"}}}}],
+    "num_runs": 1
+  },
+  "pipeline": {
+    "reproducibility": {"seed": 42},
+    "gate": {"min_validation_score_delta": 0.05, "critical_case_ids": ["val_refund_critical"]}
+  }
+}

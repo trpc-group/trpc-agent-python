@@ -1,0 +1,5 @@
+[
+  {"candidate_id": "candidate_general_fix", "prompts": {"system_prompt": "GENERAL_FIX\n", "router_prompt": "ROUTER_V1\n"}, "round_index": 1},
+  {"candidate_id": "candidate_noop", "prompts": {"system_prompt": "BASELINE\n", "router_prompt": "ROUTER_V1\n"}, "round_index": 2},
+  {"candidate_id": "candidate_overfit", "prompts": {"system_prompt": "OVERFIT\n", "router_prompt": "ROUTER_V1\n"}, "round_index": 3}
+]

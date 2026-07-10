@@ -21,6 +21,9 @@ coverage.xml
 test-ngtest-ut-trpc-agent-py.xml
 .pytest_cache
 
+# Runtime artefacts for Issue #91; stable reviewed reports live in sample_output/.
+examples/optimization/eval_optimize_loop/runs/
+
 node_modules
 package-lock.json
 pyrightconfig.json

@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from examples.optimization.eval_optimize_loop.pipeline.comparator import compare_case
 from examples.optimization.eval_optimize_loop.pipeline.config import canonical_sha256, load_pipeline_config
 from examples.optimization.eval_optimize_loop.pipeline.gate import evaluate_gate
+from examples.optimization.eval_optimize_loop.pipeline.normalization import parse_fake_response
 from examples.optimization.eval_optimize_loop.pipeline.models import (
     CandidateReport,
     CaseSnapshot,
@@ -91,4 +92,17 @@ def test_reporter_writes_json_and_markdown(tmp_path: Path) -> None:
     report.candidates.append(CandidateReport(candidate_id="candidate_noop", accepted=False, reasons=["no improvement"]))
     json_path, markdown_path = write_reports(report, tmp_path)
     assert json.loads(json_path.read_text(encoding="utf-8"))["schema_version"] == "1.0"
-    assert "Selected candidate" in markdown_path.read_text(encoding="utf-8")
+    markdown = markdown_path.read_text(encoding="utf-8")
+    assert "Selected candidate" in markdown
+    assert "Baseline" in markdown
+    assert "Validation deltas" in markdown
+    assert "Gate rules" in markdown
+
+
+def test_fake_response_parser_preserves_tool_name_and_arguments() -> None:
+    snapshot = parse_fake_response(
+        '{"route":"order_lookup","tool":"lookup_order","arguments":{"order_id":"A100"},'
+        '"answer":"正在查询订单 A100。"}'
+    )
+    assert snapshot.tool_calls[0].name == "lookup_order"
+    assert snapshot.tool_calls[0].arguments == {"order_id": "A100"}
