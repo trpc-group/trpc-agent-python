@@ -164,6 +164,25 @@ def build_candidate_audit(
     }
 
 
+def _normalized_round_number(value: Any, *, nonnegative: bool = False) -> tuple[int | float, bool]:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return 0.0, True
+    if not math.isfinite(value) or (nonnegative and value < 0):
+        return 0.0, True
+    return value, False
+
+
+def _normalized_round_count(value: Any) -> tuple[int, bool]:
+    normalized, invalid = _normalized_round_number(value, nonnegative=True)
+    if invalid:
+        return 0, True
+    if isinstance(normalized, int):
+        return normalized, False
+    if normalized.is_integer():
+        return int(normalized), False
+    return 0, True
+
+
 def write_optimizer_round_artifacts(
     *,
     run_dir: Path,
@@ -181,24 +200,60 @@ def write_optimizer_round_artifacts(
             prompt_path.write_text(content, encoding="utf-8")
             prompt_paths[name] = str(prompt_path)
             prompt_hashes[name] = sha256_text(content)
+        validation_pass_rate, invalid_validation_pass_rate = _normalized_round_number(
+            round_record.validation_pass_rate,
+            nonnegative=True,
+        )
+        metric_breakdown: dict[str, int | float] = {}
+        invalid_numeric_evidence = invalid_validation_pass_rate
+        raw_metric_breakdown = getattr(round_record, "metric_breakdown", {})
+        if not isinstance(raw_metric_breakdown, dict):
+            raw_metric_breakdown = {}
+            invalid_numeric_evidence = True
+        for name, value in raw_metric_breakdown.items():
+            normalized, invalid = _normalized_round_number(value)
+            metric_breakdown[str(name)] = normalized
+            invalid_numeric_evidence = invalid_numeric_evidence or invalid
+        cost_usd, invalid_cost = _normalized_round_number(
+            round_record.round_llm_cost,
+            nonnegative=True,
+        )
+        duration_seconds, invalid_duration = _normalized_round_number(
+            round_record.duration_seconds,
+            nonnegative=True,
+        )
+        invalid_numeric_evidence = invalid_numeric_evidence or invalid_cost or invalid_duration
+        token_usage: dict[str, int] = {}
+        raw_token_usage = getattr(round_record, "round_token_usage", {})
+        if not isinstance(raw_token_usage, dict):
+            raw_token_usage = {}
+            invalid_numeric_evidence = True
+        for name, value in raw_token_usage.items():
+            normalized, invalid = _normalized_round_count(value)
+            token_usage[str(name)] = normalized
+            invalid_numeric_evidence = invalid_numeric_evidence or invalid
+        decision_reason = sanitize_report_text(
+            round_record.acceptance_reason
+            or round_record.skip_reason
+            or round_record.error_message
+        ) or "optimizer reported no reason"
+        accepted = bool(round_record.accepted)
+        if invalid_numeric_evidence:
+            accepted = False
+            decision_reason += "; invalid numeric round evidence was normalized and rejected"
         records.append({
             "round": round_id,
             "optimized_field_names": list(round_record.optimized_field_names),
             "prompt_paths": prompt_paths,
             "prompt_sha256": prompt_hashes,
-            "validation_pass_rate": float(round_record.validation_pass_rate),
-            "metric_breakdown": dict(round_record.metric_breakdown),
-            "accepted": bool(round_record.accepted),
-            "decision_reason": (
-                round_record.acceptance_reason
-                or round_record.skip_reason
-                or round_record.error_message
-                or "optimizer reported no reason"
-            ),
+            "validation_pass_rate": float(validation_pass_rate),
+            "metric_breakdown": metric_breakdown,
+            "accepted": accepted,
+            "decision_reason": decision_reason,
             "failed_case_ids": list(round_record.failed_case_ids),
-            "cost_usd": float(round_record.round_llm_cost),
-            "token_usage": dict(round_record.round_token_usage),
-            "duration_seconds": float(round_record.duration_seconds),
+            "cost_usd": float(cost_usd),
+            "token_usage": token_usage,
+            "duration_seconds": float(duration_seconds),
         })
     return records
 

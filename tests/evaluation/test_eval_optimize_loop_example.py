@@ -1476,6 +1476,58 @@ async def test_online_round_audit_writes_native_prompt_artifacts(tmp_path: Path,
     assert Path(report["artifacts"]["native_rounds_dir"]).is_dir()
 
 
+def test_optimizer_round_audit_redacts_and_rejects_nonfinite_numeric_evidence(tmp_path: Path):
+    module = load_pipeline_module()
+    round_prompt = "round prompt"
+    records = module.write_optimizer_round_artifacts(
+        run_dir=tmp_path,
+        rounds=[
+            SimpleNamespace(
+                round=1,
+                optimized_field_names=["system_prompt"],
+                candidate_prompts={"system_prompt": round_prompt},
+                validation_pass_rate=float("nan"),
+                metric_breakdown={
+                    "finite_metric": 0.5,
+                    "infinite_metric": float("inf"),
+                    "negative_infinite_metric": float("-inf"),
+                },
+                accepted=True,
+                acceptance_reason="",
+                skip_reason=None,
+                error_message="optimizer failed: Authorization: Bearer round-secret",
+                failed_case_ids=[],
+                round_llm_cost=float("inf"),
+                round_token_usage={
+                    "prompt": float("nan"),
+                    "completion": float("inf"),
+                    "total": float("-inf"),
+                },
+                duration_seconds=float("-inf"),
+            )
+        ],
+    )
+    record = records[0]
+
+    serialized = json.dumps(records, allow_nan=False)
+    assert "round-secret" not in serialized
+    assert "Authorization" not in serialized
+    assert "Bearer" not in serialized
+    assert record["accepted"] is False
+    assert "invalid numeric round evidence" in record["decision_reason"]
+    assert record["validation_pass_rate"] == 0.0
+    assert record["metric_breakdown"] == {
+        "finite_metric": 0.5,
+        "infinite_metric": 0.0,
+        "negative_infinite_metric": 0.0,
+    }
+    assert record["cost_usd"] == 0.0
+    assert record["duration_seconds"] == 0.0
+    assert record["token_usage"] == {"prompt": 0, "completion": 0, "total": 0}
+    assert record["prompt_sha256"]["system_prompt"] == module.sha256_text(round_prompt)
+    assert Path(record["prompt_paths"]["system_prompt"]).read_text(encoding="utf-8") == round_prompt
+
+
 @pytest.mark.asyncio
 async def test_online_optimizer_validation_improvement_is_accepted(
     tmp_path: Path,
