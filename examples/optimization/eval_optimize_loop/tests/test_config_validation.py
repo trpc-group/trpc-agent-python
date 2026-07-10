@@ -129,6 +129,37 @@ def test_case_result_defaults_metrics_and_trace_availability():
     assert result.trace_available is False
 
 
+def test_case_result_preserves_legacy_positional_arguments_with_new_keyword_fields():
+    trace = {"events": ["model_call"]}
+
+    result = schemas.CaseResult(
+        "case_1",
+        "validation",
+        0.25,
+        False,
+        "bad output",
+        trace,
+        "format_violation",
+        "invalid JSON",
+        "parser rejected output",
+        0.125,
+        True,
+        "format_violation",
+        metrics={"response_match": 0.25},
+        trace_available=True,
+    )
+
+    assert result.trace == trace
+    assert result.failure_category == "format_violation"
+    assert result.failure_reason == "invalid JSON"
+    assert result.evidence == "parser rejected output"
+    assert result.cost == 0.125
+    assert result.hard_failed is True
+    assert result.expected_failure_category == "format_violation"
+    assert result.metrics == {"response_match": 0.25}
+    assert result.trace_available is True
+
+
 def test_candidate_prompt_bundle_defaults_to_system_prompt():
     candidate = schemas.CandidatePrompt(
         candidate_id="candidate_1",
@@ -219,58 +250,6 @@ def test_optimization_report_preserves_legacy_construction_with_new_defaults():
     assert report.rounds == []
     assert report.cost_summary == schemas.CostSummary()
     assert report.writeback == schemas.WritebackResult(status="not_requested")
-
-
-def test_load_eval_cases_accepts_sdk_evalset_schema(tmp_path: Path):
-    path = tmp_path / "train.evalset.json"
-    path.write_text(
-        json.dumps({
-            "evalSetId": "sdk_train",
-            "evalCases": [
-                {
-                    "evalId": "sdk_json_case",
-                    "conversation": [
-                        {
-                            "invocationId": "turn_1",
-                            "userContent": {
-                                "parts": [{"text": "Return strict JSON with answer=ok."}],
-                                "role": "user",
-                            },
-                            "finalResponse": {
-                                "parts": [{"text": "{\"answer\":\"ok\"}"}],
-                                "role": "model",
-                            },
-                        }
-                    ],
-                    "sessionInput": {
-                        "appName": "eval_optimize_loop",
-                        "userId": "tester",
-                        "state": {
-                            "eval_optimize_expectation": {
-                                "type": "json",
-                                "required_keys": ["answer"],
-                                "expected_values": {"answer": "ok"},
-                                "expected_failure_category": "format_violation",
-                            },
-                            "eval_optimize_tags": ["json", "hidden"],
-                            "eval_optimize_protected": True,
-                        },
-                    },
-                }
-            ],
-        }),
-        encoding="utf-8",
-    )
-
-    cases = load_eval_cases(path, split="train")
-
-    assert [case.case_id for case in cases] == ["sdk_json_case"]
-    assert cases[0].input == "Return strict JSON with answer=ok."
-    assert cases[0].expectation["type"] == "json"
-    assert cases[0].expectation["expected_values"] == {"answer": "ok"}
-    assert cases[0].tags == ["json", "hidden"]
-    assert cases[0].protected is True
-    assert cases[0].expected_failure_category == "format_violation"
 
 
 def test_validate_inputs_rejects_same_train_val_path(tmp_path: Path):

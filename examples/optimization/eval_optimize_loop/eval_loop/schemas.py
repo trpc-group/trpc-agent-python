@@ -57,9 +57,9 @@ class CaseResult:
     score: float
     passed: bool
     output: str
-    metrics: dict[str, float] = field(default_factory=dict)
+    metrics: dict[str, float] = field(default_factory=dict, kw_only=True)
     trace: dict[str, Any] = field(default_factory=dict)
-    trace_available: bool = False
+    trace_available: bool = field(default=False, kw_only=True)
     failure_category: str | None = None
     failure_reason: str | None = None
     evidence: str | None = None

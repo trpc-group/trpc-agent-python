@@ -30,16 +30,10 @@ def _reject_non_standard_json_constant(constant: str) -> None:
 def load_eval_cases(path: str | Path, split: str | None = None) -> list[EvalCase]:
     payload = read_json(path)
     cases = payload.get("cases")
+    if not isinstance(cases, list):
+        raise ValueError(f"evalset {path} must contain a cases list")
     effective_split = split or payload.get("split") or Path(path).name.split(".", 1)[0]
-    if isinstance(cases, list):
-        return [EvalCase.from_dict(case, str(effective_split)) for case in cases]
-
-    sdk_cases = payload.get("eval_cases") or payload.get("evalCases")
-    if isinstance(sdk_cases, list):
-        _validate_sdk_evalset(payload, path)
-        return [_eval_case_from_sdk_dict(case, str(effective_split)) for case in sdk_cases]
-
-    raise ValueError(f"evalset {path} must contain a cases or evalCases list")
+    return [EvalCase.from_dict(case, str(effective_split)) for case in cases]
 
 
 def load_optimizer_config(path: str | Path) -> OptimizerConfig:
@@ -66,84 +60,3 @@ def sha256_file(path: str | Path) -> str:
         for chunk in iter(lambda: file.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def _validate_sdk_evalset(payload: dict[str, Any], path: str | Path) -> None:
-    try:
-        from trpc_agent_sdk.evaluation._eval_set import EvalSet
-
-        EvalSet.model_validate(payload)
-    except Exception as exc:
-        raise ValueError(f"evalset {path} is not a valid SDK EvalSet: {exc}") from exc
-
-
-def _eval_case_from_sdk_dict(payload: dict[str, Any], split: str) -> EvalCase:
-    case_id = payload.get("eval_id") or payload.get("evalId")
-    if not case_id:
-        raise ValueError(f"SDK eval case is missing evalId/eval_id: {payload!r}")
-
-    session_input = payload.get("session_input") or payload.get("sessionInput") or {}
-    state = session_input.get("state") if isinstance(session_input, dict) else {}
-    state = state if isinstance(state, dict) else {}
-    expectation = state.get("eval_optimize_expectation")
-    if not isinstance(expectation, dict):
-        expectation = _infer_expectation_from_sdk_case(payload)
-
-    return EvalCase(
-        case_id=str(case_id),
-        split=split,
-        input=_first_user_text(payload),
-        expectation=dict(expectation),
-        tags=[str(item) for item in state.get("eval_optimize_tags", [])],
-        protected=bool(state.get("eval_optimize_protected", False)),
-        simulated_outputs=dict(state.get("eval_optimize_simulated_outputs") or expectation.get("simulated_outputs") or {}),
-        expected_failure_category=state.get("eval_optimize_expected_failure_category")
-        or expectation.get("expected_failure_category"),
-    )
-
-
-def _infer_expectation_from_sdk_case(payload: dict[str, Any]) -> dict[str, Any]:
-    expected = _first_final_response_text(payload)
-    if expected:
-        return {
-            "type": "exact",
-            "expected": expected,
-            "expected_failure_category": "final_response_mismatch",
-        }
-    raise ValueError(
-        "SDK eval case must put fake-mode metadata in sessionInput.state.eval_optimize_expectation "
-        f"or provide a finalResponse that can be treated as an exact expectation: {payload!r}"
-    )
-
-
-def _first_user_text(payload: dict[str, Any]) -> str:
-    for invocation in _conversation(payload):
-        content = invocation.get("user_content") or invocation.get("userContent") or {}
-        text = _content_text(content)
-        if text:
-            return text
-    return ""
-
-
-def _first_final_response_text(payload: dict[str, Any]) -> str:
-    for invocation in _conversation(payload):
-        content = invocation.get("final_response") or invocation.get("finalResponse") or {}
-        text = _content_text(content)
-        if text:
-            return text
-    return ""
-
-
-def _conversation(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    conversation = payload.get("conversation") or []
-    return [item for item in conversation if isinstance(item, dict)]
-
-
-def _content_text(content: Any) -> str:
-    if not isinstance(content, dict):
-        return ""
-    texts = []
-    for part in content.get("parts") or []:
-        if isinstance(part, dict) and part.get("text") is not None:
-            texts.append(str(part["text"]))
-    return "\n".join(texts)
