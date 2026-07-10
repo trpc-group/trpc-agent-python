@@ -9,8 +9,12 @@ import pytest
 from examples.optimization.eval_optimize_loop.run_pipeline import run_fake_pipeline
 
 
+PROMPT_DIR = Path(__file__).resolve().parents[4] / "examples" / "optimization" / "eval_optimize_loop" / "agent" / "prompts"
+
+
 @pytest.mark.asyncio
 async def test_fake_closed_loop_uses_three_fixture_candidates_and_restores_prompts(tmp_path: Path) -> None:
+    baseline_prompts = {name: (PROMPT_DIR / name).read_text(encoding="utf-8") for name in ("system.md", "router.md")}
     report = await run_fake_pipeline(output_dir=tmp_path)
     assert report.selected_candidate_id == "candidate_general_fix"
     assert {candidate.candidate_id: candidate.accepted for candidate in report.candidates} == {
@@ -20,6 +24,7 @@ async def test_fake_closed_loop_uses_three_fixture_candidates_and_restores_promp
     }
     assert (tmp_path / "optimization_report.json").is_file()
     assert (tmp_path / "optimization_report.md").is_file()
+    assert {name: (PROMPT_DIR / name).read_text(encoding="utf-8") for name in baseline_prompts} == baseline_prompts
 
 
 @pytest.mark.asyncio

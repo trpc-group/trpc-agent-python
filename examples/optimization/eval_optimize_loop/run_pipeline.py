@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+import tempfile
 from pathlib import Path
 
 # When this file is executed directly (the documented CLI path), Python puts
@@ -30,21 +31,27 @@ from examples.optimization.eval_optimize_loop.pipeline.reporter import write_rep
 
 async def run_fake_pipeline(*, output_dir: Path) -> OptimizationReport:
     config = load_pipeline_config(HERE / "optimizer.json", mode="fake")
-    target = TargetPrompt().add_path("system_prompt", str(HERE / "agent" / "prompts" / "system.md")).add_path("router_prompt", str(HERE / "agent" / "prompts" / "router.md"))
-    fake_agent = FakeSupportAgent(target)
-    evaluate = lambda path, split: evaluate_split(path, call_agent=fake_agent.call_agent, split=split, metric_weights=config.pipeline.metric_weights)
-    baseline_train = await evaluate(HERE / "train.evalset.json", "train")
-    baseline_validation = await evaluate(HERE / "val.evalset.json", "validation")
     report = OptimizationReport.empty(mode="fake", seed=config.pipeline.reproducibility.seed)
-    report.baseline_train = baseline_train
-    report.baseline_validation = baseline_validation
-    for candidate in FixtureOptimizerBackend(HERE / "fake" / "candidates.json").load_candidates():
-        async with PromptSandbox(target, candidate.prompts):
-            train = await evaluate(HERE / "train.evalset.json", "train")
-            validation = await evaluate(HERE / "val.evalset.json", "validation")
-        deltas = [compare_case(base, next(item for item in validation.cases if item.eval_id == base.eval_id), epsilon=config.pipeline.scoring_epsilon, critical_case_ids=set(config.pipeline.gate.critical_case_ids)) for base in baseline_validation.cases]
-        decision = evaluate_gate(baseline_validation, validation, settings=config.pipeline.gate, case_deltas=deltas, train_score_delta=train.aggregate_score - baseline_train.aggregate_score)
-        report.candidates.append(CandidateReport(candidate_id=candidate.candidate_id, accepted=decision.accepted, reasons=decision.reasons, train=train, validation=validation, gate=decision, validation_case_deltas=deltas))
+    with tempfile.TemporaryDirectory(prefix="trpc-agent-issue91-") as temporary_dir:
+        prompt_dir = Path(temporary_dir)
+        source_prompt_dir = HERE / "agent" / "prompts"
+        for prompt_name in ("system.md", "router.md"):
+            (prompt_dir / prompt_name).write_text((source_prompt_dir / prompt_name).read_text(encoding="utf-8"), encoding="utf-8")
+
+        target = TargetPrompt().add_path("system_prompt", str(prompt_dir / "system.md")).add_path("router_prompt", str(prompt_dir / "router.md"))
+        fake_agent = FakeSupportAgent(target)
+        evaluate = lambda path, split: evaluate_split(path, call_agent=fake_agent.call_agent, split=split, metric_weights=config.pipeline.metric_weights)
+        baseline_train = await evaluate(HERE / "train.evalset.json", "train")
+        baseline_validation = await evaluate(HERE / "val.evalset.json", "validation")
+        report.baseline_train = baseline_train
+        report.baseline_validation = baseline_validation
+        for candidate in FixtureOptimizerBackend(HERE / "fake" / "candidates.json").load_candidates():
+            async with PromptSandbox(target, candidate.prompts):
+                train = await evaluate(HERE / "train.evalset.json", "train")
+                validation = await evaluate(HERE / "val.evalset.json", "validation")
+            deltas = [compare_case(base, next(item for item in validation.cases if item.eval_id == base.eval_id), epsilon=config.pipeline.scoring_epsilon, critical_case_ids=set(config.pipeline.gate.critical_case_ids)) for base in baseline_validation.cases]
+            decision = evaluate_gate(baseline_validation, validation, settings=config.pipeline.gate, case_deltas=deltas, train_score_delta=train.aggregate_score - baseline_train.aggregate_score)
+            report.candidates.append(CandidateReport(candidate_id=candidate.candidate_id, accepted=decision.accepted, reasons=decision.reasons, train=train, validation=validation, gate=decision, validation_case_deltas=deltas))
     accepted = [candidate for candidate in report.candidates if candidate.accepted]
     report.selected_candidate_id = accepted[0].candidate_id if accepted else None
     write_reports(report, output_dir)
