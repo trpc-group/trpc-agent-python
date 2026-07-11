@@ -76,3 +76,23 @@ python examples/optimization/eval_optimize_loop/run_pipeline.py --mode trace --o
 # exit 0; normalized output preserves intermediate lookup_refund versus lookup_order,
 # and tool_responses.error as raw structural evidence
 ```
+
+## P2 reviewer follow-up
+
+`normalize_eval_results()` now uses intermediate tool calls only when a recorded call exists. For black-box fake evaluation, where `RemoteEvalService` deliberately leaves actual `intermediate_data` empty, it falls back to the parsed fake JSON calls. The fake regression confirms the baseline actual `lookup_order` with `{}` arguments and reference `lookup_order` with `{"order_id": "A100"}` arguments both remain visible.
+
+Verification after the P2 change:
+
+```text
+python -m pytest tests/examples/optimization/eval_optimize_loop/test_fake_loop.py -q -k keeps_parsed_json_tool_calls
+# 1 passed
+
+python -m pytest tests/examples/optimization/eval_optimize_loop/test_attribution_and_trace.py -q
+# 19 passed
+
+python -m pytest tests/examples/optimization/eval_optimize_loop -q
+# 53 passed
+
+python examples/optimization/eval_optimize_loop/run_pipeline.py --mode trace --output-dir <temp-dir>
+# exit 0
+```

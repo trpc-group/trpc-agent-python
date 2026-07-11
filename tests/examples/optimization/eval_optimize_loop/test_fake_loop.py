@@ -34,6 +34,18 @@ async def test_fake_loop_does_not_require_live_model_key(monkeypatch: pytest.Mon
     assert report.mode == "fake"
 
 
+@pytest.mark.asyncio
+async def test_fake_mode_keeps_parsed_json_tool_calls_when_no_intermediate_trace(tmp_path: Path) -> None:
+    report = await run_fake_pipeline(output_dir=tmp_path)
+
+    assert report.baseline_train is not None
+    case = next(item for item in report.baseline_train.cases if item.eval_id == "train_tool_argument")
+    assert [(tool.name, tool.arguments) for tool in case.tool_calls] == [("lookup_order", {})]
+    assert [(tool.name, tool.arguments) for tool in case.expected_tool_calls] == [
+        ("lookup_order", {"order_id": "A100"})
+    ]
+
+
 def test_fake_cli_runs_directly_from_repository_root(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[4]
     result = subprocess.run(

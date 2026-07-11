@@ -108,17 +108,19 @@ def normalize_eval_results(
         parsed_actual = parse_fake_response(actual)
         parsed_expected = parse_fake_response(expected)
         first_invocations = first.eval_metric_result_per_invocation
-        tool_calls = [
+        intermediate_tool_calls = [
             _tool_call_snapshot(tool_call)
             for run_invocation in first_invocations
             for tool_call in get_all_tool_calls(run_invocation.actual_invocation.intermediate_data)
         ]
-        expected_tool_calls = [
+        intermediate_expected_tool_calls = [
             _tool_call_snapshot(tool_call)
             for run_invocation in first_invocations
             if run_invocation.expected_invocation is not None
             for tool_call in get_all_tool_calls(run_invocation.expected_invocation.intermediate_data)
         ]
+        tool_calls = intermediate_tool_calls or parsed_actual.tool_calls
+        expected_tool_calls = intermediate_expected_tool_calls or parsed_expected.tool_calls
         tool_responses = [
             _tool_response_snapshot(tool_response)
             for run_invocation in first_invocations
