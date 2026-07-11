@@ -59,6 +59,7 @@ nav:
           - OpenClaw: en/openclaw.md
       - Runtime:
           - Filter: en/filter.md
+          - Code Review Agent: en/code_review_agent.md
           - Human in the Loop: en/human_in_the_loop.md
           - Cancellation: en/cancel.md
   - 中文:
@@ -101,5 +102,6 @@ nav:
           - OpenClaw: zh/openclaw.md
       - 运行时:
           - Filter: zh/filter.md
+          - 代码评审 Agent: zh/code_review_agent.md
           - Human in the Loop: zh/human_in_the_loop.md
           - Cancellation: zh/cancel.md
