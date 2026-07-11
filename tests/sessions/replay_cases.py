@@ -463,6 +463,47 @@ _NEGATIVE_CASES: tuple[ReplayCase, ...] = (
             ),
         ),
     ),
+    ReplayCase(
+        case_id="non_active_session_summary_loss_fault",
+        description="A runtime summary deletion on a non-active session alias must still be detected through alias-scoped snapshots.",
+        session_id="replay-negative-target-session",
+        enable_summary=True,
+        summary_keep_recent_count=2,
+        store_historical_events=True,
+        expected_diff_paths=("sessions_by_alias.source.summary",),
+        runtime_faults=(
+            RuntimeFault(
+                backend_name=_PERSISTENT_BACKEND,
+                after_step=6,
+                operation=RuntimeFaultOperation.DELETE_SUMMARY,
+                session_alias="source",
+            ),
+        ),
+        steps=(
+            ReplayStep.create_session(session_alias="source", session_id="replay-negative-source-session"),
+            ReplayStep.append_event(
+                EventSpec(author="user", role="user", text="Please summarize my architecture notes."),
+                session_alias="source",
+            ),
+            ReplayStep.append_event(
+                EventSpec(author="assistant", role="model", text="Sure, continue with the details."),
+                session_alias="source",
+            ),
+            ReplayStep.append_event(
+                EventSpec(author="user", role="user", text="We run SQLite for local replay and Redis in production."),
+                session_alias="source",
+            ),
+            ReplayStep.append_event(
+                EventSpec(author="assistant", role="model", text="I will summarize the backend setup."),
+                session_alias="source",
+            ),
+            ReplayStep.create_summary(force=True, session_alias="source"),
+            ReplayStep.create_session(session_alias="default", session_id="replay-negative-target-session"),
+            ReplayStep.append_event(
+                EventSpec(author="user", role="user", text="Switch focus to the current session."),
+            ),
+        ),
+    ),
 )
 
 
@@ -575,6 +616,92 @@ _ROBUSTNESS_CASES: tuple[ReplayCase, ...] = (
             ),
         ),
     ),
+    ReplayCase(
+        case_id="duplicate_memory_query_name_across_sessions",
+        description="Two sessions may reuse the same query name without overwriting earlier memory observations.",
+        session_id="replay-duplicate-query-target",
+        steps=(
+            ReplayStep.create_session(session_alias="source", session_id="replay-duplicate-query-source"),
+            ReplayStep.append_event(
+                EventSpec(author="user", role="user", text="Please remember that I prefer dragon well tea."),
+                session_alias="source",
+            ),
+            ReplayStep.append_event(
+                EventSpec(author="assistant", role="model", text="Dragon well tea preference recorded."),
+                session_alias="source",
+            ),
+            ReplayStep.store_memory(session_alias="source"),
+            ReplayStep.search_memory(
+                name="shared_preference_search",
+                query="dragon well",
+                limit=5,
+                session_alias="source",
+            ),
+            ReplayStep.restart_services(),
+            ReplayStep.create_session(session_alias="default", session_id="replay-duplicate-query-target"),
+            ReplayStep.search_memory(
+                name="shared_preference_search",
+                query="dragon well",
+                limit=5,
+            ),
+        ),
+    ),
+    ReplayCase(
+        case_id="memory_query_observation_survives_restart",
+        description="Memory query observations should retain their original step-time results across restarts and later writes.",
+        session_id="replay-memory-observation",
+        steps=(
+            ReplayStep.create_session(),
+            ReplayStep.append_event(
+                EventSpec(author="user", role="user", text="Please remember that my favorite tea is oolong."),
+            ),
+            ReplayStep.append_event(
+                EventSpec(author="assistant", role="model", text="I will remember your oolong preference."),
+            ),
+            ReplayStep.store_memory(),
+            ReplayStep.search_memory(name="tea_preference", query="oolong", limit=5),
+            ReplayStep.restart_services(),
+            ReplayStep.append_event(
+                EventSpec(author="user", role="user", text="Also remember that I enjoy jasmine tea."),
+            ),
+            ReplayStep.append_event(
+                EventSpec(author="assistant", role="model", text="I will remember the jasmine preference too."),
+            ),
+            ReplayStep.store_memory(),
+            ReplayStep.search_memory(name="tea_preference", query="jasmine", limit=5),
+        ),
+    ),
+    ReplayCase(
+        case_id="cross_user_memory_isolation",
+        description="Memory saved for one user must not become visible to another user in the same application.",
+        session_id="replay-cross-user-target",
+        steps=(
+            ReplayStep.create_session(
+                session_alias="source",
+                session_id="replay-cross-user-source",
+                user_id="replay-user-a",
+            ),
+            ReplayStep.append_event(
+                EventSpec(author="user", role="user", text="Please remember that I prefer matcha desserts."),
+                session_alias="source",
+            ),
+            ReplayStep.append_event(
+                EventSpec(author="assistant", role="model", text="Matcha dessert preference recorded."),
+                session_alias="source",
+            ),
+            ReplayStep.store_memory(session_alias="source"),
+            ReplayStep.create_session(
+                session_alias="default",
+                session_id="replay-cross-user-target",
+                user_id="replay-user-b",
+            ),
+            ReplayStep.search_memory(
+                name="cross_user_matcha_search",
+                query="matcha",
+                limit=5,
+            ),
+        ),
+    ),
 )
 
 
@@ -602,9 +729,17 @@ REPLAY_EXTRA_CASES: tuple[ReplayCase, ...] = (
     _NEGATIVE_CASES[4],  # duplicate_event_runtime_fault
     _NEGATIVE_CASES[5],  # runtime_state_corruption_fault
     _NEGATIVE_CASES[6],  # runtime_summary_loss_fault
+    _NEGATIVE_CASES[9],  # non_active_session_summary_loss_fault
     _ROBUSTNESS_CASES[0],  # cross_session_memory_aggregation
     _ROBUSTNESS_CASES[1],  # restart_mid_replay_after_summary
     _ROBUSTNESS_CASES[2],  # state_namespace_roundtrip
+    _ROBUSTNESS_CASES[5],  # cross_user_memory_isolation
+)
+
+
+REPLAY_TARGETED_CASES: tuple[ReplayCase, ...] = (
+    _ROBUSTNESS_CASES[3],  # duplicate_memory_query_name_across_sessions
+    _ROBUSTNESS_CASES[4],  # memory_query_observation_survives_restart
 )
 
 

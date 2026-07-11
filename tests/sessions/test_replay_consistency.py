@@ -13,6 +13,7 @@ import pytest
 from .replay_cases import REPLAY_ACCEPTANCE_CASES
 from .replay_cases import REPLAY_ALL_CASES
 from .replay_cases import REPLAY_EXTRA_CASES
+from .replay_cases import REPLAY_TARGETED_CASES
 from .replay_harness import DEFAULT_REPORT_PATH
 from .replay_harness import build_case_matrix_report
 from .replay_harness import InMemoryReplayAdapter
@@ -36,6 +37,13 @@ ADAPTER_TYPES: tuple[Type[ReplayBackendAdapter], ...] = (
 )
 REDIS_REPLAY_URL_ENV = "TRPC_AGENT_REPLAY_REDIS_URL"
 AdapterFactory = Callable[[], ReplayBackendAdapter]
+
+
+def _find_case(case_id: str) -> ReplayCase:
+    for case in REPLAY_ALL_CASES + REPLAY_TARGETED_CASES:
+        if case.case_id == case_id:
+            return case
+    raise KeyError(f"Unknown replay case: {case_id}")
 
 
 async def _run_case_on_backend(
@@ -181,6 +189,59 @@ def test_acceptance_case_count() -> None:
     assert len(REPLAY_ACCEPTANCE_CASES) == 10
     assert len(REPLAY_ALL_CASES) >= len(REPLAY_ACCEPTANCE_CASES)
     assert len(REPLAY_EXTRA_CASES) >= 1
+
+
+def test_replay_harness_collects_all_session_alias_snapshots() -> None:
+    """Non-active sessions should remain visible in the final snapshot."""
+
+    snapshot, _, _ = asyncio.run(
+        _run_case_on_backend(InMemoryReplayAdapter, _find_case("cross_session_memory_aggregation"))
+    )
+
+    assert snapshot.active_session_alias == "default"
+    assert set(snapshot.sessions_by_alias) == {"source", "default"}
+    assert snapshot.sessions_by_alias["source"].session_id == "replay-memory-source"
+    assert snapshot.sessions_by_alias["source"].session["events"][0]["text"] == "Please remember that I prefer oolong tea."
+    assert snapshot.sessions_by_alias["default"].session_id == "replay-memory-target"
+
+
+def test_replay_harness_preserves_memory_query_observations_across_restart() -> None:
+    """Repeated query names should preserve separate observations before and after restart."""
+
+    snapshot, _, _ = asyncio.run(
+        _run_case_on_backend(SqliteReplayAdapter, _find_case("memory_query_observation_survives_restart"))
+    )
+
+    observations = sorted(snapshot.memory.values(), key=lambda item: item["step_index"])
+    assert [item["query_name"] for item in observations] == ["tea_preference", "tea_preference"]
+    assert [item["session_alias"] for item in observations] == ["default", "default"]
+    assert len(observations) == 2
+    first_texts = {entry["text"] for entry in observations[0]["entries"]}
+    second_texts = {entry["text"] for entry in observations[1]["entries"]}
+    assert "Please remember that my favorite tea is oolong." in first_texts
+    assert "I will remember your oolong preference." in first_texts
+    assert "Also remember that I enjoy jasmine tea." in second_texts
+    assert "I will remember the jasmine preference too." in second_texts
+    assert "Also remember that I enjoy jasmine tea." not in first_texts
+
+
+def test_replay_harness_keeps_duplicate_query_names_per_session_alias() -> None:
+    """Query names may repeat across aliases without overwriting previous observations."""
+
+    snapshot, _, _ = asyncio.run(
+        _run_case_on_backend(SqliteReplayAdapter, _find_case("duplicate_memory_query_name_across_sessions"))
+    )
+
+    observations = sorted(snapshot.memory.values(), key=lambda item: item["step_index"])
+    assert len(observations) == 2
+    assert [item["query_name"] for item in observations] == ["shared_preference_search", "shared_preference_search"]
+    assert [item["session_alias"] for item in observations] == ["source", "default"]
+    assert observations[0]["step_index"] < observations[1]["step_index"]
+    assert observations[0]["entries"] != observations[1]["entries"]
+    first_texts = {entry["text"] for entry in observations[0]["entries"]}
+    second_texts = {entry["text"] for entry in observations[1]["entries"]}
+    assert any("dragon well" in text.lower() for text in first_texts)
+    assert any("dragon well" in text.lower() for text in second_texts)
 
 
 def test_replay_consistency_redis_integration_mode() -> None:

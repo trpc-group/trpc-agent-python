@@ -59,6 +59,7 @@ from .replay_models import ReplayStep
 from .replay_models import ReplayStepKind
 from .replay_models import RuntimeFault
 from .replay_models import RuntimeFaultOperation
+from .replay_models import SessionSnapshot
 from .replay_models import SnapshotMutation
 from .replay_models import SnapshotMutationOperation
 from .replay_models import SummarySnapshot
@@ -106,7 +107,7 @@ class ReplayBackendAdapter(ABC):
         self._memory_service: BaseMemoryService | None = None
         self._session: Session | None = None
         self._sessions: dict[str, Session] = {}
-        self._session_ids: dict[str, str] = {}
+        self._session_identities: dict[str, dict[str, str]] = {}
         self._active_session_alias = "default"
         self._memory_results: dict[str, Any] = {}
         self._case: ReplayCase | None = None
@@ -144,7 +145,7 @@ class ReplayBackendAdapter(ABC):
         self._memory_results = {}
         self._session = None
         self._sessions = {}
-        self._session_ids = {}
+        self._session_identities = {}
         self._active_session_alias = "default"
         self._event_sequence = 0
         self._event_time_base = _deterministic_time_base(case.case_id)
@@ -166,7 +167,7 @@ class ReplayBackendAdapter(ABC):
         await self._close_services()
         self._session = None
         self._sessions = {}
-        self._session_ids = {}
+        self._session_identities = {}
         self._active_session_alias = "default"
         self._memory_results = {}
         self._case = None
@@ -177,7 +178,7 @@ class ReplayBackendAdapter(ABC):
         """Replay all steps in a case and collect a snapshot."""
 
         for step_index, step in enumerate(case.steps):
-            await self._run_step(case, step)
+            await self._run_step(case, step, step_index)
             await self._apply_runtime_faults(step_index)
         if self.should_restart_before_snapshot():
             await self._restart_services()
@@ -204,11 +205,11 @@ class ReplayBackendAdapter(ABC):
         self._session_service = await self._build_session_service()
         self._memory_service = await self._build_memory_service()
         reopened_sessions: dict[str, Session] = {}
-        for session_alias, session_id in self._session_ids.items():
+        for session_alias, identity in self._session_identities.items():
             reopened_session = await self.session_service.get_session(
-                app_name=self.case.app_name,
-                user_id=self.case.user_id,
-                session_id=session_id,
+                app_name=identity["app_name"],
+                user_id=identity["user_id"],
+                session_id=identity["session_id"],
             )
             if reopened_session is not None:
                 reopened_sessions[session_alias] = reopened_session
@@ -220,34 +221,23 @@ class ReplayBackendAdapter(ABC):
         if self._session is None:
             return
 
-        reopened_memory_results: dict[str, Any] = {}
-        for step in self.case.steps:
-            if step.kind == ReplayStepKind.SEARCH_MEMORY and step.memory_query is not None:
-                query_session = self._resolve_session(step.session_alias)
-                reopened_memory_results[step.memory_query.name] = await self._search_memory_for_session(
-                    query_session,
-                    step.memory_query,
-                )
-        if reopened_memory_results:
-            self._memory_results = reopened_memory_results
-
     def should_restart_during_replay(self) -> bool:
         """Return whether RESTART_SERVICES steps should perform a real restart."""
 
         return False
 
-    async def _run_step(self, case: ReplayCase, step: ReplayStep) -> None:
+    async def _run_step(self, case: ReplayCase, step: ReplayStep, step_index: int) -> None:
         if step.kind == ReplayStepKind.CREATE_SESSION:
             session_id = step.session_id or case.session_id
             session = await self.session_service.create_session(
-                app_name=case.app_name,
-                user_id=case.user_id,
+                app_name=step.app_name or case.app_name,
+                user_id=step.user_id or case.user_id,
                 session_id=session_id,
                 state=step.initial_state,
             )
             self._session = session
             self._sessions[step.session_alias] = session
-            self._session_ids[step.session_alias] = session.id
+            self._session_identities[step.session_alias] = self._make_session_identity(session)
             self._active_session_alias = step.session_alias
             return
 
@@ -275,10 +265,16 @@ class ReplayBackendAdapter(ABC):
             if step.memory_query is None:
                 raise ValueError("SEARCH_MEMORY step requires a query specification.")
             target_session = self._resolve_session(step.session_alias)
-            self._memory_results[step.memory_query.name] = await self._search_memory_for_session(
-                target_session,
-                step.memory_query,
-            )
+            entries = await self._search_memory_for_session(target_session, step.memory_query)
+            self._memory_results[self._memory_observation_key(step_index, step)] = {
+                "query_name": step.memory_query.name,
+                "session_alias": step.session_alias,
+                "app_name": target_session.app_name,
+                "user_id": target_session.user_id,
+                "session_id": target_session.id,
+                "step_index": step_index,
+                "entries": entries,
+            }
             self._session = target_session
             return
 
@@ -320,32 +316,42 @@ class ReplayBackendAdapter(ABC):
     async def collect_snapshot(self, case: ReplayCase) -> BackendSnapshot:
         """Collect a backend snapshot after replay."""
 
-        session = self._session
-        if session is None:
+        if self._session is None:
             raise RuntimeError(f"Replay case '{case.case_id}' did not produce an active session.")
-        session = await self.session_service.get_session(
-            app_name=session.app_name,
-            user_id=session.user_id,
-            session_id=session.id,
-        )
-        if session is None:
-            raise RuntimeError(f"Replay session '{self.session.id}' was not found.")
+        sessions_by_alias: dict[str, SessionSnapshot] = {}
+        for session_alias, identity in self._session_identities.items():
+            session = await self.session_service.get_session(
+                app_name=identity["app_name"],
+                user_id=identity["user_id"],
+                session_id=identity["session_id"],
+            )
+            if session is None:
+                raise RuntimeError(f"Replay session '{identity['session_id']}' was not found.")
+            self._sessions[session_alias] = session
+            sessions_by_alias[session_alias] = await self._build_session_snapshot(session_alias, session)
 
-        summary = await self._get_summary_snapshot(session)
+        active_alias = self._active_session_alias
+        active_snapshot = sessions_by_alias.get(active_alias)
+        if active_snapshot is None and sessions_by_alias:
+            active_alias = next(iter(sessions_by_alias))
+            active_snapshot = sessions_by_alias[active_alias]
+            self._active_session_alias = active_alias
+            self._session = self._sessions[active_alias]
+        if active_snapshot is None:
+            raise RuntimeError(f"Replay case '{case.case_id}' did not produce an active session.")
+
         return BackendSnapshot(
             backend_name=self.name,
             case_id=case.case_id,
-            app_name=session.app_name,
-            user_id=session.user_id,
-            session_id=session.id,
-            session={
-                "conversation_count": session.conversation_count,
-                "events": [_event_to_snapshot(event) for event in session.events],
-                "historical_events": [_event_to_snapshot(event) for event in session.historical_events],
-            },
-            state=dict(session.state),
+            app_name=active_snapshot.app_name,
+            user_id=active_snapshot.user_id,
+            session_id=active_snapshot.session_id,
+            active_session_alias=active_alias,
+            session=active_snapshot.session,
+            state=active_snapshot.state,
             memory=dict(self._memory_results),
-            summary=summary,
+            summary=active_snapshot.summary,
+            sessions_by_alias=sessions_by_alias,
         )
 
     def _resolve_session(self, session_alias: str) -> Session:
@@ -385,29 +391,30 @@ class ReplayBackendAdapter(ABC):
             await self._apply_runtime_fault(fault)
 
     async def _apply_runtime_fault(self, fault: RuntimeFault) -> None:
+        target_session = self._get_fault_session(fault)
         if fault.operation == RuntimeFaultOperation.DUPLICATE_LAST_EVENT:
-            if not self.session.events:
+            if not target_session.events:
                 raise RuntimeError("Cannot duplicate the last event of an empty session.")
-            duplicated_event = self.session.events[-1].model_copy(deep=True)
+            duplicated_event = target_session.events[-1].model_copy(deep=True)
             duplicated_event.id = f"{duplicated_event.id}-duplicate"
             duplicated_event.invocation_id = f"{duplicated_event.invocation_id}-duplicate"
             duplicated_event.timestamp += 0.0001
-            self.session.events.append(duplicated_event)
-            await self.session_service.update_session(self.session)
+            target_session.events.append(duplicated_event)
+            await self.session_service.update_session(target_session)
             return
 
         if fault.operation == RuntimeFaultOperation.DROP_LAST_EVENT_KEEP_STATE:
-            if not self.session.events:
+            if not target_session.events:
                 raise RuntimeError("Cannot drop the last event of an empty session.")
-            self.session.events.pop()
-            await self.session_service.update_session(self.session)
+            target_session.events.pop()
+            await self.session_service.update_session(target_session)
             return
 
         if fault.operation == RuntimeFaultOperation.SET_SESSION_VALUE:
             if not fault.path:
                 raise ValueError("SET_SESSION_VALUE fault requires a target path.")
-            _set_path_value(self.session, fault.path, fault.value)
-            await self.session_service.update_session(self.session)
+            _set_path_value(target_session, fault.path, fault.value)
+            await self.session_service.update_session(target_session)
             return
 
         manager = getattr(self.session_service, "summarizer_manager", None)
@@ -416,31 +423,64 @@ class ReplayBackendAdapter(ABC):
 
         if fault.operation == RuntimeFaultOperation.DELETE_SUMMARY:
             summary_cache = getattr(manager, "_summarizer_cache", {})
-            summary_cache.get(self.session.app_name, {}).get(self.session.user_id, {}).pop(self.session.id, None)
-            summary_event = _get_summary_event(self.session)
+            summary_cache.get(target_session.app_name, {}).get(target_session.user_id, {}).pop(target_session.id, None)
+            summary_event = _get_summary_event(target_session)
             if summary_event is not None:
                 custom_metadata = dict(summary_event.custom_metadata or {})
                 custom_metadata.pop(_SUMMARY_EVENT_METADATA_KEY, None)
                 summary_event.custom_metadata = custom_metadata or None
-                await self.session_service.update_session(self.session)
+                await self.session_service.update_session(target_session)
             return
 
         if fault.operation == RuntimeFaultOperation.SET_SUMMARY_VALUE:
             if not fault.path:
                 raise ValueError("SET_SUMMARY_VALUE fault requires a target path.")
-            summary = await manager.get_session_summary(self.session)
+            summary = await manager.get_session_summary(target_session)
             if summary is None:
                 raise RuntimeError("Cannot mutate summary value because no cached summary exists.")
             _set_path_value(summary, fault.path, fault.value)
-            summary_event = _get_summary_event(self.session)
+            summary_event = _get_summary_event(target_session)
             if summary_event is not None and summary_event.custom_metadata:
                 persisted_summary = summary_event.custom_metadata.get(_SUMMARY_EVENT_METADATA_KEY)
                 if isinstance(persisted_summary, dict):
                     _set_path_value(persisted_summary, fault.path, fault.value)
-                    await self.session_service.update_session(self.session)
+                    await self.session_service.update_session(target_session)
             return
 
         raise ValueError(f"Unsupported runtime fault operation: {fault.operation}")
+
+    def _make_session_identity(self, session: Session) -> dict[str, str]:
+        return {
+            "app_name": session.app_name,
+            "user_id": session.user_id,
+            "session_id": session.id,
+        }
+
+    def _memory_observation_key(self, step_index: int, step: ReplayStep) -> str:
+        if step.memory_query is None:
+            raise ValueError("Memory observation key requires a query specification.")
+        return f"step_{step_index:03d}:{step.session_alias}:{step.memory_query.name}"
+
+    def _get_fault_session(self, fault: RuntimeFault) -> Session:
+        session = self._sessions.get(fault.session_alias)
+        if session is None:
+            raise RuntimeError(f"Runtime fault session alias '{fault.session_alias}' has not been created.")
+        return session
+
+    async def _build_session_snapshot(self, session_alias: str, session: Session) -> SessionSnapshot:
+        return SessionSnapshot(
+            session_alias=session_alias,
+            app_name=session.app_name,
+            user_id=session.user_id,
+            session_id=session.id,
+            session={
+                "conversation_count": session.conversation_count,
+                "events": [_event_to_snapshot(event) for event in session.events],
+                "historical_events": [_event_to_snapshot(event) for event in session.historical_events],
+            },
+            state=dict(session.state),
+            summary=await self._get_summary_snapshot(session),
+        )
 
     @abstractmethod
     async def _build_session_service(self) -> BaseSessionService:
@@ -544,6 +584,7 @@ class RedisReplayAdapter(ReplayBackendAdapter):
         super().__init__()
         self._redis_url = redis_url
         self._logical_case: ReplayCase | None = None
+        self._logical_session_identities: dict[str, dict[str, str]] = {}
         self._storage_namespace = f"replay-{uuid.uuid4().hex[:8]}"
 
     @property
@@ -554,6 +595,7 @@ class RedisReplayAdapter(ReplayBackendAdapter):
 
     async def setup(self, case: ReplayCase) -> None:
         self._logical_case = case
+        self._logical_session_identities = _collect_logical_session_identities(case)
         await super().setup(self._namespaced_case(case))
 
     def should_restart_before_snapshot(self) -> bool:
@@ -564,21 +606,26 @@ class RedisReplayAdapter(ReplayBackendAdapter):
 
     async def run_case(self, case: ReplayCase) -> BackendSnapshot:
         snapshot = await super().run_case(self.case)
-        summary = snapshot.summary
-        if summary is not None:
-            summary = replace(
-                summary,
-                session_id=self.logical_case.session_id,
-                summary_id=self._project_identifier(summary.summary_id),
-                replaces=self._project_identifier(summary.replaces),
-                metadata=self._project_scalar(summary.metadata),
-            )
+        sessions_by_alias = {
+            alias: self._project_session_snapshot(alias, session_snapshot)
+            for alias, session_snapshot in snapshot.sessions_by_alias.items()
+        }
+        active_snapshot = sessions_by_alias[snapshot.active_session_alias]
+        memory = {
+            key: self._project_memory_observation(value)
+            for key, value in snapshot.memory.items()
+        }
+        summary = active_snapshot.summary
         return replace(
             snapshot,
-            app_name=self.logical_case.app_name,
-            user_id=self.logical_case.user_id,
-            session_id=self.logical_case.session_id,
+            app_name=active_snapshot.app_name,
+            user_id=active_snapshot.user_id,
+            session_id=active_snapshot.session_id,
+            session=active_snapshot.session,
+            state=active_snapshot.state,
+            memory=memory,
             summary=summary,
+            sessions_by_alias=sessions_by_alias,
         )
 
     async def _build_session_service(self) -> BaseSessionService:
@@ -607,11 +654,14 @@ class RedisReplayAdapter(ReplayBackendAdapter):
     async def close(self) -> None:
         await super().close()
         self._logical_case = None
+        self._logical_session_identities = {}
 
     def _namespaced_case(self, case: ReplayCase) -> ReplayCase:
         namespaced_steps = tuple(
             replace(
                 step,
+                app_name=(f"{step.app_name}:{self._storage_namespace}" if step.app_name is not None else None),
+                user_id=(f"{step.user_id}:{self._storage_namespace}" if step.user_id is not None else None),
                 session_id=(f"{step.session_id}:{self._storage_namespace}" if step.session_id is not None else None),
             )
             for step in case.steps
@@ -627,7 +677,7 @@ class RedisReplayAdapter(ReplayBackendAdapter):
     def _project_identifier(self, value: Optional[str]) -> Optional[str]:
         if value is None:
             return None
-        return value.replace(self.case.session_id, self.logical_case.session_id)
+        return self._project_scalar(value)
 
     def _project_scalar(self, value: Any) -> Any:
         if isinstance(value, dict):
@@ -637,8 +687,47 @@ class RedisReplayAdapter(ReplayBackendAdapter):
         if isinstance(value, tuple):
             return [self._project_scalar(item) for item in value]
         if isinstance(value, str):
-            return self._project_identifier(value)
+            for logical_identity in self._logical_session_identities.values():
+                value = value.replace(f"{logical_identity['app_name']}:{self._storage_namespace}", logical_identity["app_name"])
+                value = value.replace(f"{logical_identity['user_id']}:{self._storage_namespace}", logical_identity["user_id"])
+                value = value.replace(f"{logical_identity['session_id']}:{self._storage_namespace}", logical_identity["session_id"])
+            value = value.replace(self.case.app_name, self.logical_case.app_name)
+            value = value.replace(self.case.user_id, self.logical_case.user_id)
+            value = value.replace(self.case.session_id, self.logical_case.session_id)
+            return value
         return value
+
+    def _project_session_snapshot(self, session_alias: str, snapshot: SessionSnapshot) -> SessionSnapshot:
+        logical_identity = self._logical_session_identities.get(session_alias)
+        projected_summary = snapshot.summary
+        if projected_summary is not None:
+            projected_summary = replace(
+                projected_summary,
+                session_id=logical_identity["session_id"] if logical_identity is not None else self._project_scalar(projected_summary.session_id),
+                summary_id=self._project_identifier(projected_summary.summary_id),
+                replaces=self._project_identifier(projected_summary.replaces),
+                metadata=self._project_scalar(projected_summary.metadata),
+            )
+        return replace(
+            snapshot,
+            app_name=logical_identity["app_name"] if logical_identity is not None else self._project_scalar(snapshot.app_name),
+            user_id=logical_identity["user_id"] if logical_identity is not None else self._project_scalar(snapshot.user_id),
+            session_id=logical_identity["session_id"] if logical_identity is not None else self._project_scalar(snapshot.session_id),
+            state=self._project_scalar(snapshot.state),
+            summary=projected_summary,
+        )
+
+    def _project_memory_observation(self, observation: Any) -> Any:
+        if not isinstance(observation, dict):
+            return self._project_scalar(observation)
+        projected = self._project_scalar(observation)
+        session_alias = projected.get("session_alias")
+        logical_identity = self._logical_session_identities.get(session_alias)
+        if logical_identity is not None:
+            projected["app_name"] = logical_identity["app_name"]
+            projected["user_id"] = logical_identity["user_id"]
+            projected["session_id"] = logical_identity["session_id"]
+        return projected
 
     def get_runtime_metadata(self) -> dict[str, Any]:
         return {
@@ -759,10 +848,12 @@ def normalize_backend_snapshot(snapshot: BackendSnapshot) -> dict[str, Any]:
         "app_name": snapshot.app_name,
         "user_id": snapshot.user_id,
         "session_id": snapshot.session_id,
+        "active_session_alias": snapshot.active_session_alias,
         "session": _normalize_scalar(snapshot.session),
         "state": _normalize_scalar(snapshot.state),
         "memory": _normalize_memory(snapshot.memory),
         "summary": _normalize_summary(snapshot.summary),
+        "sessions_by_alias": _normalize_sessions_by_alias(snapshot.sessions_by_alias, snapshot.active_session_alias),
     }
 
 
@@ -785,7 +876,20 @@ def _normalize_summary(summary: Optional[SummarySnapshot]) -> Optional[dict[str,
 
 def _normalize_memory(memory_results: dict[str, Any]) -> dict[str, Any]:
     normalized: dict[str, Any] = {}
-    for query_name, entries in memory_results.items():
+    for observation_key, observation in memory_results.items():
+        if isinstance(observation, dict):
+            entries = observation.get("entries", [])
+            normalized_observation = {
+                "query_name": observation.get("query_name"),
+                "session_alias": observation.get("session_alias"),
+                "app_name": observation.get("app_name"),
+                "user_id": observation.get("user_id"),
+                "session_id": observation.get("session_id"),
+                "step_index": observation.get("step_index"),
+            }
+        else:
+            entries = observation
+            normalized_observation = {}
         normalized_entries = []
         for entry in entries:
             normalized_entries.append(
@@ -794,10 +898,31 @@ def _normalize_memory(memory_results: dict[str, Any]) -> dict[str, Any]:
                     "role": entry.get("role"),
                     "text": (entry.get("text") or "").strip(),
                 })
-        normalized[query_name] = sorted(
+        normalized_observation["entries"] = sorted(
             normalized_entries,
             key=lambda item: (item["text"], item["author"] or "", item["role"] or ""),
         )
+        normalized[observation_key] = _normalize_scalar(normalized_observation)
+    return normalized
+
+
+def _normalize_sessions_by_alias(
+    sessions_by_alias: dict[str, SessionSnapshot],
+    active_session_alias: str,
+) -> dict[str, Any]:
+    normalized: dict[str, Any] = {}
+    for session_alias, snapshot in sessions_by_alias.items():
+        if session_alias == active_session_alias:
+            continue
+        normalized[session_alias] = {
+            "session_alias": snapshot.session_alias,
+            "app_name": snapshot.app_name,
+            "user_id": snapshot.user_id,
+            "session_id": snapshot.session_id,
+            "session": _normalize_scalar(snapshot.session),
+            "state": _normalize_scalar(snapshot.state),
+            "summary": _normalize_summary(snapshot.summary),
+        }
     return normalized
 
 
@@ -859,6 +984,19 @@ def _summarize_connection_url(url: str) -> dict[str, Any]:
     }
 
 
+def _collect_logical_session_identities(case: ReplayCase) -> dict[str, dict[str, str]]:
+    identities: dict[str, dict[str, str]] = {}
+    for step in case.steps:
+        if step.kind != ReplayStepKind.CREATE_SESSION:
+            continue
+        identities[step.session_alias] = {
+            "app_name": step.app_name or case.app_name,
+            "user_id": step.user_id or case.user_id,
+            "session_id": step.session_id or case.session_id,
+        }
+    return identities
+
+
 def _backend_target_matches(target_name: str, backend_name: str) -> bool:
     normalized_target = target_name.strip().lower()
     normalized_backend = backend_name.strip().lower()
@@ -915,6 +1053,26 @@ def diff_backend_snapshots(
             out=diffs,
             session_id=_resolve_session_id(left_view, right_view, case.session_id),
             summary_id=scope_summary_id,
+        )
+    left_aliases = left_view.get("sessions_by_alias", {})
+    right_aliases = right_view.get("sessions_by_alias", {})
+    for session_alias in sorted(set(left_aliases) | set(right_aliases)):
+        left_alias_snapshot = left_aliases.get(session_alias)
+        right_alias_snapshot = right_aliases.get(session_alias)
+        _diff_values(
+            case=case,
+            backend_a=left.backend_name,
+            backend_b=right.backend_name,
+            scope="sessions_by_alias",
+            path=f"sessions_by_alias.{session_alias}",
+            left=left_alias_snapshot,
+            right=right_alias_snapshot,
+            out=diffs,
+            session_id=_resolve_value_session_id(left_alias_snapshot, right_alias_snapshot, case.session_id),
+            summary_id=_resolve_summary_id(
+                left_alias_snapshot.get("summary") if isinstance(left_alias_snapshot, dict) else None,
+                right_alias_snapshot.get("summary") if isinstance(right_alias_snapshot, dict) else None,
+            ),
         )
     return diffs
 
@@ -1121,6 +1279,15 @@ def _resolve_session_id(left: dict[str, Any], right: dict[str, Any], fallback: s
     right_session_id = right.get("session_id")
     if isinstance(left_session_id, str) and left_session_id == right_session_id:
         return left_session_id
+    return fallback
+
+
+def _resolve_value_session_id(left: Any, right: Any, fallback: str) -> str:
+    for value in (left, right):
+        if isinstance(value, dict):
+            session_id = value.get("session_id")
+            if isinstance(session_id, str):
+                return session_id
     return fallback
 
 

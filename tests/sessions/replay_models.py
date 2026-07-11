@@ -99,6 +99,8 @@ class ReplayStep:
     force_summary: bool = False
     session_alias: str = "default"
     session_id: Optional[str] = None
+    app_name: Optional[str] = None
+    user_id: Optional[str] = None
 
     @classmethod
     def create_session(
@@ -107,12 +109,16 @@ class ReplayStep:
         initial_state: Optional[dict[str, Any]] = None,
         session_alias: str = "default",
         session_id: Optional[str] = None,
+        app_name: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> "ReplayStep":
         return cls(
             kind=ReplayStepKind.CREATE_SESSION,
             initial_state=initial_state or {},
             session_alias=session_alias,
             session_id=session_id,
+            app_name=app_name,
+            user_id=user_id,
         )
 
     @classmethod
@@ -197,6 +203,7 @@ class RuntimeFault:
     backend_name: str
     after_step: int
     operation: RuntimeFaultOperation
+    session_alias: str = "default"
     path: Optional[str] = None
     value: Any = None
 
@@ -221,6 +228,25 @@ class SummarySnapshot:
 
 
 @dataclass(frozen=True)
+class SessionSnapshot:
+    """Comparable view of one resolved session alias."""
+
+    session_alias: str
+    app_name: str
+    user_id: str
+    session_id: str
+    session: dict[str, Any]
+    state: dict[str, Any]
+    summary: Optional[SummarySnapshot]
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        if self.summary is not None:
+            data["summary"] = self.summary.to_dict()
+        return data
+
+
+@dataclass(frozen=True)
 class BackendSnapshot:
     """Full business snapshot collected after replaying one case."""
 
@@ -229,15 +255,21 @@ class BackendSnapshot:
     app_name: str
     user_id: str
     session_id: str
+    active_session_alias: str
     session: dict[str, Any]
     state: dict[str, Any]
     memory: dict[str, Any]
     summary: Optional[SummarySnapshot]
+    sessions_by_alias: dict[str, SessionSnapshot] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         if self.summary is not None:
             data["summary"] = self.summary.to_dict()
+        data["sessions_by_alias"] = {
+            alias: snapshot.to_dict()
+            for alias, snapshot in self.sessions_by_alias.items()
+        }
         return data
 
 

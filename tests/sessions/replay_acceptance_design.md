@@ -1,7 +1,7 @@
 # Replay Consistency Design Note
 
 ## 设计说明
-本框架以统一 `ReplayCase` 协议驱动 `InMemory`、文件型 `SQLite` 与可选 `Redis` 后端，先生成 `session/state/memory/summary` 四类快照，再做归一化比较。归一化只移除非业务噪声，不掩盖事件顺序、state 最终值、memory 检索结果及 summary 归属与覆盖关系；其中普通时间戳做精度收敛，`summary_timestamp` 使用 case 级确定性时钟参与比较。summary 比较分为两层：一层比较摘要文本与压缩后的事件窗口，另一层比较 `summary_id/version/replaces/session_id` 等 lineage 元数据。为验证保存/读取语义，summary 元数据会随 summary event 一起持久化，`SQLite/Redis` 适配器在抓取快照前执行一次关服务后重开读回，并支持在 case 中显式插入中途重启步骤验证“重启后继续写”。协议还支持同一 case 内用 `session_alias` 驱动多个 session，以覆盖跨 session 的 memory 聚合和 `app:/user:/temp:` 状态可见性差异。负例分为 snapshot mutation 与 runtime fault 两类，前者验证比较器精度，后者验证重复写入、中途失败和运行时污染场景。轻量模式默认运行 `InMemory + SQLite`，集成模式通过环境变量启用 `Redis`。
+本框架以统一 `ReplayCase` 协议驱动 `InMemory`、文件型 `SQLite` 与可选 `Redis` 后端，先生成 `session/state/memory/summary` 四类快照，再做归一化比较。归一化只移除非业务噪声，不掩盖事件顺序、state 最终值、memory 检索结果及 summary 归属与覆盖关系；其中普通时间戳做精度收敛，`summary_timestamp` 使用 case 级确定性时钟参与比较。summary 比较分为两层：一层比较摘要文本与压缩后的事件窗口，另一层比较 `summary_id/version/replaces/session_id` 等 lineage 元数据。为验证保存/读取语义，summary 元数据会随 summary event 一起持久化，`SQLite/Redis` 适配器在抓取快照前执行一次关服务后重开读回，并支持在 case 中显式插入中途重启步骤验证“重启后继续写”。协议支持用 `session_alias` 在同一 case 内驱动多 session / 多 user，并在最终快照中同时保留 `active session` 与 `sessions_by_alias` 视图，避免非活跃 session 损坏被漏检。memory 检索按 step 记录为独立 observation，不会在重启后被重算覆盖；同名 query 可跨 session 重复使用。负例分为 snapshot mutation 与 runtime fault 两类，二者都支持 alias 级注入，前者验证比较器精度，后者验证重复写入、中途失败、非活跃 session 污染和运行时 summary 破坏。轻量模式默认运行 `InMemory + SQLite`，集成模式通过环境变量启用 `Redis`。
 
 ## 官方 10 条验收 Case
 | Case ID | 场景 | 验收点 |
@@ -23,6 +23,10 @@
 - `duplicate_event_runtime_fault`：补充重复写入异常。
 - `runtime_state_corruption_fault`：补充运行时 state 污染。
 - `runtime_summary_loss_fault`：补充运行时 summary 丢失。
+- `non_active_session_summary_loss_fault`：补充非活跃 session 的 summary 损坏检测。
 - `cross_session_memory_aggregation`：补充同一 app/user 下跨 session 的 memory 聚合语义。
 - `restart_mid_replay_after_summary`：补充 summary 持久化后中途重启再续写的恢复语义。
 - `state_namespace_roundtrip`：补充 `app:/user:/temp:` 状态命名空间在跨 session 和重启后的可见性语义。
+- `cross_user_memory_isolation`：补充同一 app 下不同 user 的长期记忆隔离语义。
+- `duplicate_memory_query_name_across_sessions`：用定向测试覆盖跨 alias 的同名 memory query 不应互相覆盖。
+- `memory_query_observation_survives_restart`：用定向测试覆盖重启后 memory query 观测不得被后续结果回填。
