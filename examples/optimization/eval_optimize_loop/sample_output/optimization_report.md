@@ -38,22 +38,23 @@ Reasons: candidate passed all independent gate rules
 
 | Case | Transition | Score delta | Critical |
 | --- | --- | ---: | --- |
+| `val_json_generalization` | NEW_PASS | +1.000 | no |
 | `val_refund_critical` | UNCHANGED | +0.000 | yes |
 | `val_stable_faq` | UNCHANGED | +0.000 | no |
-| `val_json_generalization` | NEW_PASS | +1.000 | no |
 
 #### Gate rules
 
 | Rule | Passed | Actual | Expected |
 | --- | --- | ---: | ---: |
 | `evaluation_complete` | yes | `complete` | `complete` |
+| `validation_case_deltas_complete` | yes | `{'expected': ['val_json_generalization', 'val_refund_critical', 'val_stable_faq'], 'actual': ['val_json_generalization', 'val_refund_critical', 'val_stable_faq']}` | `one unique delta per validation case` |
 | `validation_score_delta_available` | yes | `0.33333333333333337` | `number` |
 | `validation_pass_rate_delta_available` | yes | `0.33333333333333337` | `number` |
 | `validation_score_improved` | yes | `0.33333333333333337` | `0.05` |
 | `validation_pass_rate_not_worse` | yes | `0.33333333333333337` | `0.0` |
 | `new_hard_fails` | yes | `0` | `0` |
 | `validation_regressions` | yes | `0` | `0` |
-| `no_critical_regression` | yes | `False` | `False` |
+| `no_critical_regression` | yes | `0` | `0` |
 | `no_overfit` | yes | `False` | `False` |
 | `tie_policy` | yes | `False` | `False` |
 
@@ -68,22 +69,23 @@ Reasons: validation aggregate score must improve; tie policy rejects a non-impro
 
 | Case | Transition | Score delta | Critical |
 | --- | --- | ---: | --- |
+| `val_json_generalization` | UNCHANGED | +0.000 | no |
 | `val_refund_critical` | UNCHANGED | +0.000 | yes |
 | `val_stable_faq` | UNCHANGED | +0.000 | no |
-| `val_json_generalization` | UNCHANGED | +0.000 | no |
 
 #### Gate rules
 
 | Rule | Passed | Actual | Expected |
 | --- | --- | ---: | ---: |
 | `evaluation_complete` | yes | `complete` | `complete` |
+| `validation_case_deltas_complete` | yes | `{'expected': ['val_json_generalization', 'val_refund_critical', 'val_stable_faq'], 'actual': ['val_json_generalization', 'val_refund_critical', 'val_stable_faq']}` | `one unique delta per validation case` |
 | `validation_score_delta_available` | yes | `0.0` | `number` |
 | `validation_pass_rate_delta_available` | yes | `0.0` | `number` |
 | `validation_score_improved` | no | `0.0` | `0.05` |
 | `validation_pass_rate_not_worse` | yes | `0.0` | `0.0` |
 | `new_hard_fails` | yes | `0` | `0` |
 | `validation_regressions` | yes | `0` | `0` |
-| `no_critical_regression` | yes | `False` | `False` |
+| `no_critical_regression` | yes | `0` | `0` |
 | `no_overfit` | yes | `False` | `False` |
 | `tie_policy` | no | `True` | `False` |
 
@@ -98,22 +100,23 @@ Reasons: new hard failures are not allowed; validation regressions exceed the li
 
 | Case | Transition | Score delta | Critical |
 | --- | --- | ---: | --- |
+| `val_json_generalization` | NEW_PASS | +1.000 | no |
 | `val_refund_critical` | REGRESSION | -0.800 | yes |
 | `val_stable_faq` | UNCHANGED | +0.000 | no |
-| `val_json_generalization` | NEW_PASS | +1.000 | no |
 
 #### Gate rules
 
 | Rule | Passed | Actual | Expected |
 | --- | --- | ---: | ---: |
 | `evaluation_complete` | yes | `complete` | `complete` |
+| `validation_case_deltas_complete` | yes | `{'expected': ['val_json_generalization', 'val_refund_critical', 'val_stable_faq'], 'actual': ['val_json_generalization', 'val_refund_critical', 'val_stable_faq']}` | `one unique delta per validation case` |
 | `validation_score_delta_available` | yes | `0.06666666666666676` | `number` |
 | `validation_pass_rate_delta_available` | yes | `0.0` | `number` |
 | `validation_score_improved` | yes | `0.06666666666666676` | `0.05` |
 | `validation_pass_rate_not_worse` | yes | `0.0` | `0.0` |
 | `new_hard_fails` | no | `1` | `0` |
 | `validation_regressions` | no | `1` | `0` |
-| `no_critical_regression` | no | `True` | `False` |
+| `no_critical_regression` | no | `1` | `0` |
 | `no_overfit` | yes | `False` | `False` |
 | `tie_policy` | yes | `False` | `False` |
 

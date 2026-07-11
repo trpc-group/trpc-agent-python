@@ -3,6 +3,95 @@
     "aggregate_score": 0.20000000000000004,
     "cases": [
       {
+        "aggregate_score": 0.0,
+        "eval_id": "train_json_format",
+        "execution_errors": [],
+        "expected_response": "{\"answer\": \"正在查询订单 A100。\", \"arguments\": {\"order_id\": \"A100\"}, \"route\": \"order_lookup\", \"tool\": \"lookup_order\"}",
+        "expected_tool_calls": [
+          {
+            "arguments": {
+              "order_id": "A100"
+            },
+            "name": "lookup_order"
+          }
+        ],
+        "failure_attribution": null,
+        "failure_reasons": [
+          "metric final_response_avg_score did not meet threshold 1.0",
+          "metric fake_rubric_score did not meet threshold 0.75",
+          "invalid JSON response",
+          "actual response: invalid JSON response"
+        ],
+        "failure_types": [
+          "final_response_mismatch",
+          "format_violation"
+        ],
+        "final_response": "订单 A100 正在查询",
+        "hard_failed": false,
+        "metric_passed": {
+          "fake_rubric_score": false,
+          "final_response_avg_score": false
+        },
+        "metric_reasons": {
+          "fake_rubric_score": [
+            "invalid JSON response"
+          ]
+        },
+        "metric_scores": {
+          "fake_rubric_score": 0.0,
+          "final_response_avg_score": 0.0
+        },
+        "metric_thresholds": {
+          "fake_rubric_score": 0.75,
+          "final_response_avg_score": 1.0
+        },
+        "passed": false,
+        "run_count": 1,
+        "split": "train",
+        "tool_calls": [],
+        "tool_responses": [],
+        "trace_digest": "sha256:65fdc3d48fd18eb37b2aa5138ee27435257ecbd0ef582c523a42673d87b04b77"
+      },
+      {
+        "aggregate_score": 0.30000000000000004,
+        "eval_id": "train_missing_knowledge",
+        "execution_errors": [],
+        "expected_response": "{\"answer\": \"未提供该政策，不能猜测。\", \"arguments\": {}, \"route\": \"knowledge_gap\", \"tool\": \"none\"}",
+        "expected_tool_calls": [],
+        "failure_attribution": null,
+        "failure_reasons": [
+          "metric final_response_avg_score did not meet threshold 1.0"
+        ],
+        "failure_types": [
+          "final_response_mismatch"
+        ],
+        "final_response": "{\"answer\": \"我不确定。\", \"arguments\": {}, \"route\": \"knowledge_gap\", \"tool\": \"none\"}",
+        "hard_failed": false,
+        "metric_passed": {
+          "fake_rubric_score": true,
+          "final_response_avg_score": false
+        },
+        "metric_reasons": {
+          "fake_rubric_score": [
+            "unknown knowledge must explicitly refuse to guess"
+          ]
+        },
+        "metric_scores": {
+          "fake_rubric_score": 0.75,
+          "final_response_avg_score": 0.0
+        },
+        "metric_thresholds": {
+          "fake_rubric_score": 0.75,
+          "final_response_avg_score": 1.0
+        },
+        "passed": false,
+        "run_count": 1,
+        "split": "train",
+        "tool_calls": [],
+        "tool_responses": [],
+        "trace_digest": "sha256:3f059c7504becc8cb98f605431f3c3714a0e70b4e62931895b888bba4ffcf9ed"
+      },
+      {
         "aggregate_score": 0.30000000000000004,
         "eval_id": "train_tool_argument",
         "execution_errors": [],
@@ -52,55 +141,22 @@
         ],
         "tool_responses": [],
         "trace_digest": "sha256:f086f4b22284734f1462eee58a4d204a31361c26d67449e5b23d292aaf2642bf"
-      },
-      {
-        "aggregate_score": 0.30000000000000004,
-        "eval_id": "train_missing_knowledge",
-        "execution_errors": [],
-        "expected_response": "{\"answer\": \"未提供该政策，不能猜测。\", \"arguments\": {}, \"route\": \"knowledge_gap\", \"tool\": \"none\"}",
-        "expected_tool_calls": [],
-        "failure_attribution": null,
-        "failure_reasons": [
-          "metric final_response_avg_score did not meet threshold 1.0"
-        ],
-        "failure_types": [
-          "final_response_mismatch"
-        ],
-        "final_response": "{\"answer\": \"我不确定。\", \"arguments\": {}, \"route\": \"knowledge_gap\", \"tool\": \"none\"}",
-        "hard_failed": false,
-        "metric_passed": {
-          "fake_rubric_score": true,
-          "final_response_avg_score": false
-        },
-        "metric_reasons": {
-          "fake_rubric_score": [
-            "unknown knowledge must explicitly refuse to guess"
-          ]
-        },
-        "metric_scores": {
-          "fake_rubric_score": 0.75,
-          "final_response_avg_score": 0.0
-        },
-        "metric_thresholds": {
-          "fake_rubric_score": 0.75,
-          "final_response_avg_score": 1.0
-        },
-        "passed": false,
-        "run_count": 1,
-        "split": "train",
-        "tool_calls": [],
-        "tool_responses": [],
-        "trace_digest": "sha256:3f059c7504becc8cb98f605431f3c3714a0e70b4e62931895b888bba4ffcf9ed"
-      },
+      }
+    ],
+    "pass_rate": 0.0
+  },
+  "baseline_validation": {
+    "aggregate_score": 0.6666666666666666,
+    "cases": [
       {
         "aggregate_score": 0.0,
-        "eval_id": "train_json_format",
+        "eval_id": "val_json_generalization",
         "execution_errors": [],
-        "expected_response": "{\"answer\": \"正在查询订单 A100。\", \"arguments\": {\"order_id\": \"A100\"}, \"route\": \"order_lookup\", \"tool\": \"lookup_order\"}",
+        "expected_response": "{\"answer\": \"正在查询订单 B200。\", \"arguments\": {\"order_id\": \"B200\"}, \"route\": \"order_lookup\", \"tool\": \"lookup_order\"}",
         "expected_tool_calls": [
           {
             "arguments": {
-              "order_id": "A100"
+              "order_id": "B200"
             },
             "name": "lookup_order"
           }
@@ -116,7 +172,7 @@
           "final_response_mismatch",
           "format_violation"
         ],
-        "final_response": "订单 A100 正在查询",
+        "final_response": "订单 B200 正在查询",
         "hard_failed": false,
         "metric_passed": {
           "fake_rubric_score": false,
@@ -137,17 +193,11 @@
         },
         "passed": false,
         "run_count": 1,
-        "split": "train",
+        "split": "validation",
         "tool_calls": [],
         "tool_responses": [],
-        "trace_digest": "sha256:65fdc3d48fd18eb37b2aa5138ee27435257ecbd0ef582c523a42673d87b04b77"
-      }
-    ],
-    "pass_rate": 0.0
-  },
-  "baseline_validation": {
-    "aggregate_score": 0.6666666666666666,
-    "cases": [
+        "trace_digest": "sha256:8684ddee9351120c1bf48affbd280c5b73835b2c1d58d04682622b577c37a455"
+      },
       {
         "aggregate_score": 1.0,
         "eval_id": "val_refund_critical",
@@ -235,56 +285,6 @@
         "tool_calls": [],
         "tool_responses": [],
         "trace_digest": "sha256:0d706eb4e659fd05e056460987cfedf7195c4ffeb68bec08072c97d6e784311d"
-      },
-      {
-        "aggregate_score": 0.0,
-        "eval_id": "val_json_generalization",
-        "execution_errors": [],
-        "expected_response": "{\"answer\": \"正在查询订单 B200。\", \"arguments\": {\"order_id\": \"B200\"}, \"route\": \"order_lookup\", \"tool\": \"lookup_order\"}",
-        "expected_tool_calls": [
-          {
-            "arguments": {
-              "order_id": "B200"
-            },
-            "name": "lookup_order"
-          }
-        ],
-        "failure_attribution": null,
-        "failure_reasons": [
-          "metric final_response_avg_score did not meet threshold 1.0",
-          "metric fake_rubric_score did not meet threshold 0.75",
-          "invalid JSON response",
-          "actual response: invalid JSON response"
-        ],
-        "failure_types": [
-          "final_response_mismatch",
-          "format_violation"
-        ],
-        "final_response": "订单 B200 正在查询",
-        "hard_failed": false,
-        "metric_passed": {
-          "fake_rubric_score": false,
-          "final_response_avg_score": false
-        },
-        "metric_reasons": {
-          "fake_rubric_score": [
-            "invalid JSON response"
-          ]
-        },
-        "metric_scores": {
-          "fake_rubric_score": 0.0,
-          "final_response_avg_score": 0.0
-        },
-        "metric_thresholds": {
-          "fake_rubric_score": 0.75,
-          "final_response_avg_score": 1.0
-        },
-        "passed": false,
-        "run_count": 1,
-        "split": "validation",
-        "tool_calls": [],
-        "tool_responses": [],
-        "trace_digest": "sha256:8684ddee9351120c1bf48affbd280c5b73835b2c1d58d04682622b577c37a455"
       }
     ],
     "pass_rate": 0.6666666666666666

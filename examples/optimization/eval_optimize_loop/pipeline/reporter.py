@@ -21,19 +21,28 @@ def _json_safe(value: object) -> object:
     return value
 
 
-def _write_json(path: Path, payload: object) -> None:
+def write_secret_free_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(sanitize_config(_json_safe(payload)), ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def write_audit_artifacts(report: OptimizationReport, output_dir: Path) -> None:
+def write_audit_artifacts(
+    report: OptimizationReport,
+    output_dir: Path,
+    *,
+    raw_payload: object | None = None,
+    normalized_payload: object | None = None,
+) -> None:
     """Persist normalized, secret-free evidence used by the Gate decision."""
     audit = output_dir / "audit"
     refs = report.audit_references
-    _write_json(output_dir / refs.raw_reports_path, {"baseline_train": report.baseline_train, "baseline_validation": report.baseline_validation})
-    _write_json(
+    write_secret_free_json(
+        output_dir / refs.raw_reports_path,
+        raw_payload if raw_payload is not None else {"baseline_train": report.baseline_train, "baseline_validation": report.baseline_validation},
+    )
+    write_secret_free_json(
         output_dir / refs.normalized_reports_path,
-        {
+        normalized_payload if normalized_payload is not None else {
             "baseline_train": report.baseline_train,
             "baseline_validation": report.baseline_validation,
             "candidate_train_validation": [
@@ -42,21 +51,27 @@ def write_audit_artifacts(report: OptimizationReport, output_dir: Path) -> None:
             ],
         },
     )
-    _write_json(output_dir / refs.candidate_reports_path, report.candidates)
-    _write_json(output_dir / refs.gate_decisions_path, {"selected_candidate_id": report.selected_candidate_id, "decisions": [{"candidate_id": candidate.candidate_id, "gate": candidate.gate} for candidate in report.candidates]})
+    write_secret_free_json(output_dir / refs.candidate_reports_path, report.candidates)
+    write_secret_free_json(output_dir / refs.gate_decisions_path, {"selected_candidate_id": report.selected_candidate_id, "decisions": [{"candidate_id": candidate.candidate_id, "gate": candidate.gate} for candidate in report.candidates]})
     # The run functions may write richer snapshots before this call.  Keep a
     # deterministic placeholder so every mode has the documented references.
     config_path = output_dir / refs.config_snapshot_path
     if not config_path.exists():
-        _write_json(config_path, {"mode": report.mode, "seed": report.seed, "run_metadata": report.run_metadata})
+        write_secret_free_json(config_path, {"mode": report.mode, "seed": report.seed, "run_metadata": report.run_metadata})
     environment_path = output_dir / refs.environment_snapshot_path
     if not environment_path.exists():
-        _write_json(environment_path, {"mode": report.mode, "seed": report.seed})
+        write_secret_free_json(environment_path, {"mode": report.mode, "seed": report.seed})
 
 
-def write_reports(report: OptimizationReport, output_dir: Path) -> tuple[Path, Path]:
+def write_reports(
+    report: OptimizationReport,
+    output_dir: Path,
+    *,
+    raw_payload: object | None = None,
+    normalized_payload: object | None = None,
+) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
-    write_audit_artifacts(report, output_dir)
+    write_audit_artifacts(report, output_dir, raw_payload=raw_payload, normalized_payload=normalized_payload)
     json_path = output_dir / "optimization_report.json"
     markdown_path = output_dir / "optimization_report.md"
     json_path.write_text(json.dumps(sanitize_config(report.model_dump(mode="json")), ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")

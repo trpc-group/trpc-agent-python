@@ -32,11 +32,18 @@ def evaluate_gate(
 ) -> GateDecision:
     """Apply only independently measured train/validation evidence to a proposal."""
     complete = _complete(baseline, candidate)
+    expected_delta_ids = {case.eval_id for case in baseline.cases} if complete and baseline else set()
+    actual_delta_ids = [delta.eval_id for delta in case_deltas]
+    deltas_complete = (
+        complete
+        and len(actual_delta_ids) == len(set(actual_delta_ids))
+        and set(actual_delta_ids) == expected_delta_ids
+    )
     score_delta = candidate.aggregate_score - baseline.aggregate_score if complete and baseline and candidate else None
     pass_rate_delta = candidate.pass_rate - baseline.pass_rate if complete and baseline and candidate else None
     new_hard_fails = sum(delta.hard_fail_added for delta in case_deltas)
     regressions = sum(delta.transition == "REGRESSION" for delta in case_deltas)
-    critical_regression = any(delta.critical and delta.transition == "REGRESSION" for delta in case_deltas)
+    critical_regressions = sum(delta.critical and delta.transition == "REGRESSION" for delta in case_deltas)
     overfit = bool(
         settings.reject_when_train_improves_but_validation_declines
         and train_score_delta is not None
@@ -46,13 +53,20 @@ def evaluate_gate(
     generalization_gap = train_score_delta - score_delta if train_score_delta is not None and score_delta is not None else None
     rules = [
         _rule("evaluation_complete", complete, None if not complete else "complete", "complete", "independent validation evaluation is incomplete"),
+        _rule(
+            "validation_case_deltas_complete",
+            deltas_complete,
+            {"expected": sorted(expected_delta_ids), "actual": sorted(actual_delta_ids)},
+            "one unique delta per validation case",
+            "validation case deltas are incomplete, duplicated, or do not match evaluated validation cases",
+        ),
         _rule("validation_score_delta_available", score_delta is not None, score_delta, "number", "validation aggregate score delta is required"),
         _rule("validation_pass_rate_delta_available", pass_rate_delta is not None, pass_rate_delta, "number", "validation pass-rate delta is required"),
         _rule("validation_score_improved", score_delta is not None and score_delta >= settings.min_validation_score_delta, score_delta, settings.min_validation_score_delta, "validation aggregate score must improve"),
         _rule("validation_pass_rate_not_worse", pass_rate_delta is not None and pass_rate_delta >= settings.min_validation_pass_rate_delta, pass_rate_delta, settings.min_validation_pass_rate_delta, "validation pass rate must not decline"),
         _rule("new_hard_fails", new_hard_fails <= settings.max_new_hard_fails, new_hard_fails, settings.max_new_hard_fails, "new hard failures are not allowed"),
         _rule("validation_regressions", regressions <= settings.max_validation_regressions, regressions, settings.max_validation_regressions, "validation regressions exceed the limit"),
-        _rule("no_critical_regression", settings.allow_critical_case_regression or not critical_regression, critical_regression, False, "critical validation cases must not regress"),
+        _rule("no_critical_regression", settings.allow_critical_case_regression or critical_regressions == 0, critical_regressions, 0, "critical validation cases must not regress"),
         _rule("no_overfit", not overfit, overfit, False, "train improvement with validation decline is rejected"),
     ]
     for metric_name, floor in sorted((metric_floors or {}).items()):
@@ -68,7 +82,7 @@ def evaluate_gate(
     rules.append(_rule("tie_policy", not (settings.tie_policy == "reject" and tied), tied, False, "tie policy rejects a non-improving validation outcome"))
     warnings = ["generation cost is unknown"] if generation_cost_usd is None else []
     failed = [rule.reason for rule in rules if not rule.passed]
-    risk_level = "high" if critical_regression or overfit else ("medium" if failed else "low")
+    risk_level = "high" if critical_regressions or overfit else ("medium" if failed else "low")
     return GateDecision(accepted=not failed, risk_level=risk_level, rules=rules, reasons=failed or ["candidate passed all independent gate rules"], warnings=warnings)
 
 
@@ -83,7 +97,7 @@ def select_winner(candidates: Iterable[CandidateReport]) -> str | None:
         rules = gate.rules if gate else []
         failures = {rule.rule: rule.actual for rule in rules}
         hard_fails = float(failures.get("new_hard_fails", 0) or 0)
-        critical = 1.0 if failures.get("no_critical_regression") is True else 0.0
+        critical = float(failures.get("no_critical_regression", 0) or 0)
         return (
             hard_fails,
             critical,

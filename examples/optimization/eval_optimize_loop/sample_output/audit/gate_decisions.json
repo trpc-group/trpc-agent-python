@@ -17,6 +17,24 @@
             "rule": "evaluation_complete"
           },
           {
+            "actual": {
+              "actual": [
+                "val_json_generalization",
+                "val_refund_critical",
+                "val_stable_faq"
+              ],
+              "expected": [
+                "val_json_generalization",
+                "val_refund_critical",
+                "val_stable_faq"
+              ]
+            },
+            "expected": "one unique delta per validation case",
+            "passed": true,
+            "reason": "validation case deltas are incomplete, duplicated, or do not match evaluated validation cases",
+            "rule": "validation_case_deltas_complete"
+          },
+          {
             "actual": 0.33333333333333337,
             "expected": "number",
             "passed": true,
@@ -59,8 +77,8 @@
             "rule": "validation_regressions"
           },
           {
-            "actual": false,
-            "expected": false,
+            "actual": 0,
+            "expected": 0,
             "passed": true,
             "reason": "critical validation cases must not regress",
             "rule": "no_critical_regression"
@@ -101,6 +119,24 @@
             "passed": true,
             "reason": "independent validation evaluation is incomplete",
             "rule": "evaluation_complete"
+          },
+          {
+            "actual": {
+              "actual": [
+                "val_json_generalization",
+                "val_refund_critical",
+                "val_stable_faq"
+              ],
+              "expected": [
+                "val_json_generalization",
+                "val_refund_critical",
+                "val_stable_faq"
+              ]
+            },
+            "expected": "one unique delta per validation case",
+            "passed": true,
+            "reason": "validation case deltas are incomplete, duplicated, or do not match evaluated validation cases",
+            "rule": "validation_case_deltas_complete"
           },
           {
             "actual": 0.0,
@@ -145,8 +181,8 @@
             "rule": "validation_regressions"
           },
           {
-            "actual": false,
-            "expected": false,
+            "actual": 0,
+            "expected": 0,
             "passed": true,
             "reason": "critical validation cases must not regress",
             "rule": "no_critical_regression"
@@ -190,6 +226,24 @@
             "rule": "evaluation_complete"
           },
           {
+            "actual": {
+              "actual": [
+                "val_json_generalization",
+                "val_refund_critical",
+                "val_stable_faq"
+              ],
+              "expected": [
+                "val_json_generalization",
+                "val_refund_critical",
+                "val_stable_faq"
+              ]
+            },
+            "expected": "one unique delta per validation case",
+            "passed": true,
+            "reason": "validation case deltas are incomplete, duplicated, or do not match evaluated validation cases",
+            "rule": "validation_case_deltas_complete"
+          },
+          {
             "actual": 0.06666666666666676,
             "expected": "number",
             "passed": true,
@@ -232,8 +286,8 @@
             "rule": "validation_regressions"
           },
           {
-            "actual": true,
-            "expected": false,
+            "actual": 1,
+            "expected": 0,
             "passed": false,
             "reason": "critical validation cases must not regress",
             "rule": "no_critical_regression"

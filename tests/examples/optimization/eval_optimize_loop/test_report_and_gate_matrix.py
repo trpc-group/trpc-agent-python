@@ -10,6 +10,8 @@ from examples.optimization.eval_optimize_loop.pipeline.models import (
     CandidateReport,
     CaseDelta,
     CaseSnapshot,
+    GateDecision,
+    GateRuleResult,
     GateSettings,
     OptimizationReport,
     SplitReport,
@@ -72,6 +74,30 @@ def test_gate_records_unknown_cost_warning_and_rejects_configured_tie() -> None:
     assert next(rule for rule in tie.rules if rule.rule == "tie_policy").passed is False
 
 
+@pytest.mark.parametrize(
+    "case_deltas",
+    [
+        [],
+        [_delta(), _delta()],
+        [
+            _delta(),
+            _delta().model_copy(update={"eval_id": "unexpected-validation-case"}),
+        ],
+    ],
+)
+def test_gate_rejects_missing_duplicate_or_mismatched_validation_case_deltas(case_deltas: list[CaseDelta]) -> None:
+    decision = _decision(case_deltas=case_deltas)
+    assert decision.accepted is False
+    rule = next(rule for rule in decision.rules if rule.rule == "validation_case_deltas_complete")
+    assert rule.passed is False
+
+
+def test_gate_accepts_one_unique_delta_for_each_validation_case() -> None:
+    decision = _decision(case_deltas=[_delta()])
+    rule = next(rule for rule in decision.rules if rule.rule == "validation_case_deltas_complete")
+    assert rule.passed is True
+
+
 def test_winner_selection_is_stable_and_requires_independent_evaluation() -> None:
     train = SplitReport.from_cases([_case(eval_id="train-1")])
     validation = SplitReport.from_cases([_case()])
@@ -79,6 +105,22 @@ def test_winner_selection_is_stable_and_requires_independent_evaluation() -> Non
     also_accepted = accepted.model_copy(update={"candidate_id": "a"})
     unverified = accepted.model_copy(update={"candidate_id": "unverified", "independently_evaluated": False})
     assert select_winner([accepted, also_accepted, unverified]) == "a"
+
+
+def test_winner_prefers_fewer_critical_regressions_when_policy_allows_them() -> None:
+    train = SplitReport.from_cases([_case(eval_id="train-1")])
+    validation = SplitReport.from_cases([_case()])
+
+    def candidate(candidate_id: str, critical_regressions: int) -> CandidateReport:
+        return CandidateReport(
+            candidate_id=candidate_id, accepted=True, train=train, validation=validation, independently_evaluated=True,
+            gate=GateDecision(
+                accepted=True, risk_level="low", reasons=[],
+                rules=[GateRuleResult(rule="no_critical_regression", passed=True, actual=critical_regressions, expected=0, reason="allowed by policy")],
+            ),
+        )
+
+    assert select_winner([candidate("two-critical", 2), candidate("one-critical", 1)]) == "one-critical"
 
 
 @pytest.mark.asyncio

@@ -22,4 +22,5 @@ async def evaluate_split(
     _, _, _, results_by_eval_id = await AgentEvaluator.evaluate_eval_set(
         eval_set, call_agent=call_agent, eval_config=config, num_runs=config.num_runs, print_detailed_results=False
     )
-    return SplitReport.from_cases(list(normalize_eval_results(results_by_eval_id, split=split, metric_weights=metric_weights).values()))
+    normalized = normalize_eval_results(results_by_eval_id, split=split, metric_weights=metric_weights)
+    return SplitReport.from_cases([case for _, case in sorted(normalized.items())])

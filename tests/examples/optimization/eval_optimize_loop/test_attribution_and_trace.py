@@ -255,9 +255,31 @@ async def test_trace_mode_evaluates_recorded_conversations_without_a_key(
     assert [tool.name for tool in intermediate_wins.expected_tool_calls] == ["lookup_order"]
     assert (tmp_path / "optimization_report.json").is_file()
     assert (tmp_path / "optimization_report.md").is_file()
+    assert (tmp_path / report.audit_references.raw_reports_path).is_file()
     assert (tmp_path / "trace_raw_results.json").is_file()
     assert (tmp_path / "trace_normalized_cases.json").is_file()
     assert json.loads((tmp_path / "trace_raw_results.json").read_text(encoding="utf-8"))["raw_evaluator_ran"] is True
+
+
+@pytest.mark.asyncio
+async def test_trace_raw_projection_is_stable_and_redacts_nested_secrets(tmp_path: Path) -> None:
+    from examples.optimization.eval_optimize_loop.run_pipeline import run_trace_pipeline
+    from examples.optimization.eval_optimize_loop.pipeline.reporter import write_secret_free_json
+
+    first_dir, second_dir = tmp_path / "first", tmp_path / "second"
+    first = await run_trace_pipeline(output_dir=first_dir)
+    second = await run_trace_pipeline(output_dir=second_dir)
+    first_raw = (first_dir / first.audit_references.raw_reports_path).read_text(encoding="utf-8")
+    second_raw = (second_dir / second.audit_references.raw_reports_path).read_text(encoding="utf-8")
+    assert first_raw == second_raw
+    assert "session_id" not in first_raw
+
+    sensitive_path = tmp_path / "sensitive.json"
+    write_secret_free_json(sensitive_path, {"nested": {"api_key": "do-not-leak", "refresh_token": "also-secret"}})
+    serialized = sensitive_path.read_text(encoding="utf-8")
+    assert "do-not-leak" not in serialized
+    assert "also-secret" not in serialized
+    assert "***REDACTED***" in serialized
 
 
 def test_trace_cli_writes_report_paths(tmp_path: Path) -> None:

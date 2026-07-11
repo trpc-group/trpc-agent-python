@@ -24,7 +24,7 @@ from examples.optimization.eval_optimize_loop.fake.fake_agent import FakeSupport
 from examples.optimization.eval_optimize_loop.fake.fake_judge import register_fake_rubric_evaluator
 from examples.optimization.eval_optimize_loop.fake.fixture_optimizer import FixtureOptimizerBackend
 from examples.optimization.eval_optimize_loop.pipeline.comparator import compare_case
-from examples.optimization.eval_optimize_loop.pipeline.config import load_pipeline_config, sanitize_config
+from examples.optimization.eval_optimize_loop.pipeline.config import load_pipeline_config
 from examples.optimization.eval_optimize_loop.pipeline.evaluator import evaluate_split
 from examples.optimization.eval_optimize_loop.pipeline.gate import evaluate_gate
 from examples.optimization.eval_optimize_loop.pipeline.gate import select_winner
@@ -37,7 +37,7 @@ from examples.optimization.eval_optimize_loop.pipeline.optimizer_backend import 
 from examples.optimization.eval_optimize_loop.pipeline.attribution import attribute_case
 from examples.optimization.eval_optimize_loop.pipeline.normalization import normalize_eval_results
 from examples.optimization.eval_optimize_loop.pipeline.prompt_sandbox import PromptSandbox
-from examples.optimization.eval_optimize_loop.pipeline.reporter import write_reports
+from examples.optimization.eval_optimize_loop.pipeline.reporter import write_reports, write_secret_free_json
 from examples.optimization.eval_optimize_loop.pipeline.audit import write_environment_snapshot, write_input_snapshot
 def _attribution_summary(*splits: SplitReport | None) -> dict[str, int]:
     summary: dict[str, int] = {}
@@ -48,6 +48,30 @@ def _attribution_summary(*splits: SplitReport | None) -> dict[str, int]:
                     key = case.failure_attribution.primary_type.value
                     summary[key] = summary.get(key, 0) + 1
     return dict(sorted(summary.items()))
+
+
+def _stable_trace_projection(results_by_eval_id: dict[str, list[object]]) -> dict[str, object]:
+    """Keep recorded evaluator evidence while removing per-run identifiers."""
+    ephemeral_keys = {"sessionid", "timestamp", "createdat", "updatedat"}
+
+    def project(value: object) -> object:
+        if isinstance(value, dict):
+            return {
+                key: project(item)
+                for key, item in value.items()
+                if "".join(character for character in str(key).lower() if character.isalnum()) not in ephemeral_keys
+            }
+        if isinstance(value, list):
+            return [project(item) for item in value]
+        return value
+
+    return {
+        "raw_evaluator_ran": True,
+        "results_by_eval_id": {
+            eval_id: project([result.model_dump(mode="json") for result in results])
+            for eval_id, results in sorted(results_by_eval_id.items())
+        },
+    }
 
 
 async def run_fake_pipeline(*, output_dir: Path) -> OptimizationReport:
@@ -104,36 +128,20 @@ async def run_trace_pipeline(*, output_dir: Path) -> OptimizationReport:
     )
     cases = [
         case if case.passed else case.model_copy(update={"failure_attribution": attribute_case(case)})
-        for case in normalized.values()
+        for _, case in sorted(normalized.items())
     ]
     report = OptimizationReport.empty(mode="trace", seed=config_payload["seed"])
     report.run_metadata = {"evaluation_source": "recorded_trace", "independent_candidate_evaluation": False}
     report.baseline_validation = SplitReport.from_cases(cases)
     report.attribution_summary = _attribution_summary(report.baseline_validation)
     output_dir.mkdir(parents=True, exist_ok=True)
-    (output_dir / "input.snapshot.json").write_text(json.dumps(sanitize_config({"trace_config": config_payload, "trace_evalset": "trace/trace.evalset.json"}), ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_secret_free_json(output_dir / "input.snapshot.json", {"trace_config": config_payload, "trace_evalset": "trace/trace.evalset.json"})
     write_environment_snapshot("trace", report.seed, output_dir)
-    (output_dir / "trace_raw_results.json").write_text(
-        json.dumps(
-            {
-                "raw_evaluator_ran": True,
-                "results_by_eval_id": {
-                    eval_id: [result.model_dump(mode="json") for result in results]
-                    for eval_id, results in results_by_eval_id.items()
-                },
-            },
-            ensure_ascii=False,
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    (output_dir / "trace_normalized_cases.json").write_text(
-        json.dumps([case.model_dump(mode="json") for case in cases], ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    write_reports(report, output_dir)
+    raw_projection = _stable_trace_projection(results_by_eval_id)
+    normalized_projection = {"cases": [case.model_dump(mode="json") for case in cases]}
+    write_secret_free_json(output_dir / "trace_raw_results.json", raw_projection)
+    write_secret_free_json(output_dir / "trace_normalized_cases.json", normalized_projection)
+    write_reports(report, output_dir, raw_payload=raw_projection, normalized_payload=normalized_projection)
     return report
 
 
