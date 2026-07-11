@@ -1,0 +1,12 @@
+[
+  {"id": "safe_gain", "expected": true, "train": [0, 1, 1], "candidate_train": [1, 1, 1], "validation": [0, 1, 1], "candidate_validation": [1, 1, 1], "protected": [], "max_drop": 0.0, "cost": 0.02, "budget": 1.0},
+  {"id": "no_gain", "expected": false, "train": [1, 1, 1], "candidate_train": [1, 1, 1], "validation": [1, 1, 1], "candidate_validation": [1, 1, 1], "protected": [], "max_drop": 0.0, "cost": 0.02, "budget": 1.0},
+  {"id": "overfit", "expected": false, "train": [0, 0, 1], "candidate_train": [1, 1, 1], "validation": [0, 1, 1], "candidate_validation": [1, 0, 0], "protected": [], "max_drop": 1.0, "cost": 0.02, "budget": 1.0},
+  {"id": "validation_regression", "expected": false, "train": [1, 1, 1], "candidate_train": [1, 1, 1], "validation": [1, 1, 1], "candidate_validation": [1, 1, 0], "protected": [], "max_drop": 1.0, "cost": 0.02, "budget": 1.0},
+  {"id": "protected_regression", "expected": false, "train": [0, 1, 1], "candidate_train": [1, 1, 1], "validation": [1, 0, 0], "candidate_validation": [0, 1, 1], "protected": ["v0"], "max_drop": 1.0, "cost": 0.02, "budget": 1.0},
+  {"id": "new_hard_fail", "expected": false, "train": [0, 1, 1], "candidate_train": [1, 1, 1], "validation": [1, 0, 0], "candidate_validation": [0, 1, 1], "protected": [], "max_drop": 1.0, "cost": 0.02, "budget": 1.0},
+  {"id": "soft_to_hard", "expected": false, "train": [0, 1, 1], "candidate_train": [1, 1, 1], "validation": [0.5, 0, 0], "candidate_validation": [0, 1, 1], "protected": [], "max_drop": 1.0, "cost": 0.02, "budget": 1.0},
+  {"id": "single_case_drop", "expected": false, "train": [0, 1, 1], "candidate_train": [1, 1, 1], "validation": [0.7, 0, 0], "candidate_validation": [0.5, 1, 1], "protected": [], "max_drop": 0.1, "cost": 0.02, "budget": 1.0},
+  {"id": "over_budget", "expected": false, "train": [0, 1, 1], "candidate_train": [1, 1, 1], "validation": [0, 1, 1], "candidate_validation": [1, 1, 1], "protected": [], "max_drop": 0.0, "cost": 1.1, "budget": 1.0},
+  {"id": "safe_gain_with_soft_failure", "expected": true, "train": [0, 1, 1], "candidate_train": [1, 1, 1], "validation": [0.5, 0, 1], "candidate_validation": [0.5, 1, 1], "protected": ["v0"], "max_drop": 0.0, "cost": 0.02, "budget": 1.0}
+]

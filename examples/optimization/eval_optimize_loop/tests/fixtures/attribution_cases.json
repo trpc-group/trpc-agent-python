@@ -1,0 +1,10 @@
+[
+  {"error_code": "json_parse_failure", "evidence": "JSON parser failed", "expected": "format_violation"},
+  {"error_code": "required_key_missing", "evidence": "missing key status", "expected": "final_response_mismatch"},
+  {"error_code": "exact_answer_mismatch", "evidence": "expected YES", "expected": "final_response_mismatch"},
+  {"error_code": "tool_call_error", "evidence": "expected lookup", "expected": "tool_call_error"},
+  {"error_code": "parameter_error", "evidence": "id mismatch", "expected": "parameter_error"},
+  {"error_code": "missing_rubric_terms", "evidence": "missing latency", "expected": "llm_rubric_not_met"},
+  {"error_code": "knowledge_recall_insufficient", "evidence": "missing doc-a", "expected": "knowledge_recall_insufficient"},
+  {"error_code": "forbidden_pattern", "evidence": "forbidden JSON", "expected": "format_violation"}
+]
