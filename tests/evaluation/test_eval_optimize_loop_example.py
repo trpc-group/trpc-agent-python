@@ -1274,7 +1274,8 @@ def test_validate_inputs_uses_json_criterion_numeric_tolerance(tmp_path: Path):
         module.validate_inputs(train, optimizer_dev, validation)
 
 
-def test_validate_inputs_uses_configured_json_criterion_tolerance(tmp_path: Path):
+@pytest.mark.parametrize("json_alias", ["json", "json_strategy", "jsonStrategy"])
+def test_validate_inputs_uses_configured_json_criterion_tolerance(tmp_path: Path, json_alias: str):
     module = load_pipeline_module()
     train, optimizer_dev, validation = _copy_public_evalsets(tmp_path)
     train_payload = load_report(train)
@@ -1290,7 +1291,7 @@ def test_validate_inputs_uses_configured_json_criterion_tolerance(tmp_path: Path
                 "threshold": 1.0,
                 "criterion": {
                     "final_response": {
-                        "json": {
+                        json_alias: {
                             "match": "exact",
                             "number_tolerance": 0.1,
                         }
@@ -1831,6 +1832,29 @@ def test_report_semantics_recompute_case_score_when_primary_metric_is_null():
         module.validate_report_schema(report)
 
 
+def test_report_semantics_require_zero_score_for_explicit_no_run_case():
+    module = load_pipeline_module()
+    report = load_report(EXAMPLE_DIR / "fixtures" / "optimization_report.sample.json")
+    candidate = next(item for item in report["candidates"] if item["gate"]["accepted"])
+    case = candidate["validation"]["case_results"][0]
+    case.update(
+        {
+            "score": 1.0,
+            "passed": False,
+            "metrics": {},
+            "root_cause": "runtime_error",
+            "reasons": ["evaluation runtime error: no run"],
+        }
+    )
+    case["key_trace"]["error_message"] = "AgentEvaluator returned no run for case"
+    candidate["validation"]["pass_rate"] = 0.666667
+    candidate["validation"]["failed_case_ids"] = [case["case_id"]]
+    candidate["final_validation"] = copy.deepcopy(candidate["validation"])
+
+    with pytest.raises(ValidationError, match="no-run case score"):
+        module.validate_report_schema(report)
+
+
 def test_sample_report_records_hashed_normalized_evaluation_config():
     module = load_pipeline_module()
     report = load_report(EXAMPLE_DIR / "fixtures" / "optimization_report.sample.json")
@@ -1880,6 +1904,11 @@ def test_report_semantics_reconcile_candidate_audit_cost_with_pipeline_cost():
         "round_prompt_hash_value",
         "missing_config_hash_disagreement",
         "evalset_turn_count",
+        "missing_config_coordinated",
+        "missing_metrics_coordinated",
+        "missing_evalsets_coordinated",
+        "candidate_prompt_artifacts_empty",
+        "accepted_round_prompt_evidence_empty",
     ],
 )
 def test_report_semantics_bind_reproducibility_audit_fields(mutation: str):
@@ -1925,8 +1954,59 @@ def test_report_semantics_bind_reproducibility_audit_fields(mutation: str):
         for index, candidate in enumerate(report["candidates"]):
             candidate["audit"]["config_path"] = missing_path
             candidate["audit"]["config_sha256"] = f"{index + 1:064x}"
-    else:
+    elif mutation == "evalset_turn_count":
         report["config_snapshot"]["evalsets"]["train"]["turn_count"] = 99
+    elif mutation == "missing_config_coordinated":
+        missing_path = "missing/optimizer.json"
+        report["config_snapshot"]["paths"]["optimizer_config"] = missing_path
+        report["config_snapshot"]["optimizer_config_sha256"] = "0" * 64
+        report["environment_snapshot"]["config_path"] = missing_path
+        report["artifacts"]["optimizer_config"] = missing_path
+        for candidate in report["candidates"]:
+            candidate["audit"]["config_path"] = missing_path
+            candidate["audit"]["config_sha256"] = "0" * 64
+    elif mutation == "missing_metrics_coordinated":
+        missing_path = "missing/metrics.json"
+        report["config_snapshot"]["paths"]["evaluation_metrics"] = missing_path
+        report["config_snapshot"]["evaluation_metrics_sha256"] = "0" * 64
+        report["artifacts"]["eval_metrics"] = missing_path
+    elif mutation == "missing_evalsets_coordinated":
+        path_keys = {
+            "train": "train_evalset",
+            "optimizer_dev": "optimizer_dev_evalset",
+            "final_validation": "final_validation_evalset",
+        }
+        for role, path_key in path_keys.items():
+            missing_path = f"missing/{role}.json"
+            report["config_snapshot"]["paths"][path_key] = missing_path
+            report["artifacts"][path_key] = missing_path
+            manifest = report["config_snapshot"]["evalsets"][role]
+            manifest.update(
+                {
+                    "path": missing_path,
+                    "sha256": "0" * 64,
+                    "case_count": 99,
+                    "turn_count": 99,
+                }
+            )
+        report["config_snapshot"]["paths"]["validation_evalset"] = report["config_snapshot"]["paths"][
+            "final_validation_evalset"
+        ]
+        report["artifacts"]["validation_evalset"] = report["artifacts"]["final_validation_evalset"]
+    elif mutation == "candidate_prompt_artifacts_empty":
+        for candidate in report["candidates"]:
+            candidate["prompt_artifacts"] = []
+    else:
+        round_record.update(
+            {
+                "optimized_field_names": ["system_prompt"],
+                "prompt_paths": {},
+                "prompt_sha256": {},
+                "prompt_contents": {},
+                "accepted": True,
+            }
+        )
+        report["optimization_rounds"] = [round_record]
 
     with pytest.raises(ValidationError):
         module.validate_report_schema(report)

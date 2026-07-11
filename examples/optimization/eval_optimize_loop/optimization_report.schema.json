@@ -192,6 +192,7 @@
         "prompt_patch_summary": {"type": "string"},
         "prompt_artifacts": {
           "type": "array",
+          "minItems": 1,
           "items": {"$ref": "#/$defs/promptArtifact"}
         },
         "train": {"$ref": "#/$defs/evaluationSummary"},
@@ -673,7 +674,11 @@
         "id": {"$ref": "#/$defs/safePathComponent"},
         "audit": {"$ref": "#/$defs/candidateAudit"},
         "prompt_patch_summary": {"type": "string"},
-        "prompt_artifacts": {"type": "array", "items": {"$ref": "#/$defs/promptArtifact"}},
+        "prompt_artifacts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/promptArtifact"}
+        },
         "train": {"$ref": "#/$defs/evaluationSummary"},
         "optimizer_dev": {"$ref": "#/$defs/evaluationSummary"},
         "final_validation": {"$ref": "#/$defs/evaluationSummary"},

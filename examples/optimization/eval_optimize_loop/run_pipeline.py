@@ -177,6 +177,8 @@ def validate_report_schema(report: dict[str, Any]) -> None:
             case_metrics = case["metrics"]
             if not case_metrics:
                 if not case["passed"] and case["key_trace"]["error_message"]:
+                    if case["score"] != 0.0:
+                        reject(f"{label} explicit no-run case score must be zero")
                     explicit_no_run_case_ids.add(case["case_id"])
                     continue
                 reject(f"{label} case metric evidence is empty without an explicit failed run")
@@ -289,6 +291,7 @@ def validate_report_schema(report: dict[str, Any]) -> None:
         reject_duplicate_cases(baseline[summary_name], f"baseline.{summary_name}")
         validate_evaluation_summary(baseline[summary_name], f"baseline.{summary_name}")
     validate_prompt_artifacts(baseline["prompt_artifacts"], "baseline")
+    baseline_prompt_names = {artifact["name"] for artifact in baseline["prompt_artifacts"]}
 
     if report["failure_attribution"] != attribution_for(baseline["validation"]):
         reject("top-level failure attribution does not match baseline validation failures")
@@ -317,12 +320,11 @@ def validate_report_schema(report: dict[str, Any]) -> None:
     optimizer_config_artifact = Path(expected_optimizer_config_path)
     if not optimizer_config_artifact.is_absolute():
         optimizer_config_artifact = REPO_ROOT / optimizer_config_artifact
-    if (
-        optimizer_config_artifact.is_file()
-        and sha256_json_file(optimizer_config_artifact) != expected_optimizer_config_hash
-    ):
+    if not optimizer_config_artifact.is_file():
+        reject("referenced optimizer config artifact must exist")
+    if sha256_json_file(optimizer_config_artifact) != expected_optimizer_config_hash:
         reject("optimizer config hash does not match the referenced config artifact")
-    if report["mode"] == "online" and optimizer_config_artifact.is_file():
+    if report["mode"] == "online":
         runtime_evaluation = normalized_evaluation_config(
             validated_optimizer_evaluate_config(optimizer_config_artifact)
         )
@@ -333,11 +335,12 @@ def validate_report_schema(report: dict[str, Any]) -> None:
         reject("evaluation metrics path does not match report artifacts")
     if not evaluation_metrics_path.is_absolute():
         evaluation_metrics_path = REPO_ROOT / evaluation_metrics_path
-    if evaluation_metrics_path.is_file():
-        if sha256_json_file(evaluation_metrics_path) != config_snapshot["evaluation_metrics_sha256"]:
-            reject("evaluation metrics hash does not match the referenced artifact")
-        if normalized_evaluation_config(load_json(evaluation_metrics_path)) != evaluation_snapshot:
-            reject("evaluation snapshot does not match the evaluation metrics artifact")
+    if not evaluation_metrics_path.is_file():
+        reject("referenced evaluation metrics artifact must exist")
+    if sha256_json_file(evaluation_metrics_path) != config_snapshot["evaluation_metrics_sha256"]:
+        reject("evaluation metrics hash does not match the referenced artifact")
+    if normalized_evaluation_config(load_json(evaluation_metrics_path)) != evaluation_snapshot:
+        reject("evaluation snapshot does not match the evaluation metrics artifact")
 
     manifest_path_keys = {
         "train": "train_evalset",
@@ -355,11 +358,12 @@ def validate_report_schema(report: dict[str, Any]) -> None:
         evalset_path = Path(manifest["path"])
         if not evalset_path.is_absolute():
             evalset_path = REPO_ROOT / evalset_path
-        if evalset_path.is_file():
-            observed_manifest = build_evalset_manifest(evalset_path)
-            for evidence_key in ("sha256", "case_count", "turn_count"):
-                if manifest[evidence_key] != observed_manifest[evidence_key]:
-                    reject(f"{role} evalset manifest {evidence_key} does not match the referenced artifact")
+        if not evalset_path.is_file():
+            reject(f"referenced {role} evalset artifact must exist")
+        observed_manifest = build_evalset_manifest(evalset_path)
+        for evidence_key in ("sha256", "case_count", "turn_count"):
+            if manifest[evidence_key] != observed_manifest[evidence_key]:
+                reject(f"{role} evalset manifest {evidence_key} does not match the referenced artifact")
     environment = report["environment_snapshot"]
     if environment["seed"] != report["seed"]:
         reject("environment snapshot seed must match the report")
@@ -382,6 +386,11 @@ def validate_report_schema(report: dict[str, Any]) -> None:
                 prompt_path = REPO_ROOT / prompt_path
             if prompt_path.is_file() and prompt_path.read_text(encoding="utf-8") != content:
                 reject("optimization round prompt content does not match the referenced file")
+        optimized_field_names = set(round_record["optimized_field_names"])
+        if (round_record["accepted"] or optimized_field_names) and not prompt_keys:
+            reject("accepted or optimizing rounds must contain prompt evidence")
+        if not optimized_field_names.issubset(prompt_keys):
+            reject("optimization round fields must be present in prompt evidence")
     cost = report["cost"]
     if report["mode"] == "online":
         online_duration = report.get("online_duration")
@@ -451,6 +460,8 @@ def validate_report_schema(report: dict[str, Any]) -> None:
         if candidate_audit["config_sha256"] != expected_optimizer_config_hash:
             reject(f"candidate audit config hash does not match config snapshot: {candidate_id}")
         validate_prompt_artifacts(candidate["prompt_artifacts"], f"candidate {candidate_id}")
+        if {artifact["name"] for artifact in candidate["prompt_artifacts"]} != baseline_prompt_names:
+            reject(f"candidate prompt artifact names must match baseline targets: {candidate_id}")
         pipeline_cost = cost["estimated_total"]
         audit_cost = candidate_audit["cost"]
         if audit_cost["known"] is not (pipeline_cost is not None) or audit_cost["estimated"] != pipeline_cost:
@@ -1070,6 +1081,14 @@ def write_optimizer_round_artifacts(
                 decision_reason += "; invalid mapping keys were dropped and rejected"
             for prompt_reason in prompt_reasons:
                 decision_reason += f"; {prompt_reason}; round rejected"
+        missing_prompt_fields = [name for name in optimized_field_names if name not in prompt_paths]
+        if missing_prompt_fields:
+            accepted = False
+            optimized_field_names = [name for name in optimized_field_names if name in prompt_paths]
+            decision_reason += "; optimized fields without prompt evidence were dropped and rejected"
+        if accepted and (not optimized_field_names or not prompt_paths):
+            accepted = False
+            decision_reason += "; accepted round lacked auditable optimized prompt evidence and was rejected"
         records.append(
             {
                 "round": round_id,
@@ -1385,6 +1404,7 @@ def load_gate_config(
 
 def json_criteria_from_evaluation_config(metrics_config: Mapping[str, Any] | None) -> list[Any]:
     from trpc_agent_sdk.evaluation._eval_config import EvalConfig
+    from trpc_agent_sdk.evaluation._eval_criterion import FinalResponseCriterion
     from trpc_agent_sdk.evaluation._eval_criterion import JSONCriterion
 
     criteria: list[JSONCriterion] = []
@@ -1392,7 +1412,12 @@ def json_criteria_from_evaluation_config(metrics_config: Mapping[str, Any] | Non
     def collect(value: Any) -> None:
         if isinstance(value, Mapping):
             for key, nested in value.items():
-                if str(key).lower() == "json" and isinstance(nested, Mapping):
+                normalized_key = str(key).replace("_", "").lower()
+                if normalized_key == "finalresponse" and isinstance(nested, Mapping):
+                    final_response = FinalResponseCriterion.from_dict(dict(nested))
+                    if final_response is not None and final_response.json_config is not None:
+                        criteria.append(JSONCriterion.model_validate(final_response.json_config))
+                elif normalized_key == "json" and isinstance(nested, Mapping):
                     criteria.append(JSONCriterion.model_validate(dict(nested)))
                 else:
                     collect(nested)
