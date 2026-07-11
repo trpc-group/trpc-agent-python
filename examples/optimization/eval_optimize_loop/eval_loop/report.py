@@ -152,7 +152,7 @@ def build_report(
             if isinstance(result, EvalResult):
                 all_results.append(result)
     return OptimizationReport(
-        schema_version="eval_optimize_loop.v1",
+        schema_version="eval_optimize_loop.v2",
         run=run,
         baseline={"train": baseline_train, "validation": baseline_validation},
         baseline_train=baseline_train,
@@ -645,7 +645,7 @@ def render_markdown(report: OptimizationReport) -> str:
         "",
         "## Failure Attribution Summary",
         "",
-            f"Total failed case evaluations: {summary['total_failed_cases']}",
+        f"Total failed case evaluations: {summary['total_failed_cases']}",
         "",
         "| category | count |",
         "| --- | ---: |",
@@ -691,8 +691,8 @@ def render_markdown(report: OptimizationReport) -> str:
         candidate = record["candidate"]
         lines.extend([
             f"### {candidate.candidate_id}",
-                "",
-                "```diff",
+            "",
+            "```diff",
             candidate.prompt_diff,
             "```",
             "",
@@ -702,8 +702,8 @@ def render_markdown(report: OptimizationReport) -> str:
         "## Reproducibility",
         "",
         f"```{report.run.get('reproducibility_shell') or 'bash'}",
-            report.run.get("reproducibility_command")
-            or report.audit.get("reproducibility_command")
+        report.run.get("reproducibility_command")
+        or report.audit.get("reproducibility_command")
         or REPRODUCIBILITY_COMMAND,
         "```",
         "",

@@ -6,7 +6,6 @@ import subprocess
 import sys
 
 from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_OPTIMIZER_CONFIG
-from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_PROMPT
 from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_TRAIN
 from examples.optimization.eval_optimize_loop.run_pipeline import DEFAULT_VAL
 from examples.optimization.eval_optimize_loop.run_pipeline import run_pipeline
@@ -15,11 +14,18 @@ from examples.optimization.eval_optimize_loop.eval_loop.report import report_to_
 
 def test_fake_mode_pipeline_generates_json_and_markdown_reports(tmp_path: Path):
     output_dir = tmp_path / "run"
+    prompt_path = tmp_path / "baseline_system_prompt.txt"
+    prompt_path.write_text(
+        "You are a helpful support assistant.\n\n"
+        "Answer clearly and include a short explanation when it may help the user.\n"
+        "If the user asks for structured data, provide the information they need.\n",
+        encoding="utf-8",
+    )
     report = run_pipeline(
         train_path=DEFAULT_TRAIN,
         val_path=DEFAULT_VAL,
         optimizer_config_path=DEFAULT_OPTIMIZER_CONFIG,
-        prompt_path=DEFAULT_PROMPT,
+        prompt_path=prompt_path,
         output_dir=output_dir,
         fake_model=True,
         fake_judge=True,
@@ -31,8 +37,10 @@ def test_fake_mode_pipeline_generates_json_and_markdown_reports(tmp_path: Path):
     assert json_path.is_file()
     assert md_path.is_file()
     assert report.selected_candidate == "candidate_002_safe"
+    assert report.schema_version == "eval_optimize_loop.v2"
 
     payload = json.loads(json_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "eval_optimize_loop.v2"
     assert set(payload) >= {
         "schema_version",
         "run",
@@ -213,5 +221,11 @@ def _normalized_payload(payload: dict) -> dict:
     normalized["run"].pop("reproducibility_command", None)
     normalized["audit"].pop("duration_seconds", None)
     normalized["audit"].pop("reproducibility_command", None)
+    normalized["audit"].get("sdk_result_summary", {}).pop(
+        "proposal_duration_seconds",
+        None,
+    )
     normalized["audit"].get("writeback_journal", {}).pop("run_id", None)
+    for round_record in normalized.get("rounds", []):
+        round_record.pop("duration_seconds", None)
     return normalized

@@ -3,6 +3,7 @@ from __future__ import annotations
 import builtins
 import inspect
 import json
+import math
 import os
 import shlex
 import sys
@@ -125,6 +126,75 @@ async def test_fake_backend_wraps_candidates_in_complete_optimization_result(tmp
     assert result.cost.total == 0.0
     assert len(result.rounds) == len(result.candidates)
     assert all(candidate.bundle() == {"system_prompt": candidate.prompt} for candidate in result.candidates)
+
+
+@pytest.mark.asyncio
+async def test_fake_backend_distributes_measured_batch_proposal_duration(
+    tmp_path: Path,
+    monkeypatch,
+):
+    perf_counter_values = iter((10.0, 10.006))
+    monkeypatch.setattr(
+        backend_module,
+        "time",
+        types.SimpleNamespace(
+            perf_counter=lambda: next(perf_counter_values),
+            get_clock_info=lambda name: types.SimpleNamespace(resolution=1e-9),
+        ),
+        raising=False,
+    )
+
+    result = await backend_module.FakeBackend(seed=91).optimize_candidates(
+        baseline_prompts={"system_prompt": "baseline prompt\n"},
+        baseline_train=_failed_fake_train_result(),
+        failure_summary={"by_category": {"format_violation": 1}},
+        train_path=tmp_path / "train.evalset.json",
+        validation_path=tmp_path / "validation.evalset.json",
+        config_path=tmp_path / "optimizer.json",
+        artifact_dir=tmp_path / "fake_optimize",
+    )
+
+    durations = [round_record.duration_seconds for round_record in result.rounds]
+    assert durations == pytest.approx([0.003, 0.003])
+    assert all(duration > 0 and math.isfinite(duration) for duration in durations)
+    assert sum(durations) == pytest.approx(0.006)
+    assert result.raw_summary["proposal_duration_seconds"] == pytest.approx(0.006)
+    assert result.raw_summary["round_duration_allocation"] == (
+        "equal_share_of_batch_proposal_duration"
+    )
+
+
+@pytest.mark.asyncio
+async def test_fake_backend_uses_clock_resolution_when_batch_timer_does_not_advance(
+    tmp_path: Path,
+    monkeypatch,
+):
+    perf_counter_values = iter((42.0, 42.0))
+    monkeypatch.setattr(
+        backend_module,
+        "time",
+        types.SimpleNamespace(
+            perf_counter=lambda: next(perf_counter_values),
+            get_clock_info=lambda name: types.SimpleNamespace(resolution=1e-6),
+        ),
+        raising=False,
+    )
+
+    result = await backend_module.FakeBackend(seed=91).optimize_candidates(
+        baseline_prompts={"system_prompt": "baseline prompt\n"},
+        baseline_train=_failed_fake_train_result(),
+        failure_summary={"by_category": {"format_violation": 1}},
+        train_path=tmp_path / "train.evalset.json",
+        validation_path=tmp_path / "validation.evalset.json",
+        config_path=tmp_path / "optimizer.json",
+        artifact_dir=tmp_path / "fake_optimize",
+    )
+
+    durations = [round_record.duration_seconds for round_record in result.rounds]
+    assert durations == pytest.approx([0.5e-6, 0.5e-6])
+    assert all(duration > 0 and math.isfinite(duration) for duration in durations)
+    assert sum(durations) == pytest.approx(1e-6)
+    assert result.raw_summary["proposal_duration_seconds"] == pytest.approx(1e-6)
 
 
 @pytest.mark.asyncio
@@ -1959,6 +2029,26 @@ def _empty_eval_result(prompt_id: str, split: str) -> EvalResult:
         passed=False,
         cost=0.0,
         cases=[],
+    )
+
+
+def _failed_fake_train_result() -> EvalResult:
+    return EvalResult(
+        prompt_id="baseline",
+        split="train",
+        score=0.0,
+        passed=False,
+        cost=0.0,
+        cases=[
+            CaseResult(
+                case_id="observed_training_failure",
+                split="train",
+                score=0.0,
+                passed=False,
+                output="not-json",
+                failure_category="format_violation",
+            )
+        ],
     )
 
 

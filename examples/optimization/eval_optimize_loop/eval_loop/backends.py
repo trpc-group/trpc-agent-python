@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import math
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from dataclasses import replace
@@ -130,12 +131,20 @@ class FakeBackend:
             baseline_prompts,
             context="cannot optimize fake prompt bundle",
         )
+        proposal_started_at = time.perf_counter()
         candidates = _normalize_fake_candidates(
             self._optimizer.propose(
                 baseline_prompt,
                 baseline_train,
                 failure_summary,
             )
+        )
+        proposal_duration_seconds = _positive_perf_duration(
+            proposal_started_at,
+            time.perf_counter(),
+        )
+        round_duration_seconds = (
+            proposal_duration_seconds / len(candidates) if candidates else 0.0
         )
         zero_cost = CostSummary(complete=True)
         rounds = [
@@ -146,7 +155,7 @@ class FakeBackend:
                 rationale=candidate.rationale,
                 metrics={},
                 cost=zero_cost,
-                duration_seconds=0.0,
+                duration_seconds=round_duration_seconds,
             )
             for index, candidate in enumerate(candidates, start=1)
         ]
@@ -158,6 +167,10 @@ class FakeBackend:
                 "backend": "fake",
                 "baseline_prompt_id": baseline_train.prompt_id,
                 "failure_summary": _safe_jsonable(failure_summary),
+                "proposal_duration_seconds": proposal_duration_seconds,
+                "round_duration_allocation": (
+                    "equal_share_of_batch_proposal_duration"
+                ),
             },
         )
 
@@ -835,6 +848,19 @@ def _finite_number(value: Any, *, context: str) -> float:
     if not math.isfinite(number):
         raise ValueError(f"{context} must be a finite number")
     return number
+
+
+def _positive_perf_duration(started_at: float, finished_at: float) -> float:
+    """Return one finite positive duration for a measured perf-counter span."""
+
+    elapsed = finished_at - started_at
+    if math.isfinite(elapsed) and elapsed > 0.0:
+        return elapsed
+
+    resolution = float(time.get_clock_info("perf_counter").resolution)
+    if not math.isfinite(resolution) or resolution <= 0.0:
+        raise RuntimeError("perf_counter resolution must be finite and positive")
+    return resolution
 
 
 def _nonnegative_number(value: Any, *, context: str) -> float:
