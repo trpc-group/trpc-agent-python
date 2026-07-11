@@ -21,6 +21,19 @@
 
 区别在于**谁定义角色**：开发者（Spawn）还是 LLM（Dynamic）。
 
+### 与框架其他多 agent 机制的区别
+
+框架已有几种组合 agent 的方式（详见 [Multi Agents](multi_agents.md)）。Spawned Sub-Agents 与它们解决的是不同问题：
+
+| 机制 | 参与的 agent | 谁决定何时调用 | 上下文 | 典型用途 |
+| --- | --- | --- | --- | --- |
+| **Chain / Parallel / Cycle Agent** | **预先构建**的固定 agent 实例 | **确定性**编排——按列表顺序/并行/循环执行，与输入无关 | 各 agent 独立 | 固定的多步工作流 |
+| **Sub Agents（transfer）** | 预先注册的 agent | 父 agent 运行时**转移控制权**，之后由子 agent 接管对话 | 共享同一会话 | 把整段对话**移交**给更合适的 agent |
+| **AgentTool** | 把**某个已有 agent 实例**包成工具 | 父 LLM 按需调用 | 会共享/同步 state 与 artifact 回父 | 复用一个**具体的、已存在的** agent |
+| **Spawned Sub-Agents** | **调用时临时创建**、用完即销毁 | 父 LLM 按需调用 | **严格隔离**：全新临时会话，默认不共享历史/state | 委派**一次性**子任务，保持父上下文干净 |
+
+一句话概括：**Chain/Parallel/Cycle** 是"确定性编排一组固定 agent"；**transfer** 是"把对话交出去"；**AgentTool** 是"把一个已有 agent 当工具复用"；而 **Spawned Sub-Agents** 是"为单次任务**现场造一个隔离的、短命的**子 agent，跑完就丢"——强调的是**运行时按需创建**与**上下文隔离**，而非复用既有 agent 或转移控制。
+
 ## Quick Start
 
 ```python
@@ -173,7 +186,16 @@ class SubAgentConfig:
 
     max_turns: int | None = None
     """子 agent 最多可发起的 LLM 调用次数。None = 不限制。"""
+
+    forward_events: bool = False
+    """是否将子 agent 的执行事件转发给父 runner 的消费者，作为进度更新。
+
+    True：编排层可实时展示子 agent 的执行（模型输出、工具调用、工具结果），
+    父 agent 的 LLM 仍只收到子 agent 的最终结果。
+    False（默认）：子 agent 静默执行，只回传最终结果。"""
 ```
+
+转发的事件以进度事件形式到达消费者，**不会**写入父会话、也**不会**进入父 agent 的 LLM 上下文；消费者通过 `event.custom_metadata` 上的 `tool_progress=True` 识别它们，并从 `payload` 读取执行内容（`author` / `partial` / `content` / 可选 `error` / `usage`）。
 
 ## 使用方式
 
@@ -270,3 +292,4 @@ orchestrator = LlmAgent(
 - **会话隔离**：子 agent 在全新临时会话中运行，默认不共享父会话历史。通过 `include_parent_history=True` 可注入。
 - **嵌套限制**：1 层硬限，子 agent 无法再次 spawn。
 - **结果形态**：子 agent 的最终文本作为 tool result 字符串返回。
+- **实时执行（`forward_events`）**：设置 `SubAgentConfig(forward_events=True)` 可将子 agent 的执行流转发给父 runner 的消费者用于展示。转发事件为进度事件——它们不会进入父 agent 的 LLM 上下文（父仍只收到最终结果）。消费者通过 `event.custom_metadata` 上的 `tool_progress=True` 识别它们并读取 `payload`。可运行示例见 `examples/dynamic_subagent` 与 `examples/spawn_subagent`。

@@ -71,7 +71,7 @@ class EvalSessionService(BaseSessionService):
         )
 
     @override
-    async def list_sessions(self, *, app_name: str, user_id: str):
+    async def list_sessions(self, *, app_name: str, user_id: Optional[str] = None):
         return await self._inner.list_sessions(app_name=app_name, user_id=user_id)
 
     @override

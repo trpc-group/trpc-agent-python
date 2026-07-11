@@ -27,15 +27,12 @@ from trpc_agent_sdk.sessions._types import SessionServiceConfig
 from trpc_agent_sdk.types import Content, EventActions, Part, State
 
 
-def _make_config(ttl_seconds=0,
-                 cleanup_interval=0.0,
-                 enable_ttl=False,
-                 max_events=0,
-                 store_historical_events=False):
+def _make_config(ttl_seconds=0, cleanup_interval=0.0, enable_ttl=False, max_events=0, store_historical_events=False):
     config = SessionServiceConfig(max_events=max_events, store_historical_events=store_historical_events)
     if enable_ttl:
-        config.ttl = SessionServiceConfig.create_ttl_config(
-            enable=True, ttl_seconds=ttl_seconds, cleanup_interval_seconds=cleanup_interval)
+        config.ttl = SessionServiceConfig.create_ttl_config(enable=True,
+                                                            ttl_seconds=ttl_seconds,
+                                                            cleanup_interval_seconds=cleanup_interval)
     else:
         config.clean_ttl_config()
     return config
@@ -117,6 +114,7 @@ def _create_service(config=None):
 
 
 class TestRedisCreateSession:
+
     async def test_create_basic(self):
         svc = _create_service()
         session = await svc.create_session(app_name="app", user_id="user")
@@ -133,13 +131,13 @@ class TestRedisCreateSession:
 
     async def test_create_with_state(self):
         svc = _create_service()
-        session = await svc.create_session(
-            app_name="app", user_id="user",
-            state={
-                "sk": "sv",
-                f"{State.APP_PREFIX}ak": "av",
-                f"{State.USER_PREFIX}uk": "uv",
-            })
+        session = await svc.create_session(app_name="app",
+                                           user_id="user",
+                                           state={
+                                               "sk": "sv",
+                                               f"{State.APP_PREFIX}ak": "av",
+                                               f"{State.USER_PREFIX}uk": "uv",
+                                           })
         assert session.state["sk"] == "sv"
         assert session.state[f"{State.APP_PREFIX}ak"] == "av"
         assert session.state[f"{State.USER_PREFIX}uk"] == "uv"
@@ -154,6 +152,7 @@ class TestRedisCreateSession:
 
 
 class TestRedisGetSession:
+
     async def test_get_existing(self):
         svc = _create_service()
         await svc.create_session(app_name="app", user_id="user", session_id="s1")
@@ -170,13 +169,14 @@ class TestRedisGetSession:
 
     async def test_get_with_merged_state(self):
         svc = _create_service()
-        await svc.create_session(
-            app_name="app", user_id="user", session_id="s1",
-            state={
-                "sk": "sv",
-                f"{State.APP_PREFIX}ak": "av",
-                f"{State.USER_PREFIX}uk": "uv",
-            })
+        await svc.create_session(app_name="app",
+                                 user_id="user",
+                                 session_id="s1",
+                                 state={
+                                     "sk": "sv",
+                                     f"{State.APP_PREFIX}ak": "av",
+                                     f"{State.USER_PREFIX}uk": "uv",
+                                 })
         result = await svc.get_session(app_name="app", user_id="user", session_id="s1")
         assert result.state["sk"] == "sv"
         assert result.state[f"{State.APP_PREFIX}ak"] == "av"
@@ -185,6 +185,7 @@ class TestRedisGetSession:
 
 
 class TestRedisListSessions:
+
     async def test_list_empty(self):
         svc = _create_service()
         result = await svc.list_sessions(app_name="app", user_id="user")
@@ -210,8 +211,18 @@ class TestRedisListSessions:
             assert s.historical_events == []
         await svc.close()
 
+    async def test_list_all_users_when_user_id_none(self):
+        svc = _create_service()
+        await svc.create_session(app_name="app", user_id="user1", session_id="s1")
+        await svc.create_session(app_name="app", user_id="user2", session_id="s2")
+        result = await svc.list_sessions(app_name="app", user_id=None)
+        ids = sorted(s.id for s in result.sessions)
+        assert ids == ["s1", "s2"]
+        await svc.close()
+
 
 class TestRedisDeleteSession:
+
     async def test_delete_existing(self):
         svc = _create_service()
         await svc.create_session(app_name="app", user_id="user", session_id="s1")
@@ -227,6 +238,7 @@ class TestRedisDeleteSession:
 
 
 class TestRedisAppendEvent:
+
     async def test_append_basic(self):
         svc = _create_service()
         session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
@@ -264,12 +276,13 @@ class TestRedisAppendEvent:
     async def test_append_does_not_persist_merged_or_temp_state_in_session_json(self):
         svc = _create_service()
         session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
-        event = _make_event(state_delta={
-            "session_key": "sv",
-            f"{State.APP_PREFIX}app_key": "av",
-            f"{State.USER_PREFIX}user_key": "uv",
-            f"{State.TEMP_PREFIX}temp_key": "tv",
-        })
+        event = _make_event(
+            state_delta={
+                "session_key": "sv",
+                f"{State.APP_PREFIX}app_key": "av",
+                f"{State.USER_PREFIX}user_key": "uv",
+                f"{State.TEMP_PREFIX}temp_key": "tv",
+            })
 
         await svc.append_event(session, event)
 
@@ -306,6 +319,7 @@ class TestRedisAppendEvent:
 
 
 class TestRedisUpdateSession:
+
     async def test_update_existing(self):
         svc = _create_service()
         session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
@@ -323,6 +337,7 @@ class TestRedisUpdateSession:
 
 
 class TestRedisRefreshTtl:
+
     async def test_refresh_ttl_disabled(self):
         svc = _create_service(config=_make_config())
         mock_redis = MagicMock()
@@ -340,6 +355,7 @@ class TestRedisRefreshTtl:
 
 
 class TestRedisClose:
+
     async def test_close(self):
         svc = _create_service()
         await svc.close()
