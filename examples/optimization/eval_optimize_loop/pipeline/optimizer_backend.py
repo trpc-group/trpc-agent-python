@@ -126,7 +126,7 @@ class AgentOptimizerBackend:
         return records
 
     def _extract_candidates(self, result: object, baseline_prompts: dict[str, str]) -> list[CandidateRecord]:
-        entries: list[tuple[str, int | None, bool | None, str | None, object]] = []
+        entries: list[tuple[str, int | None, bool | None, str | None, object, float | None, float | None]] = []
         rounds = list(getattr(result, "rounds", []) or [])
         if self._candidate_scope != "best_only":
             for fallback_index, round_record in enumerate(rounds, start=1):
@@ -134,14 +134,21 @@ class AgentOptimizerBackend:
                 if self._candidate_scope == "accepted_rounds" and not accepted:
                     continue
                 round_index = int(getattr(round_record, "round", fallback_index))
-                entries.append((f"round-{round_index:03d}", round_index, accepted, getattr(round_record, "acceptance_reason", None), getattr(round_record, "candidate_prompts", None)))
-        entries.append(("best", None, True, "OptimizeResult.best_prompts", getattr(result, "best_prompts", None)))
+                entries.append((
+                    f"round-{round_index:03d}", round_index, accepted, getattr(round_record, "acceptance_reason", None),
+                    getattr(round_record, "candidate_prompts", None), getattr(round_record, "generation_cost_usd", getattr(round_record, "cost_usd", None)),
+                    getattr(round_record, "duration_seconds", None),
+                ))
+        entries.append((
+            "best", None, True, "OptimizeResult.best_prompts", getattr(result, "best_prompts", None),
+            getattr(result, "generation_cost_usd", getattr(result, "cost_usd", None)), getattr(result, "duration_seconds", None),
+        ))
 
         retained: list[CandidateRecord] = []
         seen: dict[str, CandidateRecord] = {}
         duplicates: dict[str, list[str]] = {}
         skipped: list[str] = []
-        for candidate_id, round_index, optimizer_accepted, optimizer_reason, prompts in entries:
+        for candidate_id, round_index, optimizer_accepted, optimizer_reason, prompts, generation_cost_usd, duration_seconds in entries:
             full_prompts = _full_prompt_map(prompts, baseline_prompts)
             if full_prompts is None:
                 skipped.append(candidate_id)
@@ -157,6 +164,8 @@ class AgentOptimizerBackend:
                 prompts=full_prompts,
                 optimizer_accepted=optimizer_accepted,
                 optimizer_reason=optimizer_reason or "",
+                generation_cost_usd=generation_cost_usd,
+                duration_seconds=duration_seconds,
             )
             seen[digest] = record
             retained.append(record)

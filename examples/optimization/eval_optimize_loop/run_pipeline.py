@@ -24,9 +24,10 @@ from examples.optimization.eval_optimize_loop.fake.fake_agent import FakeSupport
 from examples.optimization.eval_optimize_loop.fake.fake_judge import register_fake_rubric_evaluator
 from examples.optimization.eval_optimize_loop.fake.fixture_optimizer import FixtureOptimizerBackend
 from examples.optimization.eval_optimize_loop.pipeline.comparator import compare_case
-from examples.optimization.eval_optimize_loop.pipeline.config import load_pipeline_config
+from examples.optimization.eval_optimize_loop.pipeline.config import load_pipeline_config, sanitize_config
 from examples.optimization.eval_optimize_loop.pipeline.evaluator import evaluate_split
 from examples.optimization.eval_optimize_loop.pipeline.gate import evaluate_gate
+from examples.optimization.eval_optimize_loop.pipeline.gate import select_winner
 from examples.optimization.eval_optimize_loop.pipeline.models import CandidateReport, OptimizationReport, SplitReport
 from examples.optimization.eval_optimize_loop.pipeline.optimizer_backend import (
     AgentOptimizerBackend,
@@ -37,12 +38,22 @@ from examples.optimization.eval_optimize_loop.pipeline.attribution import attrib
 from examples.optimization.eval_optimize_loop.pipeline.normalization import normalize_eval_results
 from examples.optimization.eval_optimize_loop.pipeline.prompt_sandbox import PromptSandbox
 from examples.optimization.eval_optimize_loop.pipeline.reporter import write_reports
-
+from examples.optimization.eval_optimize_loop.pipeline.audit import write_environment_snapshot, write_input_snapshot
+def _attribution_summary(*splits: SplitReport | None) -> dict[str, int]:
+    summary: dict[str, int] = {}
+    for split in splits:
+        if split is not None:
+            for case in split.cases:
+                if case.failure_attribution is not None:
+                    key = case.failure_attribution.primary_type.value
+                    summary[key] = summary.get(key, 0) + 1
+    return dict(sorted(summary.items()))
 
 
 async def run_fake_pipeline(*, output_dir: Path) -> OptimizationReport:
     config = load_pipeline_config(HERE / "optimizer.json", mode="fake")
     report = OptimizationReport.empty(mode="fake", seed=config.pipeline.reproducibility.seed)
+    report.run_metadata = {"evaluation_source": "fixture", "independent_candidate_evaluation": True}
     with tempfile.TemporaryDirectory(prefix="trpc-agent-issue91-") as temporary_dir:
         prompt_dir = Path(temporary_dir)
         source_prompt_dir = HERE / "agent" / "prompts"
@@ -50,6 +61,9 @@ async def run_fake_pipeline(*, output_dir: Path) -> OptimizationReport:
             (prompt_dir / prompt_name).write_text((source_prompt_dir / prompt_name).read_text(encoding="utf-8"), encoding="utf-8")
 
         target = TargetPrompt().add_path("system_prompt", str(prompt_dir / "system.md")).add_path("router_prompt", str(prompt_dir / "router.md"))
+        output_dir.mkdir(parents=True, exist_ok=True)
+        write_input_snapshot(config, target, output_dir)
+        write_environment_snapshot("fake", report.seed, output_dir)
         fake_agent = FakeSupportAgent(target)
         evaluate = lambda path, split: evaluate_split(path, call_agent=fake_agent.call_agent, split=split, metric_weights=config.pipeline.metric_weights)
         baseline_train = await evaluate(HERE / "train.evalset.json", "train")
@@ -61,10 +75,11 @@ async def run_fake_pipeline(*, output_dir: Path) -> OptimizationReport:
                 train = await evaluate(HERE / "train.evalset.json", "train")
                 validation = await evaluate(HERE / "val.evalset.json", "validation")
             deltas = [compare_case(base, next(item for item in validation.cases if item.eval_id == base.eval_id), epsilon=config.pipeline.scoring_epsilon, critical_case_ids=set(config.pipeline.gate.critical_case_ids)) for base in baseline_validation.cases]
-            decision = evaluate_gate(baseline_validation, validation, settings=config.pipeline.gate, case_deltas=deltas, train_score_delta=train.aggregate_score - baseline_train.aggregate_score)
-            report.candidates.append(CandidateReport(candidate_id=candidate.candidate_id, accepted=decision.accepted, reasons=decision.reasons, train=train, validation=validation, gate=decision, validation_case_deltas=deltas))
-    accepted = [candidate for candidate in report.candidates if candidate.accepted]
-    report.selected_candidate_id = accepted[0].candidate_id if accepted else None
+            decision = evaluate_gate(baseline_validation, validation, settings=config.pipeline.gate, case_deltas=deltas, train_score_delta=train.aggregate_score - baseline_train.aggregate_score, metric_floors=config.pipeline.metric_floors, generation_cost_usd=candidate.generation_cost_usd, duration_seconds=candidate.duration_seconds, epsilon=config.pipeline.scoring_epsilon)
+            report.candidates.append(CandidateReport(candidate_id=candidate.candidate_id, accepted=decision.accepted, reasons=decision.reasons, train=train, validation=validation, gate=decision, validation_case_deltas=deltas, independently_evaluated=True, source=candidate.source, generation_cost_usd=candidate.generation_cost_usd, duration_seconds=candidate.duration_seconds))
+    report.selected_candidate_id = select_winner(report.candidates)
+    report.warnings = sorted({warning for candidate in report.candidates if candidate.gate for warning in candidate.gate.warnings})
+    report.attribution_summary = _attribution_summary(report.baseline_train, report.baseline_validation)
     write_reports(report, output_dir)
     return report
 
@@ -92,8 +107,12 @@ async def run_trace_pipeline(*, output_dir: Path) -> OptimizationReport:
         for case in normalized.values()
     ]
     report = OptimizationReport.empty(mode="trace", seed=config_payload["seed"])
+    report.run_metadata = {"evaluation_source": "recorded_trace", "independent_candidate_evaluation": False}
     report.baseline_validation = SplitReport.from_cases(cases)
+    report.attribution_summary = _attribution_summary(report.baseline_validation)
     output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "input.snapshot.json").write_text(json.dumps(sanitize_config({"trace_config": config_payload, "trace_evalset": "trace/trace.evalset.json"}), ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_environment_snapshot("trace", report.seed, output_dir)
     (output_dir / "trace_raw_results.json").write_text(
         json.dumps(
             {
@@ -122,6 +141,7 @@ async def run_live_pipeline(*, output_dir: Path) -> OptimizationReport:
     """Run the public optimizer API, then independently evaluate its proposals."""
     config = load_pipeline_config(HERE / "optimizer.json", mode="live")
     report = OptimizationReport.empty(mode="live", seed=config.pipeline.reproducibility.seed)
+    report.run_metadata = {"evaluation_source": "independent_full_train_validation", "independent_candidate_evaluation": True, "write_back_default": False}
     source_prompt_dir = HERE / "agent" / "prompts"
     source_baseline = {
         "system_prompt": (source_prompt_dir / "system.md").read_text(encoding="utf-8"),
@@ -137,6 +157,9 @@ async def run_live_pipeline(*, output_dir: Path) -> OptimizationReport:
             path = prompt_dir / f"{name}.md"
             path.write_text(content, encoding="utf-8")
             target.add_path(name, str(path))
+        output_dir.mkdir(parents=True, exist_ok=True)
+        write_input_snapshot(config, target, output_dir)
+        write_environment_snapshot("live", report.seed, output_dir)
         fake_agent = FakeSupportAgent(target)
         evaluate = lambda path, split: evaluate_split(
             path,
@@ -175,6 +198,10 @@ async def run_live_pipeline(*, output_dir: Path) -> OptimizationReport:
                 settings=config.pipeline.gate,
                 case_deltas=deltas,
                 train_score_delta=train.aggregate_score - report.baseline_train.aggregate_score,
+                metric_floors=config.pipeline.metric_floors,
+                generation_cost_usd=candidate.generation_cost_usd,
+                duration_seconds=candidate.duration_seconds,
+                epsilon=config.pipeline.scoring_epsilon,
             )
             report.candidates.append(
                 CandidateReport(
@@ -185,10 +212,16 @@ async def run_live_pipeline(*, output_dir: Path) -> OptimizationReport:
                     validation=validation,
                     gate=decision,
                     validation_case_deltas=deltas,
+                    independently_evaluated=True,
+                    source=candidate.source,
+                    generation_cost_usd=candidate.generation_cost_usd,
+                    duration_seconds=candidate.duration_seconds,
                 )
             )
     accepted = [candidate for candidate in report.candidates if candidate.accepted]
-    report.selected_candidate_id = accepted[0].candidate_id if accepted else None
+    report.selected_candidate_id = select_winner(report.candidates)
+    report.warnings = sorted({warning for candidate in report.candidates if candidate.gate for warning in candidate.gate.warnings})
+    report.attribution_summary = _attribution_summary(report.baseline_train, report.baseline_validation)
     if config.pipeline.write_back_when_accepted and report.selected_candidate_id:
         selected_record = next(candidate for candidate in candidates if candidate.candidate_id == report.selected_candidate_id)
         selected_report = next(candidate for candidate in accepted if candidate.candidate_id == report.selected_candidate_id)

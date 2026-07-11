@@ -1,0 +1,9 @@
+# Design notes
+
+The loop has four boundaries. Evaluation normalizes SDK results into stable case snapshots. Attribution reads actual intermediate trace data first and uses expected conversation data only as a reference. Candidate generation is either the checked-in fixture backend or a thin live adapter around the public `AgentOptimizer` API. Acceptance is owned by the Gate, never by an optimizer round status or summary.
+
+`PromptSandbox` isolates every candidate: source prompt files stay untouched during evaluation. The live adapter builds a temporary target, passes an SDK-only runtime configuration with environment placeholders intact, uses `update_source=False` and `verbose=0`, and archives optimizer artifacts. It extracts complete prompt maps only, de-duplicates their canonical digest, then independently runs full train and validation evaluation for each proposal. Optional write-back remains off by default and uses a baseline/candidate digest check after Gate success.
+
+The Gate rejects incomplete evidence, unavailable validation deltas, new hard failures, critical or excessive regressions, metric-floor misses, train-up/validation-down overfit, configured generalization-gap, cost, duration, and tie-policy violations. Unknown cost is recorded as a warning. It ranks only independently evaluated and accepted candidates by hard failures, critical regressions, validation pass rate, validation score, cost, duration, and candidate id, making selection stable.
+
+Every path writes a Pydantic-readable `OptimizationReport` plus secret-free input, environment, raw, normalized, candidate, and Gate artifacts. Fake and trace runs are deterministic and suitable for regression tests. Existing third-party `LangChainPendingDeprecationWarning` and local `requests` dependency-compatibility warnings may appear during test execution; they are external warnings rather than pipeline decisions.

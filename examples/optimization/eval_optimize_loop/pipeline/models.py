@@ -106,6 +106,9 @@ class GateSettings(StrictModel):
     critical_case_ids: list[str] = Field(default_factory=list)
     allow_critical_case_regression: bool = False
     reject_when_train_improves_but_validation_declines: bool = True
+    max_generalization_gap: float | None = None
+    max_generation_cost_usd: float | None = None
+    max_duration_seconds: float | None = None
     tie_policy: Literal["reject"] = "reject"
 
 
@@ -122,6 +125,7 @@ class GateDecision(StrictModel):
     risk_level: Literal["low", "medium", "high"]
     rules: list[GateRuleResult]
     reasons: list[str]
+    warnings: list[str] = Field(default_factory=list)
 
 
 class ReproducibilitySettings(StrictModel):
@@ -152,7 +156,8 @@ class CandidateRecord(StrictModel):
     candidate_id: str
     prompts: dict[str, str]
     source: Literal["fixture", "agent_optimizer"] = "fixture"
-    generation_cost_usd: float = 0.0
+    generation_cost_usd: float | None = None
+    duration_seconds: float | None = None
     round_index: int | None = None
     optimizer_accepted: bool | None = None
     optimizer_reason: str = ""
@@ -166,6 +171,20 @@ class CandidateReport(StrictModel):
     validation: SplitReport | None = None
     gate: GateDecision | None = None
     validation_case_deltas: list[CaseDelta] = Field(default_factory=list)
+    independently_evaluated: bool = False
+    source: Literal["fixture", "agent_optimizer"] = "fixture"
+    generation_cost_usd: float | None = None
+    duration_seconds: float | None = None
+
+
+class AuditReferences(StrictModel):
+    config_snapshot_path: Path = Path("input.snapshot.json")
+    input_snapshot_path: Path = Path("input.snapshot.json")
+    environment_snapshot_path: Path = Path("environment.snapshot.json")
+    raw_reports_path: Path = Path("audit/raw_reports.json")
+    normalized_reports_path: Path = Path("audit/normalized_reports.json")
+    candidate_reports_path: Path = Path("audit/candidate_reports.json")
+    gate_decisions_path: Path = Path("audit/gate_decisions.json")
 
 
 class OptimizationReport(StrictModel):
@@ -177,6 +196,10 @@ class OptimizationReport(StrictModel):
     baseline_train: SplitReport | None = None
     baseline_validation: SplitReport | None = None
     source_integrity: Literal["restored", "unknown"] = "restored"
+    run_metadata: dict[str, Any] = Field(default_factory=dict)
+    audit_references: AuditReferences = Field(default_factory=AuditReferences)
+    attribution_summary: dict[str, int] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
 
     @classmethod
     def empty(cls, *, mode: Literal["fake", "trace", "live"], seed: int) -> "OptimizationReport":
