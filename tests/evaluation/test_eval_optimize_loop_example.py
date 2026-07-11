@@ -674,6 +674,154 @@ def test_sample_report_validates_against_schema_and_required_fields_are_enforced
         module.validate_report_schema(broken)
 
 
+@pytest.mark.parametrize(
+    ("mutation_path", "replacement"),
+    [
+        (("candidates", 0, "delta"), {}),
+        (("baseline", "validation", "case_results"), [{}]),
+        (("candidates", 0, "case_deltas"), [{}]),
+        (("failure_attribution", "coverage"), 9.0),
+        (("candidates", 0, "audit"), {}),
+    ],
+)
+def test_report_schema_rejects_incomplete_core_objects(
+    mutation_path: tuple[Any, ...],
+    replacement: Any,
+):
+    module = load_pipeline_module()
+    report = load_report(EXAMPLE_DIR / "fixtures" / "optimization_report.sample.json")
+    target: Any = report
+    for key in mutation_path[:-1]:
+        target = target[key]
+    target[mutation_path[-1]] = replacement
+
+    with pytest.raises(ValidationError):
+        module.validate_report_schema(report)
+
+
+@pytest.mark.parametrize(
+    ("mutation_path", "value"),
+    [
+        (("baseline", "validation", "case_results", 0, "score"), float("nan")),
+        (("candidates", 0, "audit", "duration_seconds"), float("inf")),
+        (("duration_seconds",), float("-inf")),
+    ],
+)
+def test_report_schema_rejects_nonfinite_numbers(
+    mutation_path: tuple[Any, ...],
+    value: float,
+):
+    module = load_pipeline_module()
+    report = load_report(EXAMPLE_DIR / "fixtures" / "optimization_report.sample.json")
+    target: Any = report
+    for key in mutation_path[:-1]:
+        target = target[key]
+    target[mutation_path[-1]] = value
+
+    with pytest.raises(ValidationError):
+        module.validate_report_schema(report)
+
+
+def test_report_schema_requires_numeric_delta_for_accepted_gate():
+    module = load_pipeline_module()
+    report = load_report(EXAMPLE_DIR / "fixtures" / "optimization_report.sample.json")
+    report["candidates"][0]["gate"]["accepted"] = True
+    report["candidates"][0]["gate"]["validation_delta"] = None
+
+    with pytest.raises(ValidationError):
+        module.validate_report_schema(report)
+
+    report["candidates"][0]["gate"]["accepted"] = False
+    module.validate_report_schema(report)
+
+
+def test_report_schema_requires_candidate_audit_and_optimization_rounds():
+    module = load_pipeline_module()
+    missing_audit = load_report(EXAMPLE_DIR / "fixtures" / "optimization_report.sample.json")
+    missing_audit["candidates"][0].pop("audit")
+
+    with pytest.raises(ValidationError):
+        module.validate_report_schema(missing_audit)
+
+    missing_rounds = load_report(EXAMPLE_DIR / "fixtures" / "optimization_report.sample.json")
+    missing_rounds.pop("optimization_rounds")
+
+    with pytest.raises(ValidationError):
+        module.validate_report_schema(missing_rounds)
+
+
+def test_report_schema_requires_each_optimization_round_token_usage_field():
+    module = load_pipeline_module()
+    report = load_report(EXAMPLE_DIR / "fixtures" / "optimization_report.sample.json")
+    report["optimization_rounds"] = [{
+        "round": 1,
+        "optimized_field_names": [],
+        "prompt_paths": {},
+        "prompt_sha256": {},
+        "validation_pass_rate": 1.0,
+        "metric_breakdown": {},
+        "accepted": False,
+        "decision_reason": "malformed evidence rejected",
+        "failed_case_ids": [],
+        "cost_usd": 0.0,
+        "token_usage": {"prompt": 0, "completion": 0},
+        "duration_seconds": 0.0,
+    }]
+
+    with pytest.raises(ValidationError):
+        module.validate_report_schema(report)
+
+
+@pytest.mark.parametrize(
+    ("known", "estimated"),
+    [(True, None), (False, 0.0)],
+)
+def test_report_schema_requires_consistent_candidate_audit_cost(
+    known: bool,
+    estimated: float | None,
+):
+    module = load_pipeline_module()
+    report = load_report(EXAMPLE_DIR / "fixtures" / "optimization_report.sample.json")
+    cost = report["candidates"][0]["audit"]["cost"]
+    cost["known"] = known
+    cost["estimated"] = estimated
+
+    with pytest.raises(ValidationError):
+        module.validate_report_schema(report)
+
+
+def test_report_schema_allows_empty_no_run_case_metrics():
+    module = load_pipeline_module()
+    report = load_report(EXAMPLE_DIR / "fixtures" / "optimization_report.sample.json")
+    report["baseline"]["validation"]["case_results"][0]["metrics"] = {}
+
+    module.validate_report_schema(report)
+
+
+@pytest.mark.parametrize(
+    ("mutation_path", "name"),
+    [
+        (("baseline", "validation", "case_results", 0), "unexpected_case_field"),
+        (("candidates", 0, "case_deltas", 0), "unexpected_delta_field"),
+        (("candidates", 0, "gate"), "unexpected_gate_field"),
+        (("candidates", 0, "audit", "cost"), "unexpected_cost_field"),
+    ],
+)
+def test_report_schema_rejects_extra_core_properties(
+    mutation_path: tuple[Any, ...],
+    name: str,
+):
+    module = load_pipeline_module()
+    report = load_report(EXAMPLE_DIR / "fixtures" / "optimization_report.sample.json")
+    target: Any = report
+    for key in mutation_path:
+        target = target[key]
+    target[name] = True
+
+    with pytest.raises(ValidationError):
+        module.validate_report_schema(report)
+
+
 def test_router_prompt_is_instructional_not_a_gold_answer():
     prompt = (EXAMPLE_DIR / "agent" / "prompts" / "router.md").read_text(encoding="utf-8")
 
@@ -1847,7 +1995,24 @@ async def test_online_optimizer_validation_improvement_is_accepted(
                 "llm_rubric_response": {"score": 1.0, "threshold": 0.66, "passed": True, "status": "passed"},
             },
             "case_results": [
-                {"case_id": "case_1", "score": score, "passed": passed, "tags": [], "metrics": {}, "root_cause": "", "reasons": []},
+                {
+                    "case_id": "case_1",
+                    "tags": [],
+                    "user": "test user",
+                    "score": score,
+                    "passed": passed,
+                    "metrics": {},
+                    "actual_text": "",
+                    "expected_text": "",
+                    "key_trace": {
+                        "invocation_id": "case_1",
+                        "actual_final_response": "",
+                        "expected_final_response": "",
+                        "error_message": None,
+                    },
+                    "root_cause": "",
+                    "reasons": [],
+                },
             ],
             "failed_case_ids": [] if passed else ["case_1"],
             "source": "AgentEvaluator",

@@ -69,6 +69,13 @@
             }
           },
           "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund policy question can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+          "key_trace": {
+            "invocation_id": "train-1",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund policy question can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "error_message": null
+          },
           "root_cause": "final_response_mismatch",
           "reasons": [
             "actual route 'faq' did not match expected route 'refund'"
@@ -100,6 +107,13 @@
             }
           },
           "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Account question can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+          "key_trace": {
+            "invocation_id": "train-2",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Account question can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "error_message": null
+          },
           "root_cause": "final_response_mismatch",
           "reasons": [
             "actual route 'faq' did not match expected route 'manual_escalation'"
@@ -131,6 +145,13 @@
             }
           },
           "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+          "key_trace": {
+            "invocation_id": "train-3",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "error_message": null
+          },
           "root_cause": "",
           "reasons": []
         }
@@ -186,6 +207,13 @@
             }
           },
           "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund policy question can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+          "key_trace": {
+            "invocation_id": "optimizer-dev-1",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund policy question can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "error_message": null
+          },
           "root_cause": "final_response_mismatch",
           "reasons": [
             "actual route 'faq' did not match expected route 'refund'"
@@ -217,6 +245,13 @@
             }
           },
           "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Account question can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+          "key_trace": {
+            "invocation_id": "optimizer-dev-2",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Account question can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "error_message": null
+          },
           "root_cause": "final_response_mismatch",
           "reasons": [
             "actual route 'faq' did not match expected route 'manual_escalation'"
@@ -248,6 +283,13 @@
             }
           },
           "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+          "key_trace": {
+            "invocation_id": "optimizer-dev-3",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "error_message": null
+          },
           "root_cause": "",
           "reasons": []
         }
@@ -303,6 +345,13 @@
             }
           },
           "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+          "key_trace": {
+            "invocation_id": "val-1",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "error_message": null
+          },
           "root_cause": "final_response_mismatch",
           "reasons": [
             "actual route 'faq' did not match expected route 'refund'"
@@ -334,6 +383,13 @@
             }
           },
           "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "key_trace": {
+            "invocation_id": "val-2",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "error_message": null
+          },
           "root_cause": "",
           "reasons": []
         },
@@ -364,6 +420,13 @@
             }
           },
           "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+          "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+          "key_trace": {
+            "invocation_id": "val-3",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "error_message": null
+          },
           "root_cause": "",
           "reasons": []
         }
@@ -418,6 +481,13 @@
             }
           },
           "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+          "key_trace": {
+            "invocation_id": "val-1",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "error_message": null
+          },
           "root_cause": "final_response_mismatch",
           "reasons": [
             "actual route 'faq' did not match expected route 'refund'"
@@ -449,6 +519,13 @@
             }
           },
           "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "key_trace": {
+            "invocation_id": "val-2",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "error_message": null
+          },
           "root_cause": "",
           "reasons": []
         },
@@ -479,6 +556,13 @@
             }
           },
           "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+          "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+          "key_trace": {
+            "invocation_id": "val-3",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "error_message": null
+          },
           "root_cause": "",
           "reasons": []
         }
@@ -492,6 +576,17 @@
   "candidates": [
     {
       "id": "candidate_local_patch",
+      "audit": {
+        "seed": 7,
+        "duration_seconds": 0.0,
+        "cost": {
+          "currency": "USD",
+          "estimated": 0.0,
+          "known": true
+        },
+        "config_path": "examples\\optimization\\eval_optimize_loop\\optimizer.json",
+        "config_sha256": "1e3c1759919721f9cc79702c9a933f9755f8d5cebff9efd6f03ee157d7a92528"
+      },
       "prompt_patch_summary": "Adds local routing rules for explicit refund requests and account-escalation demands while preserving FAQ for ordinary policy questions.",
       "prompt_artifacts": [
         {
@@ -558,6 +653,13 @@
               }
             },
             "actual_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "train-1",
+              "actual_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -587,6 +689,13 @@
               }
             },
             "actual_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "expected_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "key_trace": {
+              "invocation_id": "train-2",
+              "actual_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+              "expected_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -616,6 +725,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "train-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           }
@@ -668,6 +784,13 @@
               }
             },
             "actual_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-1",
+              "actual_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -697,6 +820,13 @@
               }
             },
             "actual_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "expected_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-2",
+              "actual_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+              "expected_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -726,6 +856,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           }
@@ -778,6 +915,13 @@
               }
             },
             "actual_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "val-1",
+              "actual_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -807,6 +951,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-2",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -837,6 +988,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           }
@@ -889,6 +1047,13 @@
               }
             },
             "actual_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "val-1",
+              "actual_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -918,6 +1083,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-2",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -948,6 +1120,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           }
@@ -962,18 +1141,28 @@
       },
       "case_deltas": [
         {
-          "case_id": "val_refund_window_101",
-          "baseline_score": 0.0,
+          "case_id": "val_address_change_102",
+          "baseline_score": 1.0,
           "candidate_score": 1.0,
-          "delta": 1.0,
+          "baseline_passed": true,
+          "candidate_passed": true,
+          "delta": 0.0,
+          "change_type": "unchanged",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
           "root_cause": "",
           "reasons": []
         },
         {
-          "case_id": "val_address_change_102",
-          "baseline_score": 1.0,
+          "case_id": "val_refund_window_101",
+          "baseline_score": 0.0,
           "candidate_score": 1.0,
-          "delta": 0.0,
+          "baseline_passed": false,
+          "candidate_passed": true,
+          "delta": 1.0,
+          "change_type": "new_pass",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
           "root_cause": "",
           "reasons": []
         },
@@ -981,7 +1170,12 @@
           "case_id": "val_shipping_delay_103",
           "baseline_score": 1.0,
           "candidate_score": 1.0,
+          "baseline_passed": true,
+          "candidate_passed": true,
           "delta": 0.0,
+          "change_type": "unchanged",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
           "root_cause": "",
           "reasons": []
         }
@@ -994,6 +1188,8 @@
         ],
         "new_hard_fail_ids": [],
         "critical_regression_ids": [],
+        "missing_case_ids": [],
+        "unexpected_case_ids": [],
         "validation_delta": 0.333333
       },
       "failure_attribution": {
@@ -1005,7 +1201,8 @@
           "rubric_failed": 0,
           "knowledge_gap": 0,
           "format_error": 0,
-          "runtime_error": 0
+          "runtime_error": 0,
+          "metric_failed": 0
         },
         "cases": []
       },
@@ -1016,6 +1213,17 @@
     },
     {
       "id": "candidate_noop",
+      "audit": {
+        "seed": 7,
+        "duration_seconds": 0.0,
+        "cost": {
+          "currency": "USD",
+          "estimated": 0.0,
+          "known": true
+        },
+        "config_path": "examples\\optimization\\eval_optimize_loop\\optimizer.json",
+        "config_sha256": "1e3c1759919721f9cc79702c9a933f9755f8d5cebff9efd6f03ee157d7a92528"
+      },
       "prompt_patch_summary": "Rephrases baseline guidance without changing route decisions.",
       "prompt_artifacts": [
         {
@@ -1082,6 +1290,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "train-1",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+              "error_message": null
+            },
             "root_cause": "final_response_mismatch",
             "reasons": [
               "actual route 'faq' did not match expected route 'refund'"
@@ -1113,6 +1328,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Account question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "key_trace": {
+              "invocation_id": "train-2",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Account question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+              "error_message": null
+            },
             "root_cause": "final_response_mismatch",
             "reasons": [
               "actual route 'faq' did not match expected route 'manual_escalation'"
@@ -1144,6 +1366,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "train-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           }
@@ -1199,6 +1428,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-1",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+              "error_message": null
+            },
             "root_cause": "final_response_mismatch",
             "reasons": [
               "actual route 'faq' did not match expected route 'refund'"
@@ -1230,6 +1466,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Account question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-2",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Account question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+              "error_message": null
+            },
             "root_cause": "final_response_mismatch",
             "reasons": [
               "actual route 'faq' did not match expected route 'manual_escalation'"
@@ -1261,6 +1504,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           }
@@ -1316,6 +1566,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "val-1",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "error_message": null
+            },
             "root_cause": "final_response_mismatch",
             "reasons": [
               "actual route 'faq' did not match expected route 'refund'"
@@ -1347,6 +1604,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-2",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -1377,6 +1641,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           }
@@ -1431,6 +1702,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "val-1",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "error_message": null
+            },
             "root_cause": "final_response_mismatch",
             "reasons": [
               "actual route 'faq' did not match expected route 'refund'"
@@ -1462,6 +1740,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-2",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -1492,6 +1777,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           }
@@ -1508,28 +1800,43 @@
       },
       "case_deltas": [
         {
+          "case_id": "val_address_change_102",
+          "baseline_score": 1.0,
+          "candidate_score": 1.0,
+          "baseline_passed": true,
+          "candidate_passed": true,
+          "delta": 0.0,
+          "change_type": "unchanged",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "root_cause": "",
+          "reasons": []
+        },
+        {
           "case_id": "val_refund_window_101",
           "baseline_score": 0.0,
           "candidate_score": 0.0,
+          "baseline_passed": false,
+          "candidate_passed": false,
           "delta": 0.0,
+          "change_type": "unchanged",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
           "root_cause": "final_response_mismatch",
           "reasons": [
             "actual route 'faq' did not match expected route 'refund'"
           ]
         },
         {
-          "case_id": "val_address_change_102",
-          "baseline_score": 1.0,
-          "candidate_score": 1.0,
-          "delta": 0.0,
-          "root_cause": "",
-          "reasons": []
-        },
-        {
           "case_id": "val_shipping_delay_103",
           "baseline_score": 1.0,
           "candidate_score": 1.0,
+          "baseline_passed": true,
+          "candidate_passed": true,
           "delta": 0.0,
+          "change_type": "unchanged",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
           "root_cause": "",
           "reasons": []
         }
@@ -1543,6 +1850,8 @@
         ],
         "new_hard_fail_ids": [],
         "critical_regression_ids": [],
+        "missing_case_ids": [],
+        "unexpected_case_ids": [],
         "validation_delta": 0.0
       },
       "failure_attribution": {
@@ -1554,7 +1863,8 @@
           "rubric_failed": 0,
           "knowledge_gap": 0,
           "format_error": 0,
-          "runtime_error": 0
+          "runtime_error": 0,
+          "metric_failed": 0
         },
         "cases": [
           {
@@ -1574,6 +1884,17 @@
     },
     {
       "id": "candidate_overfit",
+      "audit": {
+        "seed": 7,
+        "duration_seconds": 0.0,
+        "cost": {
+          "currency": "USD",
+          "estimated": 0.0,
+          "known": true
+        },
+        "config_path": "examples\\optimization\\eval_optimize_loop\\optimizer.json",
+        "config_sha256": "1e3c1759919721f9cc79702c9a933f9755f8d5cebff9efd6f03ee157d7a92528"
+      },
       "prompt_patch_summary": "Overfits to emotional wording and sends angry logistics questions to manual escalation.",
       "prompt_artifacts": [
         {
@@ -1640,6 +1961,13 @@
               }
             },
             "actual_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "train-1",
+              "actual_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -1669,6 +1997,13 @@
               }
             },
             "actual_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "expected_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "key_trace": {
+              "invocation_id": "train-2",
+              "actual_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+              "expected_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -1698,6 +2033,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "train-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           }
@@ -1750,6 +2092,13 @@
               }
             },
             "actual_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-1",
+              "actual_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -1779,6 +2128,13 @@
               }
             },
             "actual_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "expected_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-2",
+              "actual_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+              "expected_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -1808,6 +2164,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           }
@@ -1860,6 +2223,13 @@
               }
             },
             "actual_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "val-1",
+              "actual_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -1889,6 +2259,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-2",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -1919,6 +2296,13 @@
               }
             },
             "actual_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Angry language should be escalated to a person.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-3",
+              "actual_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Angry language should be escalated to a person.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "final_response_mismatch",
             "reasons": [
               "actual route 'manual_escalation' did not match expected route 'faq'"
@@ -1975,6 +2359,13 @@
               }
             },
             "actual_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "val-1",
+              "actual_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -2004,6 +2395,13 @@
               }
             },
             "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-2",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "",
             "reasons": []
           },
@@ -2034,6 +2432,13 @@
               }
             },
             "actual_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Angry language should be escalated to a person.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-3",
+              "actual_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Angry language should be escalated to a person.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "error_message": null
+            },
             "root_cause": "final_response_mismatch",
             "reasons": [
               "actual route 'manual_escalation' did not match expected route 'faq'"
@@ -2052,18 +2457,28 @@
       },
       "case_deltas": [
         {
-          "case_id": "val_refund_window_101",
-          "baseline_score": 0.0,
+          "case_id": "val_address_change_102",
+          "baseline_score": 1.0,
           "candidate_score": 1.0,
-          "delta": 1.0,
+          "baseline_passed": true,
+          "candidate_passed": true,
+          "delta": 0.0,
+          "change_type": "unchanged",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
           "root_cause": "",
           "reasons": []
         },
         {
-          "case_id": "val_address_change_102",
-          "baseline_score": 1.0,
+          "case_id": "val_refund_window_101",
+          "baseline_score": 0.0,
           "candidate_score": 1.0,
-          "delta": 0.0,
+          "baseline_passed": false,
+          "candidate_passed": true,
+          "delta": 1.0,
+          "change_type": "new_pass",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
           "root_cause": "",
           "reasons": []
         },
@@ -2071,7 +2486,12 @@
           "case_id": "val_shipping_delay_103",
           "baseline_score": 1.0,
           "candidate_score": 0.0,
+          "baseline_passed": true,
+          "candidate_passed": false,
           "delta": -1.0,
+          "change_type": "new_fail",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Angry language should be escalated to a person.\"}",
           "root_cause": "final_response_mismatch",
           "reasons": [
             "actual route 'manual_escalation' did not match expected route 'faq'"
@@ -2093,6 +2513,8 @@
         "critical_regression_ids": [
           "val_shipping_delay_103"
         ],
+        "missing_case_ids": [],
+        "unexpected_case_ids": [],
         "validation_delta": 0.0
       },
       "failure_attribution": {
@@ -2104,7 +2526,8 @@
           "rubric_failed": 0,
           "knowledge_gap": 0,
           "format_error": 0,
-          "runtime_error": 0
+          "runtime_error": 0,
+          "metric_failed": 0
         },
         "cases": [
           {
@@ -2144,7 +2567,8 @@
       "rubric_failed": 0,
       "knowledge_gap": 0,
       "format_error": 0,
-      "runtime_error": 0
+      "runtime_error": 0,
+      "metric_failed": 0
     },
     "cases": [
       {
@@ -2186,7 +2610,8 @@
       "model_calls": 0
     }
   },
-  "duration_seconds": 3.114304,
+  "duration_seconds": 0.0,
+  "optimization_rounds": [],
   "config_snapshot": {
     "mode": "fake",
     "seed": 7,
@@ -2214,10 +2639,10 @@
     }
   },
   "environment_snapshot": {
-    "git_commit": "650b445898cef7d21a09718062d51ff2b1805b1c",
-    "git_dirty": true,
-    "python_version": "3.13.13",
-    "sdk_version": "1.1.11",
+    "git_commit": "sample",
+    "git_dirty": false,
+    "python_version": "sample",
+    "sdk_version": "sample",
     "model_name": null,
     "base_url_host": null,
     "seed": 7,
@@ -2246,4 +2671,3 @@
     "baseline_prompt_patch": "runs\\sample\\prompts\\baseline\\prompt_patch.diff"
   }
 }
-

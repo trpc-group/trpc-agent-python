@@ -131,7 +131,19 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def validate_report_schema(report: dict[str, Any]) -> None:
     from jsonschema import Draft202012Validator
+    from jsonschema import ValidationError
 
+    def reject_nonfinite_numbers(value: Any) -> None:
+        if isinstance(value, float) and not math.isfinite(value):
+            raise ValidationError("report contains a non-finite number")
+        if isinstance(value, dict):
+            for item in value.values():
+                reject_nonfinite_numbers(item)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                reject_nonfinite_numbers(item)
+
+    reject_nonfinite_numbers(report)
     schema = load_json(REPORT_SCHEMA_PATH)
     Draft202012Validator(schema).validate(report)
 

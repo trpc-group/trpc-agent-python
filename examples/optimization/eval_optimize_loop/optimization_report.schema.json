@@ -15,6 +15,7 @@
     "failure_attribution",
     "cost",
     "duration_seconds",
+    "optimization_rounds",
     "config_snapshot",
     "environment_snapshot",
     "artifacts"
@@ -34,6 +35,10 @@
     "failure_attribution": {"$ref": "#/$defs/failureAttribution"},
     "cost": {"$ref": "#/$defs/cost"},
     "duration_seconds": {"type": "number", "minimum": 0},
+    "optimization_rounds": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/optimizationRound"}
+    },
     "config_snapshot": {"type": "object"},
     "environment_snapshot": {"$ref": "#/$defs/environmentSnapshot"},
     "artifacts": {"type": "object", "additionalProperties": {"type": "string"}}
@@ -41,43 +46,123 @@
   "$defs": {
     "metricSummary": {
       "type": "object",
-      "additionalProperties": true,
+      "additionalProperties": false,
       "required": ["score", "threshold", "passed", "status"],
       "properties": {
-        "score": {"type": ["number", "null"]},
-        "threshold": {"type": "number"},
+        "score": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "threshold": {"type": "number", "minimum": 0},
         "passed": {"type": "boolean"},
-        "status": {"type": "string"}
+        "status": {"type": "string", "minLength": 1},
+        "reason": {"type": ["string", "null"]}
       }
     },
-    "evaluationSummary": {
+    "keyTrace": {
       "type": "object",
-      "additionalProperties": true,
-      "required": ["score", "pass_rate", "metrics", "failed_case_ids", "source"],
+      "additionalProperties": false,
+      "required": [
+        "invocation_id",
+        "actual_final_response",
+        "expected_final_response",
+        "error_message"
+      ],
       "properties": {
-        "score": {"type": "number"},
-        "pass_rate": {"type": "number"},
+        "invocation_id": {"type": "string"},
+        "actual_final_response": {"type": "string"},
+        "expected_final_response": {"type": "string"},
+        "error_message": {"type": ["string", "null"]}
+      }
+    },
+    "evaluationCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "tags",
+        "user",
+        "score",
+        "passed",
+        "metrics",
+        "actual_text",
+        "expected_text",
+        "key_trace",
+        "root_cause",
+        "reasons"
+      ],
+      "properties": {
+        "case_id": {"type": "string", "minLength": 1},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "user": {"type": "string"},
+        "score": {"type": "number", "minimum": 0, "maximum": 1},
+        "passed": {"type": "boolean"},
         "metrics": {
           "type": "object",
           "additionalProperties": {"$ref": "#/$defs/metricSummary"}
         },
-        "case_results": {"type": "array"},
-        "failed_case_ids": {
-          "type": "array",
-          "items": {"type": "string"}
+        "actual_text": {"type": "string"},
+        "expected_text": {"type": "string"},
+        "key_trace": {"$ref": "#/$defs/keyTrace"},
+        "root_cause": {
+          "enum": [
+            "",
+            "final_response_mismatch",
+            "tool_call_error",
+            "parameter_error",
+            "rubric_failed",
+            "knowledge_gap",
+            "format_error",
+            "runtime_error",
+            "metric_failed"
+          ]
         },
-        "source": {"type": "string"}
+        "reasons": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "evaluationSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eval_set_id",
+        "score",
+        "pass_rate",
+        "metrics",
+        "case_results",
+        "failed_case_ids",
+        "source"
+      ],
+      "properties": {
+        "eval_set_id": {"type": "string", "minLength": 1},
+        "score": {"type": "number", "minimum": 0, "maximum": 1},
+        "pass_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "metrics": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/metricSummary"}
+        },
+        "case_results": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/evaluationCase"}
+        },
+        "failed_case_ids": {"type": "array", "items": {"type": "string"}},
+        "source": {"type": "string", "minLength": 1}
       }
     },
     "promptArtifact": {
       "type": "object",
-      "additionalProperties": true,
-      "required": ["name", "source_path", "candidate_path", "sha256", "source_written", "diff"],
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "source_path",
+        "candidate_path",
+        "sha256",
+        "source_written",
+        "summary",
+        "diff"
+      ],
       "properties": {
-        "name": {"type": "string"},
-        "source_path": {"type": "string"},
-        "candidate_path": {"type": "string"},
-        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$|^sample$"},
+        "name": {"type": "string", "minLength": 1},
+        "source_path": {"type": "string", "minLength": 1},
+        "candidate_path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "source_written": {"type": "boolean"},
         "summary": {"type": "string"},
         "diff": {"type": "string"}
@@ -85,9 +170,17 @@
     },
     "baseline": {
       "type": "object",
-      "additionalProperties": true,
-      "required": ["prompt_artifacts", "train", "optimizer_dev", "final_validation", "validation"],
+      "additionalProperties": false,
+      "required": [
+        "prompt_patch_summary",
+        "prompt_artifacts",
+        "train",
+        "optimizer_dev",
+        "final_validation",
+        "validation"
+      ],
       "properties": {
+        "prompt_patch_summary": {"type": "string"},
         "prompt_artifacts": {
           "type": "array",
           "items": {"$ref": "#/$defs/promptArtifact"}
@@ -98,11 +191,284 @@
         "validation": {"$ref": "#/$defs/evaluationSummary"}
       }
     },
+    "candidateAudit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed", "duration_seconds", "cost", "config_path", "config_sha256"],
+      "properties": {
+        "seed": {"type": "integer"},
+        "duration_seconds": {"type": "number", "minimum": 0},
+        "cost": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["currency", "estimated", "known"],
+          "properties": {
+            "currency": {"const": "USD"},
+            "estimated": {"type": ["number", "null"], "minimum": 0},
+            "known": {"type": "boolean"}
+          },
+          "allOf": [
+            {
+              "if": {"properties": {"known": {"const": true}}},
+              "then": {"properties": {"estimated": {"type": "number", "minimum": 0}}}
+            },
+            {
+              "if": {"properties": {"known": {"const": false}}},
+              "then": {"properties": {"estimated": {"type": "null"}}}
+            }
+          ]
+        },
+        "config_path": {"type": "string", "minLength": 1},
+        "config_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "caseDelta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "baseline_score",
+        "candidate_score",
+        "baseline_passed",
+        "candidate_passed",
+        "delta",
+        "change_type",
+        "baseline_actual_text",
+        "candidate_actual_text",
+        "root_cause",
+        "reasons"
+      ],
+      "properties": {
+        "case_id": {"type": "string", "minLength": 1},
+        "baseline_score": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "candidate_score": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "baseline_passed": {"type": ["boolean", "null"]},
+        "candidate_passed": {"type": ["boolean", "null"]},
+        "delta": {"type": ["number", "null"], "minimum": -1, "maximum": 1},
+        "change_type": {
+          "enum": [
+            "new_pass",
+            "new_fail",
+            "score_improved",
+            "score_regressed",
+            "unchanged",
+            "missing_candidate",
+            "unexpected_candidate"
+          ]
+        },
+        "baseline_actual_text": {"type": "string"},
+        "candidate_actual_text": {"type": "string"},
+        "root_cause": {"type": "string"},
+        "reasons": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["train_score", "optimizer_dev_score", "validation_score"],
+      "properties": {
+        "train_score": {"type": "number", "minimum": -1, "maximum": 1},
+        "optimizer_dev_score": {"type": "number", "minimum": -1, "maximum": 1},
+        "validation_score": {"type": "number", "minimum": -1, "maximum": 1}
+      }
+    },
+    "candidateGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "accepted",
+        "reasons",
+        "new_hard_fail_ids",
+        "critical_regression_ids",
+        "missing_case_ids",
+        "unexpected_case_ids",
+        "validation_delta"
+      ],
+      "properties": {
+        "candidate_id": {"type": "string", "minLength": 1},
+        "accepted": {"type": "boolean"},
+        "reasons": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "new_hard_fail_ids": {"type": "array", "items": {"type": "string"}},
+        "critical_regression_ids": {"type": "array", "items": {"type": "string"}},
+        "missing_case_ids": {"type": "array", "items": {"type": "string"}},
+        "unexpected_case_ids": {"type": "array", "items": {"type": "string"}},
+        "validation_delta": {"type": ["number", "null"], "minimum": -1, "maximum": 1}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"accepted": {"const": true}}},
+          "then": {"properties": {"validation_delta": {"type": "number", "minimum": -1, "maximum": 1}}}
+        }
+      ]
+    },
+    "gateDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accepted", "winner", "reasons"],
+      "properties": {
+        "accepted": {"type": "boolean"},
+        "winner": {"type": ["string", "null"]},
+        "reasons": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "attributionCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_id", "root_cause", "score", "reasons"],
+      "properties": {
+        "case_id": {"type": "string", "minLength": 1},
+        "root_cause": {
+          "enum": [
+            "final_response_mismatch",
+            "tool_call_error",
+            "parameter_error",
+            "rubric_failed",
+            "knowledge_gap",
+            "format_error",
+            "runtime_error",
+            "metric_failed"
+          ]
+        },
+        "score": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "reasons": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "failureAttribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coverage", "taxonomy_counts", "cases"],
+      "properties": {
+        "coverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "taxonomy_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "final_response_mismatch",
+            "tool_call_error",
+            "parameter_error",
+            "rubric_failed",
+            "knowledge_gap",
+            "format_error",
+            "runtime_error",
+            "metric_failed"
+          ],
+          "properties": {
+            "final_response_mismatch": {"type": "integer", "minimum": 0},
+            "tool_call_error": {"type": "integer", "minimum": 0},
+            "parameter_error": {"type": "integer", "minimum": 0},
+            "rubric_failed": {"type": "integer", "minimum": 0},
+            "knowledge_gap": {"type": "integer", "minimum": 0},
+            "format_error": {"type": "integer", "minimum": 0},
+            "runtime_error": {"type": "integer", "minimum": 0},
+            "metric_failed": {"type": "integer", "minimum": 0}
+          }
+        },
+        "cases": {"type": "array", "items": {"$ref": "#/$defs/attributionCase"}}
+      }
+    },
+    "tokenUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prompt", "completion", "total"],
+      "properties": {
+        "prompt": {"type": "integer", "minimum": 0},
+        "completion": {"type": "integer", "minimum": 0},
+        "total": {"type": "integer", "minimum": 0}
+      }
+    },
+    "optimizerCost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["estimated_cost", "model_calls", "reflection_lm_calls", "judge_model_calls", "token_usage"],
+      "properties": {
+        "estimated_cost": {"type": ["number", "null"], "minimum": 0},
+        "model_calls": {"type": "integer", "minimum": 0},
+        "reflection_lm_calls": {"type": "integer", "minimum": 0},
+        "judge_model_calls": {"type": "integer", "minimum": 0},
+        "token_usage": {"$ref": "#/$defs/tokenUsage"}
+      }
+    },
+    "finalRevalidationCost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["estimated_cost", "agent_calls", "judge_model_calls", "model_calls"],
+      "properties": {
+        "estimated_cost": {"type": ["number", "null"], "minimum": 0},
+        "agent_calls": {"type": "integer", "minimum": 0},
+        "judge_model_calls": {"type": "integer", "minimum": 0},
+        "model_calls": {"type": "integer", "minimum": 0}
+      }
+    },
+    "cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "currency",
+        "estimated_total",
+        "cost_source",
+        "unknown_cost_reason",
+        "model_calls",
+        "token_usage",
+        "optimizer",
+        "final_revalidation"
+      ],
+      "properties": {
+        "currency": {"const": "USD"},
+        "estimated_total": {"type": ["number", "null"], "minimum": 0},
+        "cost_source": {"type": "string", "minLength": 1},
+        "unknown_cost_reason": {"type": ["string", "null"]},
+        "model_calls": {"type": "integer", "minimum": 0},
+        "token_usage": {"$ref": "#/$defs/tokenUsage"},
+        "optimizer": {"$ref": "#/$defs/optimizerCost"},
+        "final_revalidation": {"$ref": "#/$defs/finalRevalidationCost"}
+      }
+    },
+    "optimizationRound": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "round",
+        "optimized_field_names",
+        "prompt_paths",
+        "prompt_sha256",
+        "validation_pass_rate",
+        "metric_breakdown",
+        "accepted",
+        "decision_reason",
+        "failed_case_ids",
+        "cost_usd",
+        "token_usage",
+        "duration_seconds"
+      ],
+      "properties": {
+        "round": {"type": "integer", "minimum": 1},
+        "optimized_field_names": {"type": "array", "items": {"type": "string"}},
+        "prompt_paths": {
+          "type": "object",
+          "additionalProperties": {"type": "string", "minLength": 1}
+        },
+        "prompt_sha256": {
+          "type": "object",
+          "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        },
+        "validation_pass_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "metric_breakdown": {"type": "object", "additionalProperties": {"type": "number"}},
+        "accepted": {"type": "boolean"},
+        "decision_reason": {"type": "string", "minLength": 1},
+        "failed_case_ids": {"type": "array", "items": {"type": "string"}},
+        "cost_usd": {"type": "number", "minimum": 0},
+        "token_usage": {"$ref": "#/$defs/tokenUsage"},
+        "duration_seconds": {"type": "number", "minimum": 0}
+      }
+    },
     "candidate": {
       "type": "object",
-      "additionalProperties": true,
+      "additionalProperties": false,
       "required": [
         "id",
+        "audit",
+        "prompt_patch_summary",
         "prompt_artifacts",
         "train",
         "optimizer_dev",
@@ -115,75 +481,23 @@
         "artifacts"
       ],
       "properties": {
-        "id": {"type": "string"},
-        "prompt_artifacts": {
-          "type": "array",
-          "items": {"$ref": "#/$defs/promptArtifact"}
-        },
+        "id": {"type": "string", "minLength": 1},
+        "audit": {"$ref": "#/$defs/candidateAudit"},
+        "prompt_patch_summary": {"type": "string"},
+        "prompt_artifacts": {"type": "array", "items": {"$ref": "#/$defs/promptArtifact"}},
         "train": {"$ref": "#/$defs/evaluationSummary"},
         "optimizer_dev": {"$ref": "#/$defs/evaluationSummary"},
         "final_validation": {"$ref": "#/$defs/evaluationSummary"},
         "validation": {"$ref": "#/$defs/evaluationSummary"},
         "delta": {"$ref": "#/$defs/delta"},
-        "case_deltas": {"type": "array"},
-        "gate": {"$ref": "#/$defs/gateDecision"},
+        "case_deltas": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/caseDelta"}
+        },
+        "gate": {"$ref": "#/$defs/candidateGate"},
         "failure_attribution": {"$ref": "#/$defs/failureAttribution"},
         "artifacts": {"type": "object", "additionalProperties": {"type": "string"}}
-      }
-    },
-    "delta": {
-      "type": "object",
-      "additionalProperties": true,
-      "properties": {
-        "train_score": {"type": "number"},
-        "optimizer_dev_score": {"type": "number"},
-        "validation_score": {"type": "number"}
-      }
-    },
-    "gateDecision": {
-      "type": "object",
-      "additionalProperties": true,
-      "required": ["accepted", "reasons"],
-      "properties": {
-        "accepted": {"type": "boolean"},
-        "winner": {"type": ["string", "null"]},
-        "candidate_id": {"type": "string"},
-        "reasons": {
-          "type": "array",
-          "items": {"type": "string"}
-        }
-      }
-    },
-    "failureAttribution": {
-      "type": "object",
-      "additionalProperties": true,
-      "required": ["coverage", "taxonomy_counts", "cases"],
-      "properties": {
-        "coverage": {"type": "number"},
-        "taxonomy_counts": {"type": "object"},
-        "cases": {"type": "array"}
-      }
-    },
-    "cost": {
-      "type": "object",
-      "additionalProperties": true,
-      "required": [
-        "currency",
-        "estimated_total",
-        "cost_source",
-        "unknown_cost_reason",
-        "model_calls",
-        "optimizer",
-        "final_revalidation"
-      ],
-      "properties": {
-        "currency": {"type": "string"},
-        "estimated_total": {"type": ["number", "null"]},
-        "cost_source": {"type": "string"},
-        "unknown_cost_reason": {"type": ["string", "null"]},
-        "model_calls": {"type": "integer", "minimum": 0},
-        "optimizer": {"type": "object"},
-        "final_revalidation": {"type": "object"}
       }
     },
     "environmentSnapshot": {
@@ -209,7 +523,7 @@
         "base_url_host": {"type": ["string", "null"]},
         "seed": {"type": "integer"},
         "command": {"type": "string"},
-        "config_path": {"type": "string"}
+        "config_path": {"type": "string", "minLength": 1}
       }
     }
   }
