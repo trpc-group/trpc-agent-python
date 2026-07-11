@@ -251,7 +251,9 @@ class LLMNodeAction(BaseNodeAction):
                     continue
 
                 response_parts = list(llm_response.content.parts)
-                text_parts = [part.text for part in response_parts if part.text]
+                # Exclude thought parts so a thinking model's reasoning does not
+                # leak into response_text / STATE_KEY_LAST_RESPONSE.
+                text_parts = [part.text for part in response_parts if part.text and not part.thought]
                 response_text = "".join(text_parts)
 
             logger.debug(f"[{self.name}] LLM response received ({len(response_text)} chars)")

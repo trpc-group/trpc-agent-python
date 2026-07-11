@@ -5,8 +5,15 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Tools module for TRPC Agent framework."""
 
+from typing import TYPE_CHECKING
+
 from trpc_agent_sdk.abc import ToolPredicate
 from trpc_agent_sdk.abc import ToolSetABC as BaseToolSet
+
+if TYPE_CHECKING:
+    # Lazy re-export — see ``_LAZY_REEXPORTS`` below.
+    from trpc_agent_sdk.agents.sub_agent import DynamicSubAgentTool as DynamicSubAgentTool  # noqa: F401
+    from trpc_agent_sdk.agents.sub_agent import SpawnSubAgentTool as SpawnSubAgentTool  # noqa: F401
 
 from ._agent_tool import AGENT_TOOL_APP_NAME_SUFFIX
 from ._agent_tool import AgentTool
@@ -60,6 +67,15 @@ from .task_tools import TaskToolSet
 from .task_tools import TaskUpdateTool
 from .task_tools import get_task_store
 from .task_tools import render_task_list
+from .goal_tools import GoalOptions
+from .goal_tools import GoalRecord
+from .goal_tools import GoalStatus
+from .goal_tools import GoalToolSet
+from .goal_tools import OnRetry
+from .goal_tools import RetryEvent
+from .goal_tools import get_goal_record
+from .goal_tools import setup_goal
+from .goal_tools import render_goal
 from ._transfer_to_agent_tool import transfer_to_agent
 from ._webfetch_tool import FetchResult
 from ._webfetch_tool import WebFetchTool
@@ -143,6 +159,15 @@ __all__ = [
     "get_task_store",
     "render_task_list",
     "DEFAULT_TASK_PROMPT",
+    "GoalStatus",
+    "GoalRecord",
+    "GoalToolSet",
+    "GoalOptions",
+    "RetryEvent",
+    "OnRetry",
+    "setup_goal",
+    "get_goal_record",
+    "render_goal",
     "FetchResult",
     "WebFetchTool",
     "SearchHit",
@@ -169,3 +194,25 @@ __all__ = [
     "parse_schema_from_parameter",
     "register_checker",
 ]
+
+# Lazy re-exports: implemented elsewhere (avoids circular imports and keeps
+# the tools package free of optional file/web tool dependencies) but exposed
+# here for discoverability. Not in ``__all__`` so ``import *`` stays lazy.
+_LAZY_REEXPORTS = {
+    "DynamicSubAgentTool": ("trpc_agent_sdk.agents.sub_agent", "DynamicSubAgentTool"),
+    "SpawnSubAgentTool": ("trpc_agent_sdk.agents.sub_agent", "SpawnSubAgentTool"),
+}
+
+
+def __getattr__(name):
+    if name in _LAZY_REEXPORTS:
+        import importlib
+        module_name, attr = _LAZY_REEXPORTS[name]
+        obj = getattr(importlib.import_module(module_name), attr)
+        globals()[name] = obj  # cache: subsequent accesses skip __getattr__
+        return obj
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    return sorted(set(list(globals()) + list(_LAZY_REEXPORTS)))

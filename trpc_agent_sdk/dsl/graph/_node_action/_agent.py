@@ -181,11 +181,17 @@ class AgentNodeAction(BaseNodeAction):
                         if isinstance(candidate, str) and candidate:
                             last_response = candidate
 
-                    if (not self._is_graph_event(event)) and (
-                            not event.partial) and event.content and event.content.parts:
-                        text_parts = [part.text for part in event.content.parts if part.text]
-                        if text_parts:
-                            last_response = text_parts[-1]
+                    if (not self._is_graph_event(event)) and event.is_final_response():
+                        # Only clean final answers may become last_response. Skip
+                        # thought parts (part.thought) so a thinking model's
+                        # reasoning monologue is never surfaced as the answer.
+                        # is_final_response() already excludes partial, function
+                        # call/response, and code-execution events, so plan and
+                        # transfer_to_agent rounds are naturally ignored.
+                        if event.content and event.content.parts:
+                            visible_text = [part.text for part in event.content.parts if part.text and not part.thought]
+                            if visible_text:
+                                last_response = "".join(visible_text)
 
                     if not event.visible:
                         if event.actions and event.actions.transfer_to_agent:
@@ -246,7 +252,7 @@ class AgentNodeAction(BaseNodeAction):
 
         node_response: Any = last_response
         structured_output: Any = None
-        if isinstance(self.agent, LlmAgent) and self.agent.output_schema is not None:
+        if isinstance(self.agent, LlmAgent) and self.agent.output_schema is not None and last_response:
             node_response = json.loads(last_response)
             structured_output = node_response
 
