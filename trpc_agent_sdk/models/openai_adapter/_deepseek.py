@@ -53,7 +53,7 @@ class DeepSeekAdapter(OpenAIAdapter):
         if config.response_mime_type != "application/json":
             return False, None
         if config.response_schema or config.response_json_schema:
-            logger.debug("DeepSeek only supports JSON object response_format; response schema is ignored.")
+            logger.warning("DeepSeek only supports JSON object response_format; response schema is ignored.")
         return True, {"type": "json_object"}
 
     def apply_thinking(self, request: Any, http_options: dict[str, Any]) -> bool:

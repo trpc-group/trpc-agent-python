@@ -28,7 +28,6 @@ import subprocess
 import sys
 import time
 import uuid
-import warnings
 from collections import Counter
 from collections.abc import Awaitable
 from collections.abc import Callable
@@ -64,9 +63,6 @@ ONLINE_ENV_VARS = (
     "TRPC_AGENT_API_KEY",
     "TRPC_AGENT_BASE_URL",
     "TRPC_AGENT_MODEL_NAME",
-)
-KNOWN_ONLINE_WARNING_FILTERS = (
-    "SSEDecoder._aiter_chunks close RuntimeWarning",
 )
 
 TAXONOMY = (
@@ -474,16 +470,7 @@ def environment_snapshot(
         "seed": seed,
         "command": command or "programmatic",
         "config_path": config_path,
-        "known_warning_filters": list(KNOWN_ONLINE_WARNING_FILTERS),
     }
-
-
-def install_known_online_warning_filters() -> None:
-    warnings.filterwarnings(
-        "ignore",
-        message=r"coroutine method 'aclose' of 'SSEDecoder\._aiter_chunks' was never awaited",
-        category=RuntimeWarning,
-    )
 
 
 def resolve_path(path: Path | None, default: Path) -> Path:
@@ -2057,18 +2044,21 @@ def make_online_call_agent(
             state={},
         )
         final = ""
-        async for event in runner.run_async(
-            user_id=user_id,
-            session_id=session_id,
-            new_message=Content(role="user", parts=[Part.from_text(text=query)]),
-        ):
-            if not event.is_final_response() or not event.content:
-                continue
-            for part in event.content.parts or []:
-                if part.thought:
+        try:
+            async for event in runner.run_async(
+                user_id=user_id,
+                session_id=session_id,
+                new_message=Content(role="user", parts=[Part.from_text(text=query)]),
+            ):
+                if not event.is_final_response() or not event.content:
                     continue
-                if part.text:
-                    final += part.text
+                for part in event.content.parts or []:
+                    if part.thought:
+                        continue
+                    if part.text:
+                        final += part.text
+        finally:
+            await runner.close()
         return final.strip()
 
     return call_agent
@@ -2257,7 +2247,6 @@ async def run_online(
 ) -> Path:
     from agent.config import get_model_config
 
-    install_known_online_warning_filters()
     preflight = require_online_preflight()
     print(format_online_preflight(preflight))
     get_model_config()

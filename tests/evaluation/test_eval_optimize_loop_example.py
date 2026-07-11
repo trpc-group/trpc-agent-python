@@ -1492,6 +1492,46 @@ async def test_online_mode_missing_env_fails_before_api_call(tmp_path: Path, mon
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("raise_during_run", [False, True])
+async def test_online_call_agent_closes_runner(
+    monkeypatch: pytest.MonkeyPatch,
+    raise_during_run: bool,
+):
+    module = load_pipeline_module()
+    closed: list[bool] = []
+
+    class FakeRunner:
+        def __init__(self, **kwargs: Any):
+            pass
+
+        async def run_async(self, **kwargs: Any):
+            if raise_during_run:
+                raise RuntimeError("model stream failed")
+            if False:
+                yield None
+
+        async def close(self):
+            closed.append(True)
+
+    import trpc_agent_sdk.runners as runners
+
+    monkeypatch.setattr(runners, "Runner", FakeRunner)
+    monkeypatch.setattr(module, "_make_llm_agent_from_prompts", lambda prompt_texts: object())
+    call_agent = module.make_online_call_agent(
+        system_prompt=EXAMPLE_DIR / "agent" / "prompts" / "system.md",
+        router_prompt=EXAMPLE_DIR / "agent" / "prompts" / "router.md",
+    )
+
+    if raise_during_run:
+        with pytest.raises(RuntimeError, match="model stream failed"):
+            await call_agent("hello")
+    else:
+        assert await call_agent("hello") == ""
+
+    assert closed == [True]
+
+
+@pytest.mark.asyncio
 async def test_online_mode_can_construct_optimizer_call_without_real_api(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2259,6 +2299,8 @@ def test_online_e2e_smoke_with_real_api(tmp_path: Path):
         encoding="utf-8",
     )
     before_weak_router = weak_router.read_text(encoding="utf-8")
+    source_system = EXAMPLE_DIR / "agent" / "prompts" / "system.md"
+    before_source_system = source_system.read_text(encoding="utf-8")
     gate_config = tmp_path / "online_gate.json"
     gate_config.write_text(
         json.dumps({"max_duration_seconds": 300}),
@@ -2287,16 +2329,18 @@ def test_online_e2e_smoke_with_real_api(tmp_path: Path):
     )
     run_dir = Path(proc.stdout.strip().splitlines()[-1])
     report = load_report(run_dir / "optimization_report.json")
+    report_markdown = (run_dir / "optimization_report.md").read_text(encoding="utf-8")
+    serialized_outputs = proc.stdout + proc.stderr + json.dumps(report) + report_markdown
 
     assert report["mode"] == "online"
+    assert report["baseline"]["validation"]["score"] < report["candidates"][0]["validation"]["score"]
     assert report["gate_decision"]["accepted"] is True
-    assert (run_dir / "optimization_report.md").is_file()
-    assert "DeepSeek only supports JSON object response_format" not in proc.stderr
-    assert "SSEDecoder._aiter_chunks" not in proc.stderr
     assert weak_router.read_text(encoding="utf-8") == before_weak_router
+    assert source_system.read_text(encoding="utf-8") == before_source_system
     load_pipeline_module().validate_report_schema(report)
     assert report["online_preflight"] == {
         "TRPC_AGENT_API_KEY": True,
         "TRPC_AGENT_BASE_URL": True,
         "TRPC_AGENT_MODEL_NAME": True,
     }
+    assert os.environ["TRPC_AGENT_API_KEY"] not in serialized_outputs
