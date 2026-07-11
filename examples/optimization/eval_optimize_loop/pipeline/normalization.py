@@ -119,8 +119,19 @@ def normalize_eval_results(
             if run_invocation.expected_invocation is not None
             for tool_call in get_all_tool_calls(run_invocation.expected_invocation.intermediate_data)
         ]
-        tool_calls = intermediate_tool_calls or parsed_actual.tool_calls
-        expected_tool_calls = intermediate_expected_tool_calls or parsed_expected.tool_calls
+        actual_has_intermediate_data = any(
+            run_invocation.actual_invocation.intermediate_data is not None
+            for run_invocation in first_invocations
+        )
+        expected_has_intermediate_data = any(
+            run_invocation.expected_invocation is not None
+            and run_invocation.expected_invocation.intermediate_data is not None
+            for run_invocation in first_invocations
+        )
+        tool_calls = intermediate_tool_calls if actual_has_intermediate_data else parsed_actual.tool_calls
+        expected_tool_calls = (
+            intermediate_expected_tool_calls if expected_has_intermediate_data else parsed_expected.tool_calls
+        )
         tool_responses = [
             _tool_response_snapshot(tool_response)
             for run_invocation in first_invocations

@@ -170,6 +170,26 @@ def test_normalization_uses_intermediate_tools_even_when_final_json_matches() ->
     assert _attribute(case).primary_type.value == "tool_selection_error"
 
 
+def test_normalization_keeps_explicit_empty_intermediate_tools_over_final_json() -> None:
+    response = '{"route":"order_lookup","tool":"lookup_order","arguments":{"order_id":"A100"},"answer":"ok"}'
+    case = normalize_eval_results(
+        {
+            "case": [
+                _normalization_result(
+                    _invocation(response, tool_uses=[]),
+                    _invocation(response, tool_uses=[FunctionCall(name="lookup_order", args={"order_id": "A100"})]),
+                )
+            ]
+        },
+        split="validation",
+        metric_weights={"final_response_avg_score": 1.0},
+    )["case"]
+
+    assert case.tool_calls == []
+    assert [tool.name for tool in case.expected_tool_calls] == ["lookup_order"]
+    assert _attribute(case).primary_type.value == "tool_selection_error"
+
+
 def test_normalization_preserves_invalid_tool_argument_shape_for_attribution() -> None:
     response = '{"route":"order_lookup","tool":"lookup_order","arguments":{},"answer":"ok"}'
     invalid_call = FunctionCall.model_construct(name="lookup_order", args=[])

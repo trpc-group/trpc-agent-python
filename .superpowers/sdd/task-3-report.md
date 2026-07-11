@@ -96,3 +96,20 @@ python -m pytest tests/examples/optimization/eval_optimize_loop -q
 python examples/optimization/eval_optimize_loop/run_pipeline.py --mode trace --output-dir <temp-dir>
 # exit 0
 ```
+
+## Final P1 reviewer follow-up
+
+Fallback now depends on whether an invocation has `intermediate_data is None`, rather than whether extracting its `tool_uses` produced an empty list. An explicit `IntermediateData(tool_uses=[])` is therefore authoritative and remains empty even if the final fake JSON claims a tool. The matching regression verifies the missing-tool structural attribution against a reference trace that contains `lookup_order`.
+
+Verification after this final adjustment:
+
+```text
+python -m pytest tests/examples/optimization/eval_optimize_loop/test_attribution_and_trace.py -q
+# 20 passed
+
+python -m pytest tests/examples/optimization/eval_optimize_loop -q
+# 54 passed
+
+python examples/optimization/eval_optimize_loop/run_pipeline.py --mode trace --output-dir <temp-dir>
+# exit 0
+```
