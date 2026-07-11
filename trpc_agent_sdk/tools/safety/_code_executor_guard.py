@@ -21,6 +21,7 @@ from trpc_agent_sdk.code_executors import CodeExecutionResult
 from trpc_agent_sdk.code_executors import create_code_execution_result
 from trpc_agent_sdk.context import InvocationContext
 
+from trpc_agent_sdk.tools.safety._audit import record_safety_decision
 from trpc_agent_sdk.tools.safety._policy import Policy
 from trpc_agent_sdk.tools.safety._policy import load_policy
 from trpc_agent_sdk.tools.safety._scanner import scan
@@ -60,9 +61,19 @@ class SafetyGuardedCodeExecutor(BaseCodeExecutor):
             report = scan(self._ensure_policy(), block.code,
                           language=block.language or "auto")
             decision = report.decision
-            if decision == Decision.ALLOW:
-                kept.append(block)
-            elif decision == Decision.NEEDS_REVIEW and not self.block_on_review:
+            block_allowed = (
+                decision == Decision.ALLOW
+                or (decision == Decision.NEEDS_REVIEW and not self.block_on_review)
+            )
+            # Audit each scanned block (issue #90): tool name, decision, risk,
+            # rule ids, duration, sanitized, intercepted.
+            record_safety_decision(
+                report,
+                tool_name="code_executor",
+                language=block.language or "auto",
+                intercepted=not block_allowed,
+            )
+            if block_allowed:
                 kept.append(block)
             else:
                 ids = ",".join(sorted({f.rule_id for f in report.findings}))

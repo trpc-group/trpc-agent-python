@@ -94,3 +94,19 @@ samples:
       s.connect(('internal.corp', 8080))
     expected_decision: NEEDS_REVIEW
     required_rule_ids: [tool-net-socket]
+
+  - name: 13_large_write
+    language: python
+    script: |
+      with open("big.bin", "wb") as f:
+          f.write(b"\x00" * 100000000)
+    expected_decision: NEEDS_REVIEW
+    required_rule_ids: [tool-res-large-write]
+
+  - name: 14_concurrent_flood
+    language: python
+    script: |
+      from concurrent.futures import ThreadPoolExecutor
+      ThreadPoolExecutor(max_workers=10000)
+    expected_decision: NEEDS_REVIEW
+    required_rule_ids: [tool-res-concurrent-flood]

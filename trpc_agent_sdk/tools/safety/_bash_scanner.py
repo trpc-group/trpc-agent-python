@@ -12,6 +12,7 @@ from trpc_agent_sdk.tools.safety._rules import R_PKG_INSTALL
 from trpc_agent_sdk.tools.safety._rules import R_PROC_PRIVILEGE_ESCALATION
 from trpc_agent_sdk.tools.safety._rules import R_PROC_SHELL_PIPE
 from trpc_agent_sdk.tools.safety._rules import R_RES_FORK_BOMB
+from trpc_agent_sdk.tools.safety._rules import R_RES_LARGE_WRITE
 from trpc_agent_sdk.tools.safety._rules import R_RES_LONG_SLEEP
 from trpc_agent_sdk.tools.safety._shell_parse import has_pipeline
 from trpc_agent_sdk.tools.safety._shell_parse import has_shell_bypass
@@ -20,6 +21,10 @@ from trpc_agent_sdk.tools.safety._types import Finding
 _DOMAIN_RE = re.compile(r"https?://([^/\s'\"]+)", re.IGNORECASE)
 _SLEEP_RE = re.compile(r"\bsleep\s+(\d+)")
 _FORK_BOMB_RE = re.compile(r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;")
+# dd/truncate producing GB+ files, or head -c with a very large byte count.
+_LARGE_WRITE_RE = re.compile(r"\bdd\b[^;\n]*?bs=\s*\d+\s*[GT]|\btruncate\b[^;\n]*?-s\s+\d+\s*[GT]", re.IGNORECASE)
+_HEAD_C_RE = re.compile(r"\bhead\b[^;\n]*?-c\s+(\d+)")
+_HUGE_BYTES = 10_000_000
 
 
 def scan_bash(policy: Policy, script: str) -> list[Finding]:
@@ -66,6 +71,16 @@ def scan_bash(policy: Policy, script: str) -> list[Finding]:
         if int(m.group(1)) >= policy.max_timeout_seconds:
             add(R_RES_LONG_SLEEP, f"sleep {m.group(1)}",
                 f"sleep >= {policy.max_timeout_seconds}s is suspicious.")
+            break
+
+    # Large write: dd/truncate with GB+ size, or head -c with a huge byte count.
+    if _LARGE_WRITE_RE.search(joined):
+        add(R_RES_LARGE_WRITE, "dd/truncate with GB+ size",
+            "Very large file generation; possible disk exhaustion. Review.")
+    for m in _HEAD_C_RE.finditer(joined):
+        if int(m.group(1)) >= _HUGE_BYTES:
+            add(R_RES_LARGE_WRITE, f"head -c {m.group(1)}",
+                "Very large write; possible disk exhaustion. Review.")
             break
 
     # Shell pipe / bypass

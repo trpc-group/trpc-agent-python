@@ -32,6 +32,8 @@ R_PKG_INSTALL = "tool-pkg-install"
 R_RES_INFINITE_LOOP = "tool-res-infinite-loop"
 R_RES_FORK_BOMB = "tool-res-fork-bomb"
 R_RES_LONG_SLEEP = "tool-res-long-sleep"
+R_RES_LARGE_WRITE = "tool-res-large-write"
+R_RES_CONCURRENT_FLOOD = "tool-res-concurrent-flood"
 # Secret leakage
 R_SECRET_LOGGING = "tool-secret-logging"
 R_SECRET_PRIVATE_KEY = "tool-secret-private-key"
@@ -55,6 +57,8 @@ DEFAULT_RULE_POLICIES: dict[str, tuple[RiskLevel, Decision]] = {
     R_RES_INFINITE_LOOP: (RiskLevel.MEDIUM, Decision.NEEDS_REVIEW),
     R_RES_FORK_BOMB: (RiskLevel.HIGH, Decision.DENY),
     R_RES_LONG_SLEEP: (RiskLevel.LOW, Decision.NEEDS_REVIEW),
+    R_RES_LARGE_WRITE: (RiskLevel.MEDIUM, Decision.NEEDS_REVIEW),
+    R_RES_CONCURRENT_FLOOD: (RiskLevel.MEDIUM, Decision.NEEDS_REVIEW),
     R_SECRET_LOGGING: (RiskLevel.HIGH, Decision.DENY),
     R_SECRET_PRIVATE_KEY: (RiskLevel.HIGH, Decision.DENY),
 }

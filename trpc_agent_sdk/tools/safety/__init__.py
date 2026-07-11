@@ -3,6 +3,8 @@
 """Tool Script Safety Guard public API."""
 from __future__ import annotations
 
+from trpc_agent_sdk.tools.safety._audit import AuditRecord
+from trpc_agent_sdk.tools.safety._audit import record_safety_decision
 from trpc_agent_sdk.tools.safety._code_executor_guard import SafetyGuardedCodeExecutor
 from trpc_agent_sdk.tools.safety._decision import aggregate
 from trpc_agent_sdk.tools.safety._policy import Policy
@@ -27,4 +29,6 @@ __all__ = [
     "aggregate",
     "ToolSafetyFilter",
     "SafetyGuardedCodeExecutor",
+    "AuditRecord",
+    "record_safety_decision",
 ]

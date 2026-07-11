@@ -18,7 +18,9 @@ from trpc_agent_sdk.tools.safety._rules import R_FS_READ_CREDENTIALS
 from trpc_agent_sdk.tools.safety._rules import R_NET_HTTP
 from trpc_agent_sdk.tools.safety._rules import R_NET_SOCKET
 from trpc_agent_sdk.tools.safety._rules import R_PROC_SUBPROCESS
+from trpc_agent_sdk.tools.safety._rules import R_RES_CONCURRENT_FLOOD
 from trpc_agent_sdk.tools.safety._rules import R_RES_INFINITE_LOOP
+from trpc_agent_sdk.tools.safety._rules import R_RES_LARGE_WRITE
 from trpc_agent_sdk.tools.safety._rules import R_SECRET_LOGGING
 from trpc_agent_sdk.tools.safety._types import Decision
 from trpc_agent_sdk.tools.safety._types import Finding
@@ -111,6 +113,13 @@ def scan_python(policy: Policy, script: str) -> list[Finding]:
             if mod == "socket":
                 add(R_NET_SOCKET, f"{fname}()",
                     "raw socket use bypasses HTTP allowlist; review egress.")
+            # Resource abuse: very large writes and concurrency floods.
+            if _is_write_call(fname) and _has_huge_size(node):
+                add(R_RES_LARGE_WRITE, f"{fname}(huge payload)",
+                    "Very large write; possible disk/resource exhaustion. Review.")
+            if _is_pool_call(fname) and _max_workers_too_large(node):
+                add(R_RES_CONCURRENT_FLOOD, f"{fname}(max_workers>>)",
+                    "Very large worker pool; possible resource exhaustion. Review.")
             if mod in ("open",) or fname.endswith(".open"):
                 _check_open_path(node, policy, add)
         # infinite loop
@@ -162,6 +171,44 @@ def _check_open_path(call: ast.Call, policy: Policy, add) -> None:
             add(R_FS_READ_CREDENTIALS, f"open('{path}')",
                 f"path matches denied path {denied}.")
             return
+
+
+_HUGE_BYTES = 10_000_000  # ~10 MB heuristic threshold for "large write"
+_MAX_WORKERS = 100        # heuristic threshold for concurrency flood
+
+_WRITE_METHODS = ("write", "write_bytes", "write_text")
+_POOL_CLASSES = ("ThreadPoolExecutor", "ProcessPoolExecutor")
+
+
+def _is_write_call(fname: str) -> bool:
+    return fname in _WRITE_METHODS or any(fname.endswith("." + m) for m in _WRITE_METHODS)
+
+
+def _is_pool_call(fname: str) -> bool:
+    return fname in _POOL_CLASSES or any(fname.endswith("." + c) for c in _POOL_CLASSES)
+
+
+def _huge_value(node: ast.AST) -> bool:
+    """True if node is a large int literal or a multiply/power producing one."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, int):
+        return node.value >= _HUGE_BYTES
+    if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Mult, ast.Pow)):
+        return _huge_value(node.left) or _huge_value(node.right)
+    return False
+
+
+def _has_huge_size(call: ast.Call) -> bool:
+    return any(_huge_value(a) for a in call.args) or any(
+        _huge_value(kw.value) for kw in call.keywords
+    )
+
+
+def _max_workers_too_large(call: ast.Call) -> bool:
+    for kw in call.keywords:
+        if kw.arg == "max_workers" and isinstance(kw.value, ast.Constant) \
+                and isinstance(kw.value.value, int) and kw.value.value > _MAX_WORKERS:
+            return True
+    return False
 
 
 def _is_whitelisted(url: str, policy: Policy) -> bool:

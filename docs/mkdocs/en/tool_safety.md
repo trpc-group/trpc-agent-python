@@ -65,7 +65,7 @@ result = await guarded_executor.execute_code(
 
 ### rule_id Domain Mapping
 
-The system covers **7 major risk domains** with 18 rules (aligning with `trpc-agent-go/tool/safety` style):
+The system covers **7 major risk domains** with 20 rules (aligning with `trpc-agent-go/tool/safety` style):
 
 | Domain Prefix | Risk Coverage | Example rule_ids |
 |---------------|---------------|------------------|
@@ -74,7 +74,7 @@ The system covers **7 major risk domains** with 18 rules (aligning with `trpc-ag
 | `tool-net-*` | Network egress | `tool-net-http`, `tool-net-socket` |
 | `tool-proc-*` | Process/system commands | `tool-proc-subprocess`, `tool-proc-shell-pipe`, `tool-proc-privilege-escalation` |
 | `tool-pkg-*` | Dependency installation | `tool-pkg-install` (pip/npm/apt) |
-| `tool-res-*` | Resource abuse | `tool-res-infinite-loop`, `tool-res-fork-bomb`, `tool-res-long-sleep` |
+| `tool-res-*` | Resource abuse | `tool-res-infinite-loop`, `tool-res-fork-bomb`, `tool-res-long-sleep`, `tool-res-large-write`, `tool-res-concurrent-flood` |
 | `tool-secret-*` | Sensitive information leakage | `tool-secret-logging`, `tool-secret-private-key` |
 
 ### Decision and RiskLevel
@@ -195,8 +195,9 @@ rule_overrides:
 
 #### Relationship with Telemetry
 
-- **Audit events**: Log structured events when intercepted (containing `decision`/`risk_level`/`rule_ids`/`evidence`/`recommendation`)
-- **OpenTelemetry**: Interface reserved (not implemented in MVP; can add span attributes in the future)
+- **Audit log**: Every scan appends one JSON Lines audit record to `tool_safety_audit.jsonl` (path configurable via env `TRPC_AGENT_TOOL_SAFETY_AUDIT`), containing all issue #90 mandatory fields: `tool_name`, `decision`, `risk_level`, `rule_ids`, `scan_duration_ms`, `sanitized`, `intercepted`, `timestamp`, `recommendation`. Allowed scripts are summarized; denied scripts record the block reason. See `trpc_agent_sdk/tools/safety/examples/tool_safety_audit.jsonl`.
+- **OpenTelemetry**: When the host has OTel enabled and a scan runs inside a span, it automatically sets span attributes `tool.safety.decision` / `tool.safety.risk_level` / `tool.safety.rule_id` / `tool.safety.scan_duration_ms` / `tool.safety.sanitized` / `tool.safety.blocked` / `tool.safety.tool_name` (no-op when OTel is absent or no span is active).
+- **Structured report**: See `trpc_agent_sdk/tools/safety/examples/tool_safety_report.json`; the CLI `scripts/tool_safety_check.py` prints exactly this JSON shape.
 
 ### Known Limitations
 

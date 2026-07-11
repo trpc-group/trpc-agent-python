@@ -65,7 +65,7 @@ result = await guarded_executor.execute_code(
 
 ### rule_id 规则域映射
 
-系统覆盖 **7 大风险域**，共 18 条规则（对齐 `trpc-agent-go/tool/safety` 风格）：
+系统覆盖 **7 大风险域**，共 20 条规则（对齐 `trpc-agent-go/tool/safety` 风格）：
 
 | 域前缀 | 覆盖风险 | 示例 rule_id |
 |--------|----------|-------------|
@@ -74,7 +74,7 @@ result = await guarded_executor.execute_code(
 | `tool-net-*` | 网络外连 | `tool-net-http`、`tool-net-socket` |
 | `tool-proc-*` | 进程/系统命令 | `tool-proc-subprocess`、`tool-proc-shell-pipe`、`tool-proc-privilege-escalation` |
 | `tool-pkg-*` | 依赖安装 | `tool-pkg-install`（pip/npm/apt） |
-| `tool-res-*` | 资源滥用 | `tool-res-infinite-loop`、`tool-res-fork-bomb`、`tool-res-long-sleep` |
+| `tool-res-*` | 资源滥用 | `tool-res-infinite-loop`、`tool-res-fork-bomb`、`tool-res-long-sleep`、`tool-res-large-write`、`tool-res-concurrent-flood` |
 | `tool-secret-*` | 敏感信息泄漏 | `tool-secret-logging`、`tool-secret-private-key` |
 
 ### 决策与风险级别
@@ -195,8 +195,9 @@ rule_overrides:
 
 #### 与 Telemetry 的关系
 
-- **审计事件**：拦截时记录结构化日志（含 `decision`/`risk_level`/`rule_ids`/`evidence`/`recommendation`）
-- **OpenTelemetry**：预留接口（MVP 不实现，未来可添加 span 属性）
+- **审计日志**：每次扫描写一条 JSON Lines 审计记录到 `tool_safety_audit.jsonl`（路径可用环境变量 `TRPC_AGENT_TOOL_SAFETY_AUDIT` 配置），含 issue #90 要求的全部字段：`tool_name`、`decision`、`risk_level`、`rule_ids`、`scan_duration_ms`、`sanitized`、`intercepted`、`timestamp`、`recommendation`。允许执行的脚本也记录摘要，拒绝的脚本记录拦截原因。示例见 `trpc_agent_sdk/tools/safety/examples/tool_safety_audit.jsonl`。
+- **OpenTelemetry**：若宿主启用了 OTel 且扫描处于某个 span 内，自动注入 span 属性 `tool.safety.decision` / `tool.safety.risk_level` / `tool.safety.rule_id` / `tool.safety.scan_duration_ms` / `tool.safety.sanitized` / `tool.safety.blocked` / `tool.safety.tool_name`（未启用 OTel 或无活动 span 时为 no-op）。
+- **结构化报告**：扫描报告示例见 `trpc_agent_sdk/tools/safety/examples/tool_safety_report.json`；`scripts/tool_safety_check.py` 可直接输出该 JSON 格式。
 
 ### 已知限制
 
