@@ -141,6 +141,7 @@ class PipelineSettings(StrictModel):
     metric_weights: dict[str, float] = Field(default_factory=lambda: {"final_response_avg_score": 0.6, "fake_rubric_score": 0.4})
     metric_floors: dict[str, float] = Field(default_factory=dict)
     candidate_validation: "CandidateValidationSettings" = Field(default_factory=lambda: CandidateValidationSettings())
+    write_back_when_accepted: bool = False
 
 
 class CandidateValidationSettings(StrictModel):

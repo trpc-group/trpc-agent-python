@@ -28,7 +28,11 @@ from examples.optimization.eval_optimize_loop.pipeline.config import load_pipeli
 from examples.optimization.eval_optimize_loop.pipeline.evaluator import evaluate_split
 from examples.optimization.eval_optimize_loop.pipeline.gate import evaluate_gate
 from examples.optimization.eval_optimize_loop.pipeline.models import CandidateReport, OptimizationReport, SplitReport
-from examples.optimization.eval_optimize_loop.pipeline.optimizer_backend import AgentOptimizerBackend, PipelineExecutionError
+from examples.optimization.eval_optimize_loop.pipeline.optimizer_backend import (
+    AgentOptimizerBackend,
+    PipelineExecutionError,
+    write_back_after_gate,
+)
 from examples.optimization.eval_optimize_loop.pipeline.attribution import attribute_case
 from examples.optimization.eval_optimize_loop.pipeline.normalization import normalize_eval_results
 from examples.optimization.eval_optimize_loop.pipeline.prompt_sandbox import PromptSandbox
@@ -123,6 +127,9 @@ async def run_live_pipeline(*, output_dir: Path) -> OptimizationReport:
         "system_prompt": (source_prompt_dir / "system.md").read_text(encoding="utf-8"),
         "router_prompt": (source_prompt_dir / "router.md").read_text(encoding="utf-8"),
     }
+    source_target = TargetPrompt()
+    for name, filename in (("system_prompt", "system.md"), ("router_prompt", "router.md")):
+        source_target.add_path(name, str(source_prompt_dir / filename))
     with tempfile.TemporaryDirectory(prefix="trpc-agent-issue91-regression-") as temporary_dir:
         prompt_dir = Path(temporary_dir)
         target = TargetPrompt()
@@ -182,6 +189,12 @@ async def run_live_pipeline(*, output_dir: Path) -> OptimizationReport:
             )
     accepted = [candidate for candidate in report.candidates if candidate.accepted]
     report.selected_candidate_id = accepted[0].candidate_id if accepted else None
+    if config.pipeline.write_back_when_accepted and report.selected_candidate_id:
+        selected_record = next(candidate for candidate in candidates if candidate.candidate_id == report.selected_candidate_id)
+        selected_report = next(candidate for candidate in accepted if candidate.candidate_id == report.selected_candidate_id)
+        if selected_report.gate is None:  # Defensive: accepted reports always carry a GateDecision.
+            raise PipelineExecutionError("selected candidate is missing its gate decision")
+        await write_back_after_gate(source_target, source_baseline, selected_record.prompts, selected_report.gate)
     write_reports(report, output_dir)
     return report
 

@@ -22,6 +22,7 @@
   },
   "pipeline": {
     "reproducibility": {"seed": 42},
+    "write_back_when_accepted": false,
     "gate": {"min_validation_score_delta": 0.05, "critical_case_ids": ["val_refund_critical"]}
   }
 }

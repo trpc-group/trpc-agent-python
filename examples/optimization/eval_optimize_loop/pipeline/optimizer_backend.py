@@ -104,16 +104,19 @@ class AgentOptimizerBackend:
                 path = prompt_dir / f"{name}.md"
                 path.write_text(content, encoding="utf-8")
                 target.add_path(name, str(path))
-            result = await AgentOptimizer.optimize(
-                config_path=str(runtime_path),
-                call_agent=self._call_agent_factory(target),
-                target_prompt=target,
-                train_dataset_path=str(train_dataset_path),
-                validation_dataset_path=str(validation_dataset_path),
-                output_dir=str(optimizer_dir),
-                update_source=False,
-                verbose=0,
-            )
+            try:
+                result = await AgentOptimizer.optimize(
+                    config_path=str(runtime_path),
+                    call_agent=self._call_agent_factory(target),
+                    target_prompt=target,
+                    train_dataset_path=str(train_dataset_path),
+                    validation_dataset_path=str(validation_dataset_path),
+                    output_dir=str(optimizer_dir),
+                    update_source=False,
+                    verbose=0,
+                )
+            except Exception as exc:
+                raise PipelineExecutionError("AgentOptimizer.optimize failed") from exc
         if getattr(result, "status", None) != "SUCCEEDED":
             raise PipelineExecutionError(f"AgentOptimizer finished with status {getattr(result, 'status', 'unknown')}")
         records = self._extract_candidates(result, baseline_prompts)

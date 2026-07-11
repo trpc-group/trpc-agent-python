@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -174,6 +173,40 @@ async def test_failed_optimizer_preserves_baseline_and_raises_pipeline_execution
 
 
 @pytest.mark.asyncio
+async def test_optimizer_exception_is_wrapped_with_original_cause(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    async def fake_optimize(**_kwargs):
+        raise RuntimeError("transport failed")
+
+    monkeypatch.setattr(AgentOptimizer, "optimize", fake_optimize)
+    backend = AgentOptimizerBackend(raw_config={"evaluate": {}, "optimize": {}}, candidate_scope="best_only")
+    with pytest.raises(PipelineExecutionError, match="AgentOptimizer.optimize failed") as exc_info:
+        await backend.generate_candidates(
+            baseline_prompts=_baseline(),
+            train_dataset_path=DATASET,
+            validation_dataset_path=EXAMPLE_DIR / "val.evalset.json",
+            output_dir=tmp_path,
+        )
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+
+
+def test_live_cli_returns_three_when_optimizer_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    for name, value in {
+        "TRPC_AGENT_API_KEY": "unused-in-test",
+        "TRPC_AGENT_BASE_URL": "https://unused.invalid",
+        "TRPC_AGENT_MODEL_NAME": "unused",
+    }.items():
+        monkeypatch.setenv(name, value)
+
+    async def fake_optimize(**_kwargs):
+        raise RuntimeError("transport failed")
+
+    monkeypatch.setattr(AgentOptimizer, "optimize", fake_optimize)
+    monkeypatch.setattr("sys.argv", ["run_pipeline.py", "--mode", "live", "--output-dir", str(tmp_path)])
+    assert main() == 3
+    assert "AgentOptimizer.optimize failed" in capsys.readouterr().err
+
+
+@pytest.mark.asyncio
 async def test_optional_write_back_requires_gate_and_detects_baseline_conflict(tmp_path: Path) -> None:
     source = tmp_path / "system.md"
     source.write_text("BASELINE", encoding="utf-8")
@@ -186,3 +219,62 @@ async def test_optional_write_back_requires_gate_and_detects_baseline_conflict(t
     source.write_text("CHANGED_EXTERNALLY", encoding="utf-8")
     with pytest.raises(PipelineExecutionError, match="baseline changed"):
         await write_back_after_gate(target, baseline, candidate, accepted)
+
+
+@pytest.mark.asyncio
+async def test_live_pipeline_does_not_write_back_by_default_or_without_gate_winner(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    for name, value in {
+        "TRPC_AGENT_API_KEY": "unused-in-test",
+        "TRPC_AGENT_BASE_URL": "https://unused.invalid",
+        "TRPC_AGENT_MODEL_NAME": "unused",
+    }.items():
+        monkeypatch.setenv(name, value)
+    general_fix = {**_baseline(), "system_prompt": "GENERAL_FIX"}
+
+    async def fake_optimize(**_kwargs):
+        return _result(best=general_fix)
+
+    async def should_not_write(*_args, **_kwargs):
+        raise AssertionError("write-back must remain disabled by default")
+
+    monkeypatch.setattr(AgentOptimizer, "optimize", fake_optimize)
+    monkeypatch.setattr("examples.optimization.eval_optimize_loop.run_pipeline.write_back_after_gate", should_not_write)
+    report = await run_live_pipeline(output_dir=tmp_path)
+    assert report.selected_candidate_id == "best"
+
+
+@pytest.mark.asyncio
+async def test_live_pipeline_writes_only_selected_gate_winner_when_explicitly_enabled(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from examples.optimization.eval_optimize_loop.pipeline.config import load_pipeline_config
+
+    for name, value in {
+        "TRPC_AGENT_API_KEY": "unused-in-test",
+        "TRPC_AGENT_BASE_URL": "https://unused.invalid",
+        "TRPC_AGENT_MODEL_NAME": "unused",
+    }.items():
+        monkeypatch.setenv(name, value)
+    general_fix = {**_baseline(), "system_prompt": "GENERAL_FIX"}
+
+    async def fake_optimize(**_kwargs):
+        return _result(best=general_fix)
+
+    config = load_pipeline_config(EXAMPLE_DIR / "optimizer.json", mode="live")
+    enabled_pipeline = config.pipeline.model_copy(update={"write_back_when_accepted": True})
+    enabled_config = config.model_copy(update={"pipeline": enabled_pipeline})
+    observed: dict[str, object] = {}
+
+    async def fake_write_back(target, baseline, candidate, gate):
+        observed.update({"target": target, "baseline": baseline, "candidate": candidate, "gate": gate})
+        return True
+
+    monkeypatch.setattr(AgentOptimizer, "optimize", fake_optimize)
+    monkeypatch.setattr("examples.optimization.eval_optimize_loop.run_pipeline.load_pipeline_config", lambda *_args, **_kwargs: enabled_config)
+    monkeypatch.setattr("examples.optimization.eval_optimize_loop.run_pipeline.write_back_after_gate", fake_write_back)
+    report = await run_live_pipeline(output_dir=tmp_path)
+    assert report.selected_candidate_id == "best"
+    assert observed["candidate"] == general_fix
+    assert observed["gate"].accepted is True
