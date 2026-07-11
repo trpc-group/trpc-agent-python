@@ -25,7 +25,6 @@ from unittest.mock import patch
 import pytest
 from jsonschema import ValidationError
 
-
 EXAMPLE_DIR = Path(__file__).resolve().parents[2] / "examples" / "optimization" / "eval_optimize_loop"
 RUN_PIPELINE = EXAMPLE_DIR / "run_pipeline.py"
 REPORT_SCHEMA = EXAMPLE_DIR / "optimization_report.schema.json"
@@ -97,9 +96,7 @@ def test_gate_fails_closed_for_boundary_and_invalid_evidence():
     assert missing["missing_case_ids"] == ["b"]
 
     extra_case = copy.deepcopy(valid_candidate)
-    extra_case["case_results"].append(
-        {"case_id": "c", "score": 1.0, "passed": True, "tags": []}
-    )
+    extra_case["case_results"].append({"case_id": "c", "score": 1.0, "passed": True, "tags": []})
     extra = module.apply_gate(
         candidate_id="extra",
         baseline_val=baseline,
@@ -266,17 +263,21 @@ def test_case_deltas_classify_pass_fail_and_score_transitions():
     candidate = {
         "case_results": [
             {"case_id": "new_pass", "score": 1.0, "passed": True, "actual_text": "c1", "root_cause": "", "reasons": []},
-            {"case_id": "new_fail", "score": 0.0, "passed": False, "actual_text": "c2", "root_cause": "format_error", "reasons": ["bad"]},
+            {
+                "case_id": "new_fail",
+                "score": 0.0,
+                "passed": False,
+                "actual_text": "c2",
+                "root_cause": "format_error",
+                "reasons": ["bad"],
+            },
             {"case_id": "up", "score": 0.6, "passed": True, "actual_text": "c3", "root_cause": "", "reasons": []},
             {"case_id": "down", "score": 0.6, "passed": True, "actual_text": "c4", "root_cause": "", "reasons": []},
             {"case_id": "same", "score": 1.0, "passed": True, "actual_text": "c5", "root_cause": "", "reasons": []},
         ]
     }
 
-    by_id = {
-        item["case_id"]: item
-        for item in module.build_case_deltas(baseline, candidate)
-    }
+    by_id = {item["case_id"]: item for item in module.build_case_deltas(baseline, candidate)}
 
     assert by_id["new_pass"]["change_type"] == "new_pass"
     assert by_id["new_fail"]["change_type"] == "new_fail"
@@ -292,21 +293,23 @@ def test_summary_omits_thoughts_and_redacts_provider_credentials_from_report_tex
     payload = load_report(EXAMPLE_DIR / "val.evalset.json")
     case = payload["eval_cases"][0]
     visible_final = '{"route":"faq","tool":{"name":"none","arguments":{}}}'
-    actual_invocation = SimpleNamespace(final_response={
-        "parts": [
-            {"text": "internal chain of thought", "thought": True},
-            {"text": visible_final, "thought": False},
-        ]
-    })
-    expected_invocation = SimpleNamespace(final_response={
-        "parts": [{"text": visible_final, "thought": False}]
-    })
+    actual_invocation = SimpleNamespace(
+        final_response={
+            "parts": [
+                {"text": "internal chain of thought", "thought": True},
+                {"text": visible_final, "thought": False},
+            ]
+        }
+    )
+    expected_invocation = SimpleNamespace(final_response={"parts": [{"text": visible_final, "thought": False}]})
     secret = "ASIA_SECRET_SESSION_TOKEN"
     run = SimpleNamespace(
-        eval_metric_result_per_invocation=[SimpleNamespace(
-            actual_invocation=actual_invocation,
-            expected_invocation=expected_invocation,
-        )],
+        eval_metric_result_per_invocation=[
+            SimpleNamespace(
+                actual_invocation=actual_invocation,
+                expected_invocation=expected_invocation,
+            )
+        ],
         final_eval_status="failed",
         error_message=f"request failed: X-Amz-Security-Token: {secret}; retry later",
         overall_eval_metric_results=[
@@ -314,9 +317,7 @@ def test_summary_omits_thoughts_and_redacts_provider_credentials_from_report_tex
                 metric_name="provider_metric",
                 score=0.0,
                 eval_status="failed",
-                details=SimpleNamespace(
-                    reason=f"provider headers: X-Amz-Security-Token: {secret}"
-                ),
+                details=SimpleNamespace(reason=f"provider headers: X-Amz-Security-Token: {secret}"),
                 threshold=1.0,
             ),
             SimpleNamespace(
@@ -328,11 +329,13 @@ def test_summary_omits_thoughts_and_redacts_provider_credentials_from_report_tex
             ),
         ],
     )
-    result = SimpleNamespace(results_by_eval_set_id={
-        payload["eval_set_id"]: SimpleNamespace(
-            eval_results_by_eval_id={case["eval_id"]: [run]},
-        )
-    })
+    result = SimpleNamespace(
+        results_by_eval_set_id={
+            payload["eval_set_id"]: SimpleNamespace(
+                eval_results_by_eval_id={case["eval_id"]: [run]},
+            )
+        }
+    )
 
     summary = module.summarize_evaluate_result(result, payload)
     case_result = summary["case_results"][0]
@@ -379,11 +382,13 @@ def test_no_run_key_trace_uses_safe_shape_and_omits_thought_content():
             {"text": "visible expected final", "thought": False},
         ]
     }
-    result = SimpleNamespace(results_by_eval_set_id={
-        payload["eval_set_id"]: SimpleNamespace(
-            eval_results_by_eval_id={case["eval_id"]: []},
-        )
-    })
+    result = SimpleNamespace(
+        results_by_eval_set_id={
+            payload["eval_set_id"]: SimpleNamespace(
+                eval_results_by_eval_id={case["eval_id"]: []},
+            )
+        }
+    )
 
     summary = module.summarize_evaluate_result(result, payload)
     key_trace = summary["case_results"][0]["key_trace"]
@@ -473,13 +478,15 @@ def test_build_candidate_report_sanitizes_nonfinite_case_reasons():
     )
     validation = _gate_summary(
         0.75,
-        [{
-            "case_id": "a",
-            "score": 0.0,
-            "passed": False,
-            "tags": [],
-            "reasons": [float("nan")],
-        }],
+        [
+            {
+                "case_id": "a",
+                "score": 0.0,
+                "passed": False,
+                "tags": [],
+                "reasons": [float("nan")],
+            }
+        ],
     )
 
     report = module.build_candidate_report(
@@ -614,9 +621,7 @@ def test_evalsets_and_optimizer_config_are_schema_loadable():
         "train_faq_003",
     }
     assert "val_shipping_delay_103" in {case.eval_id for case in val.eval_cases}
-    assert {case.eval_id for case in optimizer_dev.eval_cases}.isdisjoint(
-        {case.eval_id for case in val.eval_cases}
-    )
+    assert {case.eval_id for case in optimizer_dev.eval_cases}.isdisjoint({case.eval_id for case in val.eval_cases})
 
     config = load_optimize_config(str(EXAMPLE_DIR / "optimizer.json"))
     assert config.optimize.algorithm.name == "gepa_reflective"
@@ -732,8 +737,8 @@ def test_sample_report_is_deterministic_and_has_no_temporary_paths():
     assert all(value == 0.0 for value in durations)
     assert all("\\" not in value for value in strings)
     assert all(not (len(value) >= 3 and value[1:3] == ":/") for value in strings)
-    normalized_bytes = (EXAMPLE_DIR / "fixtures" / "optimization_report.sample.json").read_bytes().replace(
-        b"\r\n", b"\n"
+    normalized_bytes = (
+        (EXAMPLE_DIR / "fixtures" / "optimization_report.sample.json").read_bytes().replace(b"\r\n", b"\n")
     )
     assert normalized_bytes.endswith(b"\n")
     assert not normalized_bytes.endswith(b"\n\n")
@@ -830,20 +835,22 @@ def test_report_schema_requires_candidate_audit_and_optimization_rounds():
 def test_report_schema_requires_each_optimization_round_token_usage_field():
     module = load_pipeline_module()
     report = load_report(EXAMPLE_DIR / "fixtures" / "optimization_report.sample.json")
-    report["optimization_rounds"] = [{
-        "round": 1,
-        "optimized_field_names": [],
-        "prompt_paths": {},
-        "prompt_sha256": {},
-        "validation_pass_rate": 1.0,
-        "metric_breakdown": {},
-        "accepted": False,
-        "decision_reason": "malformed evidence rejected",
-        "failed_case_ids": [],
-        "cost_usd": 0.0,
-        "token_usage": {"prompt": 0, "completion": 0},
-        "duration_seconds": 0.0,
-    }]
+    report["optimization_rounds"] = [
+        {
+            "round": 1,
+            "optimized_field_names": [],
+            "prompt_paths": {},
+            "prompt_sha256": {},
+            "validation_pass_rate": 1.0,
+            "metric_breakdown": {},
+            "accepted": False,
+            "decision_reason": "malformed evidence rejected",
+            "failed_case_ids": [],
+            "cost_usd": 0.0,
+            "token_usage": {"prompt": 0, "completion": 0},
+            "duration_seconds": 0.0,
+        }
+    ]
 
     with pytest.raises(ValidationError):
         module.validate_report_schema(report)
@@ -1003,15 +1010,9 @@ async def test_markdown_includes_rejected_candidate_delta_types_absent_from_winn
     report = load_report(run_dir / "optimization_report.json")
     markdown = (run_dir / "optimization_report.md").read_text(encoding="utf-8")
     winner = next(
-        candidate
-        for candidate in report["candidates"]
-        if candidate["id"] == report["gate_decision"]["winner"]
+        candidate for candidate in report["candidates"] if candidate["id"] == report["gate_decision"]["winner"]
     )
-    rejected = next(
-        candidate
-        for candidate in report["candidates"]
-        if candidate["id"] == "candidate_overfit"
-    )
+    rejected = next(candidate for candidate in report["candidates"] if candidate["id"] == "candidate_overfit")
     rejected_types = {item["change_type"] for item in rejected["case_deltas"]}
     winner_types = {item["change_type"] for item in winner["case_deltas"]}
 
@@ -1315,10 +1316,7 @@ def test_failure_attribution_is_total_for_malformed_tool_shapes(
     module = load_pipeline_module()
     result = module.attribute_failure_case(
         actual_text=actual_text,
-        expected_text=(
-            '{"route":"faq","tool":{"name":"none","arguments":{}},'
-            '"reason":"expected"}'
-        ),
+        expected_text=('{"route":"faq","tool":{"name":"none","arguments":{}},' '"reason":"expected"}'),
         error_message=None,
         metrics={ROUTE_TOOL_ARGS_METRIC: {"passed": False}},
     )
@@ -1663,13 +1661,9 @@ def test_online_warning_observability_is_not_suppressed():
 
     assert handled is True
     assert response_format == {"type": "json_object"}
-    warning.assert_called_once_with(
-        "DeepSeek only supports JSON object response_format; response schema is ignored."
-    )
+    warning.assert_called_once_with("DeepSeek only supports JSON object response_format; response schema is ignored.")
     assert not any(
-        action == "ignore"
-        and issubclass(RuntimeWarning, category)
-        and (message is None or message.search(sse_warning))
+        action == "ignore" and issubclass(RuntimeWarning, category) and (message is None or message.search(sse_warning))
         for action, message, category, _module, _line in warnings.filters
     )
     with pytest.warns(RuntimeWarning, match=re.escape(sse_warning)):
@@ -2036,10 +2030,7 @@ def test_optimizer_round_audit_rejects_duplicate_round_ids_without_overwriting_a
     assert records[1]["accepted"] is False
     assert "duplicate round identifier" in records[1]["decision_reason"]
 
-    prompt_paths = [
-        Path(record["prompt_paths"]["system_prompt"])
-        for record in records
-    ]
+    prompt_paths = [Path(record["prompt_paths"]["system_prompt"]) for record in records]
     assert len(set(prompt_paths)) == 2
     for record, prompt_path in zip(records, prompt_paths):
         content = prompt_path.read_text(encoding="utf-8")
@@ -2248,7 +2239,12 @@ async def test_online_optimizer_validation_improvement_is_accepted(
             "score": score,
             "pass_rate": 1.0 if passed else 0.5,
             "metrics": {
-                ROUTE_TOOL_ARGS_METRIC: {"score": score, "threshold": 1.0, "passed": passed, "status": "passed" if passed else "failed"},
+                ROUTE_TOOL_ARGS_METRIC: {
+                    "score": score,
+                    "threshold": 1.0,
+                    "passed": passed,
+                    "status": "passed" if passed else "failed",
+                },
                 "llm_rubric_response": {"score": 1.0, "threshold": 0.66, "passed": True, "status": "passed"},
             },
             "case_results": [
@@ -2275,14 +2271,16 @@ async def test_online_optimizer_validation_improvement_is_accepted(
             "source": "AgentEvaluator",
         }
 
-    summaries = iter([
-        summary(0.5, False),
-        summary(0.5, False),
-        summary(0.5, False),
-        summary(1.0, True),
-        summary(1.0, True),
-        summary(1.0, True),
-    ])
+    summaries = iter(
+        [
+            summary(0.5, False),
+            summary(0.5, False),
+            summary(0.5, False),
+            summary(1.0, True),
+            summary(1.0, True),
+            summary(1.0, True),
+        ]
+    )
 
     async def fake_run_evaluator(**_: Any) -> dict[str, Any]:
         return next(summaries)
@@ -2440,16 +2438,18 @@ def test_online_e2e_smoke_with_real_api(tmp_path: Path):
     weak_system.write_text(source_prompts[EXAMPLE_DIR / "agent" / "prompts" / "system.md"], encoding="utf-8")
     weak_router = tmp_path / "weak_router.md"
     weak_router.write_text(
-        "\n".join([
-            "You route customer-support requests to one backend action.",
-            "Output exactly one JSON object with keys route, tool, and reason.",
-            "Allowed tools: create_refund_ticket, create_escalation_case, none.",
-            "Baseline v0 policy:",
-            "1. Prefer faq for refund requests unless the user says the refund was already approved.",
-            "2. Prefer faq for account or legal complaints unless the user uses the exact phrase human agent.",
-            "3. Use faq for shipping, coupon, address, and policy questions.",
-            "4. Keep tool.arguments as an empty object.",
-        ]),
+        "\n".join(
+            [
+                "You route customer-support requests to one backend action.",
+                "Output exactly one JSON object with keys route, tool, and reason.",
+                "Allowed tools: create_refund_ticket, create_escalation_case, none.",
+                "Baseline v0 policy:",
+                "1. Prefer faq for refund requests unless the user says the refund was already approved.",
+                "2. Prefer faq for account or legal complaints unless the user uses the exact phrase human agent.",
+                "3. Use faq for shipping, coupon, address, and policy questions.",
+                "4. Keep tool.arguments as an empty object.",
+            ]
+        ),
         encoding="utf-8",
     )
     before_weak_system = weak_system.read_text(encoding="utf-8")
@@ -2506,10 +2506,7 @@ def test_online_e2e_smoke_with_real_api(tmp_path: Path):
         }
         assert os.environ["TRPC_AGENT_API_KEY"] not in serialized_outputs
     finally:
-        assert {
-            path: path.read_text(encoding="utf-8")
-            for path in source_prompts
-        } == source_prompts
+        assert {path: path.read_text(encoding="utf-8") for path in source_prompts} == source_prompts
 
 
 @pytest.mark.skipif(os.getenv("RUN_ONLINE_E2E") != "1", reason="online rejection smoke is opt-in")
@@ -2562,10 +2559,7 @@ def test_online_e2e_rejects_perfect_default_prompts(tmp_path: Path):
             reports.append(report)
 
         candidate = report["candidates"][0]
-        serialized_outputs = "".join(
-            proc.stdout + proc.stderr
-            for proc in procs
-        ) + "".join(
+        serialized_outputs = "".join(proc.stdout + proc.stderr for proc in procs) + "".join(
             json.dumps(run_report)
             + (tmp_path / run_report["run_id"] / "optimization_report.md").read_text(encoding="utf-8")
             for run_report in reports
@@ -2575,8 +2569,7 @@ def test_online_e2e_rejects_perfect_default_prompts(tmp_path: Path):
         assert candidate["validation"]["score"] == 1.0
         assert report["gate_decision"]["accepted"] is False
         assert any(
-            "validation score did not improve over baseline" in reason
-            for reason in report["gate_decision"]["reasons"]
+            "validation score did not improve over baseline" in reason for reason in report["gate_decision"]["reasons"]
         )
         assert all(
             artifact["source_written"] is False
@@ -2586,7 +2579,4 @@ def test_online_e2e_rejects_perfect_default_prompts(tmp_path: Path):
         load_pipeline_module().validate_report_schema(report)
         assert os.environ["TRPC_AGENT_API_KEY"] not in serialized_outputs
     finally:
-        assert {
-            path: path.read_text(encoding="utf-8")
-            for path in source_prompts
-        } == source_prompts
+        assert {path: path.read_text(encoding="utf-8") for path in source_prompts} == source_prompts

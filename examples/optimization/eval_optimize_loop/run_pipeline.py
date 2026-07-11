@@ -36,7 +36,6 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -45,7 +44,6 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 from trpc_agent_sdk.log import logger
-
 
 TRAIN_PATH = HERE / "train.evalset.json"
 OPTIMIZER_DEV_PATH = HERE / "optimizer_dev.evalset.json"
@@ -83,27 +81,13 @@ OFFLINE_METRICS_CONFIG = {
         {
             "metric_name": PRIMARY_METRIC,
             "threshold": 1.0,
-            "criterion": {
-                "final_response": {
-                    "json": {
-                        "match": "exact"
-                    }
-                }
-            },
+            "criterion": {"final_response": {"json": {"match": "exact"}}},
         },
         {
             "metric_name": OFFLINE_RUBRIC_METRIC,
             "threshold": 1.0,
-            "criterion": {
-                "offline_rubric": {
-                    "checks": [
-                        "valid_json_object",
-                        "route_present",
-                        "tool_object_present"
-                    ]
-                }
-            },
-        }
+            "criterion": {"offline_rubric": {"checks": ["valid_json_object", "route_present", "tool_object_present"]}},
+        },
     ],
     "num_runs": 1,
 }
@@ -257,17 +241,13 @@ def write_optimizer_round_artifacts(
     reserved_round_ids = {
         round_id
         for round_record in rounds
-        for round_id, invalid in [
-            _normalized_round_identifier(getattr(round_record, "round", None))
-        ]
+        for round_id, invalid in [_normalized_round_identifier(getattr(round_record, "round", None))]
         if not invalid
     }
     used_round_ids: set[int] = set()
     next_fallback_round_id = 1
     for round_record in rounds:
-        round_id, invalid_round_id = _normalized_round_identifier(
-            getattr(round_record, "round", None)
-        )
+        round_id, invalid_round_id = _normalized_round_identifier(getattr(round_record, "round", None))
         duplicate_round_id = not invalid_round_id and round_id in used_round_ids
         if invalid_round_id or duplicate_round_id:
             while next_fallback_round_id in reserved_round_ids or next_fallback_round_id in used_round_ids:
@@ -283,9 +263,7 @@ def write_optimizer_round_artifacts(
         raw_candidate_prompts = getattr(round_record, "candidate_prompts", None)
         invalid_prompt_evidence = not isinstance(raw_candidate_prompts, dict)
         if invalid_prompt_evidence:
-            prompt_reasons.append(
-                "candidate_prompts was not a mapping and was normalized to an empty mapping"
-            )
+            prompt_reasons.append("candidate_prompts was not a mapping and was normalized to an empty mapping")
             raw_candidate_prompts = {}
         raw_prompt_items = sorted(raw_candidate_prompts.items(), key=_prompt_sort_key)
         used_prompt_names = {
@@ -411,20 +389,22 @@ def write_optimizer_round_artifacts(
                 decision_reason += "; invalid mapping keys were dropped and rejected"
             for prompt_reason in prompt_reasons:
                 decision_reason += f"; {prompt_reason}; round rejected"
-        records.append({
-            "round": round_id,
-            "optimized_field_names": optimized_field_names,
-            "prompt_paths": prompt_paths,
-            "prompt_sha256": prompt_hashes,
-            "validation_pass_rate": float(validation_pass_rate),
-            "metric_breakdown": metric_breakdown,
-            "accepted": accepted,
-            "decision_reason": decision_reason,
-            "failed_case_ids": failed_case_ids,
-            "cost_usd": float(cost_usd),
-            "token_usage": token_usage,
-            "duration_seconds": float(duration_seconds),
-        })
+        records.append(
+            {
+                "round": round_id,
+                "optimized_field_names": optimized_field_names,
+                "prompt_paths": prompt_paths,
+                "prompt_sha256": prompt_hashes,
+                "validation_pass_rate": float(validation_pass_rate),
+                "metric_breakdown": metric_breakdown,
+                "accepted": accepted,
+                "decision_reason": decision_reason,
+                "failed_case_ids": failed_case_ids,
+                "cost_usd": float(cost_usd),
+                "token_usage": token_usage,
+                "duration_seconds": float(duration_seconds),
+            }
+        )
     return records
 
 
@@ -509,10 +489,7 @@ def online_preflight() -> dict[str, bool]:
 
 
 def format_online_preflight(preflight: dict[str, bool]) -> str:
-    parts = [
-        f"{name}={'present' if preflight.get(name) else 'missing'}"
-        for name in ONLINE_ENV_VARS
-    ]
+    parts = [f"{name}={'present' if preflight.get(name) else 'missing'}" for name in ONLINE_ENV_VARS]
     return "online preflight: " + " ".join(parts)
 
 
@@ -564,7 +541,7 @@ def sanitize_report_text(value: Any) -> str | None:
     match = _SENSITIVE_REPORT_TEXT.search(message)
     if match is None:
         return message
-    context = message[:match.start()].rstrip(" :;,-")
+    context = message[: match.start()].rstrip(" :;,-")
     return f"{context}: provider details redacted" if context else "provider details redacted"
 
 
@@ -670,9 +647,7 @@ def offline_candidate_prompts(
     prompts = {name: text for name, (_, text) in source_prompts.items()}
     if candidate_id != "baseline":
         prompts["router_prompt"] = (
-            prompts["router_prompt"].rstrip()
-            + "\n\n"
-            + f"Offline candidate patch ({candidate_id}): {summary}\n"
+            prompts["router_prompt"].rstrip() + "\n\n" + f"Offline candidate patch ({candidate_id}): {summary}\n"
         )
     return prompts
 
@@ -709,15 +684,17 @@ def write_prompt_artifacts(
         candidate_path.write_text(candidate_text, encoding="utf-8")
         diff_text = prompt_diff(source_text, candidate_text, name)
         patch_lines.extend([f"## {name}", diff_text, ""])
-        audit.append({
-            "name": name,
-            "source_path": str(source_path),
-            "candidate_path": str(candidate_path),
-            "sha256": sha256_text(candidate_text),
-            "source_written": source_written,
-            "summary": summary,
-            "diff": diff_text,
-        })
+        audit.append(
+            {
+                "name": name,
+                "source_path": str(source_path),
+                "candidate_path": str(candidate_path),
+                "sha256": sha256_text(candidate_text),
+                "source_written": source_written,
+                "summary": summary,
+                "diff": diff_text,
+            }
+        )
     patch_path = prompt_dir / "prompt_patch.diff"
     patch_path.write_text("\n".join(patch_lines), encoding="utf-8")
     return audit, {
@@ -854,8 +831,7 @@ def attribute_failure_case(
         return {
             "root_cause": "final_response_mismatch",
             "reasons": [
-                "actual route "
-                f"{actual.get('route')!r} did not match expected route {expected.get('route')!r}"
+                "actual route " f"{actual.get('route')!r} did not match expected route {expected.get('route')!r}"
             ],
         }
     if not isinstance(actual_tool, dict):
@@ -867,8 +843,7 @@ def attribute_failure_case(
         return {
             "root_cause": "tool_call_error",
             "reasons": [
-                "actual tool "
-                f"{actual_tool.get('name')!r} did not match expected tool {expected_tool.get('name')!r}"
+                "actual tool " f"{actual_tool.get('name')!r} did not match expected tool {expected_tool.get('name')!r}"
             ],
         }
     actual_arguments = actual_tool.get("arguments", _MISSING)
@@ -938,24 +913,26 @@ def summarize_evaluate_result(result: Any, evalset_payload: dict[str, Any]) -> d
                 error_message=error_message,
                 metrics=metrics,
             )
-            case_results.append({
-                "case_id": eval_id,
-                "tags": case_tags(case),
-                "user": case_user_text(case),
-                "score": 0.0,
-                "passed": False,
-                "metrics": metrics,
-                "actual_text": "",
-                "expected_text": expected_text,
-                "key_trace": {
-                    "invocation_id": str(case_by_id[eval_id]["conversation"][0].get("invocation_id", "")),
-                    "actual_final_response": "",
-                    "expected_final_response": expected_text,
-                    "error_message": error_message,
-                },
-                "root_cause": attribution["root_cause"],
-                "reasons": attribution["reasons"],
-            })
+            case_results.append(
+                {
+                    "case_id": eval_id,
+                    "tags": case_tags(case),
+                    "user": case_user_text(case),
+                    "score": 0.0,
+                    "passed": False,
+                    "metrics": metrics,
+                    "actual_text": "",
+                    "expected_text": expected_text,
+                    "key_trace": {
+                        "invocation_id": str(case_by_id[eval_id]["conversation"][0].get("invocation_id", "")),
+                        "actual_final_response": "",
+                        "expected_final_response": expected_text,
+                        "error_message": error_message,
+                    },
+                    "root_cause": attribution["root_cause"],
+                    "reasons": attribution["reasons"],
+                }
+            )
             continue
 
         run_scores: list[float] = []
@@ -988,9 +965,7 @@ def summarize_evaluate_result(result: Any, evalset_payload: dict[str, Any]) -> d
 
         if not run_scores:
             run_scores = [
-                float(metric["score"])
-                for metric in merged_metrics.values()
-                if metric.get("score") is not None
+                float(metric["score"]) for metric in merged_metrics.values() if metric.get("score") is not None
             ]
         score_value = sum(run_scores) / len(run_scores) if run_scores else (1.0 if run_passed else 0.0)
         attribution = {"root_cause": "", "reasons": []}
@@ -1001,24 +976,26 @@ def summarize_evaluate_result(result: Any, evalset_payload: dict[str, Any]) -> d
                 error_message=error_message,
                 metrics=merged_metrics,
             )
-        case_results.append({
-            "case_id": eval_id,
-            "tags": case_tags(case),
-            "user": case_user_text(case),
-            "score": round(score_value, 6),
-            "passed": run_passed,
-            "metrics": merged_metrics,
-            "actual_text": actual_text,
-            "expected_text": expected_text,
-            "key_trace": {
-                "invocation_id": str(case_by_id[eval_id]["conversation"][0].get("invocation_id", "")),
-                "actual_final_response": actual_text,
-                "expected_final_response": expected_text,
-                "error_message": error_message,
-            },
-            "root_cause": attribution["root_cause"],
-            "reasons": attribution["reasons"],
-        })
+        case_results.append(
+            {
+                "case_id": eval_id,
+                "tags": case_tags(case),
+                "user": case_user_text(case),
+                "score": round(score_value, 6),
+                "passed": run_passed,
+                "metrics": merged_metrics,
+                "actual_text": actual_text,
+                "expected_text": expected_text,
+                "key_trace": {
+                    "invocation_id": str(case_by_id[eval_id]["conversation"][0].get("invocation_id", "")),
+                    "actual_final_response": actual_text,
+                    "expected_final_response": expected_text,
+                    "error_message": error_message,
+                },
+                "root_cause": attribution["root_cause"],
+                "reasons": attribution["reasons"],
+            }
+        )
 
     total = len(case_results)
     score = sum(item["score"] for item in case_results) / total if total else 0.0
@@ -1061,10 +1038,7 @@ def attribution_for(evaluation: dict[str, Any]) -> dict[str, Any]:
     case_results = evaluation.get("case_results")
     if not isinstance(case_results, list):
         case_results = []
-    failed = [
-        case for case in case_results
-        if isinstance(case, dict) and case.get("passed") is not True
-    ]
+    failed = [case for case in case_results if isinstance(case, dict) and case.get("passed") is not True]
     counts = Counter({name: 0 for name in TAXONOMY})
     cases = []
     for case in failed:
@@ -1073,12 +1047,14 @@ def attribution_for(evaluation: dict[str, Any]) -> dict[str, Any]:
             root = "runtime_error"
         counts[root] += 1
         reasons = case.get("reasons") or ["no failure reason recorded"]
-        cases.append({
-            "case_id": str(case.get("case_id", "")),
-            "root_cause": root,
-            "score": _finite_float(case.get("score")),
-            "reasons": reasons if isinstance(reasons, list) else [str(reasons)],
-        })
+        cases.append(
+            {
+                "case_id": str(case.get("case_id", "")),
+                "root_cause": root,
+                "score": _finite_float(case.get("score")),
+                "reasons": reasons if isinstance(reasons, list) else [str(reasons)],
+            }
+        )
     covered = sum(1 for case in cases if case["reasons"])
     return {
         "coverage": round(covered / len(failed), 6) if failed else 1.0,
@@ -1112,9 +1088,7 @@ def _install_offline_rubric_evaluator():
     from trpc_agent_sdk.evaluation._evaluator_base import Evaluator
     from trpc_agent_sdk.evaluation._evaluator_registry import EVALUATOR_REGISTRY
 
-    previous = EVALUATOR_REGISTRY.get_evaluator_class(
-        EvalMetric(metric_name=OFFLINE_RUBRIC_METRIC, threshold=1.0)
-    )
+    previous = EVALUATOR_REGISTRY.get_evaluator_class(EvalMetric(metric_name=OFFLINE_RUBRIC_METRIC, threshold=1.0))
 
     class OfflineRubricEvaluator(Evaluator):
         requires_reference = False
@@ -1191,10 +1165,7 @@ def make_fixture_call_agent(
     evalset_payload: dict[str, Any],
     outputs: dict[str, str],
 ) -> Callable[[str], Awaitable[str]]:
-    query_to_output = {
-        case_user_text(case): outputs.get(case["eval_id"], "")
-        for case in evalset_payload["eval_cases"]
-    }
+    query_to_output = {case_user_text(case): outputs.get(case["eval_id"], "") for case in evalset_payload["eval_cases"]}
 
     async def call_agent(query: str) -> str:
         return query_to_output.get(query, "")
@@ -1221,9 +1192,7 @@ def materialize_trace_evalset(
         expected_invocation = copy.deepcopy(case["conversation"][0])
         actual_invocation = copy.deepcopy(expected_invocation)
         actual_invocation["final_response"] = {
-            "parts": [{
-                "text": outputs.get(case["eval_id"], "")
-            }],
+            "parts": [{"text": outputs.get(case["eval_id"], "")}],
             "role": "model",
         }
         case["actual_conversation"] = [actual_invocation]
@@ -1301,9 +1270,7 @@ def build_case_deltas(baseline_val: dict[str, Any], candidate_val: dict[str, Any
         baseline_score = None if before is None else _finite_float(before.get("score"))
         candidate_score = None if after is None else _finite_float(after.get("score"))
         delta = (
-            None
-            if baseline_score is None or candidate_score is None
-            else round(candidate_score - baseline_score, 6)
+            None if baseline_score is None or candidate_score is None else round(candidate_score - baseline_score, 6)
         )
         if before is None:
             root_cause = "unexpected_candidate"
@@ -1317,19 +1284,21 @@ def build_case_deltas(baseline_val: dict[str, Any], candidate_val: dict[str, Any
             root_cause = after.get("root_cause", "")
             change_type = classify_case_delta(before, after)
             reasons = after.get("reasons", [])
-        deltas.append({
-            "case_id": case_id,
-            "baseline_score": baseline_score,
-            "candidate_score": candidate_score,
-            "baseline_passed": None if before is None else bool(before.get("passed")),
-            "candidate_passed": None if after is None else bool(after.get("passed")),
-            "delta": delta,
-            "change_type": change_type,
-            "baseline_actual_text": "" if before is None else before.get("actual_text", ""),
-            "candidate_actual_text": "" if after is None else after.get("actual_text", ""),
-            "root_cause": root_cause,
-            "reasons": reasons,
-        })
+        deltas.append(
+            {
+                "case_id": case_id,
+                "baseline_score": baseline_score,
+                "candidate_score": candidate_score,
+                "baseline_passed": None if before is None else bool(before.get("passed")),
+                "candidate_passed": None if after is None else bool(after.get("passed")),
+                "delta": delta,
+                "change_type": change_type,
+                "baseline_actual_text": "" if before is None else before.get("actual_text", ""),
+                "candidate_actual_text": "" if after is None else after.get("actual_text", ""),
+                "root_cause": root_cause,
+                "reasons": reasons,
+            }
+        )
     return deltas
 
 
@@ -1410,14 +1379,10 @@ def apply_gate(
     baseline_score = _finite_float(baseline_val.get("score"))
     candidate_score = _finite_float(candidate_val.get("score"))
     raw_validation_delta = (
-        None
-        if baseline_score is None or candidate_score is None
-        else candidate_score - baseline_score
+        None if baseline_score is None or candidate_score is None else candidate_score - baseline_score
     )
     validation_delta = (
-        raw_validation_delta
-        if raw_validation_delta is not None and math.isfinite(raw_validation_delta)
-        else None
+        raw_validation_delta if raw_validation_delta is not None and math.isfinite(raw_validation_delta) else None
     )
     if validation_delta is None:
         accepted = False
@@ -1433,8 +1398,7 @@ def apply_gate(
         elif validation_delta <= min_delta:
             accepted = False
             reasons.append(
-                "validation score improvement "
-                f"{validation_delta:.4f} must be greater than required {min_delta:.4f}"
+                "validation score improvement " f"{validation_delta:.4f} must be greater than required {min_delta:.4f}"
             )
 
     baseline_ids = set(baseline_by_id)
@@ -1464,8 +1428,7 @@ def apply_gate(
         if "critical" in _normalized_gate_tags(candidate_by_id[case_id])
         and _finite_float(candidate_by_id[case_id].get("score")) is not None
         and _finite_float(baseline_by_id[case_id].get("score")) is not None
-        and _finite_float(candidate_by_id[case_id].get("score"))
-        < _finite_float(baseline_by_id[case_id].get("score"))
+        and _finite_float(candidate_by_id[case_id].get("score")) < _finite_float(baseline_by_id[case_id].get("score"))
     ]
     if critical_regression_ids and not gate_config.get("allow_critical_regression", False):
         accepted = False
@@ -1579,32 +1542,32 @@ def build_candidate_report(
         duration_seconds=duration_seconds,
         cost_usd=cost_usd,
     )
-    return _json_safe({
-        "id": candidate_id,
-        "audit": build_candidate_audit(
-            seed=seed,
-            duration_seconds=duration_seconds,
-            cost_usd=cost_usd,
-            optimizer_config=optimizer_config,
-        ),
-        "prompt_patch_summary": fixture.get("prompt_patch_summary", ""),
-        "prompt_artifacts": prompt_artifacts or [],
-        "train": _json_safe(train),
-        "optimizer_dev": _json_safe(optimizer_dev),
-        "final_validation": _json_safe(validation),
-        "validation": _json_safe(validation),
-        "delta": {
-            "train_score": _score_delta(train.get("score"), baseline_train.get("score")),
-            "optimizer_dev_score": _score_delta(
-                optimizer_dev.get("score"), baseline_optimizer_dev.get("score")
+    return _json_safe(
+        {
+            "id": candidate_id,
+            "audit": build_candidate_audit(
+                seed=seed,
+                duration_seconds=duration_seconds,
+                cost_usd=cost_usd,
+                optimizer_config=optimizer_config,
             ),
-            "validation_score": _score_delta(validation.get("score"), baseline_val.get("score")),
-        },
-        "case_deltas": build_case_deltas(baseline_val, validation),
-        "gate": gate,
-        "failure_attribution": attribution_for(validation),
-        "artifacts": artifacts or {},
-    })
+            "prompt_patch_summary": fixture.get("prompt_patch_summary", ""),
+            "prompt_artifacts": prompt_artifacts or [],
+            "train": _json_safe(train),
+            "optimizer_dev": _json_safe(optimizer_dev),
+            "final_validation": _json_safe(validation),
+            "validation": _json_safe(validation),
+            "delta": {
+                "train_score": _score_delta(train.get("score"), baseline_train.get("score")),
+                "optimizer_dev_score": _score_delta(optimizer_dev.get("score"), baseline_optimizer_dev.get("score")),
+                "validation_score": _score_delta(validation.get("score"), baseline_val.get("score")),
+            },
+            "case_deltas": build_case_deltas(baseline_val, validation),
+            "gate": gate,
+            "failure_attribution": attribution_for(validation),
+            "artifacts": artifacts or {},
+        }
+    )
 
 
 def pick_winner(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -1916,17 +1879,23 @@ async def build_offline_report(
         router_prompt=router_prompt,
     )
     if mode == "trace":
-        artifacts.update({
-            "trace_evalset": str(run_dir / "trace_evalset.json"),
-            "trace_metrics": str(run_dir / "trace_metrics.json"),
-        })
-    artifacts.update({
-        "baseline_train_trace_evalset": baseline_train_artifacts.get("train_trace_evalset", ""),
-        "baseline_optimizer_dev_trace_evalset": baseline_optimizer_dev_artifacts.get("optimizer_dev_trace_evalset", ""),
-        "baseline_validation_trace_evalset": baseline_val_artifacts.get("validation_trace_evalset", ""),
-        "baseline_prompt_dir": baseline_prompt_paths.get("prompt_dir", ""),
-        "baseline_prompt_patch": baseline_prompt_paths.get("prompt_patch", ""),
-    })
+        artifacts.update(
+            {
+                "trace_evalset": str(run_dir / "trace_evalset.json"),
+                "trace_metrics": str(run_dir / "trace_metrics.json"),
+            }
+        )
+    artifacts.update(
+        {
+            "baseline_train_trace_evalset": baseline_train_artifacts.get("train_trace_evalset", ""),
+            "baseline_optimizer_dev_trace_evalset": baseline_optimizer_dev_artifacts.get(
+                "optimizer_dev_trace_evalset", ""
+            ),
+            "baseline_validation_trace_evalset": baseline_val_artifacts.get("validation_trace_evalset", ""),
+            "baseline_prompt_dir": baseline_prompt_paths.get("prompt_dir", ""),
+            "baseline_prompt_patch": baseline_prompt_paths.get("prompt_patch", ""),
+        }
+    )
 
     return build_top_level_report(
         mode=mode,
@@ -2080,9 +2049,7 @@ async def online_call_agent(query: str) -> str:
 
 
 def _optimizer_fixture(result: Any) -> dict[str, str]:
-    return {
-        "prompt_patch_summary": "Best prompt returned by AgentOptimizer.optimize(update_source=False)."
-    }
+    return {"prompt_patch_summary": "Best prompt returned by AgentOptimizer.optimize(update_source=False)."}
 
 
 def _optimizer_extra(result: Any) -> dict[str, Any]:
@@ -2275,11 +2242,7 @@ async def run_online(
     source_prompts = read_source_prompts(system_path, router_path)
 
     online_dir = run_dir / "online"
-    target = (
-        TargetPrompt()
-        .add_path("system_prompt", str(system_path))
-        .add_path("router_prompt", str(router_path))
-    )
+    target = TargetPrompt().add_path("system_prompt", str(system_path)).add_path("router_prompt", str(router_path))
     route_metric_state = _install_route_tool_args_metric()
     try:
         result = await AgentOptimizer.optimize(
@@ -2368,9 +2331,9 @@ async def run_online(
         run_dir=run_dir,
         candidate_id="baseline",
         source_prompts=source_prompts,
-        candidate_prompts=dict(getattr(result, "baseline_prompts", {}) or {
-            name: text for name, (_, text) in source_prompts.items()
-        }),
+        candidate_prompts=dict(
+            getattr(result, "baseline_prompts", {}) or {name: text for name, (_, text) in source_prompts.items()}
+        ),
         summary="Source prompts before AgentOptimizer.optimize.",
         source_written=False,
     )
@@ -2433,19 +2396,19 @@ async def run_online(
         router_prompt=router_path,
     )
     artifacts.update(candidate["artifacts"])
-    artifacts.update({
-        "online_eval_metrics": str(metrics_path),
-        "baseline_prompt_dir": baseline_prompt_paths.get("prompt_dir", ""),
-        "baseline_prompt_patch": baseline_prompt_paths.get("prompt_patch", ""),
-    })
+    artifacts.update(
+        {
+            "online_eval_metrics": str(metrics_path),
+            "baseline_prompt_dir": baseline_prompt_paths.get("prompt_dir", ""),
+            "baseline_prompt_patch": baseline_prompt_paths.get("prompt_patch", ""),
+        }
+    )
     report = build_top_level_report(
         mode="online",
         run_id=actual_run_id,
         run_dir=run_dir,
         seed=seed,
-        baseline_fixture={
-            "prompt_patch_summary": "Source prompts before AgentOptimizer.optimize."
-        },
+        baseline_fixture={"prompt_patch_summary": "Source prompts before AgentOptimizer.optimize."},
         baseline_train=baseline_train,
         baseline_optimizer_dev=baseline_optimizer_dev,
         baseline_val=baseline_val,
