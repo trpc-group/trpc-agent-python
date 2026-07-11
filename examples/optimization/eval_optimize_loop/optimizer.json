@@ -1,0 +1,81 @@
+{
+  "evaluate": {
+    "metrics": [
+      {
+        "metric_name": "final_response_avg_score",
+        "threshold": 1.0,
+        "criterion": {
+          "final_response": {
+            "text": {
+              "match": "contains",
+              "case_insensitive": false
+            }
+          }
+        }
+      },
+      {
+        "metric_name": "llm_rubric_response",
+        "threshold": 1.0,
+        "criterion": {
+          "llm_judge": {
+            "judge_model": {
+              "provider_name": "offline",
+              "model_name": "judge",
+              "api_key": "",
+              "num_samples": 1,
+              "generation_config": {
+                "max_tokens": 512,
+                "temperature": 0.0
+              }
+            },
+            "rubrics": [
+              {
+                "id": "format",
+                "content": {
+                  "text": "The response follows the required output format."
+                },
+                "description": "Required output format",
+                "type": "FINAL_RESPONSE_QUALITY"
+              },
+              {
+                "id": "quality",
+                "content": {
+                  "text": "The response gives the complete, ordered, and useful answer."
+                },
+                "description": "Complete and useful response",
+                "type": "FINAL_RESPONSE_QUALITY"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "num_runs": 1
+  },
+  "optimize": {
+    "eval_case_parallelism": 1,
+    "stop": {
+      "required_metrics": "all"
+    },
+    "algorithm": {
+      "name": "gepa_reflective",
+      "seed": 91,
+      "reflection_lm": {
+        "provider_name": "offline",
+        "model_name": "reflector",
+        "api_key": "",
+        "generation_config": {
+          "max_tokens": 1024,
+          "temperature": 0.0
+        }
+      },
+      "candidate_selection_strategy": "current_best",
+      "module_selector": "round_robin",
+      "reflection_minibatch_size": 3,
+      "skip_perfect_score": false,
+      "max_metric_calls": 80,
+      "max_candidate_proposals": 3,
+      "timeout_seconds": 120
+    }
+  }
+}

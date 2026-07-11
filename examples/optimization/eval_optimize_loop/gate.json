@@ -1,0 +1,13 @@
+{
+  "min_validation_gain": 0.5,
+  "min_validation_gain_ci_lower_bound": 0.0,
+  "forbid_new_hard_failures": true,
+  "key_cases_no_regression": true,
+  "reject_overfitting": true,
+  "budget": {
+    "max_metric_calls": 80,
+    "max_total_tokens": 200000,
+    "max_duration_seconds": 180,
+    "max_cost_usd": 0.0
+  }
+}

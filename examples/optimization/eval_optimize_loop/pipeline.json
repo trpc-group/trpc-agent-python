@@ -1,0 +1,29 @@
+{
+  "optimizer_config": "optimizer.json",
+  "regression_metrics_config": "regression.metrics.json",
+  "gate_config": "gate.json",
+  "train_dataset": "data/train.evalset.json",
+  "validation_dataset": "data/val.evalset.json",
+  "target_prompts": {
+    "system": "agent/prompts/system.md"
+  },
+  "candidate_sources": [
+    {
+      "candidate_id": "ineffective",
+      "path": "agent/prompts/candidates/ineffective.md"
+    },
+    {
+      "candidate_id": "overfit",
+      "path": "agent/prompts/candidates/overfit.md"
+    },
+    {
+      "candidate_id": "robust",
+      "path": "agent/prompts/candidates/robust.md"
+    }
+  ],
+  "output_dir": "runs/latest",
+  "seed": 91,
+  "bootstrap_samples": 2000,
+  "confidence_level": 0.95,
+  "apply_if_accepted": false
+}

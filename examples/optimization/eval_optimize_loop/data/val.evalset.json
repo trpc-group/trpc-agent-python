@@ -1,0 +1,189 @@
+{
+  "eval_set_id": "support_regression_validation",
+  "name": "离线客服回归验证集",
+  "description": "三个验证 case，覆盖 rubric、知识召回和关键格式回退。",
+  "eval_cases": [
+    {
+      "eval_id": "val_llm_rubric_failure",
+      "conversation": [
+        {
+          "invocation_id": "expected-4",
+          "user_content": {
+            "role": "user",
+            "parts": [{"text": "客户申请退款时，请说明客服必须先做什么，再做什么。"}]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [{"text": "退款处理流程："}]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "offline",
+        "state": {
+          "key_case": false,
+          "hard_fail": false,
+          "variant_traces": {
+            "baseline": {
+              "final_response": {"role": "model", "parts": [{"text": "退款处理流程：请告知客户耐心等待。"}]},
+              "intermediate_data": {"tool_uses": [], "tool_responses": []},
+              "signals": {"format_pass": true, "knowledge_recall_pass": true, "llm_rubric_pass": false},
+              "usage": {"input_tokens": 44, "output_tokens": 18, "cost": 0.0, "latency_ms": 5}
+            },
+            "ineffective": {
+              "final_response": {"role": "model", "parts": [{"text": "退款处理流程：请告知客户耐心等待。"}]},
+              "intermediate_data": {"tool_uses": [], "tool_responses": []},
+              "signals": {"format_pass": true, "knowledge_recall_pass": true, "llm_rubric_pass": false},
+              "usage": {"input_tokens": 46, "output_tokens": 18, "cost": 0.0, "latency_ms": 5}
+            },
+            "overfit": {
+              "final_response": {"role": "model", "parts": [{"text": "退款处理流程：请告知客户耐心等待。"}]},
+              "intermediate_data": {"tool_uses": [], "tool_responses": []},
+              "signals": {"format_pass": true, "knowledge_recall_pass": true, "llm_rubric_pass": false},
+              "usage": {"input_tokens": 50, "output_tokens": 18, "cost": 0.0, "latency_ms": 5}
+            },
+            "robust": {
+              "final_response": {"role": "model", "parts": [{"text": "退款处理流程：先核验订单与付款状态，再告知退款时效。"}]},
+              "intermediate_data": {"tool_uses": [], "tool_responses": []},
+              "signals": {"format_pass": true, "knowledge_recall_pass": true, "llm_rubric_pass": true},
+              "usage": {"input_tokens": 56, "output_tokens": 24, "cost": 0.0, "latency_ms": 6}
+            }
+          }
+        }
+      }
+    },
+    {
+      "eval_id": "val_knowledge_recall_insufficiency",
+      "conversation": [
+        {
+          "invocation_id": "expected-5",
+          "user_content": {
+            "role": "user",
+            "parts": [{"text": "根据知识库回答：会员退款到账需要多久？"}]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [{"text": "会员退款到账："}]
+          },
+          "intermediate_data": {
+            "tool_uses": [{"id": "call-1", "name": "search_policy", "args": {"query": "会员退款到账时效", "top_k": 2}}],
+            "tool_responses": [{"id": "call-1", "name": "search_policy", "response": {"documents": [{"id": "refund-sla", "text": "会员退款原路退回，3-5 个工作日到账。"}]}}]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "offline",
+        "state": {
+          "key_case": false,
+          "hard_fail": false,
+          "variant_traces": {
+            "baseline": {
+              "final_response": {"role": "model", "parts": [{"text": "会员退款到账：通常当天到账。"}]},
+              "intermediate_data": {
+                "tool_uses": [{"id": "call-1", "name": "search_policy", "args": {"query": "会员退款到账时效", "top_k": 2}}],
+                "tool_responses": [{"id": "call-1", "name": "search_policy", "response": {"documents": [{"id": "return-window", "text": "商品支持 7 天退换。"}]}}]
+              },
+              "signals": {"format_pass": true, "knowledge_recall_pass": false, "llm_rubric_pass": false},
+              "usage": {"input_tokens": 48, "output_tokens": 18, "cost": 0.0, "latency_ms": 8}
+            },
+            "ineffective": {
+              "final_response": {"role": "model", "parts": [{"text": "会员退款到账：通常当天到账。"}]},
+              "intermediate_data": {
+                "tool_uses": [{"id": "call-1", "name": "search_policy", "args": {"query": "会员退款到账时效", "top_k": 2}}],
+                "tool_responses": [{"id": "call-1", "name": "search_policy", "response": {"documents": [{"id": "return-window", "text": "商品支持 7 天退换。"}]}}]
+              },
+              "signals": {"format_pass": true, "knowledge_recall_pass": false, "llm_rubric_pass": false},
+              "usage": {"input_tokens": 50, "output_tokens": 18, "cost": 0.0, "latency_ms": 8}
+            },
+            "overfit": {
+              "final_response": {"role": "model", "parts": [{"text": "会员退款到账：通常当天到账。"}]},
+              "intermediate_data": {
+                "tool_uses": [{"id": "call-1", "name": "search_policy", "args": {"query": "会员退款到账时效", "top_k": 2}}],
+                "tool_responses": [{"id": "call-1", "name": "search_policy", "response": {"documents": [{"id": "return-window", "text": "商品支持 7 天退换。"}]}}]
+              },
+              "signals": {"format_pass": true, "knowledge_recall_pass": false, "llm_rubric_pass": false},
+              "usage": {"input_tokens": 54, "output_tokens": 18, "cost": 0.0, "latency_ms": 8}
+            },
+            "robust": {
+              "final_response": {"role": "model", "parts": [{"text": "会员退款到账：原路退回，3-5 个工作日到账。"}]},
+              "intermediate_data": {
+                "tool_uses": [{"id": "call-1", "name": "search_policy", "args": {"query": "会员退款到账时效", "top_k": 2}}],
+                "tool_responses": [{"id": "call-1", "name": "search_policy", "response": {"documents": [{"id": "refund-sla", "text": "会员退款原路退回，3-5 个工作日到账。"}]}}]
+              },
+              "signals": {"format_pass": true, "knowledge_recall_pass": true, "llm_rubric_pass": true},
+              "usage": {"input_tokens": 60, "output_tokens": 24, "cost": 0.0, "latency_ms": 8}
+            }
+          }
+        }
+      }
+    },
+    {
+      "eval_id": "val_format_key_case",
+      "conversation": [
+        {
+          "invocation_id": "expected-6",
+          "user_content": {
+            "role": "user",
+            "parts": [{"text": "查询订单 O-400，只返回 JSON，字段为 order_id 和 status。"}]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [{"text": "{\"order_id\":\"O-400\",\"status\":\"已签收\"}"}]
+          },
+          "intermediate_data": {
+            "tool_uses": [{"id": "call-1", "name": "lookup_order", "args": {"order_id": "O-400"}}],
+            "tool_responses": [{"id": "call-1", "name": "lookup_order", "response": {"order_id": "O-400", "status": "已签收"}}]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "offline",
+        "state": {
+          "key_case": true,
+          "hard_fail": true,
+          "variant_traces": {
+            "baseline": {
+              "final_response": {"role": "model", "parts": [{"text": "{\"order_id\":\"O-400\",\"status\":\"已签收\"}"}]},
+              "intermediate_data": {
+                "tool_uses": [{"id": "call-1", "name": "lookup_order", "args": {"order_id": "O-400"}}],
+                "tool_responses": [{"id": "call-1", "name": "lookup_order", "response": {"order_id": "O-400", "status": "已签收"}}]
+              },
+              "signals": {"format_pass": true, "knowledge_recall_pass": true, "llm_rubric_pass": true},
+              "usage": {"input_tokens": 50, "output_tokens": 20, "cost": 0.0, "latency_ms": 6}
+            },
+            "ineffective": {
+              "final_response": {"role": "model", "parts": [{"text": "{\"order_id\":\"O-400\",\"status\":\"已签收\"}"}]},
+              "intermediate_data": {
+                "tool_uses": [{"id": "call-1", "name": "lookup_order", "args": {"order_id": "O-400"}}],
+                "tool_responses": [{"id": "call-1", "name": "lookup_order", "response": {"order_id": "O-400", "status": "已签收"}}]
+              },
+              "signals": {"format_pass": true, "knowledge_recall_pass": true, "llm_rubric_pass": true},
+              "usage": {"input_tokens": 52, "output_tokens": 20, "cost": 0.0, "latency_ms": 6}
+            },
+            "overfit": {
+              "final_response": {"role": "model", "parts": [{"text": "订单 O-400 状态：已签收。"}]},
+              "intermediate_data": {
+                "tool_uses": [{"id": "call-1", "name": "lookup_order", "args": {"order_id": "O-400"}}],
+                "tool_responses": [{"id": "call-1", "name": "lookup_order", "response": {"order_id": "O-400", "status": "已签收"}}]
+              },
+              "signals": {"format_pass": false, "knowledge_recall_pass": true, "llm_rubric_pass": true},
+              "usage": {"input_tokens": 56, "output_tokens": 16, "cost": 0.0, "latency_ms": 6}
+            },
+            "robust": {
+              "final_response": {"role": "model", "parts": [{"text": "{\"order_id\":\"O-400\",\"status\":\"已签收\"}"}]},
+              "intermediate_data": {
+                "tool_uses": [{"id": "call-1", "name": "lookup_order", "args": {"order_id": "O-400"}}],
+                "tool_responses": [{"id": "call-1", "name": "lookup_order", "response": {"order_id": "O-400", "status": "已签收"}}]
+              },
+              "signals": {"format_pass": true, "knowledge_recall_pass": true, "llm_rubric_pass": true},
+              "usage": {"input_tokens": 62, "output_tokens": 20, "cost": 0.0, "latency_ms": 6}
+            }
+          }
+        }
+      }
+    }
+  ]
+}
