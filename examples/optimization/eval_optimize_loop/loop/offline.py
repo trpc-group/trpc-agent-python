@@ -93,6 +93,12 @@ class OfflineModel(LLMModel):
                 if not conversation:
                     continue
                 query = _content_text(conversation[0].user_content)
+                if not query:
+                    raise ValueError(f"case {case.eval_id!r} has an empty offline replay query")
+                if query in catalog:
+                    previous = catalog[query]
+                    raise ValueError("offline replay queries must be unique; "
+                                     f"cases {previous.eval_id!r} and {case.eval_id!r} share the same query")
                 catalog[query] = case
         with cls._configuration_lock:
             cls._catalog = catalog

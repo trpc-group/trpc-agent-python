@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 import time
 import uuid
 from datetime import datetime
@@ -36,6 +37,8 @@ from .offline import configure_offline_models
 from .offline import create_offline_call_agent
 from .reporting import write_reports
 from .trace import TraceEvaluator
+
+_OFFLINE_RUN_LOCK = threading.Lock()
 
 
 def _sha256_bytes(payload: bytes) -> str:
@@ -75,6 +78,15 @@ class EvalOptimizePipeline:
         self._spec = spec
 
     async def run(self) -> OptimizationReport:
+        """Execute one isolated offline run, rejecting unsafe concurrency."""
+        if not _OFFLINE_RUN_LOCK.acquire(blocking=False):
+            raise RuntimeError("another offline evaluation/optimization pipeline is already running in this process")
+        try:
+            return await self._run_isolated()
+        finally:
+            _OFFLINE_RUN_LOCK.release()
+
+    async def _run_isolated(self) -> OptimizationReport:
         """Run baseline, optimization, independent regression, gate, and reports."""
         started_clock = time.perf_counter()
         started_at = datetime.now(timezone.utc)
@@ -89,13 +101,12 @@ class EvalOptimizePipeline:
         trace_evaluator = TraceEvaluator(spec.output_dir)
         train_set = EvalSet.model_validate_json(spec.train_dataset.read_text(encoding="utf-8"))
         validation_set = EvalSet.model_validate_json(spec.validation_dataset.read_text(encoding="utf-8"))
+        baseline_prompts = {name: path.read_text(encoding="utf-8") for name, path in spec.target_prompts.items()}
         known_candidates = {
             source.candidate_id: source.path.read_text(encoding="utf-8")
             for source in spec.candidate_sources
         }
-        prompt_text = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in (list(spec.target_prompts.values()) + [source.path for source in spec.candidate_sources]))
+        prompt_text = "\n".join([*baseline_prompts.values(), *known_candidates.values()])
         data_quality = analyzer.validate_data_quality(
             train_set,
             validation_set,
@@ -110,11 +121,19 @@ class EvalOptimizePipeline:
             eval_sets=[train_set, validation_set],
             candidate_prompts=list(known_candidates.values()),
         )
+        optimizer_dir = spec.output_dir / "optimizer"
+        prompt_workspace = optimizer_dir / "prompt_workspace"
+        prompt_workspace.mkdir(parents=True, exist_ok=True)
         target_prompt = TargetPrompt()
+        source_target_prompt = TargetPrompt()
+        working_prompt_paths: dict[str, Path] = {}
         for name, path in spec.target_prompts.items():
-            target_prompt.add_path(name, str(path))
-        baseline_prompts = await target_prompt.read_all()
-        call_agent = create_offline_call_agent(spec.target_prompts)
+            workspace_path = prompt_workspace / f"{name}.md"
+            workspace_path.write_text(baseline_prompts[name], encoding="utf-8")
+            working_prompt_paths[name] = workspace_path
+            target_prompt.add_path(name, str(workspace_path))
+            source_target_prompt.add_path(name, str(path))
+        call_agent = create_offline_call_agent(working_prompt_paths)
 
         baseline = BaselineEvaluation(
             train=await trace_evaluator.evaluate(
@@ -133,7 +152,6 @@ class EvalOptimizePipeline:
             ),
         )
 
-        optimizer_dir = spec.output_dir / "optimizer"
         proposal_capture = _ProposalCapture()
         optimize_result = await AgentOptimizer.optimize(
             config_path=str(spec.optimizer_config),
@@ -153,63 +171,59 @@ class EvalOptimizePipeline:
         optimizer_resources = analyzer.optimizer_resources(optimize_result)
 
         candidates: list[CandidateEvaluation] = []
-        try:
-            for optimizer_round, prompts in proposal_records:
-                candidate_started = time.perf_counter()
-                candidate_id = analyzer.candidate_id(prompts, known_candidates)
-                await target_prompt.write_all(prompts)
-                candidate_train = await trace_evaluator.evaluate(
-                    train_set,
-                    split="train",
-                    eval_config=regression_config,
+        for optimizer_round, prompts in proposal_records:
+            candidate_started = time.perf_counter()
+            candidate_id = analyzer.candidate_id(prompts, known_candidates)
+            candidate_train = await trace_evaluator.evaluate(
+                train_set,
+                split="train",
+                eval_config=regression_config,
+                prompts=prompts,
+                trace_label=candidate_id,
+            )
+            candidate_validation = await trace_evaluator.evaluate(
+                validation_set,
+                split="validation",
+                eval_config=regression_config,
+                prompts=prompts,
+                trace_label=candidate_id,
+            )
+            delta = CandidateDelta(
+                train=analyzer.diff(baseline.train, candidate_train),
+                validation=analyzer.diff(baseline.validation, candidate_validation),
+            )
+            candidate_resources = analyzer.candidate_resources(
+                train_set=train_set,
+                validation_set=validation_set,
+                prompts=prompts,
+                eval_config=regression_config,
+                duration_seconds=time.perf_counter() - candidate_started,
+            )
+            gate = analyzer.gate(
+                baseline=baseline,
+                candidate_train=candidate_train,
+                candidate_validation=candidate_validation,
+                delta=delta,
+                optimizer_status=optimize_result.status,
+                resources=candidate_resources,
+                config=gate_config,
+            )
+            candidates.append(
+                CandidateEvaluation(
+                    candidate_id=candidate_id,
                     prompts=prompts,
-                    trace_label=candidate_id,
-                )
-                candidate_validation = await trace_evaluator.evaluate(
-                    validation_set,
-                    split="validation",
-                    eval_config=regression_config,
-                    prompts=prompts,
-                    trace_label=candidate_id,
-                )
-                delta = CandidateDelta(
-                    train=analyzer.diff(baseline.train, candidate_train),
-                    validation=analyzer.diff(baseline.validation, candidate_validation),
-                )
-                candidate_resources = analyzer.candidate_resources(
-                    train_set=train_set,
-                    validation_set=validation_set,
-                    prompts=prompts,
-                    eval_config=regression_config,
-                    duration_seconds=time.perf_counter() - candidate_started,
-                )
-                gate = analyzer.gate(
-                    baseline=baseline,
-                    candidate_train=candidate_train,
-                    candidate_validation=candidate_validation,
+                    train=candidate_train,
+                    validation=candidate_validation,
                     delta=delta,
-                    optimizer_status=optimize_result.status,
-                    resources=candidate_resources,
-                    config=gate_config,
-                )
-                candidates.append(
-                    CandidateEvaluation(
-                        candidate_id=candidate_id,
-                        prompts=prompts,
-                        train=candidate_train,
-                        validation=candidate_validation,
-                        delta=delta,
-                        gate=gate,
-                        audit=CandidateAudit(
-                            prompt_sha256=_sha256_text(json.dumps(prompts, sort_keys=True, ensure_ascii=False)),
-                            source="GEPA on_proposal_end",
-                            optimizer_round=optimizer_round,
-                            seed=spec.seed,
-                            resources=candidate_resources,
-                        ),
-                    ))
-        finally:
-            await target_prompt.write_all(baseline_prompts)
+                    gate=gate,
+                    audit=CandidateAudit(
+                        prompt_sha256=_sha256_text(json.dumps(prompts, sort_keys=True, ensure_ascii=False)),
+                        source="GEPA on_proposal_end",
+                        optimizer_round=optimizer_round,
+                        seed=spec.seed,
+                        resources=candidate_resources,
+                    ),
+                ))
 
         analyzer.mark_pareto(candidates)
         accepted_candidates = [candidate for candidate in candidates if candidate.gate.accepted]
@@ -223,7 +237,7 @@ class EvalOptimizePipeline:
             ),
         ) if accepted_candidates else None)
         if selected is not None and spec.apply_if_accepted:
-            await target_prompt.write_all(selected.prompts)
+            await source_target_prompt.write_all(selected.prompts)
 
         scoped_cases = {
             "baseline/train": baseline.train.cases,

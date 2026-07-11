@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 from typing import Literal
@@ -18,6 +19,39 @@ from typing import Optional
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
+from pydantic import field_validator
+from pydantic import model_validator
+
+_SAFE_ARTIFACT_LABEL = r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+_WINDOWS_DEVICE_NAMES = {
+    "aux",
+    "con",
+    "nul",
+    "prn",
+    *(f"com{index}" for index in range(1, 10)),
+    *(f"lpt{index}" for index in range(1, 10)),
+}
+
+
+def _validate_artifact_label(
+    value: str,
+    *,
+    subject: str,
+    reserved: set[str] | None = None,
+) -> str:
+    if re.fullmatch(_SAFE_ARTIFACT_LABEL, value) is None:
+        raise ValueError(f"{subject} must be a safe artifact label")
+    folded = value.casefold()
+    if folded in _WINDOWS_DEVICE_NAMES or folded in (reserved or set()):
+        raise ValueError(f"{subject} is a reserved artifact label: {value!r}")
+    return value
+
+
+def _casefold_duplicates(values: list[str]) -> list[str]:
+    groups: dict[str, list[str]] = {}
+    for value in values:
+        groups.setdefault(value.casefold(), []).append(value)
+    return sorted(" == ".join(group) for group in groups.values() if len(group) > 1)
 
 
 class _StrictModel(BaseModel):
@@ -27,8 +61,17 @@ class _StrictModel(BaseModel):
 class CandidateSource(_StrictModel):
     """A deterministic prompt proposal used by the offline reflection model."""
 
-    candidate_id: str
+    candidate_id: str = Field(pattern=_SAFE_ARTIFACT_LABEL)
     path: Path
+
+    @field_validator("candidate_id")
+    @classmethod
+    def _candidate_id_is_artifact_safe(cls, value: str) -> str:
+        return _validate_artifact_label(
+            value,
+            subject="candidate_id",
+            reserved={"baseline"},
+        )
 
 
 class PipelineSpec(_StrictModel):
@@ -40,13 +83,28 @@ class PipelineSpec(_StrictModel):
     gate_config: Path
     train_dataset: Path
     validation_dataset: Path
-    target_prompts: dict[str, Path]
-    candidate_sources: list[CandidateSource]
+    target_prompts: dict[str, Path] = Field(min_length=1)
+    candidate_sources: list[CandidateSource] = Field(min_length=1)
     output_dir: Path
     seed: int = 91
     bootstrap_samples: int = Field(default=2000, ge=100)
     confidence_level: float = Field(default=0.95, gt=0.0, lt=1.0)
     apply_if_accepted: bool = False
+
+    @model_validator(mode="after")
+    def _validate_artifact_labels(self) -> "PipelineSpec":
+        candidate_ids = [source.candidate_id for source in self.candidate_sources]
+        duplicate_ids = _casefold_duplicates(candidate_ids)
+        if duplicate_ids:
+            raise ValueError(f"candidate_ids must be case-insensitively unique: {duplicate_ids}")
+        prompt_names = list(self.target_prompts)
+        duplicate_prompt_names = _casefold_duplicates(prompt_names)
+        if duplicate_prompt_names:
+            raise ValueError("target prompt names must be case-insensitively unique: "
+                             f"{duplicate_prompt_names}")
+        for name in prompt_names:
+            _validate_artifact_label(name, subject="target prompt name")
+        return self
 
     @classmethod
     def from_file(
@@ -94,8 +152,8 @@ class PipelineSpec(_StrictModel):
 
 class MetricOutcome(_StrictModel):
     metric_name: str
-    score: Optional[float] = None
-    threshold: float
+    score: Optional[float] = Field(default=None, allow_inf_nan=False)
+    threshold: float = Field(allow_inf_nan=False)
     passed: bool
     reason: str = ""
 
@@ -115,7 +173,7 @@ class TrajectoryStep(_StrictModel):
 class CaseEvaluation(_StrictModel):
     case_id: str
     passed: bool
-    score: float
+    score: float = Field(allow_inf_nan=False)
     key_case: bool = False
     hard_fail: bool = False
     metrics: list[MetricOutcome] = Field(default_factory=list)
@@ -128,8 +186,8 @@ class CaseEvaluation(_StrictModel):
 
 class SplitEvaluation(_StrictModel):
     split: Literal["train", "validation"]
-    pass_rate: float
-    average_score: float
+    pass_rate: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
+    average_score: float = Field(allow_inf_nan=False)
     cases: list[CaseEvaluation]
 
 
@@ -152,24 +210,24 @@ class CaseDelta(_StrictModel):
     status: DeltaStatus
     baseline_passed: bool
     candidate_passed: bool
-    baseline_score: float
-    candidate_score: float
-    score_delta: float
+    baseline_score: float = Field(allow_inf_nan=False)
+    candidate_score: float = Field(allow_inf_nan=False)
+    score_delta: float = Field(allow_inf_nan=False)
 
 
 class PairedConfidenceInterval(_StrictModel):
-    point_estimate: float
-    lower: float
-    upper: float
-    confidence_level: float
-    bootstrap_samples: int
+    point_estimate: float = Field(allow_inf_nan=False)
+    lower: float = Field(allow_inf_nan=False)
+    upper: float = Field(allow_inf_nan=False)
+    confidence_level: float = Field(gt=0.0, lt=1.0, allow_inf_nan=False)
+    bootstrap_samples: int = Field(ge=1)
     seed: int
 
 
 class SplitDelta(_StrictModel):
     split: Literal["train", "validation"]
-    pass_rate_delta: float
-    average_score_delta: float
+    pass_rate_delta: float = Field(allow_inf_nan=False)
+    average_score_delta: float = Field(allow_inf_nan=False)
     paired_pass_rate_ci: PairedConfidenceInterval
     newly_passed: list[str] = Field(default_factory=list)
     newly_failed: list[str] = Field(default_factory=list)
@@ -200,15 +258,15 @@ class GateDecision(_StrictModel):
 
 
 class ResourceUsage(_StrictModel):
-    metric_calls: int = 0
-    reflection_calls: int = 0
-    judge_calls: Optional[int] = None
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    total_tokens: int = 0
-    cost_usd: Optional[float] = None
-    duration_seconds: float = 0.0
-    p95_latency_ms: Optional[float] = None
+    metric_calls: int = Field(default=0, ge=0)
+    reflection_calls: int = Field(default=0, ge=0)
+    judge_calls: Optional[int] = Field(default=None, ge=0)
+    prompt_tokens: int = Field(default=0, ge=0)
+    completion_tokens: int = Field(default=0, ge=0)
+    total_tokens: int = Field(default=0, ge=0)
+    cost_usd: Optional[float] = Field(default=None, ge=0.0, allow_inf_nan=False)
+    duration_seconds: float = Field(default=0.0, ge=0.0, allow_inf_nan=False)
+    p95_latency_ms: Optional[float] = Field(default=None, ge=0.0, allow_inf_nan=False)
     cost_measurement: str = "unavailable"
 
 
@@ -236,17 +294,17 @@ class OptimizerAudit(_StrictModel):
     status: str
     stop_reason: Optional[str] = None
     used_agent_optimizer: bool
-    baseline_pass_rate: float
-    best_pass_rate: float
-    rounds: int
+    baseline_pass_rate: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
+    best_pass_rate: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
+    rounds: int = Field(ge=0)
     resources: ResourceUsage
     artifact_dir: str
 
 
 class DataQualityAudit(_StrictModel):
     passed: bool
-    train_cases: int
-    validation_cases: int
+    train_cases: int = Field(ge=0)
+    validation_cases: int = Field(ge=0)
     duplicate_ids: list[str] = Field(default_factory=list)
     cross_split_duplicates: list[str] = Field(default_factory=list)
     near_cross_split_duplicates: list[str] = Field(default_factory=list)
@@ -257,7 +315,7 @@ class RunAudit(_StrictModel):
     run_id: str
     started_at: str
     finished_at: str
-    duration_seconds: float
+    duration_seconds: float = Field(ge=0.0, allow_inf_nan=False)
     seed: int
     config_sha256: str
     train_sha256: str
@@ -267,9 +325,9 @@ class RunAudit(_StrictModel):
 
 
 class FailureAttributionSummary(_StrictModel):
-    explained_failed_cases: int
-    total_failed_cases: int
-    coverage_rate: float
+    explained_failed_cases: int = Field(ge=0)
+    total_failed_cases: int = Field(ge=0)
+    coverage_rate: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
     category_counts: dict[str, int] = Field(default_factory=dict)
     by_case: dict[str, list[FailureReason]] = Field(default_factory=dict)
 

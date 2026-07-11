@@ -83,6 +83,13 @@ class RegressionAnalyzer:
 
         all_ids = [case.eval_id for case in train_set.eval_cases + validation_set.eval_cases]
         duplicate_ids = sorted(case_id for case_id, count in Counter(all_ids).items() if count > 1)
+        query_groups: dict[str, list[str]] = {}
+        for case in train_set.eval_cases + validation_set.eval_cases:
+            replay_query = self._case_replay_query(case)
+            if not replay_query:
+                raise ValueError(f"case {case.eval_id!r} has an empty user query")
+            query_groups.setdefault(replay_query, []).append(case.eval_id)
+        duplicate_queries = sorted(" == ".join(case_ids) for case_ids in query_groups.values() if len(case_ids) > 1)
         train_fingerprints = {self._case_fingerprint(case): case.eval_id for case in train_set.eval_cases}
         validation_fingerprints = {self._case_fingerprint(case): case.eval_id for case in validation_set.eval_cases}
         overlap = sorted(set(train_fingerprints) & set(validation_fingerprints))
@@ -106,9 +113,10 @@ class RegressionAnalyzer:
             normalized = _normalize(expected)
             if len(normalized) >= 12 and normalized in prompt_normalized:
                 leakage.append(case.eval_id)
-        if duplicate_ids or cross_split or near_cross_split or leakage:
+        if duplicate_ids or duplicate_queries or cross_split or near_cross_split or leakage:
             raise ValueError("data quality check failed: "
-                             f"duplicate_ids={duplicate_ids}, cross_split={cross_split}, "
+                             f"duplicate_ids={duplicate_ids}, duplicate_queries={duplicate_queries}, "
+                             f"cross_split={cross_split}, "
                              f"near_cross_split={near_cross_split}, prompt_leakage={leakage}")
         return DataQualityAudit(
             passed=True,
@@ -130,6 +138,11 @@ class RegressionAnalyzer:
         payload = "\n".join(f"{_text(invocation.user_content)}\n{_text(invocation.final_response)}"
                             for invocation in conversation)
         return _normalize(payload)
+
+    @staticmethod
+    def _case_replay_query(case: EvalCase) -> str:
+        conversation = case.conversation or []
+        return _text(conversation[0].user_content) if conversation else ""
 
     @staticmethod
     def _expected_response(case: EvalCase) -> str:
@@ -324,7 +337,8 @@ class RegressionAnalyzer:
         baseline_validation_by_id = {case.case_id: case for case in baseline.validation.cases}
         key_regressions = sorted(
             case.case_id for case in candidate_validation.cases
-            if case.key_case and baseline_validation_by_id[case.case_id].score - case.score > epsilon)
+            if case.key_case and ((baseline_validation_by_id[case.case_id].passed and not case.passed)
+                                  or baseline_validation_by_id[case.case_id].score - case.score > epsilon))
 
         def _trend(split_delta: SplitDelta) -> int:
             if split_delta.pass_rate_delta > epsilon:

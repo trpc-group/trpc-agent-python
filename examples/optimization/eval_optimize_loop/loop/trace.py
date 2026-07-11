@@ -29,6 +29,9 @@ from .models import CaseEvaluation
 from .models import FailureReason
 from .models import MetricOutcome
 from .models import SplitEvaluation
+from .models import _validate_artifact_label
+
+_SUPPORTED_SPLITS = {"train", "validation"}
 
 
 def _text(content: Any) -> str:
@@ -40,6 +43,22 @@ def _text(content: Any) -> str:
 def _payload_response_text(payload: dict[str, Any]) -> str:
     response = payload.get("final_response") or {}
     return "\n".join(str(part.get("text", "") or "") for part in response.get("parts", [])).strip()
+
+
+def _tool_response_is_error(payload: Any) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    status = str(payload.get("status", "")).casefold()
+    status_code = payload.get("status_code")
+    numeric_status_code = None
+    if isinstance(status_code, int) and not isinstance(status_code, bool):
+        numeric_status_code = status_code
+    elif isinstance(status_code, str) and status_code.strip().isdigit():
+        numeric_status_code = int(status_code.strip())
+    return bool(
+        payload.get("error") or status in {"error", "failed", "failure"} or payload.get("success") is False
+        or payload.get("ok") is False or payload.get("is_error") is True
+        or (numeric_status_code is not None and numeric_status_code >= 400))
 
 
 class TraceEvaluator:
@@ -58,8 +77,10 @@ class TraceEvaluator:
         trace_label: str,
     ) -> SplitEvaluation:
         """Materialize, persist, evaluate, and normalize one replay split."""
+        if split not in _SUPPORTED_SPLITS:
+            raise ValueError(f"unsupported replay split: {split!r}")
+        trace_dir = self._trace_directory(trace_label)
         trace_set = self._materialize_trace(eval_set, prompts=prompts, trace_label=trace_label)
-        trace_dir = self._output_dir / "traces" / trace_label
         trace_dir.mkdir(parents=True, exist_ok=True)
         trace_path = trace_dir / f"{split}.trace.evalset.json"
         trace_path.write_text(
@@ -83,6 +104,19 @@ class TraceEvaluator:
             average_score=average_score,
             cases=cases,
         )
+
+    def _trace_directory(self, trace_label: str) -> Path:
+        """Resolve a trace directory without allowing artifact-path escape."""
+        _validate_artifact_label(trace_label, subject="trace label")
+        output_root = self._output_dir.resolve()
+        trace_root = (output_root / "traces").resolve()
+        trace_dir = (trace_root / trace_label).resolve()
+        try:
+            trace_root.relative_to(output_root)
+            trace_dir.relative_to(trace_root)
+        except ValueError as error:
+            raise ValueError("trace artifact path escapes the output directory") from error
+        return trace_dir
 
     @staticmethod
     def _materialize_trace(
@@ -245,8 +279,7 @@ class TraceEvaluator:
         error_responses = []
         for response in actual_responses:
             payload = response.response
-            if isinstance(payload, dict) and (payload.get("error")
-                                              or str(payload.get("status", "")).lower() in {"error", "failed"}):
+            if _tool_response_is_error(payload):
                 error_responses.append({
                     "tool": response.name,
                     "id": response.id,

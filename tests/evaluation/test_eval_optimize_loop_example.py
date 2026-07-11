@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -81,6 +82,198 @@ def test_output_override_is_resolved_from_callers_working_directory(
     assert spec.output_dir == tmp_path / "relative-run"
 
 
+def test_artifact_labels_are_safe_and_candidate_ids_are_unique(tmp_path: Path, ) -> None:
+    _, PipelineSpec = _load_public_interface()
+    from eval_optimize_loop.loop.models import CandidateSource
+    from eval_optimize_loop.loop.trace import TraceEvaluator
+
+    for unsafe_id in ("../outside", "baseline", "NUL"):
+        with pytest.raises(ValueError, match="candidate_id"):
+            CandidateSource(candidate_id=unsafe_id, path=tmp_path / "prompt.md")
+    with pytest.raises(ValueError, match="safe artifact label"):
+        TraceEvaluator(tmp_path)._trace_directory("../outside")
+    with pytest.raises(ValueError, match="reserved artifact label"):
+        TraceEvaluator(tmp_path)._trace_directory("CON")
+
+    spec = PipelineSpec.from_file(_EXAMPLE_DIR / "pipeline.json", output_dir=tmp_path / "run")
+    payload = spec.model_dump()
+    payload["candidate_sources"][1]["candidate_id"] = payload["candidate_sources"][0]["candidate_id"].upper()
+    with pytest.raises(ValueError, match="candidate_ids must be case-insensitively unique"):
+        PipelineSpec.model_validate(payload)
+
+    payload = spec.model_dump()
+    payload["target_prompts"]["SYSTEM"] = payload["target_prompts"]["system"]
+    with pytest.raises(ValueError, match="target prompt names must be case-insensitively unique"):
+        PipelineSpec.model_validate(payload)
+
+
+def test_offline_model_rejects_ambiguous_duplicate_queries() -> None:
+    _load_public_interface()
+    from eval_optimize_loop.loop.offline import OfflineModel
+    from trpc_agent_sdk.evaluation import EvalSet
+
+    train_payload = json.loads((_EXAMPLE_DIR / "data/train.evalset.json").read_text(encoding="utf-8"))
+    validation_payload = json.loads((_EXAMPLE_DIR / "data/val.evalset.json").read_text(encoding="utf-8"))
+    validation_payload["eval_cases"][0]["conversation"][0]["user_content"] = (
+        train_payload["eval_cases"][0]["conversation"][0]["user_content"])
+    train = EvalSet.model_validate(train_payload)
+    validation = EvalSet.model_validate(validation_payload)
+
+    with pytest.raises(ValueError, match="offline replay queries must be unique"):
+        OfflineModel.configure(
+            eval_sets=[train, validation],
+            candidate_prompts=["[variant: test]"],
+        )
+
+
+def test_query_identity_preserves_case_and_inner_whitespace() -> None:
+    _load_public_interface()
+    from eval_optimize_loop.loop.analysis import RegressionAnalyzer
+    from eval_optimize_loop.loop.offline import OfflineModel
+    from trpc_agent_sdk.evaluation import EvalSet
+
+    train_payload = json.loads((_EXAMPLE_DIR / "data/train.evalset.json").read_text(encoding="utf-8"))
+    validation_payload = json.loads((_EXAMPLE_DIR / "data/val.evalset.json").read_text(encoding="utf-8"))
+    train_payload["eval_cases"][0]["conversation"][0]["user_content"]["parts"][0]["text"] = "SKU ab c"
+    validation_payload["eval_cases"][0]["conversation"][0]["user_content"]["parts"][0]["text"] = "SKU a bc"
+    train = EvalSet.model_validate(train_payload)
+    validation = EvalSet.model_validate(validation_payload)
+    analyzer = RegressionAnalyzer(seed=91, bootstrap_samples=100, confidence_level=0.95)
+
+    audit = analyzer.validate_data_quality(
+        train,
+        validation,
+        train_path=Path("train.evalset.json"),
+        validation_path=Path("val.evalset.json"),
+        prompt_text="",
+    )
+    OfflineModel.configure(
+        eval_sets=[train, validation],
+        candidate_prompts=["[variant: test]"],
+    )
+
+    assert audit.passed is True
+
+
+@pytest.mark.asyncio
+async def test_cross_split_duplicate_queries_fail_data_quality_before_replay(tmp_path: Path, ) -> None:
+    EvalOptimizePipeline, PipelineSpec = _load_public_interface()
+    validation_payload = json.loads((_EXAMPLE_DIR / "data/val.evalset.json").read_text(encoding="utf-8"))
+    train_payload = json.loads((_EXAMPLE_DIR / "data/train.evalset.json").read_text(encoding="utf-8"))
+    validation_payload["eval_cases"][0]["conversation"][0]["user_content"] = (
+        train_payload["eval_cases"][0]["conversation"][0]["user_content"])
+    validation_path = tmp_path / "duplicate-query.evalset.json"
+    validation_path.write_text(json.dumps(validation_payload, ensure_ascii=False), encoding="utf-8")
+    spec = PipelineSpec.from_file(
+        _EXAMPLE_DIR / "pipeline.json",
+        output_dir=tmp_path / "duplicate-query",
+    ).model_copy(update={"validation_dataset": validation_path})
+
+    with pytest.raises(ValueError, match="duplicate_queries"):
+        await EvalOptimizePipeline(spec).run()
+
+
+def test_non_finite_scores_and_resources_fail_closed() -> None:
+    _load_public_interface()
+    from eval_optimize_loop.loop.models import CaseEvaluation
+    from eval_optimize_loop.loop.models import ResourceUsage
+
+    with pytest.raises(ValueError, match="finite number"):
+        CaseEvaluation(case_id="nan-score", passed=False, score=float("nan"))
+    with pytest.raises(ValueError, match="finite number"):
+        ResourceUsage(duration_seconds=float("inf"))
+
+
+@pytest.mark.parametrize("status_code", [500, "500"])
+def test_numeric_http_error_status_is_attributed_as_tool_error(status_code: int | str) -> None:
+    _load_public_interface()
+    from eval_optimize_loop.loop.trace import _tool_response_is_error
+
+    assert _tool_response_is_error({"status_code": status_code, "message": "backend unavailable"}) is True
+
+
+def test_key_case_pass_to_fail_is_rejected_even_when_score_is_unchanged() -> None:
+    _load_public_interface()
+    from eval_optimize_loop.loop.analysis import RegressionAnalyzer
+    from eval_optimize_loop.loop.models import BaselineEvaluation
+    from eval_optimize_loop.loop.models import CandidateDelta
+    from eval_optimize_loop.loop.models import CaseEvaluation
+    from eval_optimize_loop.loop.models import ResourceUsage
+    from eval_optimize_loop.loop.models import SplitEvaluation
+
+    analyzer = RegressionAnalyzer(seed=91, bootstrap_samples=100, confidence_level=0.95)
+    baseline_train = SplitEvaluation(
+        split="train",
+        pass_rate=0.0,
+        average_score=0.0,
+        cases=[CaseEvaluation(case_id="train", passed=False, score=0.0)],
+    )
+    candidate_train = baseline_train.model_copy(deep=True)
+    baseline_validation = SplitEvaluation(
+        split="validation",
+        pass_rate=0.5,
+        average_score=0.25,
+        cases=[
+            CaseEvaluation(case_id="key", passed=True, score=0.5, key_case=True),
+            CaseEvaluation(case_id="other", passed=False, score=0.0),
+        ],
+    )
+    candidate_validation = SplitEvaluation(
+        split="validation",
+        pass_rate=0.5,
+        average_score=0.75,
+        cases=[
+            CaseEvaluation(case_id="key", passed=False, score=0.5, key_case=True),
+            CaseEvaluation(case_id="other", passed=True, score=1.0),
+        ],
+    )
+    baseline = BaselineEvaluation(train=baseline_train, validation=baseline_validation)
+    delta = CandidateDelta(
+        train=analyzer.diff(baseline_train, candidate_train),
+        validation=analyzer.diff(baseline_validation, candidate_validation),
+    )
+
+    decision = analyzer.gate(
+        baseline=baseline,
+        candidate_train=candidate_train,
+        candidate_validation=candidate_validation,
+        delta=delta,
+        optimizer_status="SUCCEEDED",
+        resources=ResourceUsage(),
+        config={"min_validation_gain": 0.0},
+    )
+
+    key_check = next(check for check in decision.checks if check.name == "key_cases_no_regression")
+    assert key_check.passed is False
+    assert key_check.actual == ["key"]
+    assert decision.accepted is False
+
+
+@pytest.mark.asyncio
+async def test_success_false_tool_response_is_attributed_as_tool_error(tmp_path: Path, ) -> None:
+    EvalOptimizePipeline, PipelineSpec = _load_public_interface()
+    train_payload = json.loads((_EXAMPLE_DIR / "data/train.evalset.json").read_text(encoding="utf-8"))
+    tool_case = next(case for case in train_payload["eval_cases"] if case["eval_id"] == "train_tool_call_error")
+    traces = tool_case["session_input"]["state"]["variant_traces"]
+    for variant in ("baseline", "ineffective"):
+        traces[variant]["intermediate_data"]["tool_responses"][0]["response"] = {
+            "success": False,
+            "message": "backend unavailable",
+        }
+    train_path = tmp_path / "success-false.evalset.json"
+    train_path.write_text(json.dumps(train_payload, ensure_ascii=False), encoding="utf-8")
+    spec = PipelineSpec.from_file(
+        _EXAMPLE_DIR / "pipeline.json",
+        output_dir=tmp_path / "success-false",
+    ).model_copy(update={"train_dataset": train_path})
+
+    report = await EvalOptimizePipeline(spec).run()
+
+    result = next(case for case in report.baseline.train.cases if case.case_id == "train_tool_call_error")
+    assert result.primary_failure == "tool_call_error"
+    assert result.failure_reasons[0].evidence["tool_responses"][0]["response"]["success"] is False
+
+
 @pytest.mark.asyncio
 async def test_offline_pipeline_writes_machine_and_human_reports_without_api_key(
     tmp_path: Path,
@@ -111,6 +304,7 @@ async def test_offline_pipeline_writes_machine_and_human_reports_without_api_key
     assert report.optimizer.used_agent_optimizer is True
     assert report.selected_candidate_id is not None
     assert prompt_path.read_bytes() == original_prompt
+    assert (output_dir / "optimizer/prompt_workspace/system.md").is_file()
     assert (output_dir / "optimization_report.json").is_file()
     assert (output_dir / "optimization_report.md").is_file()
 
@@ -121,6 +315,59 @@ async def test_offline_pipeline_writes_machine_and_human_reports_without_api_key
     markdown = (output_dir / "optimization_report.md").read_text(encoding="utf-8")
     assert "Baseline" in markdown
     assert "Gate" in markdown
+
+
+@pytest.mark.asyncio
+async def test_concurrent_offline_runs_fail_closed_without_touching_source_prompt(tmp_path: Path, ) -> None:
+    EvalOptimizePipeline, PipelineSpec = _load_public_interface()
+    prompt_path = _EXAMPLE_DIR / "agent/prompts/system.md"
+    original_prompt = prompt_path.read_bytes()
+    specs = [
+        PipelineSpec.from_file(
+            _EXAMPLE_DIR / "pipeline.json",
+            output_dir=tmp_path / f"concurrent-{index}",
+        ) for index in range(2)
+    ]
+
+    results = await asyncio.gather(
+        *(EvalOptimizePipeline(spec).run() for spec in specs),
+        return_exceptions=True,
+    )
+
+    reports = [result for result in results if not isinstance(result, BaseException)]
+    errors = [result for result in results if isinstance(result, BaseException)]
+    assert len(reports) == 1
+    assert reports[0].status == "accepted"
+    assert len(errors) == 1
+    assert isinstance(errors[0], RuntimeError)
+    assert "already running" in str(errors[0])
+    assert prompt_path.read_bytes() == original_prompt
+
+
+@pytest.mark.asyncio
+async def test_explicit_apply_writes_only_the_accepted_prompt_atomically(tmp_path: Path, ) -> None:
+    EvalOptimizePipeline, PipelineSpec = _load_public_interface()
+    source_prompt = tmp_path / "system.md"
+    source_prompt.write_text(
+        (_EXAMPLE_DIR / "agent/prompts/system.md").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    spec = PipelineSpec.from_file(
+        _EXAMPLE_DIR / "pipeline.json",
+        output_dir=tmp_path / "apply",
+    ).model_copy(update={
+        "target_prompts": {
+            "system": source_prompt
+        },
+        "apply_if_accepted": True,
+    })
+
+    report = await EvalOptimizePipeline(spec).run()
+
+    assert report.selected_candidate_id == "robust"
+    assert report.candidate is not None
+    assert source_prompt.read_text(encoding="utf-8") == report.candidate.prompts["system"]
+    assert not source_prompt.with_name(source_prompt.name + ".tmp").exists()
 
 
 @pytest.mark.asyncio

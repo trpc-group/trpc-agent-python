@@ -18,7 +18,7 @@ python examples/optimization/eval_optimize_loop/run_pipeline.py \
   --output-dir /tmp/eval-optimize-loop
 ```
 
-命令正常完成时输出 `decision=accepted` 与报告路径。默认不会覆盖源 prompt；只有显式传入 `--apply-if-accepted` 且所有必选 Gate 均通过，才会原子回写最终候选。
+命令正常完成时输出 `decision=accepted` 与报告路径。优化器只改写输出目录中的隔离 prompt workspace，默认运行不会触碰源 prompt；只有显式传入 `--apply-if-accepted` 且所有必选 Gate 均通过，才会原子回写最终候选。
 
 ## 为什么不是“伪造优化”
 
@@ -71,7 +71,7 @@ reflection
 2. validation pass-rate 增益达到 `min_validation_gain`；
 3. paired bootstrap 区间下界达到配置值；
 4. 不新增 hard failure；
-5. key case 不降分；
+5. key case 不允许从通过变失败，也不允许降分；
 6. train 提升而 validation 下降时判定 overfit 并拒绝；趋势以 pass-rate 为主，持平时再比较 average score；
 7. metric calls、token、耗时和成本均在预算内。
 
@@ -82,6 +82,7 @@ reflection
 - baseline 与 candidate 在同一 case 上配对，使用固定 seed 的 2,000 次 bootstrap，报告 validation pass-rate delta 的 95% 区间。
 - 先过安全 Gate，再在合格候选中按 validation 质量、token 与 P95 latency 标记 Pareto 前沿。
 - 运行前检查重复 id、train/validation 精确重复、去空白后的重复、相似度 ≥0.92 的近重复，以及 baseline/candidate prompt 中直接出现 validation reference answer；命中即 fail-closed。
+- artifact label 只允许有限长度的字母、数字、下划线和连字符，候选 id 必须唯一；离线回放遇到空问题或同一问题映射多个 case 时会拒绝运行，避免路径逃逸和静默错配。
 - baseline、每个候选和每个 split 的 trace 均保存到 artifact 目录，可由 `AgentEvaluator` 重新播放。
 
 ## 输出
@@ -112,4 +113,4 @@ pytest -q tests/evaluation/test_eval_optimize_loop_example.py
 
 ## 接入真实业务
 
-保留 `EvalOptimizePipeline.run()` 这个外部 interface，将 `offline.py` 的三个 adapter 替换为业务实现：`call_agent` 驱动真实 Agent，reflection/judge 的 `provider_name` 改为实际 provider，trace 物化器读取业务运行日志。`optimizer.json`、`TargetPrompt`、逐候选复评、diff、Gate 和报告模型无需改变。生产环境建议每次使用唯一 output directory；离线 registry 使用进程级固定 replay 配置，不支持在同一 Python 进程中并发启动两个 pipeline。
+保留 `EvalOptimizePipeline.run()` 这个外部 interface，将 `offline.py` 的三个 adapter 替换为业务实现：`call_agent` 驱动真实 Agent，reflection/judge 的 `provider_name` 改为实际 provider，trace 物化器读取业务运行日志。`optimizer.json`、`TargetPrompt`、逐候选复评、diff、Gate 和报告模型无需改变。生产环境应为每次运行使用唯一 output directory；不同进程会在各自 workspace 优化而不触碰源 prompt，同一 Python 进程中的并发离线运行会明确拒绝，避免共享 registry 串扰。
