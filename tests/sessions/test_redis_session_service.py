@@ -83,9 +83,13 @@ class _MockRedisStorage:
             return [k for k in self._store.keys() if k.startswith(prefix)]
         elif method == 'hset':
             key = args[0]
-            pairs = args[1:]
             if key not in self._hash_store:
                 self._hash_store[key] = {}
+            mapping = getattr(command, "kwargs", {}).get("mapping", {})
+            if mapping:
+                self._hash_store[key].update(mapping)
+                return True
+            pairs = args[1:]
             for i in range(0, len(pairs), 2):
                 self._hash_store[key][pairs[i]] = pairs[i + 1]
             return True
