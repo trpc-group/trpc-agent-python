@@ -1592,6 +1592,56 @@ def test_optimizer_round_audit_rejects_out_of_range_validation_rate(tmp_path: Pa
     assert "validation_pass_rate" in record["decision_reason"]
 
 
+def test_optimizer_round_audit_rejects_duplicate_round_ids_without_overwriting_artifacts(
+    tmp_path: Path,
+):
+    module = load_pipeline_module()
+
+    def round_record(prompt: str, reason: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            round=1,
+            optimized_field_names=["system_prompt"],
+            candidate_prompts={"system_prompt": prompt},
+            validation_pass_rate=1.0,
+            metric_breakdown={ROUTE_TOOL_ARGS_METRIC: 1.0},
+            accepted=True,
+            acceptance_reason=reason,
+            skip_reason=None,
+            error_message=None,
+            failed_case_ids=[],
+            round_llm_cost=0.01,
+            round_token_usage={"prompt": 8, "completion": 2, "total": 10},
+            duration_seconds=0.25,
+        )
+
+    records = module.write_optimizer_round_artifacts(
+        run_dir=tmp_path,
+        rounds=[
+            round_record("first round prompt", "first round accepted"),
+            round_record("duplicate round prompt", "duplicate round accepted"),
+        ],
+    )
+
+    serialized = json.dumps(records, allow_nan=False)
+    assert serialized
+    assert [record["round"] for record in records] == [1, 2]
+    assert len({record["round"] for record in records}) == 2
+    assert records[0]["accepted"] is True
+    assert records[0]["decision_reason"] == "first round accepted"
+    assert records[1]["accepted"] is False
+    assert "duplicate round identifier" in records[1]["decision_reason"]
+
+    prompt_paths = [
+        Path(record["prompt_paths"]["system_prompt"])
+        for record in records
+    ]
+    assert len(set(prompt_paths)) == 2
+    for record, prompt_path in zip(records, prompt_paths):
+        content = prompt_path.read_text(encoding="utf-8")
+        assert content == ("first round prompt" if record is records[0] else "duplicate round prompt")
+        assert record["prompt_sha256"]["system_prompt"] == module.sha256_text(content)
+
+
 @pytest.mark.asyncio
 async def test_online_optimizer_validation_improvement_is_accepted(
     tmp_path: Path,

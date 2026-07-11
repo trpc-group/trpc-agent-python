@@ -209,7 +209,8 @@ def write_optimizer_round_artifacts(
     next_fallback_round_id = 1
     for round_record in rounds:
         round_id, invalid_round_id = _normalized_round_identifier(round_record.round)
-        if invalid_round_id:
+        duplicate_round_id = not invalid_round_id and round_id in used_round_ids
+        if invalid_round_id or duplicate_round_id:
             while next_fallback_round_id in reserved_round_ids or next_fallback_round_id in used_round_ids:
                 next_fallback_round_id += 1
             round_id = next_fallback_round_id
@@ -265,12 +266,14 @@ def write_optimizer_round_artifacts(
             or round_record.error_message
         ) or "optimizer reported no reason"
         accepted = bool(round_record.accepted)
-        if invalid_round_id or invalid_numeric_evidence or invalid_rate_bounds:
+        if invalid_round_id or duplicate_round_id or invalid_numeric_evidence or invalid_rate_bounds:
             accepted = False
             if invalid_numeric_evidence:
                 decision_reason += "; invalid numeric round evidence was normalized and rejected"
             if invalid_round_id:
                 decision_reason += f"; invalid round identifier was normalized to {round_id} and rejected"
+            if duplicate_round_id:
+                decision_reason += f"; duplicate round identifier was normalized to {round_id} and rejected"
             if invalid_rate_bounds:
                 decision_reason += "; validation_pass_rate was out of bounds and normalized to 0.0; round rejected"
         records.append({
