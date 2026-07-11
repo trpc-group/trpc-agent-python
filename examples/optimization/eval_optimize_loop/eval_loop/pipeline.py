@@ -52,6 +52,36 @@ from .writeback import PromptRestorationError
 from .writeback import snapshot_prompt_files
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
+_SENSITIVE_CONFIG_KEY_SUFFIXES = (
+    "apikey",
+    "authorization",
+    "authtoken",
+    "bearertoken",
+    "clientsecret",
+    "credential",
+    "credentials",
+    "idtoken",
+    "password",
+    "passwd",
+    "privatekey",
+    "refreshtoken",
+    "secret",
+    "secretaccesskey",
+    "secretkey",
+    "signingkey",
+    "sshkey",
+    "token",
+    "accesstoken",
+)
+_SENSITIVE_CONFIG_KEY_MARKERS = (
+    "apikey",
+    "password",
+    "passwd",
+    "credential",
+    "secret",
+    "authorization",
+    "privatekey",
+)
 
 
 @dataclass(frozen=True)
@@ -1580,36 +1610,9 @@ def _pretty_json_sha256(value: Any) -> str:
 
 
 def _is_secret_key(lowered: str) -> bool:
-    normalized = lowered.replace("-", "_").replace(" ", "_")
-    if normalized in {
-            "api_key",
-            "apikey",
-            "token",
-            "access_token",
-            "refresh_token",
-            "auth_token",
-            "password",
-            "passwd",
-            "credentials",
-            "credential",
-            "secret",
-            "authorization",
-            "private_key",
-            "signing_key",
-            "ssh_key",
-    }:
-        return True
-    if normalized.endswith("_token"):
-        return True
-    return any(marker in normalized for marker in (
-        "api_key",
-        "password",
-        "passwd",
-        "credential",
-        "secret",
-        "authorization",
-        "private_key",
-    ))
+    normalized = "".join(character for character in lowered if character.isalnum())
+    return normalized.endswith(_SENSITIVE_CONFIG_KEY_SUFFIXES) or any(marker in normalized
+                                                                      for marker in _SENSITIVE_CONFIG_KEY_MARKERS)
 
 
 def _sanitize_public_value(value: Any) -> Any:

@@ -1681,11 +1681,19 @@ async def test_public_report_redacts_secrets_and_absolute_personal_paths(tmp_pat
         "api_key": "plain-api-key",
         "nested": {
             "access_token": "plain-token",
+            "accessToken": "plain-camel-access-token",
+            "authToken": "plain-camel-auth-token",
+            "bearerToken": "plain-camel-bearer-token",
+            "idToken": "plain-camel-id-token",
+            "githubToken": "plain-camel-github-token",
+            "passwordValue": "plain-camel-password-value",
             "credentials": {
                 "password": "plain-password"
             },
             "github_token": "plain-github-token",
             "private_key": "plain-private-key",
+            "max_tokens": 2048,
+            "token_budget": 4096,
             "cache_path": str(tmp_path / "private-cache"),
         },
     }
@@ -1700,6 +1708,14 @@ async def test_public_report_redacts_secrets_and_absolute_personal_paths(tmp_pat
     assert "plain-password" not in payload
     assert "plain-github-token" not in payload
     assert "plain-private-key" not in payload
+    assert "plain-camel-access-token" not in payload
+    assert "plain-camel-auth-token" not in payload
+    assert "plain-camel-bearer-token" not in payload
+    assert "plain-camel-id-token" not in payload
+    assert "plain-camel-github-token" not in payload
+    assert "plain-camel-password-value" not in payload
+    assert report.audit["config_snapshot"]["nested"]["max_tokens"] == 2048
+    assert report.audit["config_snapshot"]["nested"]["token_budget"] == 4096
     assert str(tmp_path.resolve()) not in payload
     assert report.run["reproducibility_shell"] == "powershell"
     assert "$EXTERNAL" in report.run["reproducibility_command"]
@@ -1713,11 +1729,26 @@ async def test_public_report_redacts_secrets_and_absolute_personal_paths(tmp_pat
         request.run_id,
         "config.snapshot.json",
     ).read_text(encoding="utf-8")
-    assert "plain-api-key" not in persisted + config_snapshot
-    assert "plain-token" not in persisted + config_snapshot
-    assert "plain-password" not in persisted + config_snapshot
-    assert "plain-github-token" not in persisted + config_snapshot
-    assert "plain-private-key" not in persisted + config_snapshot
+    final_run_dir = Path(request.output_dir) / "runs" / request.run_id
+    persisted_bytes = persisted.encode("utf-8") + persisted_markdown.encode("utf-8")
+    persisted_bytes += b"".join(path.read_bytes() for path in final_run_dir.rglob("*") if path.is_file())
+    for secret in (
+            "plain-api-key",
+            "plain-token",
+            "plain-password",
+            "plain-github-token",
+            "plain-private-key",
+            "plain-camel-access-token",
+            "plain-camel-auth-token",
+            "plain-camel-bearer-token",
+            "plain-camel-id-token",
+            "plain-camel-github-token",
+            "plain-camel-password-value",
+    ):
+        assert secret.encode("utf-8") not in persisted_bytes
+    redacted_snapshot = json.loads(config_snapshot)
+    assert redacted_snapshot["nested"]["max_tokens"] == 2048
+    assert redacted_snapshot["nested"]["token_budget"] == 4096
     assert "```powershell" in persisted_markdown
     assert str(tmp_path.resolve()) not in persisted_markdown
     assert hashlib.sha256(
