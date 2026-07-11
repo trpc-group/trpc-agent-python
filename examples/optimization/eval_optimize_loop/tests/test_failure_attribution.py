@@ -22,14 +22,19 @@ def test_evaluator_attaches_failure_details_to_failed_cases():
             expectation={
                 "type": "json",
                 "required_keys": ["answer"],
-                "expected_values": {"answer": "ok"},
+                "expected_values": {
+                    "answer": "ok"
+                },
             },
         ),
         EvalCase(
             case_id="exact_case",
             split="train",
             input="Answer exactly OK.",
-            expectation={"type": "exact", "expected": "OK"},
+            expectation={
+                "type": "exact",
+                "expected": "OK"
+            },
         ),
     ]
     result = ExampleEvaluator(FakeModel(seed=91), FakeJudge()).evaluate(
@@ -60,7 +65,13 @@ def test_fake_judge_scores_tool_and_parameter_expectations():
         case_id="tool_case",
         split="train",
         input="Call tool",
-        expectation={"type": "tool", "expected_tool": "lookup", "expected_args": {"id": "42"}},
+        expectation={
+            "type": "tool",
+            "expected_tool": "lookup",
+            "expected_args": {
+                "id": "42"
+            }
+        },
     )
 
     assert judge.score(tool_case, '{"tool": "lookup", "args": {"id": "42"}}').passed
@@ -97,7 +108,12 @@ def test_failure_summary_computes_attribution_accuracy():
                 case_id="json_labeled",
                 split="train",
                 input="Return JSON",
-                expectation={"type": "json", "expected_values": {"answer": "ok"}},
+                expectation={
+                    "type": "json",
+                    "expected_values": {
+                        "answer": "ok"
+                    }
+                },
                 expected_failure_category="format_violation",
             )
         ],

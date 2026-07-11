@@ -41,7 +41,8 @@ async def test_fake_backend_implements_unified_contract_with_real_trace(tmp_path
     dataset_path = tmp_path / "fake_train.evalset.json"
     dataset_path.write_text(
         json.dumps({
-            "split": "train",
+            "split":
+            "train",
             "cases": [{
                 "case_id": "case_a",
                 "input": "Mention latency and retries.",
@@ -113,7 +114,9 @@ async def test_fake_backend_wraps_candidates_in_complete_optimization_result(tmp
     result = await backend_module.FakeBackend(seed=91).optimize_candidates(
         baseline_prompts={"system_prompt": baseline_prompt},
         baseline_train=baseline_train,
-        failure_summary={"by_category": {"format_violation": 1}},
+        failure_summary={"by_category": {
+            "format_violation": 1
+        }},
         train_path=DEFAULT_TRAIN,
         validation_path=DEFAULT_VAL,
         config_path=DEFAULT_OPTIMIZER_CONFIG,
@@ -147,7 +150,9 @@ async def test_fake_backend_distributes_measured_batch_proposal_duration(
     result = await backend_module.FakeBackend(seed=91).optimize_candidates(
         baseline_prompts={"system_prompt": "baseline prompt\n"},
         baseline_train=_failed_fake_train_result(),
-        failure_summary={"by_category": {"format_violation": 1}},
+        failure_summary={"by_category": {
+            "format_violation": 1
+        }},
         train_path=tmp_path / "train.evalset.json",
         validation_path=tmp_path / "validation.evalset.json",
         config_path=tmp_path / "optimizer.json",
@@ -159,9 +164,7 @@ async def test_fake_backend_distributes_measured_batch_proposal_duration(
     assert all(duration > 0 and math.isfinite(duration) for duration in durations)
     assert sum(durations) == pytest.approx(0.006)
     assert result.raw_summary["proposal_duration_seconds"] == pytest.approx(0.006)
-    assert result.raw_summary["round_duration_allocation"] == (
-        "equal_share_of_batch_proposal_duration"
-    )
+    assert result.raw_summary["round_duration_allocation"] == ("equal_share_of_batch_proposal_duration")
 
 
 @pytest.mark.asyncio
@@ -183,7 +186,9 @@ async def test_fake_backend_uses_clock_resolution_when_batch_timer_does_not_adva
     result = await backend_module.FakeBackend(seed=91).optimize_candidates(
         baseline_prompts={"system_prompt": "baseline prompt\n"},
         baseline_train=_failed_fake_train_result(),
-        failure_summary={"by_category": {"format_violation": 1}},
+        failure_summary={"by_category": {
+            "format_violation": 1
+        }},
         train_path=tmp_path / "train.evalset.json",
         validation_path=tmp_path / "validation.evalset.json",
         config_path=tmp_path / "optimizer.json",
@@ -261,7 +266,10 @@ async def test_sdk_backend_maps_rounds_deduplicates_bundles_and_marks_cost_incom
     backend = SDKBackend(
         prompt_path=system_path,
         call_agent_path="fake_call_agent_module:call_agent",
-        target_prompt_paths={"system_prompt": system_path, "router_prompt": router_path},
+        target_prompt_paths={
+            "system_prompt": system_path,
+            "router_prompt": router_path
+        },
     )
 
     result = await backend.optimize_candidates(
@@ -526,9 +534,19 @@ def test_sdk_result_mapping_preserves_metrics_trace_and_expected_label():
     assert case.output == "last output"
     assert case.trace_available is True
     assert case.trace == {
-        "user_content": {"parts": [{"text": "last question"}]},
-        "final_response": {"parts": [{"text": "last output"}]},
-        "intermediate_data": {"step": 2},
+        "user_content": {
+            "parts": [{
+                "text": "last question"
+            }]
+        },
+        "final_response": {
+            "parts": [{
+                "text": "last output"
+            }]
+        },
+        "intermediate_data": {
+            "step": 2
+        },
     }
     assert case.expected_failure_category == "format_violation"
     assert case.failure_category == "final_response_mismatch"
@@ -544,13 +562,9 @@ def test_sdk_result_mapping_preserves_metrics_trace_and_expected_label():
     ],
 )
 def test_sdk_result_mapping_rejects_case_id_set_mismatch(sdk_case_ids, expected_case_ids, message):
-    sdk_runs = {
-        case_id: [_sdk_case_run(case_id, status="PASSED", metrics=[])]
-        for case_id in sdk_case_ids
-    }
+    sdk_runs = {case_id: [_sdk_case_run(case_id, status="PASSED", metrics=[])] for case_id in sdk_case_ids}
     expected_cases = [
-        EvalCase(case_id=case_id, split="validation", input="", expectation={})
-        for case_id in expected_case_ids
+        EvalCase(case_id=case_id, split="validation", input="", expectation={}) for case_id in expected_case_ids
     ]
 
     with pytest.raises(ValueError, match=message):
@@ -568,8 +582,7 @@ def test_sdk_result_mapping_rejects_duplicate_case_ids_across_eval_sets():
         results_by_eval_set_id={
             "set_a": types.SimpleNamespace(eval_results_by_eval_id={"case_a": [run]}),
             "set_b": types.SimpleNamespace(eval_results_by_eval_id={"case_a": [run]}),
-        }
-    )
+        })
     expected = [EvalCase(case_id="case_a", split="validation", input="", expectation={})]
 
     with pytest.raises(ValueError, match="duplicate.*case_a"):
@@ -681,18 +694,20 @@ def test_sdk_expected_cases_parse_standard_evalset_metadata(tmp_path: Path):
             "invocation_id": "case-1-turn-0",
             "user_content": {
                 "role": "user",
-                "parts": [{"text": "earlier query"}],
+                "parts": [{
+                    "text": "earlier query"
+                }],
             },
             "final_response": {
                 "role": "model",
-                "parts": [{"text": "earlier expected"}],
+                "parts": [{
+                    "text": "earlier expected"
+                }],
             },
         },
     )
     dataset_path.write_text(
-        json.dumps(
-            _sdk_evalset_payload([case_payload])
-        ),
+        json.dumps(_sdk_evalset_payload([case_payload])),
         encoding="utf-8",
     )
 
@@ -718,12 +733,10 @@ def test_sdk_expected_cases_parse_standard_evalset_metadata(tmp_path: Path):
 def test_sdk_expected_cases_reject_duplicate_eval_ids(tmp_path: Path):
     dataset_path = tmp_path / "duplicate.evalset.json"
     dataset_path.write_text(
-        json.dumps(
-            _sdk_evalset_payload([
-                _sdk_eval_case_payload("case-1"),
-                _sdk_eval_case_payload("case-1"),
-            ])
-        ),
+        json.dumps(_sdk_evalset_payload([
+            _sdk_eval_case_payload("case-1"),
+            _sdk_eval_case_payload("case-1"),
+        ])),
         encoding="utf-8",
     )
 
@@ -755,7 +768,10 @@ def test_sdk_expected_cases_require_expectation_metadata(tmp_path: Path):
 def test_sdk_expected_cases_reject_invalid_eval_cases_shape(tmp_path: Path):
     dataset_path = tmp_path / "invalid_shape.evalset.json"
     dataset_path.write_text(
-        json.dumps({"eval_set_id": "set", "eval_cases": {}}),
+        json.dumps({
+            "eval_set_id": "set",
+            "eval_cases": {}
+        }),
         encoding="utf-8",
     )
 
@@ -781,8 +797,7 @@ async def test_sdk_backend_evaluate_temporarily_installs_and_restores_prompt_byt
                     expected="answer",
                     expected_failure_category="format_violation",
                 )
-            ])
-        ),
+            ])),
         encoding="utf-8",
     )
     from trpc_agent_sdk.evaluation import EvalSet
@@ -826,13 +841,9 @@ async def test_sdk_backend_evaluate_temporarily_installs_and_restores_prompt_byt
     assert calls["observed_candidate"] is True
     assert calls["eval_result_output_dir"] == str(tmp_path / "sdk_eval")
     eval_config_path = Path(calls["eval_metrics_file_path_or_dir"])
-    eval_config = EvalConfig.model_validate_json(
-        eval_config_path.read_text(encoding="utf-8")
-    )
+    eval_config = EvalConfig.model_validate_json(eval_config_path.read_text(encoding="utf-8"))
     assert eval_config.criteria == {"final_response_avg_score": 1.0}
-    assert [metric.metric_name for metric in eval_config.get_eval_metrics()] == [
-        "final_response_avg_score"
-    ]
+    assert [metric.metric_name for metric in eval_config.get_eval_metrics()] == ["final_response_avg_score"]
     assert prompt_path.read_bytes() == original_bytes
     assert mapped.cases[0].trace_available is True
     assert mapped.cases[0].expected_failure_category == "format_violation"
@@ -845,15 +856,11 @@ async def test_sdk_backend_evaluate_propagates_non_case_failure_even_with_result
 ):
     dataset_path = tmp_path / "validation.evalset.json"
     dataset_path.write_text(
-        json.dumps(
-            _sdk_evalset_payload([
-                _sdk_eval_case_payload(
-                    "case_a",
-                    query="question",
-                    expected="answer",
-                )
-            ])
-        ),
+        json.dumps(_sdk_evalset_payload([_sdk_eval_case_payload(
+            "case_a",
+            query="question",
+            expected="answer",
+        )])),
         encoding="utf-8",
     )
     prompt_path = tmp_path / "prompt.txt"
@@ -900,15 +907,11 @@ async def test_sdk_backend_evaluate_real_agent_evaluator_smoke(
 ):
     dataset_path = (tmp_path / "validation.evalset.json").resolve()
     dataset_path.write_text(
-        json.dumps(
-            _sdk_evalset_payload([
-                _sdk_eval_case_payload(
-                    "case_a",
-                    query="question",
-                    expected="answer",
-                )
-            ])
-        ),
+        json.dumps(_sdk_evalset_payload([_sdk_eval_case_payload(
+            "case_a",
+            query="question",
+            expected="answer",
+        )])),
         encoding="utf-8",
     )
     prompt_path = tmp_path / "prompt.txt"
@@ -1012,7 +1015,9 @@ def test_sdk_backend_router_prompt_only_can_succeed(tmp_path: Path, monkeypatch)
     candidates = SDKBackend(
         prompt_path=tmp_path / "unused_system.txt",
         call_agent_path="fake_call_agent_module:call_agent",
-        target_prompt_paths={"router_prompt": router_path},
+        target_prompt_paths={
+            "router_prompt": router_path
+        },
     ).optimize(
         baseline_prompt="unused",
         train_path=tmp_path / "train.evalset.json",
@@ -1033,7 +1038,9 @@ def test_sdk_backend_skill_prompt_only_can_succeed(tmp_path: Path, monkeypatch):
     candidates = SDKBackend(
         prompt_path=tmp_path / "unused_system.txt",
         call_agent_path="fake_call_agent_module:call_agent",
-        target_prompt_paths={"skill_prompt": skill_path},
+        target_prompt_paths={
+            "skill_prompt": skill_path
+        },
     ).optimize(
         baseline_prompt="unused",
         train_path=tmp_path / "train.evalset.json",
@@ -1055,7 +1062,10 @@ def test_sdk_backend_missing_registered_best_prompt_field_is_clear(tmp_path: Pat
     backend = SDKBackend(
         prompt_path=tmp_path / "unused_system.txt",
         call_agent_path="fake_call_agent_module:call_agent",
-        target_prompt_paths={"router_prompt": router_path, "skill_prompt": skill_path},
+        target_prompt_paths={
+            "router_prompt": router_path,
+            "skill_prompt": skill_path
+        },
     )
 
     with pytest.raises(ValueError, match="best_prompts.*missing registered target fields.*skill_prompt"):
@@ -1323,9 +1333,8 @@ def test_run_pipeline_mode_sdk_writes_report_without_fallback(tmp_path: Path, mo
     candidate_artifact = report.audit["candidate_artifacts"]["sdk_best"]
     assert (output_dir / "runs" / "sdk_test_run" / "prompt_diffs" / f"{candidate_artifact}.diff").is_file()
     assert calls["update_source"] is False
-    assert calls["output_dir"].endswith("runs\\.sdk_test_run.tmp\\optimizer") or calls[
-        "output_dir"
-    ].endswith("runs/.sdk_test_run.tmp/optimizer")
+    assert calls["output_dir"].endswith("runs\\.sdk_test_run.tmp\\optimizer") or calls["output_dir"].endswith(
+        "runs/.sdk_test_run.tmp/optimizer")
     assert calls["evaluation_count"] == 4
     command = report.run["reproducibility_command"]
     assert "--sdk-call-agent fake_call_agent_module:call_agent" in command
@@ -1350,7 +1359,14 @@ def test_run_pipeline_mode_sdk_accepts_sdk_shaped_inputs_without_fake_schema(tmp
         encoding="utf-8",
     )
     optimizer_path.write_text(
-        json.dumps({"seed": "sdk-owned-seed", "optimize": {"algorithm": {"name": "gepa_reflective"}}}),
+        json.dumps({
+            "seed": "sdk-owned-seed",
+            "optimize": {
+                "algorithm": {
+                    "name": "gepa_reflective"
+                }
+            }
+        }),
         encoding="utf-8",
     )
     prompt_path.write_text("baseline", encoding="utf-8")
@@ -1820,15 +1836,21 @@ def test_run_pipeline_mode_sdk_registers_multiple_target_prompt_paths(tmp_path: 
     }
     run_dir = tmp_path / "sdk_run" / "runs" / "sdk_multi_target"
     candidate_artifact = report.audit["candidate_artifacts"]["sdk_best"]
-    assert (run_dir / "candidate_prompts" / candidate_artifact / "system_prompt.txt").read_text(
-        encoding="utf-8"
-    ) == "optimized system"
-    assert (run_dir / "candidate_prompts" / candidate_artifact / "router_prompt.txt").read_text(
-        encoding="utf-8"
-    ) == "optimized router"
-    assert (run_dir / "candidate_prompts" / candidate_artifact / "skill_prompt.txt").read_text(
-        encoding="utf-8"
-    ) == "optimized skill"
+    assert run_dir.joinpath(
+        "candidate_prompts",
+        candidate_artifact,
+        "system_prompt.txt",
+    ).read_text(encoding="utf-8") == "optimized system"
+    assert run_dir.joinpath(
+        "candidate_prompts",
+        candidate_artifact,
+        "router_prompt.txt",
+    ).read_text(encoding="utf-8") == "optimized router"
+    assert run_dir.joinpath(
+        "candidate_prompts",
+        candidate_artifact,
+        "skill_prompt.txt",
+    ).read_text(encoding="utf-8") == "optimized skill"
     input_hashes = json.loads((run_dir / "input_hashes.json").read_text(encoding="utf-8"))
     assert set(input_hashes["target_prompts"]) == {
         "system_prompt",
@@ -1905,6 +1927,7 @@ def _install_fake_sdk(
     calls = {}
 
     class FakeTargetPrompt:
+
         def __init__(self):
             self.paths = []
 
@@ -1913,6 +1936,7 @@ def _install_fake_sdk(
             return self
 
     class FakeAgentOptimizer:
+
         @staticmethod
         async def optimize(**kwargs):
             calls.update(kwargs)
@@ -1949,7 +1973,11 @@ def _install_fake_sdk(
                 best_metric_breakdown={"exact_match": best_pass_rate},
                 metric_thresholds={"exact_match": 0.7},
                 total_llm_cost=total_llm_cost,
-                total_token_usage={"prompt": 100, "completion": 25, "total": 125},
+                total_token_usage={
+                    "prompt": 100,
+                    "completion": 25,
+                    "total": 125
+                },
                 duration_seconds=duration_seconds,
                 started_at=started_at,
                 total_rounds=len(effective_rounds),
@@ -1957,6 +1985,7 @@ def _install_fake_sdk(
             )
 
     class FakeEvalConfig:
+
         def __init__(self, **kwargs):
             self.payload = kwargs
 
@@ -1967,6 +1996,7 @@ def _install_fake_sdk(
         pass
 
     class FakeAgentEvaluator:
+
         @staticmethod
         def get_executer(dataset_path, **kwargs):
             evaluation_index = int(calls.get("evaluation_count", 0))
@@ -1995,6 +2025,7 @@ def _install_fake_sdk(
             })
 
             class FakeExecuter:
+
                 async def evaluate(self):
                     return None
 
@@ -2078,7 +2109,11 @@ def _sdk_round(
         per_field_diagnosis={},
         reflection_lm_calls=1,
         round_llm_cost=round_llm_cost,
-        round_token_usage={"prompt": 0, "completion": 0, "total": 0},
+        round_token_usage={
+            "prompt": 0,
+            "completion": 0,
+            "total": 0
+        },
         started_at="2026-07-04T12:00:00+00:00",
         duration_seconds=duration_seconds,
         kind="reflective",
@@ -2117,8 +2152,12 @@ def _sdk_case_run(
     if output is not None or user_content is not None or intermediate_data is not None:
         actual_invocation = types.SimpleNamespace(
             invocation_id=f"{case_id}_invocation",
-            user_content={"parts": [{"text": user_content or ""}]},
-            final_response={"parts": [{"text": output or ""}]} if output is not None else None,
+            user_content={"parts": [{
+                "text": user_content or ""
+            }]},
+            final_response={"parts": [{
+                "text": output or ""
+            }]} if output is not None else None,
             intermediate_data=intermediate_data,
             creation_timestamp=0.0,
         )
@@ -2127,8 +2166,7 @@ def _sdk_case_run(
                 actual_invocation=actual_invocation,
                 expected_invocation=None,
                 eval_metric_results=list(metrics),
-            )
-        )
+            ))
     return types.SimpleNamespace(
         eval_set_id="set_a",
         eval_id=case_id,
@@ -2146,12 +2184,12 @@ def _sdk_case_run(
 def _sdk_evaluate_result(runs_by_case_id: dict[str, list[object]]):
     return types.SimpleNamespace(
         results_by_eval_set_id={
-            "set_a": types.SimpleNamespace(
+            "set_a":
+            types.SimpleNamespace(
                 eval_results_by_eval_id=dict(runs_by_case_id),
                 num_runs=max((len(runs) for runs in runs_by_case_id.values()), default=1),
             )
-        }
-    )
+        })
 
 
 def _sdk_evalset_payload(eval_cases: list[dict[str, object]]) -> dict[str, object]:
@@ -2171,16 +2209,21 @@ def _sdk_eval_case_payload(
     protected: bool = False,
 ) -> dict[str, object]:
     return {
-        "eval_id": eval_id,
+        "eval_id":
+        eval_id,
         "conversation": [{
             "invocation_id": f"{eval_id}-turn-1",
             "user_content": {
                 "role": "user",
-                "parts": [{"text": query}],
+                "parts": [{
+                    "text": query
+                }],
             },
             "final_response": {
                 "role": "model",
-                "parts": [{"text": expected}],
+                "parts": [{
+                    "text": expected
+                }],
             },
         }],
         "session_input": {
@@ -2209,6 +2252,7 @@ def _install_fake_agent_evaluator(
     calls: dict[str, object] = {}
 
     class FakeExecuter:
+
         async def evaluate(self):
             calls["observed_candidate"] = bool(on_evaluate())
             if evaluation_error is not None:
@@ -2218,6 +2262,7 @@ def _install_fake_agent_evaluator(
             return result
 
     class FakeAgentEvaluator:
+
         @staticmethod
         def get_executer(dataset_path, **kwargs):
             calls["dataset_path"] = dataset_path
@@ -2247,8 +2292,14 @@ def _write_sdk_optimizer_config(tmp_path: Path) -> Path:
     path = tmp_path / "sdk_optimizer.json"
     path.write_text(
         json.dumps({
-            "evaluate": {"metrics": []},
-            "optimize": {"algorithm": {"name": "gepa_reflective"}},
+            "evaluate": {
+                "metrics": []
+            },
+            "optimize": {
+                "algorithm": {
+                    "name": "gepa_reflective"
+                }
+            },
         }),
         encoding="utf-8",
     )
@@ -2263,12 +2314,11 @@ def _write_gate_config(
 ) -> Path:
     path = tmp_path / "wrapper_gate.json"
     path.write_text(
-        json.dumps({
-            "gate": {
+        json.dumps(
+            {"gate": {
                 "min_val_score_improvement": min_val_score_improvement,
                 "max_total_cost": max_total_cost,
-            }
-        }),
+            }}),
         encoding="utf-8",
     )
     return path

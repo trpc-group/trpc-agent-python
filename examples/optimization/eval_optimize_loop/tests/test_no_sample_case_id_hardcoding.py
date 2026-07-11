@@ -25,7 +25,9 @@ FORBIDDEN_MODEL_ACCESSES = [
 
 def test_sample_case_ids_do_not_appear_in_fake_runtime_logic():
     case_ids = {
-        case["eval_id"] for path in DATA_FILES for case in json.loads(path.read_text(encoding="utf-8"))["eval_cases"]
+        case["eval_id"]
+        for path in DATA_FILES
+        for case in json.loads(path.read_text(encoding="utf-8"))["eval_cases"]
     }
 
     for path in NO_SAMPLE_ID_FILES:

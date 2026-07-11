@@ -20,7 +20,9 @@ def test_gate_rejects_train_improvement_with_validation_regression():
         candidate_train=candidate_train,
         candidate_validation=candidate_val,
     )
-    decision = AcceptanceGate({"protected_case_ids": []}).decide(
+    decision = AcceptanceGate({
+        "protected_case_ids": []
+    }).decide(
         candidate_id="candidate",
         baseline_train=baseline_train,
         baseline_validation=baseline_val,
@@ -48,7 +50,9 @@ def test_gate_rejects_protected_case_regression():
         candidate_train=candidate_train,
         candidate_validation=candidate_val,
     )
-    decision = AcceptanceGate({"protected_case_ids": ["protected"]}).decide(
+    decision = AcceptanceGate({
+        "protected_case_ids": ["protected"]
+    }).decide(
         candidate_id="candidate",
         baseline_train=baseline_train,
         baseline_validation=baseline_val,
@@ -76,7 +80,9 @@ def test_gate_accepts_safe_candidate():
         candidate_train=candidate_train,
         candidate_validation=candidate_val,
     )
-    decision = AcceptanceGate({"protected_case_ids": ["protected"]}).decide(
+    decision = AcceptanceGate({
+        "protected_case_ids": ["protected"]
+    }).decide(
         candidate_id="candidate",
         baseline_train=baseline_train,
         baseline_validation=baseline_val,
@@ -104,7 +110,9 @@ def test_gate_rejects_new_hard_failure_when_not_allowed():
         candidate_validation=candidate_val,
     )
 
-    decision = AcceptanceGate({"allow_new_hard_fail": False}).decide(
+    decision = AcceptanceGate({
+        "allow_new_hard_fail": False
+    }).decide(
         candidate_id="candidate",
         baseline_train=baseline_train,
         baseline_validation=baseline_val,
@@ -164,7 +172,10 @@ def test_gate_rejects_excessive_score_drop():
         candidate_validation=candidate_val,
     )
 
-    decision = AcceptanceGate({"max_score_drop_per_case": 0.5, "allow_new_hard_fail": True}).decide(
+    decision = AcceptanceGate({
+        "max_score_drop_per_case": 0.5,
+        "allow_new_hard_fail": True
+    }).decide(
         candidate_id="candidate",
         baseline_train=baseline_train,
         baseline_validation=baseline_val,
@@ -191,7 +202,9 @@ def test_gate_rejects_cost_budget():
         candidate_validation=candidate_val,
     )
 
-    decision = AcceptanceGate({"max_total_cost": 0.001}).decide(
+    decision = AcceptanceGate({
+        "max_total_cost": 0.001
+    }).decide(
         candidate_id="candidate",
         baseline_train=baseline_train,
         baseline_validation=baseline_val,
@@ -213,7 +226,9 @@ def test_gate_rejects_incomplete_cost_when_budget_is_configured():
     baseline_val = _eval("baseline", "validation", [("val_a", 0.0)])
     candidate_val = _eval("candidate", "validation", [("val_a", 1.0)])
 
-    decision = AcceptanceGate({"max_total_cost": 100.0}).decide(
+    decision = AcceptanceGate({
+        "max_total_cost": 100.0
+    }).decide(
         candidate_id="candidate",
         baseline_train=baseline_train,
         baseline_validation=baseline_val,
@@ -241,7 +256,9 @@ def test_gate_skips_cost_completeness_check_when_budget_is_disabled():
     baseline_val = _eval("baseline", "validation", [("val_a", 0.0)])
     candidate_val = _eval("candidate", "validation", [("val_a", 1.0)])
 
-    decision = AcceptanceGate({"max_total_cost": None}).decide(
+    decision = AcceptanceGate({
+        "max_total_cost": None
+    }).decide(
         candidate_id="candidate",
         baseline_train=baseline_train,
         baseline_validation=baseline_val,
@@ -301,7 +318,9 @@ def test_gate_does_not_add_cost_summary_total_twice():
     baseline_val = _eval("baseline", "validation", [("val_a", 0.0)])
     candidate_val = _eval("candidate", "validation", [("val_a", 1.0)])
 
-    decision = AcceptanceGate({"max_total_cost": 1.0}).decide(
+    decision = AcceptanceGate({
+        "max_total_cost": 1.0
+    }).decide(
         candidate_id="candidate",
         baseline_train=baseline_train,
         baseline_validation=baseline_val,
@@ -352,7 +371,9 @@ def test_gate_rejects_duplicate_missing_and_empty_case_results():
     ]
 
     for baseline_train, candidate_train, baseline_val, candidate_val, expected in scenarios:
-        decision = AcceptanceGate({"max_total_cost": None}).decide(
+        decision = AcceptanceGate({
+            "max_total_cost": None
+        }).decide(
             candidate_id="candidate",
             baseline_train=baseline_train,
             baseline_validation=baseline_val,
@@ -398,8 +419,7 @@ def _eval(prompt_id: str, split: str, scores: list[tuple[str, float]]) -> EvalRe
             passed=score >= 1.0,
             output="",
             hard_failed=score <= 0.0,
-        )
-        for case_id, score in scores
+        ) for case_id, score in scores
     ]
     return EvalResult(
         prompt_id=prompt_id,

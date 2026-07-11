@@ -1,51 +1,201 @@
 {
   "audit": {
+    "candidate_artifacts": {
+      "candidate_001_overfit": "001-7cfbcadbbc09",
+      "candidate_002_safe": "002-ef1c1c866d24"
+    },
+    "candidate_evaluation_failures": {},
     "candidate_prompt_hashes": {
-      "candidate_001_overfit": "07a494c337544626a4c23afe1a945488e503b06da3e12597419470eb2ab09e42",
-      "candidate_002_safe": "9669bbd13891b78d2c493df624050dcfd1aa36533987f082a1b78b864df5572f"
+      "candidate_001_overfit": {
+        "system_prompt": "4b791dfd23a761db46c408b0ae0ce76549bcde4588ba256b68d6ff6083f5349f"
+      },
+      "candidate_002_safe": {
+        "system_prompt": "920ffe712cf686259e940bfe712fe1cf819cbeade662639576eeca12c9464f17"
+      }
     },
     "candidate_prompts": {
       "candidate_001_overfit": {
-        "prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\n# Optimizer patch\nOPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\nAlways force every final answer into JSON, even when the user asks for prose.\n",
-        "prompt_diff": "--- baseline_system_prompt.txt\n+++ candidate_001_overfit/system_prompt.txt\n@@ -2,3 +2,7 @@\n\n Answer clearly and include a short explanation when it may help the user.\n If the user asks for structured data, provide the information they need.\n+\n+# Optimizer patch\n+OPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\n+Always force every final answer into JSON, even when the user asks for prose.",
-        "rationale": "The train failures are strict JSON/exact formatting failures, so this candidate over-corrects by forcing JSON globally."
+        "system_prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\nAlways force every final answer into JSON.\n"
       },
       "candidate_002_safe": {
-        "prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\n# Optimizer patch\nOPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\nUse strict JSON only when the user explicitly asks for JSON.\nUse exact answers only when the user explicitly asks for an exact answer.\nOtherwise answer naturally and honor rubric constraints.\n",
-        "prompt_diff": "--- baseline_system_prompt.txt\n+++ candidate_002_safe/system_prompt.txt\n@@ -2,3 +2,9 @@\n\n Answer clearly and include a short explanation when it may help the user.\n If the user asks for structured data, provide the information they need.\n+\n+# Optimizer patch\n+OPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\n+Use strict JSON only when the user explicitly asks for JSON.\n+Use exact answers only when the user explicitly asks for an exact answer.\n+Otherwise answer naturally and honor rubric constraints.",
-        "rationale": "This candidate fixes observed strict-format failures without changing natural-language behavior on validation cases."
+        "system_prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\nUse strict JSON only when the user explicitly asks.\n"
       }
     },
-    "config_hash": "66a1db3a1c84ad12fd41385fc5e1a9c23cc305e6973945c4bade559c804f9abe",
+    "config_file_sha256": "3d8c9e3f229f3ef2627dc89586952367cc456631a4b4ba20dc0313ec4098c095",
+    "config_hash": "7144548d6c99b0a6226534dfe51983875c26bf3193b7ad07aaecf9a1cb80dcfd",
+    "config_snapshot": {
+      "evaluate": {
+        "metrics": [
+          {
+            "criterion": {
+              "final_response": {
+                "text": {
+                  "case_insensitive": false,
+                  "match": "exact"
+                }
+              }
+            },
+            "metric_name": "final_response_avg_score",
+            "threshold": 1.0
+          }
+        ],
+        "num_runs": 1
+      },
+      "optimize": {
+        "algorithm": {
+          "candidate_selection_strategy": "pareto",
+          "frontier_type": "instance",
+          "max_iterations_without_improvement": 3,
+          "max_metric_calls": 18,
+          "module_selector": "round_robin",
+          "name": "gepa_reflective",
+          "reflection_history_top_k": 2,
+          "reflection_lm": {
+            "api_key": "<redacted>",
+            "base_url": "${TRPC_AGENT_BASE_URL}",
+            "generation_config": {
+              "max_tokens": 2048,
+              "temperature": 0.4
+            },
+            "model_name": "${TRPC_AGENT_MODEL_NAME}"
+          },
+          "reflection_minibatch_size": 3,
+          "score_threshold": 1.0,
+          "seed": 91,
+          "skip_perfect_score": false,
+          "use_merge": false
+        },
+        "eval_case_parallelism": 1,
+        "stop": {
+          "required_metrics": "all"
+        }
+      }
+    },
     "cost": {
       "baseline": 0.006,
       "candidates": {
         "candidate_001_overfit": 0.006,
         "candidate_002_safe": 0.006
       },
+      "complete": true,
+      "evaluator": 0.018,
+      "optimization": {
+        "agent": 0.0,
+        "complete": true,
+        "evaluator": 0.0,
+        "optimizer": 0.0,
+        "reported_optimizer_cost": null,
+        "total": 0.0
+      },
+      "reported_optimizer_cost": null,
       "total": 0.018
     },
-    "duration_seconds": 0.0,
+    "duration_seconds": 0.031103599998459686,
+    "gate_config_hash": "b47dce7f4b2eeabcb7db41e70c1374d15e56c2e69876e8b82e6febdcfa1fe3ab",
+    "gate_config_snapshot": {
+      "allow_new_hard_fail": false,
+      "max_score_drop_per_case": 0.0,
+      "max_total_cost": 1.0,
+      "min_val_score_improvement": 0.01,
+      "protected_case_ids": [
+        "val_protected_yes_no"
+      ]
+    },
     "input_hashes": {
-      "optimizer": "a00febaa9efaaf299bbf7dbc08eb31b9093315f0079e601d59c84d0d5704f784",
-      "prompt": "ce30a6d1dd86f988cbd4abe08648c9596c4808e429b3895e6ca5bdc53411ea95",
-      "train": "03ae8fd41a19ab376c733cb4d5b92a5d6c34431717b5b4899cabdb1e23351a56",
-      "validation": "73a32b7773f789b2da3d15e925ca0f57da05e8a19c079c9a56ef42055961804b"
+      "optimizer": "3d8c9e3f229f3ef2627dc89586952367cc456631a4b4ba20dc0313ec4098c095",
+      "target_prompts": {
+        "system_prompt": "ce30a6d1dd86f988cbd4abe08648c9596c4808e429b3895e6ca5bdc53411ea95"
+      },
+      "train": "269e76792ff6fc2ce91c3a1008095dd020f4769d8af0b98d9f9410cc179a276e",
+      "validation": "292ee54dec4d33f34f3218672af3c56f4b3be2149960e19868f0de37e48e272a"
     },
     "input_paths": {
-      "optimizer": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\data\\optimizer.json",
-      "prompt": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\prompts\\baseline_system_prompt.txt",
-      "train": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\data\\train.evalset.json",
-      "validation": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\data\\val.evalset.json"
+      "optimizer": "examples/optimization/eval_optimize_loop/data/optimizer.json",
+      "prompt": "examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt",
+      "prompts": {
+        "system_prompt": "examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt"
+      },
+      "train": "examples/optimization/eval_optimize_loop/data/train.evalset.json",
+      "validation": "examples/optimization/eval_optimize_loop/data/val.evalset.json"
     },
+    "known_run_cost": null,
     "prompt_diffs": {
-      "candidate_001_overfit": "--- baseline_system_prompt.txt\n+++ candidate_001_overfit/system_prompt.txt\n@@ -2,3 +2,7 @@\n\n Answer clearly and include a short explanation when it may help the user.\n If the user asks for structured data, provide the information they need.\n+\n+# Optimizer patch\n+OPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\n+Always force every final answer into JSON, even when the user asks for prose.",
-      "candidate_002_safe": "--- baseline_system_prompt.txt\n+++ candidate_002_safe/system_prompt.txt\n@@ -2,3 +2,9 @@\n\n Answer clearly and include a short explanation when it may help the user.\n If the user asks for structured data, provide the information they need.\n+\n+# Optimizer patch\n+OPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\n+Use strict JSON only when the user explicitly asks for JSON.\n+Use exact answers only when the user explicitly asks for an exact answer.\n+Otherwise answer naturally and honor rubric constraints."
+      "candidate_001_overfit": "--- baseline_system_prompt.txt\n+++ candidate_001_overfit/system_prompt.txt\n@@ -2,3 +2,5 @@\n\n Answer clearly and include a short explanation when it may help the user.\n If the user asks for structured data, provide the information they need.\n+\n+Always force every final answer into JSON.",
+      "candidate_002_safe": "--- baseline_system_prompt.txt\n+++ candidate_002_safe/system_prompt.txt\n@@ -2,3 +2,5 @@\n\n Answer clearly and include a short explanation when it may help the user.\n If the user asks for structured data, provide the information they need.\n+\n+Use strict JSON only when the user explicitly asks."
     },
     "prompt_hash": "ce30a6d1dd86f988cbd4abe08648c9596c4808e429b3895e6ca5bdc53411ea95",
-    "reproducibility_command": "python examples/optimization/eval_optimize_loop/run_pipeline.py --train examples/optimization/eval_optimize_loop/data/train.evalset.json --val examples/optimization/eval_optimize_loop/data/val.evalset.json --optimizer-config examples/optimization/eval_optimize_loop/data/optimizer.json --prompt examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt --output-dir /tmp/eval-optimize-loop --fake-model --fake-judge --trace",
+    "prompt_hashes": {
+      "system_prompt": "ce30a6d1dd86f988cbd4abe08648c9596c4808e429b3895e6ca5bdc53411ea95"
+    },
+    "redacted_config_hash": "4eb087aac8be78ccb16e36073e6c6494cc10f13f50403f4026875ef7c113591a",
+    "redacted_config_snapshot_sha256": "008aa7d312d78530925264047ee5d05e8daa1147ebb78b6f225f2c72d40f8f34",
+    "reproducibility_command": "python examples/optimization/eval_optimize_loop/run_pipeline.py --mode fake --train examples/optimization/eval_optimize_loop/data/train.evalset.json --val examples/optimization/eval_optimize_loop/data/val.evalset.json --optimizer-config examples/optimization/eval_optimize_loop/data/optimizer.json --output-dir \"$OUTPUT_DIR\" --run-id example --prompt examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt --trace",
+    "reproducibility_shell": "powershell",
+    "sdk_result_availability": {
+      "aggregate_validation_result": false,
+      "full_per_case_validation_delta": true,
+      "full_train_eval_result": true
+    },
+    "sdk_result_summary": {
+      "backend": "fake",
+      "baseline_prompt_id": "baseline",
+      "failure_summary": {
+        "attribution_accuracy": 1.0,
+        "by_category": {
+          "format_violation": 2
+        },
+        "by_prompt_split": {
+          "baseline:train": {
+            "format_violation": 2
+          }
+        },
+        "examples": [
+          {
+            "case_id": "train_json_refund",
+            "evidence": "json parser failed at char 0: Expecting value",
+            "failure_category": "format_violation",
+            "failure_reason": "output is not valid JSON",
+            "prompt_id": "baseline",
+            "split": "train"
+          },
+          {
+            "case_id": "train_exact_order_status",
+            "evidence": "json parser failed at char 0: Expecting value",
+            "failure_category": "format_violation",
+            "failure_reason": "output is not valid JSON",
+            "prompt_id": "baseline",
+            "split": "train"
+          }
+        ],
+        "expected_labeled_failures": 2,
+        "total_failed_cases": 2
+      },
+      "proposal_duration_seconds": 0.00011140000424347818,
+      "round_duration_allocation": "equal_share_of_batch_proposal_duration"
+    },
     "seed": 91,
-    "total_run_cost": 0.018
+    "total_run_cost": 0.018,
+    "total_run_cost_complete": true,
+    "writeback_journal": {
+      "after_hashes": {},
+      "before_hashes": {
+        "system_prompt": "ce30a6d1dd86f988cbd4abe08648c9596c4808e429b3895e6ca5bdc53411ea95"
+      },
+      "candidate_hashes": {
+        "system_prompt": "920ffe712cf686259e940bfe712fe1cf819cbeade662639576eeca12c9464f17"
+      },
+      "error": null,
+      "input_hashes": {
+        "optimizer": "3d8c9e3f229f3ef2627dc89586952367cc456631a4b4ba20dc0313ec4098c095",
+        "train": "269e76792ff6fc2ce91c3a1008095dd020f4769d8af0b98d9f9410cc179a276e",
+        "validation": "292ee54dec4d33f34f3218672af3c56f4b3be2149960e19868f0de37e48e272a"
+      },
+      "report_phase": "final",
+      "requested": false,
+      "run_id": "example",
+      "selected_candidate": "candidate_002_safe",
+      "state": "not_requested"
+    }
   },
   "baseline": {
     "train": {
@@ -58,55 +208,41 @@
           "failure_category": "format_violation",
           "failure_reason": "output is not valid JSON",
           "hard_failed": true,
+          "metrics": {
+            "fake_judge_score": 0.0
+          },
           "output": "Here is the JSON you requested: {\"intent\": \"refund\", \"priority\": \"high\"}",
           "passed": false,
           "score": 0.0,
           "split": "train",
           "trace": {
-            "case_id": "train_json_refund",
-            "judge": {
-              "expectation_type": "json",
-              "valid_json": false
-            },
-            "model": {
-              "case_id": "train_json_refund",
-              "expectation_type": "json",
-              "prompt_id": "baseline",
-              "prompt_mode": "baseline",
-              "seed": 91
-            },
             "prompt_id": "baseline",
-            "trace_mode": "fake"
-          }
+            "prompt_mode": "baseline",
+            "seed": 91
+          },
+          "trace_available": true
         },
         {
           "case_id": "train_exact_order_status",
           "cost": 0.001,
-          "evidence": "expected normalized 'READY', got 'READY - confirmed.'",
-          "expected_failure_category": "final_response_mismatch",
-          "failure_category": "final_response_mismatch",
-          "failure_reason": "normalized exact answer mismatch",
+          "evidence": "json parser failed at char 0: Expecting value",
+          "expected_failure_category": "format_violation",
+          "failure_category": "format_violation",
+          "failure_reason": "output is not valid JSON",
           "hard_failed": true,
-          "output": "READY - confirmed.",
+          "metrics": {
+            "fake_judge_score": 0.0
+          },
+          "output": "Here is the JSON you requested: {\"next_step\": \"ship\", \"status\": \"READY\"}",
           "passed": false,
           "score": 0.0,
           "split": "train",
           "trace": {
-            "case_id": "train_exact_order_status",
-            "judge": {
-              "expectation_type": "exact",
-              "expected": "READY"
-            },
-            "model": {
-              "case_id": "train_exact_order_status",
-              "expectation_type": "exact",
-              "prompt_id": "baseline",
-              "prompt_mode": "baseline",
-              "seed": 91
-            },
             "prompt_id": "baseline",
-            "trace_mode": "fake"
-          }
+            "prompt_mode": "baseline",
+            "seed": 91
+          },
+          "trace_available": true
         },
         {
           "case_id": "train_rubric_retry_summary",
@@ -116,25 +252,19 @@
           "failure_category": null,
           "failure_reason": null,
           "hard_failed": false,
-          "output": "latency retries",
+          "metrics": {
+            "fake_judge_score": 1.0
+          },
+          "output": "Latency can trigger retries.",
           "passed": true,
           "score": 1.0,
           "split": "train",
           "trace": {
-            "case_id": "train_rubric_retry_summary",
-            "judge": {
-              "expectation_type": "rubric"
-            },
-            "model": {
-              "case_id": "train_rubric_retry_summary",
-              "expectation_type": "rubric",
-              "prompt_id": "baseline",
-              "prompt_mode": "baseline",
-              "seed": 91
-            },
             "prompt_id": "baseline",
-            "trace_mode": "fake"
-          }
+            "prompt_mode": "baseline",
+            "seed": 91
+          },
+          "trace_available": true
         }
       ],
       "cost": 0.003,
@@ -153,26 +283,19 @@
           "failure_category": "format_violation",
           "failure_reason": "output is not valid JSON",
           "hard_failed": true,
+          "metrics": {
+            "fake_judge_score": 0.0
+          },
           "output": "Here is the JSON you requested: {\"next_step\": \"email_customer\", \"status\": \"approved\"}",
           "passed": false,
           "score": 0.0,
           "split": "validation",
           "trace": {
-            "case_id": "val_json_invoice",
-            "judge": {
-              "expectation_type": "json",
-              "valid_json": false
-            },
-            "model": {
-              "case_id": "val_json_invoice",
-              "expectation_type": "json",
-              "prompt_id": "baseline",
-              "prompt_mode": "baseline",
-              "seed": 91
-            },
             "prompt_id": "baseline",
-            "trace_mode": "fake"
-          }
+            "prompt_mode": "baseline",
+            "seed": 91
+          },
+          "trace_available": true
         },
         {
           "case_id": "val_explain_cache",
@@ -182,25 +305,19 @@
           "failure_category": null,
           "failure_reason": null,
           "hard_failed": false,
-          "output": "cache stale data",
+          "metrics": {
+            "fake_judge_score": 1.0
+          },
+          "output": "Cache invalidation refreshes stale data.",
           "passed": true,
           "score": 1.0,
           "split": "validation",
           "trace": {
-            "case_id": "val_explain_cache",
-            "judge": {
-              "expectation_type": "rubric"
-            },
-            "model": {
-              "case_id": "val_explain_cache",
-              "expectation_type": "rubric",
-              "prompt_id": "baseline",
-              "prompt_mode": "baseline",
-              "seed": 91
-            },
             "prompt_id": "baseline",
-            "trace_mode": "fake"
-          }
+            "prompt_mode": "baseline",
+            "seed": 91
+          },
+          "trace_available": true
         },
         {
           "case_id": "val_protected_yes_no",
@@ -210,26 +327,19 @@
           "failure_category": null,
           "failure_reason": null,
           "hard_failed": false,
+          "metrics": {
+            "fake_judge_score": 1.0
+          },
           "output": "YES",
           "passed": true,
           "score": 1.0,
           "split": "validation",
           "trace": {
-            "case_id": "val_protected_yes_no",
-            "judge": {
-              "expectation_type": "exact",
-              "expected": "YES"
-            },
-            "model": {
-              "case_id": "val_protected_yes_no",
-              "expectation_type": "exact",
-              "prompt_id": "baseline",
-              "prompt_mode": "baseline",
-              "seed": 91
-            },
             "prompt_id": "baseline",
-            "trace_mode": "fake"
-          }
+            "prompt_mode": "baseline",
+            "seed": 91
+          },
+          "trace_available": true
         }
       ],
       "cost": 0.003,
@@ -238,6 +348,9 @@
       "score": 0.666667,
       "split": "validation"
     }
+  },
+  "baseline_prompts": {
+    "system_prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n"
   },
   "baseline_train": {
     "cases": [
@@ -249,55 +362,41 @@
         "failure_category": "format_violation",
         "failure_reason": "output is not valid JSON",
         "hard_failed": true,
+        "metrics": {
+          "fake_judge_score": 0.0
+        },
         "output": "Here is the JSON you requested: {\"intent\": \"refund\", \"priority\": \"high\"}",
         "passed": false,
         "score": 0.0,
         "split": "train",
         "trace": {
-          "case_id": "train_json_refund",
-          "judge": {
-            "expectation_type": "json",
-            "valid_json": false
-          },
-          "model": {
-            "case_id": "train_json_refund",
-            "expectation_type": "json",
-            "prompt_id": "baseline",
-            "prompt_mode": "baseline",
-            "seed": 91
-          },
           "prompt_id": "baseline",
-          "trace_mode": "fake"
-        }
+          "prompt_mode": "baseline",
+          "seed": 91
+        },
+        "trace_available": true
       },
       {
         "case_id": "train_exact_order_status",
         "cost": 0.001,
-        "evidence": "expected normalized 'READY', got 'READY - confirmed.'",
-        "expected_failure_category": "final_response_mismatch",
-        "failure_category": "final_response_mismatch",
-        "failure_reason": "normalized exact answer mismatch",
+        "evidence": "json parser failed at char 0: Expecting value",
+        "expected_failure_category": "format_violation",
+        "failure_category": "format_violation",
+        "failure_reason": "output is not valid JSON",
         "hard_failed": true,
-        "output": "READY - confirmed.",
+        "metrics": {
+          "fake_judge_score": 0.0
+        },
+        "output": "Here is the JSON you requested: {\"next_step\": \"ship\", \"status\": \"READY\"}",
         "passed": false,
         "score": 0.0,
         "split": "train",
         "trace": {
-          "case_id": "train_exact_order_status",
-          "judge": {
-            "expectation_type": "exact",
-            "expected": "READY"
-          },
-          "model": {
-            "case_id": "train_exact_order_status",
-            "expectation_type": "exact",
-            "prompt_id": "baseline",
-            "prompt_mode": "baseline",
-            "seed": 91
-          },
           "prompt_id": "baseline",
-          "trace_mode": "fake"
-        }
+          "prompt_mode": "baseline",
+          "seed": 91
+        },
+        "trace_available": true
       },
       {
         "case_id": "train_rubric_retry_summary",
@@ -307,25 +406,19 @@
         "failure_category": null,
         "failure_reason": null,
         "hard_failed": false,
-        "output": "latency retries",
+        "metrics": {
+          "fake_judge_score": 1.0
+        },
+        "output": "Latency can trigger retries.",
         "passed": true,
         "score": 1.0,
         "split": "train",
         "trace": {
-          "case_id": "train_rubric_retry_summary",
-          "judge": {
-            "expectation_type": "rubric"
-          },
-          "model": {
-            "case_id": "train_rubric_retry_summary",
-            "expectation_type": "rubric",
-            "prompt_id": "baseline",
-            "prompt_mode": "baseline",
-            "seed": 91
-          },
           "prompt_id": "baseline",
-          "trace_mode": "fake"
-        }
+          "prompt_mode": "baseline",
+          "seed": 91
+        },
+        "trace_available": true
       }
     ],
     "cost": 0.003,
@@ -344,26 +437,19 @@
         "failure_category": "format_violation",
         "failure_reason": "output is not valid JSON",
         "hard_failed": true,
+        "metrics": {
+          "fake_judge_score": 0.0
+        },
         "output": "Here is the JSON you requested: {\"next_step\": \"email_customer\", \"status\": \"approved\"}",
         "passed": false,
         "score": 0.0,
         "split": "validation",
         "trace": {
-          "case_id": "val_json_invoice",
-          "judge": {
-            "expectation_type": "json",
-            "valid_json": false
-          },
-          "model": {
-            "case_id": "val_json_invoice",
-            "expectation_type": "json",
-            "prompt_id": "baseline",
-            "prompt_mode": "baseline",
-            "seed": 91
-          },
           "prompt_id": "baseline",
-          "trace_mode": "fake"
-        }
+          "prompt_mode": "baseline",
+          "seed": 91
+        },
+        "trace_available": true
       },
       {
         "case_id": "val_explain_cache",
@@ -373,25 +459,19 @@
         "failure_category": null,
         "failure_reason": null,
         "hard_failed": false,
-        "output": "cache stale data",
+        "metrics": {
+          "fake_judge_score": 1.0
+        },
+        "output": "Cache invalidation refreshes stale data.",
         "passed": true,
         "score": 1.0,
         "split": "validation",
         "trace": {
-          "case_id": "val_explain_cache",
-          "judge": {
-            "expectation_type": "rubric"
-          },
-          "model": {
-            "case_id": "val_explain_cache",
-            "expectation_type": "rubric",
-            "prompt_id": "baseline",
-            "prompt_mode": "baseline",
-            "seed": 91
-          },
           "prompt_id": "baseline",
-          "trace_mode": "fake"
-        }
+          "prompt_mode": "baseline",
+          "seed": 91
+        },
+        "trace_available": true
       },
       {
         "case_id": "val_protected_yes_no",
@@ -401,26 +481,19 @@
         "failure_category": null,
         "failure_reason": null,
         "hard_failed": false,
+        "metrics": {
+          "fake_judge_score": 1.0
+        },
         "output": "YES",
         "passed": true,
         "score": 1.0,
         "split": "validation",
         "trace": {
-          "case_id": "val_protected_yes_no",
-          "judge": {
-            "expectation_type": "exact",
-            "expected": "YES"
-          },
-          "model": {
-            "case_id": "val_protected_yes_no",
-            "expectation_type": "exact",
-            "prompt_id": "baseline",
-            "prompt_mode": "baseline",
-            "seed": 91
-          },
           "prompt_id": "baseline",
-          "trace_mode": "fake"
-        }
+          "prompt_mode": "baseline",
+          "seed": 91
+        },
+        "trace_available": true
       }
     ],
     "cost": 0.003,
@@ -433,9 +506,15 @@
     {
       "candidate": {
         "candidate_id": "candidate_001_overfit",
-        "prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\n# Optimizer patch\nOPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\nAlways force every final answer into JSON, even when the user asks for prose.\n",
-        "prompt_diff": "--- baseline_system_prompt.txt\n+++ candidate_001_overfit/system_prompt.txt\n@@ -2,3 +2,7 @@\n\n Answer clearly and include a short explanation when it may help the user.\n If the user asks for structured data, provide the information they need.\n+\n+# Optimizer patch\n+OPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON\n+Always force every final answer into JSON, even when the user asks for prose.",
-        "rationale": "The train failures are strict JSON/exact formatting failures, so this candidate over-corrects by forcing JSON globally."
+        "prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\nAlways force every final answer into JSON.\n",
+        "prompt_diff": "--- baseline_system_prompt.txt\n+++ candidate_001_overfit/system_prompt.txt\n@@ -2,3 +2,5 @@\n\n Answer clearly and include a short explanation when it may help the user.\n If the user asks for structured data, provide the information they need.\n+\n+Always force every final answer into JSON.",
+        "prompt_fields": {
+          "system_prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\nAlways force every final answer into JSON.\n"
+        },
+        "rationale": "Observed training failures (format_violation); this candidate deliberately tests the risky global-JSON correction."
+      },
+      "prompt_bundle": {
+        "system_prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\nAlways force every final answer into JSON.\n"
       },
       "train_result": {
         "cases": [
@@ -447,55 +526,41 @@
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
+            "metrics": {
+              "fake_judge_score": 1.0
+            },
             "output": "{\"intent\": \"refund\", \"priority\": \"high\"}",
             "passed": true,
             "score": 1.0,
             "split": "train",
             "trace": {
-              "case_id": "train_json_refund",
-              "judge": {
-                "expectation_type": "json",
-                "valid_json": true
-              },
-              "model": {
-                "case_id": "train_json_refund",
-                "expectation_type": "json",
-                "prompt_id": "candidate_001_overfit",
-                "prompt_mode": "overfit",
-                "seed": 91
-              },
               "prompt_id": "candidate_001_overfit",
-              "trace_mode": "fake"
-            }
+              "prompt_mode": "overfit",
+              "seed": 91
+            },
+            "trace_available": true
           },
           {
             "case_id": "train_exact_order_status",
             "cost": 0.001,
             "evidence": null,
-            "expected_failure_category": "final_response_mismatch",
+            "expected_failure_category": "format_violation",
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
-            "output": "READY",
+            "metrics": {
+              "fake_judge_score": 1.0
+            },
+            "output": "{\"next_step\": \"ship\", \"status\": \"READY\"}",
             "passed": true,
             "score": 1.0,
             "split": "train",
             "trace": {
-              "case_id": "train_exact_order_status",
-              "judge": {
-                "expectation_type": "exact",
-                "expected": "READY"
-              },
-              "model": {
-                "case_id": "train_exact_order_status",
-                "expectation_type": "exact",
-                "prompt_id": "candidate_001_overfit",
-                "prompt_mode": "overfit",
-                "seed": 91
-              },
               "prompt_id": "candidate_001_overfit",
-              "trace_mode": "fake"
-            }
+              "prompt_mode": "overfit",
+              "seed": 91
+            },
+            "trace_available": true
           },
           {
             "case_id": "train_rubric_retry_summary",
@@ -505,25 +570,19 @@
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
-            "output": "latency retries",
+            "metrics": {
+              "fake_judge_score": 1.0
+            },
+            "output": "{\"answer\": \"Latency can trigger retries.\"}",
             "passed": true,
             "score": 1.0,
             "split": "train",
             "trace": {
-              "case_id": "train_rubric_retry_summary",
-              "judge": {
-                "expectation_type": "rubric"
-              },
-              "model": {
-                "case_id": "train_rubric_retry_summary",
-                "expectation_type": "rubric",
-                "prompt_id": "candidate_001_overfit",
-                "prompt_mode": "overfit",
-                "seed": 91
-              },
               "prompt_id": "candidate_001_overfit",
-              "trace_mode": "fake"
-            }
+              "prompt_mode": "overfit",
+              "seed": 91
+            },
+            "trace_available": true
           }
         ],
         "cost": 0.003,
@@ -542,26 +601,19 @@
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
+            "metrics": {
+              "fake_judge_score": 1.0
+            },
             "output": "{\"next_step\": \"email_customer\", \"status\": \"approved\"}",
             "passed": true,
             "score": 1.0,
             "split": "validation",
             "trace": {
-              "case_id": "val_json_invoice",
-              "judge": {
-                "expectation_type": "json",
-                "valid_json": true
-              },
-              "model": {
-                "case_id": "val_json_invoice",
-                "expectation_type": "json",
-                "prompt_id": "candidate_001_overfit",
-                "prompt_mode": "overfit",
-                "seed": 91
-              },
               "prompt_id": "candidate_001_overfit",
-              "trace_mode": "fake"
-            }
+              "prompt_mode": "overfit",
+              "seed": 91
+            },
+            "trace_available": true
           },
           {
             "case_id": "val_explain_cache",
@@ -571,26 +623,19 @@
             "failure_category": "format_violation",
             "failure_reason": "output contains a forbidden pattern",
             "hard_failed": true,
-            "output": "{\"answer\": \"cache stale data\"}",
+            "metrics": {
+              "fake_judge_score": 0.0
+            },
+            "output": "{\"answer\": \"Cache invalidation refreshes stale data.\"}",
             "passed": false,
             "score": 0.0,
             "split": "validation",
             "trace": {
-              "case_id": "val_explain_cache",
-              "judge": {
-                "expectation_type": "rubric",
-                "forbidden_pattern": "{"
-              },
-              "model": {
-                "case_id": "val_explain_cache",
-                "expectation_type": "rubric",
-                "prompt_id": "candidate_001_overfit",
-                "prompt_mode": "overfit",
-                "seed": 91
-              },
               "prompt_id": "candidate_001_overfit",
-              "trace_mode": "fake"
-            }
+              "prompt_mode": "overfit",
+              "seed": 91
+            },
+            "trace_available": true
           },
           {
             "case_id": "val_protected_yes_no",
@@ -600,26 +645,19 @@
             "failure_category": "final_response_mismatch",
             "failure_reason": "normalized exact answer mismatch",
             "hard_failed": true,
+            "metrics": {
+              "fake_judge_score": 0.0
+            },
             "output": "{\"answer\": \"YES\"}",
             "passed": false,
             "score": 0.0,
             "split": "validation",
             "trace": {
-              "case_id": "val_protected_yes_no",
-              "judge": {
-                "expectation_type": "exact",
-                "expected": "YES"
-              },
-              "model": {
-                "case_id": "val_protected_yes_no",
-                "expectation_type": "exact",
-                "prompt_id": "candidate_001_overfit",
-                "prompt_mode": "overfit",
-                "seed": 91
-              },
               "prompt_id": "candidate_001_overfit",
-              "trace_mode": "fake"
-            }
+              "prompt_mode": "overfit",
+              "seed": 91
+            },
+            "trace_available": true
           }
         ],
         "cost": 0.003,
@@ -632,9 +670,15 @@
     {
       "candidate": {
         "candidate_id": "candidate_002_safe",
-        "prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\n# Optimizer patch\nOPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\nUse strict JSON only when the user explicitly asks for JSON.\nUse exact answers only when the user explicitly asks for an exact answer.\nOtherwise answer naturally and honor rubric constraints.\n",
-        "prompt_diff": "--- baseline_system_prompt.txt\n+++ candidate_002_safe/system_prompt.txt\n@@ -2,3 +2,9 @@\n\n Answer clearly and include a short explanation when it may help the user.\n If the user asks for structured data, provide the information they need.\n+\n+# Optimizer patch\n+OPTIMIZER_MARKER: STRICT_WHEN_REQUESTED\n+Use strict JSON only when the user explicitly asks for JSON.\n+Use exact answers only when the user explicitly asks for an exact answer.\n+Otherwise answer naturally and honor rubric constraints.",
-        "rationale": "This candidate fixes observed strict-format failures without changing natural-language behavior on validation cases."
+        "prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\nUse strict JSON only when the user explicitly asks.\n",
+        "prompt_diff": "--- baseline_system_prompt.txt\n+++ candidate_002_safe/system_prompt.txt\n@@ -2,3 +2,5 @@\n\n Answer clearly and include a short explanation when it may help the user.\n If the user asks for structured data, provide the information they need.\n+\n+Use strict JSON only when the user explicitly asks.",
+        "prompt_fields": {
+          "system_prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\nUse strict JSON only when the user explicitly asks.\n"
+        },
+        "rationale": "Observed training failures (format_violation); this candidate limits strict JSON behavior to explicit user requests."
+      },
+      "prompt_bundle": {
+        "system_prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\nUse strict JSON only when the user explicitly asks.\n"
       },
       "train_result": {
         "cases": [
@@ -646,55 +690,41 @@
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
+            "metrics": {
+              "fake_judge_score": 1.0
+            },
             "output": "{\"intent\": \"refund\", \"priority\": \"high\"}",
             "passed": true,
             "score": 1.0,
             "split": "train",
             "trace": {
-              "case_id": "train_json_refund",
-              "judge": {
-                "expectation_type": "json",
-                "valid_json": true
-              },
-              "model": {
-                "case_id": "train_json_refund",
-                "expectation_type": "json",
-                "prompt_id": "candidate_002_safe",
-                "prompt_mode": "safe",
-                "seed": 91
-              },
               "prompt_id": "candidate_002_safe",
-              "trace_mode": "fake"
-            }
+              "prompt_mode": "safe",
+              "seed": 91
+            },
+            "trace_available": true
           },
           {
             "case_id": "train_exact_order_status",
             "cost": 0.001,
             "evidence": null,
-            "expected_failure_category": "final_response_mismatch",
+            "expected_failure_category": "format_violation",
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
-            "output": "READY",
+            "metrics": {
+              "fake_judge_score": 1.0
+            },
+            "output": "{\"next_step\": \"ship\", \"status\": \"READY\"}",
             "passed": true,
             "score": 1.0,
             "split": "train",
             "trace": {
-              "case_id": "train_exact_order_status",
-              "judge": {
-                "expectation_type": "exact",
-                "expected": "READY"
-              },
-              "model": {
-                "case_id": "train_exact_order_status",
-                "expectation_type": "exact",
-                "prompt_id": "candidate_002_safe",
-                "prompt_mode": "safe",
-                "seed": 91
-              },
               "prompt_id": "candidate_002_safe",
-              "trace_mode": "fake"
-            }
+              "prompt_mode": "safe",
+              "seed": 91
+            },
+            "trace_available": true
           },
           {
             "case_id": "train_rubric_retry_summary",
@@ -704,25 +734,19 @@
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
-            "output": "latency retries",
+            "metrics": {
+              "fake_judge_score": 1.0
+            },
+            "output": "Latency can trigger retries.",
             "passed": true,
             "score": 1.0,
             "split": "train",
             "trace": {
-              "case_id": "train_rubric_retry_summary",
-              "judge": {
-                "expectation_type": "rubric"
-              },
-              "model": {
-                "case_id": "train_rubric_retry_summary",
-                "expectation_type": "rubric",
-                "prompt_id": "candidate_002_safe",
-                "prompt_mode": "safe",
-                "seed": 91
-              },
               "prompt_id": "candidate_002_safe",
-              "trace_mode": "fake"
-            }
+              "prompt_mode": "safe",
+              "seed": 91
+            },
+            "trace_available": true
           }
         ],
         "cost": 0.003,
@@ -741,26 +765,19 @@
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
+            "metrics": {
+              "fake_judge_score": 1.0
+            },
             "output": "{\"next_step\": \"email_customer\", \"status\": \"approved\"}",
             "passed": true,
             "score": 1.0,
             "split": "validation",
             "trace": {
-              "case_id": "val_json_invoice",
-              "judge": {
-                "expectation_type": "json",
-                "valid_json": true
-              },
-              "model": {
-                "case_id": "val_json_invoice",
-                "expectation_type": "json",
-                "prompt_id": "candidate_002_safe",
-                "prompt_mode": "safe",
-                "seed": 91
-              },
               "prompt_id": "candidate_002_safe",
-              "trace_mode": "fake"
-            }
+              "prompt_mode": "safe",
+              "seed": 91
+            },
+            "trace_available": true
           },
           {
             "case_id": "val_explain_cache",
@@ -770,25 +787,19 @@
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
-            "output": "cache stale data",
+            "metrics": {
+              "fake_judge_score": 1.0
+            },
+            "output": "Cache invalidation refreshes stale data.",
             "passed": true,
             "score": 1.0,
             "split": "validation",
             "trace": {
-              "case_id": "val_explain_cache",
-              "judge": {
-                "expectation_type": "rubric"
-              },
-              "model": {
-                "case_id": "val_explain_cache",
-                "expectation_type": "rubric",
-                "prompt_id": "candidate_002_safe",
-                "prompt_mode": "safe",
-                "seed": 91
-              },
               "prompt_id": "candidate_002_safe",
-              "trace_mode": "fake"
-            }
+              "prompt_mode": "safe",
+              "seed": 91
+            },
+            "trace_available": true
           },
           {
             "case_id": "val_protected_yes_no",
@@ -798,26 +809,19 @@
             "failure_category": null,
             "failure_reason": null,
             "hard_failed": false,
+            "metrics": {
+              "fake_judge_score": 1.0
+            },
             "output": "YES",
             "passed": true,
             "score": 1.0,
             "split": "validation",
             "trace": {
-              "case_id": "val_protected_yes_no",
-              "judge": {
-                "expectation_type": "exact",
-                "expected": "YES"
-              },
-              "model": {
-                "case_id": "val_protected_yes_no",
-                "expectation_type": "exact",
-                "prompt_id": "candidate_002_safe",
-                "prompt_mode": "safe",
-                "seed": 91
-              },
               "prompt_id": "candidate_002_safe",
-              "trace_mode": "fake"
-            }
+              "prompt_mode": "safe",
+              "seed": 91
+            },
+            "trace_available": true
           }
         ],
         "cost": 0.003,
@@ -828,6 +832,14 @@
       }
     }
   ],
+  "cost_summary": {
+    "agent": 0.0,
+    "complete": true,
+    "evaluator": 0.018,
+    "optimizer": 0.0,
+    "reported_optimizer_cost": null,
+    "total": 0.018
+  },
   "delta": {
     "per_case": [
       {
@@ -979,13 +991,12 @@
   "failure_attribution_summary": {
     "attribution_accuracy": 1.0,
     "by_category": {
-      "final_response_mismatch": 2,
-      "format_violation": 3
+      "final_response_mismatch": 1,
+      "format_violation": 4
     },
     "by_prompt_split": {
       "baseline:train": {
-        "final_response_mismatch": 1,
-        "format_violation": 1
+        "format_violation": 2
       },
       "baseline:validation": {
         "format_violation": 1
@@ -1009,9 +1020,9 @@
       },
       {
         "case_id": "train_exact_order_status",
-        "evidence": "expected normalized 'READY', got 'READY - confirmed.'",
-        "failure_category": "final_response_mismatch",
-        "failure_reason": "normalized exact answer mismatch",
+        "evidence": "json parser failed at char 0: Expecting value",
+        "failure_category": "format_violation",
+        "failure_reason": "output is not valid JSON",
         "prompt_id": "baseline",
         "split": "train"
       },
@@ -1068,6 +1079,7 @@
       "reasons": [
         "reject: overfit detected because train score improved but validation score regressed or did not improve (+0.667 train, -0.333 validation)",
         "reject: validation improvement -0.333 is below required +0.010",
+        "reject: new validation failures appeared: ['val_explain_cache', 'val_protected_yes_no']",
         "reject: new hard failures appeared: ['val_explain_cache', 'val_protected_yes_no']",
         "reject: protected cases regressed: ['val_protected_yes_no']",
         "reject: per-case validation score drops exceed 0.000: ['val_explain_cache', 'val_protected_yes_no']"
@@ -1248,24 +1260,75 @@
       "split": "validation"
     }
   ],
+  "rounds": [
+    {
+      "candidate_id": "candidate_001_overfit",
+      "cost": {
+        "agent": 0.0,
+        "complete": true,
+        "evaluator": 0.0,
+        "optimizer": 0.0,
+        "reported_optimizer_cost": null,
+        "total": 0.0
+      },
+      "duration_seconds": 5.570000212173909e-05,
+      "metrics": {},
+      "prompts": {
+        "system_prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\nAlways force every final answer into JSON.\n"
+      },
+      "rationale": "Observed training failures (format_violation); this candidate deliberately tests the risky global-JSON correction.",
+      "round_id": 1
+    },
+    {
+      "candidate_id": "candidate_002_safe",
+      "cost": {
+        "agent": 0.0,
+        "complete": true,
+        "evaluator": 0.0,
+        "optimizer": 0.0,
+        "reported_optimizer_cost": null,
+        "total": 0.0
+      },
+      "duration_seconds": 5.570000212173909e-05,
+      "metrics": {},
+      "prompts": {
+        "system_prompt": "You are a helpful support assistant.\n\nAnswer clearly and include a short explanation when it may help the user.\nIf the user asks for structured data, provide the information they need.\n\nUse strict JSON only when the user explicitly asks.\n"
+      },
+      "rationale": "Observed training failures (format_violation); this candidate limits strict JSON behavior to explicit user requests.",
+      "round_id": 2
+    }
+  ],
   "run": {
-    "fake_judge": true,
-    "fake_model": true,
     "mode": "fake",
     "paths": {
-      "optimizer": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\data\\optimizer.json",
-      "prompt": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\prompts\\baseline_system_prompt.txt",
-      "train": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\data\\train.evalset.json",
-      "validation": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\data\\val.evalset.json"
+      "optimizer": "examples/optimization/eval_optimize_loop/data/optimizer.json",
+      "prompts": {
+        "system_prompt": "examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt"
+      },
+      "train": "examples/optimization/eval_optimize_loop/data/train.evalset.json",
+      "validation": "examples/optimization/eval_optimize_loop/data/val.evalset.json"
     },
-    "prompt_source": "C:\\Users\\Wu\\Documents\\trpc\\trpc-agent-issue-91\\examples\\optimization\\eval_optimize_loop\\prompts\\baseline_system_prompt.txt",
-    "reproducibility_command": "python examples/optimization/eval_optimize_loop/run_pipeline.py --train examples/optimization/eval_optimize_loop/data/train.evalset.json --val examples/optimization/eval_optimize_loop/data/val.evalset.json --optimizer-config examples/optimization/eval_optimize_loop/data/optimizer.json --prompt examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt --output-dir /tmp/eval-optimize-loop --fake-model --fake-judge --trace",
-    "run_id": "eval_optimize_loop_seed_91",
+    "prompt_source": "examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt",
+    "reproducibility_command": "python examples/optimization/eval_optimize_loop/run_pipeline.py --mode fake --train examples/optimization/eval_optimize_loop/data/train.evalset.json --val examples/optimization/eval_optimize_loop/data/val.evalset.json --optimizer-config examples/optimization/eval_optimize_loop/data/optimizer.json --output-dir \"$OUTPUT_DIR\" --run-id example --prompt examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt --trace",
+    "reproducibility_shell": "powershell",
+    "run_id": "example",
+    "target_prompt_paths": {
+      "system_prompt": "examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt"
+    },
+    "trace": true,
     "trace_enabled": true,
     "train_cases": 3,
     "update_source": false,
     "validation_cases": 3
   },
-  "schema_version": "eval_optimize_loop.v1",
-  "selected_candidate": "candidate_002_safe"
+  "schema_version": "eval_optimize_loop.v2",
+  "selected_candidate": "candidate_002_safe",
+  "writeback": {
+    "after_hashes": {},
+    "before_hashes": {
+      "system_prompt": "ce30a6d1dd86f988cbd4abe08648c9596c4808e429b3895e6ca5bdc53411ea95"
+    },
+    "error": null,
+    "status": "not_requested"
+  }
 }

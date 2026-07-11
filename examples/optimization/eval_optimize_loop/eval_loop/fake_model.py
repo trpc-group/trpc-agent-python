@@ -7,7 +7,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-_ASSIGNMENT_PATTERN = re.compile(r"(?<![A-Za-z0-9_-])([A-Za-z_][A-Za-z0-9_]*)=([A-Za-z0-9_-]+)" r"(?![A-Za-z0-9_-])")
+_ASSIGNMENT_PATTERN = re.compile(r"(?<![A-Za-z0-9_-])([A-Za-z_][A-Za-z0-9_]*)=([A-Za-z0-9_-]+)"
+                                 r"(?![A-Za-z0-9_-])")
 _RETURN_ONLY_PATTERN = re.compile(
     r"\breturn\s+only\s+([A-Za-z0-9_-]+)\b",
     re.IGNORECASE,

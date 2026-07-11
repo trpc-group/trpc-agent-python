@@ -7,7 +7,6 @@ from typing import Iterable
 
 from .schemas import EvalResult
 
-
 _ERROR_TO_ATTRIBUTION = {
     "json_parse_failure": ("format_violation", "output is not valid JSON"),
     "required_key_missing": ("final_response_mismatch", "required JSON key is missing"),
@@ -71,12 +70,11 @@ def summarize_failures(results: Iterable[EvalResult]) -> dict[str, object]:
     return {
         "total_failed_cases": total_failed,
         "by_category": dict(sorted(by_category.items())),
-        "by_prompt_split": {key: dict(sorted(value.items())) for key, value in sorted(by_prompt.items())},
+        "by_prompt_split": {
+            key: dict(sorted(value.items()))
+            for key, value in sorted(by_prompt.items())
+        },
         "examples": examples,
-        "attribution_accuracy": (
-            round(expected_correct / expected_total, 6)
-            if expected_total
-            else None
-        ),
+        "attribution_accuracy": (round(expected_correct / expected_total, 6) if expected_total else None),
         "expected_labeled_failures": expected_total,
     }

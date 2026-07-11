@@ -94,10 +94,8 @@ def test_fake_mode_pipeline_generates_json_and_markdown_reports(tmp_path: Path):
     assert not decisions["candidate_001_overfit"]["accepted"]
     assert decisions["candidate_002_safe"]["accepted"]
     assert decisions["candidate_001_overfit"]["total_run_cost"] > decisions["candidate_001_overfit"]["candidate_cost"]
-    assert any(
-        "train score improved but validation score regressed" in reason
-        for reason in decisions["candidate_001_overfit"]["reasons"]
-    )
+    assert any("train score improved but validation score regressed" in reason
+               for reason in decisions["candidate_001_overfit"]["reasons"])
 
     markdown = md_path.read_text(encoding="utf-8")
     assert "Selected candidate: `candidate_002_safe`." in markdown
@@ -118,9 +116,8 @@ def test_fake_mode_pipeline_generates_json_and_markdown_reports(tmp_path: Path):
     assert (run_dir / "candidate_prompts" / overfit_artifact / "system_prompt.txt").is_file()
     assert (run_dir / "case_results" / f"{safe_artifact}_validation.json").is_file()
     assert (run_dir / "prompt_diffs" / f"{safe_artifact}.diff").is_file()
-    assert (run_dir / "prompt_diffs" / f"{safe_artifact}.diff").read_text(encoding="utf-8") == (
-        payload["candidates"][1]["candidate"]["prompt_diff"]
-    )
+    assert (run_dir / "prompt_diffs" / f"{safe_artifact}.diff").read_text(
+        encoding="utf-8") == (payload["candidates"][1]["candidate"]["prompt_diff"])
 
 
 def test_pipeline_is_deterministic_with_same_seed(tmp_path: Path):
@@ -182,11 +179,14 @@ def test_cli_mode_fake_and_legacy_fake_flags_both_run(tmp_path: Path):
     second = tmp_path / "second"
 
     subprocess.run(
-        [sys.executable, str(script), "--mode", "fake", "--trace", "--output-dir", str(first)],
+        [sys.executable, str(script), "--mode", "fake", "--trace", "--output-dir",
+         str(first)],
         check=True,
     )
     subprocess.run(
-        [sys.executable, str(script), "--fake-model", "--fake-judge", "--trace", "--output-dir", str(second)],
+        [sys.executable,
+         str(script), "--fake-model", "--fake-judge", "--trace", "--output-dir",
+         str(second)],
         check=True,
     )
 

@@ -119,7 +119,10 @@ async def execute_pipeline(
         raise ValueError("target_prompt_paths must not be empty")
     _validate_target_prompt_fields(request.target_prompt_paths)
     validate_distinct_file_paths(
-        {"train": request.train_path, "validation": request.validation_path},
+        {
+            "train": request.train_path,
+            "validation": request.validation_path
+        },
         context="train and validation evalset paths",
     )
     artifact_paths = reserve_run_artifacts(request.output_dir, run_id=run_id)
@@ -394,21 +397,16 @@ async def _execute_with_snapshots(
 
         train_result = record["train_result"]
         validation_result = record["validation_result"]
-        comparable = _result_pair_is_comparable(baseline_train, train_result) and (
-            _result_pair_is_comparable(baseline_validation, validation_result)
-        )
+        comparable = _result_pair_is_comparable(baseline_train, train_result) and (_result_pair_is_comparable(
+            baseline_validation, validation_result))
         all_results_comparable = all_results_comparable and comparable
-        deltas = (
-            compute_case_deltas(
-                candidate_id=candidate.candidate_id,
-                baseline_train=baseline_train,
-                baseline_validation=baseline_validation,
-                candidate_train=train_result,
-                candidate_validation=validation_result,
-            )
-            if comparable
-            else []
-        )
+        deltas = (compute_case_deltas(
+            candidate_id=candidate.candidate_id,
+            baseline_train=baseline_train,
+            baseline_validation=baseline_validation,
+            candidate_train=train_result,
+            candidate_validation=validation_result,
+        ) if comparable else [])
         decision = gate.decide(
             candidate_id=candidate.candidate_id,
             baseline_train=baseline_train,
@@ -443,9 +441,8 @@ async def _execute_with_snapshots(
         selected_candidate=selected_candidate,
         update_source=request.update_source,
         before_hashes=before_hashes,
-        candidate_hashes=(
-            _prompt_bundle_hashes(candidate_bundles[selected_candidate]) if selected_candidate is not None else {}
-        ),
+        candidate_hashes=(_prompt_bundle_hashes(candidate_bundles[selected_candidate])
+                          if selected_candidate is not None else {}),
         input_hashes=input_snapshots.hashes(),
     )
     audit = _build_audit(
@@ -474,11 +471,8 @@ async def _execute_with_snapshots(
         provisional_writeback = WritebackResult(
             status="not_requested",
             before_hashes=before_hashes,
-            error=(
-                "pending source writeback; pre-write audit must be prepared before commit"
-                if request.update_source
-                else None
-            ),
+            error=("pending source writeback; pre-write audit must be prepared before commit"
+                   if request.update_source else None),
         )
     report = build_report(
         run=run,
@@ -610,16 +604,17 @@ async def _execute_with_snapshots(
         persist_writeback_journal(artifact_paths, final_journal)
     except Exception as persist_error:
         unknown_journal = dict(final_journal)
-        unknown_journal.update(
-            {
-                "state": "unknown",
-                "error": _sanitize_error_message(
-                    f"failed to persist terminal writeback outcome: {persist_error}",
-                    request,
-                ),
-                "observed_hashes": _current_prompt_hashes(prompt_snapshot),
-            }
-        )
+        unknown_journal.update({
+            "state":
+            "unknown",
+            "error":
+            _sanitize_error_message(
+                f"failed to persist terminal writeback outcome: {persist_error}",
+                request,
+            ),
+            "observed_hashes":
+            _current_prompt_hashes(prompt_snapshot),
+        })
         try:
             persist_writeback_journal(artifact_paths, unknown_journal)
         except Exception:
@@ -749,14 +744,8 @@ def _validate_backend_seed(backend: Any, effective_seed: int) -> None:
     if not hasattr(backend, "seed"):
         return
     backend_seed = getattr(backend, "seed")
-    if (
-        isinstance(backend_seed, bool)
-        or not isinstance(backend_seed, int)
-        or backend_seed != effective_seed
-    ):
-        raise ValueError(
-            f"fake backend seed {backend_seed!r} does not match effective seed {effective_seed}"
-        )
+    if (isinstance(backend_seed, bool) or not isinstance(backend_seed, int) or backend_seed != effective_seed):
+        raise ValueError(f"fake backend seed {backend_seed!r} does not match effective seed {effective_seed}")
 
 
 def _strict_case_metadata(path: str | Path, *, role: str) -> dict[str, bool]:
@@ -764,9 +753,7 @@ def _strict_case_metadata(path: str | Path, *, role: str) -> dict[str, bool]:
     has_standard = "eval_cases" in payload
     has_legacy = "cases" in payload
     if has_standard == has_legacy:
-        raise ValueError(
-            f"{role} evalset must contain exactly one of eval_cases or cases"
-        )
+        raise ValueError(f"{role} evalset must contain exactly one of eval_cases or cases")
     if has_standard:
         cases = payload["eval_cases"]
         standard = True
@@ -869,18 +856,10 @@ def _verify_prompt_integrity(
         try:
             observed[name] = hashlib.sha256(prompt_file.path.read_bytes()).hexdigest()
         except OSError as error:
-            raise PromptRestorationError(
-                f"source prompt field {name!r} is unreadable {context}"
-            ) from error
+            raise PromptRestorationError(f"source prompt field {name!r} is unreadable {context}") from error
     if observed != expected:
-        changed = sorted(
-            name
-            for name in set(expected) | set(observed)
-            if expected.get(name) != observed.get(name)
-        )
-        raise ConcurrentPromptUpdateError(
-            f"source prompt integrity changed {context}: {', '.join(changed)}"
-        )
+        changed = sorted(name for name in set(expected) | set(observed) if expected.get(name) != observed.get(name))
+        raise ConcurrentPromptUpdateError(f"source prompt integrity changed {context}: {', '.join(changed)}")
 
 
 async def _await_backend_with_prompt_integrity(
@@ -930,14 +909,12 @@ def _verify_terminal_writeback_integrity(
         )
     except (ConcurrentPromptUpdateError, PromptRestorationError) as integrity_error:
         unknown_journal = dict(journal)
-        unknown_journal.update(
-            {
-                "state": "unknown",
-                "report_phase": "final",
-                "after_hashes": _current_prompt_hashes(snapshot),
-                "error": _sanitize_error_message(str(integrity_error), request),
-            }
-        )
+        unknown_journal.update({
+            "state": "unknown",
+            "report_phase": "final",
+            "after_hashes": _current_prompt_hashes(snapshot),
+            "error": _sanitize_error_message(str(integrity_error), request),
+        })
         try:
             persist_writeback_journal(artifact_paths, unknown_journal)
         except Exception as persist_error:
@@ -955,14 +932,12 @@ def _terminal_journal(
     input_drift: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     terminal = dict(journal)
-    terminal.update(
-        {
-            "state": state,
-            "report_phase": "final",
-            "after_hashes": dict(writeback.after_hashes),
-            "error": writeback.error,
-        }
-    )
+    terminal.update({
+        "state": state,
+        "report_phase": "final",
+        "after_hashes": dict(writeback.after_hashes),
+        "error": writeback.error,
+    })
     if input_drift:
         terminal["input_drift"] = input_drift
     return terminal
@@ -1041,10 +1016,7 @@ def _recoverable_candidate_evaluation_failure(
     """
 
     _verify_snapshot_integrity(input_snapshots)
-    if _exception_chain_contains(
-        error,
-        (ConcurrentPromptUpdateError, PromptRestorationError),
-    ):
+    if _exception_chain_contains(error, (ConcurrentPromptUpdateError, PromptRestorationError)):
         raise error
     try:
         _verify_prompt_integrity(
@@ -1059,9 +1031,7 @@ def _recoverable_candidate_evaluation_failure(
         "stage": stage,
         "type": type(error).__name__,
         "message": "candidate evaluation failed; backend details withheld",
-        "message_sha256": hashlib.sha256(
-            raw_message.encode("utf-8", errors="replace")
-        ).hexdigest(),
+        "message_sha256": hashlib.sha256(raw_message.encode("utf-8", errors="replace")).hexdigest(),
         "completed_splits": [result.split for result in completed_results],
         "known_evaluator_cost": round(sum(result.cost for result in completed_results), 6),
         "cost_complete": False,
@@ -1097,10 +1067,8 @@ def _evaluation_error_gate_decision(
     candidate_cost = round(float(failure["known_evaluator_cost"]), 6)
     total_run_cost = round(cumulative_cost + candidate_cost, 6)
     stage = str(failure["stage"])
-    reason = (
-        f"reject: evaluation_error during {stage}: "
-        f"{failure['type']}: {failure['message']}"
-    )
+    reason = (f"reject: evaluation_error during {stage}: "
+              f"{failure['type']}: {failure['message']}")
     return GateDecision(
         candidate_id=candidate_id,
         accepted=False,
@@ -1159,16 +1127,13 @@ def _validated_candidate_bundles(
         bundle = candidate.bundle()
         actual_fields = set(bundle)
         if actual_fields != expected_fields:
-            raise ValueError(
-                f"candidate {candidate_id!r} bundle fields must exactly match target prompt fields; "
-                f"missing={sorted(expected_fields - actual_fields)}, "
-                f"extra={sorted(actual_fields - expected_fields)}"
-            )
+            raise ValueError(f"candidate {candidate_id!r} bundle fields must exactly match target prompt fields; "
+                             f"missing={sorted(expected_fields - actual_fields)}, "
+                             f"extra={sorted(actual_fields - expected_fields)}")
         for field_name, prompt_text in bundle.items():
             if not isinstance(prompt_text, str) or not prompt_text:
-                raise ValueError(
-                    f"candidate {candidate_id!r} bundle field {field_name!r} " "must be a non-empty string"
-                )
+                raise ValueError(f"candidate {candidate_id!r} bundle field {field_name!r} "
+                                 "must be a non-empty string")
             _validate_utf8_text(
                 prompt_text,
                 context=f"candidate {candidate_id!r} bundle field {field_name!r}",
@@ -1196,15 +1161,9 @@ def _validate_utf8_text(value: Any, *, context: str) -> None:
 def _result_pair_is_comparable(baseline: EvalResult, candidate: EvalResult) -> bool:
     baseline_ids = [case.case_id for case in baseline.cases]
     candidate_ids = [case.case_id for case in candidate.cases]
-    return (
-        bool(baseline_ids)
-        and bool(candidate_ids)
-        and (
-            len(baseline_ids) == len(set(baseline_ids))
-            and len(candidate_ids) == len(set(candidate_ids))
-            and set(baseline_ids) == set(candidate_ids)
-        )
-    )
+    return (bool(baseline_ids) and bool(candidate_ids)
+            and (len(baseline_ids) == len(set(baseline_ids)) and len(candidate_ids) == len(set(candidate_ids))
+                 and set(baseline_ids) == set(candidate_ids)))
 
 
 def _validate_eval_result(
@@ -1215,14 +1174,11 @@ def _validate_eval_result(
     expected_case_ids: set[str] | None = None,
 ) -> None:
     if result.prompt_id != expected_prompt_id:
-        raise ValueError(
-            f"evaluation result prompt_id mismatch: expected {expected_prompt_id!r}, " f"got {result.prompt_id!r}"
-        )
+        raise ValueError(f"evaluation result prompt_id mismatch: expected {expected_prompt_id!r}, "
+                         f"got {result.prompt_id!r}")
     if result.split != expected_split:
-        raise ValueError(
-            f"EvalResult split mismatch for {expected_prompt_id!r}: "
-            f"expected {expected_split!r}, got {result.split!r}"
-        )
+        raise ValueError(f"EvalResult split mismatch for {expected_prompt_id!r}: "
+                         f"expected {expected_split!r}, got {result.split!r}")
     score = _finite_number(
         result.score,
         context=f"EvalResult score for {expected_prompt_id!r}",
@@ -1246,10 +1202,8 @@ def _validate_eval_result(
             pass
         case_ids.add(case.case_id)
         if case.split != expected_split:
-            raise ValueError(
-                f"CaseResult {case.case_id!r} split mismatch for {expected_prompt_id!r}: "
-                f"expected {expected_split!r}, got {case.split!r}"
-            )
+            raise ValueError(f"CaseResult {case.case_id!r} split mismatch for {expected_prompt_id!r}: "
+                             f"expected {expected_split!r}, got {case.split!r}")
         _finite_number(
             case.score,
             context=f"CaseResult {case.case_id!r} score",
@@ -1282,10 +1236,8 @@ def _validate_eval_result(
     if expected_case_ids is not None:
         observed_ids = [case.case_id for case in result.cases]
         if len(observed_ids) != len(set(observed_ids)) or set(observed_ids) != expected_case_ids:
-            raise ValueError(
-                f"{expected_prompt_id} {expected_split} result must exactly match dataset case IDs; "
-                f"expected={sorted(expected_case_ids)}, observed={sorted(set(observed_ids))}"
-            )
+            raise ValueError(f"{expected_prompt_id} {expected_split} result must exactly match dataset case IDs; "
+                             f"expected={sorted(expected_case_ids)}, observed={sorted(set(observed_ids))}")
 
 
 def _validate_optimization_result(result: OptimizationResult) -> None:
@@ -1293,11 +1245,8 @@ def _validate_optimization_result(result: OptimizationResult) -> None:
         raise ValueError("optimization result candidates and rounds must be lists")
     _validate_cost_summary(result.cost, context="optimization cost")
     for index, round_record in enumerate(result.rounds):
-        if (
-            isinstance(round_record.round_id, bool)
-            or not isinstance(round_record.round_id, int)
-            or round_record.round_id <= 0
-        ):
+        if (isinstance(round_record.round_id, bool) or not isinstance(round_record.round_id, int)
+                or round_record.round_id <= 0):
             raise ValueError(f"optimization round {index} round_id must be a positive integer")
         _validate_candidate_id(round_record.candidate_id)
         _finite_number(
@@ -1338,10 +1287,10 @@ def _validate_cost_summary(summary: CostSummary, *, context: str) -> None:
             minimum=0.0,
         )
     if summary.complete and not math.isclose(
-        total,
-        sum(components.values()),
-        rel_tol=0.0,
-        abs_tol=1e-6,
+            total,
+            sum(components.values()),
+            rel_tol=0.0,
+            abs_tol=1e-6,
     ):
         raise ValueError(f"{context} total must equal components when complete")
 
@@ -1403,8 +1352,7 @@ def _gate_config_with_dataset_protection(
     effective = dict(gate_config)
     configured_ids = effective.get("protected_case_ids", [])
     if not isinstance(configured_ids, list) or not all(
-        isinstance(case_id, str) and bool(case_id.strip()) for case_id in configured_ids
-    ):
+            isinstance(case_id, str) and bool(case_id.strip()) for case_id in configured_ids):
         raise ValueError("gate protected_case_ids must be a list of non-empty strings")
     missing_ids = sorted(set(configured_ids) - set(validation_metadata))
     if missing_ids:
@@ -1424,11 +1372,7 @@ def _select_candidate(
     for index, record in enumerate(candidate_records):
         candidate = record["candidate"]
         decision = decisions_by_id[candidate.candidate_id]
-        if (
-            decision.accepted
-            and "train_result" in record
-            and "validation_result" in record
-        ):
+        if (decision.accepted and "train_result" in record and "validation_result" in record):
             accepted.append((index, record))
     if not accepted:
         return None
@@ -1492,23 +1436,23 @@ def _build_audit(
     writeback_journal: dict[str, Any],
 ) -> dict[str, Any]:
     candidate_costs = {
-        record["candidate"].candidate_id: round(
-            sum(
-                record[result_name].cost
-                for result_name in ("train_result", "validation_result")
-                if result_name in record
-            ),
+        record["candidate"].candidate_id:
+        round(
+            sum(record[result_name].cost for result_name in ("train_result", "validation_result")
+                if result_name in record),
             6,
         )
         for record in candidate_records
     }
     candidate_evaluation_failures = {
         record["candidate"].candidate_id: dict(record["evaluation_error"])
-        for record in candidate_records
-        if "evaluation_error" in record
+        for record in candidate_records if "evaluation_error" in record
     }
     candidate_prompt_hashes = {
-        candidate_id: {name: hashlib.sha256(prompt.encode("utf-8")).hexdigest() for name, prompt in bundle.items()}
+        candidate_id: {
+            name: hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+            for name, prompt in bundle.items()
+        }
         for candidate_id, bundle in candidate_bundles.items()
     }
     cost_audit: dict[str, Any] = {
@@ -1541,7 +1485,9 @@ def _build_audit(
             "validation": _display_path(request.validation_path),
             "optimizer": _display_path(request.optimizer_config_path),
             "prompts": target_paths,
-            **({"prompt": target_paths["system_prompt"]} if "system_prompt" in target_paths else {}),
+            **({
+                "prompt": target_paths["system_prompt"]
+            } if "system_prompt" in target_paths else {}),
         },
         "prompt_hash": snapshot_hashes.get("system_prompt"),
         "prompt_hashes": snapshot_hashes,
@@ -1554,11 +1500,13 @@ def _build_audit(
             for index, record in enumerate(candidate_records, start=1)
         },
         "candidate_prompts": {
-            candidate_id: dict(bundle) for candidate_id, bundle in candidate_bundles.items()
+            candidate_id: dict(bundle)
+            for candidate_id, bundle in candidate_bundles.items()
         },
         "candidate_evaluation_failures": candidate_evaluation_failures,
         "prompt_diffs": {
-            record["candidate"].candidate_id: record["candidate"].prompt_diff for record in candidate_records
+            record["candidate"].candidate_id: record["candidate"].prompt_diff
+            for record in candidate_records
         },
         "total_run_cost": cost_summary.total if cost_summary.complete else None,
         "known_run_cost": cost_summary.total if not cost_summary.complete else None,
@@ -1566,12 +1514,12 @@ def _build_audit(
         "cost": cost_audit,
         "sdk_result_summary": _sanitize_public_value(to_jsonable(optimization_raw_summary)),
         "sdk_result_availability": {
-            "aggregate_validation_result": bool(request.mode == "sdk" and optimization_raw_summary),
-            "full_train_eval_result": not any(
-                failure.get("stage") == "train"
-                for failure in candidate_evaluation_failures.values()
-            ),
-            "full_per_case_validation_delta": all_results_comparable,
+            "aggregate_validation_result":
+            bool(request.mode == "sdk" and optimization_raw_summary),
+            "full_train_eval_result":
+            not any(failure.get("stage") == "train" for failure in candidate_evaluation_failures.values()),
+            "full_per_case_validation_delta":
+            all_results_comparable,
         },
         "reproducibility_shell": "powershell",
         "reproducibility_command": _reproducibility_command(request),
@@ -1634,37 +1582,34 @@ def _pretty_json_sha256(value: Any) -> str:
 def _is_secret_key(lowered: str) -> bool:
     normalized = lowered.replace("-", "_").replace(" ", "_")
     if normalized in {
-        "api_key",
-        "apikey",
-        "token",
-        "access_token",
-        "refresh_token",
-        "auth_token",
-        "password",
-        "passwd",
-        "credentials",
-        "credential",
-        "secret",
-        "authorization",
-        "private_key",
-        "signing_key",
-        "ssh_key",
-    }:
-        return True
-    if normalized.endswith("_token"):
-        return True
-    return any(
-        marker in normalized
-        for marker in (
             "api_key",
+            "apikey",
+            "token",
+            "access_token",
+            "refresh_token",
+            "auth_token",
             "password",
             "passwd",
+            "credentials",
             "credential",
             "secret",
             "authorization",
             "private_key",
-        )
-    )
+            "signing_key",
+            "ssh_key",
+    }:
+        return True
+    if normalized.endswith("_token"):
+        return True
+    return any(marker in normalized for marker in (
+        "api_key",
+        "password",
+        "passwd",
+        "credential",
+        "secret",
+        "authorization",
+        "private_key",
+    ))
 
 
 def _sanitize_public_value(value: Any) -> Any:
@@ -1724,19 +1669,13 @@ def _powershell_quote(value: str) -> str:
 def _powershell_arg(value: str) -> str:
     placeholder = re.search(r"\$(OUTPUT_DIR|EXTERNAL)", value)
     if placeholder is not None:
-        prefix = value[: placeholder.start()]
-        suffix = value[placeholder.end() :]
+        prefix = value[:placeholder.start()]
+        suffix = value[placeholder.end():]
 
         def escape_literal(text: str) -> str:
             return text.replace("`", "``").replace("$", "`$").replace('"', '`"')
 
-        return (
-            '"'
-            + escape_literal(prefix)
-            + placeholder.group(0)
-            + escape_literal(suffix)
-            + '"'
-        )
+        return ('"' + escape_literal(prefix) + placeholder.group(0) + escape_literal(suffix) + '"')
     if re.fullmatch(r"[A-Za-z0-9_./:-]+", value):
         return value
     return _powershell_quote(value)

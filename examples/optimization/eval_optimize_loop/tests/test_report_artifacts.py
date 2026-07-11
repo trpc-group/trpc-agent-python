@@ -16,16 +16,15 @@ from examples.optimization.eval_optimize_loop.eval_loop.pipeline import execute_
 from examples.optimization.eval_optimize_loop.eval_loop.schemas import CostSummary
 from examples.optimization.eval_optimize_loop.eval_loop.schemas import OptimizationRound
 from examples.optimization.eval_optimize_loop.tests.test_pipeline_orchestration import (
-    FailingCandidateBackend,
-)
+    FailingCandidateBackend, )
 from examples.optimization.eval_optimize_loop.tests.test_pipeline_orchestration import (
-    RecordingBackend,
-)
+    RecordingBackend, )
 from examples.optimization.eval_optimize_loop.tests.test_pipeline_orchestration import _request
 from examples.optimization.eval_optimize_loop.tests.test_pipeline_orchestration import _safe_backend
 
 
 class _BaselineCrashBackend(RecordingBackend):
+
     async def evaluate(self, **kwargs: Any):
         artifact_dir = Path(kwargs["artifact_dir"])
         artifact_dir.joinpath("backend-started.txt").write_text("started\n", encoding="utf-8")
@@ -97,6 +96,7 @@ async def _source_report(tmp_path: Path, label: str):
 
 
 class _FakeRenameAt2:
+
     def __init__(self, result: int) -> None:
         self.result = result
         self.calls: list[tuple[Any, ...]] = []
@@ -121,6 +121,7 @@ def _install_fake_renameat2(
         renameat2 = function
 
     class _CtypesProxy:
+
         def CDLL(self, name: Any, *, use_errno: bool):
             assert name is None
             assert use_errno is True
@@ -185,10 +186,12 @@ def test_posix_rename_noreplace_fails_closed_when_unsupported(
 ):
     real_ctypes = report_module.ctypes
     if failure == "missing_symbol":
+
         class _LibcWithoutRenameAt2:
             pass
 
         class _MissingSymbolProxy:
+
             def CDLL(self, name: Any, *, use_errno: bool):
                 return _LibcWithoutRenameAt2()
 
@@ -290,10 +293,10 @@ async def test_pipeline_rejects_duplicate_round_ids_before_report_artifact_write
     assert temp_run.is_dir()
     assert not _final_run_dir(request).exists()
     for report_artifact in (
-        "pre_write_report.json",
-        "artifact_manifest.json",
-        "rounds.json",
-        "rounds",
+            "pre_write_report.json",
+            "artifact_manifest.json",
+            "rounds.json",
+            "rounds",
     ):
         assert not (temp_run / report_artifact).exists()
 
@@ -315,19 +318,19 @@ async def test_direct_report_writers_reject_duplicate_round_ids_before_writing(
     run_id = f"duplicate_rounds_{writer}"
     report = replace(
         source_report,
-        run={**source_report.run, "run_id": run_id},
+        run={
+            **source_report.run, "run_id": run_id
+        },
         rounds=[_round(7, rationale="first"), _round(7, rationale="duplicate")],
     )
     output_dir = tmp_path / f"direct-{writer}"
 
-    if writer == "prepare":
-        paths = report_module.reserve_run_artifacts(output_dir, run_id=run_id)
-        operation = lambda: report_module.prepare_run_artifacts(report, paths)
-    else:
-        operation = lambda: report_module.write_reports(report, output_dir)
-
     with pytest.raises(ValueError, match=r"duplicate round_id.*7"):
-        operation()
+        if writer == "prepare":
+            paths = report_module.reserve_run_artifacts(output_dir, run_id=run_id)
+            report_module.prepare_run_artifacts(report, paths)
+        else:
+            report_module.write_reports(report, output_dir)
 
     temp_run = output_dir / "runs" / f".{run_id}.tmp"
     assert temp_run.is_dir()
@@ -393,9 +396,7 @@ async def test_final_artifact_write_failure_cannot_publish_a_partial_run(
 
 
 @pytest.mark.asyncio
-async def test_before_publish_failure_refreshes_manifest_without_replacing_original_error(
-    tmp_path: Path,
-):
+async def test_before_publish_failure_refreshes_manifest_without_replacing_original_error(tmp_path: Path, ):
     source_root = tmp_path / "callback-source"
     source_root.mkdir()
     source_request = _request(source_root)
@@ -412,8 +413,12 @@ async def test_before_publish_failure_refreshes_manifest_without_replacing_origi
     }
     report = replace(
         source_report,
-        run={**source_report.run, "run_id": run_id},
-        audit={**source_report.audit, "writeback_journal": journal},
+        run={
+            **source_report.run, "run_id": run_id
+        },
+        audit={
+            **source_report.audit, "writeback_journal": journal
+        },
     )
     paths = report_module.reserve_run_artifacts(tmp_path / "callback-output", run_id=run_id)
     report_module.prepare_run_artifacts(report, paths)
@@ -428,7 +433,9 @@ async def test_before_publish_failure_refreshes_manifest_without_replacing_origi
                 **journal,
                 "state": "unknown",
                 "error": "source prompt integrity changed before publication",
-                "after_hashes": {"system_prompt": "changed"},
+                "after_hashes": {
+                    "system_prompt": "changed"
+                },
             },
         )
         raise _PromptIntegritySentinel("prompt drift sentinel")
@@ -443,22 +450,16 @@ async def test_before_publish_failure_refreshes_manifest_without_replacing_origi
     assert type(caught.value) is _PromptIntegritySentinel
     assert paths.temp_run_dir.is_dir()
     assert not paths.final_run_dir.exists()
-    manifest = json.loads(
-        (paths.temp_run_dir / "artifact_manifest.json").read_text(encoding="utf-8")
-    )
+    manifest = json.loads((paths.temp_run_dir / "artifact_manifest.json").read_text(encoding="utf-8"))
     _assert_manifest_records_match_files(paths.temp_run_dir, manifest)
-    journal_record = next(
-        record for record in manifest["files"] if record["path"] == "writeback_journal.json"
-    )
+    journal_record = next(record for record in manifest["files"] if record["path"] == "writeback_journal.json")
     journal_bytes = (paths.temp_run_dir / "writeback_journal.json").read_bytes()
     assert journal_record["sha256"] == hashlib.sha256(journal_bytes).hexdigest()
     assert journal_record["size_bytes"] == len(journal_bytes)
 
 
 @pytest.mark.asyncio
-async def test_prepare_rejects_linked_top_level_audit_directory_before_outside_write(
-    tmp_path: Path,
-):
+async def test_prepare_rejects_linked_top_level_audit_directory_before_outside_write(tmp_path: Path, ):
     source_report = await _source_report(tmp_path, "linked-top-source")
     run_id = "linked_top_level"
     report = replace(source_report, run={**source_report.run, "run_id": run_id})
@@ -601,9 +602,7 @@ async def test_fresh_published_run_has_positive_duration_and_only_strict_json(tm
         payload = artifact.read_text(encoding="utf-8")
         json.loads(
             payload,
-            parse_constant=lambda value: (_ for _ in ()).throw(
-                ValueError(f"non-standard JSON constant: {value}")
-            ),
+            parse_constant=lambda value: (_ for _ in ()).throw(ValueError(f"non-standard JSON constant: {value}")),
         )
 
 
@@ -649,10 +648,10 @@ async def test_manifest_covers_complete_audit_set_and_partial_candidate_results(
 
     declared_files = {item["path"] for item in manifest["files"]}
     for group in (
-        artifacts["reports"],
-        artifacts["baseline_case_results"],
-        artifacts["baseline_prompts"],
-        artifacts["audit_records"],
+            artifacts["reports"],
+            artifacts["baseline_case_results"],
+            artifacts["baseline_prompts"],
+            artifacts["audit_records"],
     ):
         assert set(group.values()) <= declared_files
     assert set(artifacts["rounds"]) <= declared_files
@@ -660,9 +659,8 @@ async def test_manifest_covers_complete_audit_set_and_partial_candidate_results(
     assert candidate["diff"] in declared_files
     assert set(candidate["prompt_bundle"].values()) <= declared_files
     assert set(candidate["case_results"].values()) <= declared_files
-    assert json.loads((run_dir / artifacts["audit_records"]["evaluation_failures"]).read_text(encoding="utf-8"))[
-        "candidate_a"
-    ]["stage"] == "validation"
+    assert json.loads((run_dir / artifacts["audit_records"]["evaluation_failures"]).read_text(
+        encoding="utf-8"))["candidate_a"]["stage"] == "validation"
 
 
 @pytest.mark.asyncio
@@ -678,13 +676,11 @@ async def test_convenience_reports_are_exact_copies_created_after_run_publicatio
     def observe_copy(path: Path, content: bytes) -> None:
         path = Path(path)
         if path.parent == Path(request.output_dir) and path.name.startswith("optimization_report"):
-            copy_events.append(
-                (
-                    path.name,
-                    _final_run_dir(request).is_dir(),
-                    _temp_run_dir(request).exists(),
-                )
-            )
+            copy_events.append((
+                path.name,
+                _final_run_dir(request).is_dir(),
+                _temp_run_dir(request).exists(),
+            ))
         original_write_bytes(path, content)
 
     monkeypatch.setattr(report_module, "_atomic_write_bytes", observe_copy)
@@ -720,3 +716,32 @@ async def test_runtime_input_hashes_match_exact_entry_bytes(tmp_path: Path):
     for role, content in exact_inputs.items():
         assert hashes[role] == hashlib.sha256(content).hexdigest()
     assert hashes["target_prompts"]["system_prompt"] == hashlib.sha256(prompt_bytes).hexdigest()
+
+
+def test_committed_example_matches_committed_inputs_without_personal_paths():
+    example_root = Path(__file__).resolve().parents[1]
+    report_path = example_root / "outputs" / "optimization_report.example.json"
+    payload = json.loads(report_path.read_text(encoding="utf-8"))
+    input_hashes = payload["audit"]["input_hashes"]
+    expected_inputs = {
+        "train": example_root / "data" / "train.evalset.json",
+        "validation": example_root / "data" / "val.evalset.json",
+        "optimizer": example_root / "data" / "optimizer.json",
+    }
+
+    for role, path in expected_inputs.items():
+        assert input_hashes[role] == hashlib.sha256(path.read_bytes()).hexdigest()
+    prompt_path = example_root / "prompts" / "baseline_system_prompt.txt"
+    assert input_hashes["target_prompts"]["system_prompt"] == hashlib.sha256(prompt_path.read_bytes()).hexdigest()
+
+    assert payload["schema_version"] == "eval_optimize_loop.v2"
+    assert payload["run"]["run_id"] == "example"
+    assert payload["audit"]["duration_seconds"] > 0
+    assert payload["rounds"]
+    assert all(round_record["duration_seconds"] > 0 for round_record in payload["rounds"])
+
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert "C:\\Users\\" not in serialized
+    assert "/Users/" not in serialized
+    assert "/home/" not in serialized
+    assert "partial_applied" not in serialized

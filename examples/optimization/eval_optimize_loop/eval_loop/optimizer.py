@@ -29,23 +29,15 @@ class FakeOptimizer:
             raise TypeError("failure_summary must be a dict")
 
         if baseline_train.split != "train":
-            raise ValueError(
-                "baseline_train.split must be 'train'; "
-                f"got {baseline_train.split!r}"
-            )
+            raise ValueError("baseline_train.split must be 'train'; "
+                             f"got {baseline_train.split!r}")
         for case in baseline_train.cases:
             if case.split != "train":
-                raise ValueError(
-                    f"baseline_train case {case.case_id!r} split must be 'train'; "
-                    f"got {case.split!r}"
-                )
+                raise ValueError(f"baseline_train case {case.case_id!r} split must be 'train'; "
+                                 f"got {case.split!r}")
 
         failed_cases = [case for case in baseline_train.cases if not case.passed]
-        observed_counts = Counter(
-            case.failure_category
-            for case in failed_cases
-            if case.failure_category
-        )
+        observed_counts = Counter(case.failure_category for case in failed_cases if case.failure_category)
         _validate_failure_summary(failure_summary, observed_counts)
 
         targeted = sorted(observed_counts.keys() & _TARGET_FAILURE_CATEGORIES)
@@ -59,10 +51,8 @@ class FakeOptimizer:
             CandidatePrompt(
                 candidate_id="candidate_001_overfit",
                 prompt=overfit_prompt,
-                rationale=(
-                    f"Observed training failures ({evidence}); this candidate deliberately "
-                    "tests the risky global-JSON correction."
-                ),
+                rationale=(f"Observed training failures ({evidence}); this candidate deliberately "
+                           "tests the risky global-JSON correction."),
                 prompt_diff=make_unified_diff(
                     baseline_prompt,
                     overfit_prompt,
@@ -74,10 +64,8 @@ class FakeOptimizer:
             CandidatePrompt(
                 candidate_id="candidate_002_safe",
                 prompt=safe_prompt,
-                rationale=(
-                    f"Observed training failures ({evidence}); this candidate limits strict "
-                    "JSON behavior to explicit user requests."
-                ),
+                rationale=(f"Observed training failures ({evidence}); this candidate limits strict "
+                           "JSON behavior to explicit user requests."),
                 prompt_diff=make_unified_diff(
                     baseline_prompt,
                     safe_prompt,
@@ -105,18 +93,14 @@ def _validate_failure_summary(
         summary_counts[category] = _normalize_positive_count(category, count)
 
     if summary_counts != dict(observed_counts):
-        raise ValueError(
-            "failure_summary['by_category'] must match failed train cases exactly; "
-            f"summary={summary_counts!r}, observed={dict(observed_counts)!r}"
-        )
+        raise ValueError("failure_summary['by_category'] must match failed train cases exactly; "
+                         f"summary={summary_counts!r}, observed={dict(observed_counts)!r}")
 
 
 def _normalize_positive_count(category: object, value: object) -> int:
     normalized = value if type(value) is int and value > 0 else None
 
     if normalized is None:
-        raise ValueError(
-            "failure_summary['by_category'] count must be a positive integer; "
-            f"category={category!r}, count={value!r}"
-        )
+        raise ValueError("failure_summary['by_category'] count must be a positive integer; "
+                         f"category={category!r}, count={value!r}")
     return normalized

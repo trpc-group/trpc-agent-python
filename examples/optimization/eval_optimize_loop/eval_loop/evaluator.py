@@ -62,8 +62,7 @@ class ExampleEvaluator:
                     cost=cost,
                     hard_failed=(not judged.passed and judged.score <= 0.0),
                     expected_failure_category=case.expected_failure_category,
-                )
-            )
+                ))
 
         score = round(sum(case.score for case in case_results) / len(case_results), 6) if case_results else 0.0
         total_cost = round(sum(case.cost for case in case_results), 6)

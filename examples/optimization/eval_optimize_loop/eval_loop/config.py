@@ -114,10 +114,8 @@ def resolve_effective_seed(
         )
         if top_present and isinstance(top_seed, int) and not isinstance(top_seed, bool):
             if top_seed != nested:
-                raise ValueError(
-                    f"{path_text}: conflicting seed values: top-level seed={top_seed}, "
-                    f"optimize.algorithm.seed={nested}"
-                )
+                raise ValueError(f"{path_text}: conflicting seed values: top-level seed={top_seed}, "
+                                 f"optimize.algorithm.seed={nested}")
         return nested
 
     if not top_present:
@@ -143,7 +141,10 @@ def validate_inputs(
     config: OptimizerConfig,
 ) -> None:
     validate_distinct_file_paths(
-        {"train": train_path, "validation": val_path},
+        {
+            "train": train_path,
+            "validation": val_path
+        },
         context="train and validation evalset paths",
     )
 
@@ -155,16 +156,11 @@ def validate_inputs(
         raise ValueError(f"{val_path}: validation evalset must contain at least 3 cases")
 
     validation_ids = {case.case_id for case in validation_cases}
-    missing_protected = [
-        case_id
-        for case_id in config.gate.protected_case_ids
-        if case_id not in validation_ids
-    ]
+    missing_protected = [case_id for case_id in config.gate.protected_case_ids if case_id not in validation_ids]
     if missing_protected:
         raise ValueError(
             f"{optimizer_config_path}: field 'gate.protected_case_ids' references missing validation cases: "
-            f"{missing_protected}"
-        )
+            f"{missing_protected}")
 
 
 def _parse_gate_config(payload: dict[str, Any], *, path: str) -> GateConfig:
@@ -199,15 +195,11 @@ def _parse_gate_config(payload: dict[str, Any], *, path: str) -> GateConfig:
     )
 
     max_total_cost_value = payload.get("max_total_cost", 1.0)
-    max_total_cost = (
-        None
-        if max_total_cost_value is None
-        else _finite_number(
-            max_total_cost_value,
-            f"{path}: field 'gate.max_total_cost'",
-            0.0,
-        )
-    )
+    max_total_cost = (None if max_total_cost_value is None else _finite_number(
+        max_total_cost_value,
+        f"{path}: field 'gate.max_total_cost'",
+        0.0,
+    ))
 
     return GateConfig(
         min_val_score_improvement=min_val,
@@ -236,9 +228,7 @@ def _finite_number(
     if number < minimum:
         raise ValueError(f"{field_name} must be a finite number greater than or equal to {minimum:g}")
     if maximum is not None and number > maximum:
-        raise ValueError(
-            f"{field_name} must be a finite number between {minimum:g} and {maximum:g}"
-        )
+        raise ValueError(f"{field_name} must be a finite number between {minimum:g} and {maximum:g}")
     return number
 
 

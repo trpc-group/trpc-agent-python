@@ -47,15 +47,11 @@ def test_optimizer_config_rejects_negative_cost(tmp_path: Path):
 
 @pytest.mark.parametrize(
     ("field_name", "field_value"),
-    [
-        (field_name, field_value)
-        for field_name in (
-            "min_val_score_improvement",
-            "max_score_drop_per_case",
-            "max_total_cost",
-        )
-        for field_value in (float("nan"), float("inf"), float("-inf"), True)
-    ],
+    [(field_name, field_value) for field_name in (
+        "min_val_score_improvement",
+        "max_score_drop_per_case",
+        "max_total_cost",
+    ) for field_value in (float("nan"), float("inf"), float("-inf"), True)],
 )
 def test_optimizer_config_rejects_non_finite_or_boolean_gate_numbers(
     tmp_path: Path,
@@ -70,7 +66,9 @@ def test_optimizer_config_rejects_non_finite_or_boolean_gate_numbers(
 
 def test_optimizer_config_allows_disabling_cost_gate(tmp_path: Path):
     config = parse_optimizer_config(
-        {"gate": {"max_total_cost": None}},
+        {"gate": {
+            "max_total_cost": None
+        }},
         path=tmp_path / "optimizer.json",
     )
 
@@ -256,7 +254,10 @@ def test_eval_case_rejects_explicit_split_mismatch():
         "id": "case_1",
         "split": "validation",
         "input": "hello",
-        "expectation": {"type": "exact", "expected": "hello"},
+        "expectation": {
+            "type": "exact",
+            "expected": "hello"
+        },
     }
 
     with pytest.raises(ValueError, match="split mismatch"):
@@ -461,7 +462,9 @@ def test_validate_inputs_rejects_missing_protected_case(tmp_path: Path):
     train_path = _write_evalset(tmp_path / "train.evalset.json", "train", ["a", "b", "c"])
     val_path = _write_evalset(tmp_path / "val.evalset.json", "validation", ["v1", "v2", "v3"])
     config = parse_optimizer_config(
-        {"gate": {"protected_case_ids": ["missing"]}},
+        {"gate": {
+            "protected_case_ids": ["missing"]
+        }},
         path=tmp_path / "optimizer.json",
     )
 
@@ -478,15 +481,19 @@ def test_validate_inputs_rejects_missing_protected_case(tmp_path: Path):
 
 def _write_evalset(path: Path, split: str, ids: list[str]) -> Path:
     payload = {
-        "split": split,
-        "cases": [
-            {
-                "id": case_id,
-                "input": "Return JSON",
-                "expectation": {"type": "json", "required_keys": ["answer"], "expected_values": {"answer": case_id}},
-            }
-            for case_id in ids
-        ],
+        "split":
+        split,
+        "cases": [{
+            "id": case_id,
+            "input": "Return JSON",
+            "expectation": {
+                "type": "json",
+                "required_keys": ["answer"],
+                "expected_values": {
+                    "answer": case_id
+                }
+            },
+        } for case_id in ids],
     }
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path

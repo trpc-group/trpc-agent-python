@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import re
 import secrets
 import sys
@@ -13,7 +12,6 @@ from datetime import datetime
 from datetime import timezone
 from pathlib import Path
 from typing import Any
-
 
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
@@ -43,7 +41,6 @@ except ImportError:  # Direct script execution.
     from eval_loop.pipeline import PipelineRequest
     from eval_loop.pipeline import execute_pipeline
     from eval_loop.schemas import OptimizationReport
-
 
 DEFAULT_TRAIN = HERE / "data" / "train.evalset.json"
 DEFAULT_VAL = HERE / "data" / "val.evalset.json"
@@ -119,10 +116,8 @@ def run_pipeline(
     """Synchronous compatibility facade for callers without an active loop."""
 
     if _has_running_loop():
-        raise ValueError(
-            "run_pipeline() cannot run while an event loop is active; "
-            "await run_pipeline_async(...) instead."
-        )
+        raise ValueError("run_pipeline() cannot run while an event loop is active; "
+                         "await run_pipeline_async(...) instead.")
     return asyncio.run(
         run_pipeline_async(
             train_path=train_path,
@@ -140,8 +135,7 @@ def run_pipeline(
             target_prompts=target_prompts,
             run_id=run_id,
             backend=backend,
-        )
-    )
+        ))
 
 
 def build_pipeline_request_and_backend(
@@ -167,13 +161,14 @@ def build_pipeline_request_and_backend(
     if mode not in {"fake", "sdk"}:
         raise ValueError("field 'mode' must be one of: fake, sdk")
     if mode == "fake" and (not fake_model or not fake_judge):
-        raise ValueError(
-            "fake mode requires fake_model=True and fake_judge=True. Pass --fake-model "
-            "--fake-judge or use --mode sdk with --sdk-call-agent module:function."
-        )
+        raise ValueError("fake mode requires fake_model=True and fake_judge=True. Pass --fake-model "
+                         "--fake-judge or use --mode sdk with --sdk-call-agent module:function.")
 
     validate_distinct_file_paths(
-        {"train": train_path, "validation": val_path},
+        {
+            "train": train_path,
+            "validation": val_path
+        },
         context="train and validation evalset paths",
     )
 
@@ -191,24 +186,15 @@ def build_pipeline_request_and_backend(
     )
     if mode == "fake" and backend is not None and hasattr(backend, "seed"):
         backend_seed = getattr(backend, "seed")
-        if (
-            isinstance(backend_seed, bool)
-            or not isinstance(backend_seed, int)
-            or backend_seed != effective_seed
-        ):
-            raise ValueError(
-                f"fake backend seed {backend_seed!r} does not match effective seed {effective_seed}"
-            )
+        if (isinstance(backend_seed, bool) or not isinstance(backend_seed, int) or backend_seed != effective_seed):
+            raise ValueError(f"fake backend seed {backend_seed!r} does not match effective seed {effective_seed}")
     if mode == "fake":
         optimizer_config = parse_optimizer_config(
             optimizer_payload,
             path=optimizer_config_path,
         )
-        gate_config = (
-            _load_sdk_gate_config(gate_config_path)
-            if gate_config_path is not None
-            else optimizer_config.gate.to_dict()
-        )
+        gate_config = (_load_sdk_gate_config(gate_config_path)
+                       if gate_config_path is not None else optimizer_config.gate.to_dict())
         gate_config_source = "file" if gate_config_path is not None else "optimizer"
         selected_backend = backend or FakeBackend(
             seed=effective_seed,
@@ -257,10 +243,8 @@ def _load_sdk_gate_config(gate_config_path: str | Path | None) -> dict[str, Any]
         try:
             payload = read_json(gate_config_path)
         except ValueError as exc:
-            raise ValueError(
-                f"--gate-config {gate_config_path}: invalid JSON for gate numeric fields "
-                f"(including max_total_cost): {exc}"
-            ) from exc
+            raise ValueError(f"--gate-config {gate_config_path}: invalid JSON for gate numeric fields "
+                             f"(including max_total_cost): {exc}") from exc
         gate_payload = payload.get("gate", payload)
         path_text = str(gate_config_path)
     if gate_payload is None:
@@ -290,10 +274,8 @@ def _parse_target_prompt_paths(
         name, raw_path = item.split("=", 1)
         path = raw_path.strip()
         if not TARGET_PROMPT_FIELD_RE.fullmatch(name):
-            raise ValueError(
-                f"--target-prompt field name {name!r} is invalid; "
-                "use /^[A-Za-z_][A-Za-z0-9_]*$/"
-            )
+            raise ValueError(f"--target-prompt field name {name!r} is invalid; "
+                             "use /^[A-Za-z_][A-Za-z0-9_]*$/")
         try:
             validate_artifact_component(name, context="target-prompt field")
         except ValueError as error:

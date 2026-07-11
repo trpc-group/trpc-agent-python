@@ -1,20 +1,48 @@
 {
-  "seed": 91,
-  "optimizer": {
-    "name": "fake_two_candidate_optimizer",
-    "description": "Deterministically proposes one overfit candidate and one safe candidate."
-  },
-  "metrics": {
-    "case_score": "mean",
-    "failure_attribution": "rule_based"
-  },
-  "gate": {
-    "min_val_score_improvement": 0.01,
-    "allow_new_hard_fail": false,
-    "protected_case_ids": [
-      "val_protected_yes_no"
+  "evaluate": {
+    "metrics": [
+      {
+        "metric_name": "final_response_avg_score",
+        "threshold": 1.0,
+        "criterion": {
+          "final_response": {
+            "text": {
+              "match": "exact",
+              "case_insensitive": false
+            }
+          }
+        }
+      }
     ],
-    "max_score_drop_per_case": 0.0,
-    "max_total_cost": 1.0
+    "num_runs": 1
+  },
+  "optimize": {
+    "eval_case_parallelism": 1,
+    "stop": {
+      "required_metrics": "all"
+    },
+    "algorithm": {
+      "name": "gepa_reflective",
+      "seed": 91,
+      "reflection_lm": {
+        "model_name": "${TRPC_AGENT_MODEL_NAME}",
+        "base_url": "${TRPC_AGENT_BASE_URL}",
+        "api_key": "${TRPC_AGENT_API_KEY}",
+        "generation_config": {
+          "max_tokens": 2048,
+          "temperature": 0.4
+        }
+      },
+      "candidate_selection_strategy": "pareto",
+      "module_selector": "round_robin",
+      "frontier_type": "instance",
+      "reflection_minibatch_size": 3,
+      "reflection_history_top_k": 2,
+      "skip_perfect_score": false,
+      "use_merge": false,
+      "max_metric_calls": 18,
+      "score_threshold": 1.0,
+      "max_iterations_without_improvement": 3
+    }
   }
 }

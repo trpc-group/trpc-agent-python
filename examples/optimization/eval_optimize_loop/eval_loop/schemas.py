@@ -30,8 +30,7 @@ class EvalCase:
             raise ValueError(f"eval case is missing id/case_id: {payload!r}")
         if "split" in payload and str(payload["split"]) != str(split):
             raise ValueError(
-                f"eval case {case_id!r} split mismatch: payload has {payload['split']!r}, expected {split!r}"
-            )
+                f"eval case {case_id!r} split mismatch: payload has {payload['split']!r}, expected {split!r}")
         expectation = payload.get("expectation")
         if not isinstance(expectation, dict):
             raise ValueError(f"eval case {case_id!r} is missing expectation object")
@@ -212,9 +211,7 @@ class OptimizationReport:
     audit: dict[str, Any]
     rounds: list[OptimizationRound] = field(default_factory=list)
     cost_summary: CostSummary = field(default_factory=CostSummary)
-    writeback: WritebackResult = field(
-        default_factory=lambda: WritebackResult(status="not_requested")
-    )
+    writeback: WritebackResult = field(default_factory=lambda: WritebackResult(status="not_requested"))
     baseline_prompts: dict[str, str] = field(default_factory=dict)
 
 

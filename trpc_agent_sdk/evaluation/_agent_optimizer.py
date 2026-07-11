@@ -91,9 +91,7 @@ def _redact_config_secrets(value: Any) -> Any:
     if isinstance(value, dict):
         redacted = {}
         for key, child in value.items():
-            normalized_key = "".join(
-                character for character in key.casefold() if character.isalnum()
-            )
+            normalized_key = "".join(character for character in key.casefold() if character.isalnum())
             if normalized_key.endswith(_SENSITIVE_CONFIG_KEY_SUFFIXES):
                 redacted[key] = _REDACTED_CONFIG_VALUE
             else:

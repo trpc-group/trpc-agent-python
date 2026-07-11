@@ -33,22 +33,25 @@ def test_model_output_and_trace_are_stable_for_the_same_public_input():
     public_input = "Return strict JSON with intent=refund and priority=high."
     same_inputs = [public_input, f"{public_input}", "".join([public_input])]
 
-    generated = [
-        FakeModel(seed=91).generate("candidate", SAFE_PROMPT, user_input)
-        for user_input in same_inputs
-    ]
+    generated = [FakeModel(seed=91).generate("candidate", SAFE_PROMPT, user_input) for user_input in same_inputs]
 
     assert {output for output, _, _ in generated} == {'{"intent": "refund", "priority": "high"}'}
-    assert {json.dumps(trace, sort_keys=True) for _, trace, _ in generated} == {
-        json.dumps(
-            {"seed": 91, "prompt_id": "candidate", "prompt_mode": "safe"},
-            sort_keys=True,
-        )
-    }
+    assert {json.dumps(trace, sort_keys=True)
+            for _, trace, _ in generated
+            } == {json.dumps(
+                {
+                    "seed": 91,
+                    "prompt_id": "candidate",
+                    "prompt_mode": "safe"
+                },
+                sort_keys=True,
+            )}
 
 
 def test_example_evaluator_only_exposes_public_user_input_to_model():
+
     class SpyModel:
+
         def __init__(self) -> None:
             self.user_inputs: list[str] = []
 
@@ -67,7 +70,10 @@ def test_example_evaluator_only_exposes_public_user_input_to_model():
         case_id="SECRET_CASE_ID",
         split="validation",
         input="PUBLIC USER INPUT",
-        expectation={"type": "exact", "expected": "SECRET_EXPECTATION"},
+        expectation={
+            "type": "exact",
+            "expected": "SECRET_EXPECTATION"
+        },
         tags=["SECRET_TAG"],
         protected=True,
         simulated_outputs={"safe": "SECRET_SIMULATED_OUTPUT"},
@@ -180,45 +186,35 @@ def test_natural_and_unknown_requests_are_deterministic(input_text: str, natural
 
 def test_optimizer_returns_no_candidates_without_observed_target_failures():
     optimizer = FakeOptimizer()
-    all_pass = _eval_result(
-        _case_result(
-            "passed_case",
-            passed=True,
-            failure_category="format_violation",
-        )
-    )
-    unrelated_failure = _eval_result(
-        _case_result(
-            "failed_case",
-            passed=False,
-            failure_category="llm_rubric_not_met",
-        )
-    )
-    unclassified_failure = _eval_result(
-        _case_result(
-            "unclassified_failure",
-            passed=False,
-            failure_category=None,
-        )
-    )
+    all_pass = _eval_result(_case_result(
+        "passed_case",
+        passed=True,
+        failure_category="format_violation",
+    ))
+    unrelated_failure = _eval_result(_case_result(
+        "failed_case",
+        passed=False,
+        failure_category="llm_rubric_not_met",
+    ))
+    unclassified_failure = _eval_result(_case_result(
+        "unclassified_failure",
+        passed=False,
+        failure_category=None,
+    ))
 
-    assert (
-        optimizer.propose(
-            BASELINE_PROMPT,
-            all_pass,
-            {},
-        )
-        == []
-    )
+    assert (optimizer.propose(
+        BASELINE_PROMPT,
+        all_pass,
+        {},
+    ) == [])
     assert optimizer.propose(BASELINE_PROMPT, unclassified_failure, {}) == []
-    assert (
-        optimizer.propose(
-            BASELINE_PROMPT,
-            unrelated_failure,
-            {"by_category": {"llm_rubric_not_met": 1}},
-        )
-        == []
-    )
+    assert (optimizer.propose(
+        BASELINE_PROMPT,
+        unrelated_failure,
+        {"by_category": {
+            "llm_rubric_not_met": 1
+        }},
+    ) == [])
 
 
 def test_optimizer_rejects_validation_result_as_training_evidence():
@@ -258,16 +254,13 @@ def test_optimizer_rejects_validation_case_mixed_into_training_evidence():
 
 
 @pytest.mark.parametrize("failure_summary", [None, [], "not-a-summary"])
-def test_optimizer_rejects_non_mapping_failure_summary(
-    failure_summary: object,
-):
+def test_optimizer_rejects_non_mapping_failure_summary(failure_summary: object, ):
     observed_failure = _eval_result(
         _case_result(
             "observed_failure",
             passed=False,
             failure_category="format_violation",
-        )
-    )
+        ))
 
     with pytest.raises(TypeError, match="^failure_summary must be a dict$"):
         FakeOptimizer().propose(
@@ -278,40 +271,41 @@ def test_optimizer_rejects_non_mapping_failure_summary(
 
 
 def test_optimizer_rejects_summary_category_not_observed_in_failed_cases():
-    unclassified_failure = _eval_result(
-        _case_result(
-            "unclassified_failure",
-            passed=False,
-            failure_category=None,
-        )
-    )
+    unclassified_failure = _eval_result(_case_result(
+        "unclassified_failure",
+        passed=False,
+        failure_category=None,
+    ))
 
     with pytest.raises(ValueError, match="by_category.*failed train cases"):
         FakeOptimizer().propose(
             BASELINE_PROMPT,
             unclassified_failure,
-            {"by_category": {"format_violation": 1}},
+            {"by_category": {
+                "format_violation": 1
+            }},
         )
 
 
 @pytest.mark.parametrize(
     "by_category",
     [
-        {"final_response_mismatch": 1},
-        {"format_violation": 2},
+        {
+            "final_response_mismatch": 1
+        },
+        {
+            "format_violation": 2
+        },
         {},
     ],
 )
-def test_optimizer_rejects_summary_category_or_count_mismatch(
-    by_category: dict[str, object],
-):
+def test_optimizer_rejects_summary_category_or_count_mismatch(by_category: dict[str, object], ):
     observed_failure = _eval_result(
         _case_result(
             "observed_failure",
             passed=False,
             failure_category="format_violation",
-        )
-    )
+        ))
 
     with pytest.raises(ValueError, match="by_category.*failed train cases"):
         FakeOptimizer().propose(
@@ -338,14 +332,15 @@ def test_optimizer_rejects_non_positive_integer_summary_counts(count: object):
             "observed_failure",
             passed=False,
             failure_category="format_violation",
-        )
-    )
+        ))
 
     with pytest.raises(ValueError, match="count.*positive integer"):
         FakeOptimizer().propose(
             BASELINE_PROMPT,
             observed_failure,
-            {"by_category": {"format_violation": count}},
+            {"by_category": {
+                "format_violation": count
+            }},
         )
 
 
@@ -353,19 +348,20 @@ def test_optimizer_rejects_non_positive_integer_summary_counts(count: object):
     "failure_summary",
     [
         {},
-        {"by_category": {"format_violation": 1}},
+        {
+            "by_category": {
+                "format_violation": 1
+            }
+        },
     ],
 )
-def test_optimizer_proposes_two_candidates_for_observed_train_format_failure(
-    failure_summary: dict[str, object],
-):
+def test_optimizer_proposes_two_candidates_for_observed_train_format_failure(failure_summary: dict[str, object], ):
     baseline_train = _eval_result(
         _case_result(
             "random_training_case",
             passed=False,
             failure_category="format_violation",
-        )
-    )
+        ))
     candidates = FakeOptimizer().propose(
         BASELINE_PROMPT,
         baseline_train,
@@ -398,14 +394,14 @@ async def test_fake_backend_passes_training_evidence_to_optimizer(tmp_path: Path
     )
     with_evidence = await backend.optimize_candidates(
         baseline_prompts={"system_prompt": BASELINE_PROMPT},
-        baseline_train=_eval_result(
-            _case_result(
-                "not-a-sample-id",
-                passed=False,
-                failure_category="format_violation",
-            )
-        ),
-        failure_summary={"by_category": {"format_violation": 1}},
+        baseline_train=_eval_result(_case_result(
+            "not-a-sample-id",
+            passed=False,
+            failure_category="format_violation",
+        )),
+        failure_summary={"by_category": {
+            "format_violation": 1
+        }},
         train_path=TRAIN_PATH,
         validation_path=VALIDATION_PATH,
         config_path=tmp_path / "unused.json",
@@ -449,23 +445,19 @@ def test_example_data_is_official_sdk_evalset_with_self_contained_user_inputs():
         raw = path.read_text(encoding="utf-8")
         validated = EvalSet.model_validate_json(raw)
         payload = json.loads(raw)
-        assert [
-            case["conversation"][-1]["user_content"]["parts"][0]["text"] for case in payload["eval_cases"]
-        ] == inputs
+        assert [case["conversation"][-1]["user_content"]["parts"][0]["text"]
+                for case in payload["eval_cases"]] == inputs
         assert len(validated.eval_cases) == 3
         all_eval_ids.extend(case.eval_id for case in validated.eval_cases)
-        all_invocation_ids.extend(
-            invocation.invocation_id for case in validated.eval_cases for invocation in case.conversation or []
-        )
+        all_invocation_ids.extend(invocation.invocation_id for case in validated.eval_cases
+                                  for invocation in case.conversation or [])
 
     assert len(all_eval_ids) == len(set(all_eval_ids)) == 6
     assert len(all_invocation_ids) == len(set(all_invocation_ids)) == 6
 
 
 @pytest.mark.asyncio
-async def test_fake_backend_scores_baseline_overfit_and_safe_on_official_data(
-    tmp_path: Path,
-):
+async def test_fake_backend_scores_baseline_overfit_and_safe_on_official_data(tmp_path: Path, ):
     backend = FakeBackend(seed=91)
     prompts = {
         "baseline": BASELINE_PROMPT,
@@ -497,15 +489,11 @@ async def test_fake_backend_scores_baseline_overfit_and_safe_on_official_data(
             expected_score, expected_passes = expected[(prompt_id, split)]
             assert result.score == pytest.approx(expected_score, abs=1e-6)
             assert [case.passed for case in result.cases] == expected_passes
-            assert all(
-                case.trace
-                == {
-                    "seed": 91,
-                    "prompt_id": prompt_id,
-                    "prompt_mode": prompt_id,
-                }
-                for case in result.cases
-            )
+            assert all(case.trace == {
+                "seed": 91,
+                "prompt_id": prompt_id,
+                "prompt_mode": prompt_id,
+            } for case in result.cases)
 
 
 def _case_result(

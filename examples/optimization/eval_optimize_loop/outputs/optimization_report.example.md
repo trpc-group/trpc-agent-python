@@ -6,12 +6,15 @@ Selected candidate: `candidate_002_safe`.
 
 Update source prompt: no (default)
 
+Fake and SDK modes perform complete AgentEvaluator-compatible reevaluation for baseline and every candidate on both train and validation; optimizer aggregates are never used as gate evidence.
+
 
 ## Gate Reasons
 
 ### candidate_001_overfit (rejected)
 - reject: overfit detected because train score improved but validation score regressed or did not improve (+0.667 train, -0.333 validation)
 - reject: validation improvement -0.333 is below required +0.010
+- reject: new validation failures appeared: ['val_explain_cache', 'val_protected_yes_no']
 - reject: new hard failures appeared: ['val_explain_cache', 'val_protected_yes_no']
 - reject: protected cases regressed: ['val_protected_yes_no']
 - reject: per-case validation score drops exceed 0.000: ['val_explain_cache', 'val_protected_yes_no']
@@ -50,16 +53,16 @@ Total failed case evaluations: 5
 
 | category | count |
 | --- | ---: |
-| final_response_mismatch | 2 |
-| format_violation | 3 |
+| final_response_mismatch | 1 |
+| format_violation | 4 |
 
 Attribution accuracy: 1.000
 
 ## Cost And Audit
 
 Total cost: 0.018
-Config hash: `66a1db3a1c84ad12fd41385fc5e1a9c23cc305e6973945c4bade559c804f9abe`
-Run id: `eval_optimize_loop_seed_91`
+Config hash: `7144548d6c99b0a6226534dfe51983875c26bf3193b7ad07aaecf9a1cb80dcfd`
+Run id: `example`
 
 ## Prompt Diff
 
@@ -68,14 +71,12 @@ Run id: `eval_optimize_loop_seed_91`
 ```diff
 --- baseline_system_prompt.txt
 +++ candidate_001_overfit/system_prompt.txt
-@@ -2,3 +2,7 @@
+@@ -2,3 +2,5 @@
 
  Answer clearly and include a short explanation when it may help the user.
  If the user asks for structured data, provide the information they need.
 +
-+# Optimizer patch
-+OPTIMIZER_MARKER: ALWAYS_OUTPUT_JSON
-+Always force every final answer into JSON, even when the user asks for prose.
++Always force every final answer into JSON.
 ```
 
 ### candidate_002_safe
@@ -83,20 +84,16 @@ Run id: `eval_optimize_loop_seed_91`
 ```diff
 --- baseline_system_prompt.txt
 +++ candidate_002_safe/system_prompt.txt
-@@ -2,3 +2,9 @@
+@@ -2,3 +2,5 @@
 
  Answer clearly and include a short explanation when it may help the user.
  If the user asks for structured data, provide the information they need.
 +
-+# Optimizer patch
-+OPTIMIZER_MARKER: STRICT_WHEN_REQUESTED
-+Use strict JSON only when the user explicitly asks for JSON.
-+Use exact answers only when the user explicitly asks for an exact answer.
-+Otherwise answer naturally and honor rubric constraints.
++Use strict JSON only when the user explicitly asks.
 ```
 
 ## Reproducibility
 
-```bash
-python examples/optimization/eval_optimize_loop/run_pipeline.py --train examples/optimization/eval_optimize_loop/data/train.evalset.json --val examples/optimization/eval_optimize_loop/data/val.evalset.json --optimizer-config examples/optimization/eval_optimize_loop/data/optimizer.json --prompt examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt --output-dir /tmp/eval-optimize-loop --fake-model --fake-judge --trace
+```powershell
+python examples/optimization/eval_optimize_loop/run_pipeline.py --mode fake --train examples/optimization/eval_optimize_loop/data/train.evalset.json --val examples/optimization/eval_optimize_loop/data/val.evalset.json --optimizer-config examples/optimization/eval_optimize_loop/data/optimizer.json --output-dir "$OUTPUT_DIR" --run-id example --prompt examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt --trace
 ```

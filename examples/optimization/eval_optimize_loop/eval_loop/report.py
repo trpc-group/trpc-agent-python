@@ -27,16 +27,13 @@ from .schemas import OptimizationRound
 from .schemas import WritebackResult
 from .schemas import to_jsonable
 
-
-REPRODUCIBILITY_COMMAND = (
-    "python examples/optimization/eval_optimize_loop/run_pipeline.py "
-    "--train examples/optimization/eval_optimize_loop/data/train.evalset.json "
-    "--val examples/optimization/eval_optimize_loop/data/val.evalset.json "
-    "--optimizer-config examples/optimization/eval_optimize_loop/data/optimizer.json "
-    "--prompt examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt "
-    "--output-dir /tmp/eval-optimize-loop "
-    "--fake-model --fake-judge --trace"
-)
+REPRODUCIBILITY_COMMAND = ("python examples/optimization/eval_optimize_loop/run_pipeline.py "
+                           "--train examples/optimization/eval_optimize_loop/data/train.evalset.json "
+                           "--val examples/optimization/eval_optimize_loop/data/val.evalset.json "
+                           "--optimizer-config examples/optimization/eval_optimize_loop/data/optimizer.json "
+                           "--prompt examples/optimization/eval_optimize_loop/prompts/baseline_system_prompt.txt "
+                           "--output-dir /tmp/eval-optimize-loop "
+                           "--fake-model --fake-judge --trace")
 
 
 @dataclass(frozen=True)
@@ -125,8 +122,7 @@ def compute_case_deltas(
                     candidate_passed=candidate_case.passed,
                     regression=delta < 0,
                     delta_type=delta_type,
-                )
-            )
+                ))
     return deltas
 
 
@@ -154,7 +150,10 @@ def build_report(
     return OptimizationReport(
         schema_version="eval_optimize_loop.v2",
         run=run,
-        baseline={"train": baseline_train, "validation": baseline_validation},
+        baseline={
+            "train": baseline_train,
+            "validation": baseline_validation
+        },
         baseline_train=baseline_train,
         baseline_validation=baseline_validation,
         candidates=candidate_records,
@@ -210,15 +209,11 @@ def reserve_run_artifacts(
     final_run_dir = runs_root / safe_run_id
     for occupied in (final_run_dir, temp_run_dir):
         if os.path.lexists(occupied):
-            raise FileExistsError(
-                f"run ID {safe_run_id!r} is already reserved or published in {runs_root}"
-            )
+            raise FileExistsError(f"run ID {safe_run_id!r} is already reserved or published in {runs_root}")
     try:
         temp_run_dir.mkdir()
     except FileExistsError as error:
-        raise FileExistsError(
-            f"run ID {safe_run_id!r} is already reserved or published in {runs_root}"
-        ) from error
+        raise FileExistsError(f"run ID {safe_run_id!r} is already reserved or published in {runs_root}") from error
 
     # A concurrently published final must win.  Leave no misleading reservation
     # when our just-created directory is still empty.
@@ -227,9 +222,7 @@ def reserve_run_artifacts(
             temp_run_dir.rmdir()
         except OSError:
             pass
-        raise FileExistsError(
-            f"run ID {safe_run_id!r} is already reserved or published in {runs_root}"
-        )
+        raise FileExistsError(f"run ID {safe_run_id!r} is already reserved or published in {runs_root}")
     return RunArtifactPaths(
         output_dir=output_path,
         run_id=safe_run_id,
@@ -313,10 +306,8 @@ def finalize_run_artifacts(
             except BaseException as manifest_error:
                 add_note = getattr(callback_error, "add_note", None)
                 if add_note is not None:
-                    add_note(
-                        "failed to refresh temp artifact manifest after before_publish failure: "
-                        f"{manifest_error}"
-                    )
+                    add_note("failed to refresh temp artifact manifest after before_publish failure: "
+                             f"{manifest_error}")
             raise
     _durable_publish_directory(paths)
 
@@ -356,9 +347,7 @@ def _require_mutable_temp_run(paths: RunArtifactPaths) -> None:
     try:
         metadata = os.lstat(paths.temp_run_dir)
     except FileNotFoundError as error:
-        raise FileNotFoundError(
-            f"reserved temp directory for run ID {paths.run_id!r} is unavailable"
-        ) from error
+        raise FileNotFoundError(f"reserved temp directory for run ID {paths.run_id!r} is unavailable") from error
     if paths.temp_run_dir.is_symlink() or _is_reparse_point(paths.temp_run_dir):
         raise OSError(f"refusing unsafe reserved temp directory: {paths.temp_run_dir}")
     if not stat.S_ISDIR(metadata.st_mode):
@@ -371,16 +360,13 @@ def report_to_json(report: OptimizationReport) -> str:
 
 
 def _json_text(value: Any) -> str:
-    return (
-        json.dumps(
-            to_jsonable(value),
-            indent=2,
-            ensure_ascii=False,
-            sort_keys=True,
-            allow_nan=False,
-        )
-        + "\n"
-    )
+    return (json.dumps(
+        to_jsonable(value),
+        indent=2,
+        ensure_ascii=False,
+        sort_keys=True,
+        allow_nan=False,
+    ) + "\n")
 
 
 def _atomic_write_text(path: Path, content: str) -> None:
@@ -562,8 +548,7 @@ def render_markdown(report: OptimizationReport) -> str:
 
     lines.extend([
         "",
-        "Update source prompt: "
-        + ("yes" if report.run.get("update_source") else "no (default)"),
+        "Update source prompt: " + ("yes" if report.run.get("update_source") else "no (default)"),
         "",
     ])
     availability = report.audit.get("sdk_result_availability", {})
@@ -615,15 +600,9 @@ def render_markdown(report: OptimizationReport) -> str:
         train_result = record.get("train_result")
         validation_result = record.get("validation_result")
         train_score = f"{train_result.score:.3f}" if isinstance(train_result, EvalResult) else "n/a"
-        validation_score = (
-            f"{validation_result.score:.3f}"
-            if isinstance(validation_result, EvalResult)
-            else "n/a"
-        )
-        lines.append(
-            f"| {candidate.candidate_id} | {train_score} | "
-            f"{validation_score} | {verdict} |"
-        )
+        validation_score = (f"{validation_result.score:.3f}" if isinstance(validation_result, EvalResult) else "n/a")
+        lines.append(f"| {candidate.candidate_id} | {train_score} | "
+                     f"{validation_score} | {verdict} |")
 
     lines.extend([
         "",
@@ -633,12 +612,10 @@ def render_markdown(report: OptimizationReport) -> str:
         "| --- | --- | --- | ---: | ---: | ---: | --- | --- |",
     ])
     for delta in report.per_case_deltas:
-        lines.append(
-            f"| {delta.candidate_id} | {delta.split} | {delta.case_id} | "
-            f"{delta.baseline_score:.3f} | {delta.candidate_score:.3f} | "
-            f"{delta.delta:+.3f} | {delta.baseline_passed} -> {delta.candidate_passed} | "
-            f"{delta.delta_type} |"
-        )
+        lines.append(f"| {delta.candidate_id} | {delta.split} | {delta.case_id} | "
+                     f"{delta.baseline_score:.3f} | {delta.candidate_score:.3f} | "
+                     f"{delta.delta:+.3f} | {delta.baseline_passed} -> {delta.candidate_passed} | "
+                     f"{delta.delta_type} |")
 
     summary = report.failure_attribution_summary
     lines.extend([
@@ -667,15 +644,11 @@ def render_markdown(report: OptimizationReport) -> str:
     else:
         reported_optimizer_cost = cost_audit.get("reported_optimizer_cost")
         if reported_optimizer_cost is not None:
-            lines.append(
-                "Reported optimizer cost (incomplete; not total run cost): "
-                f"{reported_optimizer_cost:.3f}"
-            )
+            lines.append("Reported optimizer cost (incomplete; not total run cost): "
+                         f"{reported_optimizer_cost:.3f}")
         lines.append(f"Known evaluator cost: {cost_audit.get('evaluator', 0):.3f}")
-        lines.append(
-            "Known run cost (incomplete; not total run cost): "
-            f"{cost_audit.get('known_run_cost', 0):.3f}"
-        )
+        lines.append("Known run cost (incomplete; not total run cost): "
+                     f"{cost_audit.get('known_run_cost', 0):.3f}")
         lines.append("Complete run cost: unavailable")
     lines.extend([
         f"Config hash: `{report.audit.get('config_hash', '')}`",
@@ -702,8 +675,7 @@ def render_markdown(report: OptimizationReport) -> str:
         "## Reproducibility",
         "",
         f"```{report.run.get('reproducibility_shell') or 'bash'}",
-        report.run.get("reproducibility_command")
-        or report.audit.get("reproducibility_command")
+        report.run.get("reproducibility_command") or report.audit.get("reproducibility_command")
         or REPRODUCIBILITY_COMMAND,
         "```",
         "",
@@ -719,11 +691,11 @@ def write_audit_artifacts(report: OptimizationReport, run_dir: Path) -> None:
     _require_safe_audit_root(run_dir)
 
     for component in (
-        "case_results",
-        "baseline_prompts",
-        "candidate_prompts",
-        "prompt_diffs",
-        "rounds",
+            "case_results",
+            "baseline_prompts",
+            "candidate_prompts",
+            "prompt_diffs",
+            "rounds",
     ):
         _ensure_safe_audit_directory(run_dir, component)
     for index, record in enumerate(report.candidates, start=1):
@@ -841,11 +813,8 @@ def _write_safe_audit_text(
 
     run_root = Path(run_root)
     relative = Path(relative_path)
-    if (
-        relative.is_absolute()
-        or not relative.parts
-        or any(component in {"", ".", ".."} for component in relative.parts)
-    ):
+    if (relative.is_absolute() or not relative.parts
+            or any(component in {"", ".", ".."} for component in relative.parts)):
         raise OSError(f"unsafe audit artifact path: {relative_path!r}")
     if len(relative.parts) == 1:
         _require_safe_audit_root(run_root)
@@ -876,13 +845,8 @@ def _ensure_safe_audit_directory(run_root: Path, *components: str) -> Path:
         raise ValueError("audit directory components must not be empty")
     for component in components:
         component_path = Path(component)
-        if (
-            not component
-            or component_path.is_absolute()
-            or len(component_path.parts) != 1
-            or component_path.name != component
-            or component in {".", ".."}
-        ):
+        if (not component or component_path.is_absolute() or len(component_path.parts) != 1
+                or component_path.name != component or component in {".", ".."}):
             raise OSError(f"unsafe audit directory component: {component!r}")
 
     directory = run_root.joinpath(*components)
@@ -918,11 +882,9 @@ def _write_artifact_manifest(
 ) -> None:
     _require_mutable_temp_run(paths)
     artifacts = _manifest_artifact_layout(report)
-    expected_files = (
-        {"writeback_journal.json": expected_journal.encode("utf-8")}
-        if expected_journal is not None
-        else {}
-    )
+    expected_files = ({
+        "writeback_journal.json": expected_journal.encode("utf-8")
+    } if expected_journal is not None else {})
     files = _manifest_file_records(paths.temp_run_dir, expected_files=expected_files)
     declared_paths = _declared_manifest_paths(artifacts)
     if expected_journal is not None:
@@ -952,11 +914,8 @@ def _manifest_artifact_layout(report: OptimizationReport) -> dict[str, Any]:
         artifact_id = _candidate_artifact_name(index, candidate.candidate_id)
         prompt_bundle = record.get("prompt_bundle") or candidate.bundle()
         prompt_paths = {
-            field_name: (
-                Path("candidate_prompts")
-                / artifact_id
-                / f"{_safe_artifact_name(str(field_name))}.txt"
-            ).as_posix()
+            field_name:
+            (Path("candidate_prompts") / artifact_id / f"{_safe_artifact_name(str(field_name))}.txt").as_posix()
             for field_name in prompt_bundle
         }
         case_results: dict[str, str] = {}
@@ -965,19 +924,15 @@ def _manifest_artifact_layout(report: OptimizationReport) -> dict[str, Any]:
             if not isinstance(result, EvalResult):
                 continue
             split = _safe_artifact_name(str(result.split))
-            case_results[str(result.split)] = (
-                Path("case_results") / f"{artifact_id}_{split}.json"
-            ).as_posix()
-        candidates.append(
-            {
-                "candidate_id": candidate.candidate_id,
-                "artifact_id": artifact_id,
-                "prompt_bundle": prompt_paths,
-                "diff": (Path("prompt_diffs") / f"{artifact_id}.diff").as_posix(),
-                "case_results": case_results,
-                "evaluation_failure": "evaluation_error" in record,
-            }
-        )
+            case_results[str(result.split)] = (Path("case_results") / f"{artifact_id}_{split}.json").as_posix()
+        candidates.append({
+            "candidate_id": candidate.candidate_id,
+            "artifact_id": artifact_id,
+            "prompt_bundle": prompt_paths,
+            "diff": (Path("prompt_diffs") / f"{artifact_id}.diff").as_posix(),
+            "case_results": case_results,
+            "evaluation_failure": "evaluation_error" in record,
+        })
 
     return {
         "reports": {
@@ -991,15 +946,11 @@ def _manifest_artifact_layout(report: OptimizationReport) -> dict[str, Any]:
             "validation": "case_results/baseline_validation.json",
         },
         "baseline_prompts": {
-            field_name: (
-                Path("baseline_prompts") / f"{_safe_artifact_name(str(field_name))}.txt"
-            ).as_posix()
+            field_name: (Path("baseline_prompts") / f"{_safe_artifact_name(str(field_name))}.txt").as_posix()
             for field_name in report.baseline_prompts
         },
-        "rounds": [
-            (Path("rounds") / f"{_safe_artifact_name(str(round_record.round_id))}.json").as_posix()
-            for round_record in report.rounds
-        ],
+        "rounds": [(Path("rounds") / f"{_safe_artifact_name(str(round_record.round_id))}.json").as_posix()
+                   for round_record in report.rounds],
         "audit_records": {
             "audit": "audit.json",
             "config_snapshot": "config.snapshot.json",
@@ -1011,7 +962,8 @@ def _manifest_artifact_layout(report: OptimizationReport) -> dict[str, Any]:
             "writeback_journal": "writeback_journal.json",
             "evaluation_failures": "evaluation_failures.json",
         },
-        "candidates": candidates,
+        "candidates":
+        candidates,
     }
 
 
@@ -1042,14 +994,11 @@ def _manifest_file_records(
         if relative_path == "artifact_manifest.json":
             continue
         content_by_path[relative_path] = artifact.read_bytes()
-    return [
-        {
-            "path": relative_path,
-            "sha256": hashlib.sha256(content).hexdigest(),
-            "size_bytes": len(content),
-        }
-        for relative_path, content in sorted(content_by_path.items())
-    ]
+    return [{
+        "path": relative_path,
+        "sha256": hashlib.sha256(content).hexdigest(),
+        "size_bytes": len(content),
+    } for relative_path, content in sorted(content_by_path.items())]
 
 
 def _candidate_artifact_name(index: int, candidate_id: str) -> str:

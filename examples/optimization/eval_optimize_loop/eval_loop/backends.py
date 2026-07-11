@@ -106,13 +106,11 @@ class FakeBackend:
         for case_result in result.cases:
             model_trace = case_result.trace.get("model")
             sanitized_trace = dict(model_trace) if isinstance(model_trace, dict) else {}
-            sanitized_cases.append(
-                replace(
-                    case_result,
-                    trace=sanitized_trace,
-                    trace_available=bool(sanitized_trace),
-                )
-            )
+            sanitized_cases.append(replace(
+                case_result,
+                trace=sanitized_trace,
+                trace_available=bool(sanitized_trace),
+            ))
         return replace(result, cases=sanitized_cases)
 
     async def optimize_candidates(
@@ -137,15 +135,12 @@ class FakeBackend:
                 baseline_prompt,
                 baseline_train,
                 failure_summary,
-            )
-        )
+            ))
         proposal_duration_seconds = _positive_perf_duration(
             proposal_started_at,
             time.perf_counter(),
         )
-        round_duration_seconds = (
-            proposal_duration_seconds / len(candidates) if candidates else 0.0
-        )
+        round_duration_seconds = (proposal_duration_seconds / len(candidates) if candidates else 0.0)
         zero_cost = CostSummary(complete=True)
         rounds = [
             OptimizationRound(
@@ -156,8 +151,7 @@ class FakeBackend:
                 metrics={},
                 cost=zero_cost,
                 duration_seconds=round_duration_seconds,
-            )
-            for index, candidate in enumerate(candidates, start=1)
+            ) for index, candidate in enumerate(candidates, start=1)
         ]
         return OptimizationResult(
             candidates=candidates,
@@ -168,9 +162,7 @@ class FakeBackend:
                 "baseline_prompt_id": baseline_train.prompt_id,
                 "failure_summary": _safe_jsonable(failure_summary),
                 "proposal_duration_seconds": proposal_duration_seconds,
-                "round_duration_allocation": (
-                    "equal_share_of_batch_proposal_duration"
-                ),
+                "round_duration_allocation": ("equal_share_of_batch_proposal_duration"),
             },
         )
 
@@ -186,11 +178,9 @@ class FakeBackend:
         """Reject legacy optimization that has no observed failure evidence."""
 
         del baseline_prompt, train_path, val_path, optimizer_config_path, output_dir
-        raise RuntimeError(
-            "FakeBackend.optimize() cannot invent training failure evidence; "
-            "use await FakeBackend.optimize_candidates(...) with baseline_train "
-            "and failure_summary."
-        )
+        raise RuntimeError("FakeBackend.optimize() cannot invent training failure evidence; "
+                           "use await FakeBackend.optimize_candidates(...) with baseline_train "
+                           "and failure_summary.")
 
 
 class SDKBackend:
@@ -232,10 +222,8 @@ class SDKBackend:
         """Safely bridge old synchronous callers to the async implementation."""
 
         if _has_running_loop():
-            raise ValueError(
-                "SDKBackend.optimize() cannot be called while an event loop is already running; "
-                "use await SDKBackend.optimize_async(...) instead."
-            )
+            raise ValueError("SDKBackend.optimize() cannot be called while an event loop is already running; "
+                             "use await SDKBackend.optimize_async(...) instead.")
         return asyncio.run(
             self.optimize_async(
                 baseline_prompt=baseline_prompt,
@@ -243,8 +231,7 @@ class SDKBackend:
                 val_path=val_path,
                 optimizer_config_path=optimizer_config_path,
                 output_dir=output_dir,
-            )
-        )
+            ))
 
     async def optimize_async(
         self,
@@ -309,14 +296,10 @@ class SDKBackend:
             target_paths,
             context="baseline prompt bundle",
         )
-        mismatched = sorted(
-            name for name in target_paths if baseline_bundle[name] != source_bundle[name]
-        )
+        mismatched = sorted(name for name in target_paths if baseline_bundle[name] != source_bundle[name])
         if mismatched:
-            raise ValueError(
-                "baseline prompt bundle does not match registered source prompt files: "
-                + ", ".join(mismatched)
-            )
+            fields = ", ".join(mismatched)
+            raise ValueError(f"baseline prompt bundle does not match registered source prompt files: {fields}")
 
         target_prompt = TargetPrompt()
         for name, path in target_paths.items():
@@ -336,10 +319,8 @@ class SDKBackend:
         finally:
             changed_sources = _changed_snapshot_files(snapshot)
             if changed_sources:
-                raise RuntimeError(
-                    "AgentOptimizer modified source prompt files despite update_source=False: "
-                    + ", ".join(changed_sources)
-                )
+                fields = ", ".join(changed_sources)
+                raise RuntimeError(f"AgentOptimizer modified source prompt files despite update_source=False: {fields}")
 
         _require_successful_optimize_result(sdk_result)
         total_llm_cost = _nonnegative_result_field(
@@ -382,15 +363,11 @@ class SDKBackend:
             seen_round_ids.add(round_id)
             candidate_id = f"sdk_round_{round_id:03d}"
             round_raw_prompts = getattr(sdk_round, "candidate_prompts", {}) or {}
-            round_prompts = (
-                _validated_prompt_bundle(
-                    round_raw_prompts,
-                    target_paths,
-                    context=f"SDK round {round_id} candidate_prompts",
-                )
-                if round_raw_prompts
-                else {}
-            )
+            round_prompts = (_validated_prompt_bundle(
+                round_raw_prompts,
+                target_paths,
+                context=f"SDK round {round_id} candidate_prompts",
+            ) if round_raw_prompts else {})
             rationale = str(getattr(sdk_round, "acceptance_reason", "") or "")
             round_metrics = _finite_metric_map(
                 getattr(sdk_round, "metric_breakdown", {}) or {},
@@ -425,8 +402,7 @@ class SDKBackend:
                         complete=False,
                     ),
                     duration_seconds=duration_seconds,
-                )
-            )
+                ))
             if round_prompts:
                 bundle_key = _prompt_bundle_key(round_prompts)
                 if bundle_key not in seen_bundles:
@@ -437,8 +413,7 @@ class SDKBackend:
                             prompts=round_prompts,
                             rationale=rationale,
                             baseline_prompts=baseline_bundle,
-                        )
-                    )
+                        ))
 
         best_key = _prompt_bundle_key(best_prompts)
         if best_key not in seen_bundles:
@@ -448,8 +423,7 @@ class SDKBackend:
                     prompts=best_prompts,
                     rationale="Best prompt returned by AgentOptimizer.optimize.",
                     baseline_prompts=baseline_bundle,
-                )
-            )
+                ))
 
         raw_summary = _summarize_sdk_result(sdk_result)
         cost = CostSummary(
@@ -501,9 +475,9 @@ class SDKBackend:
         artifact_path.mkdir(parents=True, exist_ok=True)
         eval_config_path = artifact_path / "eval_config.json"
         eval_config_path.write_text(
-            EvalConfig(
-                criteria={"final_response_avg_score": 1.0}
-            ).model_dump_json(indent=2),
+            EvalConfig(criteria={
+                "final_response_avg_score": 1.0
+            }).model_dump_json(indent=2),
             encoding="utf-8",
         )
         snapshot = snapshot_prompt_files(target_paths)
@@ -540,17 +514,12 @@ class SDKBackend:
             suffix = " for AgentEvaluator runs" if for_evaluation else (
                 ". The callable must be async and compatible with "
                 "AgentOptimizer.optimize(call_agent=...). Also configure real model credentials required "
-                "by that callable, such as TRPC_AGENT_API_KEY/TRPC_AGENT_BASE_URL/TRPC_AGENT_MODEL_NAME."
-            )
+                "by that callable, such as TRPC_AGENT_API_KEY/TRPC_AGENT_BASE_URL/TRPC_AGENT_MODEL_NAME.")
             raise ValueError(f"sdk mode requires --sdk-call-agent module:function{suffix}")
         return _load_call_agent(self.call_agent_path)
 
     def _target_prompt_paths(self) -> dict[str, str | Path]:
-        paths = (
-            dict(self.target_prompt_paths)
-            if self.target_prompt_paths
-            else {"system_prompt": self.prompt_path}
-        )
+        paths = (dict(self.target_prompt_paths) if self.target_prompt_paths else {"system_prompt": self.prompt_path})
         validate_distinct_file_paths(paths, context="SDK target prompt fields")
         return paths
 
@@ -575,8 +544,7 @@ def _normalize_fake_candidates(candidates: Iterable[CandidatePrompt]) -> list[Ca
                 rationale=candidate.rationale,
                 prompt_diff=candidate.prompt_diff,
                 prompt_fields=bundle,
-            )
-        )
+            ))
     return normalized
 
 
@@ -615,25 +583,19 @@ def _validated_prompt_bundle(
     missing_fields = sorted(name for name in paths if name not in prompts)
     if missing_fields:
         if context == "OptimizeResult.best_prompts":
-            raise ValueError(
-                "sdk mode completed but OptimizeResult.best_prompts is missing registered target fields: "
-                + ", ".join(missing_fields)
-            )
+            fields = ", ".join(missing_fields)
+            raise ValueError("sdk mode completed but OptimizeResult.best_prompts is missing "
+                             f"registered target fields: {fields}")
         raise ValueError(f"{context} is missing registered target fields: {', '.join(missing_fields)}")
     extra_fields = sorted(name for name in prompts if name not in paths)
     if extra_fields:
         raise ValueError(f"{context} contains unregistered target fields: {', '.join(extra_fields)}")
-    empty_fields = sorted(
-        name
-        for name in paths
-        if not isinstance(prompts[name], str) or not prompts[name].strip()
-    )
+    empty_fields = sorted(name for name in paths if not isinstance(prompts[name], str) or not prompts[name].strip())
     if empty_fields:
         if context == "OptimizeResult.best_prompts":
-            raise ValueError(
-                "sdk mode completed but OptimizeResult.best_prompts contained empty registered target fields: "
-                + ", ".join(empty_fields)
-            )
+            fields = ", ".join(empty_fields)
+            raise ValueError("sdk mode completed but OptimizeResult.best_prompts contained "
+                             f"empty registered target fields: {fields}")
         raise ValueError(f"{context} contains empty registered target fields: {', '.join(empty_fields)}")
     return {name: prompts[name] for name in paths}
 
@@ -645,9 +607,7 @@ def _read_prompt_bundle(paths: dict[str, str | Path]) -> dict[str, str]:
         try:
             prompts[name] = prompt_path.read_bytes().decode("utf-8")
         except UnicodeDecodeError as exc:
-            raise ValueError(
-                f"source prompt field {name!r} is not valid UTF-8: {prompt_path}"
-            ) from exc
+            raise ValueError(f"source prompt field {name!r} is not valid UTF-8: {prompt_path}") from exc
     return prompts
 
 
@@ -657,9 +617,7 @@ def _prompt_bundle_from_snapshot(snapshot: Any) -> dict[str, str]:
         try:
             prompts[name] = prompt_file.content.decode("utf-8")
         except UnicodeDecodeError as exc:
-            raise ValueError(
-                f"source prompt field {name!r} is not valid UTF-8: {prompt_file.path}"
-            ) from exc
+            raise ValueError(f"source prompt field {name!r} is not valid UTF-8: {prompt_file.path}") from exc
     return prompts
 
 
@@ -687,13 +645,11 @@ def _require_successful_optimize_result(result: Any) -> None:
     status = _sdk_result_text(getattr(result, "status", None)).upper()
     if status == "SUCCEEDED":
         return
-    raise ValueError(
-        "SDK optimization did not succeed: "
-        f"status={status}; "
-        f"error_message={_sdk_result_text(getattr(result, 'error_message', None))}; "
-        f"finish_reason={_sdk_result_text(getattr(result, 'finish_reason', None))}; "
-        f"stop_reason={_sdk_result_text(getattr(result, 'stop_reason', None))}"
-    )
+    raise ValueError("SDK optimization did not succeed: "
+                     f"status={status}; "
+                     f"error_message={_sdk_result_text(getattr(result, 'error_message', None))}; "
+                     f"finish_reason={_sdk_result_text(getattr(result, 'finish_reason', None))}; "
+                     f"stop_reason={_sdk_result_text(getattr(result, 'stop_reason', None))}")
 
 
 def _sdk_result_text(value: Any) -> str:
@@ -733,58 +689,75 @@ def _candidate_from_bundle(
 
 def _summarize_sdk_result(result: Any) -> dict[str, Any]:
     return {
-        "schema_version": _safe_jsonable(getattr(result, "schema_version", None)),
-        "algorithm": _safe_jsonable(getattr(result, "algorithm", None)),
-        "status": _safe_jsonable(getattr(result, "status", None)),
-        "finish_reason": _safe_jsonable(getattr(result, "finish_reason", None)),
-        "stop_reason": _safe_jsonable(getattr(result, "stop_reason", None)),
-        "error_message": _safe_jsonable(getattr(result, "error_message", None)),
-        "baseline_pass_rate": _pass_rate_result_field(
+        "schema_version":
+        _safe_jsonable(getattr(result, "schema_version", None)),
+        "algorithm":
+        _safe_jsonable(getattr(result, "algorithm", None)),
+        "status":
+        _safe_jsonable(getattr(result, "status", None)),
+        "finish_reason":
+        _safe_jsonable(getattr(result, "finish_reason", None)),
+        "stop_reason":
+        _safe_jsonable(getattr(result, "stop_reason", None)),
+        "error_message":
+        _safe_jsonable(getattr(result, "error_message", None)),
+        "baseline_pass_rate":
+        _pass_rate_result_field(
             "baseline_pass_rate",
             getattr(result, "baseline_pass_rate", 0.0),
         ),
-        "best_pass_rate": _pass_rate_result_field(
+        "best_pass_rate":
+        _pass_rate_result_field(
             "best_pass_rate",
             getattr(result, "best_pass_rate", 0.0),
         ),
-        "pass_rate_improvement": _finite_result_field(
+        "pass_rate_improvement":
+        _finite_result_field(
             "pass_rate_improvement",
             getattr(result, "pass_rate_improvement", 0.0),
         ),
-        "baseline_metric_breakdown": _finite_metric_map(
+        "baseline_metric_breakdown":
+        _finite_metric_map(
             getattr(result, "baseline_metric_breakdown", {}) or {},
             context="SDK OptimizeResult baseline_metric_breakdown",
         ),
-        "best_metric_breakdown": _finite_metric_map(
+        "best_metric_breakdown":
+        _finite_metric_map(
             getattr(result, "best_metric_breakdown", {}) or {},
             context="SDK OptimizeResult best_metric_breakdown",
         ),
-        "metric_thresholds": _finite_metric_map(
+        "metric_thresholds":
+        _finite_metric_map(
             getattr(result, "metric_thresholds", {}) or {},
             context="SDK OptimizeResult metric_thresholds",
         ),
-        "per_metric_best_candidates": _safe_jsonable(
-            getattr(result, "per_metric_best_candidates", {})
-        ),
-        "total_llm_cost": _nonnegative_result_field(
+        "per_metric_best_candidates":
+        _safe_jsonable(getattr(result, "per_metric_best_candidates", {})),
+        "total_llm_cost":
+        _nonnegative_result_field(
             "total_llm_cost",
             getattr(result, "total_llm_cost", 0.0),
         ),
-        "total_token_usage": _safe_jsonable(getattr(result, "total_token_usage", {})),
-        "duration_seconds": _nonnegative_result_field(
+        "total_token_usage":
+        _safe_jsonable(getattr(result, "total_token_usage", {})),
+        "duration_seconds":
+        _nonnegative_result_field(
             "duration_seconds",
             getattr(result, "duration_seconds", 0.0),
         ),
-        "started_at": _safe_jsonable(getattr(result, "started_at", None)),
-        "finished_at": _safe_jsonable(getattr(result, "finished_at", None)),
-        "total_rounds": _safe_jsonable(getattr(result, "total_rounds", 0)),
-        "baseline_prompts": _safe_jsonable(getattr(result, "baseline_prompts", {})),
-        "best_prompts": _safe_jsonable(getattr(result, "best_prompts", {})),
-        "rounds": [
-            _round_raw_summary(round_record)
-            for round_record in getattr(result, "rounds", []) or []
-        ],
-        "extras": _safe_jsonable(getattr(result, "extras", {})),
+        "started_at":
+        _safe_jsonable(getattr(result, "started_at", None)),
+        "finished_at":
+        _safe_jsonable(getattr(result, "finished_at", None)),
+        "total_rounds":
+        _safe_jsonable(getattr(result, "total_rounds", 0)),
+        "baseline_prompts":
+        _safe_jsonable(getattr(result, "baseline_prompts", {})),
+        "best_prompts":
+        _safe_jsonable(getattr(result, "best_prompts", {})),
+        "rounds": [_round_raw_summary(round_record) for round_record in getattr(result, "rounds", []) or []],
+        "extras":
+        _safe_jsonable(getattr(result, "extras", {})),
     }
 
 
@@ -795,14 +768,10 @@ def _round_raw_summary(round_record: Any) -> dict[str, Any]:
     return {
         "round": _safe_jsonable(getattr(round_record, "round", None)),
         "candidate_prompts": _safe_jsonable(getattr(round_record, "candidate_prompts", {})),
-        "validation_pass_rate": _safe_jsonable(
-            getattr(round_record, "validation_pass_rate", None)
-        ),
+        "validation_pass_rate": _safe_jsonable(getattr(round_record, "validation_pass_rate", None)),
         "metric_breakdown": _safe_jsonable(getattr(round_record, "metric_breakdown", {})),
         "accepted": _safe_jsonable(getattr(round_record, "accepted", None)),
-        "acceptance_reason": _safe_jsonable(
-            getattr(round_record, "acceptance_reason", "")
-        ),
+        "acceptance_reason": _safe_jsonable(getattr(round_record, "acceptance_reason", "")),
         "failed_case_ids": _safe_jsonable(getattr(round_record, "failed_case_ids", [])),
         "round_llm_cost": _safe_jsonable(getattr(round_record, "round_llm_cost", 0.0)),
         "duration_seconds": _safe_jsonable(getattr(round_record, "duration_seconds", 0.0)),
@@ -826,19 +795,14 @@ def _nonnegative_result_field(field_name: str, value: Any) -> float:
 def _pass_rate_result_field(field_name: str, value: Any) -> float:
     number = _finite_result_field(field_name, value)
     if not 0.0 <= number <= 1.0:
-        raise ValueError(
-            f"SDK OptimizeResult field {field_name} must be between 0 and 1"
-        )
+        raise ValueError(f"SDK OptimizeResult field {field_name} must be between 0 and 1")
     return number
 
 
 def _finite_metric_map(value: Any, *, context: str) -> dict[str, float]:
     if not isinstance(value, dict):
         raise ValueError(f"{context} must be a metric mapping")
-    return {
-        str(name): _finite_number(score, context=f"{context}.{name}")
-        for name, score in value.items()
-    }
+    return {str(name): _finite_number(score, context=f"{context}.{name}") for name, score in value.items()}
 
 
 def _finite_number(value: Any, *, context: str) -> float:
@@ -923,14 +887,10 @@ def _load_sdk_expected_cases(
     expected_cases: dict[str, EvalCase] = {}
     for index, raw_case in enumerate(raw_cases):
         if not isinstance(raw_case, dict):
-            raise ValueError(
-                f"SDK evalset {dataset_path} eval_cases[{index}] must be an object"
-            )
+            raise ValueError(f"SDK evalset {dataset_path} eval_cases[{index}] must be an object")
         eval_id = raw_case.get("eval_id")
         if not isinstance(eval_id, str) or not eval_id.strip():
-            raise ValueError(
-                f"SDK evalset {dataset_path} eval_cases[{index}] is missing non-empty eval_id"
-            )
+            raise ValueError(f"SDK evalset {dataset_path} eval_cases[{index}] is missing non-empty eval_id")
         if eval_id in expected_cases:
             raise ValueError(f"SDK evalset {dataset_path} contains duplicate eval_id {eval_id!r}")
         expected_cases[eval_id] = _expected_case_from_sdk_case(
@@ -962,9 +922,7 @@ def _expected_case_from_sdk_case(
         if user_content is None:
             continue
         if not isinstance(user_content, dict):
-            raise ValueError(
-                f"{context} conversation[{turn_index}].user_content must be an object"
-            )
+            raise ValueError(f"{context} conversation[{turn_index}].user_content must be an object")
         candidate_text = _content_text(user_content)
         if candidate_text.strip():
             input_text = candidate_text
@@ -980,9 +938,7 @@ def _expected_case_from_sdk_case(
         raise ValueError(f"{context} session_input.state must be an object")
     expectation = state.get("eval_optimize_expectation")
     if not isinstance(expectation, dict):
-        raise ValueError(
-            f"{context} session_input.state must contain eval_optimize_expectation object"
-        )
+        raise ValueError(f"{context} session_input.state must contain eval_optimize_expectation object")
 
     tags = state.get("eval_optimize_tags", [])
     if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
@@ -996,13 +952,8 @@ def _expected_case_from_sdk_case(
         expected_failure_category = state.get("expected_failure_category")
     if expected_failure_category is None:
         expected_failure_category = expectation.get("expected_failure_category")
-    if (
-        expected_failure_category is not None
-        and (
-            not isinstance(expected_failure_category, str)
-            or not expected_failure_category.strip()
-        )
-    ):
+    if (expected_failure_category is not None
+            and (not isinstance(expected_failure_category, str) or not expected_failure_category.strip())):
         raise ValueError(f"{context} expected_failure_category must be a non-empty string")
 
     return EvalCase(
@@ -1059,10 +1010,8 @@ def _eval_result_from_sdk_result(
                 raise ValueError(f"SDK evaluation result contains duplicate case id: {eval_id}")
             run_list = list(runs or [])
             if num_runs is not None and len(run_list) != num_runs:
-                raise ValueError(
-                    f"SDK eval set {eval_set_id!r} declares num_runs={num_runs}, "
-                    f"but case {eval_id!r} contains {len(run_list)} runs"
-                )
+                raise ValueError(f"SDK eval set {eval_set_id!r} declares num_runs={num_runs}, "
+                                 f"but case {eval_id!r} contains {len(run_list)} runs")
             _validate_sdk_run_ids(
                 run_list,
                 eval_set_id=eval_set_id,
@@ -1091,38 +1040,19 @@ def _eval_result_from_sdk_result(
         if metrics:
             score = _mean(list(metrics.values()))
         else:
-            score = _mean([
-                1.0 if _status_passed(getattr(run, "final_eval_status", None)) else 0.0
-                for run in run_list
-            ])
+            score = _mean([1.0 if _status_passed(getattr(run, "final_eval_status", None)) else 0.0 for run in run_list])
         score = round(score, 6)
-        passed = bool(run_list) and all(
-            _status_passed(getattr(run, "final_eval_status", None))
-            for run in run_list
-        )
+        passed = bool(run_list) and all(_status_passed(getattr(run, "final_eval_status", None)) for run in run_list)
         failure_reason, evidence, failure_category = _failure_details(run_list)
         actual_invocation = _last_actual_invocation(run_list)
         trace_available = actual_invocation is not None
-        trace_payload = (
-            {
-                "user_content": _safe_jsonable(
-                    getattr(actual_invocation, "user_content", None)
-                ),
-                "final_response": _safe_jsonable(
-                    getattr(actual_invocation, "final_response", None)
-                ),
-                "intermediate_data": _safe_jsonable(
-                    getattr(actual_invocation, "intermediate_data", None)
-                ),
-            }
-            if actual_invocation is not None
-            else {}
-        )
-        output = (
-            _content_text(getattr(actual_invocation, "final_response", None))
-            if actual_invocation is not None
-            else ""
-        )
+        trace_payload = ({
+            "user_content": _safe_jsonable(getattr(actual_invocation, "user_content", None)),
+            "final_response": _safe_jsonable(getattr(actual_invocation, "final_response", None)),
+            "intermediate_data": _safe_jsonable(getattr(actual_invocation, "intermediate_data", None)),
+        } if actual_invocation is not None else {})
+        output = (_content_text(getattr(actual_invocation, "final_response", None))
+                  if actual_invocation is not None else "")
         case_results.append(
             CaseResult(
                 case_id=case_id,
@@ -1139,14 +1069,9 @@ def _eval_result_from_sdk_result(
                 cost=0.0,
                 hard_failed=(not passed and score <= 0.0),
                 expected_failure_category=expected_case.expected_failure_category,
-            )
-        )
+            ))
 
-    aggregate_score = (
-        round(_mean([case.score for case in case_results]), 6)
-        if case_results
-        else 0.0
-    )
+    aggregate_score = (round(_mean([case.score for case in case_results]), 6) if case_results else 0.0)
     return EvalResult(
         prompt_id=prompt_id,
         split=split,
@@ -1162,9 +1087,7 @@ def _optional_num_runs(set_result: Any, *, eval_set_id: str) -> int | None:
         return None
     num_runs = getattr(set_result, "num_runs")
     if isinstance(num_runs, bool) or not isinstance(num_runs, int) or num_runs <= 0:
-        raise ValueError(
-            f"SDK eval set {eval_set_id!r} num_runs must be a positive integer"
-        )
+        raise ValueError(f"SDK eval set {eval_set_id!r} num_runs must be a positive integer")
     return num_runs
 
 
@@ -1179,31 +1102,20 @@ def _validate_sdk_run_ids(
     for run in runs:
         internal_eval_id = getattr(run, "eval_id", None)
         if internal_eval_id not in (None, "") and str(internal_eval_id) != eval_id:
-            raise ValueError(
-                f"SDK run internal eval_id {internal_eval_id!r} does not match "
-                f"container case id {eval_id!r}"
-            )
+            raise ValueError(f"SDK run internal eval_id {internal_eval_id!r} does not match "
+                             f"container case id {eval_id!r}")
         internal_eval_set_id = getattr(run, "eval_set_id", None)
-        if (
-            internal_eval_set_id not in (None, "")
-            and str(internal_eval_set_id) != eval_set_id
-        ):
-            raise ValueError(
-                f"SDK run internal eval_set_id {internal_eval_set_id!r} does not match "
-                f"container eval set id {eval_set_id!r}"
-            )
+        if (internal_eval_set_id not in (None, "") and str(internal_eval_set_id) != eval_set_id):
+            raise ValueError(f"SDK run internal eval_set_id {internal_eval_set_id!r} does not match "
+                             f"container eval set id {eval_set_id!r}")
 
         run_id = getattr(run, "run_id", None)
         if run_id is None:
             continue
         if isinstance(run_id, bool) or not isinstance(run_id, int) or run_id <= 0:
-            raise ValueError(
-                f"SDK case {eval_id!r} run_id must be a positive integer or None"
-            )
+            raise ValueError(f"SDK case {eval_id!r} run_id must be a positive integer or None")
         if num_runs is not None and run_id > num_runs:
-            raise ValueError(
-                f"SDK case {eval_id!r} run_id {run_id} exceeds num_runs={num_runs}"
-            )
+            raise ValueError(f"SDK case {eval_id!r} run_id {run_id} exceeds num_runs={num_runs}")
         if run_id in seen_run_ids:
             raise ValueError(f"SDK evaluation result contains duplicate run_id {run_id} for case {eval_id}")
         seen_run_ids.add(run_id)
@@ -1224,10 +1136,7 @@ def _aggregate_case_metrics(runs: list[Any], *, case_id: str) -> dict[str, float
                 context=f"SDK case {case_id} metric {metric_name} score",
             )
             scores_by_metric.setdefault(metric_name, []).append(score)
-    return {
-        metric_name: round(_mean(scores), 6)
-        for metric_name, scores in scores_by_metric.items()
-    }
+    return {metric_name: round(_mean(scores), 6) for metric_name, scores in scores_by_metric.items()}
 
 
 def _mean(values: list[float]) -> float:
@@ -1335,6 +1244,5 @@ def _render_prompt_bundle_diff(
                 candidate_prompts.get(name, ""),
                 before_name=f"baseline/{name}.txt",
                 after_name=f"{candidate_id}/{name}.txt",
-            )
-        )
+            ))
     return "\n\n".join(diffs)

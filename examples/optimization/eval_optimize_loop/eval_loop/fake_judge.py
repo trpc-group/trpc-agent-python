@@ -50,7 +50,10 @@ class FakeJudge:
                 passed=False,
                 error_code="json_parse_failure",
                 evidence=f"json parser failed at char {exc.pos}: {exc.msg}",
-                trace={"expectation_type": "json", "valid_json": False},
+                trace={
+                    "expectation_type": "json",
+                    "valid_json": False
+                },
             )
         if not isinstance(parsed, dict):
             return JudgeOutcome(
@@ -58,7 +61,11 @@ class FakeJudge:
                 passed=False,
                 error_code="json_value_mismatch",
                 evidence=f"expected JSON object, got {type(parsed).__name__}",
-                trace={"expectation_type": "json", "valid_json": True, "object": False},
+                trace={
+                    "expectation_type": "json",
+                    "valid_json": True,
+                    "object": False
+                },
             )
         required_keys = list(case.expectation.get("required_keys") or [])
         for key in required_keys:
@@ -68,7 +75,11 @@ class FakeJudge:
                     passed=False,
                     error_code="required_key_missing",
                     evidence=f"missing key {key!r}; got keys {sorted(parsed.keys())!r}",
-                    trace={"expectation_type": "json", "valid_json": True, "missing_key": key},
+                    trace={
+                        "expectation_type": "json",
+                        "valid_json": True,
+                        "missing_key": key
+                    },
                 )
         expected_values = dict(case.expectation.get("expected_values") or {})
         for key, expected_value in expected_values.items():
@@ -79,7 +90,11 @@ class FakeJudge:
                     passed=False,
                     error_code="json_value_mismatch",
                     evidence=f"{key!r}: expected {expected_value!r}, got {actual_value!r}",
-                    trace={"expectation_type": "json", "valid_json": True, "mismatch_key": key},
+                    trace={
+                        "expectation_type": "json",
+                        "valid_json": True,
+                        "mismatch_key": key
+                    },
                 )
         return JudgeOutcome(score=1.0, passed=True, trace={"expectation_type": "json", "valid_json": True})
 
@@ -91,7 +106,10 @@ class FakeJudge:
                 passed=False,
                 error_code="exact_answer_mismatch",
                 evidence=f"expected normalized {expected!r}, got {output!r}",
-                trace={"expectation_type": "exact", "expected": expected},
+                trace={
+                    "expectation_type": "exact",
+                    "expected": expected
+                },
             )
         return JudgeOutcome(score=1.0, passed=True, trace={"expectation_type": "exact", "expected": expected})
 
@@ -105,7 +123,10 @@ class FakeJudge:
                     passed=False,
                     error_code="forbidden_pattern",
                     evidence=f"forbidden pattern {pattern!r} was present",
-                    trace={"expectation_type": "rubric", "forbidden_pattern": pattern},
+                    trace={
+                        "expectation_type": "rubric",
+                        "forbidden_pattern": pattern
+                    },
                 )
 
         must_include = [str(item) for item in case.expectation.get("must_include") or []]
@@ -116,7 +137,10 @@ class FakeJudge:
                 passed=False,
                 error_code="missing_rubric_terms",
                 evidence=f"missing terms: {missing!r}",
-                trace={"expectation_type": "rubric", "missing_terms": missing},
+                trace={
+                    "expectation_type": "rubric",
+                    "missing_terms": missing
+                },
             )
 
         max_chars = case.expectation.get("max_chars")
@@ -126,7 +150,11 @@ class FakeJudge:
                 passed=False,
                 error_code="max_chars_exceeded",
                 evidence=f"length {len(output)} exceeded max_chars {max_chars}",
-                trace={"expectation_type": "rubric", "length": len(output), "max_chars": int(max_chars)},
+                trace={
+                    "expectation_type": "rubric",
+                    "length": len(output),
+                    "max_chars": int(max_chars)
+                },
             )
 
         return JudgeOutcome(score=1.0, passed=True, trace={"expectation_type": "rubric"})
@@ -140,7 +168,10 @@ class FakeJudge:
                 passed=False,
                 error_code="tool_call_error",
                 evidence=f"tool output was not JSON at char {exc.pos}: {exc.msg}",
-                trace={"expectation_type": "tool", "valid_json": False},
+                trace={
+                    "expectation_type": "tool",
+                    "valid_json": False
+                },
             )
         expected_tool = case.expectation.get("expected_tool")
         if parsed.get("tool") != expected_tool:
@@ -149,7 +180,10 @@ class FakeJudge:
                 passed=False,
                 error_code="tool_call_error",
                 evidence=f"expected tool {expected_tool!r}, got {parsed.get('tool')!r}",
-                trace={"expectation_type": "tool", "expected_tool": expected_tool},
+                trace={
+                    "expectation_type": "tool",
+                    "expected_tool": expected_tool
+                },
             )
         expected_args = dict(case.expectation.get("expected_args") or {})
         actual_args = parsed.get("args") or {}
@@ -160,7 +194,10 @@ class FakeJudge:
                     passed=False,
                     error_code="parameter_error",
                     evidence=f"arg {key!r}: expected {expected_value!r}, got {actual_args.get(key)!r}",
-                    trace={"expectation_type": "tool", "arg": key},
+                    trace={
+                        "expectation_type": "tool",
+                        "arg": key
+                    },
                 )
         return JudgeOutcome(score=1.0, passed=True, trace={"expectation_type": "tool"})
 

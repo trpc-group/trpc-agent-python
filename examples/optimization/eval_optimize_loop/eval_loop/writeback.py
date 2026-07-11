@@ -206,9 +206,8 @@ def temporary_prompt_bundle(
             name for name, candidate_hash in candidate_hashes.items() if installed_hashes[name] != candidate_hash
         ]
         if candidate_mismatches:
-            raise ConcurrentPromptUpdateError(
-                "candidate prompt files changed before temporary evaluation: " f"{', '.join(candidate_mismatches)}"
-            )
+            raise ConcurrentPromptUpdateError("candidate prompt files changed before temporary evaluation: "
+                                              f"{', '.join(candidate_mismatches)}")
         yield
     except BaseException as primary_error:
         failures = _restore_snapshot(snapshot, written_hashes)
@@ -225,9 +224,7 @@ def temporary_prompt_bundle(
         failures = _restore_snapshot(snapshot, written_hashes)
         restoration_error = _restoration_error(snapshot, failures)
         if restoration_error is not None:
-            raise PromptRestorationError(
-                f"failed to restore prompt snapshot: {restoration_error}"
-            )
+            raise PromptRestorationError(f"failed to restore prompt snapshot: {restoration_error}")
 
 
 def commit_prompt_bundle(
@@ -258,9 +255,8 @@ def commit_prompt_bundle(
             name for name, candidate_hash in candidate_hashes.items() if applied_hashes[name] != candidate_hash
         ]
         if candidate_mismatches:
-            raise ConcurrentPromptUpdateError(
-                "candidate prompt files changed before final verification: " f"{', '.join(candidate_mismatches)}"
-            )
+            raise ConcurrentPromptUpdateError("candidate prompt files changed before final verification: "
+                                              f"{', '.join(candidate_mismatches)}")
     except (OSError, ConcurrentPromptUpdateError) as error:
         if isinstance(error, ConcurrentPromptUpdateError) and not written_hashes:
             raise
@@ -272,11 +268,9 @@ def commit_prompt_bundle(
             after_hashes = {}
             rollback_failures.append(f"hash verification: {hash_error}")
         else:
-            rollback_failures.extend(
-                f"{name}: final hash differs from snapshot"
-                for name, expected_hash in expected_hashes.items()
-                if after_hashes[name] != expected_hash
-            )
+            rollback_failures.extend(f"{name}: final hash differs from snapshot"
+                                     for name, expected_hash in expected_hashes.items()
+                                     if after_hashes[name] != expected_hash)
 
         error_message = f"prompt commit failed: {error}"
         if rollback_failures:
