@@ -1528,6 +1528,70 @@ def test_optimizer_round_audit_redacts_and_rejects_nonfinite_numeric_evidence(tm
     assert Path(record["prompt_paths"]["system_prompt"]).read_text(encoding="utf-8") == round_prompt
 
 
+def test_optimizer_round_audit_normalizes_nonfinite_round_id(tmp_path: Path):
+    module = load_pipeline_module()
+    round_prompt = "round prompt"
+    records = module.write_optimizer_round_artifacts(
+        run_dir=tmp_path,
+        rounds=[
+            SimpleNamespace(
+                round=float("nan"),
+                optimized_field_names=["system_prompt"],
+                candidate_prompts={"system_prompt": round_prompt},
+                validation_pass_rate=0.5,
+                metric_breakdown={ROUTE_TOOL_ARGS_METRIC: 0.5},
+                accepted=True,
+                acceptance_reason="improved validation",
+                skip_reason=None,
+                error_message=None,
+                failed_case_ids=[],
+                round_llm_cost=0.01,
+                round_token_usage={"prompt": 8, "completion": 2, "total": 10},
+                duration_seconds=0.25,
+            )
+        ],
+    )
+    record = records[0]
+
+    json.dumps(records, allow_nan=False)
+    assert isinstance(record["round"], int)
+    assert record["round"] > 0
+    assert record["accepted"] is False
+    assert "invalid round identifier" in record["decision_reason"]
+    assert record["prompt_sha256"]["system_prompt"] == module.sha256_text(round_prompt)
+    assert Path(record["prompt_paths"]["system_prompt"]).read_text(encoding="utf-8") == round_prompt
+
+
+def test_optimizer_round_audit_rejects_out_of_range_validation_rate(tmp_path: Path):
+    module = load_pipeline_module()
+    records = module.write_optimizer_round_artifacts(
+        run_dir=tmp_path,
+        rounds=[
+            SimpleNamespace(
+                round=2,
+                optimized_field_names=["system_prompt"],
+                candidate_prompts={"system_prompt": "round prompt"},
+                validation_pass_rate=1.5,
+                metric_breakdown={ROUTE_TOOL_ARGS_METRIC: 1.0},
+                accepted=True,
+                acceptance_reason="improved validation",
+                skip_reason=None,
+                error_message=None,
+                failed_case_ids=[],
+                round_llm_cost=0.01,
+                round_token_usage={"prompt": 8, "completion": 2, "total": 10},
+                duration_seconds=0.25,
+            )
+        ],
+    )
+    record = records[0]
+
+    json.dumps(records, allow_nan=False)
+    assert 0.0 <= record["validation_pass_rate"] <= 1.0
+    assert record["accepted"] is False
+    assert "validation_pass_rate" in record["decision_reason"]
+
+
 @pytest.mark.asyncio
 async def test_online_optimizer_validation_improvement_is_accepted(
     tmp_path: Path,

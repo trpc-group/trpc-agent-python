@@ -183,14 +183,38 @@ def _normalized_round_count(value: Any) -> tuple[int, bool]:
     return 0, True
 
 
+def _normalized_round_identifier(value: Any) -> tuple[int, bool]:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return 0, True
+    if isinstance(value, float) and not math.isfinite(value):
+        return 0, True
+    if value <= 0 or (isinstance(value, float) and not value.is_integer()):
+        return 0, True
+    return int(value), False
+
+
 def write_optimizer_round_artifacts(
     *,
     run_dir: Path,
     rounds: list[Any],
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
+    reserved_round_ids = {
+        round_id
+        for round_record in rounds
+        for round_id, invalid in [_normalized_round_identifier(round_record.round)]
+        if not invalid
+    }
+    used_round_ids: set[int] = set()
+    next_fallback_round_id = 1
     for round_record in rounds:
-        round_id = int(round_record.round)
+        round_id, invalid_round_id = _normalized_round_identifier(round_record.round)
+        if invalid_round_id:
+            while next_fallback_round_id in reserved_round_ids or next_fallback_round_id in used_round_ids:
+                next_fallback_round_id += 1
+            round_id = next_fallback_round_id
+            next_fallback_round_id += 1
+        used_round_ids.add(round_id)
         round_dir = run_dir / "prompts" / f"optimizer_round_{round_id:03d}"
         round_dir.mkdir(parents=True, exist_ok=True)
         prompt_paths: dict[str, str] = {}
@@ -204,6 +228,9 @@ def write_optimizer_round_artifacts(
             round_record.validation_pass_rate,
             nonnegative=True,
         )
+        invalid_rate_bounds = invalid_validation_pass_rate or validation_pass_rate > 1
+        if invalid_rate_bounds:
+            validation_pass_rate = 0.0
         metric_breakdown: dict[str, int | float] = {}
         invalid_numeric_evidence = invalid_validation_pass_rate
         raw_metric_breakdown = getattr(round_record, "metric_breakdown", {})
@@ -238,9 +265,14 @@ def write_optimizer_round_artifacts(
             or round_record.error_message
         ) or "optimizer reported no reason"
         accepted = bool(round_record.accepted)
-        if invalid_numeric_evidence:
+        if invalid_round_id or invalid_numeric_evidence or invalid_rate_bounds:
             accepted = False
-            decision_reason += "; invalid numeric round evidence was normalized and rejected"
+            if invalid_numeric_evidence:
+                decision_reason += "; invalid numeric round evidence was normalized and rejected"
+            if invalid_round_id:
+                decision_reason += f"; invalid round identifier was normalized to {round_id} and rejected"
+            if invalid_rate_bounds:
+                decision_reason += "; validation_pass_rate was out of bounds and normalized to 0.0; round rejected"
         records.append({
             "round": round_id,
             "optimized_field_names": list(round_record.optimized_field_names),
