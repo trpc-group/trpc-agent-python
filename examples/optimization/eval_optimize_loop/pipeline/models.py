@@ -27,7 +27,12 @@ class FailureType(str, Enum):
 
 class ToolCallSnapshot(StrictModel):
     name: str
-    arguments: dict[str, Any] = Field(default_factory=dict)
+    arguments: Any = Field(default_factory=dict)
+
+
+class ToolResponseSnapshot(StrictModel):
+    name: str
+    response: Any = None
 
 
 class FailureAttribution(StrictModel):
@@ -59,6 +64,7 @@ class CaseSnapshot(StrictModel):
     expected_response: str | None = None
     tool_calls: list[ToolCallSnapshot] = Field(default_factory=list)
     expected_tool_calls: list[ToolCallSnapshot] = Field(default_factory=list)
+    tool_responses: list[ToolResponseSnapshot] = Field(default_factory=list)
 
 
 class CaseDelta(StrictModel):

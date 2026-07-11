@@ -7,8 +7,9 @@ from typing import Literal
 
 from trpc_agent_sdk.evaluation._eval_metrics import EvalStatus
 from trpc_agent_sdk.evaluation._eval_result import EvalCaseResult
+from trpc_agent_sdk.evaluation._eval_case import get_all_tool_calls, get_all_tool_responses
 
-from .models import CaseSnapshot, FailureType, ToolCallSnapshot
+from .models import CaseSnapshot, FailureType, ToolCallSnapshot, ToolResponseSnapshot
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,20 @@ def _text(content: object) -> str | None:
     if not parts:
         return None
     return "".join(part.text or "" for part in parts)
+
+
+def _tool_call_snapshot(tool_call: object) -> ToolCallSnapshot:
+    return ToolCallSnapshot(
+        name=str(getattr(tool_call, "name", "") or ""),
+        arguments=getattr(tool_call, "args", None),
+    )
+
+
+def _tool_response_snapshot(tool_response: object) -> ToolResponseSnapshot:
+    return ToolResponseSnapshot(
+        name=str(getattr(tool_response, "name", "") or ""),
+        response=getattr(tool_response, "response", None),
+    )
 
 
 def normalize_eval_results(
@@ -92,6 +107,23 @@ def normalize_eval_results(
         expected = _text(invocation.expected_invocation.final_response) if invocation and invocation.expected_invocation else None
         parsed_actual = parse_fake_response(actual)
         parsed_expected = parse_fake_response(expected)
+        first_invocations = first.eval_metric_result_per_invocation
+        tool_calls = [
+            _tool_call_snapshot(tool_call)
+            for run_invocation in first_invocations
+            for tool_call in get_all_tool_calls(run_invocation.actual_invocation.intermediate_data)
+        ]
+        expected_tool_calls = [
+            _tool_call_snapshot(tool_call)
+            for run_invocation in first_invocations
+            if run_invocation.expected_invocation is not None
+            for tool_call in get_all_tool_calls(run_invocation.expected_invocation.intermediate_data)
+        ]
+        tool_responses = [
+            _tool_response_snapshot(tool_response)
+            for run_invocation in first_invocations
+            for tool_response in get_all_tool_responses(run_invocation.actual_invocation.intermediate_data)
+        ]
         parsed_run_responses = [
             (
                 parse_fake_response(_text(run_invocation.actual_invocation.final_response)),
@@ -132,8 +164,9 @@ def normalize_eval_results(
             metric_reasons=metric_reasons, execution_errors=execution_errors, failure_reasons=failure_reasons, failure_types=failure_types,
             final_response=actual, expected_response=expected,
             trace_digest="sha256:" + hashlib.sha256((actual or "").encode("utf-8")).hexdigest(),
-            tool_calls=parsed_actual.tool_calls,
-            expected_tool_calls=parsed_expected.tool_calls,
+            tool_calls=tool_calls,
+            expected_tool_calls=expected_tool_calls,
+            tool_responses=tool_responses,
         )
     return snapshots
 

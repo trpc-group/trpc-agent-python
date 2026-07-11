@@ -37,6 +37,22 @@ def _judge_attribution(case: CaseSnapshot, judge: Callable[..., Any]) -> Failure
     return candidate.model_copy(update={"eval_id": case.eval_id, "source": "judge"})
 
 
+def _tool_response_failure(case: CaseSnapshot) -> str | None:
+    for response in case.tool_responses:
+        value = response.response
+        if value is None or value == {}:
+            return f"tool response for {response.name or '<unnamed>'} was empty"
+        if isinstance(value, dict):
+            if value.get("error"):
+                return f"tool response for {response.name or '<unnamed>'} contained an error: {value['error']}"
+            if value.get("failed") is True:
+                return f"tool response for {response.name or '<unnamed>'} was failed"
+            status = value.get("status")
+            if isinstance(status, str) and status.lower() in {"error", "failed"}:
+                return f"tool response for {response.name or '<unnamed>'} had status {status}"
+    return None
+
+
 def attribute_case(case: CaseSnapshot, *, judge: Callable[..., Any] | None = None) -> FailureAttribution:
     """Classify a failed evaluation using deterministic evidence before any judge."""
     reasons = _reasons(case)
@@ -62,6 +78,10 @@ def attribute_case(case: CaseSnapshot, *, judge: Callable[..., Any] | None = Non
 
     if any(actual.arguments != expected.arguments for actual, expected in zip(case.tool_calls, case.expected_tool_calls)):
         return _rule(case, FailureType.TOOL_ARGUMENT_ERROR, "tool names matched but tool arguments differed")
+
+    response_failure = _tool_response_failure(case)
+    if response_failure is not None:
+        return _rule(case, FailureType.TOOL_EXECUTION_ERROR, response_failure)
 
     tool_response_markers = ("tool response", "tool execution", "tool result")
     if any(marker in reason_text for marker in tool_response_markers) and any(
