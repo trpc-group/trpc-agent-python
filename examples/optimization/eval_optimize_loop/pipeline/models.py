@@ -140,14 +140,21 @@ class PipelineSettings(StrictModel):
     scoring_epsilon: float = 0.000001
     metric_weights: dict[str, float] = Field(default_factory=lambda: {"final_response_avg_score": 0.6, "fake_rubric_score": 0.4})
     metric_floors: dict[str, float] = Field(default_factory=dict)
+    candidate_validation: "CandidateValidationSettings" = Field(default_factory=lambda: CandidateValidationSettings())
+
+
+class CandidateValidationSettings(StrictModel):
+    scope: Literal["best_only", "accepted_rounds", "all"] = "accepted_rounds"
 
 
 class CandidateRecord(StrictModel):
     candidate_id: str
     prompts: dict[str, str]
-    source: Literal["fixture"] = "fixture"
+    source: Literal["fixture", "agent_optimizer"] = "fixture"
     generation_cost_usd: float = 0.0
     round_index: int | None = None
+    optimizer_accepted: bool | None = None
+    optimizer_reason: str = ""
 
 
 class CandidateReport(StrictModel):
@@ -162,7 +169,7 @@ class CandidateReport(StrictModel):
 
 class OptimizationReport(StrictModel):
     schema_version: str = "1.0"
-    mode: Literal["fake", "trace"]
+    mode: Literal["fake", "trace", "live"]
     seed: int
     selected_candidate_id: str | None = None
     candidates: list[CandidateReport] = Field(default_factory=list)
@@ -171,5 +178,5 @@ class OptimizationReport(StrictModel):
     source_integrity: Literal["restored", "unknown"] = "restored"
 
     @classmethod
-    def empty(cls, *, mode: Literal["fake", "trace"], seed: int) -> "OptimizationReport":
+    def empty(cls, *, mode: Literal["fake", "trace", "live"], seed: int) -> "OptimizationReport":
         return cls(mode=mode, seed=seed)

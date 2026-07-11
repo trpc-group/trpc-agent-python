@@ -6,6 +6,20 @@
     ],
     "num_runs": 1
   },
+  "optimize": {
+    "eval_case_parallelism": 1,
+    "stop": {"required_metrics": "all"},
+    "algorithm": {
+      "name": "gepa_reflective",
+      "seed": 42,
+      "reflection_lm": {
+        "model_name": "${TRPC_AGENT_MODEL_NAME}",
+        "base_url": "${TRPC_AGENT_BASE_URL}",
+        "api_key": "${TRPC_AGENT_API_KEY}"
+      },
+      "max_metric_calls": 10
+    }
+  },
   "pipeline": {
     "reproducibility": {"seed": 42},
     "gate": {"min_validation_score_delta": 0.05, "critical_case_ids": ["val_refund_critical"]}
