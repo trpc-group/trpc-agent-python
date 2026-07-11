@@ -12,19 +12,31 @@ class StrictModel(BaseModel):
 
 
 class FailureType(str, Enum):
+    TIMEOUT = "timeout"
     EXECUTION_ERROR = "execution_error"
+    TOOL_EXECUTION_ERROR = "tool_execution_error"
     FINAL_RESPONSE_MISMATCH = "final_response_mismatch"
     TOOL_SELECTION_ERROR = "tool_selection_error"
     TOOL_ARGUMENT_ERROR = "tool_argument_error"
     FORMAT_VIOLATION = "format_violation"
     KNOWLEDGE_RECALL_INSUFFICIENT = "knowledge_recall_insufficient"
     LLM_RUBRIC_NOT_MET = "llm_rubric_not_met"
+    SAFETY_VIOLATION = "safety_violation"
     UNKNOWN = "unknown"
 
 
 class ToolCallSnapshot(StrictModel):
     name: str
     arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+class FailureAttribution(StrictModel):
+    eval_id: str
+    primary_type: FailureType
+    secondary_types: list[FailureType] = Field(default_factory=list)
+    confidence: float = Field(ge=0.0, le=1.0)
+    evidence: list[str] = Field(min_length=1)
+    source: Literal["rule", "judge", "fallback"]
 
 
 class CaseSnapshot(StrictModel):
@@ -39,8 +51,10 @@ class CaseSnapshot(StrictModel):
     metric_passed: dict[str, bool]
     trace_digest: str
     metric_reasons: dict[str, list[str]] = Field(default_factory=dict)
+    execution_errors: list[str] = Field(default_factory=list)
     failure_reasons: list[str] = Field(default_factory=list)
     failure_types: list[FailureType] = Field(default_factory=list)
+    failure_attribution: FailureAttribution | None = None
     final_response: str | None = None
     expected_response: str | None = None
     tool_calls: list[ToolCallSnapshot] = Field(default_factory=list)
@@ -142,7 +156,7 @@ class CandidateReport(StrictModel):
 
 class OptimizationReport(StrictModel):
     schema_version: str = "1.0"
-    mode: Literal["fake"]
+    mode: Literal["fake", "trace"]
     seed: int
     selected_candidate_id: str | None = None
     candidates: list[CandidateReport] = Field(default_factory=list)
@@ -151,5 +165,5 @@ class OptimizationReport(StrictModel):
     source_integrity: Literal["restored", "unknown"] = "restored"
 
     @classmethod
-    def empty(cls, *, mode: Literal["fake"], seed: int) -> "OptimizationReport":
+    def empty(cls, *, mode: Literal["fake", "trace"], seed: int) -> "OptimizationReport":
         return cls(mode=mode, seed=seed)

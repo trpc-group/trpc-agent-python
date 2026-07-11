@@ -124,11 +124,12 @@ def normalize_eval_results(
             [actual_parsed for actual_parsed, _ in parsed_run_responses],
             [expected_parsed for _, expected_parsed in parsed_run_responses],
         )
+        execution_errors = [run.error_message for run in runs if run.error_message]
         snapshots[eval_id] = CaseSnapshot(
             eval_id=eval_id, split=split, run_count=len(runs), passed=all(item.final_eval_status == EvalStatus.PASSED for item in runs),
             hard_failed=any(item.error_message for item in runs), aggregate_score=weighted / total_weight if total_weight else 0.0,
             metric_scores=averaged, metric_thresholds=metric_thresholds, metric_passed=metric_passed,
-            metric_reasons=metric_reasons, failure_reasons=failure_reasons, failure_types=failure_types,
+            metric_reasons=metric_reasons, execution_errors=execution_errors, failure_reasons=failure_reasons, failure_types=failure_types,
             final_response=actual, expected_response=expected,
             trace_digest="sha256:" + hashlib.sha256((actual or "").encode("utf-8")).hexdigest(),
             tool_calls=parsed_actual.tool_calls,
@@ -145,7 +146,10 @@ def _failure_types(
     expected: list[FakeResponseSnapshot],
 ) -> list[FailureType]:
     failure_types: set[FailureType] = set()
-    if any(run.error_message for run in runs):
+    error_messages = [run.error_message for run in runs if run.error_message]
+    if any("timeout" in error.lower() for error in error_messages):
+        failure_types.add(FailureType.TIMEOUT)
+    elif error_messages:
         failure_types.add(FailureType.EXECUTION_ERROR)
     if any(item.failure_reason for item in actual + expected):
         failure_types.add(FailureType.FORMAT_VIOLATION)
@@ -157,6 +161,8 @@ def _failure_types(
             failure_types.add(FailureType.TOOL_SELECTION_ERROR)
         if "tool arguments" in reasons:
             failure_types.add(FailureType.TOOL_ARGUMENT_ERROR)
+        if "tool response" in reasons and any(marker in reasons for marker in ("failed", "error", "empty")):
+            failure_types.add(FailureType.TOOL_EXECUTION_ERROR)
         if "refuse to guess" in reasons:
             failure_types.add(FailureType.KNOWLEDGE_RECALL_INSUFFICIENT)
         if metric_name == "final_response_avg_score":

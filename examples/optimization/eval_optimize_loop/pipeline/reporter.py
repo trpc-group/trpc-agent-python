@@ -27,6 +27,20 @@ def write_reports(report: OptimizationReport, output_dir: Path) -> tuple[Path, P
     for name, split in (("train", report.baseline_train), ("validation", report.baseline_validation)):
         if split is not None:
             lines.append(f"| {name} | {split.pass_rate:.3f} | {split.aggregate_score:.3f} |")
+    baseline_failures = [
+        case
+        for split in (report.baseline_train, report.baseline_validation)
+        if split is not None
+        for case in split.cases
+        if case.failure_attribution is not None
+    ]
+    if baseline_failures:
+        lines.extend(["", "## Baseline failure attribution", "", "| Case | Primary type | Source | Evidence |", "| --- | --- | --- | --- |"])
+        for case in baseline_failures:
+            attribution = case.failure_attribution
+            lines.append(
+                f"| `{case.eval_id}` | `{attribution.primary_type.value}` | `{attribution.source}` | {'; '.join(attribution.evidence)} |"
+            )
     lines.extend([
         "",
         "## Candidates",
@@ -74,7 +88,7 @@ def write_reports(report: OptimizationReport, output_dir: Path) -> tuple[Path, P
         "## Reproduction",
         "",
         "```text",
-        "python examples/optimization/eval_optimize_loop/run_pipeline.py --mode fake --output-dir <output-dir>",
+        f"python examples/optimization/eval_optimize_loop/run_pipeline.py --mode {report.mode} --output-dir <output-dir>",
         "```",
     ])
     markdown_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
