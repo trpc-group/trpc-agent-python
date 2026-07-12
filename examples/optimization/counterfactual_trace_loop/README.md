@@ -2,14 +2,20 @@
 
 This example closes evaluation and prompt optimization with evidence from trace interventions. Unlike loops that classify a failure from reason text or sample metadata, it deep-copies the actual trace, changes one execution surface, and sends the counterfactual `EvalCase` through the same public `AgentEvaluator` metrics. Evaluation-data, evaluator, and infrastructure failures are excluded from prompt optimization.
 
+## Distinction from other Issue #91 proposals
+
+PR #159 uses rule-first attribution from failure text and static expected/actual trace differences. PR #161 replays optimizer candidates and combines static trace/rubric attribution with bootstrap and Pareto selection. This example addresses a different question: which minimal trace intervention causally repairs the failing metric when the same `AgentEvaluator` evaluates it again?
+
+The attribution evidence is therefore an observed before/after metric delta from `replace_final_response`, `replace_tool_name`, `replace_tool_arguments`, or a bounded combination. Static trace differences can propose an intervention, but cannot by themselves establish the diagnosis. The same mechanism is reused after candidate validation to locate regressions. No case ID, expected failure label, attribution hint, or hand-authored metric score participates in the decision.
+
 ## Quick start
 
 ```bash
-python examples/optimization/eval_optimize_loop/run_counterfactual_probe.py
-python examples/optimization/eval_optimize_loop/run_pipeline.py --mode fake
-python examples/optimization/eval_optimize_loop/run_pipeline.py --mode trace
-python examples/optimization/eval_optimize_loop/run_pipeline.py --mode fake --candidate-profile accepted
-python examples/optimization/eval_optimize_loop/run_pipeline.py --mode fake --candidate-profile ineffective
+python examples/optimization/counterfactual_trace_loop/run_counterfactual_probe.py
+python examples/optimization/counterfactual_trace_loop/run_pipeline.py --mode fake
+python examples/optimization/counterfactual_trace_loop/run_pipeline.py --mode trace
+python examples/optimization/counterfactual_trace_loop/run_pipeline.py --mode fake --candidate-profile accepted
+python examples/optimization/counterfactual_trace_loop/run_pipeline.py --mode fake --candidate-profile ineffective
 ```
 
 Both fake and trace modes need no API key. Trace mode replays `actual_conversation`; `conversation` remains the expected trace. The fake optimizer is prompt-sensitive and introduces an intentionally broad billing rule without reading case IDs.

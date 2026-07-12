@@ -11,7 +11,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-from examples.optimization.eval_optimize_loop.pipeline.pipeline import run_pipeline  # noqa: E402
+from examples.optimization.counterfactual_trace_loop.pipeline.pipeline import run_pipeline  # noqa: E402
 
 
 def main():

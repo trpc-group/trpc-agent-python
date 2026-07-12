@@ -14,11 +14,11 @@ import pytest
 
 from trpc_agent_sdk.types import FunctionResponse
 
-from examples.optimization.eval_optimize_loop.pipeline.interventions import (
+from examples.optimization.counterfactual_trace_loop.pipeline.interventions import (
     InterventionKind,
     build_counterfactual,
 )
-from examples.optimization.eval_optimize_loop.pipeline.probe import (
+from examples.optimization.counterfactual_trace_loop.pipeline.probe import (
     build_probe_cases,
     evaluate_trace_cases,
     run_counterfactual_probe,

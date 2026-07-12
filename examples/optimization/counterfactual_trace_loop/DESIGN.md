@@ -8,6 +8,10 @@
 
 ## 技术附录
 
+### 与现有方案的边界
+
+PR #159 主要依据失败文本和预期/实际轨迹的静态差异归因；PR #161 重点在优化候选回放、bootstrap 与 Pareto 决策。本方案不把静态差异直接视为原因，而是把它转化为局部反事实干预，再由同一个 `AgentEvaluator` 重评。只有可重复观察到 metric 修复的干预才形成归因证据，且该机制同时用于 baseline 失败和 candidate 新增退化。
+
 - 反事实归因：结论来自真实 metric delta，不依赖 case ID、failure reason 或人工标签。
 - Prompt actionability：只有 agent behavior failure 能够选择优化表面。
 - Gate：关键检查必须全部通过，证据不足时以 `NEEDS_REVIEW` 拒绝。

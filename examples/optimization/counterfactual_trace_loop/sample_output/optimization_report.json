@@ -947,7 +947,7 @@
       {
         "name": "latency_budget",
         "passed": true,
-        "observed": 0.29256009999880916,
+        "observed": 0.3700505000015255,
         "threshold": 180,
         "reason": "passed"
       },
@@ -970,7 +970,7 @@
   "audit": {
     "seed": 42,
     "mode": "trace",
-    "duration_seconds": 0.29256009999880916,
+    "duration_seconds": 0.3700505000015255,
     "cost": {
       "total": 0.0
     },
@@ -997,7 +997,7 @@
         "system_prompt": "4e1c6a4ef268a492679ad6888230217d874733817e27137644f3364038642be9"
       }
     },
-    "reproduction_command": "python examples/optimization/eval_optimize_loop/run_pipeline.py --mode trace --candidate-profile overfit"
+    "reproduction_command": "python examples/optimization/counterfactual_trace_loop/run_pipeline.py --mode trace --candidate-profile overfit"
   },
   "known_limitations": [
     "A local trace edit can be structurally valid but semantically incoherent with an original tool response.",

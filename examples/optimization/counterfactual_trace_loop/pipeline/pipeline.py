@@ -366,7 +366,7 @@ async def run_pipeline(
             "prompt_hashes": {k: _sha(v) for k, v in prompt_paths.items()},
             "write_back": write_back,
             "reproduction_command": (
-                "python examples/optimization/eval_optimize_loop/run_pipeline.py "
+                "python examples/optimization/counterfactual_trace_loop/run_pipeline.py "
                 f"--mode {mode} --candidate-profile {candidate_profile}"
             ),
         },

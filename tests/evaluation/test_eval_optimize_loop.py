@@ -8,24 +8,24 @@ from types import SimpleNamespace
 
 import pytest
 
-from examples.optimization.eval_optimize_loop.pipeline.diagnosis import (
+from examples.optimization.counterfactual_trace_loop.pipeline.diagnosis import (
     InfrastructureFailure,
     attribute_from_evidence,
     build_failure_digest,
     classify_non_agent_failure,
     select_target_prompts,
 )
-from examples.optimization.eval_optimize_loop.pipeline.gate import evaluate_gate
-from examples.optimization.eval_optimize_loop.pipeline.input_audit import audit_eval_cases
-from examples.optimization.eval_optimize_loop.pipeline.models import CounterfactualEvidence
-from examples.optimization.eval_optimize_loop.fake.model import generate_trace
-from examples.optimization.eval_optimize_loop.pipeline.optimizer import (
+from examples.optimization.counterfactual_trace_loop.pipeline.gate import evaluate_gate
+from examples.optimization.counterfactual_trace_loop.pipeline.input_audit import audit_eval_cases
+from examples.optimization.counterfactual_trace_loop.pipeline.models import CounterfactualEvidence
+from examples.optimization.counterfactual_trace_loop.fake.model import generate_trace
+from examples.optimization.counterfactual_trace_loop.pipeline.optimizer import (
     apply_if_accepted,
     run_real_optimizer,
 )
-from examples.optimization.eval_optimize_loop.pipeline.pipeline import run_pipeline
-from examples.optimization.eval_optimize_loop.pipeline.pipeline import _evaluate_with_triage
-from examples.optimization.eval_optimize_loop.pipeline.probe import build_probe_cases
+from examples.optimization.counterfactual_trace_loop.pipeline.pipeline import run_pipeline
+from examples.optimization.counterfactual_trace_loop.pipeline.pipeline import _evaluate_with_triage
+from examples.optimization.counterfactual_trace_loop.pipeline.probe import build_probe_cases
 
 
 def _evidence(name: str, passed: bool, repaired: list[str]) -> CounterfactualEvidence:
@@ -289,7 +289,7 @@ async def test_fake_and_trace_pipeline_have_same_schema_without_api_key(tmp_path
     for key in list(__import__("os").environ):
         if "API_KEY" in key:
             monkeypatch.delenv(key, raising=False)
-    base = Path(__file__).parents[2] / "examples" / "optimization" / "eval_optimize_loop"
+    base = Path(__file__).parents[2] / "examples" / "optimization" / "counterfactual_trace_loop"
     fake = await run_pipeline(base, "fake", tmp_path / "fake")
     trace = await run_pipeline(base, "trace", tmp_path / "trace")
     assert fake.keys() == trace.keys()
@@ -302,7 +302,7 @@ async def test_fake_and_trace_pipeline_have_same_schema_without_api_key(tmp_path
 
 @pytest.mark.asyncio
 async def test_real_evaluations_drive_accept_overfit_and_ineffective_decisions(tmp_path):
-    base = Path(__file__).parents[2] / "examples" / "optimization" / "eval_optimize_loop"
+    base = Path(__file__).parents[2] / "examples" / "optimization" / "counterfactual_trace_loop"
     accepted = await run_pipeline(base, "fake", tmp_path / "accepted", candidate_profile="accepted")
     overfit = await run_pipeline(base, "fake", tmp_path / "overfit", candidate_profile="overfit")
     ineffective = await run_pipeline(base, "fake", tmp_path / "ineffective", candidate_profile="ineffective")
@@ -317,7 +317,7 @@ async def test_real_evaluations_drive_accept_overfit_and_ineffective_decisions(t
 
 @pytest.mark.asyncio
 async def test_real_optimizer_receives_filtered_train_and_never_updates_source(tmp_path, monkeypatch):
-    base = Path(__file__).parents[2] / "examples" / "optimization" / "eval_optimize_loop"
+    base = Path(__file__).parents[2] / "examples" / "optimization" / "counterfactual_trace_loop"
     captured = {}
 
     async def spy(**kwargs):
@@ -347,7 +347,7 @@ async def test_real_optimizer_receives_filtered_train_and_never_updates_source(t
         )
 
     monkeypatch.setattr(
-        "examples.optimization.eval_optimize_loop.pipeline.optimizer.AgentOptimizer.optimize",
+        "examples.optimization.counterfactual_trace_loop.pipeline.optimizer.AgentOptimizer.optimize",
         spy,
     )
     result = await run_real_optimizer(
@@ -385,7 +385,7 @@ async def test_real_optimizer_receives_filtered_train_and_never_updates_source(t
 
 @pytest.mark.asyncio
 async def test_real_optimizer_restores_prompt_if_optimizer_mutates_then_fails(tmp_path, monkeypatch):
-    base = Path(__file__).parents[2] / "examples" / "optimization" / "eval_optimize_loop"
+    base = Path(__file__).parents[2] / "examples" / "optimization" / "counterfactual_trace_loop"
     prompt = tmp_path / "router.md"
     prompt.write_text("baseline", encoding="utf-8")
 
@@ -394,7 +394,7 @@ async def test_real_optimizer_restores_prompt_if_optimizer_mutates_then_fails(tm
         raise RuntimeError("optimizer failed")
 
     monkeypatch.setattr(
-        "examples.optimization.eval_optimize_loop.pipeline.optimizer.AgentOptimizer.optimize",
+        "examples.optimization.counterfactual_trace_loop.pipeline.optimizer.AgentOptimizer.optimize",
         broken_optimizer,
     )
 
@@ -414,7 +414,7 @@ async def test_real_optimizer_restores_prompt_if_optimizer_mutates_then_fails(tm
 
 @pytest.mark.asyncio
 async def test_pipeline_rejects_unsupported_real_mode(tmp_path):
-    base = Path(__file__).parents[2] / "examples" / "optimization" / "eval_optimize_loop"
+    base = Path(__file__).parents[2] / "examples" / "optimization" / "counterfactual_trace_loop"
 
     with pytest.raises(ValueError, match="fake or trace"):
         await run_pipeline(base, "real", tmp_path)
@@ -422,7 +422,7 @@ async def test_pipeline_rejects_unsupported_real_mode(tmp_path):
 
 @pytest.mark.asyncio
 async def test_report_contains_trace_status_evidence_and_limitations(tmp_path):
-    base = Path(__file__).parents[2] / "examples" / "optimization" / "eval_optimize_loop"
+    base = Path(__file__).parents[2] / "examples" / "optimization" / "counterfactual_trace_loop"
     report = await run_pipeline(base, "trace", tmp_path)
     case = report["baseline"]["train"]["case_results"][0]
     assert {"case_id", "passed", "metrics", "failure_reason", "trace_summary"} <= case.keys()
@@ -435,7 +435,7 @@ async def test_report_contains_trace_status_evidence_and_limitations(tmp_path):
 
 @pytest.mark.asyncio
 async def test_fake_round_audit_contains_candidate_prompts_and_evaluation(tmp_path):
-    base = Path(__file__).parents[2] / "examples" / "optimization" / "eval_optimize_loop"
+    base = Path(__file__).parents[2] / "examples" / "optimization" / "counterfactual_trace_loop"
 
     report = await run_pipeline(base, "fake", tmp_path, candidate_profile="accepted")
 
@@ -450,7 +450,7 @@ async def test_fake_round_audit_contains_candidate_prompts_and_evaluation(tmp_pa
 
 
 def test_committed_sample_output_has_current_report_contract():
-    sample = Path(__file__).parents[2] / "examples" / "optimization" / "eval_optimize_loop" / "sample_output"
+    sample = Path(__file__).parents[2] / "examples" / "optimization" / "counterfactual_trace_loop" / "sample_output"
     report = json.loads((sample / "optimization_report.json").read_text(encoding="utf-8"))
     assert report["schema_version"] == "1.0"
     assert report["baseline"]["train"]["case_results"]
@@ -471,7 +471,7 @@ async def test_pipeline_evaluation_triages_timeout_without_dropping_case(tmp_pat
         return {case.eval_id: {"tool_trajectory_avg_score": 1.0}}
 
     monkeypatch.setattr(
-        "examples.optimization.eval_optimize_loop.pipeline.pipeline.evaluate_trace_cases",
+        "examples.optimization.counterfactual_trace_loop.pipeline.pipeline.evaluate_trace_cases",
         evaluator,
     )
     metrics, failures = await _evaluate_with_triage(cases, tmp_path)

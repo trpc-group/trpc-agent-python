@@ -12,7 +12,7 @@ REPO_ROOT = HERE.parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from examples.optimization.eval_optimize_loop.pipeline.probe import (  # noqa: E402
+from examples.optimization.counterfactual_trace_loop.pipeline.probe import (  # noqa: E402
     run_counterfactual_probe,
 )
 
