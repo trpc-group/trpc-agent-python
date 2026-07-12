@@ -1,0 +1,11 @@
+diff --git a/src/secrets.py b/src/secrets.py
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/src/secrets.py
+@@ -0,0 +1,5 @@
++GITHUB_TOKEN = "ghp_FAKEGITHUBTOKENVALUE1234567890"
++SLACK_TOKEN = "xoxb-FAKE-SLACK-TOKEN-1234567890"
++DATABASE_URL = "postgres://app:FAKE_DB_PASSWORD_1234567890@db.example.local/app"
++PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----FAKE_PRIVATE_KEY_VALUE_1234567890-----END PRIVATE KEY-----"
++PASSWORD = "FAKE_PASSWORD_VALUE_1234567890"

@@ -1,277 +1,202 @@
 # Code Review Agent Example
 
-This example is a **design and scaffold** for an automatic code-review Agent. It is intentionally not a complete runnable bot yet.
+This example demonstrates a Skill-first automatic code-review Agent prototype with a deterministic dry-run path. It can parse unified diffs or a local git working tree diff, run deterministic review rules, apply pre-sandbox Filter governance, simulate sandbox execution, redact sensitive values, persist results to SQLite, and render JSON/Markdown reports.
 
-The goal is to show how a future implementation can combine tRPC-Agent Skills, sandbox execution, Filter governance, structured findings, monitoring, and SQL storage.
+The default mode intentionally does **not** require API keys, Docker, Cube/E2B, or network access. It uses a fake model and fake sandbox so tests can exercise the whole review pipeline in CI.
 
 ## What this example demonstrates
 
-- A Skill-first review policy package under `skills/code-review/`.
-- A container-first sandbox design for executing static checks or helper scripts.
-- A structured finding contract that can be validated, deduplicated, stored, and rendered.
-- A dry-run-first workflow that works without posting comments or modifying code.
-- A staged implementation path for future MVP work.
-
-## Current status
-
-This directory currently contains documentation and a Skill scaffold only.
-
-It does **not** yet include:
-
-- a runnable `run_review.py` CLI;
-- a diff parser;
-- SQLite models;
-- real model calls;
-- PR/GitHub comment posting;
-- automatic code fixes.
-
-Those pieces are intentionally left for follow-up MVP work after the design is reviewed.
+- A `code-review` Skill policy package under `skills/code-review/`.
+- Unified diff parsing for files, hunks, changed lines, and line anchors.
+- Deterministic rules for secrets, security risks, async issues, resource leaks, database lifecycle issues, and missing tests.
+- Pre-sandbox governance decisions for allowlisted scripts, forbidden paths, risky commands, network access, and output budgets.
+- Fake sandbox runs with failure/timeout/output-limit records.
+- Structured findings, warnings, filter decisions, sandbox summaries, audit events, and metrics.
+- Optional SQLite persistence for review task, sandbox run, filter decision, finding, warning, audit, and report records.
 
 ## Architecture
 
 ```text
-user / CI dry-run request
-  -> collect git diff or patch file
-  -> parse files, hunks, and changed lines
-  -> load skills/code-review/SKILL.md
-  -> apply Filter governance before sandbox runs
-  -> run approved checks in container or Cube/E2B sandbox
-  -> validate structured findings
-  -> dedupe and downgrade noisy findings
-  -> persist task, sandbox runs, findings, and metrics
-  -> render review_report.json and review_report.md
+user / CI request
+  -> load --diff-file or --repo-path git diff
+  -> parse files, hunks, changed lines, and anchors
+  -> build sandbox requests
+  -> apply pre-sandbox Filter governance
+  -> execute allowed requests in fake sandbox
+  -> run deterministic fake-model rules
+  -> post-filter findings: redact, anchor, dedupe, route low confidence
+  -> build review_report.json and review_report.md
+  -> optionally persist task/report rows to SQLite
 ```
 
-## Planned folder layout
+## Folder layout
 
 ```text
 examples/code_review_agent/
   README.md
-  skills/
-    code-review/
-      SKILL.md
-      references/
-        finding_schema.md
-        security_boundary.md
-      scripts/
-        # future static checks / diff helpers
+  run_review.py
   agent/
-    # future MVP modules:
-    # diff_parser.py
-    # schema.py
-    # filters.py
-    # storage.py
-    # sandbox.py
+    diff_parser.py
+    fake_reviewer.py
+    filters.py
+    governance.py
+    inputs.py
+    pipeline.py
+    report.py
+    rules.py
+    sandbox.py
+    schemas.py
+    storage.py
   fixtures/
-    # future diff samples
+    clean.diff
+    hardcoded_secret.diff
+    async_resource_leak.diff
+    db_lifecycle.diff
+    missing_tests.diff
+    duplicate_secret.diff
+    sandbox_failure.diff
+    sensitive_redaction.diff
+    binary.diff
+    removed_only.diff
+    renamed_file.diff
+  skills/code-review/
+    SKILL.md
+    references/
+      finding_schema.md
+      rules.md
+      sandbox_policy.md
+      security_boundary.md
 ```
+
+## Run the dry-run prototype
+
+Review a fixture and print Markdown:
+
+```bash
+python examples/code_review_agent/run_review.py \
+  --diff-file examples/code_review_agent/fixtures/hardcoded_secret.diff \
+  --fake-model \
+  --sandbox-runtime fake \
+  --markdown
+```
+
+Write both report files and persist to SQLite:
+
+```bash
+python examples/code_review_agent/run_review.py \
+  --diff-file examples/code_review_agent/fixtures/hardcoded_secret.diff \
+  --fake-model \
+  --sandbox-runtime fake \
+  --db-path /tmp/code-review-agent.sqlite \
+  --output-dir /tmp/code-review-agent-output
+```
+
+Expected output files:
+
+```text
+/tmp/code-review-agent-output/review_report.json
+/tmp/code-review-agent-output/review_report.md
+```
+
+Print JSON for automation:
+
+```bash
+python examples/code_review_agent/run_review.py \
+  --diff-file examples/code_review_agent/fixtures/clean.diff \
+  --fake-model \
+  --json
+```
+
+Review a local git working tree diff:
+
+```bash
+python examples/code_review_agent/run_review.py \
+  --repo-path . \
+  --fake-model \
+  --sandbox-runtime fake \
+  --json
+```
+
+Query a persisted task:
+
+```bash
+python examples/code_review_agent/run_review.py \
+  --db-path /tmp/code-review-agent.sqlite \
+  --show-task review-xxxxxxxxxxxx \
+  --json
+```
+
+Fail when high-confidence findings are present:
+
+```bash
+python examples/code_review_agent/run_review.py \
+  --diff-file examples/code_review_agent/fixtures/hardcoded_secret.diff \
+  --fake-model \
+  --fail-on-findings
+```
+
+## Fixture matrix
+
+| Fixture | Purpose |
+| --- | --- |
+| `clean.diff` | No high-confidence finding. |
+| `hardcoded_secret.diff` | Security/sensitive information leak. |
+| `async_resource_leak.diff` | Untracked async task. |
+| `db_lifecycle.diff` | Database connection lifecycle issue. |
+| `missing_tests.diff` | Production change without a test update; warning/human review. |
+| `duplicate_secret.diff` | Duplicate finding merge. |
+| `sandbox_failure.diff` | Sandbox failure is recorded without crashing the review. |
+| `sensitive_redaction.diff` | Multiple secret forms are redacted in reports and storage. |
+
+Additional parser regression fixtures cover binary diffs, removed-only secrets, and renamed files.
 
 ## Skill package
 
-The `code-review` Skill defines how the Agent should inspect code changes. It should be loaded with `skill_load` when a review task starts and can later provide approved scripts through `skill_run`.
+The `code-review` Skill defines review scope, output fields, safety rules, and allowed script policy. In this deterministic prototype, the Python pipeline uses the same rule categories directly instead of invoking a real model loop with `skill_load` / `skill_run`. A production implementation can load the Skill before review, request only allowlisted scripts, and execute those scripts through Container or Cube/E2B workspace runtimes.
 
-The Skill focuses on these review categories:
+## SQLite storage
 
-- security risks;
-- async errors;
-- resource leaks;
-- missing tests;
-- sensitive information leaks;
-- database transaction or connection lifecycle issues.
+When `--db-path` is provided, the example creates these tables:
 
-The Skill must return structured findings and must not instruct the Agent to modify files.
+- `review_tasks`
+- `sandbox_runs`
+- `filter_decisions`
+- `findings`
+- `review_reports`
+- `audit_events`
 
-## Dry-run lifecycle
+Rows store redacted summaries and report payloads. Raw secret-bearing diffs are not stored; the task stores a redacted diff hash and summary instead.
 
-Dry-run is the default target mode for this example.
+## Security boundaries
 
-A future dry-run command should:
+- Fake sandbox is the default and never executes host commands.
+- Non-fake runtimes are not required for tests and should be treated as future adapters.
+- Local execution is a development fallback only, not the production default.
+- Pre-sandbox governance denies risky commands, forbidden paths, network access, and over-budget requests.
+- Denied or `needs_human_review` sandbox requests are recorded but not executed.
+- Reports and database rows redact API keys, tokens, passwords, private keys, cookies, authorization headers, and credential URLs.
+- Sandbox failures, timeouts, and truncated output are recorded as non-fatal audit data.
 
-1. Read a diff from `--diff-file` or local repository changes.
-2. Parse changed files and line anchors.
-3. Load the `code-review` Skill.
-4. Run only approved sandbox checks.
-5. Validate all findings against the documented schema.
-6. Deduplicate repeated findings.
-7. Route low-confidence issues to warnings or `needs_human_review`.
-8. Write local reports and optional SQLite records.
-9. Avoid external comments, pushes, or file modifications.
+## Design note
 
-## Security checklist
+The prototype keeps the Agent implementation deterministic so contributors can validate the full review lifecycle without external services. The Skill package defines the policy layer: scope, review categories, finding schema, and sandbox safety expectations. The Python pipeline then implements that policy in a dry-run form. Inputs are normalized from either a diff file or local git diff, then parsed into files, hunks, and changed-line anchors. Before any executable check, sandbox requests pass through a governance filter that allowlists known scripts and rejects risky commands, forbidden paths, network access, or excessive output. The fake sandbox records the same shape of result that a Container or Cube/E2B runtime would provide, including failures and timeouts, but never executes arbitrary host commands. Deterministic rules produce structured findings for secrets, security risks, async issues, resource leaks, database lifecycle problems, and missing tests. Post-filters redact sensitive values, dedupe by file/line/category, and route low-confidence or unanchored issues to human-review warnings. SQLite persistence stores task state, sandbox runs, filter decisions, findings, warnings, metrics, audit events, and the final report using only redacted data. Reports expose findings, severity/category statistics, human-review items, Filter decisions, sandbox summaries, monitoring fields, and actionable recommendations.
 
-A production implementation should enforce these defaults:
+## Verification
 
-- Use container or Cube/E2B runtime for untrusted command execution.
-- Treat local runtime as a development fallback only.
-- Mount repository inputs read-only.
-- Use a controlled output directory.
-- Enforce timeouts and output-size limits.
-- Pass only allowlisted environment variables.
-- Never pass secrets into the sandbox.
-- Redact API keys, tokens, passwords, and credentials in reports and database rows.
-- Record sandbox failures and Filter denials without crashing the full review.
+Run focused tests:
 
-## Future MVP tasks
+```bash
+python -m pytest tests/examples/code_review_agent
+```
 
-A minimal runnable follow-up can add:
+Run existing Skill tests:
 
-- `agent/diff_parser.py`: parse unified diffs into files, hunks, and changed lines.
-- `agent/schema.py`: Pydantic models for review findings, reports, and metrics.
-- `agent/filters.py`: changed-line anchoring, dedupe, noise filtering, and redaction.
-- `agent/storage.py`: SQLite-backed review task and finding storage.
-- `agent/sandbox.py`: container-first sandbox wrapper with timeout and output limits.
-- `run_review.py`: dry-run CLI supporting `--diff-file`, `--repo-path`, and `--fake-model`.
-- `fixtures/`: at least 8 diff samples covering clean diff, security issue, async/resource leak, database lifecycle, missing tests, duplicate finding, sandbox failure, and secret redaction.
-
-## Learning path for new contributors
-
-If you are new to this project, read these in order:
-
-1. [Skills example](../skills/README.md) - basic Skill loading and `skill_run`.
-2. [Skills with container](../skills_with_container/README.md) - sandboxed Skill execution with Docker.
-3. [Agent Skills docs](../../docs/mkdocs/en/skill.md) - Skill architecture and loading model.
-4. [Code Executor docs](../../docs/mkdocs/en/code_executor.md) - local, container, and Cube/E2B execution.
-5. [Filter docs](../../docs/mkdocs/en/filter.md) - request/response governance.
-6. [SQL Session docs](../../docs/mkdocs/en/session_sql.md) - SQL persistence patterns.
-7. [Code Review Agent design](../../docs/mkdocs/en/code_review_agent.md) - the architecture this example follows.
+```bash
+python -m pytest tests/skills
+```
 
 ---
 
 # 中文说明
 
-# 代码评审 Agent 示例
-
-本示例是一个自动代码评审 Agent 的**设计说明和脚手架**，目前还不是完整可运行的机器人。
-
-它的目标是说明：未来如何把 tRPC-Agent 的 Skills、沙箱执行、Filter 治理、结构化 findings、监控审计和 SQL 存储组合成一个完整的代码评审 Agent。
-
-## 这个示例展示什么
-
-- 在 `skills/code-review/` 下放置一个以 Skill 为核心的代码评审策略包。
-- 使用 container-first 的沙箱设计来执行静态检查或辅助脚本。
-- 定义结构化 finding 契约，方便后续校验、去重、入库和渲染报告。
-- 以 dry-run 为默认工作流，不发布评论、不修改代码。
-- 为后续 MVP 工作提供分阶段实现路径。
-
-## 当前状态
-
-当前目录只包含文档和 Skill 脚手架。
-
-它**暂时不包含**：
-
-- 可运行的 `run_review.py` 命令行入口；
-- diff 解析器；
-- SQLite 数据模型；
-- 真实模型调用；
-- PR / GitHub 评论发布；
-- 自动代码修复。
-
-这些内容会留到设计方案被 review 后，在后续 MVP PR 中逐步实现。
-
-## 架构
-
-```text
-用户 / CI 发起 dry-run 请求
-  -> 收集 git diff 或 patch 文件
-  -> 解析文件、hunk 和变更行
-  -> 加载 skills/code-review/SKILL.md
-  -> 在沙箱执行前应用 Filter 治理
-  -> 在 Container 或 Cube/E2B 沙箱中执行已批准的检查
-  -> 校验结构化 findings
-  -> 对重复和噪声 findings 去重 / 降级
-  -> 持久化 task、sandbox run、findings 和 metrics
-  -> 生成 review_report.json 和 review_report.md
-```
-
-## 计划目录结构
-
-```text
-examples/code_review_agent/
-  README.md
-  skills/
-    code-review/
-      SKILL.md
-      references/
-        finding_schema.md
-        security_boundary.md
-      scripts/
-        # 未来放静态检查 / diff 辅助脚本
-  agent/
-    # 未来 MVP 模块：
-    # diff_parser.py
-    # schema.py
-    # filters.py
-    # storage.py
-    # sandbox.py
-  fixtures/
-    # 未来放 diff 测试样例
-```
-
-## Skill 包
-
-`code-review` Skill 定义了 Agent 应该如何检查代码变更。评审任务开始时可以通过 `skill_load` 加载它，后续可以通过 `skill_run` 执行经过批准的脚本。
-
-这个 Skill 重点关注这些评审类别：
-
-- 安全风险；
-- 异步错误；
-- 资源泄漏；
-- 测试缺失；
-- 敏感信息泄漏；
-- 数据库事务或连接生命周期问题。
-
-这个 Skill 必须返回结构化 findings，并且不能要求 Agent 修改文件。
-
-## Dry-run 生命周期
-
-Dry-run 是本示例的默认目标模式。
-
-未来的 dry-run 命令应该：
-
-1. 从 `--diff-file` 或本地仓库变更读取 diff。
-2. 解析变更文件和行号锚点。
-3. 加载 `code-review` Skill。
-4. 只运行经过批准的沙箱检查。
-5. 根据文档中的 schema 校验所有 findings。
-6. 对重复 findings 去重。
-7. 将低置信问题放入 warnings 或 `needs_human_review`。
-8. 写入本地报告和可选 SQLite 记录。
-9. 不发布外部评论、不 push、不修改文件。
-
-## 安全检查清单
-
-生产实现应强制执行以下默认策略：
-
-- 使用 Container 或 Cube/E2B runtime 执行不可信命令。
-- 只把本地 runtime 当作开发 fallback。
-- 以只读方式挂载仓库输入。
-- 使用受控输出目录。
-- 强制设置超时和输出大小限制。
-- 只传入白名单环境变量。
-- 不要把 secrets 传入沙箱。
-- 在报告和数据库记录中脱敏 API key、token、password 和凭证。
-- 记录沙箱失败和 Filter 拒绝原因，但不要让整个评审任务崩溃。
-
-## 后续 MVP 任务
-
-后续最小可运行版本可以增加：
-
-- `agent/diff_parser.py`：把 unified diff 解析成文件、hunk 和变更行。
-- `agent/schema.py`：定义 review findings、reports 和 metrics 的 Pydantic 模型。
-- `agent/filters.py`：实现变更行锚定、去重、降噪和脱敏。
-- `agent/storage.py`：基于 SQLite 的 review task 和 finding 存储。
-- `agent/sandbox.py`：container-first 沙箱封装，支持超时和输出限制。
-- `run_review.py`：dry-run 命令行入口，支持 `--diff-file`、`--repo-path` 和 `--fake-model`。
-- `fixtures/`：至少 8 个 diff 样例，覆盖无问题 diff、安全问题、异步 / 资源泄漏、数据库生命周期、测试缺失、重复 finding、沙箱失败和敏感信息脱敏。
-
-## 新贡献者学习路径
-
-如果你刚接触这个项目，建议按顺序阅读：
-
-1. [Skills 示例](../skills/README.md) - 基础 Skill 加载和 `skill_run`。
-2. [容器版 Skills 示例](../skills_with_container/README.md) - 使用 Docker 沙箱执行 Skill。
-3. [Agent Skills 文档](../../docs/mkdocs/en/skill.md) - Skill 架构和加载模型。
-4. [Code Executor 文档](../../docs/mkdocs/en/code_executor.md) - local、container 和 Cube/E2B 执行。
-5. [Filter 文档](../../docs/mkdocs/en/filter.md) - 请求 / 响应治理。
-6. [SQL Session 文档](../../docs/mkdocs/en/session_sql.md) - SQL 持久化模式。
-7. [Code Review Agent 设计](../../docs/mkdocs/en/code_review_agent.md) - 本示例遵循的架构设计。
+这个示例实现了一个确定性的代码评审 Agent 原型：读取 diff 或本地 git diff，执行 fake model 规则、Filter 治理、fake sandbox、敏感信息脱敏、SQLite 落库，并生成 JSON / Markdown 报告。默认不需要 API key、Docker、Cube/E2B 或网络访问，适合本地和 CI 测试。生产实现可以在这个结构上替换真实模型和 Container / Cube/E2B workspace runtime。

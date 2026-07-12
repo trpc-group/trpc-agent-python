@@ -58,6 +58,13 @@ If no high-confidence issue is found, return an empty `findings` list and a shor
 - Do not review generated files, vendored code, or lockfiles unless the diff itself creates a security or integrity risk.
 - Do not duplicate findings for the same file, line, and category.
 
+## References
+
+- Finding contract: `references/finding_schema.md`.
+- Deterministic rule categories: `references/rules.md`.
+- Sandbox execution policy: `references/sandbox_policy.md`.
+- Security boundary: `references/security_boundary.md`.
+
 ## Future scripts
 
 Future implementations may add scripts under `scripts/` for static checks, diff summarization, or fixture generation.

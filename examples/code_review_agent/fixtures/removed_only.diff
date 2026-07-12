@@ -1,0 +1,8 @@
+diff --git a/src/config.py b/src/config.py
+index 1111111..2222222 100644
+--- a/src/config.py
++++ b/src/config.py
+@@ -1,3 +1,2 @@
+ DEBUG = False
+-API_KEY = "FAKE_REMOVED_SECRET_VALUE_1234567890"
+ TIMEOUT = 30
