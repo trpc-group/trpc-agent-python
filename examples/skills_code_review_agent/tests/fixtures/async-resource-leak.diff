@@ -1,0 +1,9 @@
+diff --git a/worker.py b/worker.py
+--- a/worker.py
++++ b/worker.py
+@@ -1,2 +1,5 @@
++import asyncio
++
+ async def start(job):
+-    await job.run()
++    asyncio.create_task(job.run())
