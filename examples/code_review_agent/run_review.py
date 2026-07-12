@@ -29,7 +29,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--repo-path", type=Path, help="Path to a local git repository whose diff should be reviewed.")
     parser.add_argument("--base-ref", help="Optional base ref for repo-path mode, e.g. origin/main.")
     parser.add_argument("--fake-model", action="store_true", default=True, help="Use deterministic fake-model mode.")
-    parser.add_argument("--sandbox-runtime", default="fake", choices=("fake", "container", "local-dev"), help="Sandbox runtime.")
+    parser.add_argument("--sandbox-runtime", default="fake", choices=("fake", "container"), help="Sandbox runtime.")
+    parser.add_argument("--container-image", default="python:3-slim", help="Docker image for --sandbox-runtime container.")
     parser.add_argument("--sandbox-timeout-seconds", type=int, default=10, help="Sandbox timeout budget.")
     parser.add_argument("--max-output-bytes", type=int, default=4096, help="Maximum sandbox output bytes to retain.")
     parser.add_argument("--db-path", type=Path, help="SQLite database path for persisted review results.")
@@ -64,10 +65,6 @@ def main(argv: list[str] | None = None) -> int:
         print("provide exactly one of --diff-file or --repo-path", file=sys.stderr)
         return 2
 
-    if args.sandbox_runtime != "fake":
-        print("only --sandbox-runtime fake is implemented in this deterministic example", file=sys.stderr)
-        return 2
-
     try:
         bundle = load_review_input(diff_file=args.diff_file, repo_path=args.repo_path, base_ref=args.base_ref)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
@@ -84,7 +81,12 @@ def main(argv: list[str] | None = None) -> int:
         bundle.diff_text,
         parsed_diff=bundle.parsed_diff,
         review_input=bundle.review_input,
-        config=ReviewRunConfig(fake_model=args.fake_model, sandbox_policy=policy, db_path=args.db_path),
+        config=ReviewRunConfig(
+            fake_model=args.fake_model,
+            sandbox_policy=policy,
+            db_path=args.db_path,
+            container_image=args.container_image,
+        ),
     )
 
     printed = False

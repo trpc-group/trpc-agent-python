@@ -20,7 +20,7 @@ from .governance import evaluate_sandbox_requests
 from .inputs import build_review_input
 from .report import build_report
 from .rules import review_with_rules
-from .sandbox import FakeSandboxRunner
+from .sandbox import create_sandbox_runner
 from .schemas import AuditEvent
 from .schemas import ParsedDiff
 from .schemas import ReviewInput
@@ -39,6 +39,7 @@ class ReviewRunConfig:
     db_path: Path | None = None
     task_id: str | None = None
     include_missing_tests: bool = True
+    container_image: str = "python:3-slim"
 
 
 def run_dry_review(diff_text: str, *, fake_model: bool = True) -> ReviewReport:
@@ -88,7 +89,8 @@ def run_review(
 
         requests = build_default_sandbox_requests(review_input.changed_files)
         allowed_requests, pre_decisions = evaluate_sandbox_requests(requests, policy)
-        sandbox_runs = FakeSandboxRunner(policy).run_requests(allowed_requests, parsed)
+        sandbox_runner = create_sandbox_runner(policy, container_image=config.container_image)
+        sandbox_runs = sandbox_runner.run_requests(allowed_requests, parsed, diff_text)
         for run in sandbox_runs:
             if run.error_type:
                 audit_events.append(

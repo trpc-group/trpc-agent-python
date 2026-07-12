@@ -10,7 +10,7 @@ The default mode intentionally does **not** require API keys, Docker, Cube/E2B, 
 - Unified diff parsing for files, hunks, changed lines, and line anchors.
 - Deterministic rules for secrets, security risks, async issues, resource leaks, database lifecycle issues, and missing tests.
 - Pre-sandbox governance decisions for allowlisted scripts, forbidden paths, risky commands, network access, and output budgets.
-- Fake sandbox runs with failure/timeout/output-limit records.
+- Fake sandbox runs with failure/timeout/output-limit records, plus optional Docker Container runtime for allowlisted scripts.
 - Structured findings, warnings, filter decisions, sandbox summaries, audit events, and metrics.
 - Optional SQLite persistence for review task, sandbox run, filter decision, finding, warning, audit, and report records.
 
@@ -22,7 +22,7 @@ user / CI request
   -> parse files, hunks, changed lines, and anchors
   -> build sandbox requests
   -> apply pre-sandbox Filter governance
-  -> execute allowed requests in fake sandbox
+  -> execute allowed requests in fake sandbox or Docker container
   -> run deterministic fake-model rules
   -> post-filter findings: redact, anchor, dedupe, route low confidence
   -> build review_report.json and review_report.md
@@ -122,6 +122,17 @@ python examples/code_review_agent/run_review.py \
   --json
 ```
 
+Review with Docker Container sandbox execution for allowlisted scripts:
+
+```bash
+python examples/code_review_agent/run_review.py \
+  --diff-file examples/code_review_agent/fixtures/hardcoded_secret.diff \
+  --fake-model \
+  --sandbox-runtime container \
+  --container-image python:3-slim \
+  --json
+```
+
 Query a persisted task:
 
 ```bash
@@ -175,8 +186,8 @@ Rows store redacted summaries and report payloads. Raw secret-bearing diffs are 
 ## Security boundaries
 
 - Fake sandbox is the default and never executes host commands.
-- Non-fake runtimes are not required for tests and should be treated as future adapters.
-- Local execution is a development fallback only, not the production default.
+- Container runtime is optional and uses the project's existing Docker `ContainerClient` to execute only allowlisted scripts with network disabled.
+- Cube/E2B can be integrated through the repository's existing `CubeWorkspaceRuntime`, but it is not required for the default deterministic path.
 - Pre-sandbox governance denies risky commands, forbidden paths, network access, and over-budget requests.
 - Denied or `needs_human_review` sandbox requests are recorded but not executed.
 - Reports and database rows redact API keys, tokens, passwords, private keys, cookies, authorization headers, and credential URLs.
@@ -184,7 +195,7 @@ Rows store redacted summaries and report payloads. Raw secret-bearing diffs are 
 
 ## Design note
 
-The prototype keeps the Agent implementation deterministic so contributors can validate the full review lifecycle without external services. The Skill package defines the policy layer: scope, review categories, finding schema, and sandbox safety expectations. The Python pipeline then implements that policy in a dry-run form. Inputs are normalized from either a diff file or local git diff, then parsed into files, hunks, and changed-line anchors. Before any executable check, sandbox requests pass through a governance filter that allowlists known scripts and rejects risky commands, forbidden paths, network access, or excessive output. The fake sandbox records the same shape of result that a Container or Cube/E2B runtime would provide, including failures and timeouts, but never executes arbitrary host commands. Deterministic rules produce structured findings for secrets, security risks, async issues, resource leaks, database lifecycle problems, and missing tests. Post-filters redact sensitive values, dedupe by file/line/category, and route low-confidence or unanchored issues to human-review warnings. SQLite persistence stores task state, sandbox runs, filter decisions, findings, warnings, metrics, audit events, and the final report using only redacted data. Reports expose findings, severity/category statistics, human-review items, Filter decisions, sandbox summaries, monitoring fields, and actionable recommendations.
+The prototype keeps the Agent implementation deterministic so contributors can validate the full review lifecycle without external services. The Skill package defines the policy layer: scope, review categories, finding schema, and sandbox safety expectations. The Python pipeline then implements that policy in a dry-run form. Inputs are normalized from either a diff file or local git diff, then parsed into files, hunks, and changed-line anchors. Before any executable check, sandbox requests pass through a governance filter that allowlists known scripts and rejects risky commands, forbidden paths, network access, or excessive output. The fake sandbox records the same shape of result that an isolated runtime would provide, while the optional Container runtime uses the repository's existing Docker `ContainerClient` to execute allowlisted scripts with stdin, timeout, output caps, and network disabled. Deterministic rules produce structured findings for secrets, security risks, async issues, resource leaks, database lifecycle problems, and missing tests. Post-filters redact sensitive values, dedupe by file/line/category, and route low-confidence or unanchored issues to human-review warnings. SQLite persistence stores task state, sandbox runs, filter decisions, findings, warnings, metrics, audit events, and the final report using only redacted data. Reports expose findings, severity/category statistics, human-review items, Filter decisions, sandbox summaries, monitoring fields, and actionable recommendations.
 
 ## Verification
 

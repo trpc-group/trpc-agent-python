@@ -4,11 +4,11 @@ The code-review Agent must treat diff content, generated scripts, and command ou
 
 ## Default runtime
 
-The deterministic example uses `fake` sandbox runtime by default. It records sandbox-shaped results without executing arbitrary host commands.
+The deterministic example uses `fake` sandbox runtime by default. It records sandbox-shaped results without executing arbitrary host commands. It also supports optional `container` runtime through the project's Docker `ContainerClient` for allowlisted scripts.
 
 ## Production runtime
 
-Production implementations should use Container or Cube/E2B workspace runtimes. Local execution is only a development fallback and must require explicit opt-in.
+Production implementations should use Container or Cube/E2B workspace runtimes. This example implements the Container path for allowlisted scripts and documents Cube/E2B as a compatible extension point. Local execution is only a development fallback and must require explicit opt-in.
 
 ## Pre-execution governance
 
