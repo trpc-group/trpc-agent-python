@@ -34,6 +34,8 @@ user / CI request
 ```text
 examples/code_review_agent/
   README.md
+  review_report.json
+  review_report.md
   run_review.py
   agent/
     diff_parser.py
@@ -61,6 +63,9 @@ examples/code_review_agent/
     renamed_file.diff
   skills/code-review/
     SKILL.md
+    scripts/
+      diff_summary.py
+      static_rules.py
     references/
       finding_schema.md
       rules.md

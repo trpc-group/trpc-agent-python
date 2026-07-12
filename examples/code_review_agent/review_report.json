@@ -1,0 +1,136 @@
+{
+  "mode": "dry_run",
+  "summary": "Found 1 finding(s) across 1 changed file(s).",
+  "findings": [
+    {
+      "severity": "high",
+      "category": "secrets",
+      "file": "src/config.py",
+      "line": 2,
+      "title": "Hard-coded secret in changed code",
+      "evidence": "Added line contains a secret-like assignment: API_KEY = \"<REDACTED_SECRET>\"",
+      "recommendation": "Move the secret to an environment variable or secret manager, remove it from source control, and rotate the exposed value.",
+      "confidence": "high",
+      "source": "fake_model",
+      "fingerprint": "9b95e3b4d91e69ea",
+      "line_start": 2,
+      "line_end": 2,
+      "needs_human_review": false,
+      "raw_source": null
+    }
+  ],
+  "warnings": [],
+  "filter_decisions": [
+    {
+      "filter_name": "changed_line_anchor",
+      "decision": "allow",
+      "reason": "Finding is anchored to an added changed line.",
+      "file": "src/config.py",
+      "line": 2,
+      "fingerprint": "9b95e3b4d91e69ea",
+      "stage": "post",
+      "script_name": null,
+      "path": null,
+      "rule_id": null
+    },
+    {
+      "filter_name": "redaction",
+      "decision": "redact",
+      "reason": "Redacted secret-like content from finding fields.",
+      "file": "src/config.py",
+      "line": 2,
+      "fingerprint": "9b95e3b4d91e69ea",
+      "stage": "post",
+      "script_name": null,
+      "path": null,
+      "rule_id": null
+    },
+    {
+      "filter_name": "sandbox_governance",
+      "decision": "allow",
+      "reason": "Sandbox request passed pre-execution governance.",
+      "file": null,
+      "line": null,
+      "fingerprint": null,
+      "stage": "pre_sandbox",
+      "script_name": "diff_summary",
+      "path": null,
+      "rule_id": null
+    },
+    {
+      "filter_name": "sandbox_governance",
+      "decision": "allow",
+      "reason": "Sandbox request passed pre-execution governance.",
+      "file": null,
+      "line": null,
+      "fingerprint": null,
+      "stage": "pre_sandbox",
+      "script_name": "static_rules",
+      "path": null,
+      "rule_id": null
+    }
+  ],
+  "metrics": {
+    "file_count": 1,
+    "hunk_count": 1,
+    "changed_line_count": 3,
+    "finding_count": 1,
+    "warning_count": 0,
+    "severity_counts": {
+      "high": 1
+    },
+    "category_counts": {
+      "secrets": 1
+    },
+    "duration_ms": 0,
+    "sandbox_duration_ms": 0,
+    "tool_call_count": 2,
+    "sandbox_run_count": 2,
+    "filter_intercept_count": 0,
+    "redaction_count": 1,
+    "exception_counts": {}
+  },
+  "task_id": "review-7bb30cf34bf8",
+  "status": "completed",
+  "input": {
+    "input_type": "diff_file",
+    "repo_path": null,
+    "diff_file": "examples/code_review_agent/fixtures/hardcoded_secret.diff",
+    "base_ref": null,
+    "changed_files": [
+      "src/config.py"
+    ],
+    "diff_sha256": "142c997e939d03b9ff401ec8fe60f6597e2b3745db8c8561acfc7ae01b73e74b",
+    "diff_summary": "1 file(s), 1 hunk(s), 3 parsed changed/context line(s)."
+  },
+  "sandbox_runs": [
+    {
+      "id": "sandbox-diff_summary",
+      "script_name": "diff_summary",
+      "runtime": "fake",
+      "decision": "allow",
+      "exit_code": 0,
+      "timed_out": false,
+      "duration_ms": 0,
+      "stdout_excerpt": "files=1 hunks=1 changed_lines=3",
+      "stderr_excerpt": "",
+      "output_truncated": false,
+      "error_type": null
+    },
+    {
+      "id": "sandbox-static_rules",
+      "script_name": "static_rules",
+      "runtime": "fake",
+      "decision": "allow",
+      "exit_code": 0,
+      "timed_out": false,
+      "duration_ms": 0,
+      "stdout_excerpt": "static_rules completed",
+      "stderr_excerpt": "",
+      "output_truncated": false,
+      "error_type": null
+    }
+  ],
+  "audit_events": [],
+  "final_conclusion": "Review completed with high-confidence findings."
+}
