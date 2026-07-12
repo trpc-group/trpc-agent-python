@@ -1,0 +1,24 @@
+{
+  "tool_name": "bash",
+  "decision": "deny",
+  "risk_level": "critical",
+  "findings": [
+    {
+      "risk_type": "dangerous_file_operation",
+      "risk_level": "critical",
+      "rule_id": "FILE_DESTRUCTIVE",
+      "evidence": "rm -rf /",
+      "recommendation": "Restrict writes to an isolated workspace and require explicit approval.",
+      "line": 1
+    }
+  ],
+  "rule_ids": ["FILE_DESTRUCTIVE"],
+  "duration_ms": 0.2,
+  "redacted": false,
+  "blocked": true,
+  "telemetry_attributes": {
+    "tool.safety.decision": "deny",
+    "tool.safety.risk_level": "critical",
+    "tool.safety.rule_id": "FILE_DESTRUCTIVE"
+  }
+}

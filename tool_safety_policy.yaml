@@ -1,0 +1,22 @@
+allowed_domains:
+  - api.example.com
+allowed_commands:
+  - echo
+  - pwd
+  - ls
+  - cat
+  - grep
+  - curl
+forbidden_paths:
+  - ~/.ssh
+  - .env
+  - credentials.json
+  - /etc/shadow
+  - /root
+max_timeout_seconds: 60
+max_output_bytes: 1000000
+deny_risk_levels:
+  - critical
+  - high
+review_risk_levels:
+  - medium
