@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 import uuid
 from typing import Any
@@ -52,6 +53,26 @@ def _session_key_prefix(app_name: str, user_id: Optional[str] = None) -> str:
     if user_id is None:
         return f"session:{app_name}:*"
     return f"session:{app_name}:{user_id}:*"
+
+
+def _decode_state_hash(state: dict[Any, Any] | None) -> dict[str, Any]:
+    """Decode Redis hash bytes and JSON-serialized state values."""
+    decoded: dict[str, Any] = {}
+    for raw_key, raw_value in (state or {}).items():
+        key = raw_key.decode("utf-8") if isinstance(raw_key, bytes) else str(raw_key)
+        value = raw_value.decode("utf-8") if isinstance(raw_value, bytes) else raw_value
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                pass
+        decoded[key] = value
+    return decoded
+
+
+def _encode_state_value(value: Any) -> str:
+    """Serialize one state value without losing its JSON type."""
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
 class RedisSessionService(BaseSessionService):
@@ -264,7 +285,7 @@ class RedisSessionService(BaseSessionService):
 
         key = app_state_key(app_name)
         command = RedisCommand(method='hgetall', args=(key, ))
-        app_state: dict[str, Any] = await self._redis_storage.execute_command(redis_session, command)
+        app_state = _decode_state_hash(await self._redis_storage.execute_command(redis_session, command))
         if app_state:
             app_state.update(state_delta)
         else:
@@ -280,7 +301,7 @@ class RedisSessionService(BaseSessionService):
         # Use HSET with TTL if TTL is configured, otherwise use HSET
         args = [key]
         for k, v in app_state.items():
-            args.extend([k, v])
+            args.extend([k, _encode_state_value(v)])
 
         command = RedisCommand(method='hset',
                                args=tuple(args),
@@ -304,7 +325,7 @@ class RedisSessionService(BaseSessionService):
 
         key = user_state_key(app_name, user_id)
         command = RedisCommand(method='hgetall', args=(key, ))
-        user_state: dict[str, Any] = await self._redis_storage.execute_command(redis_session, command)
+        user_state = _decode_state_hash(await self._redis_storage.execute_command(redis_session, command))
         if user_state:
             user_state.update(state_delta)
         else:
@@ -320,7 +341,7 @@ class RedisSessionService(BaseSessionService):
         # Use HSET with TTL if TTL is configured, otherwise use HSET
         args = [key]
         for k, v in user_state.items():
-            args.extend([k, v])
+            args.extend([k, _encode_state_value(v)])
 
         command = RedisCommand(method='hset',
                                args=tuple(args),
@@ -362,7 +383,7 @@ class RedisSessionService(BaseSessionService):
         """
         key = app_state_key(app_name)
         command = RedisCommand(method='hgetall', args=(key, ))
-        app_state = await self._redis_storage.execute_command(redis_session, command)
+        app_state = _decode_state_hash(await self._redis_storage.execute_command(redis_session, command))
         if app_state:
             await self._refresh_ttl(redis_session, key)
 
@@ -383,7 +404,7 @@ class RedisSessionService(BaseSessionService):
         """
         key = user_state_key(app_name, user_id)
         command = RedisCommand(method='hgetall', args=(key, ))
-        user_state = await self._redis_storage.execute_command(redis_session, command)
+        user_state = _decode_state_hash(await self._redis_storage.execute_command(redis_session, command))
         if user_state:
             await self._refresh_ttl(redis_session, key)
         return user_state or {}

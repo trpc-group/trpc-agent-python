@@ -352,6 +352,7 @@ class TestCreateSessionSummaryByEvents:
         summary_event = next(event for event in result_events if event.is_summary_event())
         assert summary_event.author == "system"
         assert summary_event.content.role == "user"
+        assert summary_event.timestamp < result_events[1].timestamp
 
     async def test_summary_starts_from_first_user_turn_before_recent_events(self):
         model = _make_model_mock()

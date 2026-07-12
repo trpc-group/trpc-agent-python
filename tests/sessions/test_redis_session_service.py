@@ -183,6 +183,22 @@ class TestRedisGetSession:
         assert result.state[f"{State.USER_PREFIX}uk"] == "uv"
         await svc.close()
 
+    async def test_get_decodes_real_redis_hash_bytes_and_json_values(self):
+        svc = _create_service()
+        await svc.create_session(app_name="app", user_id="user", session_id="s1")
+        svc._redis_storage._hash_store["app_state:app"] = {
+            b"settings": b'{"region":"cn","retries":2}',
+        }
+        svc._redis_storage._hash_store["user_state:app:user"] = {
+            b"enabled": b"true",
+        }
+
+        result = await svc.get_session(app_name="app", user_id="user", session_id="s1")
+
+        assert result.state[f"{State.APP_PREFIX}settings"] == {"region": "cn", "retries": 2}
+        assert result.state[f"{State.USER_PREFIX}enabled"] is True
+        await svc.close()
+
 
 class TestRedisListSessions:
 

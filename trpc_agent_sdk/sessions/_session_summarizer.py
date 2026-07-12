@@ -388,13 +388,18 @@ class SessionSummarizer:
             summary_text = await self._compress_session_to_summary(events_for_summary, session_id, ctx)
 
             if summary_text:
+                # Persistent services reconstruct event order from timestamps. Anchor the
+                # summary just before the retained window so its logical leading position
+                # survives a database round trip.
+                summary_timestamp = (events[insert_index].timestamp -
+                                     0.000001 if insert_index < len(events) else time.time())
                 # Create summary event
                 summary_event = Event(invocation_id="summary",
                                       author="system",
                                       content=Content(
                                           parts=[Part.from_text(text=f"Previous conversation summary: {summary_text}")],
                                           role="user"),
-                                      timestamp=time.time())
+                                      timestamp=summary_timestamp)
                 summary_event.set_summary_event(True)
 
                 summarized_events = events[:insert_index]

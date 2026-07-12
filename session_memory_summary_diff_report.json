@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "reference_backend": "in_memory",
+  "compared_backends": [
+    "sqlite",
+    "redis"
+  ],
+  "generated_by": "tests/sessions/test_replay_consistency.py",
+  "allowed_diff_source": "tests/sessions/replay_cases/session_memory_summary.jsonl",
+  "duration_seconds": 1.7,
+  "compared_sections": [
+    "events",
+    "state",
+    "memory",
+    "summary"
+  ],
+  "normalization": [
+    "timestamp precision",
+    "memory result ordering"
+  ],
+  "cases": [
+    {"case_id":"single_turn","session_id":"replay-single_turn","status":"match","differences":[]},
+    {"case_id":"multi_turn","session_id":"replay-multi_turn","status":"match","differences":[]},
+    {"case_id":"tool_round_trip","session_id":"replay-tool_round_trip","status":"match","differences":[]},
+    {"case_id":"state_overwrite","session_id":"replay-state_overwrite","status":"match","differences":[]},
+    {"case_id":"memory_preference","session_id":"replay-memory_preference","status":"match","differences":[]},
+    {"case_id":"memory_fact_update","session_id":"replay-memory_fact_update","status":"match","differences":[]},
+    {"case_id":"summary_create","session_id":"replay-summary_create","status":"match","differences":[]},
+    {"case_id":"summary_update","session_id":"replay-summary_update","status":"match","differences":[]},
+    {"case_id":"summary_truncation","session_id":"replay-summary_truncation","status":"match","differences":[]},
+    {"case_id":"retry_recovery","session_id":"replay-retry_recovery","status":"match","differences":[]}
+  ]
+}
