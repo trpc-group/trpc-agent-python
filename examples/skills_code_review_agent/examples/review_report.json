@@ -1,0 +1,87 @@
+{
+  "task_id": "sample-task",
+  "created_at": "2026-01-01T00:00:00Z",
+  "completed_at": "2026-01-01T00:00:00.050000Z",
+  "status": "completed_with_warnings",
+  "repository": "security",
+  "scope": "changed",
+  "input_summary": {
+    "kind": "fixture",
+    "source": "security",
+    "digest": "c79a29335c1a64d2be4b7994826fd9a9aa0d7a242d3520a268835f4a851439b5",
+    "review_profile": "sample-profile-v2",
+    "file_count": 1,
+    "hunk_count": 1,
+    "added_lines": 3,
+    "removed_lines": 1,
+    "files": ["commands.py"],
+    "redacted_preview": "diff --git a/commands.py b/commands.py ..."
+  },
+  "analysis": {
+    "summary": "Deterministic review of 1 changed file(s).",
+    "findings": [
+      {
+        "severity": "critical",
+        "category": "security",
+        "file": "commands.py",
+        "line": 4,
+        "title": "Untrusted data crosses a dangerous execution boundary",
+        "evidence": "return os.system(user_input)",
+        "recommendation": "Use parameterized APIs or argument lists and validate untrusted input before the boundary.",
+        "confidence": 0.96,
+        "source": "skill:review_security.py"
+      }
+    ],
+    "warnings": [
+      {
+        "severity": "medium",
+        "category": "test_missing",
+        "file": "commands.py",
+        "line": null,
+        "title": "Behavioral source changes have no focused test change",
+        "evidence": "The patch changes source files but no test file.",
+        "recommendation": "Add a focused regression test for the changed behavior.",
+        "confidence": 0.65,
+        "source": "skill:review_tests.py"
+      }
+    ],
+    "needs_human_review": [],
+    "checks_performed": [
+      "unified diff parsing",
+      "six deterministic code-review Skill rules"
+    ]
+  },
+  "filter_decisions": [
+    {
+      "decision_id": "sample-decision",
+      "command": "python3 scripts/run_review_rules.py work/inputs/security.diff",
+      "decision": "allow",
+      "reason": "command is read-only and within the configured budget",
+      "created_at": "2026-01-01T00:00:00.010000Z"
+    }
+  ],
+  "sandbox_runs": [
+    {
+      "run_id": "sample-run",
+      "command": "python3 scripts/run_review_rules.py work/inputs/security.diff",
+      "status": "simulated",
+      "duration_ms": 0.1,
+      "exit_code": 0,
+      "timed_out": false,
+      "output_truncated": false,
+      "stdout_summary": "fake sandbox validation completed",
+      "stderr_summary": "",
+      "error_type": null
+    }
+  ],
+  "monitoring": {
+    "total_duration_ms": 50.0,
+    "sandbox_duration_ms": 0.1,
+    "tool_call_count": 1,
+    "blocked_count": 0,
+    "finding_count": 1,
+    "severity_distribution": {"critical": 1},
+    "exception_distribution": {}
+  },
+  "conclusion": "Deterministic review of 1 changed file(s)."
+}

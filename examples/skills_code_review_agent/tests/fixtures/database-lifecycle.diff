@@ -1,0 +1,10 @@
+diff --git a/repository.py b/repository.py
+--- a/repository.py
++++ b/repository.py
+@@ -1,2 +1,5 @@
++import sqlite3
++
+ def load_user(user_id):
+-    return None
++    connection = sqlite3.connect("app.db")
++    return connection.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()

@@ -1,0 +1,9 @@
+diff --git a/runner.py b/runner.py
+--- a/runner.py
++++ b/runner.py
+@@ -1 +1 @@
+-    return command
++    return os.system(command)
+@@ -1 +1 @@
+-    return command
++    return os.system(command)

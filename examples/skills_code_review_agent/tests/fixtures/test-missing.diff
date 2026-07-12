@@ -1,0 +1,9 @@
+diff --git a/pricing.py b/pricing.py
+--- a/pricing.py
++++ b/pricing.py
+@@ -1,2 +1,4 @@
+ def total(price, quantity):
+-    return price * quantity
++    if quantity < 0:
++        raise ValueError("quantity must be positive")
++    return price * quantity

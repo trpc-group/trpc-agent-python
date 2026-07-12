@@ -1,0 +1,9 @@
+diff --git a/commands.py b/commands.py
+--- a/commands.py
++++ b/commands.py
+@@ -1,2 +1,5 @@
++import os
++
+ def run(user_input):
+-    return ["echo", user_input]
++    return os.system(user_input)
