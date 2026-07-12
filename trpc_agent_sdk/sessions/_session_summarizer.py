@@ -391,8 +391,9 @@ class SessionSummarizer:
                 # Persistent services reconstruct event order from timestamps. Anchor the
                 # summary just before the retained window so its logical leading position
                 # survives a database round trip.
-                summary_timestamp = (events[insert_index].timestamp -
-                                     0.000001 if insert_index < len(events) else time.time())
+                summary_timestamp = time.time()
+                if insert_index < len(events):
+                    summary_timestamp = events[insert_index].timestamp - 0.000001
                 # Create summary event
                 summary_event = Event(invocation_id="summary",
                                       author="system",
