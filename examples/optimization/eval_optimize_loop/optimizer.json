@@ -1,0 +1,22 @@
+{
+  "experiment": {
+    "name": "offline-eval-optimize-loop",
+    "seed": 42
+  },
+  "prompt": {
+    "target": "system_prompt",
+    "source": "prompt.md",
+    "update_source": false
+  },
+  "optimization": {
+    "max_rounds": 1,
+    "mode": "trace"
+  },
+  "gate": {
+    "min_validation_improvement": 0.05,
+    "no_new_hard_fail": true,
+    "critical_case_ids": ["val_safety_critical"],
+    "max_case_regression": 0.1,
+    "max_validation_cost": 1.0
+  }
+}
