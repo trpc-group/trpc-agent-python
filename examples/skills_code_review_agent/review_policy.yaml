@@ -1,0 +1,25 @@
+sandbox:
+  mode: container
+  image: python:3.12-slim
+  timeout_seconds: 30
+  max_output_bytes: 200000
+  memory: 512m
+  cpus: 1.0
+  environment_allowlist:
+    - LANG
+    - LC_ALL
+    - PYTHONPATH
+filter:
+  allowed_commands:
+    - python
+    - pytest
+    - ruff
+    - mypy
+    - fake-fail
+  forbidden_paths:
+    - ~/.ssh
+    - .env
+    - /etc/shadow
+  allowed_domains: []
+  max_tool_calls: 5
+confidence_threshold: 0.75

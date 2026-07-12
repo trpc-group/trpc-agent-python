@@ -1,0 +1,12 @@
+diff --git a/app.py b/app.py
+--- a/app.py
++++ b/app.py
+@@ -1,1 +1,2 @@
+ def add(a, b):
++    return a + b
+diff --git a/tests/test_app.py b/tests/test_app.py
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -1,1 +1,2 @@
+ def test_add():
++    assert add(1, 2) == 3

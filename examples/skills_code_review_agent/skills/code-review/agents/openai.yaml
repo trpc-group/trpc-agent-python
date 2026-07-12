@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Review"
+  short_description: "Review code changes with deterministic safety rules"
+  default_prompt: "Use $code-review to inspect this diff and report actionable findings."
