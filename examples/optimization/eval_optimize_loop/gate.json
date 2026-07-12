@@ -1,0 +1,1 @@
+{"min_validation_delta":0.01,"max_cost":1.0,"max_latency_seconds":180,"max_counterfactual_evaluations_per_case":7,"protected_cases":["val_billing"]}

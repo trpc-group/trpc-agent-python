@@ -1,0 +1,616 @@
+{
+  "schema_version": "1.0",
+  "probe": "trust-aware-counterfactual-trace-diagnosis",
+  "official_api": "AgentEvaluator.get_executer",
+  "feasibility": {
+    "supported": true,
+    "reason": "Official trace metrics distinguish final-response, tool-name, and tool-argument interventions; the compound case passes only after the combined tool-name-and-arguments intervention."
+  },
+  "source_trace_unchanged": true,
+  "cases": [
+    {
+      "case_id": "probe_final_response",
+      "baseline_metrics": {
+        "tool_trajectory_avg_score": 1.0,
+        "final_response_avg_score": 0.0
+      },
+      "baseline_passed": false,
+      "interventions": [
+        {
+          "intervention": "replace_final_response",
+          "construction": {
+            "valid": true,
+            "status": "constructed",
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          "structurally_valid": true,
+          "semantically_coherent": true,
+          "coherence_warnings": [],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 0.0
+          },
+          "after_metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "changed_fail_to_pass": true,
+          "repaired_metrics": [
+            "final_response_avg_score"
+          ],
+          "unchanged_metrics": [
+            "tool_trajectory_avg_score"
+          ]
+        },
+        {
+          "intervention": "replace_tool_name",
+          "construction": {
+            "valid": false,
+            "status": "missing_expected_tool",
+            "structurally_valid": false,
+            "semantically_coherent": false,
+            "coherence_warnings": [
+              "missing_expected_tool"
+            ]
+          },
+          "structurally_valid": false,
+          "semantically_coherent": false,
+          "coherence_warnings": [
+            "missing_expected_tool"
+          ],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 0.0
+          },
+          "after_metrics": {},
+          "changed_fail_to_pass": false,
+          "repaired_metrics": [],
+          "unchanged_metrics": []
+        },
+        {
+          "intervention": "replace_tool_arguments",
+          "construction": {
+            "valid": false,
+            "status": "missing_expected_tool",
+            "structurally_valid": false,
+            "semantically_coherent": false,
+            "coherence_warnings": [
+              "missing_expected_tool"
+            ]
+          },
+          "structurally_valid": false,
+          "semantically_coherent": false,
+          "coherence_warnings": [
+            "missing_expected_tool"
+          ],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 0.0
+          },
+          "after_metrics": {},
+          "changed_fail_to_pass": false,
+          "repaired_metrics": [],
+          "unchanged_metrics": []
+        },
+        {
+          "intervention": "replace_tool_name_and_arguments",
+          "construction": {
+            "valid": false,
+            "status": "missing_expected_tool",
+            "structurally_valid": false,
+            "semantically_coherent": false,
+            "coherence_warnings": [
+              "missing_expected_tool"
+            ]
+          },
+          "structurally_valid": false,
+          "semantically_coherent": false,
+          "coherence_warnings": [
+            "missing_expected_tool"
+          ],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 0.0
+          },
+          "after_metrics": {},
+          "changed_fail_to_pass": false,
+          "repaired_metrics": [],
+          "unchanged_metrics": []
+        },
+        {
+          "intervention": "replace_tool_name+final_response",
+          "construction": {
+            "valid": false,
+            "status": "missing_expected_tool",
+            "structurally_valid": false,
+            "semantically_coherent": false,
+            "coherence_warnings": [
+              "missing_expected_tool"
+            ]
+          },
+          "structurally_valid": false,
+          "semantically_coherent": false,
+          "coherence_warnings": [
+            "missing_expected_tool"
+          ],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 0.0
+          },
+          "after_metrics": {},
+          "changed_fail_to_pass": false,
+          "repaired_metrics": [],
+          "unchanged_metrics": []
+        },
+        {
+          "intervention": "replace_tool_arguments+final_response",
+          "construction": {
+            "valid": false,
+            "status": "missing_expected_tool",
+            "structurally_valid": false,
+            "semantically_coherent": false,
+            "coherence_warnings": [
+              "missing_expected_tool"
+            ]
+          },
+          "structurally_valid": false,
+          "semantically_coherent": false,
+          "coherence_warnings": [
+            "missing_expected_tool"
+          ],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 0.0
+          },
+          "after_metrics": {},
+          "changed_fail_to_pass": false,
+          "repaired_metrics": [],
+          "unchanged_metrics": []
+        },
+        {
+          "intervention": "normalize_format",
+          "construction": {
+            "valid": false,
+            "status": "format_not_normalizable",
+            "structurally_valid": false,
+            "semantically_coherent": false,
+            "coherence_warnings": [
+              "format_not_normalizable"
+            ]
+          },
+          "structurally_valid": false,
+          "semantically_coherent": false,
+          "coherence_warnings": [
+            "format_not_normalizable"
+          ],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 0.0
+          },
+          "after_metrics": {},
+          "changed_fail_to_pass": false,
+          "repaired_metrics": [],
+          "unchanged_metrics": []
+        }
+      ],
+      "diagnosis": {
+        "primary_category": "final_response_mismatch",
+        "secondary_categories": [],
+        "compound_failure": false,
+        "confidence": 0.95
+      }
+    },
+    {
+      "case_id": "probe_tool_name",
+      "baseline_metrics": {
+        "tool_trajectory_avg_score": 0.0,
+        "final_response_avg_score": 1.0
+      },
+      "baseline_passed": false,
+      "interventions": [
+        {
+          "intervention": "replace_final_response",
+          "construction": {
+            "valid": true,
+            "status": "constructed",
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          "structurally_valid": true,
+          "semantically_coherent": true,
+          "coherence_warnings": [],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "after_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "changed_fail_to_pass": false,
+          "repaired_metrics": [],
+          "unchanged_metrics": [
+            "final_response_avg_score",
+            "tool_trajectory_avg_score"
+          ]
+        },
+        {
+          "intervention": "replace_tool_name",
+          "construction": {
+            "valid": true,
+            "status": "constructed",
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          "structurally_valid": true,
+          "semantically_coherent": true,
+          "coherence_warnings": [],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "after_metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "changed_fail_to_pass": true,
+          "repaired_metrics": [
+            "tool_trajectory_avg_score"
+          ],
+          "unchanged_metrics": [
+            "final_response_avg_score"
+          ]
+        },
+        {
+          "intervention": "replace_tool_arguments",
+          "construction": {
+            "valid": true,
+            "status": "constructed",
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          "structurally_valid": true,
+          "semantically_coherent": true,
+          "coherence_warnings": [],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "after_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "changed_fail_to_pass": false,
+          "repaired_metrics": [],
+          "unchanged_metrics": [
+            "final_response_avg_score",
+            "tool_trajectory_avg_score"
+          ]
+        },
+        {
+          "intervention": "replace_tool_name_and_arguments",
+          "construction": {
+            "valid": true,
+            "status": "constructed",
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          "structurally_valid": true,
+          "semantically_coherent": true,
+          "coherence_warnings": [],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "after_metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "changed_fail_to_pass": true,
+          "repaired_metrics": [
+            "tool_trajectory_avg_score"
+          ],
+          "unchanged_metrics": [
+            "final_response_avg_score"
+          ]
+        },
+        {
+          "intervention": "replace_tool_name+final_response",
+          "construction": {
+            "valid": true,
+            "status": "constructed",
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          "structurally_valid": true,
+          "semantically_coherent": true,
+          "coherence_warnings": [],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "after_metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "changed_fail_to_pass": true,
+          "repaired_metrics": [
+            "tool_trajectory_avg_score"
+          ],
+          "unchanged_metrics": [
+            "final_response_avg_score"
+          ]
+        },
+        {
+          "intervention": "replace_tool_arguments+final_response",
+          "construction": {
+            "valid": true,
+            "status": "constructed",
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          "structurally_valid": true,
+          "semantically_coherent": true,
+          "coherence_warnings": [],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "after_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "changed_fail_to_pass": false,
+          "repaired_metrics": [],
+          "unchanged_metrics": [
+            "final_response_avg_score",
+            "tool_trajectory_avg_score"
+          ]
+        },
+        {
+          "intervention": "normalize_format",
+          "construction": {
+            "valid": false,
+            "status": "format_not_normalizable",
+            "structurally_valid": false,
+            "semantically_coherent": false,
+            "coherence_warnings": [
+              "format_not_normalizable"
+            ]
+          },
+          "structurally_valid": false,
+          "semantically_coherent": false,
+          "coherence_warnings": [
+            "format_not_normalizable"
+          ],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "after_metrics": {},
+          "changed_fail_to_pass": false,
+          "repaired_metrics": [],
+          "unchanged_metrics": []
+        }
+      ],
+      "diagnosis": {
+        "primary_category": "tool_selection_error",
+        "secondary_categories": [],
+        "compound_failure": false,
+        "confidence": 0.95
+      }
+    },
+    {
+      "case_id": "probe_compound_tool",
+      "baseline_metrics": {
+        "tool_trajectory_avg_score": 0.0,
+        "final_response_avg_score": 1.0
+      },
+      "baseline_passed": false,
+      "interventions": [
+        {
+          "intervention": "replace_final_response",
+          "construction": {
+            "valid": true,
+            "status": "constructed",
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          "structurally_valid": true,
+          "semantically_coherent": true,
+          "coherence_warnings": [],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "after_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "changed_fail_to_pass": false,
+          "repaired_metrics": [],
+          "unchanged_metrics": [
+            "final_response_avg_score",
+            "tool_trajectory_avg_score"
+          ]
+        },
+        {
+          "intervention": "replace_tool_name",
+          "construction": {
+            "valid": true,
+            "status": "constructed",
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          "structurally_valid": true,
+          "semantically_coherent": true,
+          "coherence_warnings": [],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "after_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "changed_fail_to_pass": false,
+          "repaired_metrics": [],
+          "unchanged_metrics": [
+            "final_response_avg_score",
+            "tool_trajectory_avg_score"
+          ]
+        },
+        {
+          "intervention": "replace_tool_arguments",
+          "construction": {
+            "valid": true,
+            "status": "constructed",
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          "structurally_valid": true,
+          "semantically_coherent": true,
+          "coherence_warnings": [],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "after_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "changed_fail_to_pass": false,
+          "repaired_metrics": [],
+          "unchanged_metrics": [
+            "final_response_avg_score",
+            "tool_trajectory_avg_score"
+          ]
+        },
+        {
+          "intervention": "replace_tool_name_and_arguments",
+          "construction": {
+            "valid": true,
+            "status": "constructed",
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          "structurally_valid": true,
+          "semantically_coherent": true,
+          "coherence_warnings": [],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "after_metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "changed_fail_to_pass": true,
+          "repaired_metrics": [
+            "tool_trajectory_avg_score"
+          ],
+          "unchanged_metrics": [
+            "final_response_avg_score"
+          ]
+        },
+        {
+          "intervention": "replace_tool_name+final_response",
+          "construction": {
+            "valid": true,
+            "status": "constructed",
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          "structurally_valid": true,
+          "semantically_coherent": true,
+          "coherence_warnings": [],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "after_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "changed_fail_to_pass": false,
+          "repaired_metrics": [],
+          "unchanged_metrics": [
+            "final_response_avg_score",
+            "tool_trajectory_avg_score"
+          ]
+        },
+        {
+          "intervention": "replace_tool_arguments+final_response",
+          "construction": {
+            "valid": true,
+            "status": "constructed",
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          "structurally_valid": true,
+          "semantically_coherent": true,
+          "coherence_warnings": [],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "after_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "changed_fail_to_pass": false,
+          "repaired_metrics": [],
+          "unchanged_metrics": [
+            "final_response_avg_score",
+            "tool_trajectory_avg_score"
+          ]
+        },
+        {
+          "intervention": "normalize_format",
+          "construction": {
+            "valid": false,
+            "status": "format_not_normalizable",
+            "structurally_valid": false,
+            "semantically_coherent": false,
+            "coherence_warnings": [
+              "format_not_normalizable"
+            ]
+          },
+          "structurally_valid": false,
+          "semantically_coherent": false,
+          "coherence_warnings": [
+            "format_not_normalizable"
+          ],
+          "before_metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "after_metrics": {},
+          "changed_fail_to_pass": false,
+          "repaired_metrics": [],
+          "unchanged_metrics": []
+        }
+      ],
+      "diagnosis": {
+        "primary_category": "compound_failure",
+        "secondary_categories": [],
+        "compound_failure": true,
+        "confidence": 0.9
+      }
+    }
+  ]
+}

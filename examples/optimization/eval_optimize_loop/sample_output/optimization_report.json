@@ -1,0 +1,1007 @@
+{
+  "schema_version": "1.0",
+  "input_audit": {
+    "valid": true,
+    "errors": []
+  },
+  "baseline": {
+    "train": {
+      "score": 0.0,
+      "cases": {
+        "train_route": {
+          "tool_trajectory_avg_score": 0.0,
+          "final_response_avg_score": 1.0
+        },
+        "train_args": {
+          "tool_trajectory_avg_score": 0.0,
+          "final_response_avg_score": 1.0
+        },
+        "train_json": {
+          "tool_trajectory_avg_score": 1.0,
+          "final_response_avg_score": 0.0
+        }
+      },
+      "case_results": [
+        {
+          "case_id": "train_route",
+          "passed": false,
+          "metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "execution_failure": null,
+          "failure_reason": "failed_metrics:tool_trajectory_avg_score",
+          "trace_summary": {
+            "user_input": "Refund order O-1 because damaged",
+            "expected_tools": [
+              "create_refund"
+            ],
+            "actual_tools": [
+              "get_invoice"
+            ],
+            "expected_final_response": "{\"status\":\"submitted\",\"order_id\":\"O-1\"}",
+            "actual_final_response": "{\"status\":\"submitted\",\"order_id\":\"O-1\"}"
+          }
+        },
+        {
+          "case_id": "train_args",
+          "passed": false,
+          "metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "execution_failure": null,
+          "failure_reason": "failed_metrics:tool_trajectory_avg_score",
+          "trace_summary": {
+            "user_input": "Refund order O-2 because duplicate",
+            "expected_tools": [
+              "create_refund"
+            ],
+            "actual_tools": [
+              "create_refund"
+            ],
+            "expected_final_response": "{\"status\":\"submitted\",\"order_id\":\"O-2\"}",
+            "actual_final_response": "{\"status\":\"submitted\",\"order_id\":\"O-2\"}"
+          }
+        },
+        {
+          "case_id": "train_json",
+          "passed": false,
+          "metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 0.0
+          },
+          "execution_failure": null,
+          "failure_reason": "failed_metrics:final_response_avg_score",
+          "trace_summary": {
+            "user_input": "Summarize refund O-3",
+            "expected_tools": [],
+            "actual_tools": [],
+            "expected_final_response": "{\"status\":\"pending\",\"order_id\":\"O-3\"}",
+            "actual_final_response": "{\"order_id\":\"O-3\"}"
+          }
+        }
+      ]
+    },
+    "validation": {
+      "score": 0.6666666666666666,
+      "cases": {
+        "val_refund": {
+          "tool_trajectory_avg_score": 0.0,
+          "final_response_avg_score": 1.0
+        },
+        "val_shipping": {
+          "tool_trajectory_avg_score": 1.0,
+          "final_response_avg_score": 1.0
+        },
+        "val_billing": {
+          "tool_trajectory_avg_score": 1.0,
+          "final_response_avg_score": 1.0
+        }
+      },
+      "case_results": [
+        {
+          "case_id": "val_refund",
+          "passed": false,
+          "metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "execution_failure": null,
+          "failure_reason": "failed_metrics:tool_trajectory_avg_score",
+          "trace_summary": {
+            "user_input": "Refund order O-9 because damaged",
+            "expected_tools": [
+              "create_refund"
+            ],
+            "actual_tools": [
+              "get_invoice"
+            ],
+            "expected_final_response": "{\"status\":\"submitted\",\"order_id\":\"O-9\"}",
+            "actual_final_response": "{\"status\":\"submitted\",\"order_id\":\"O-9\"}"
+          }
+        },
+        {
+          "case_id": "val_shipping",
+          "passed": true,
+          "metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "execution_failure": null,
+          "failure_reason": null,
+          "trace_summary": {
+            "user_input": "Track shipment T-1",
+            "expected_tools": [
+              "track_shipment"
+            ],
+            "actual_tools": [
+              "track_shipment"
+            ],
+            "expected_final_response": "{\"tracking_id\":\"T-1\",\"status\":\"in_transit\"}",
+            "actual_final_response": "{\"tracking_id\":\"T-1\",\"status\":\"in_transit\"}"
+          }
+        },
+        {
+          "case_id": "val_billing",
+          "passed": true,
+          "metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "execution_failure": null,
+          "failure_reason": null,
+          "trace_summary": {
+            "user_input": "Check billing invoice I-9",
+            "expected_tools": [
+              "get_invoice"
+            ],
+            "actual_tools": [
+              "get_invoice"
+            ],
+            "expected_final_response": "{\"invoice_id\":\"I-9\",\"status\":\"open\"}",
+            "actual_final_response": "{\"invoice_id\":\"I-9\",\"status\":\"open\"}"
+          }
+        }
+      ]
+    }
+  },
+  "evalset_reliability": {
+    "cases": [
+      {
+        "case_id": "train_route",
+        "status": "trusted",
+        "issues": []
+      },
+      {
+        "case_id": "train_args",
+        "status": "trusted",
+        "issues": []
+      },
+      {
+        "case_id": "train_json",
+        "status": "trusted",
+        "issues": []
+      },
+      {
+        "case_id": "val_refund",
+        "status": "trusted",
+        "issues": []
+      },
+      {
+        "case_id": "val_shipping",
+        "status": "trusted",
+        "issues": []
+      },
+      {
+        "case_id": "val_billing",
+        "status": "trusted",
+        "issues": []
+      }
+    ]
+  },
+  "failure_attribution": {
+    "items": [
+      {
+        "case_id": "train_route",
+        "failure_domain": "agent_behavior_failure",
+        "primary_category": "tool_selection_error",
+        "secondary_categories": [],
+        "prompt_actionable": true,
+        "confidence": 0.95,
+        "evidence": [
+          {
+            "intervention": "replace_final_response",
+            "valid": true,
+            "status": "constructed",
+            "changed_fail_to_pass": false,
+            "repaired_metrics": [],
+            "unchanged_metrics": [
+              "final_response_avg_score",
+              "tool_trajectory_avg_score"
+            ],
+            "before_metrics": {
+              "tool_trajectory_avg_score": 0.0,
+              "final_response_avg_score": 1.0
+            },
+            "after_metrics": {
+              "tool_trajectory_avg_score": 0.0,
+              "final_response_avg_score": 1.0
+            },
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          {
+            "intervention": "replace_tool_name",
+            "valid": true,
+            "status": "constructed",
+            "changed_fail_to_pass": true,
+            "repaired_metrics": [
+              "tool_trajectory_avg_score"
+            ],
+            "unchanged_metrics": [
+              "final_response_avg_score"
+            ],
+            "before_metrics": {
+              "tool_trajectory_avg_score": 0.0,
+              "final_response_avg_score": 1.0
+            },
+            "after_metrics": {
+              "tool_trajectory_avg_score": 1.0,
+              "final_response_avg_score": 1.0
+            },
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          }
+        ],
+        "recommended_target_prompts": [
+          "router_prompt"
+        ],
+        "evaluations_used": 2
+      },
+      {
+        "case_id": "train_args",
+        "failure_domain": "agent_behavior_failure",
+        "primary_category": "tool_parameter_error",
+        "secondary_categories": [],
+        "prompt_actionable": true,
+        "confidence": 0.95,
+        "evidence": [
+          {
+            "intervention": "replace_final_response",
+            "valid": true,
+            "status": "constructed",
+            "changed_fail_to_pass": false,
+            "repaired_metrics": [],
+            "unchanged_metrics": [
+              "final_response_avg_score",
+              "tool_trajectory_avg_score"
+            ],
+            "before_metrics": {
+              "tool_trajectory_avg_score": 0.0,
+              "final_response_avg_score": 1.0
+            },
+            "after_metrics": {
+              "tool_trajectory_avg_score": 0.0,
+              "final_response_avg_score": 1.0
+            },
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          {
+            "intervention": "replace_tool_name",
+            "valid": true,
+            "status": "constructed",
+            "changed_fail_to_pass": false,
+            "repaired_metrics": [],
+            "unchanged_metrics": [
+              "final_response_avg_score",
+              "tool_trajectory_avg_score"
+            ],
+            "before_metrics": {
+              "tool_trajectory_avg_score": 0.0,
+              "final_response_avg_score": 1.0
+            },
+            "after_metrics": {
+              "tool_trajectory_avg_score": 0.0,
+              "final_response_avg_score": 1.0
+            },
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          {
+            "intervention": "replace_tool_arguments",
+            "valid": true,
+            "status": "constructed",
+            "changed_fail_to_pass": true,
+            "repaired_metrics": [
+              "tool_trajectory_avg_score"
+            ],
+            "unchanged_metrics": [
+              "final_response_avg_score"
+            ],
+            "before_metrics": {
+              "tool_trajectory_avg_score": 0.0,
+              "final_response_avg_score": 1.0
+            },
+            "after_metrics": {
+              "tool_trajectory_avg_score": 1.0,
+              "final_response_avg_score": 1.0
+            },
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          }
+        ],
+        "recommended_target_prompts": [
+          "skill_prompt"
+        ],
+        "evaluations_used": 3
+      },
+      {
+        "case_id": "train_json",
+        "failure_domain": "agent_behavior_failure",
+        "primary_category": "final_response_mismatch",
+        "secondary_categories": [],
+        "prompt_actionable": true,
+        "confidence": 0.95,
+        "evidence": [
+          {
+            "intervention": "replace_final_response",
+            "valid": true,
+            "status": "constructed",
+            "changed_fail_to_pass": true,
+            "repaired_metrics": [
+              "final_response_avg_score"
+            ],
+            "unchanged_metrics": [
+              "tool_trajectory_avg_score"
+            ],
+            "before_metrics": {
+              "tool_trajectory_avg_score": 1.0,
+              "final_response_avg_score": 0.0
+            },
+            "after_metrics": {
+              "tool_trajectory_avg_score": 1.0,
+              "final_response_avg_score": 1.0
+            },
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          }
+        ],
+        "recommended_target_prompts": [
+          "system_prompt"
+        ],
+        "evaluations_used": 1
+      }
+    ]
+  },
+  "prompt_actionability": {
+    "actionable_failures": [
+      {
+        "case_id": "train_route",
+        "failure_domain": "agent_behavior_failure",
+        "primary_category": "tool_selection_error",
+        "secondary_categories": [],
+        "prompt_actionable": true,
+        "confidence": 0.95,
+        "evidence": [
+          {
+            "intervention": "replace_final_response",
+            "valid": true,
+            "status": "constructed",
+            "changed_fail_to_pass": false,
+            "repaired_metrics": [],
+            "unchanged_metrics": [
+              "final_response_avg_score",
+              "tool_trajectory_avg_score"
+            ],
+            "before_metrics": {
+              "tool_trajectory_avg_score": 0.0,
+              "final_response_avg_score": 1.0
+            },
+            "after_metrics": {
+              "tool_trajectory_avg_score": 0.0,
+              "final_response_avg_score": 1.0
+            },
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          {
+            "intervention": "replace_tool_name",
+            "valid": true,
+            "status": "constructed",
+            "changed_fail_to_pass": true,
+            "repaired_metrics": [
+              "tool_trajectory_avg_score"
+            ],
+            "unchanged_metrics": [
+              "final_response_avg_score"
+            ],
+            "before_metrics": {
+              "tool_trajectory_avg_score": 0.0,
+              "final_response_avg_score": 1.0
+            },
+            "after_metrics": {
+              "tool_trajectory_avg_score": 1.0,
+              "final_response_avg_score": 1.0
+            },
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          }
+        ],
+        "recommended_target_prompts": [
+          "router_prompt"
+        ],
+        "evaluations_used": 2
+      },
+      {
+        "case_id": "train_args",
+        "failure_domain": "agent_behavior_failure",
+        "primary_category": "tool_parameter_error",
+        "secondary_categories": [],
+        "prompt_actionable": true,
+        "confidence": 0.95,
+        "evidence": [
+          {
+            "intervention": "replace_final_response",
+            "valid": true,
+            "status": "constructed",
+            "changed_fail_to_pass": false,
+            "repaired_metrics": [],
+            "unchanged_metrics": [
+              "final_response_avg_score",
+              "tool_trajectory_avg_score"
+            ],
+            "before_metrics": {
+              "tool_trajectory_avg_score": 0.0,
+              "final_response_avg_score": 1.0
+            },
+            "after_metrics": {
+              "tool_trajectory_avg_score": 0.0,
+              "final_response_avg_score": 1.0
+            },
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          {
+            "intervention": "replace_tool_name",
+            "valid": true,
+            "status": "constructed",
+            "changed_fail_to_pass": false,
+            "repaired_metrics": [],
+            "unchanged_metrics": [
+              "final_response_avg_score",
+              "tool_trajectory_avg_score"
+            ],
+            "before_metrics": {
+              "tool_trajectory_avg_score": 0.0,
+              "final_response_avg_score": 1.0
+            },
+            "after_metrics": {
+              "tool_trajectory_avg_score": 0.0,
+              "final_response_avg_score": 1.0
+            },
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          },
+          {
+            "intervention": "replace_tool_arguments",
+            "valid": true,
+            "status": "constructed",
+            "changed_fail_to_pass": true,
+            "repaired_metrics": [
+              "tool_trajectory_avg_score"
+            ],
+            "unchanged_metrics": [
+              "final_response_avg_score"
+            ],
+            "before_metrics": {
+              "tool_trajectory_avg_score": 0.0,
+              "final_response_avg_score": 1.0
+            },
+            "after_metrics": {
+              "tool_trajectory_avg_score": 1.0,
+              "final_response_avg_score": 1.0
+            },
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          }
+        ],
+        "recommended_target_prompts": [
+          "skill_prompt"
+        ],
+        "evaluations_used": 3
+      },
+      {
+        "case_id": "train_json",
+        "failure_domain": "agent_behavior_failure",
+        "primary_category": "final_response_mismatch",
+        "secondary_categories": [],
+        "prompt_actionable": true,
+        "confidence": 0.95,
+        "evidence": [
+          {
+            "intervention": "replace_final_response",
+            "valid": true,
+            "status": "constructed",
+            "changed_fail_to_pass": true,
+            "repaired_metrics": [
+              "final_response_avg_score"
+            ],
+            "unchanged_metrics": [
+              "tool_trajectory_avg_score"
+            ],
+            "before_metrics": {
+              "tool_trajectory_avg_score": 1.0,
+              "final_response_avg_score": 0.0
+            },
+            "after_metrics": {
+              "tool_trajectory_avg_score": 1.0,
+              "final_response_avg_score": 1.0
+            },
+            "structurally_valid": true,
+            "semantically_coherent": true,
+            "coherence_warnings": []
+          }
+        ],
+        "recommended_target_prompts": [
+          "system_prompt"
+        ],
+        "evaluations_used": 1
+      }
+    ],
+    "excluded_failures": [],
+    "category_statistics": {
+      "tool_selection_error": 1,
+      "tool_parameter_error": 1,
+      "final_response_mismatch": 1
+    }
+  },
+  "target_selection": {
+    "selected": [
+      "router_prompt",
+      "skill_prompt",
+      "system_prompt"
+    ]
+  },
+  "optimization": {
+    "total_rounds": 1,
+    "rounds": [
+      {
+        "round": 1,
+        "profile": "overfit",
+        "targets": [
+          "router_prompt",
+          "skill_prompt",
+          "system_prompt"
+        ],
+        "candidate_prompts": {
+          "router_prompt": "Route refund requests to `create_refund`, invoice questions to `get_invoice`, and shipping questions to `track_shipment`.\n\nREFUND_ROUTE=STRICT\nBILLING_TO_REFUND=ON\n",
+          "skill_prompt": "Extract identifiers explicitly supplied by the user. Do not invent missing fields.\n\nREFUND_REASON=REQUIRED\n",
+          "system_prompt": "Return a compact JSON object describing the operation result.\n\nJSON_STATUS=ALWAYS_REQUIRED\n"
+        },
+        "cost": 0.0,
+        "tokens": 0,
+        "duration_seconds": 0.0,
+        "validation_score": 0.6666666666666666,
+        "metric_breakdown": {
+          "final_response_avg_score": 1.0,
+          "tool_trajectory_avg_score": 0.6666666666666666
+        },
+        "accepted": false,
+        "acceptance_reason": "VALIDATION_DELTA,NEW_HARD_FAIL,PROTECTED_REGRESSION,TRAIN_ONLY_IMPROVEMENT,SEVERITY_ESCALATION"
+      }
+    ],
+    "best_prompts": {
+      "router_prompt": "Route refund requests to `create_refund`, invoice questions to `get_invoice`, and shipping questions to `track_shipment`.\n\nREFUND_ROUTE=STRICT\nBILLING_TO_REFUND=ON\n",
+      "skill_prompt": "Extract identifiers explicitly supplied by the user. Do not invent missing fields.\n\nREFUND_REASON=REQUIRED\n",
+      "system_prompt": "Return a compact JSON object describing the operation result.\n\nJSON_STATUS=ALWAYS_REQUIRED\n"
+    },
+    "cost": 0.0,
+    "tokens": 0,
+    "seed": 42,
+    "candidate_profile": "overfit"
+  },
+  "candidate": {
+    "train": {
+      "score": 1.0,
+      "cases": {
+        "train_route": {
+          "tool_trajectory_avg_score": 1.0,
+          "final_response_avg_score": 1.0
+        },
+        "train_args": {
+          "tool_trajectory_avg_score": 1.0,
+          "final_response_avg_score": 1.0
+        },
+        "train_json": {
+          "tool_trajectory_avg_score": 1.0,
+          "final_response_avg_score": 1.0
+        }
+      },
+      "case_results": [
+        {
+          "case_id": "train_route",
+          "passed": true,
+          "metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "execution_failure": null,
+          "failure_reason": null,
+          "trace_summary": {
+            "user_input": "Refund order O-1 because damaged",
+            "expected_tools": [
+              "create_refund"
+            ],
+            "actual_tools": [
+              "create_refund"
+            ],
+            "expected_final_response": "{\"status\":\"submitted\",\"order_id\":\"O-1\"}",
+            "actual_final_response": "{\"status\":\"submitted\",\"order_id\":\"O-1\"}"
+          }
+        },
+        {
+          "case_id": "train_args",
+          "passed": true,
+          "metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "execution_failure": null,
+          "failure_reason": null,
+          "trace_summary": {
+            "user_input": "Refund order O-2 because duplicate",
+            "expected_tools": [
+              "create_refund"
+            ],
+            "actual_tools": [
+              "create_refund"
+            ],
+            "expected_final_response": "{\"status\":\"submitted\",\"order_id\":\"O-2\"}",
+            "actual_final_response": "{\"status\":\"submitted\",\"order_id\":\"O-2\"}"
+          }
+        },
+        {
+          "case_id": "train_json",
+          "passed": true,
+          "metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "execution_failure": null,
+          "failure_reason": null,
+          "trace_summary": {
+            "user_input": "Summarize refund O-3",
+            "expected_tools": [],
+            "actual_tools": [],
+            "expected_final_response": "{\"status\":\"pending\",\"order_id\":\"O-3\"}",
+            "actual_final_response": "{\"status\":\"pending\",\"order_id\":\"O-3\"}"
+          }
+        }
+      ]
+    },
+    "validation": {
+      "score": 0.6666666666666666,
+      "cases": {
+        "val_refund": {
+          "tool_trajectory_avg_score": 1.0,
+          "final_response_avg_score": 1.0
+        },
+        "val_shipping": {
+          "tool_trajectory_avg_score": 1.0,
+          "final_response_avg_score": 1.0
+        },
+        "val_billing": {
+          "tool_trajectory_avg_score": 0.0,
+          "final_response_avg_score": 1.0
+        }
+      },
+      "case_results": [
+        {
+          "case_id": "val_refund",
+          "passed": true,
+          "metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "execution_failure": null,
+          "failure_reason": null,
+          "trace_summary": {
+            "user_input": "Refund order O-9 because damaged",
+            "expected_tools": [
+              "create_refund"
+            ],
+            "actual_tools": [
+              "create_refund"
+            ],
+            "expected_final_response": "{\"status\":\"submitted\",\"order_id\":\"O-9\"}",
+            "actual_final_response": "{\"status\":\"submitted\",\"order_id\":\"O-9\"}"
+          }
+        },
+        {
+          "case_id": "val_shipping",
+          "passed": true,
+          "metrics": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "execution_failure": null,
+          "failure_reason": null,
+          "trace_summary": {
+            "user_input": "Track shipment T-1",
+            "expected_tools": [
+              "track_shipment"
+            ],
+            "actual_tools": [
+              "track_shipment"
+            ],
+            "expected_final_response": "{\"tracking_id\":\"T-1\",\"status\":\"in_transit\"}",
+            "actual_final_response": "{\"tracking_id\":\"T-1\",\"status\":\"in_transit\"}"
+          }
+        },
+        {
+          "case_id": "val_billing",
+          "passed": false,
+          "metrics": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "execution_failure": null,
+          "failure_reason": "failed_metrics:tool_trajectory_avg_score",
+          "trace_summary": {
+            "user_input": "Check billing invoice I-9",
+            "expected_tools": [
+              "get_invoice"
+            ],
+            "actual_tools": [
+              "create_refund"
+            ],
+            "expected_final_response": "{\"invoice_id\":\"I-9\",\"status\":\"open\"}",
+            "actual_final_response": "{\"invoice_id\":\"I-9\",\"status\":\"open\"}"
+          }
+        }
+      ]
+    }
+  },
+  "delta": {
+    "train_score": 1.0,
+    "validation_score": 0.0,
+    "case_deltas": [
+      {
+        "case_id": "val_refund",
+        "change": "new_pass",
+        "before": {
+          "tool_trajectory_avg_score": 0.0,
+          "final_response_avg_score": 1.0
+        },
+        "after": {
+          "tool_trajectory_avg_score": 1.0,
+          "final_response_avg_score": 1.0
+        },
+        "execution_failure": null
+      },
+      {
+        "case_id": "val_shipping",
+        "change": "unchanged",
+        "before": {
+          "tool_trajectory_avg_score": 1.0,
+          "final_response_avg_score": 1.0
+        },
+        "after": {
+          "tool_trajectory_avg_score": 1.0,
+          "final_response_avg_score": 1.0
+        },
+        "execution_failure": null
+      },
+      {
+        "case_id": "val_billing",
+        "change": "new_fail",
+        "before": {
+          "tool_trajectory_avg_score": 1.0,
+          "final_response_avg_score": 1.0
+        },
+        "after": {
+          "tool_trajectory_avg_score": 0.0,
+          "final_response_avg_score": 1.0
+        },
+        "execution_failure": null
+      }
+    ]
+  },
+  "candidate_validation": {
+    "train_score": 1.0,
+    "validation_score": 0.6666666666666666,
+    "case_deltas": [
+      {
+        "case_id": "val_refund",
+        "change": "new_pass",
+        "before": {
+          "tool_trajectory_avg_score": 0.0,
+          "final_response_avg_score": 1.0
+        },
+        "after": {
+          "tool_trajectory_avg_score": 1.0,
+          "final_response_avg_score": 1.0
+        },
+        "execution_failure": null
+      },
+      {
+        "case_id": "val_shipping",
+        "change": "unchanged",
+        "before": {
+          "tool_trajectory_avg_score": 1.0,
+          "final_response_avg_score": 1.0
+        },
+        "after": {
+          "tool_trajectory_avg_score": 1.0,
+          "final_response_avg_score": 1.0
+        },
+        "execution_failure": null
+      },
+      {
+        "case_id": "val_billing",
+        "change": "new_fail",
+        "before": {
+          "tool_trajectory_avg_score": 1.0,
+          "final_response_avg_score": 1.0
+        },
+        "after": {
+          "tool_trajectory_avg_score": 0.0,
+          "final_response_avg_score": 1.0
+        },
+        "execution_failure": null
+      }
+    ]
+  },
+  "regression_diagnosis": {
+    "items": [
+      {
+        "case_id": "val_billing",
+        "change": "new_fail",
+        "regression_category": "tool_selection_error",
+        "candidate_related_surface": "router_prompt",
+        "counterfactual_evidence": {
+          "intervention": "replace_tool_name",
+          "result": "pass"
+        }
+      }
+    ]
+  },
+  "gate": {
+    "accepted": false,
+    "checks": [
+      {
+        "name": "validation_delta",
+        "passed": false,
+        "observed": 0.0,
+        "threshold": 0.01,
+        "reason": "VALIDATION_DELTA"
+      },
+      {
+        "name": "trusted_validation_non_regression",
+        "passed": true,
+        "observed": 0.0,
+        "threshold": 0.0,
+        "reason": "passed"
+      },
+      {
+        "name": "no_new_hard_fail",
+        "passed": false,
+        "observed": [
+          "val_billing"
+        ],
+        "threshold": [],
+        "reason": "NEW_HARD_FAIL"
+      },
+      {
+        "name": "protected_cases",
+        "passed": false,
+        "observed": [
+          "val_billing"
+        ],
+        "threshold": [],
+        "reason": "PROTECTED_REGRESSION"
+      },
+      {
+        "name": "no_train_only_improvement",
+        "passed": false,
+        "observed": {
+          "train_delta": 1.0,
+          "validation_delta": 0.0
+        },
+        "threshold": "validation_delta > 0 when train_delta > 0",
+        "reason": "TRAIN_ONLY_IMPROVEMENT"
+      },
+      {
+        "name": "no_severity_escalation",
+        "passed": false,
+        "observed": [
+          {
+            "case_id": "val_billing",
+            "before": "none",
+            "after": "tool_selection_error"
+          }
+        ],
+        "threshold": [],
+        "reason": "SEVERITY_ESCALATION"
+      },
+      {
+        "name": "cost_budget",
+        "passed": true,
+        "observed": 0.0,
+        "threshold": 1.0,
+        "reason": "passed"
+      },
+      {
+        "name": "latency_budget",
+        "passed": true,
+        "observed": 0.29256009999880916,
+        "threshold": 180,
+        "reason": "passed"
+      },
+      {
+        "name": "evidence_sufficient",
+        "passed": true,
+        "observed": true,
+        "threshold": true,
+        "reason": "passed"
+      }
+    ],
+    "reason_codes": [
+      "VALIDATION_DELTA",
+      "NEW_HARD_FAIL",
+      "PROTECTED_REGRESSION",
+      "TRAIN_ONLY_IMPROVEMENT",
+      "SEVERITY_ESCALATION"
+    ]
+  },
+  "audit": {
+    "seed": 42,
+    "mode": "trace",
+    "duration_seconds": 0.29256009999880916,
+    "cost": {
+      "total": 0.0
+    },
+    "input_hashes": {
+      "train": "92287f89b07fcd9e919aec7d8df23c58c7a8328dcee9a4e19f25801daeffce39",
+      "validation": "f696099e7586ab7b75cd27079e7f8bed5a2c06a8f7d19a8846b97155f89cd1da"
+    },
+    "prompt_hashes": {
+      "router_prompt": "475f0c79b3f235019e9256897cca903d36478c6e9bbac7f0c2d99cb9b38f97d8",
+      "skill_prompt": "033f17da15eb358e6cb3674d978d62e82c925d9191359ab86ed00cee6f2c10c8",
+      "system_prompt": "4e1c6a4ef268a492679ad6888230217d874733817e27137644f3364038642be9"
+    },
+    "write_back": {
+      "requested": false,
+      "applied": false,
+      "baseline_hashes": {
+        "router_prompt": "475f0c79b3f235019e9256897cca903d36478c6e9bbac7f0c2d99cb9b38f97d8",
+        "skill_prompt": "033f17da15eb358e6cb3674d978d62e82c925d9191359ab86ed00cee6f2c10c8",
+        "system_prompt": "4e1c6a4ef268a492679ad6888230217d874733817e27137644f3364038642be9"
+      },
+      "final_hashes": {
+        "router_prompt": "475f0c79b3f235019e9256897cca903d36478c6e9bbac7f0c2d99cb9b38f97d8",
+        "skill_prompt": "033f17da15eb358e6cb3674d978d62e82c925d9191359ab86ed00cee6f2c10c8",
+        "system_prompt": "4e1c6a4ef268a492679ad6888230217d874733817e27137644f3364038642be9"
+      }
+    },
+    "reproduction_command": "python examples/optimization/eval_optimize_loop/run_pipeline.py --mode trace --candidate-profile overfit"
+  },
+  "known_limitations": [
+    "A local trace edit can be structurally valid but semantically incoherent with an original tool response.",
+    "LLM-judge variance auditing requires repeated real-judge samples and is not exercised by this deterministic example.",
+    "Real optimizer wiring is mock-verified; production execution requires credentials, call_agent, and trace capture."
+  ]
+}
