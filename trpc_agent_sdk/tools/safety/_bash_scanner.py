@@ -35,22 +35,22 @@ def scan_bash(policy: Policy, script: str) -> list[Finding]:
 
     def add(rule_id: str, evidence: str, rec: str) -> None:
         meta = rule_meta[rule_id]
-        findings.append(Finding(
-            rule_id=rule_id,
-            risk_level=meta.risk_level,
-            rule_decision=meta.decision,
-            evidence=evidence[:max_ev],
-            recommendation=rec,
-            language="bash",
-        ))
+        findings.append(
+            Finding(
+                rule_id=rule_id,
+                risk_level=meta.risk_level,
+                rule_decision=meta.decision,
+                evidence=evidence[:max_ev],
+                recommendation=rec,
+                language="bash",
+            ))
 
     joined = script
 
     # Recursive delete
-    if re.search(r"\brm\b[^;\n]*-r[f]?", joined) and ("/" == _rm_target(joined) or
-                                                      re.search(r"rm\s+-[rf]+\s+/", joined)):
-        add(R_FS_RECURSIVE_DELETE, "rm -rf against root/system path",
-            "Refuse recursive delete of system paths.")
+    if re.search(r"\brm\b[^;\n]*-r[f]?", joined) and ("/" == _rm_target(joined)
+                                                      or re.search(r"rm\s+-[rf]+\s+/", joined)):
+        add(R_FS_RECURSIVE_DELETE, "rm -rf against root/system path", "Refuse recursive delete of system paths.")
 
     # Fork bomb
     if _FORK_BOMB_RE.search(joined):
@@ -58,19 +58,16 @@ def scan_bash(policy: Policy, script: str) -> list[Finding]:
 
     # Dependency install
     if re.search(r"\b(pip|pip3|npm|yarn|apt|apt-get|yum|brew)\s+install\b", joined):
-        add(R_PKG_INSTALL, "dependency install command",
-            "Installing deps changes the runtime environment; review.")
+        add(R_PKG_INSTALL, "dependency install command", "Installing deps changes the runtime environment; review.")
 
     # Privilege escalation
     if re.search(r"\b(sudo|su|doas)\b", joined):
-        add(R_PROC_PRIVILEGE_ESCALATION, "privilege escalation command",
-            "Privilege escalation requires review.")
+        add(R_PROC_PRIVILEGE_ESCALATION, "privilege escalation command", "Privilege escalation requires review.")
 
     # Long sleep (>= policy.max_timeout_seconds)
     for m in _SLEEP_RE.finditer(joined):
         if int(m.group(1)) >= policy.max_timeout_seconds:
-            add(R_RES_LONG_SLEEP, f"sleep {m.group(1)}",
-                f"sleep >= {policy.max_timeout_seconds}s is suspicious.")
+            add(R_RES_LONG_SLEEP, f"sleep {m.group(1)}", f"sleep >= {policy.max_timeout_seconds}s is suspicious.")
             break
 
     # Large write: dd/truncate with GB+ size, or head -c with a huge byte count.
@@ -79,8 +76,7 @@ def scan_bash(policy: Policy, script: str) -> list[Finding]:
             "Very large file generation; possible disk exhaustion. Review.")
     for m in _HEAD_C_RE.finditer(joined):
         if int(m.group(1)) >= _HUGE_BYTES:
-            add(R_RES_LARGE_WRITE, f"head -c {m.group(1)}",
-                "Very large write; possible disk exhaustion. Review.")
+            add(R_RES_LARGE_WRITE, f"head -c {m.group(1)}", "Very large write; possible disk exhaustion. Review.")
             break
 
     # Shell pipe / bypass
@@ -100,8 +96,7 @@ def scan_bash(policy: Policy, script: str) -> list[Finding]:
         host = m.group(1).lower()
         root_domain = ".".join(host.split(".")[-2:]) if len(host.split(".")) >= 2 else host
         if root_domain not in policy.whitelisted_domains and host not in policy.whitelisted_domains:
-            add(R_NET_HTTP, f"network egress to {host}",
-                f"{host} is not whitelisted; review or allowlist.")
+            add(R_NET_HTTP, f"network egress to {host}", f"{host} is not whitelisted; review or allowlist.")
 
     return findings
 

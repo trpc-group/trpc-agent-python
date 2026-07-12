@@ -24,17 +24,14 @@ from trpc_agent_sdk.tools.safety._rules import R_RES_INFINITE_LOOP
 from trpc_agent_sdk.tools.safety._rules import R_RES_LARGE_WRITE
 from trpc_agent_sdk.tools.safety._rules import R_SECRET_LOGGING
 from trpc_agent_sdk.tools.safety._rules import R_SECRET_PRIVATE_KEY
-from trpc_agent_sdk.tools.safety._types import Decision
 from trpc_agent_sdk.tools.safety._types import Finding
-from trpc_agent_sdk.tools.safety._types import RiskLevel
 
 _CRED_PATH_RE = re.compile(r"(\.ssh|\.env|\.aws/credentials|id_rsa|id_ed25519|credentials)", re.I)
 _URL_RE = re.compile(r"https?://([^/\s'\"']+)", re.I)
 _SECRET_NAME_RE = re.compile(r"(api[_-]?key|secret|token|password|passwd|private[_-]?key)", re.I)
 _PRIVATE_KEY_RE = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")
 # System directories: writing here can brick the runtime (issue risk class #1).
-_SYSTEM_DIRS = ("/etc/", "/usr/", "/bin/", "/sbin/", "/boot/", "/sys/",
-                "/proc/", "/lib/", "/lib64/", "/var/", "/dev/")
+_SYSTEM_DIRS = ("/etc/", "/usr/", "/bin/", "/sbin/", "/boot/", "/sys/", "/proc/", "/lib/", "/lib64/", "/var/", "/dev/")
 
 # attribute path -> rule fired when called/used
 _DANGEROUS_ATTR = {
@@ -73,9 +70,13 @@ def scan_python(policy: Policy, script: str) -> list[Finding]:
 
     def add(rule_id: str, evidence: str, rec: str) -> None:
         meta = policy.rules[rule_id]
-        findings.append(Finding(
-            rule_id=rule_id, risk_level=meta.risk_level, rule_decision=meta.decision,
-            evidence=evidence[:max_ev], recommendation=rec, language="python"))
+        findings.append(
+            Finding(rule_id=rule_id,
+                    risk_level=meta.risk_level,
+                    rule_decision=meta.decision,
+                    evidence=evidence[:max_ev],
+                    recommendation=rec,
+                    language="python"))
 
     def resolve_attr(node: ast.AST) -> str:
         """Resolve `x.system` or `system` to 'module.attr' using alias tables."""
@@ -116,8 +117,7 @@ def scan_python(policy: Policy, script: str) -> list[Finding]:
                     add(R_NET_HTTP, f"{fname}({url})", f"{url} not whitelisted.")
             # Socket handled at module level to catch ALL socket.* calls (not a per-attribute list).
             if mod == "socket":
-                add(R_NET_SOCKET, f"{fname}()",
-                    "raw socket use bypasses HTTP allowlist; review egress.")
+                add(R_NET_SOCKET, f"{fname}()", "raw socket use bypasses HTTP allowlist; review egress.")
             # Resource abuse: very large writes and concurrency floods.
             if _is_write_call(fname) and _has_huge_size(node):
                 add(R_RES_LARGE_WRITE, f"{fname}(huge payload)",
@@ -125,22 +125,20 @@ def scan_python(policy: Policy, script: str) -> list[Finding]:
             if _is_pool_call(fname) and _max_workers_too_large(node):
                 add(R_RES_CONCURRENT_FLOOD, f"{fname}(max_workers>>)",
                     "Very large worker pool; possible resource exhaustion. Review.")
-            if mod in ("open",) or fname.endswith(".open"):
+            if mod in ("open", ) or fname.endswith(".open"):
                 _check_open_path(node, policy, add)
         # infinite loop
-        if isinstance(node, (ast.While,)) and _is_truthy(node.test):
+        if isinstance(node, (ast.While, )) and _is_truthy(node.test):
             add(R_RES_INFINITE_LOOP, "while True:", "infinite loop; review.")
         # secret logging: assignment to a secret-named variable.
         if isinstance(node, ast.Assign):
             for t in node.targets:
                 if isinstance(t, ast.Name) and _SECRET_NAME_RE.search(t.id):
-                    add(R_SECRET_LOGGING, f"secret assigned to {t.id}",
-                        "secret-like variable; avoid logging.")
+                    add(R_SECRET_LOGGING, f"secret assigned to {t.id}", "secret-like variable; avoid logging.")
         # private-key literal embedded anywhere (independent of variable name).
         if isinstance(node, ast.Constant) and isinstance(node.value, str) \
                 and _PRIVATE_KEY_RE.search(node.value):
-            add(R_SECRET_PRIVATE_KEY, "private key literal",
-                "embedded private key; refuse.")
+            add(R_SECRET_PRIVATE_KEY, "private key literal", "embedded private key; refuse.")
 
     return findings
 
@@ -169,23 +167,19 @@ def _check_open_path(call: ast.Call, policy: Policy, add) -> None:
         path = "".join(v.value for v in arg.values if isinstance(v, ast.Constant))
     mode = _open_mode(call)
     if path and _is_write_mode(mode) and path.startswith(_SYSTEM_DIRS):
-        add(R_FS_SYSTEM_DIR, f"open('{path}','{mode}')",
-            f"writing to system directory {path}; refuse.")
+        add(R_FS_SYSTEM_DIR, f"open('{path}','{mode}')", f"writing to system directory {path}; refuse.")
         return
     if path and _CRED_PATH_RE.search(path):
-        add(R_FS_READ_CREDENTIALS, f"open('{path}')",
-            f"reading credential path {path}; review.")
+        add(R_FS_READ_CREDENTIALS, f"open('{path}')", f"reading credential path {path}; review.")
         return
     for denied in policy.denied_paths:
-        norm = denied.replace("~", "/root")  # crude home expansion for matching
         if denied in path:
-            add(R_FS_READ_CREDENTIALS, f"open('{path}')",
-                f"path matches denied path {denied}.")
+            add(R_FS_READ_CREDENTIALS, f"open('{path}')", f"path matches denied path {denied}.")
             return
 
 
 _HUGE_BYTES = 10_000_000  # ~10 MB heuristic threshold for "large write"
-_MAX_WORKERS = 100        # heuristic threshold for concurrency flood
+_MAX_WORKERS = 100  # heuristic threshold for concurrency flood
 
 _WRITE_METHODS = ("write", "write_bytes", "write_text")
 _POOL_CLASSES = ("ThreadPoolExecutor", "ProcessPoolExecutor")
@@ -209,9 +203,7 @@ def _huge_value(node: ast.AST) -> bool:
 
 
 def _has_huge_size(call: ast.Call) -> bool:
-    return any(_huge_value(a) for a in call.args) or any(
-        _huge_value(kw.value) for kw in call.keywords
-    )
+    return any(_huge_value(a) for a in call.args) or any(_huge_value(kw.value) for kw in call.keywords)
 
 
 def _max_workers_too_large(call: ast.Call) -> bool:
@@ -254,9 +246,13 @@ def _heuristic_fallback(policy: Policy, script: str) -> list[Finding]:
 
     def add(rule_id: str, evidence: str, rec: str) -> None:
         meta = policy.rules[rule_id]
-        findings.append(Finding(
-            rule_id=rule_id, risk_level=meta.risk_level, rule_decision=meta.decision,
-            evidence=evidence[:max_ev], recommendation=rec, language="python"))
+        findings.append(
+            Finding(rule_id=rule_id,
+                    risk_level=meta.risk_level,
+                    rule_decision=meta.decision,
+                    evidence=evidence[:max_ev],
+                    recommendation=rec,
+                    language="python"))
 
     if re.search(r"\beval\s*\(", script):
         add(R_CODE_UNSAFE_EVAL, "eval(", "eval executes arbitrary code.")

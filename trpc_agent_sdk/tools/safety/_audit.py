@@ -81,7 +81,8 @@ def build_audit_record(
         language=language,
         decision=report.decision.name,
         risk_level=report.risk_level.name,
-        rule_ids=sorted({f.rule_id for f in report.findings}),
+        rule_ids=sorted({f.rule_id
+                         for f in report.findings}),
         scan_duration_ms=report.scan_duration_ms,
         sanitized=bool(report.sanitized),
         intercepted=bool(intercepted),

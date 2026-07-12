@@ -69,14 +69,11 @@ class ToolSafetyFilter(BaseFilter):
 
         script, language = extracted
         tool_name = getattr(ctx, "tool_name", None) or "tool_safety_filter"
-        report = scan(self._ensure_policy(), script, language=language,
-                      meta={"tool_name": tool_name})
+        report = scan(self._ensure_policy(), script, language=language, meta={"tool_name": tool_name})
         # Audit every decision (issue #90): allowed scripts get a summary,
         # denied scripts get a reason + an intercepted flag.
         intercepted = report.decision != Decision.ALLOW
-        record_safety_decision(
-            report, tool_name=tool_name, language=language, intercepted=intercepted
-        )
+        record_safety_decision(report, tool_name=tool_name, language=language, intercepted=intercepted)
         if report.decision == Decision.ALLOW:
             return await handle()
 

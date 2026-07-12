@@ -25,10 +25,7 @@ def detect_language(script: str) -> str:
     return "python"  # default
 
 
-def scan(policy: Policy,
-         script: str,
-         language: str = "auto",
-         meta: Optional[dict] = None) -> SafetyReport:
+def scan(policy: Policy, script: str, language: str = "auto", meta: Optional[dict] = None) -> SafetyReport:
     """Scan one script; return an aggregated SafetyReport.
 
     Args:

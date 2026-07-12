@@ -49,8 +49,7 @@ class SafetyGuardedCodeExecutor(BaseCodeExecutor):
         return self._policy
 
     @override
-    async def execute_code(self,
-                           invocation_context: InvocationContext,
+    async def execute_code(self, invocation_context: InvocationContext,
                            input_data: CodeExecutionInput) -> CodeExecutionResult:
         if not input_data.code_blocks and input_data.code:
             input_data.code_blocks = [CodeBlock(code=input_data.code, language="python")]
@@ -58,13 +57,10 @@ class SafetyGuardedCodeExecutor(BaseCodeExecutor):
         kept: list[CodeBlock] = []
         blocked_msgs: list[str] = []
         for block in input_data.code_blocks:
-            report = scan(self._ensure_policy(), block.code,
-                          language=block.language or "auto")
+            report = scan(self._ensure_policy(), block.code, language=block.language or "auto")
             decision = report.decision
-            block_allowed = (
-                decision == Decision.ALLOW
-                or (decision == Decision.NEEDS_REVIEW and not self.block_on_review)
-            )
+            block_allowed = (decision == Decision.ALLOW
+                             or (decision == Decision.NEEDS_REVIEW and not self.block_on_review))
             # Audit each scanned block (issue #90): tool name, decision, risk,
             # rule ids, duration, sanitized, intercepted.
             record_safety_decision(
@@ -77,8 +73,7 @@ class SafetyGuardedCodeExecutor(BaseCodeExecutor):
                 kept.append(block)
             else:
                 ids = ",".join(sorted({f.rule_id for f in report.findings}))
-                blocked_msgs.append(
-                    f"TOOL_SAFETY_BLOCKED [{block.language}] {decision.name} ({ids})")
+                blocked_msgs.append(f"TOOL_SAFETY_BLOCKED [{block.language}] {decision.name} ({ids})")
 
         out_parts: list[str] = []
         err_parts: list[str] = []

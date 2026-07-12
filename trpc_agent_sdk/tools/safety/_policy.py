@@ -78,9 +78,17 @@ def _policy_from_dict(raw: dict[str, Any]) -> Policy:
 
 
 _ALLOWED_TOP_LEVEL = {
-    "name", "description", "whitelisted_domains", "allowed_commands",
-    "denied_paths", "max_timeout_seconds", "max_output_bytes", "max_evidence_chars",
-    "deny_risk_level", "review_risk_level", "rule_overrides",
+    "name",
+    "description",
+    "whitelisted_domains",
+    "allowed_commands",
+    "denied_paths",
+    "max_timeout_seconds",
+    "max_output_bytes",
+    "max_evidence_chars",
+    "deny_risk_level",
+    "review_risk_level",
+    "rule_overrides",
 }
 
 
@@ -130,7 +138,8 @@ def _string_list(raw: dict[str, Any], key: str) -> list[str]:
 def _risk(raw: dict[str, Any], key: str, default: RiskLevel) -> RiskLevel:
     name = raw.get(key, default.name)
     if not isinstance(name, str):
-        raise ValueError(f"{key} must be a string enum name (one of {sorted(_VALID_RISK)}), got {type(name).__name__}: {name!r}")
+        raise ValueError(
+            f"{key} must be a string enum name (one of {sorted(_VALID_RISK)}), got {type(name).__name__}: {name!r}")
     if name not in _VALID_RISK:
         raise ValueError(f"{key} must be one of {sorted(_VALID_RISK)}, got {name!r}")
     return RiskLevel[name]
@@ -138,7 +147,8 @@ def _risk(raw: dict[str, Any], key: str, default: RiskLevel) -> RiskLevel:
 
 def _decision(name: str) -> Decision:
     if not isinstance(name, str):
-        raise ValueError(f"decision must be a string enum name (one of {sorted(_VALID_DECISION)}), got {type(name).__name__}: {name!r}")
+        raise ValueError(f"decision must be a string enum name (one of {sorted(_VALID_DECISION)}), "
+                         f"got {type(name).__name__}: {name!r}")
     if name not in _VALID_DECISION:
         raise ValueError(f"decision must be one of {sorted(_VALID_DECISION)}, got {name!r}")
     return Decision[name]
