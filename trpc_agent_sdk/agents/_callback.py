@@ -19,6 +19,7 @@ Features:
     - Generates standardized event objects
     - Manages callback context and state
 """
+from functools import partial
 import inspect
 from typing import Any
 from typing import Awaitable
@@ -319,3 +320,50 @@ class ToolCallbackFilter(CallbackFilter[SingleToolCallback]):
             if after_tool_callback_content:
                 rsp.rsp = after_tool_callback_content
                 return
+
+    @override
+    async def run_stream(self, ctx: AgentContext, req: Any, handle):
+        """Run callbacks while letting the after callback replace the final item.
+
+        The one-item lookahead is intentional: the final item cannot be
+        exposed until the after callback has had a chance to replace it.
+        """
+
+        if not self._after_callback:
+            async for event in super().run_stream(ctx, req, handle):
+                yield event
+            return
+
+        result = FilterResult()
+        async for event in self._handle_co(result, self._before(ctx, req, result), "before"):
+            yield event
+            if not event.is_continue:
+                return
+        if result.error or not result.is_continue:
+            return
+
+        pending = None
+        has_pending = False
+        handle_event = partial(self._after_every_stream, ctx, req)
+        async for event in self._handle_co(result, handle(), "handle", handle_event):
+            if has_pending:
+                yield pending
+            pending = event
+            has_pending = True
+            if not event.is_continue:
+                yield event
+                return
+
+        if not has_pending:
+            result = FilterResult()
+        else:
+            result = pending
+
+        emitted = False
+        async for event in self._handle_co(result, self._after(ctx, req, result), "after"):
+            emitted = True
+            yield event
+            if not event.is_continue:
+                return
+        if has_pending and not emitted:
+            yield result

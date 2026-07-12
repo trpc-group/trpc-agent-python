@@ -54,8 +54,21 @@ class _SyntheticTool(BaseTool):
     It does not perform actual tool execution.
     """
 
-    def __init__(self, name: str, description: str = ""):
+    def __init__(
+        self,
+        name: str,
+        description: str = "",
+        payload_sanitizer: Optional[Callable[[Any], Any]] = None,
+    ):
         super().__init__(name=name, description=description or f"Custom tool: {name}")
+        self._payload_sanitizer = payload_sanitizer
+
+    def sanitize_telemetry_args(self, value: Any) -> Any:
+        """Apply an optional sanitizer supplied by the custom reporter."""
+
+        if self._payload_sanitizer is None:
+            return value
+        return self._payload_sanitizer(value)
 
     async def _run_async_impl(self, *, tool_context, args) -> Any:
         """Not used - this tool is only for tracing."""
@@ -99,6 +112,7 @@ class CustomTraceReporter:
         model_prefix: str = "custom",
         tool_description_prefix: str = "Custom tool",
         text_content_filter: Optional[Callable[[str], bool]] = None,
+        tool_payload_sanitizer: Optional[Callable[[Any], Any]] = None,
     ):
         """Initialize the CustomTraceReporter.
 
@@ -111,11 +125,14 @@ class CustomTraceReporter:
             text_content_filter: Optional callable to filter text content before tracing.
                                 Returns True if the text should be traced, False otherwise.
                                 If None, all non-empty text will be traced.
+            tool_payload_sanitizer: Optional callable that redacts tool arguments
+                                    and responses before span attributes are set.
         """
         self.agent_name = agent_name
         self.model_prefix = model_prefix
         self.tool_description_prefix = tool_description_prefix
         self.text_content_filter = text_content_filter
+        self.tool_payload_sanitizer = tool_payload_sanitizer
         self.pending_function_calls: dict[str, dict[str, Any]] = {}
 
     def _create_synthetic_llm_request(self, ctx: InvocationContext) -> LlmRequest:
@@ -179,6 +196,7 @@ class CustomTraceReporter:
                     synthetic_tool = _SyntheticTool(
                         name=function_call_data['name'],
                         description=f"{self.tool_description_prefix}: {function_call_data['name']}",
+                        payload_sanitizer=self.tool_payload_sanitizer,
                     )
                     trace_tool_call(
                         tool=synthetic_tool,

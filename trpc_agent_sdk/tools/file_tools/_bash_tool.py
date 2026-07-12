@@ -26,6 +26,8 @@ from trpc_agent_sdk.types import Type
 class BashTool(BaseTool):
     """Tool for executing bash commands."""
 
+    DEFAULT_TIMEOUT_SECONDS = 300
+
     # Whitelist of commands allowed outside working directory
     ALLOWED_COMMANDS_OUTSIDE_WORKDIR = ["ls", "pwd", "cat", "grep", "find", "head", "tail", "wc", "echo"]
 
@@ -145,7 +147,9 @@ class BashTool(BaseTool):
     async def _run_async_impl(self, *, tool_context: InvocationContext, args: dict[str, Any]) -> Any:
         command = args.get("command")
         cwd = args.get("cwd")
-        timeout = args.get("timeout", 300)
+        timeout = args.get("timeout")
+        if timeout is None or timeout == "":
+            timeout = self.DEFAULT_TIMEOUT_SECONDS
 
         if not command:
             return {"error": "INVALID_PARAMETER: command parameter is required"}

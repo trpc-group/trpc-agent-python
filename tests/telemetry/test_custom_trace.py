@@ -30,14 +30,17 @@ from trpc_agent_sdk.telemetry._custom_trace import (
     _SyntheticTool,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_invocation_context(agent_name="test_agent", session_id="sess-1",
-                             user_id="user-1", user_content=None,
-                             invocation_id="inv-1", instruction=None):
+
+def _make_invocation_context(agent_name="test_agent",
+                             session_id="sess-1",
+                             user_id="user-1",
+                             user_content=None,
+                             invocation_id="inv-1",
+                             instruction=None):
     ctx = MagicMock()
     ctx.agent = MagicMock()
     ctx.agent.name = agent_name
@@ -89,7 +92,9 @@ def _make_event(
 # Tests: _SyntheticTool
 # ---------------------------------------------------------------------------
 
+
 class TestSyntheticTool:
+
     def test_init_with_name_and_description(self):
         tool = _SyntheticTool(name="my_tool", description="My tool desc")
         assert tool.name == "my_tool"
@@ -103,6 +108,11 @@ class TestSyntheticTool:
         tool = _SyntheticTool(name="t", description="")
         assert tool.description == "Custom tool: t"
 
+    def test_optional_payload_sanitizer(self):
+        tool = _SyntheticTool(name="t", payload_sanitizer=lambda value: {"redacted": bool(value)})
+
+        assert tool.sanitize_telemetry_args({"secret": "value"}) == {"redacted": True}
+
     @pytest.mark.asyncio
     async def test_run_async_impl_raises(self):
         tool = _SyntheticTool(name="t")
@@ -114,7 +124,9 @@ class TestSyntheticTool:
 # Tests: CustomTraceReporter.__init__
 # ---------------------------------------------------------------------------
 
+
 class TestCustomTraceReporterInit:
+
     def test_default_init(self):
         reporter = CustomTraceReporter(agent_name="agent_a")
         assert reporter.agent_name == "agent_a"
@@ -124,23 +136,33 @@ class TestCustomTraceReporterInit:
         assert reporter.pending_function_calls == {}
 
     def test_custom_params(self):
-        filt = lambda text: len(text) > 5
+
+        def filt(text):
+            return len(text) > 5
+
+        def sanitizer(value):
+            return value
+
         reporter = CustomTraceReporter(
             agent_name="agent_b",
             model_prefix="a2a",
             tool_description_prefix="Remote tool",
             text_content_filter=filt,
+            tool_payload_sanitizer=sanitizer,
         )
         assert reporter.model_prefix == "a2a"
         assert reporter.tool_description_prefix == "Remote tool"
         assert reporter.text_content_filter is filt
+        assert reporter.tool_payload_sanitizer is sanitizer
 
 
 # ---------------------------------------------------------------------------
 # Tests: _create_synthetic_llm_request
 # ---------------------------------------------------------------------------
 
+
 class TestCreateSyntheticLlmRequest:
+
     @patch("trpc_agent_sdk.telemetry._custom_trace.LlmRequest")
     @patch("trpc_agent_sdk.telemetry._custom_trace.GenerateContentConfig")
     def test_with_user_content(self, MockConfig, MockLlmRequest):
@@ -181,7 +203,9 @@ class TestCreateSyntheticLlmRequest:
 # Tests: _create_synthetic_llm_response
 # ---------------------------------------------------------------------------
 
+
 class TestCreateSyntheticLlmResponse:
+
     @patch("trpc_agent_sdk.telemetry._custom_trace.LlmResponse")
     def test_with_event(self, MockLlmResponse):
         reporter = CustomTraceReporter(agent_name="a")
@@ -211,7 +235,9 @@ class TestCreateSyntheticLlmResponse:
 # Tests: _trace_function_call
 # ---------------------------------------------------------------------------
 
+
 class TestTraceFunctionCall:
+
     def test_single_function_call(self):
         reporter = CustomTraceReporter(agent_name="a")
         fc = _make_function_call(name="tool_1", fc_id="fc-1", args={"k": "v"})
@@ -248,7 +274,9 @@ class TestTraceFunctionCall:
 # Tests: _trace_function_response
 # ---------------------------------------------------------------------------
 
+
 class TestTraceFunctionResponse:
+
     @patch("trpc_agent_sdk.telemetry._custom_trace.trace_tool_call")
     @patch("trpc_agent_sdk.telemetry._custom_trace.tracer")
     def test_matched_response(self, mock_tracer, mock_trace_tool_call):
@@ -262,7 +290,9 @@ class TestTraceFunctionResponse:
         )
         reporter.pending_function_calls["fc-1"] = {
             "name": "tool_x",
-            "args": {"input": "val"},
+            "args": {
+                "input": "val"
+            },
             "id": "fc-1",
         }
 
@@ -277,6 +307,31 @@ class TestTraceFunctionResponse:
         assert call_kwargs["args"] == {"input": "val"}
         assert call_kwargs["function_response_event"] is event
         assert "fc-1" not in reporter.pending_function_calls
+
+    @patch("trpc_agent_sdk.telemetry._custom_trace.trace_tool_call")
+    @patch("trpc_agent_sdk.telemetry._custom_trace.tracer")
+    def test_matched_response_passes_payload_sanitizer_to_synthetic_tool(self, mock_tracer, mock_trace_tool_call):
+        mock_tracer.start_as_current_span = MagicMock()
+        mock_tracer.start_as_current_span.return_value.__enter__ = MagicMock()
+        mock_tracer.start_as_current_span.return_value.__exit__ = MagicMock(return_value=False)
+
+        def sanitizer(value):
+            del value
+            return {"redacted": True}
+
+        reporter = CustomTraceReporter(agent_name="a", tool_payload_sanitizer=sanitizer)
+        reporter.pending_function_calls["fc-1"] = {
+            "name": "tool_x",
+            "args": {
+                "command": "secret"
+            },
+            "id": "fc-1",
+        }
+
+        reporter._trace_function_response(_make_event(function_responses=[_make_function_response(resp_id="fc-1")]))
+
+        synthetic_tool = mock_trace_tool_call.call_args.kwargs["tool"]
+        assert synthetic_tool.sanitize_telemetry_args({"command": "secret"}) == {"redacted": True}
 
     @patch("trpc_agent_sdk.telemetry._custom_trace.trace_tool_call")
     @patch("trpc_agent_sdk.telemetry._custom_trace.tracer")
@@ -298,10 +353,14 @@ class TestTraceFunctionResponse:
 
         reporter = CustomTraceReporter(agent_name="a")
         reporter.pending_function_calls["fc-1"] = {
-            "name": "t1", "args": {}, "id": "fc-1",
+            "name": "t1",
+            "args": {},
+            "id": "fc-1",
         }
         reporter.pending_function_calls["fc-2"] = {
-            "name": "t2", "args": {}, "id": "fc-2",
+            "name": "t2",
+            "args": {},
+            "id": "fc-2",
         }
 
         fr1 = _make_function_response(resp_id="fc-1")
@@ -318,7 +377,9 @@ class TestTraceFunctionResponse:
 # Tests: _trace_llm_response
 # ---------------------------------------------------------------------------
 
+
 class TestTraceLlmResponse:
+
     @patch("trpc_agent_sdk.telemetry._custom_trace.trace_call_llm")
     @patch("trpc_agent_sdk.telemetry._custom_trace.tracer")
     def test_traces_llm_call(self, mock_tracer, mock_trace_call_llm):
@@ -396,7 +457,9 @@ class TestTraceLlmResponse:
 # Tests: _should_trace_text
 # ---------------------------------------------------------------------------
 
+
 class TestShouldTraceText:
+
     def test_empty_text_returns_false(self):
         reporter = CustomTraceReporter(agent_name="a")
         assert reporter._should_trace_text("") is False
@@ -431,7 +494,9 @@ class TestShouldTraceText:
 # Tests: trace_event
 # ---------------------------------------------------------------------------
 
+
 class TestTraceEvent:
+
     def test_skip_partial_event(self):
         reporter = CustomTraceReporter(agent_name="a")
         ctx = _make_invocation_context()
@@ -500,6 +565,8 @@ class TestTraceEvent:
              patch.object(reporter, "_trace_llm_response") as m_llm:
             reporter.trace_event(ctx, event)
 
+        m_fc.assert_not_called()
+        m_fr.assert_not_called()
         m_llm.assert_not_called()
 
     def test_text_filtered_out_skips_llm_trace(self):
@@ -533,7 +600,9 @@ class TestTraceEvent:
 # Tests: reset
 # ---------------------------------------------------------------------------
 
+
 class TestReset:
+
     def test_reset_clears_pending(self):
         reporter = CustomTraceReporter(agent_name="a")
         reporter.pending_function_calls["fc-1"] = {"name": "t", "args": {}, "id": "fc-1"}
@@ -554,13 +623,13 @@ class TestReset:
 # Tests: Integration-like end-to-end flow
 # ---------------------------------------------------------------------------
 
+
 class TestEndToEndFlow:
+
     @patch("trpc_agent_sdk.telemetry._custom_trace.trace_call_llm")
     @patch("trpc_agent_sdk.telemetry._custom_trace.trace_tool_call")
     @patch("trpc_agent_sdk.telemetry._custom_trace.tracer")
-    def test_full_flow_fc_then_fr_then_text(
-        self, mock_tracer, mock_trace_tool_call, mock_trace_call_llm
-    ):
+    def test_full_flow_fc_then_fr_then_text(self, mock_tracer, mock_trace_tool_call, mock_trace_call_llm):
         mock_tracer.start_as_current_span = MagicMock()
         mock_tracer.start_as_current_span.return_value.__enter__ = MagicMock()
         mock_tracer.start_as_current_span.return_value.__exit__ = MagicMock(return_value=False)
@@ -593,9 +662,7 @@ class TestEndToEndFlow:
     @patch("trpc_agent_sdk.telemetry._custom_trace.trace_call_llm")
     @patch("trpc_agent_sdk.telemetry._custom_trace.trace_tool_call")
     @patch("trpc_agent_sdk.telemetry._custom_trace.tracer")
-    def test_reset_between_invocations(
-        self, mock_tracer, mock_trace_tool_call, mock_trace_call_llm
-    ):
+    def test_reset_between_invocations(self, mock_tracer, mock_trace_tool_call, mock_trace_call_llm):
         mock_tracer.start_as_current_span = MagicMock()
         mock_tracer.start_as_current_span.return_value.__enter__ = MagicMock()
         mock_tracer.start_as_current_span.return_value.__exit__ = MagicMock(return_value=False)

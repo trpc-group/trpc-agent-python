@@ -170,6 +170,9 @@ class _ExecSession:
 class WorkspaceExecTool(BaseTool):
     """Execute shell commands in shared executor workspace."""
 
+    DEFAULT_TIMEOUT_SECONDS = _DEFAULT_WORKSPACE_EXEC_TIMEOUT_SEC
+    ZERO_TIMEOUT_USES_DEFAULT = True
+
     def __init__(
         self,
         workspace_runtime: BaseWorkspaceRuntime,

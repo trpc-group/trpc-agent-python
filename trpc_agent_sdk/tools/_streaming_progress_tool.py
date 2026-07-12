@@ -78,6 +78,7 @@ Constraints
 
 from __future__ import annotations
 
+from contextlib import aclosing
 import inspect
 from typing import Any
 from typing import AsyncIterator
@@ -89,9 +90,12 @@ from typing_extensions import override
 from pydantic import BaseModel
 
 from trpc_agent_sdk.context import InvocationContext
+from trpc_agent_sdk.context import create_agent_context
 from trpc_agent_sdk.filter import BaseFilter
 
 from ._constants import TOOL_CONTEXT
+from ._context_var import reset_tool_var
+from ._context_var import set_tool_var
 from ._function_tool import FunctionTool
 from .utils import convert_pydantic_args
 from .utils import get_mandatory_args
@@ -180,16 +184,55 @@ class StreamingProgressTool(FunctionTool):
         tool_context: InvocationContext,
         args: Dict[str, Any],
     ) -> AsyncIterator[Any]:
-        """Yield progress values produced by the wrapped async generator.
+        """Run filters and yield values produced by the wrapped generator.
 
         The framework wraps each yielded value into a partial ``Event`` and
         surfaces it through ``Runner.run_async``. The *last* yielded value is
         additionally used as the final ``function_response`` part fed back to
         the LLM.
 
-        Mandatory-argument validation, ``tool_context`` injection and
-        pydantic-arg coercion mirror :class:`FunctionTool`.
+        Filter ordering, tool callbacks, and the current-tool context mirror
+        :meth:`BaseTool.run_async`. This keeps final authorization filters in
+        front of the generator, before any user code starts running.
         """
+        agent_context = tool_context.agent_context
+        if agent_context is None:
+            agent_context = create_agent_context()
+            tool_context.agent_context = agent_context
+
+        before_tool_callback = getattr(tool_context.agent, "before_tool_callback", None)
+        after_tool_callback = getattr(tool_context.agent, "after_tool_callback", None)
+        # Import here to avoid the same tools/agents circular import as BaseTool.
+        from trpc_agent_sdk.agents import ToolCallbackFilter
+        extra_filters = [ToolCallbackFilter(before_tool_callback, after_tool_callback)]
+
+        token = set_tool_var(self)
+        implementation_stream = self._run_streaming_impl(tool_context=tool_context, args=args)
+
+        def handler():
+            return implementation_stream
+
+        filtered_stream = self._run_stream_filters(agent_context, args, handler, extra_filters)
+        try:
+            async for value in filtered_stream:
+                yield value
+        finally:
+            try:
+                await filtered_stream.aclose()
+            finally:
+                try:
+                    await implementation_stream.aclose()
+                finally:
+                    reset_tool_var(token)
+
+    async def _run_streaming_impl(
+        self,
+        *,
+        tool_context: InvocationContext,
+        args: Dict[str, Any],
+    ) -> AsyncIterator[Any]:
+        """Validate arguments and invoke the wrapped async generator."""
+
         args_to_call = args.copy()
         signature = inspect.signature(self.func)
 
@@ -207,7 +250,8 @@ class StreamingProgressTool(FunctionTool):
             }
             return
 
-        async for value in self.func(**args_to_call):
-            if isinstance(value, BaseModel):
-                value = value.model_dump()
-            yield value
+        async with aclosing(self.func(**args_to_call)) as function_stream:
+            async for value in function_stream:
+                if isinstance(value, BaseModel):
+                    value = value.model_dump()
+                yield value

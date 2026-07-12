@@ -54,6 +54,9 @@ async def run_stream_filters(ctx: AgentContext, req: Any, filters: list[BaseFilt
     for filter in reversed(filters):
         current_handle = partial(filter.run_stream, ctx, req, current_handle)
     async for event in current_handle():
+        if event.error:
+            logger.error("run_stream_filters error: %s", event.error)
+            raise event.error
         yield event.rsp
 
 

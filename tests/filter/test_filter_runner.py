@@ -7,19 +7,18 @@
 
 from __future__ import annotations
 
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from trpc_agent_sdk.abc import FilterResult, FilterType
+from trpc_agent_sdk.abc import FilterType
 from trpc_agent_sdk.filter._base_filter import BaseFilter
 from trpc_agent_sdk.filter._filter_runner import FilterRunner
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 class ConcreteRunner(FilterRunner):
     """Concrete subclass for testing (FilterRunner is ABC)."""
@@ -50,6 +49,7 @@ class PassthroughFilter(BaseFilter):
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def mock_ctx():
     return MagicMock()
@@ -63,6 +63,7 @@ def runner():
 # ---------------------------------------------------------------------------
 # Tests for __init__
 # ---------------------------------------------------------------------------
+
 
 class TestFilterRunnerInit:
 
@@ -86,6 +87,7 @@ class TestFilterRunnerInit:
 # Tests for name property
 # ---------------------------------------------------------------------------
 
+
 class TestFilterRunnerName:
 
     def test_default_name(self):
@@ -101,6 +103,7 @@ class TestFilterRunnerName:
 # ---------------------------------------------------------------------------
 # Tests for _init_filters
 # ---------------------------------------------------------------------------
+
 
 class TestInitFilters:
 
@@ -127,6 +130,7 @@ class TestInitFilters:
 # ---------------------------------------------------------------------------
 # Tests for add_filters
 # ---------------------------------------------------------------------------
+
 
 class TestAddFilters:
 
@@ -177,6 +181,7 @@ class TestAddFilters:
 # ---------------------------------------------------------------------------
 # Tests for add_one_filter
 # ---------------------------------------------------------------------------
+
 
 class TestAddOneFilter:
 
@@ -229,6 +234,7 @@ class TestAddOneFilter:
 # Tests for get_filter
 # ---------------------------------------------------------------------------
 
+
 class TestGetFilter:
 
     def test_found(self, runner):
@@ -244,6 +250,7 @@ class TestGetFilter:
 # ---------------------------------------------------------------------------
 # Tests for _run_filters / _run_stream_filters
 # ---------------------------------------------------------------------------
+
 
 class TestRunFiltersMethods:
 
@@ -280,6 +287,23 @@ class TestRunFiltersMethods:
             filters_passed = mock_run.call_args[0][2]
             assert len(filters_passed) == 2
 
+    async def test_final_authorization_filter_runs_after_extra_filters(self, mock_ctx):
+        runner = ConcreteRunner()
+        regular = PassthroughFilter("regular")
+        final = PassthroughFilter("final")
+        final.run_last_before_handler = True
+        extra = PassthroughFilter("callback")
+        runner._filters = [final, regular]
+
+        async def handle():
+            return "final"
+
+        with patch("trpc_agent_sdk.filter._filter_runner.run_filters", new_callable=AsyncMock) as mock_run:
+            mock_run.return_value = "result"
+            await runner._run_filters(mock_ctx, "req", handle, extra_filters=[extra])
+
+        assert mock_run.call_args[0][2] == [regular, extra, final]
+
     async def test_run_stream_filters_delegates(self, mock_ctx):
         runner = ConcreteRunner()
         f = PassthroughFilter("p1")
@@ -289,6 +313,7 @@ class TestRunFiltersMethods:
             yield "data"
 
         with patch("trpc_agent_sdk.filter._filter_runner.run_stream_filters") as mock_run:
+
             async def mock_gen(*args, **kwargs):
                 yield "streamed"
 
