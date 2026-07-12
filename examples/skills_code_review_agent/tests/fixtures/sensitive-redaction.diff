@@ -1,0 +1,16 @@
+diff --git a/settings.py b/settings.py
+--- a/settings.py
++++ b/settings.py
+@@ -1 +1,12 @@
+ DEBUG = False
++API_KEY = "sk-testabcdefghijklmnop"
++PASSWORD = "not-a-real-password"
++TOKEN = "dummy-token-value"
++AUTHORIZATION = "Bearer abcdefghijklmnop"
++AWS_ACCESS_KEY = "AKIAABCDEFGHIJKLMNOP"
++GITHUB_TOKEN = "ghp_abcdefghijklmnopqrstuvwxyz"
++JWT = "eyJheader.payload.signaturevalue"
++DATABASE_URL = "postgresql://admin:dummy-password@db.invalid/app"
++PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----ABCDEF0123456789-----END PRIVATE KEY-----"
++AWS_SECRET_ACCESS_KEY = "plain-aws-secret-material"
++CONFIG = {"apiKey": "plain-json-api-key"}
