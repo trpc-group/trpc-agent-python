@@ -9,6 +9,7 @@ string so that `echo "a|b"` is not mis-flagged as a pipeline.
 from __future__ import annotations
 
 import shlex
+from typing import Optional
 
 
 def split_tokens(cmd: str) -> list[str]:

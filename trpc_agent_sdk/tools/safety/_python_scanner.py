@@ -15,6 +15,7 @@ from trpc_agent_sdk.tools.safety._rules import R_CODE_UNSAFE_EVAL
 from trpc_agent_sdk.tools.safety._rules import R_CODE_UNSAFE_EXEC
 from trpc_agent_sdk.tools.safety._rules import R_FS_RECURSIVE_DELETE
 from trpc_agent_sdk.tools.safety._rules import R_FS_READ_CREDENTIALS
+from trpc_agent_sdk.tools.safety._rules import R_FS_SYSTEM_DIR
 from trpc_agent_sdk.tools.safety._rules import R_NET_HTTP
 from trpc_agent_sdk.tools.safety._rules import R_NET_SOCKET
 from trpc_agent_sdk.tools.safety._rules import R_PROC_SUBPROCESS
@@ -22,6 +23,7 @@ from trpc_agent_sdk.tools.safety._rules import R_RES_CONCURRENT_FLOOD
 from trpc_agent_sdk.tools.safety._rules import R_RES_INFINITE_LOOP
 from trpc_agent_sdk.tools.safety._rules import R_RES_LARGE_WRITE
 from trpc_agent_sdk.tools.safety._rules import R_SECRET_LOGGING
+from trpc_agent_sdk.tools.safety._rules import R_SECRET_PRIVATE_KEY
 from trpc_agent_sdk.tools.safety._types import Decision
 from trpc_agent_sdk.tools.safety._types import Finding
 from trpc_agent_sdk.tools.safety._types import RiskLevel
@@ -30,6 +32,9 @@ _CRED_PATH_RE = re.compile(r"(\.ssh|\.env|\.aws/credentials|id_rsa|id_ed25519|cr
 _URL_RE = re.compile(r"https?://([^/\s'\"']+)", re.I)
 _SECRET_NAME_RE = re.compile(r"(api[_-]?key|secret|token|password|passwd|private[_-]?key)", re.I)
 _PRIVATE_KEY_RE = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")
+# System directories: writing here can brick the runtime (issue risk class #1).
+_SYSTEM_DIRS = ("/etc/", "/usr/", "/bin/", "/sbin/", "/boot/", "/sys/",
+                "/proc/", "/lib/", "/lib64/", "/var/", "/dev/")
 
 # attribute path -> rule fired when called/used
 _DANGEROUS_ATTR = {
@@ -125,16 +130,17 @@ def scan_python(policy: Policy, script: str) -> list[Finding]:
         # infinite loop
         if isinstance(node, (ast.While,)) and _is_truthy(node.test):
             add(R_RES_INFINITE_LOOP, "while True:", "infinite loop; review.")
-        # secret logging: assignment of secret-named var + later print
+        # secret logging: assignment to a secret-named variable.
         if isinstance(node, ast.Assign):
             for t in node.targets:
                 if isinstance(t, ast.Name) and _SECRET_NAME_RE.search(t.id):
-                    if _PRIVATE_KEY_RE.search(_literal(node.value)):
-                        add(R_SECRET_LOGGING, f"private key in {t.id}",
-                            "private key literal detected.")
-                    else:
-                        add(R_SECRET_LOGGING, f"secret assigned to {t.id}",
-                            "secret-like variable; avoid logging.")
+                    add(R_SECRET_LOGGING, f"secret assigned to {t.id}",
+                        "secret-like variable; avoid logging.")
+        # private-key literal embedded anywhere (independent of variable name).
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) \
+                and _PRIVATE_KEY_RE.search(node.value):
+            add(R_SECRET_PRIVATE_KEY, "private key literal",
+                "embedded private key; refuse.")
 
     return findings
 
@@ -161,6 +167,11 @@ def _check_open_path(call: ast.Call, policy: Policy, add) -> None:
         path = arg.value
     elif isinstance(arg, ast.JoinedStr):
         path = "".join(v.value for v in arg.values if isinstance(v, ast.Constant))
+    mode = _open_mode(call)
+    if path and _is_write_mode(mode) and path.startswith(_SYSTEM_DIRS):
+        add(R_FS_SYSTEM_DIR, f"open('{path}','{mode}')",
+            f"writing to system directory {path}; refuse.")
+        return
     if path and _CRED_PATH_RE.search(path):
         add(R_FS_READ_CREDENTIALS, f"open('{path}')",
             f"reading credential path {path}; review.")
@@ -218,10 +229,22 @@ def _is_whitelisted(url: str, policy: Policy) -> bool:
     return root in {d.lower() for d in policy.whitelisted_domains} or host in policy.whitelisted_domains
 
 
-def _literal(node: ast.AST) -> str:
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return node.value
+def _open_mode(call: ast.Call) -> str:
+    """Return the literal mode string of an open() call, else ''."""
+    if len(call.args) >= 2:
+        m = call.args[1]
+        if isinstance(m, ast.Constant) and isinstance(m.value, str):
+            return m.value
+    for kw in call.keywords:
+        if kw.arg == "mode" and isinstance(kw.value, ast.Constant) \
+                and isinstance(kw.value.value, str):
+            return kw.value.value
     return ""
+
+
+def _is_write_mode(mode: str) -> bool:
+    """True if the mode can create/modify a file (w x a +)."""
+    return bool(set(mode) & set("wxa+"))
 
 
 def _heuristic_fallback(policy: Policy, script: str) -> list[Finding]:

@@ -110,3 +110,19 @@ samples:
       ThreadPoolExecutor(max_workers=10000)
     expected_decision: NEEDS_REVIEW
     required_rule_ids: [tool-res-concurrent-flood]
+
+  - name: 15_system_dir_write
+    language: python
+    script: |
+      with open("/etc/passwd", "w") as f:
+          f.write("hacked")
+    expected_decision: DENY
+    required_rule_ids: [tool-fs-system-dir-write]
+
+  - name: 16_private_key
+    language: python
+    script: |
+      key = "-----BEGIN RSA PRIVATE KEY-----\nMIIEoQIBAA\n-----END RSA PRIVATE KEY-----"
+      print(key)
+    expected_decision: DENY
+    required_rule_ids: [tool-secret-private-key]
