@@ -11,8 +11,6 @@ from pathlib import Path
 from trpc_agent_sdk.tools.safety._policy import (
     SafetyPolicy,
     PolicyRuleConfig,
-    WhitelistConfig,
-    BlocklistConfig,
 )
 from trpc_agent_sdk.tools.safety._types import RiskType, Decision, RiskLevel
 

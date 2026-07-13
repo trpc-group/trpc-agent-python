@@ -15,7 +15,6 @@ from dataclasses import asdict
 from datetime import datetime
 from datetime import timezone
 from pathlib import Path
-from typing import Optional
 
 from ._types import AuditEvent
 from ._types import ScanReport

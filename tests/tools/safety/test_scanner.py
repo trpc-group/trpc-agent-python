@@ -5,8 +5,6 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Core integration tests for the ToolSafetyScanner."""
 
-import pytest
-
 from trpc_agent_sdk.tools.safety._types import Decision
 from trpc_agent_sdk.tools.safety._types import RiskLevel
 from trpc_agent_sdk.tools.safety._types import RiskType

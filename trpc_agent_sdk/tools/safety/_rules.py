@@ -191,7 +191,7 @@ BUILTIN_PATTERN_RULES: list[PatternRule] = [
         message="Potential sensitive information exposure detected",
         recommendation="Do not log or output API keys, tokens, or passwords",
         patterns=[
-            r"(print|write|log|logger)\.?[^(]*\([^)]*(api_key|API_KEY|password|PASSWORD|token|TOKEN|secret|SECRET|private_key|PRIVATE_KEY)",
+            r"(print|write|log|logger)\.?[^(]*\([^)]*(api_key|API_KEY|password|PASSWORD|token|TOKEN|secret|SECRET|private_key|PRIVATE_KEY)",  # noqa: E501
             r"(api_key|API_KEY|password|PASSWORD|token|TOKEN|secret|SECRET)\s*=\s*[^#\n]{3,}",
         ],
     ),
