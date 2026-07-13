@@ -242,17 +242,16 @@ def _check_subprocess_shell_true(tree: ast.AST) -> list[RuleFinding]:
                 if isinstance(node.func.value, ast.Name) and node.func.value.id == "subprocess":
                     if node.func.attr in ("run", "Popen", "call", "check_output", "check_call"):
                         for kw in node.keywords:
-                            if kw.arg == "shell" and (
-                                isinstance(kw.value, ast.Constant) and kw.value.value is True
-                            ):
-                                findings.append(RuleFinding(
-                                    rule_id="SUBPROCESS_SHELL_001",
-                                    risk_type=RiskType.SYSTEM_COMMAND,
-                                    risk_level=RiskLevel.CRITICAL,
-                                    evidence=f"subprocess.{node.func.attr}(shell=True) at line {node.lineno}",
-                                    message="subprocess call with shell=True enables shell injection",
-                                    recommendation="Set shell=False and pass arguments as a list",
-                                ))
+                            if kw.arg == "shell" and (isinstance(kw.value, ast.Constant) and kw.value.value is True):
+                                findings.append(
+                                    RuleFinding(
+                                        rule_id="SUBPROCESS_SHELL_001",
+                                        risk_type=RiskType.SYSTEM_COMMAND,
+                                        risk_level=RiskLevel.CRITICAL,
+                                        evidence=f"subprocess.{node.func.attr}(shell=True) at line {node.lineno}",
+                                        message="subprocess call with shell=True enables shell injection",
+                                        recommendation="Set shell=False and pass arguments as a list",
+                                    ))
     return findings
 
 
@@ -263,35 +262,38 @@ def _check_python_network_calls(tree: ast.AST) -> list[RuleFinding]:
         if isinstance(node, ast.Call):
             if isinstance(node.func, ast.Attribute):
                 if isinstance(node.func.value, ast.Name) and node.func.value.id in network_libs:
-                    findings.append(RuleFinding(
-                        rule_id="NETWORK_AST_001",
-                        risk_type=RiskType.NETWORK_ACCESS,
-                        risk_level=RiskLevel.HIGH,
-                        evidence=f"{node.func.value.id}.{node.func.attr}() at line {node.lineno}",
-                        message=f"Network call via '{node.func.value.id}' library detected",
-                        recommendation="Ensure the target domain is whitelisted",
-                    ))
+                    findings.append(
+                        RuleFinding(
+                            rule_id="NETWORK_AST_001",
+                            risk_type=RiskType.NETWORK_ACCESS,
+                            risk_level=RiskLevel.HIGH,
+                            evidence=f"{node.func.value.id}.{node.func.attr}() at line {node.lineno}",
+                            message=f"Network call via '{node.func.value.id}' library detected",
+                            recommendation="Ensure the target domain is whitelisted",
+                        ))
     return findings
 
 
 def _check_sensitive_write(tree: ast.AST) -> list[RuleFinding]:
     findings: list[RuleFinding] = []
-    sensitive_names = {"api_key", "password", "token", "secret", "credential",
-                       "private_key", "API_KEY", "PASSWORD", "TOKEN", "SECRET"}
+    sensitive_names = {
+        "api_key", "password", "token", "secret", "credential", "private_key", "API_KEY", "PASSWORD", "TOKEN", "SECRET"
+    }
     output_funcs = {"print", "write", "info", "debug", "error", "warning", "log"}
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             if isinstance(node.func, ast.Name) and node.func.id in output_funcs:
                 for arg in node.args:
                     if isinstance(arg, ast.Name) and arg.id.lower() in {n.lower() for n in sensitive_names}:
-                        findings.append(RuleFinding(
-                            rule_id="SENSITIVE_AST_001",
-                            risk_type=RiskType.SENSITIVE_INFO_LEAK,
-                            risk_level=RiskLevel.HIGH,
-                            evidence=f"{node.func.id}({arg.id}) at line {node.lineno}",
-                            message=f"Sensitive variable '{arg.id}' passed to output function",
-                            recommendation="Do not output sensitive values to logs or files",
-                        ))
+                        findings.append(
+                            RuleFinding(
+                                rule_id="SENSITIVE_AST_001",
+                                risk_type=RiskType.SENSITIVE_INFO_LEAK,
+                                risk_level=RiskLevel.HIGH,
+                                evidence=f"{node.func.id}({arg.id}) at line {node.lineno}",
+                                message=f"Sensitive variable '{arg.id}' passed to output function",
+                                recommendation="Do not output sensitive values to logs or files",
+                            ))
     return findings
 
 

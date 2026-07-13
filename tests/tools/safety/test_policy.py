@@ -43,6 +43,7 @@ blocklist:
 
 
 class TestPolicyLoading:
+
     def test_load_from_yaml_file(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(MINIMAL_YAML)
@@ -81,6 +82,7 @@ class TestPolicyLoading:
 
 
 class TestPolicyRuleConfig:
+
     def test_enabled_rule(self):
         rule = PolicyRuleConfig(
             rule_id="TEST_001",
@@ -103,31 +105,31 @@ class TestPolicyRuleConfig:
 
 
 class TestGetEnabledRules:
+
     def test_get_enabled_rules_filters_disabled(self):
-        policy = SafetyPolicy(
-            rules=[
-                PolicyRuleConfig(
-                    rule_id="ENABLED_001",
-                    enabled=True,
-                    risk_type=RiskType.DANGEROUS_FILE_OP,
-                    severity=RiskLevel.CRITICAL,
-                    decision=Decision.DENY,
-                ),
-                PolicyRuleConfig(
-                    rule_id="DISABLED_002",
-                    enabled=False,
-                    risk_type=RiskType.NETWORK_ACCESS,
-                    severity=RiskLevel.HIGH,
-                    decision=Decision.DENY,
-                ),
-            ]
-        )
+        policy = SafetyPolicy(rules=[
+            PolicyRuleConfig(
+                rule_id="ENABLED_001",
+                enabled=True,
+                risk_type=RiskType.DANGEROUS_FILE_OP,
+                severity=RiskLevel.CRITICAL,
+                decision=Decision.DENY,
+            ),
+            PolicyRuleConfig(
+                rule_id="DISABLED_002",
+                enabled=False,
+                risk_type=RiskType.NETWORK_ACCESS,
+                severity=RiskLevel.HIGH,
+                decision=Decision.DENY,
+            ),
+        ])
         enabled = policy.get_enabled_rules()
         assert len(enabled) == 1
         assert enabled[0].rule_id == "ENABLED_001"
 
 
 class TestModifiedPolicyWithoutCodeChange:
+
     def test_changed_yaml_reflects_in_policy(self):
         yaml_a = MINIMAL_YAML
         yaml_b = MINIMAL_YAML.replace("max_scan_time_ms: 1000", "max_scan_time_ms: 5000")

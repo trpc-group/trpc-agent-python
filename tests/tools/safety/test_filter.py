@@ -40,6 +40,7 @@ def filter_instance(mock_scanner, mock_audit_logger):
 
 
 class TestToolSafetyFilter:
+
     async def test_filter_blocks_on_deny(self, filter_instance, mock_scanner):
         mock_scanner.scan.return_value = ScanReport(
             decision=Decision.DENY,

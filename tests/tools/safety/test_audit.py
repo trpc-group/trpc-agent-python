@@ -16,6 +16,7 @@ from trpc_agent_sdk.tools.safety._types import ScanReport
 
 
 class TestSafetyAuditLogger:
+
     def test_log_writes_valid_jsonl(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
             log_path = f.name
@@ -71,28 +72,30 @@ class TestSafetyAuditLogger:
             log_path = f.name
         try:
             logger = SafetyAuditLogger(output_path=log_path)
-            logger.log_event(AuditEvent(
-                timestamp="2026-07-10T12:00:00Z",
-                tool_name="tool_a",
-                decision="allow",
-                risk_level=None,
-                rule_ids=[],
-                scan_duration_ms=1.0,
-                sanitized=False,
-                intercepted=False,
-                script_hash="aaa",
-            ))
-            logger.log_event(AuditEvent(
-                timestamp="2026-07-10T12:01:00Z",
-                tool_name="tool_b",
-                decision="deny",
-                risk_level="high",
-                rule_ids=["NETWORK_PYTHON_004"],
-                scan_duration_ms=2.0,
-                sanitized=False,
-                intercepted=True,
-                script_hash="bbb",
-            ))
+            logger.log_event(
+                AuditEvent(
+                    timestamp="2026-07-10T12:00:00Z",
+                    tool_name="tool_a",
+                    decision="allow",
+                    risk_level=None,
+                    rule_ids=[],
+                    scan_duration_ms=1.0,
+                    sanitized=False,
+                    intercepted=False,
+                    script_hash="aaa",
+                ))
+            logger.log_event(
+                AuditEvent(
+                    timestamp="2026-07-10T12:01:00Z",
+                    tool_name="tool_b",
+                    decision="deny",
+                    risk_level="high",
+                    rule_ids=["NETWORK_PYTHON_004"],
+                    scan_duration_ms=2.0,
+                    sanitized=False,
+                    intercepted=True,
+                    script_hash="bbb",
+                ))
 
             with open(log_path) as f:
                 lines = f.readlines()

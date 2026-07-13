@@ -67,12 +67,8 @@ class ToolSafetyFilter(BaseFilter):
         self._audit_logger.log(report, tool_name=tool_name, script_hash=script_hash)
 
         if report.decision == Decision.DENY:
-            findings_text = "; ".join(
-                f"{f.rule_id}: {f.message}" for f in report.findings
-            )
-            rsp.error = Exception(
-                f"Tool execution blocked by safety guard: {findings_text}"
-            )
+            findings_text = "; ".join(f"{f.rule_id}: {f.message}" for f in report.findings)
+            rsp.error = Exception(f"Tool execution blocked by safety guard: {findings_text}")
             rsp.is_continue = False
 
     @staticmethod

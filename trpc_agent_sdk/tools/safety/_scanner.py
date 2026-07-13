@@ -159,9 +159,7 @@ class ToolSafetyScanner:
             filtered.append(finding)
         return filtered
 
-    def _is_script_whitelisted(
-        self, script: str, whitelisted_domains: set[str], whitelisted_paths: set[str]
-    ) -> bool:
+    def _is_script_whitelisted(self, script: str, whitelisted_domains: set[str], whitelisted_paths: set[str]) -> bool:
         for domain in whitelisted_domains:
             if domain in script:
                 return True
@@ -170,9 +168,7 @@ class ToolSafetyScanner:
                 return True
         return False
 
-    def _is_whitelisted(
-        self, evidence: str, whitelisted_domains: set[str], whitelisted_paths: set[str]
-    ) -> bool:
+    def _is_whitelisted(self, evidence: str, whitelisted_domains: set[str], whitelisted_paths: set[str]) -> bool:
         for domain in whitelisted_domains:
             if domain in evidence:
                 return True

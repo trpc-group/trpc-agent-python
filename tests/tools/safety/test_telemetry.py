@@ -17,6 +17,7 @@ from trpc_agent_sdk.tools.safety._types import ScanReport
 
 
 class TestSetSafetySpanAttrs:
+
     def test_span_attributes_set_on_active_span(self):
         mock_span = MagicMock()
         mock_span.is_recording.return_value = True

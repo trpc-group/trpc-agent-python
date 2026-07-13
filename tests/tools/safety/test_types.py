@@ -18,6 +18,7 @@ from trpc_agent_sdk.tools.safety._types import (
 
 
 class TestRiskType:
+
     def test_risk_type_values(self):
         assert RiskType.DANGEROUS_FILE_OP.value == "dangerous_file_operation"
         assert RiskType.NETWORK_ACCESS.value == "network_access"
@@ -28,6 +29,7 @@ class TestRiskType:
 
 
 class TestDecision:
+
     def test_decision_values(self):
         assert Decision.ALLOW.value == "allow"
         assert Decision.DENY.value == "deny"
@@ -39,6 +41,7 @@ class TestDecision:
 
 
 class TestRiskLevel:
+
     def test_risk_level_values(self):
         assert RiskLevel.LOW.value == "low"
         assert RiskLevel.MEDIUM.value == "medium"
@@ -52,6 +55,7 @@ class TestRiskLevel:
 
 
 class TestRuleFinding:
+
     def test_create_finding(self):
         f = RuleFinding(
             rule_id="TEST_001",
@@ -68,6 +72,7 @@ class TestRuleFinding:
 
 
 class TestScanReport:
+
     def test_aggregation_picks_worst_decision(self):
         findings = [
             RuleFinding(
@@ -102,6 +107,7 @@ class TestScanReport:
 
 
 class TestAuditEvent:
+
     def test_serialization(self):
         import json
         from dataclasses import asdict
