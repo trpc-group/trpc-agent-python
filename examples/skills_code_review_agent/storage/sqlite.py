@@ -1,6 +1,5 @@
 """SQLite implementation of the review store."""
 
-import hashlib
 import json
 import os
 import sqlite3
@@ -14,9 +13,12 @@ from security import redact_report
 from security import redact_text
 
 from .base import BaseReviewStore
+from .records import filter_decision_rows
+from .records import finding_rows
+from .records import sandbox_rows
+from .schema_loader import read_trusted_schema
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
-MAX_SCHEMA_BYTES = 256 * 1024
 
 
 class SQLiteReviewStore(BaseReviewStore):
@@ -59,32 +61,7 @@ class SQLiteReviewStore(BaseReviewStore):
 
     def _read_trusted_schema(self) -> str:
         """Read a bounded schema file confined to this example's storage directory."""
-        try:
-            metadata = os.lstat(self.schema_path)
-        except FileNotFoundError as error:
-            raise ValueError(
-                f"SQLite schema file does not exist: {self.schema_path}"
-            ) from error
-        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
-            raise ValueError("SQLite schema path must be a regular file, not a link")
-        resolved = self.schema_path.resolve()
-        try:
-            resolved.relative_to(SCHEMA_PATH.parent.resolve())
-        except ValueError as error:
-            raise ValueError(
-                "SQLite schema must be located under the example storage directory"
-            ) from error
-        if metadata.st_size > MAX_SCHEMA_BYTES:
-            raise ValueError(f"SQLite schema exceeds {MAX_SCHEMA_BYTES} bytes")
-        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-        descriptor = os.open(resolved, flags)
-        try:
-            data = os.read(descriptor, MAX_SCHEMA_BYTES + 1)
-        finally:
-            os.close(descriptor)
-        if len(data) > MAX_SCHEMA_BYTES:
-            raise ValueError(f"SQLite schema exceeds {MAX_SCHEMA_BYTES} bytes")
-        return data.decode("utf-8")
+        return read_trusted_schema(self.schema_path, SCHEMA_PATH.parent, "SQLite")
 
     @staticmethod
     def _schema_authorizer(
@@ -255,22 +232,7 @@ class SQLiteReviewStore(BaseReviewStore):
                      timed_out, output_truncated, stdout_summary, stderr_summary, error_type)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                [
-                    (
-                        run.run_id,
-                        report.task_id,
-                        redact_text(run.command),
-                        run.status,
-                        run.duration_ms,
-                        run.exit_code,
-                        int(run.timed_out),
-                        int(run.output_truncated),
-                        redact_text(run.stdout_summary),
-                        redact_text(run.stderr_summary),
-                        run.error_type,
-                    )
-                    for run in report.sandbox_runs
-                ],
+                sandbox_rows(report),
             )
             connection.executemany(
                 """
@@ -278,47 +240,8 @@ class SQLiteReviewStore(BaseReviewStore):
                     (decision_id, task_id, command, decision, reason, created_at)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                [
-                    (
-                        decision.decision_id,
-                        report.task_id,
-                        redact_text(decision.command),
-                        decision.decision,
-                        redact_text(decision.reason),
-                        decision.created_at.isoformat(),
-                    )
-                    for decision in report.filter_decisions
-                ],
+                filter_decision_rows(report),
             )
-
-            finding_rows = []
-            for bucket, items in (
-                ("finding", report.analysis.findings),
-                ("warning", report.analysis.warnings),
-                ("needs_human_review", report.analysis.needs_human_review),
-            ):
-                for finding in items:
-                    # Stable IDs make repeated saves idempotent across all finding buckets.
-                    key = (
-                        f"{report.task_id}:{bucket}:{finding.file}:"
-                        f"{finding.line}:{finding.category}"
-                    )
-                    finding_rows.append(
-                        (
-                            hashlib.sha256(key.encode("utf-8")).hexdigest(),
-                            report.task_id,
-                            bucket,
-                            finding.severity,
-                            finding.category,
-                            redact_text(finding.file),
-                            finding.line,
-                            redact_text(finding.title),
-                            redact_text(finding.evidence),
-                            redact_text(finding.recommendation),
-                            finding.confidence,
-                            redact_text(finding.source),
-                        )
-                    )
             connection.executemany(
                 """
                 INSERT INTO findings
@@ -326,7 +249,7 @@ class SQLiteReviewStore(BaseReviewStore):
                      title, evidence, recommendation, confidence, source)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                finding_rows,
+                finding_rows(report),
             )
             connection.execute(
                 """

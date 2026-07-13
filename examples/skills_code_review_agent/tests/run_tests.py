@@ -53,6 +53,8 @@ from sandbox.docker import _BoundedProgramRunner
 from sandbox.docker import _HardenedContainerClient
 from sandbox.factory import create_sandbox_provider
 from storage.factory import create_review_store
+from storage.postgresql import PostgreSQLReviewStore
+from storage.postgresql import validate_postgres_dsn
 from storage.sqlite import SQLiteReviewStore
 from workflow import AgentExecutionFailure
 from workflow import CodeReviewWorkflow
@@ -1700,6 +1702,120 @@ class FakeWorkflowTests(unittest.TestCase):
         self.assertEqual(store.schema_path, schema)
         store.initialize()
         self.assertTrue(store.database_path.is_file())
+
+    def test_storage_factory_selects_postgresql_from_environment(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "CODE_REVIEW_STORAGE_BACKEND": "postgresql",
+                "CODE_REVIEW_POSTGRES_DSN": (
+                    "postgresql://reviewer:local-test@127.0.0.1/reviews"
+                ),
+                "CODE_REVIEW_POSTGRES_CONNECT_TIMEOUT_SECONDS": "7",
+                "CODE_REVIEW_POSTGRES_STATEMENT_TIMEOUT_SECONDS": "20",
+            },
+        ):
+            store = create_review_store()
+        self.assertIsInstance(store, PostgreSQLReviewStore)
+        self.assertEqual(store.connect_timeout_seconds, 7)
+        self.assertEqual(store.statement_timeout_seconds, 20)
+
+        with patch.dict(
+            os.environ,
+            {
+                "CODE_REVIEW_STORAGE_BACKEND": "postgres",
+                "CODE_REVIEW_POSTGRES_DSN": (
+                    "postgresql://reviewer:local-test@localhost/reviews"
+                ),
+            },
+        ):
+            with self.assertRaisesRegex(ValueError, "SQLite"):
+                create_review_store(Path("override.sqlite3"))
+
+    def test_postgresql_configuration_enforces_safe_dsn_and_timeouts(self) -> None:
+        with self.assertRaisesRegex(ValueError, "required"):
+            validate_postgres_dsn("")
+        with self.assertRaisesRegex(ValueError, "postgresql://"):
+            validate_postgres_dsn("host=localhost dbname=reviews")
+        with self.assertRaisesRegex(ValueError, "sslmode"):
+            validate_postgres_dsn(
+                "postgresql://reviewer:example@db.example.invalid/reviews"
+            )
+        secure = (
+            "postgresql://reviewer:example@db.example.invalid/reviews"
+            "?sslmode=verify-full"
+        )
+        self.assertEqual(validate_postgres_dsn(secure), secure)
+        with patch.dict(
+            os.environ,
+            {
+                "CODE_REVIEW_STORAGE_BACKEND": "postgresql",
+                "CODE_REVIEW_POSTGRES_DSN": (
+                    "postgresql://reviewer:local-test@localhost/reviews"
+                ),
+                "CODE_REVIEW_POSTGRES_CONNECT_TIMEOUT_SECONDS": "31",
+            },
+        ):
+            with self.assertRaisesRegex(ValueError, "between 1 and 30"):
+                create_review_store()
+
+    def test_postgresql_schema_is_confined_and_statement_allowlisted(self) -> None:
+        root = Path(self.temp_dir.name)
+        external = root / "postgres.sql"
+        external.write_text("DROP TABLE public.review_tasks;", encoding="utf-8")
+        store = PostgreSQLReviewStore(
+            "postgresql://reviewer:local-test@localhost/reviews",
+            schema_path=external,
+        )
+        with self.assertRaisesRegex(ValueError, "storage directory"):
+            store._schema_statements()
+
+        with patch(
+            "storage.postgresql.read_trusted_schema",
+            return_value="DROP TABLE public.review_tasks;",
+        ):
+            store = PostgreSQLReviewStore(
+                "postgresql://reviewer:local-test@localhost/reviews",
+            )
+            with self.assertRaisesRegex(ValueError, "disallowed"):
+                store._schema_statements()
+
+    def test_postgresql_connection_errors_redact_dsn_credentials(self) -> None:
+        marker = "sk-postgres-connection-fake-secret-1234567890"
+        store = PostgreSQLReviewStore(
+            f"postgresql://reviewer:{marker}@localhost/reviews"
+        )
+
+        class FailingDriver:
+            @staticmethod
+            def connect(dsn, **kwargs):
+                del kwargs
+                raise RuntimeError(f"failed to connect with {dsn}")
+
+        with patch.object(
+            store,
+            "_load_driver",
+            return_value=(FailingDriver, None),
+        ):
+            with self.assertRaises(RuntimeError) as context:
+                store._connect()
+        self.assertNotIn(marker, str(context.exception))
+        self.assertIn("[REDACTED]", str(context.exception))
+
+        class FakeConnection:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exception_type, exception, traceback):
+                del exception_type, exception, traceback
+                return False
+
+        with patch.object(store, "_connect", return_value=FakeConnection()):
+            with self.assertRaises(RuntimeError) as operation_context:
+                with store._operation("test write"):
+                    raise ValueError(f"password={marker}")
+        self.assertNotIn(marker, str(operation_context.exception))
+        self.assertIn("[REDACTED]", str(operation_context.exception))
 
     def test_sqlite_enables_wal_and_digest_profile_index(self) -> None:
         self.store.initialize()
