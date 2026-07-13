@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0",
+  "required_cases": [
+    "single_turn_text",
+    "multi_turn_text",
+    "tool_call_response",
+    "state_shallow_update",
+    "memory_scope_user_session",
+    "summary_create_update",
+    "summary_event_truncation",
+    "failure_retry_append",
+    "cross_session_isolation",
+    "summary_defect_specials"
+  ],
+  "extended_cases": [
+    "all_entities_contract"
+  ],
+  "requirements": {
+    "p0_backends": {
+      "requirement": "Run lightweight replay against InMemory and a persistent or simulated persistent backend.",
+      "backends": ["in_memory", "sqlite"],
+      "test": "test_lightweight_replay_cases"
+    },
+    "p0_public_cases": {
+      "requirement": "Provide at least 10 deterministic public replay cases.",
+      "required_case_count": 10,
+      "extended_case_count": 1,
+      "test": "test_acceptance_matrix_matches_fixtures"
+    },
+    "p0_public_case_mutation_matrix": {
+      "requirement": "Each required public replay case detects an injected inconsistency.",
+      "detected": 10,
+      "total": 10,
+      "rate": 1.0,
+      "test": "test_required_public_cases_detect_injected_inconsistency"
+    },
+    "p0_entities": {
+      "requirement": "Cover event, state, memory, and summary entities.",
+      "entities": ["event", "state", "memory", "summary"],
+      "test": "test_snapshot_contains_all_entities"
+    },
+    "p0_summary_defects": {
+      "requirement": "Detect summary loss, stale overwrite, and wrong session ownership.",
+      "summary_loss_detection_rate": 1.0,
+      "summary_overwrite_detection_rate": 1.0,
+      "summary_owner_error_detection_rate": 1.0,
+      "test": "test_summary_defect_detection"
+    },
+    "p0_mutation_score": {
+      "requirement": "Detect all registered public mutations.",
+      "mutation_detection_rate": 1.0,
+      "survived_mutations": [],
+      "test": "test_mutation_detection"
+    },
+    "p1_runtime_fault_detection": {
+      "requirement": "Detect an after-commit client retry fault as a runtime replay inconsistency.",
+      "runtime_fault_detection_rate": 1.0,
+      "test": "test_runtime_fault_retry_duplicate_is_detected"
+    },
+    "p1_persistent_rebuild": {
+      "requirement": "Destroy and rebuild the persistent backend between replay phases, then read back through a fresh service.",
+      "cases": [
+        "summary_create_update",
+        "single_turn_text"
+      ],
+      "test": "test_sqlite_destroy_rebuild_continue_and_readback"
+    },
+    "p0_reports": {
+      "requirement": "Generate structured JSON diff reports with precise location fields.",
+      "required_fields": [
+        "case_id",
+        "backend_pair",
+        "session_id",
+        "entity_type",
+        "entity_id",
+        "index",
+        "field_path",
+        "reference_value",
+        "actual_value",
+        "allowed",
+        "category",
+        "reason"
+      ],
+      "test": "test_diff_report_schema_contains_required_location_fields"
+    },
+    "p0_lightweight_runtime": {
+      "requirement": "Run default lightweight mode in less than 30 seconds without external services.",
+      "lightweight_duration_seconds_max": 30,
+      "test": "test_lightweight_replay_cases"
+    }
+  }
+}
