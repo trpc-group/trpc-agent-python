@@ -84,7 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--database",
         type=Path,
         default=None,
-        help="SQLite path overriding CODE_REVIEW_SQLITE_PATH",
+        help="SQLite path overriding CODE_REVIEW_SQLITE_PATH (SQLite only)",
     )
     parser.add_argument(
         "--output-dir",
