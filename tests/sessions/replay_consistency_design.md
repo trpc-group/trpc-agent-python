@@ -1,0 +1,1 @@
+Replay harness 用 Python fixture 定义 10 条标准轨迹，统一写入独立后端。默认比较 InMemory 与 SQLite；轻量模式只跑 InMemory，SQL/Redis 集成由环境变量开启。读取后生成 snapshot，归一化 JSON 顺序、空值、memory 时间戳和 summary 自动 id，保留普通事件 id 定位丢失、重复、乱序。Summary 文本做空白归一化，归属 session、version、压缩计数和覆盖关系严格比较。允许差异必须写入 `ALLOWED_DIFFS`，否则进入报告并使测试失败。
