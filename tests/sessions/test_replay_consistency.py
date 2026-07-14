@@ -135,8 +135,9 @@ async def _make_redis_backend() -> ReplayBackend:
         db_url=redis_url,
         session_config=_make_session_config(store_historical_events=True),
         summarizer_manager=summarizer_manager,
+        decode_responses=True,
     )
-    memory_service = RedisMemoryService(db_url=redis_url)
+    memory_service = RedisMemoryService(db_url=redis_url, decode_responses=True)
     return ReplayBackend(
         name="redis",
         session_service=session_service,
@@ -353,12 +354,14 @@ async def _run_case(backend: ReplayBackend, replay_case: ReplayCase) -> dict[str
     session: Session | None = None
     next_event_index = 1
     memory_searches: list[dict[str, Any]] = []
+    app_name = f"{APP_NAME}-{replay_case.case_id}"
+    user_id = f"{USER_ID}-{replay_case.case_id}"
 
     for operation in replay_case.operations:
         if operation["op"] == "create_session":
             session = await backend.session_service.create_session(
-                app_name=APP_NAME,
-                user_id=USER_ID,
+                app_name=app_name,
+                user_id=user_id,
                 session_id=replay_case.session_id,
                 state=operation.get("state"),
             )
@@ -420,8 +423,8 @@ async def _run_case(backend: ReplayBackend, replay_case: ReplayCase) -> dict[str
             if summary and "version" in operation:
                 summary.metadata["version"] = operation["version"]
             session = await backend.session_service.get_session(
-                app_name=APP_NAME,
-                user_id=USER_ID,
+                app_name=app_name,
+                user_id=user_id,
                 session_id=replay_case.session_id,
             )
             assert session is not None
@@ -438,8 +441,8 @@ async def _run_case(backend: ReplayBackend, replay_case: ReplayCase) -> dict[str
         raise AssertionError(f"{replay_case.case_id}: replay case did not create a session")
 
     persisted = await backend.session_service.get_session(
-        app_name=APP_NAME,
-        user_id=USER_ID,
+        app_name=app_name,
+        user_id=user_id,
         session_id=replay_case.session_id,
     )
     assert persisted is not None

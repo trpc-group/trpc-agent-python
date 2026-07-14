@@ -86,6 +86,9 @@ class _MockRedisStorage:
             pairs = args[1:]
             if key not in self._hash_store:
                 self._hash_store[key] = {}
+            if command.kwargs.get("mapping"):
+                self._hash_store[key].update(command.kwargs["mapping"])
+                return True
             for i in range(0, len(pairs), 2):
                 self._hash_store[key][pairs[i]] = pairs[i + 1]
             return True

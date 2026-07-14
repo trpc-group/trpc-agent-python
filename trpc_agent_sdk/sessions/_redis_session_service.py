@@ -277,13 +277,9 @@ class RedisSessionService(BaseSessionService):
             await self._refresh_ttl(redis_session, key)
             return app_state
 
-        # Use HSET with TTL if TTL is configured, otherwise use HSET
-        args = [key]
-        for k, v in app_state.items():
-            args.extend([k, v])
-
         command = RedisCommand(method='hset',
-                               args=tuple(args),
+                               args=(key, ),
+                               kwargs={"mapping": app_state},
                                expire=RedisExpire(key=key, ttl=self._session_config.ttl))
         await self._redis_storage.execute_command(redis_session, command)
 
@@ -317,13 +313,9 @@ class RedisSessionService(BaseSessionService):
             await self._refresh_ttl(redis_session, key)
             return user_state
 
-        # Use HSET with TTL if TTL is configured, otherwise use HSET
-        args = [key]
-        for k, v in user_state.items():
-            args.extend([k, v])
-
         command = RedisCommand(method='hset',
-                               args=tuple(args),
+                               args=(key, ),
+                               kwargs={"mapping": user_state},
                                expire=RedisExpire(key=key, ttl=self._session_config.ttl))
         await self._redis_storage.execute_command(redis_session, command)
 
