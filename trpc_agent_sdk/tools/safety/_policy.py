@@ -20,8 +20,7 @@ class ToolSafetyPolicy(BaseModel):
     allowed_domains: list[str] = Field(default_factory=list)
     allowed_commands: list[str] = Field(default_factory=lambda: ["echo", "pwd", "ls"])
     forbidden_paths: list[str] = Field(
-        default_factory=lambda: ["~/.ssh", ".env", "credentials.json", "/etc/shadow", "/root"]
-    )
+        default_factory=lambda: ["~/.ssh", ".env", "credentials.json", "/etc/shadow", "/root"])
     max_timeout_seconds: int = 60
     max_output_bytes: int = 1_000_000
     deny_risk_levels: list[str] = Field(default_factory=lambda: ["critical", "high"])

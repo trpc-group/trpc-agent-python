@@ -112,9 +112,8 @@ class ToolSafetyGuard:
     ) -> Any:
         report = self.check(request)
         approved = bool(request.metadata.get("human_approved"))
-        if report.decision == SafetyDecision.DENY or (
-            report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW and not approved
-        ):
+        if report.decision == SafetyDecision.DENY or (report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+                                                      and not approved):
             raise ToolSafetyBlockedError(report)
         result = executor()
         if inspect.isawaitable(result):
@@ -125,9 +124,7 @@ class ToolSafetyGuard:
             try:
                 result = await asyncio.wait_for(result, timeout=timeout)
             except asyncio.TimeoutError as exc:
-                raise ToolSafetyResourceLimitError(
-                    f"Tool execution exceeded {timeout} seconds"
-                ) from exc
+                raise ToolSafetyResourceLimitError(f"Tool execution exceeded {timeout} seconds") from exc
         if isinstance(result, bytes):
             output_size = len(result)
         elif isinstance(result, str):
@@ -135,9 +132,7 @@ class ToolSafetyGuard:
         else:
             output_size = len(json.dumps(result, default=str).encode("utf-8"))
         if output_size > self.scanner.policy.max_output_bytes:
-            raise ToolSafetyResourceLimitError(
-                f"Tool output exceeded {self.scanner.policy.max_output_bytes} bytes"
-            )
+            raise ToolSafetyResourceLimitError(f"Tool output exceeded {self.scanner.policy.max_output_bytes} bytes")
         return result
 
 
@@ -168,13 +163,18 @@ class ToolScriptSafetyFilter(BaseFilter):
             language=req.get("language", "auto"),
             command_args=[str(value) for value in req.get("command_args", [])],
             working_directory=req.get("cwd") or req.get("working_directory"),
-            environment={str(key): str(value) for key, value in req.get("env", {}).items()},
-            metadata={"timeout": req.get("timeout"), "human_approved": req.get("human_approved", False)},
+            environment={
+                str(key): str(value)
+                for key, value in req.get("env", {}).items()
+            },
+            metadata={
+                "timeout": req.get("timeout"),
+                "human_approved": req.get("human_approved", False)
+            },
         )
         report = self.guard.check(request)
         approved = bool(request.metadata.get("human_approved"))
-        if report.decision == SafetyDecision.DENY or (
-            report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW and not approved
-        ):
+        if report.decision == SafetyDecision.DENY or (report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+                                                      and not approved):
             rsp.rsp = {"success": False, "safety_report": report.model_dump(mode="json")}
             rsp.is_continue = False

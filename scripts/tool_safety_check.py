@@ -30,9 +30,7 @@ def main() -> int:
     if language == "auto" and args.file:
         language = "python" if args.file.suffix == ".py" else "bash"
     scanner = ToolScriptSafetyScanner.from_policy_file(args.policy)
-    report = scanner.scan(
-        ToolSafetyRequest(tool_name=args.tool_name, script=script, language=language)
-    )
+    report = scanner.scan(ToolSafetyRequest(tool_name=args.tool_name, script=script, language=language))
     print(json.dumps(report.model_dump(mode="json"), ensure_ascii=False, indent=2))
     return 0 if report.decision.value == "allow" else 2
 
