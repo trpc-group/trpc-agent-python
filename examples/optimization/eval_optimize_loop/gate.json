@@ -1,0 +1,16 @@
+{
+  "min_validation_score_delta": 0.05,
+  "max_new_hard_fails": 0,
+  "max_score_regression_per_case": 0.0,
+  "critical_case_ids": ["val_fiction_key"],
+  "overfitting": {
+    "enabled": true,
+    "generalization_gap_threshold": 0.1
+  },
+  "budget": {
+    "max_metric_calls": 80,
+    "max_duration_seconds": 180,
+    "cost_measurement": "measured_zero_offline"
+  },
+  "tie_policy": "reject"
+}
