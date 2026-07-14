@@ -1,0 +1,431 @@
+{
+  "generated_at": "2026-07-15T00:16:49",
+  "reference_backend": "in_memory",
+  "backends_compared": [
+    "sqlite"
+  ],
+  "cases": [
+    {
+      "case_name": "single_turn_simple",
+      "backend_name": "sqlite",
+      "consistent": true,
+      "expected_faults": [],
+      "injected_fault": null,
+      "differences": []
+    },
+    {
+      "case_name": "multi_turn_conversation",
+      "backend_name": "sqlite",
+      "consistent": true,
+      "expected_faults": [],
+      "injected_fault": null,
+      "differences": []
+    },
+    {
+      "case_name": "tool_call_conversation",
+      "backend_name": "sqlite",
+      "consistent": true,
+      "expected_faults": [],
+      "injected_fault": null,
+      "differences": []
+    },
+    {
+      "case_name": "state_updates",
+      "backend_name": "sqlite",
+      "consistent": true,
+      "expected_faults": [],
+      "injected_fault": null,
+      "differences": []
+    },
+    {
+      "case_name": "memory_write_read",
+      "backend_name": "sqlite",
+      "consistent": true,
+      "expected_faults": [],
+      "injected_fault": null,
+      "differences": []
+    },
+    {
+      "case_name": "summary_generation",
+      "backend_name": "sqlite",
+      "consistent": true,
+      "expected_faults": [],
+      "injected_fault": null,
+      "differences": []
+    },
+    {
+      "case_name": "summary_event_truncation",
+      "backend_name": "sqlite",
+      "consistent": true,
+      "expected_faults": [],
+      "injected_fault": null,
+      "differences": []
+    },
+    {
+      "case_name": "anomaly_recovery_duplicate",
+      "backend_name": "sqlite",
+      "consistent": true,
+      "expected_faults": [],
+      "injected_fault": null,
+      "differences": []
+    },
+    {
+      "case_name": "injected_drop_event",
+      "backend_name": "sqlite",
+      "consistent": false,
+      "expected_faults": [
+        "drop_event"
+      ],
+      "injected_fault": "drop_event",
+      "differences": [
+        {
+          "path": "sessions[0].events[0].content.parts[0].text",
+          "reference_value": "First",
+          "actual_value": "Second",
+          "allowed_diff": false,
+          "message": "values differ"
+        },
+        {
+          "path": "sessions[0].events[0].author",
+          "reference_value": "user",
+          "actual_value": "agent",
+          "allowed_diff": false,
+          "message": "values differ"
+        },
+        {
+          "path": "sessions[0].events[1].content.parts[0].text",
+          "reference_value": "Second",
+          "actual_value": "Third",
+          "allowed_diff": false,
+          "message": "values differ"
+        },
+        {
+          "path": "sessions[0].events[1].author",
+          "reference_value": "agent",
+          "actual_value": "user",
+          "allowed_diff": false,
+          "message": "values differ"
+        },
+        {
+          "path": "sessions[0].events[2]",
+          "reference_value": {
+            "content": {
+              "parts": [
+                {
+                  "text": "Third"
+                }
+              ]
+            },
+            "invocation_id": "inv-1",
+            "author": "user",
+            "actions": {
+              "artifact_delta": {}
+            },
+            "requires_completion": false,
+            "version": 0,
+            "id": "__event_id__",
+            "timestamp": "__event_timestamp__",
+            "visible": true,
+            "model_flags": 1
+          },
+          "actual_value": null,
+          "allowed_diff": false,
+          "message": "missing item in actual list"
+        }
+      ]
+    },
+    {
+      "case_name": "injected_duplicate_event",
+      "backend_name": "sqlite",
+      "consistent": false,
+      "expected_faults": [
+        "duplicate_event"
+      ],
+      "injected_fault": "duplicate_event",
+      "differences": [
+        {
+          "path": "sessions[0].events[2]",
+          "reference_value": null,
+          "actual_value": {
+            "content": {
+              "parts": [
+                {
+                  "text": "Second"
+                }
+              ]
+            },
+            "invocation_id": "inv-1",
+            "author": "agent",
+            "actions": {
+              "artifact_delta": {}
+            },
+            "requires_completion": false,
+            "version": 0,
+            "id": "__event_id__",
+            "timestamp": "__event_timestamp__",
+            "visible": true,
+            "model_flags": 1
+          },
+          "allowed_diff": false,
+          "message": "extra item in actual list"
+        }
+      ]
+    },
+    {
+      "case_name": "injected_corrupt_state",
+      "backend_name": "sqlite",
+      "consistent": false,
+      "expected_faults": [
+        "corrupt_state"
+      ],
+      "injected_fault": "corrupt_state",
+      "differences": [
+        {
+          "path": "sessions[0].events[2]",
+          "reference_value": null,
+          "actual_value": {
+            "invocation_id": "fault-state-update",
+            "author": "system",
+            "actions": {
+              "state_delta": {
+                "counter": 9999
+              },
+              "artifact_delta": {}
+            },
+            "requires_completion": false,
+            "version": 0,
+            "id": "__event_id__",
+            "timestamp": "__event_timestamp__",
+            "visible": true,
+            "model_flags": 1
+          },
+          "allowed_diff": false,
+          "message": "extra item in actual list"
+        },
+        {
+          "path": "sessions[0].state.counter",
+          "reference_value": 42,
+          "actual_value": 9999,
+          "allowed_diff": false,
+          "message": "values differ"
+        }
+      ]
+    },
+    {
+      "case_name": "injected_drop_summary",
+      "backend_name": "sqlite",
+      "consistent": false,
+      "expected_faults": [
+        "drop_summary"
+      ],
+      "injected_fault": "drop_summary",
+      "differences": [
+        {
+          "path": "summaries[0]",
+          "reference_value": {
+            "session_id": "s-sum-drop",
+            "summary_text": "Summary of 387 chars.",
+            "original_event_count": 4,
+            "compressed_event_count": 3,
+            "summary_timestamp": 1784045809.0
+          },
+          "actual_value": null,
+          "allowed_diff": false,
+          "message": "summary presence mismatch"
+        }
+      ]
+    },
+    {
+      "case_name": "injected_wrong_summary_session",
+      "backend_name": "sqlite",
+      "consistent": false,
+      "expected_faults": [
+        "wrong_summary_session"
+      ],
+      "injected_fault": "wrong_summary_session",
+      "differences": [
+        {
+          "path": "summaries[0].session_id",
+          "reference_value": "s-sum-wrong",
+          "actual_value": "other-session",
+          "allowed_diff": false,
+          "message": "values differ"
+        }
+      ]
+    },
+    {
+      "case_name": "injected_summary_loss",
+      "backend_name": "sqlite",
+      "consistent": false,
+      "expected_faults": [
+        "summary_loss"
+      ],
+      "injected_fault": "summary_loss",
+      "differences": [
+        {
+          "path": "summaries[0].summary_text",
+          "reference_value": "Summary of 387 chars.",
+          "actual_value": "",
+          "allowed_diff": false,
+          "message": "values differ"
+        }
+      ]
+    },
+    {
+      "case_name": "injected_summary_override_error",
+      "backend_name": "sqlite",
+      "consistent": false,
+      "expected_faults": [
+        "summary_override_error"
+      ],
+      "injected_fault": "summary_override_error",
+      "differences": [
+        {
+          "path": "summaries[0].summary_text",
+          "reference_value": "Summary of 387 chars.",
+          "actual_value": "corrupted summary",
+          "allowed_diff": false,
+          "message": "values differ"
+        }
+      ]
+    },
+    {
+      "case_name": "injected_drop_memory_event",
+      "backend_name": "sqlite",
+      "consistent": false,
+      "expected_faults": [
+        "drop_memory_event"
+      ],
+      "injected_fault": "drop_event",
+      "differences": [
+        {
+          "path": "sessions[0].events[0].content.parts[0].text",
+          "reference_value": "remember this keyword",
+          "actual_value": "I stored it",
+          "allowed_diff": false,
+          "message": "values differ"
+        },
+        {
+          "path": "sessions[0].events[0].author",
+          "reference_value": "user",
+          "actual_value": "agent",
+          "allowed_diff": false,
+          "message": "values differ"
+        },
+        {
+          "path": "sessions[0].events[1]",
+          "reference_value": {
+            "content": {
+              "parts": [
+                {
+                  "text": "I stored it"
+                }
+              ]
+            },
+            "invocation_id": "inv-1",
+            "author": "agent",
+            "actions": {
+              "artifact_delta": {}
+            },
+            "requires_completion": false,
+            "version": 0,
+            "id": "__event_id__",
+            "timestamp": "__event_timestamp__",
+            "visible": true,
+            "model_flags": 1
+          },
+          "actual_value": null,
+          "allowed_diff": false,
+          "message": "missing item in actual list"
+        }
+      ]
+    },
+    {
+      "case_name": "injected_extra_event",
+      "backend_name": "sqlite",
+      "consistent": false,
+      "expected_faults": [
+        "extra_event"
+      ],
+      "injected_fault": "duplicate_event",
+      "differences": [
+        {
+          "path": "sessions[0].events[2]",
+          "reference_value": null,
+          "actual_value": {
+            "content": {
+              "parts": [
+                {
+                  "text": "Hi"
+                }
+              ]
+            },
+            "invocation_id": "inv-1",
+            "author": "agent",
+            "actions": {
+              "artifact_delta": {}
+            },
+            "requires_completion": false,
+            "version": 0,
+            "id": "__event_id__",
+            "timestamp": "__event_timestamp__",
+            "visible": true,
+            "model_flags": 1
+          },
+          "allowed_diff": false,
+          "message": "extra item in actual list"
+        }
+      ]
+    },
+    {
+      "case_name": "injected_app_state_loss",
+      "backend_name": "sqlite",
+      "consistent": false,
+      "expected_faults": [
+        "corrupt_state"
+      ],
+      "injected_fault": "corrupt_state",
+      "differences": [
+        {
+          "path": "sessions[0].events[1]",
+          "reference_value": null,
+          "actual_value": {
+            "invocation_id": "fault-state-update",
+            "author": "system",
+            "actions": {
+              "state_delta": {
+                "app:feature_flag": "off"
+              },
+              "artifact_delta": {}
+            },
+            "requires_completion": false,
+            "version": 0,
+            "id": "__event_id__",
+            "timestamp": "__event_timestamp__",
+            "visible": true,
+            "model_flags": 1
+          },
+          "allowed_diff": false,
+          "message": "extra item in actual list"
+        },
+        {
+          "path": "sessions[0].state.app:feature_flag",
+          "reference_value": "on",
+          "actual_value": "off",
+          "allowed_diff": false,
+          "message": "values differ"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_cases": 18,
+    "normal_cases": 8,
+    "fault_cases": 10,
+    "inconsistent_cases": 10,
+    "false_positives": 0,
+    "false_positive_rate": 0.0,
+    "injected_fault_detection_rate": 1.0,
+    "summary_fault_detection_rate": 1.0
+  }
+}
