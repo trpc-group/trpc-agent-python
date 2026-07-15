@@ -3,7 +3,7 @@
 Usage::
 
     python scripts/tool_safety_check.py \\
-        --policy tool/safety/examples/tool_safety_policy.yaml \\
+        --policy trpc_agent_sdk/tools/safety/examples/tool_safety_policy.yaml \\
         --language python \\
         --script-file path/to/script.py \\
         --tool-name demo
@@ -30,24 +30,24 @@ from typing import Any, Mapping, Sequence
 
 import yaml
 
-# Ensure the repo root is on sys.path so ``import tool.safety`` works
+# Ensure the repo root is on sys.path so ``import trpc_agent_sdk.tools.safety`` works
 # when the CLI is invoked directly via ``python scripts/...``.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from tool.safety._audit import InMemoryAuditSink, JsonlAuditSink  # noqa: E402
-from tool.safety._exceptions import SafetyAuditError  # noqa: E402
-from tool.safety._guard import ToolSafetyGuard  # noqa: E402
-from tool.safety._models import (  # noqa: E402
+from trpc_agent_sdk.tools.safety._audit import InMemoryAuditSink, JsonlAuditSink  # noqa: E402
+from trpc_agent_sdk.tools.safety._exceptions import SafetyAuditError  # noqa: E402
+from trpc_agent_sdk.tools.safety._guard import ToolSafetyGuard  # noqa: E402
+from trpc_agent_sdk.tools.safety._models import (  # noqa: E402
     SafetyDecision,
     SafetyReport,
     SafetyScanRequest,
     ScriptLanguage,
     ToolKind,
 )
-from tool.safety._policy import load_safety_policy  # noqa: E402
-from tool.safety._telemetry import build_audit_event  # noqa: E402
+from trpc_agent_sdk.tools.safety._policy import load_safety_policy  # noqa: E402
+from trpc_agent_sdk.tools.safety._telemetry import build_audit_event  # noqa: E402
 
 
 def main(argv: Sequence[str] | None = None) -> int:

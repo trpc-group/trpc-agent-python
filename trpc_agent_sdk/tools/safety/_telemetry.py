@@ -10,17 +10,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from tool.safety._models import SafetyAuditEvent, SafetyReport
+from trpc_agent_sdk.tools.safety._models import SafetyAuditEvent, SafetyReport
 
 
 _SPAN_ATTRS = (
-    "tool.safety.decision",
-    "tool.safety.risk_level",
-    "tool.safety.rule_id",
-    "tool.safety.blocked",
-    "tool.safety.redacted",
-    "tool.safety.scan_duration_ms",
-    "tool.safety.policy_hash",
+    "trpc_agent_sdk.tools.safety.decision",
+    "trpc_agent_sdk.tools.safety.risk_level",
+    "trpc_agent_sdk.tools.safety.rule_id",
+    "trpc_agent_sdk.tools.safety.blocked",
+    "trpc_agent_sdk.tools.safety.redacted",
+    "trpc_agent_sdk.tools.safety.scan_duration_ms",
+    "trpc_agent_sdk.tools.safety.policy_hash",
 )
 
 _METRIC_SCAN_COUNT = "trpc_agent.tool_safety.scan_count"
@@ -91,13 +91,13 @@ class TelemetrySink:
 
         rule_ids = ",".join(report.rule_ids[:8])
         return {
-            "tool.safety.decision": report.decision.value,
-            "tool.safety.risk_level": report.risk_level.label(),
-            "tool.safety.rule_id": rule_ids,
-            "tool.safety.blocked": bool(blocked),
-            "tool.safety.redacted": bool(report.redacted),
-            "tool.safety.scan_duration_ms": float(report.scan_duration_ms),
-            "tool.safety.policy_hash": report.policy_hash,
+            "trpc_agent_sdk.tools.safety.decision": report.decision.value,
+            "trpc_agent_sdk.tools.safety.risk_level": report.risk_level.label(),
+            "trpc_agent_sdk.tools.safety.rule_id": rule_ids,
+            "trpc_agent_sdk.tools.safety.blocked": bool(blocked),
+            "trpc_agent_sdk.tools.safety.redacted": bool(report.redacted),
+            "trpc_agent_sdk.tools.safety.scan_duration_ms": float(report.scan_duration_ms),
+            "trpc_agent_sdk.tools.safety.policy_hash": report.policy_hash,
         }
 
     def _emit_span_attrs(self, attrs: dict[str, Any]) -> None:
@@ -124,7 +124,7 @@ class TelemetrySink:
 def _safe_tracer():
     try:
         from opentelemetry.trace import get_tracer  # type: ignore
-        return get_tracer("tool.safety")
+        return get_tracer("trpc_agent_sdk.tools.safety")
     except Exception:
         return None
 
@@ -132,7 +132,7 @@ def _safe_tracer():
 def _safe_meter():
     try:
         from opentelemetry.metrics import get_meter  # type: ignore
-        return get_meter("tool.safety")
+        return get_meter("trpc_agent_sdk.tools.safety")
     except Exception:
         return None
 
@@ -176,7 +176,7 @@ def build_audit_event(
 ):
     """Build a :class:`SafetyAuditEvent` from a report."""
 
-    from tool.safety._models import SafetyAuditEvent
+    from trpc_agent_sdk.tools.safety._models import SafetyAuditEvent
 
     return SafetyAuditEvent(
         event_id=report.report_id,

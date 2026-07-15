@@ -14,7 +14,7 @@ from __future__ import annotations
 import ipaddress
 from typing import Iterable, Protocol, Sequence, runtime_checkable
 
-from tool.safety._facts import (
+from trpc_agent_sdk.tools.safety._facts import (
     ConcurrencyFact,
     DependencyInstallFact,
     DynamicExecFact,
@@ -33,7 +33,7 @@ from tool.safety._facts import (
     ShellOperatorFact,
     UnboundedLoopFact,
 )
-from tool.safety._models import (
+from trpc_agent_sdk.tools.safety._models import (
     Evidence,
     RiskCategory,
     RiskLevel,
@@ -42,12 +42,12 @@ from tool.safety._models import (
     SafetyScanRequest,
     ScriptLanguage,
 )
-from tool.safety._policy import (
+from trpc_agent_sdk.tools.safety._policy import (
     ToolSafetyPolicy,
     match_domain,
     match_path_glob,
 )
-from tool.safety._redaction import Redactor
+from trpc_agent_sdk.tools.safety._redaction import Redactor
 
 
 @runtime_checkable
@@ -980,7 +980,7 @@ class _LanguageScannerRule:
 def _matches_denied_path(target: str, policy: ToolSafetyPolicy) -> bool:
     if not target:
         return False
-    from tool.safety._policy import normalize_script_path_for_match
+    from trpc_agent_sdk.tools.safety._policy import normalize_script_path_for_match
 
     normalized = normalize_script_path_for_match(target)
     for pattern in policy.paths.deny:
@@ -1061,9 +1061,9 @@ def default_rules() -> list[SafetyRule]:
     or used as a replacement set.
     """
 
-    from tool.safety._python_scanner import PythonScannerRule
-    from tool.safety._bash_scanner import BashScannerRule
-    from tool.safety._cross_field_scanner import CrossFieldScannerRule
+    from trpc_agent_sdk.tools.safety._python_scanner import PythonScannerRule
+    from trpc_agent_sdk.tools.safety._bash_scanner import BashScannerRule
+    from trpc_agent_sdk.tools.safety._cross_field_scanner import CrossFieldScannerRule
 
     return [
         PythonScannerRule(),

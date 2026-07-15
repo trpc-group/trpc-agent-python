@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from tool.safety._exceptions import SafetyPolicyError
-from tool.safety._policy import (
+from trpc_agent_sdk.tools.safety._exceptions import SafetyPolicyError
+from trpc_agent_sdk.tools.safety._policy import (
     POLICY_VERSION,
     load_safety_policy,
     load_safety_policy_dict,

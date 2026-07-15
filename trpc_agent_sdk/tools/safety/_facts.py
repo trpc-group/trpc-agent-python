@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-from tool.safety._models import ScriptLanguage
+from trpc_agent_sdk.tools.safety._models import ScriptLanguage
 
 
 @dataclass(frozen=True)

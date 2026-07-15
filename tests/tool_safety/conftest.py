@@ -6,12 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from tool.safety._guard import ToolSafetyGuard
-from tool.safety._policy import load_safety_policy
+from trpc_agent_sdk.tools.safety._guard import ToolSafetyGuard
+from trpc_agent_sdk.tools.safety._policy import load_safety_policy
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-EXAMPLE_POLICY = REPO_ROOT / "examples" / "tool_safety" / "tool_safety_policy.yaml"
+EXAMPLE_POLICY = (
+    REPO_ROOT / "trpc_agent_sdk" / "tools" / "safety" / "examples"
+    / "tool_safety_policy.yaml"
+)
 
 
 @pytest.fixture

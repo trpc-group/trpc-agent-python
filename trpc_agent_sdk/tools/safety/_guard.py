@@ -12,8 +12,8 @@ import time
 import uuid
 from typing import Iterable, Sequence
 
-from tool.safety._exceptions import SafetyGuardError, SafetyScannerError
-from tool.safety._models import (
+from trpc_agent_sdk.tools.safety._exceptions import SafetyGuardError, SafetyScannerError
+from trpc_agent_sdk.tools.safety._models import (
     SAFE_RULE_ID,
     RiskLevel,
     SafetyDecision,
@@ -21,9 +21,9 @@ from tool.safety._models import (
     SafetyReport,
     SafetyScanRequest,
 )
-from tool.safety._policy import POLICY_VERSION, ToolSafetyPolicy
-from tool.safety._redaction import Redactor, evidence_was_redacted
-from tool.safety._rules import SafetyRule, default_rules
+from trpc_agent_sdk.tools.safety._policy import POLICY_VERSION, ToolSafetyPolicy
+from trpc_agent_sdk.tools.safety._redaction import Redactor, evidence_was_redacted
+from trpc_agent_sdk.tools.safety._rules import SafetyRule, default_rules
 
 INTERNAL_ERROR_RULE_ID = "GUARD001_INTERNAL_ERROR"
 
@@ -198,7 +198,7 @@ class ToolSafetyGuard:
 
 
 # Imports here to avoid circular import at module load.
-from tool.safety._models import RiskCategory  # noqa: E402
+from trpc_agent_sdk.tools.safety._models import RiskCategory  # noqa: E402
 
 
 # --------------------------------------------------------------------------- #

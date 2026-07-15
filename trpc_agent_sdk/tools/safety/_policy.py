@@ -23,8 +23,8 @@ from typing import Any, Iterable
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from tool.safety._exceptions import SafetyPolicyError
-from tool.safety._models import ScriptLanguage, ToolKind
+from trpc_agent_sdk.tools.safety._exceptions import SafetyPolicyError
+from trpc_agent_sdk.tools.safety._models import ScriptLanguage, ToolKind
 
 POLICY_VERSION = "1"
 

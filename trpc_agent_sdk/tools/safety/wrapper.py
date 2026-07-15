@@ -23,16 +23,16 @@ import asyncio
 import inspect
 from typing import Any, Callable, Generic, Mapping, TypeVar
 
-from tool.safety._audit import AuditSink, InMemoryAuditSink, NullAuditSink
-from tool.safety._filter import BlockedExecutionError, ToolScriptSafetyFilter
-from tool.safety._guard import ToolSafetyGuard
-from tool.safety._models import (
+from trpc_agent_sdk.tools.safety._audit import AuditSink, InMemoryAuditSink, NullAuditSink
+from trpc_agent_sdk.tools.safety._filter import BlockedExecutionError, ToolScriptSafetyFilter
+from trpc_agent_sdk.tools.safety._guard import ToolSafetyGuard
+from trpc_agent_sdk.tools.safety._models import (
     SafetyReport,
     SafetyScanRequest,
     ScriptLanguage,
     ToolKind,
 )
-from tool.safety._policy import ToolSafetyPolicy
+from trpc_agent_sdk.tools.safety._policy import ToolSafetyPolicy
 
 T = TypeVar("T")
 
@@ -43,8 +43,9 @@ class SafetyWrappedCallable(Generic[T]):
     Example
     -------
     >>> import os
-    >>> from tool.safety import load_safety_policy, ToolSafetyGuard
-    >>> from tool.wrapper import SafetyWrappedCallable
+    >>> from trpc_agent_sdk.tools.safety import (
+    ...     SafetyWrappedCallable, ToolSafetyGuard, load_safety_policy,
+    ... )
     >>> policy = load_safety_policy("policy.yaml")
     >>> guard = ToolSafetyGuard(policy)
     >>> wrapped = SafetyWrappedCallable(guard, os.system,
@@ -261,7 +262,7 @@ def _default_audit_sink(policy: ToolSafetyPolicy) -> AuditSink:
     if not policy.audit.enabled:
         return NullAuditSink()
     if policy.audit.path:
-        from tool.safety._audit import JsonlAuditSink
+        from trpc_agent_sdk.tools.safety._audit import JsonlAuditSink
         return JsonlAuditSink(policy.audit.path)
     return InMemoryAuditSink()
 
@@ -356,7 +357,7 @@ class _ExecutorFailure:
 
 def _render_executor_block(report: SafetyReport) -> Any:
     payload = (
-        f"[tool.safety] execution blocked: decision={report.decision.value} "
+        f"[trpc_agent_sdk.tools.safety] execution blocked: decision={report.decision.value} "
         f"risk={report.risk_level.label()} rules={','.join(report.rule_ids)} "
         f"report_id={report.report_id}"
     )

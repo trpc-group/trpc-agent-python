@@ -20,21 +20,21 @@ import datetime as _dt
 import logging
 from typing import Any, Coroutine, Mapping, TypeVar
 
-from tool.safety._audit import AuditSink, InMemoryAuditSink, NullAuditSink
-from tool.safety._exceptions import (
+from trpc_agent_sdk.tools.safety._audit import AuditSink, InMemoryAuditSink, NullAuditSink
+from trpc_agent_sdk.tools.safety._exceptions import (
     SafetyAuditError,
     ToolRequestError,
 )
-from tool.safety._guard import ToolSafetyGuard
-from tool.safety._models import (
+from trpc_agent_sdk.tools.safety._guard import ToolSafetyGuard
+from trpc_agent_sdk.tools.safety._models import (
     SafetyDecision,
     SafetyReport,
     SafetyScanRequest,
     ToolKind,
 )
-from tool.safety._policy import ToolSafetyPolicy
-from tool.safety._telemetry import TelemetrySink, build_audit_event, get_default_sink
-from tool.safety._tool_adapter import (
+from trpc_agent_sdk.tools.safety._policy import ToolSafetyPolicy
+from trpc_agent_sdk.tools.safety._telemetry import TelemetrySink, build_audit_event, get_default_sink
+from trpc_agent_sdk.tools.safety._tool_adapter import (
     ToolInputAdapter,
     build_default_adapters,
     resolve_adapter,

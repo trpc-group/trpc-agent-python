@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from tool.safety._exceptions import ToolRequestError
-from tool.safety._models import SafetyScanRequest, ScriptLanguage, ToolKind
-from tool.safety._policy import ToolFieldMapping, ToolSafetyPolicy
+from trpc_agent_sdk.tools.safety._exceptions import ToolRequestError
+from trpc_agent_sdk.tools.safety._models import SafetyScanRequest, ScriptLanguage, ToolKind
+from trpc_agent_sdk.tools.safety._policy import ToolFieldMapping, ToolSafetyPolicy
 
 
 # Default mappings keyed by the canonical tool name. The keys must match

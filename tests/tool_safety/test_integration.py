@@ -1,7 +1,7 @@
 """Integration tests: manifest samples must match expected decisions.
 
 These tests verify the public manifest in
-``tool/safety/examples/samples/manifest.yaml``. Per the issue acceptance
+``trpc_agent_sdk/tools/safety/examples/samples/manifest.yaml``. Per the issue acceptance
 criteria: every sample must produce a structured report, high-risk
 detection must be >= 90%, safe false positives <= 10%, and the
 key-credential-delete-non-allowlist categories must be 100%.
@@ -14,14 +14,20 @@ from pathlib import Path
 import pytest
 import yaml
 
-from tool.safety._guard import ToolSafetyGuard
-from tool.safety._models import SafetyDecision, SafetyScanRequest, ScriptLanguage
-from tool.safety._policy import load_safety_policy
+from trpc_agent_sdk.tools.safety._guard import ToolSafetyGuard
+from trpc_agent_sdk.tools.safety._models import SafetyDecision, SafetyScanRequest, ScriptLanguage
+from trpc_agent_sdk.tools.safety._policy import load_safety_policy
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-POLICY_PATH = REPO_ROOT / "tool" / "safety" / "examples" / "tool_safety_policy.yaml"
-MANIFEST_PATH = REPO_ROOT / "tool" / "safety" / "examples" / "samples" / "manifest.yaml"
+POLICY_PATH = (
+    REPO_ROOT / "trpc_agent_sdk" / "tools" / "safety" / "examples"
+    / "tool_safety_policy.yaml"
+)
+MANIFEST_PATH = (
+    REPO_ROOT / "trpc_agent_sdk" / "tools" / "safety" / "examples"
+    / "samples" / "manifest.yaml"
+)
 
 
 @pytest.fixture(scope="module")
@@ -123,7 +129,7 @@ def test_policy_changes_decision_without_code_change(strict_policy_dict):
     """Tweak a domain in the YAML; verify behavior changes without code."""
 
     import copy
-    from tool.safety._policy import load_safety_policy_dict
+    from trpc_agent_sdk.tools.safety._policy import load_safety_policy_dict
 
     base = copy.deepcopy(strict_policy_dict)
     # Domain NOT allowlisted in base policy -> deny.

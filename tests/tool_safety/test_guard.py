@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from tool.safety._guard import ToolSafetyGuard
-from tool.safety._models import SafetyDecision, SafetyScanRequest, ScriptLanguage
-from tool.safety._policy import load_safety_policy_dict
+from trpc_agent_sdk.tools.safety._guard import ToolSafetyGuard
+from trpc_agent_sdk.tools.safety._models import SafetyDecision, SafetyScanRequest, ScriptLanguage
+from trpc_agent_sdk.tools.safety._policy import load_safety_policy_dict
 
 
 def test_allow_path_uses_safe000(strict_policy_dict):
@@ -61,8 +61,8 @@ def test_policy_hash_propagates(strict_policy_dict):
 
 
 def test_duplicate_rule_ids_rejected(strict_policy_dict):
-    from tool.safety._python_scanner import PythonScannerRule
-    from tool.safety._exceptions import SafetyGuardError
+    from trpc_agent_sdk.tools.safety._python_scanner import PythonScannerRule
+    from trpc_agent_sdk.tools.safety._exceptions import SafetyGuardError
 
     policy = load_safety_policy_dict(strict_policy_dict)
     with pytest.raises(SafetyGuardError):

@@ -14,8 +14,8 @@ import ast
 import os
 from typing import Any, Iterator
 
-from tool.safety._exceptions import SafetyScannerError
-from tool.safety._facts import (
+from trpc_agent_sdk.tools.safety._exceptions import SafetyScannerError
+from trpc_agent_sdk.tools.safety._facts import (
     ConcurrencyFact,
     DependencyInstallFact,
     DynamicExecFact,
@@ -35,10 +35,10 @@ from tool.safety._facts import (
     ShellOperatorFact,
     UnboundedLoopFact,
 )
-from tool.safety._models import ScriptLanguage
-from tool.safety._rules import _LanguageScannerRule, SafetyRule
-from tool.safety._policy import is_sensitive_env_key
-from tool.safety._redaction import contains_secret_literal
+from trpc_agent_sdk.tools.safety._models import ScriptLanguage
+from trpc_agent_sdk.tools.safety._rules import _LanguageScannerRule, SafetyRule
+from trpc_agent_sdk.tools.safety._policy import is_sensitive_env_key
+from trpc_agent_sdk.tools.safety._redaction import contains_secret_literal
 
 
 # Networks libs and the attribute used to extract a host arg.

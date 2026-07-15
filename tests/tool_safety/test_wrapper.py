@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from tool.safety._audit import InMemoryAuditSink
-from tool.safety._filter import BlockedExecutionError, ToolScriptSafetyFilter
-from tool.safety._guard import ToolSafetyGuard
-from tool.safety._models import ScriptLanguage, ToolKind
-from tool.safety._policy import load_safety_policy_dict
-from tool.wrapper import SafetyCheckedExecutor, SafetyWrappedCallable
+from trpc_agent_sdk.tools.safety._audit import InMemoryAuditSink
+from trpc_agent_sdk.tools.safety._filter import BlockedExecutionError, ToolScriptSafetyFilter
+from trpc_agent_sdk.tools.safety._guard import ToolSafetyGuard
+from trpc_agent_sdk.tools.safety._models import ScriptLanguage, ToolKind
+from trpc_agent_sdk.tools.safety._policy import load_safety_policy_dict
+from trpc_agent_sdk.tools.safety import (
+    SafetyCheckedExecutor,
+    SafetyWrappedCallable,
+)
 
 
 @pytest.fixture
@@ -142,7 +145,7 @@ def test_executor_deny_does_not_delegate(guard):
                                     audit_sink=InMemoryAuditSink())
     result = asyncio.run(wrapped.execute_code(FakeInput()))  # noqa: F821
     assert called == []
-    assert "blocked" in result.output or "tool.safety" in result.output
+    assert "blocked" in result.output or "trpc_agent_sdk.tools.safety" in result.output
 
 
 def test_executor_scans_code_attribute_when_blocks_are_empty(guard):

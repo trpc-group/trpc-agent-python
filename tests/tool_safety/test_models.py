@@ -7,7 +7,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from tool.safety._models import (
+from trpc_agent_sdk.tools.safety._models import (
     SAFE_RULE_ID,
     Evidence,
     RiskCategory,

@@ -62,9 +62,9 @@ permissions, and runtime resource limits.
 
 ```bash
 python scripts/tool_safety_check.py \
-    --policy tool/safety/examples/tool_safety_policy.yaml \
+    --policy trpc_agent_sdk/tools/safety/examples/tool_safety_policy.yaml \
     --language python \
-    --script-file tool/safety/examples/samples/03_dangerous_delete.py \
+    --script-file trpc_agent_sdk/tools/safety/examples/samples/03_dangerous_delete.py \
     --output tool_safety_report.json \
     --audit-file tool_safety_audit.jsonl
 echo $?  # 0=allow, 2=deny, 3=review, 4=input/policy error
@@ -74,23 +74,23 @@ Run the manifest to scan all 14 public samples:
 
 ```bash
 python scripts/tool_safety_check.py \
-    --policy tool/safety/examples/tool_safety_policy.yaml \
-    --manifest tool/safety/examples/samples/manifest.yaml \
-    --manifest-output tool/safety/examples/manifest_run.json \
-    --audit-file tool/safety/examples/tool_safety_audit.jsonl
+    --policy trpc_agent_sdk/tools/safety/examples/tool_safety_policy.yaml \
+    --manifest trpc_agent_sdk/tools/safety/examples/samples/manifest.yaml \
+    --manifest-output trpc_agent_sdk/tools/safety/examples/manifest_run.json \
+    --audit-file trpc_agent_sdk/tools/safety/examples/tool_safety_audit.jsonl
 ```
 
 ## Programmatic usage
 
 ```python
-from tool.safety import (
+from trpc_agent_sdk.tools.safety import (
     ToolSafetyGuard,
     load_safety_policy,
     SafetyScanRequest,
     ScriptLanguage,
 )
 
-policy = load_safety_policy("tool/safety/examples/tool_safety_policy.yaml")
+policy = load_safety_policy("trpc_agent_sdk/tools/safety/examples/tool_safety_policy.yaml")
 guard = ToolSafetyGuard(policy)
 
 request = SafetyScanRequest(
@@ -108,8 +108,8 @@ print(report.decision, report.rule_ids)
 
 ```python
 import subprocess
-from tool.wrapper import SafetyWrappedCallable
-from tool.safety import ToolSafetyGuard, load_safety_policy, ScriptLanguage
+from trpc_agent_sdk.tools.safety import SafetyWrappedCallable
+from trpc_agent_sdk.tools.safety import ToolSafetyGuard, load_safety_policy, ScriptLanguage
 
 guard = ToolSafetyGuard(load_safety_policy("policy.yaml"))
 safe_run = SafetyWrappedCallable(
@@ -131,8 +131,8 @@ names so the normalized request contains every available execution field.
 ### Wrapping a code executor
 
 ```python
-from tool.wrapper import SafetyCheckedExecutor
-from tool.safety import ToolSafetyGuard, load_safety_policy, ScriptLanguage
+from trpc_agent_sdk.tools.safety import SafetyCheckedExecutor
+from trpc_agent_sdk.tools.safety import ToolSafetyGuard, load_safety_policy, ScriptLanguage
 
 guard = ToolSafetyGuard(load_safety_policy("policy.yaml"))
 safe_executor = SafetyCheckedExecutor(
@@ -255,13 +255,13 @@ When OpenTelemetry is active the guard sets these low-cardinality span
 attributes on the current span:
 
 ```text
-tool.safety.decision
-tool.safety.risk_level
-tool.safety.rule_id           # comma-separated, bounded to 8 entries
-tool.safety.blocked
-tool.safety.redacted
-tool.safety.scan_duration_ms
-tool.safety.policy_hash
+trpc_agent_sdk.tools.safety.decision
+trpc_agent_sdk.tools.safety.risk_level
+trpc_agent_sdk.tools.safety.rule_id           # comma-separated, bounded to 8 entries
+trpc_agent_sdk.tools.safety.blocked
+trpc_agent_sdk.tools.safety.redacted
+trpc_agent_sdk.tools.safety.scan_duration_ms
+trpc_agent_sdk.tools.safety.policy_hash
 ```
 
 Metrics emitted (no-op when OTel is absent):
@@ -302,7 +302,7 @@ all argument-mutating callbacks. The wrapper remains mandatory until then.
 Implement :class:`SafetyRule` and pass the rule list explicitly:
 
 ```python
-from tool.safety import ToolSafetyGuard, SafetyScanRequest
+from trpc_agent_sdk.tools.safety import ToolSafetyGuard, SafetyScanRequest
 
 class MyRule:
     rule_id = "CUSTOM001_MY_RULE"
@@ -397,7 +397,7 @@ tool/
 scripts/
   tool_safety_check.py          # CLI
 tests/tool_safety/              # safety guard tests
-tool/safety/examples/
+trpc_agent_sdk/tools/safety/examples/
   tool_safety_policy.yaml       # sample policy
   samples/                      # 14 public samples + manifest
   tool_safety_report.json       # generated report

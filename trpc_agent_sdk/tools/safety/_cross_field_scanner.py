@@ -10,8 +10,8 @@ from __future__ import annotations
 import os
 from typing import Iterable
 
-from tool.safety._facts import Loc
-from tool.safety._models import (
+from trpc_agent_sdk.tools.safety._facts import Loc
+from trpc_agent_sdk.tools.safety._models import (
     Evidence,
     RiskCategory,
     RiskLevel,
@@ -20,13 +20,13 @@ from tool.safety._models import (
     SafetyScanRequest,
     ScriptLanguage,
 )
-from tool.safety._policy import (
+from trpc_agent_sdk.tools.safety._policy import (
     ToolSafetyPolicy,
     match_path_glob,
     normalize_script_path_for_match,
 )
-from tool.safety._redaction import Redactor
-from tool.safety._rules import (
+from trpc_agent_sdk.tools.safety._redaction import Redactor
+from trpc_agent_sdk.tools.safety._rules import (
     SafetyRule,
     _default_unknown,
     _finding,
@@ -193,7 +193,7 @@ class CrossFieldScannerRule(SafetyRule):
             return []
         # Built-in adapters are vetted by the tool_adapter module; the
         # cross-field check only fires for unknown execution-capable tools.
-        from tool.safety._tool_adapter import _BUILTIN_DEFAULTS
+        from trpc_agent_sdk.tools.safety._tool_adapter import _BUILTIN_DEFAULTS
         if adapter_id and adapter_id in _BUILTIN_DEFAULTS:
             return []
         decision = resolve_decision(

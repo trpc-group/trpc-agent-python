@@ -31,7 +31,7 @@ and the generated report / audit outputs.
 
 ```bash
 # Single sample
-python ../../../scripts/tool_safety_check.py \
+python ../../../../scripts/tool_safety_check.py \
     --policy tool_safety_policy.yaml \
     --language python \
     --script-file samples/03_dangerous_delete.py \
@@ -40,7 +40,7 @@ python ../../../scripts/tool_safety_check.py \
 echo $?  # 0=allow, 2=deny, 3=review, 4=input/policy error
 
 # All 14 samples
-python ../../../scripts/tool_safety_check.py \
+python ../../../../scripts/tool_safety_check.py \
     --policy tool_safety_policy.yaml \
     --manifest samples/manifest.yaml \
     --manifest-output manifest_run.json \
@@ -58,5 +58,5 @@ python ../../../scripts/tool_safety_check.py \
   samples.
 
 See the full design document in
-[English](../../../docs/mkdocs/en/tool_safety_guard.md) or
-[中文](../../../docs/mkdocs/zh/tool_safety_guard.zh_CN.md).
+[English](../../../../docs/mkdocs/en/tool_safety_guard.md) or
+[中文](../../../../docs/mkdocs/zh/tool_safety_guard.zh_CN.md).

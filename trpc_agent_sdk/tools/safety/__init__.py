@@ -1,18 +1,12 @@
-"""Top-level package for the standalone Tool Script Safety Guard reference.
+"""Tool Script Safety Guard public API. Internal modules are private."""
 
-This package is deliberately self-contained. It must not import from
-``trpc_agent_sdk`` so that it can be reused, audited, and tested in isolation.
-The framework integration points (Tool Filter, CodeExecutor wrapper) consume
-the public surface exported here without modifying existing SDK files.
-"""
-
-from tool.safety._exceptions import (
+from trpc_agent_sdk.tools.safety._exceptions import (
     SafetyAuditError,
-    SafetyPolicyError,
     SafetyGuardError,
+    SafetyPolicyError,
     SafetyScannerError,
 )
-from tool.safety._models import (
+from trpc_agent_sdk.tools.safety._models import (
     Evidence,
     RiskCategory,
     RiskLevel,
@@ -24,20 +18,20 @@ from tool.safety._models import (
     ScriptLanguage,
     ToolKind,
 )
-from tool.safety._policy import (
-    ToolSafetyPolicy,
-    load_safety_policy,
-)
-from tool.safety._guard import ToolSafetyGuard
-from tool.safety._rules import SafetyRule, default_rules
-from tool.safety._audit import AuditSink, InMemoryAuditSink, JsonlAuditSink
-from tool.safety._tool_adapter import (
+from trpc_agent_sdk.tools.safety._policy import ToolSafetyPolicy, load_safety_policy
+from trpc_agent_sdk.tools.safety._guard import ToolSafetyGuard
+from trpc_agent_sdk.tools.safety._rules import SafetyRule, default_rules
+from trpc_agent_sdk.tools.safety._audit import AuditSink, InMemoryAuditSink, JsonlAuditSink
+from trpc_agent_sdk.tools.safety._tool_adapter import (
     ToolInputAdapter,
     ToolRequestError,
     build_default_adapters,
 )
-from tool.safety._filter import ToolScriptSafetyFilter
-from tool.wrapper import SafetyCheckedExecutor, SafetyWrappedCallable
+from trpc_agent_sdk.tools.safety._filter import ToolScriptSafetyFilter
+from trpc_agent_sdk.tools.safety.wrapper import (
+    SafetyCheckedExecutor,
+    SafetyWrappedCallable,
+)
 
 __all__ = [
     "AuditSink",

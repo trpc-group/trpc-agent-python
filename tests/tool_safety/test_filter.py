@@ -7,11 +7,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from tool.safety._audit import InMemoryAuditSink
-from tool.safety._filter import BlockedExecutionError, ToolScriptSafetyFilter
-from tool.safety._guard import ToolSafetyGuard
-from tool.safety._models import SafetyDecision, ToolKind
-from tool.safety._policy import load_safety_policy_dict
+from trpc_agent_sdk.tools.safety._audit import InMemoryAuditSink
+from trpc_agent_sdk.tools.safety._filter import BlockedExecutionError, ToolScriptSafetyFilter
+from trpc_agent_sdk.tools.safety._guard import ToolSafetyGuard
+from trpc_agent_sdk.tools.safety._models import SafetyDecision, ToolKind
+from trpc_agent_sdk.tools.safety._policy import load_safety_policy_dict
 
 
 @pytest.fixture

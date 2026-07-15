@@ -11,7 +11,10 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CLI = REPO_ROOT / "scripts" / "tool_safety_check.py"
-POLICY = REPO_ROOT / "tool" / "safety" / "examples" / "tool_safety_policy.yaml"
+POLICY = (
+    REPO_ROOT / "trpc_agent_sdk" / "tools" / "safety" / "examples"
+    / "tool_safety_policy.yaml"
+)
 
 
 def _run_cli(*args: str) -> tuple[int, str, str]:
@@ -74,7 +77,10 @@ def test_required_audit_failure_exits_4(tmp_path):
 
 
 def test_manifest_writes_output(tmp_path):
-    manifest = REPO_ROOT / "tool" / "safety" / "examples" / "samples" / "manifest.yaml"
+    manifest = (
+        REPO_ROOT / "trpc_agent_sdk" / "tools" / "safety" / "examples"
+        / "samples" / "manifest.yaml"
+    )
     output = tmp_path / "out.json"
     audit = tmp_path / "audit.jsonl"
     cmd = [sys.executable, str(CLI), "--policy", str(POLICY),

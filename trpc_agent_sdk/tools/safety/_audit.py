@@ -17,8 +17,8 @@ import os
 import threading
 from typing import Protocol, runtime_checkable
 
-from tool.safety._exceptions import SafetyAuditError
-from tool.safety._models import SafetyAuditEvent
+from trpc_agent_sdk.tools.safety._exceptions import SafetyAuditError
+from trpc_agent_sdk.tools.safety._models import SafetyAuditEvent
 
 
 @runtime_checkable

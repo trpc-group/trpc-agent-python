@@ -6,9 +6,9 @@ import time
 
 import pytest
 
-from tool.safety._guard import ToolSafetyGuard
-from tool.safety._models import SafetyDecision, SafetyScanRequest, ScriptLanguage
-from tool.safety._policy import load_safety_policy_dict
+from trpc_agent_sdk.tools.safety._guard import ToolSafetyGuard
+from trpc_agent_sdk.tools.safety._models import SafetyDecision, SafetyScanRequest, ScriptLanguage
+from trpc_agent_sdk.tools.safety._policy import load_safety_policy_dict
 
 
 def _make_large_script(lines: int = 500) -> str:

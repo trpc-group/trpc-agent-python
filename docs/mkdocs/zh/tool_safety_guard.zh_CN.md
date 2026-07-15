@@ -53,9 +53,9 @@ span 属性/指标输出。
 
 ```bash
 python scripts/tool_safety_check.py \
-    --policy tool/safety/examples/tool_safety_policy.yaml \
+    --policy trpc_agent_sdk/tools/safety/examples/tool_safety_policy.yaml \
     --language python \
-    --script-file tool/safety/examples/samples/03_dangerous_delete.py \
+    --script-file trpc_agent_sdk/tools/safety/examples/samples/03_dangerous_delete.py \
     --output tool_safety_report.json \
     --audit-file tool_safety_audit.jsonl
 echo $?  # 0=allow, 2=deny, 3=review, 4=输入/策略/必需审计错误
@@ -65,23 +65,23 @@ echo $?  # 0=allow, 2=deny, 3=review, 4=输入/策略/必需审计错误
 
 ```bash
 python scripts/tool_safety_check.py \
-    --policy tool/safety/examples/tool_safety_policy.yaml \
-    --manifest tool/safety/examples/samples/manifest.yaml \
-    --manifest-output tool/safety/examples/manifest_run.json \
-    --audit-file tool/safety/examples/tool_safety_audit.jsonl
+    --policy trpc_agent_sdk/tools/safety/examples/tool_safety_policy.yaml \
+    --manifest trpc_agent_sdk/tools/safety/examples/samples/manifest.yaml \
+    --manifest-output trpc_agent_sdk/tools/safety/examples/manifest_run.json \
+    --audit-file trpc_agent_sdk/tools/safety/examples/tool_safety_audit.jsonl
 ```
 
 ## 作为库使用
 
 ```python
-from tool.safety import (
+from trpc_agent_sdk.tools.safety import (
     ToolSafetyGuard,
     load_safety_policy,
     SafetyScanRequest,
     ScriptLanguage,
 )
 
-policy = load_safety_policy("tool/safety/examples/tool_safety_policy.yaml")
+policy = load_safety_policy("trpc_agent_sdk/tools/safety/examples/tool_safety_policy.yaml")
 guard = ToolSafetyGuard(policy)
 
 request = SafetyScanRequest(
@@ -99,8 +99,8 @@ print(report.decision, report.rule_ids)
 
 ```python
 import subprocess
-from tool.wrapper import SafetyWrappedCallable
-from tool.safety import ToolSafetyGuard, load_safety_policy, ScriptLanguage
+from trpc_agent_sdk.tools.safety import SafetyWrappedCallable
+from trpc_agent_sdk.tools.safety import ToolSafetyGuard, load_safety_policy, ScriptLanguage
 
 guard = ToolSafetyGuard(load_safety_policy("policy.yaml"))
 safe_run = SafetyWrappedCallable(
@@ -121,8 +121,8 @@ safe_run("ls -la")  # 策略拒绝时抛出 BlockedExecutionError
 ### 包装 CodeExecutor
 
 ```python
-from tool.wrapper import SafetyCheckedExecutor
-from tool.safety import ToolSafetyGuard, load_safety_policy, ScriptLanguage
+from trpc_agent_sdk.tools.safety import SafetyCheckedExecutor
+from trpc_agent_sdk.tools.safety import ToolSafetyGuard, load_safety_policy, ScriptLanguage
 
 guard = ToolSafetyGuard(load_safety_policy("policy.yaml"))
 safe_executor = SafetyCheckedExecutor(
@@ -249,13 +249,13 @@ audit:
 启用 OpenTelemetry 后，Guard 在当前 span 上写入低基数属性：
 
 ```text
-tool.safety.decision
-tool.safety.risk_level
-tool.safety.rule_id           # 逗号分隔，最多 8 项
-tool.safety.blocked
-tool.safety.redacted
-tool.safety.scan_duration_ms
-tool.safety.policy_hash
+trpc_agent_sdk.tools.safety.decision
+trpc_agent_sdk.tools.safety.risk_level
+trpc_agent_sdk.tools.safety.rule_id           # 逗号分隔，最多 8 项
+trpc_agent_sdk.tools.safety.blocked
+trpc_agent_sdk.tools.safety.redacted
+trpc_agent_sdk.tools.safety.scan_duration_ms
+trpc_agent_sdk.tools.safety.policy_hash
 ```
 
 OTel 不存在时指标会安全地 no-op。可用指标：
@@ -295,7 +295,7 @@ TOCTOU 绕过。因此目前必须使用 ``SafetyWrappedCallable`` 或
 实现 ``SafetyRule`` 并显式传入规则列表：
 
 ```python
-from tool.safety import ToolSafetyGuard, SafetyScanRequest
+from trpc_agent_sdk.tools.safety import ToolSafetyGuard, SafetyScanRequest
 
 class MyRule:
     rule_id = "CUSTOM001_MY_RULE"
@@ -351,7 +351,7 @@ tool/
 scripts/
   tool_safety_check.py          # CLI
 tests/tool_safety/              # 安全检查器测试
-tool/safety/examples/           # 策略、14 个样例、报告和审计样例
+trpc_agent_sdk/tools/safety/examples/           # 策略、14 个样例、报告和审计样例
 docs/
   tool_safety_guard.md          # English version
   tool_safety_guard.zh_CN.md    # 本文

@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from tool.safety._exceptions import ToolRequestError
-from tool.safety._models import ScriptLanguage, ToolKind
-from tool.safety._tool_adapter import (
+from trpc_agent_sdk.tools.safety._exceptions import ToolRequestError
+from trpc_agent_sdk.tools.safety._models import ScriptLanguage, ToolKind
+from trpc_agent_sdk.tools.safety._tool_adapter import (
     ToolInputAdapter,
     build_default_adapters,
     resolve_adapter,
 )
-from tool.safety._policy import load_safety_policy_dict
+from trpc_agent_sdk.tools.safety._policy import load_safety_policy_dict
 
 
 def test_workspace_exec_adapter_extracts_command(strict_policy_dict):

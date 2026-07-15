@@ -11,7 +11,7 @@ import hashlib
 import re
 from typing import Iterable
 
-from tool.safety._models import EVIDENCE_MAX_CHARS, Evidence, ScriptLanguage
+from trpc_agent_sdk.tools.safety._models import EVIDENCE_MAX_CHARS, Evidence, ScriptLanguage
 
 # Patterns for common secret formats. Order matters: longer/more specific
 # patterns first so their redaction wins over generic ones.

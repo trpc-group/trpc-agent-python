@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 
-from tool.safety._redaction import Redactor
-from tool.safety._models import ScriptLanguage
+from trpc_agent_sdk.tools.safety._redaction import Redactor
+from trpc_agent_sdk.tools.safety._models import ScriptLanguage
 
 
 def test_env_value_redacted():

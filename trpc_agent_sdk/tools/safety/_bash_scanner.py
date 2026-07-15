@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from typing import Iterator
 
-from tool.safety._facts import (
+from trpc_agent_sdk.tools.safety._facts import (
     ConcurrencyFact,
     DependencyInstallFact,
     DynamicExecFact,
@@ -35,8 +35,8 @@ from tool.safety._facts import (
     ShellOperatorFact,
     UnboundedLoopFact,
 )
-from tool.safety._models import ScriptLanguage
-from tool.safety._rules import _LanguageScannerRule, SafetyRule
+from trpc_agent_sdk.tools.safety._models import ScriptLanguage
+from trpc_agent_sdk.tools.safety._rules import _LanguageScannerRule, SafetyRule
 
 
 # --------------------------------------------------------------------------- #

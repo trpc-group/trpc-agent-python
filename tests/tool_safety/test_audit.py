@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from tool.safety._audit import InMemoryAuditSink, JsonlAuditSink
-from tool.safety._models import (
+from trpc_agent_sdk.tools.safety._audit import InMemoryAuditSink, JsonlAuditSink
+from trpc_agent_sdk.tools.safety._models import (
     RiskLevel,
     SafetyAuditEvent,
     SafetyDecision,
