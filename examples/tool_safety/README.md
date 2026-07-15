@@ -57,5 +57,6 @@ python ../../scripts/tool_safety_check.py \
 * `manifest_run.json` shows expected-vs-actual decisions across all 14
   samples.
 
-See [../../docs/tool_safety_guard.md](../../docs/tool_safety_guard.md)
-for the full design document.
+See the full design document in
+[English](../../docs/tool_safety_guard.md) or
+[中文](../../docs/tool_safety_guard.zh_CN.md).

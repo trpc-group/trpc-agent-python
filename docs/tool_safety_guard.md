@@ -1,5 +1,7 @@
 # Tool Script Safety Guard
 
+[中文版本](tool_safety_guard.zh_CN.md)
+
 Pre-execution static safety scanner for Python and Bash scripts invoked by
 Tools, Skills, MCP tools, and CodeExecutors. Produces a structured
 ``allow`` / ``deny`` / ``needs_human_review`` decision, a redacted report,
@@ -394,7 +396,7 @@ tool/
   wrapper.py                    # SafetyWrappedCallable, SafetyCheckedExecutor
 scripts/
   tool_safety_check.py          # CLI
-tests/tool_safety/              # 115 tests
+tests/tool_safety/              # safety guard tests
 examples/tool_safety/
   tool_safety_policy.yaml       # sample policy
   samples/                      # 14 public samples + manifest
@@ -403,4 +405,5 @@ examples/tool_safety/
   manifest_run.json             # manifest execution summary
 docs/
   tool_safety_guard.md          # this document
+  tool_safety_guard.zh_CN.md    # Chinese version
 ```
