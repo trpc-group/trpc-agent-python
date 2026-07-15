@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under the Apache License, Version 2.0.
-"""First-stage pipeline preparation: validate inputs and isolate prompts."""
+"""Pipeline preparation and the deterministic offline stage-two loop."""
 
 from __future__ import annotations
 
@@ -14,25 +14,38 @@ from datetime import datetime
 from datetime import timezone
 from hashlib import sha256
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
+from trpc_agent_sdk.evaluation import AgentEvaluator
+from trpc_agent_sdk.evaluation import EvalCaseResult
 from trpc_agent_sdk.evaluation import EvalSet
+from trpc_agent_sdk.evaluation import EvalStatus
 from trpc_agent_sdk.evaluation import OptimizeConfigFile
 from trpc_agent_sdk.evaluation import TargetPrompt
 from trpc_agent_sdk.evaluation import load_optimize_config
 
 from .config import PipelineConfig
 from .config import load_pipeline_config
+from .fake import DeterministicFakeAgent
+from .fake import DeterministicFakeCandidateProvider
 from .prompt_workspace import PromptWorkspaceError
 from .prompt_workspace import resolve_inside_example_root
 from .prompt_workspace import stage_prompt_workspace
 from .prompt_workspace import validate_prompt_sources
 from .schemas import InputSnapshot
+from .schemas import FakeCandidateScenario
+from .schemas import FakeEvaluationSnapshot
+from .schemas import FakeStageResult
 from .schemas import WorkspaceSnapshot
 
 
 class PipelinePreparationError(ValueError):
     """The example cannot safely prepare an evaluation/optimization run."""
+
+
+class FakeStageExecutionError(RuntimeError):
+    """The deterministic stage-two loop could not complete safely."""
 
 
 @dataclass(frozen=True)
@@ -112,6 +125,31 @@ def _new_run_id() -> str:
 
 def _file_sha256(path: Path) -> str:
     return sha256(path.read_bytes()).hexdigest()
+
+
+def _reload_prepared_evalset(
+    path: Path,
+    *,
+    label: str,
+    expected_sha256: str,
+) -> EvalSet:
+    """Reload exactly the evalset bytes whose identity was prepared."""
+    try:
+        payload = path.read_bytes()
+    except OSError as exc:
+        raise FakeStageExecutionError(f"failed to reload prepared {label}: {path}: {exc}") from exc
+
+    actual_sha256 = sha256(payload).hexdigest()
+    if actual_sha256 != expected_sha256:
+        raise FakeStageExecutionError(
+            f"{label} changed after prepare_run: {path}; "
+            f"expected sha256 {expected_sha256}, got {actual_sha256}"
+        )
+
+    try:
+        return EvalSet.model_validate_json(payload)
+    except Exception as exc:
+        raise FakeStageExecutionError(f"prepared {label} is no longer a valid EvalSet: {path}: {exc}") from exc
 
 
 def prepare_run(pipeline_config_path: str | Path, *, run_id: str | None = None) -> PreparedRun:
@@ -199,3 +237,192 @@ def prepare_run(pipeline_config_path: str | Path, *, run_id: str | None = None) 
     except BaseException:
         shutil.rmtree(staging_run_dir, ignore_errors=True)
         raise
+
+
+def _summarize_fake_results(
+    eval_results_by_eval_id: dict[str, list[EvalCaseResult]],
+) -> tuple[int, int, float | None]:
+    passed_cases = 0
+    scores: list[float] = []
+    for runs in eval_results_by_eval_id.values():
+        if runs and all(getattr(run, "final_eval_status", None) == EvalStatus.PASSED for run in runs):
+            passed_cases += 1
+        for run in runs:
+            for metric in getattr(run, "overall_eval_metric_results", []):
+                if metric.score is not None:
+                    scores.append(float(metric.score))
+    average_score = sum(scores) / len(scores) if scores else None
+    return passed_cases, len(eval_results_by_eval_id), average_score
+
+
+def _validate_fake_results(
+    *,
+    eval_set: EvalSet,
+    eval_results_by_eval_id: dict[str, list[EvalCaseResult]],
+    num_runs: int,
+    phase: Literal["baseline", "candidate"],
+    split: Literal["train", "validation"],
+) -> None:
+    expected_ids = {case.eval_id for case in eval_set.eval_cases}
+    actual_ids = set(eval_results_by_eval_id)
+    if actual_ids != expected_ids:
+        raise FakeStageExecutionError(
+            f"{phase} {split} evaluation returned case ids {sorted(actual_ids)}; "
+            f"expected {sorted(expected_ids)}"
+        )
+    wrong_run_counts = {
+        eval_id: len(results)
+        for eval_id, results in eval_results_by_eval_id.items()
+        if len(results) != num_runs
+    }
+    if wrong_run_counts:
+        raise FakeStageExecutionError(
+            f"{phase} {split} evaluation returned unexpected run counts: {wrong_run_counts}; "
+            f"expected {num_runs}"
+        )
+
+
+async def _evaluate_fake_split(
+    *,
+    prepared: PreparedRun,
+    eval_set: EvalSet,
+    agent: DeterministicFakeAgent,
+    phase: Literal["baseline", "candidate"],
+    split: Literal["train", "validation"],
+) -> FakeEvaluationSnapshot:
+    num_runs = prepared.optimizer_config.evaluate.num_runs
+    try:
+        failed_summary, details_lines, result_lines, eval_results_by_eval_id = (
+            await AgentEvaluator.evaluate_eval_set(
+                eval_set,
+                call_agent=agent.call_agent,
+                eval_config=prepared.optimizer_config.evaluate,
+                num_runs=num_runs,
+                print_detailed_results=False,
+                case_parallelism=prepared.optimizer_config.optimize.eval_case_parallelism,
+                case_eval_parallelism=prepared.optimizer_config.optimize.eval_case_parallelism,
+            )
+        )
+    except Exception as exc:
+        raise FakeStageExecutionError(f"{phase} {split} evaluation failed: {exc}") from exc
+
+    _validate_fake_results(
+        eval_set=eval_set,
+        eval_results_by_eval_id=eval_results_by_eval_id,
+        num_runs=num_runs,
+        phase=phase,
+        split=split,
+    )
+    passed_cases, total_cases, average_score = _summarize_fake_results(eval_results_by_eval_id)
+    return FakeEvaluationSnapshot(
+        phase=phase,
+        split=split,
+        eval_set_id=eval_set.eval_set_id,
+        failed_summary=failed_summary,
+        details_lines=details_lines,
+        result_lines=result_lines,
+        eval_results_by_eval_id=eval_results_by_eval_id,
+        passed_case_count=passed_cases,
+        total_case_count=total_cases,
+        average_score=average_score,
+    )
+
+
+async def run_fake_stage(
+    prepared: PreparedRun,
+    *,
+    scenario: FakeCandidateScenario | None = None,
+) -> FakeStageResult:
+    """Run four deterministic evaluations without a model, judge, or optimizer.
+
+    Source prompts are never written. Once generated, the candidate remains in
+    the isolated working target on success or candidate-evaluation failure so
+    the run can be inspected later.
+    """
+    if prepared.config.execution.mode != "fake":
+        raise FakeStageExecutionError(
+            f"run_fake_stage requires execution.mode='fake', got {prepared.config.execution.mode!r}"
+        )
+    if prepared.config.execution.use_fake_judge:
+        raise FakeStageExecutionError(
+            "execution.use_fake_judge=true is not supported in stage two; "
+            "the example uses deterministic final-response matching"
+        )
+
+    selected_scenario = scenario or prepared.config.execution.fake_candidate_scenario
+    train_evalset = _reload_prepared_evalset(
+        Path(prepared.input_snapshot.train_evalset_path),
+        label="train_evalset",
+        expected_sha256=prepared.input_snapshot.train_evalset_sha256,
+    )
+    validation_evalset = _reload_prepared_evalset(
+        Path(prepared.input_snapshot.validation_evalset_path),
+        label="validation_evalset",
+        expected_sha256=prepared.input_snapshot.validation_evalset_sha256,
+    )
+
+    try:
+        baseline_prompts = await prepared.working_target.read_all()
+    except Exception as exc:
+        raise FakeStageExecutionError(f"failed to read prepared working prompts: {exc}") from exc
+    expected_baseline = {
+        snapshot.field_name: snapshot.content for snapshot in prepared.input_snapshot.prompt_snapshots
+    }
+    if baseline_prompts != expected_baseline:
+        raise FakeStageExecutionError("working prompts no longer match the prepared baseline snapshot")
+
+    agent = DeterministicFakeAgent(prepared.working_target)
+    baseline_train = await _evaluate_fake_split(
+        prepared=prepared,
+        eval_set=train_evalset,
+        agent=agent,
+        phase="baseline",
+        split="train",
+    )
+    baseline_validation = await _evaluate_fake_split(
+        prepared=prepared,
+        eval_set=validation_evalset,
+        agent=agent,
+        phase="baseline",
+        split="validation",
+    )
+
+    try:
+        candidate = DeterministicFakeCandidateProvider().propose(
+            baseline_prompts,
+            scenario=selected_scenario,
+            seed=prepared.input_snapshot.seed,
+        )
+    except Exception as exc:
+        raise FakeStageExecutionError(f"fake candidate generation failed: {exc}") from exc
+
+    try:
+        await prepared.working_target.write_all(candidate.prompts)
+        written_prompts = await prepared.working_target.read_all()
+    except Exception as exc:
+        raise FakeStageExecutionError(f"candidate prompt write failed: {exc}") from exc
+    if written_prompts != candidate.prompts:
+        raise FakeStageExecutionError("candidate prompt readback did not match the generated proposal")
+
+    candidate_train = await _evaluate_fake_split(
+        prepared=prepared,
+        eval_set=train_evalset,
+        agent=agent,
+        phase="candidate",
+        split="train",
+    )
+    candidate_validation = await _evaluate_fake_split(
+        prepared=prepared,
+        eval_set=validation_evalset,
+        agent=agent,
+        phase="candidate",
+        split="validation",
+    )
+    return FakeStageResult(
+        scenario=selected_scenario,
+        candidate=candidate,
+        baseline_train=baseline_train,
+        baseline_validation=baseline_validation,
+        candidate_train=candidate_train,
+        candidate_validation=candidate_validation,
+    )
