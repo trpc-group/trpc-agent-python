@@ -25,8 +25,10 @@ from trpc_agent_sdk.evaluation import OptimizeConfigFile
 from trpc_agent_sdk.evaluation import TargetPrompt
 from trpc_agent_sdk.evaluation import load_optimize_config
 
+from .analysis import build_evaluation_analysis
 from .config import PipelineConfig
 from .config import load_pipeline_config
+from .evaluation_adapter import EvaluationAnalysisError
 from .fake import DeterministicFakeAgent
 from .fake import DeterministicFakeCandidateProvider
 from .prompt_workspace import PromptWorkspaceError
@@ -418,6 +420,18 @@ async def run_fake_stage(
         phase="candidate",
         split="validation",
     )
+    try:
+        analysis = build_evaluation_analysis(
+            baseline_train=baseline_train,
+            baseline_validation=baseline_validation,
+            candidate_train=candidate_train,
+            candidate_validation=candidate_validation,
+            hard_case_ids=set(prepared.config.case_labels.hard_case_ids),
+            critical_case_ids=set(prepared.config.case_labels.critical_case_ids),
+            severe_case_score_drop=prepared.config.gate.severe_case_score_drop,
+        )
+    except EvaluationAnalysisError as exc:
+        raise FakeStageExecutionError(f"stage 3a analysis failed: {exc}") from exc
     return FakeStageResult(
         scenario=selected_scenario,
         candidate=candidate,
@@ -425,4 +439,5 @@ async def run_fake_stage(
         baseline_validation=baseline_validation,
         candidate_train=candidate_train,
         candidate_validation=candidate_validation,
+        analysis=analysis,
     )
