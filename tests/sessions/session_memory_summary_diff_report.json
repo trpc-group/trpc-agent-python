@@ -1,0 +1,705 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-15T06:59:33Z",
+  "backends": [
+    "in_memory",
+    "sqlite"
+  ],
+  "case_count": 10,
+  "allowed_diff": [
+    {
+      "path": "$.session.last_update_time",
+      "reason": "Persistent backends use their storage commit clock."
+    },
+    {
+      "path": "$.summary.summary_timestamp",
+      "reason": "Summary metadata is stamped independently by each manager."
+    }
+  ],
+  "normal_cases": [
+    {
+      "case_id": "single_turn",
+      "passed": true,
+      "differences": [
+        {
+          "case_id": "single_turn",
+          "left_backend": "in_memory",
+          "right_backend": "sqlite",
+          "session_id": "session-single_turn",
+          "path": "$.session.last_update_time",
+          "left_value": 1784098773.5082352,
+          "right_value": 1784098773.0,
+          "allowed": true,
+          "reason": "Persistent backends use their storage commit clock.",
+          "event_index": null,
+          "summary_id": null
+        }
+      ]
+    },
+    {
+      "case_id": "multi_turn",
+      "passed": true,
+      "differences": [
+        {
+          "case_id": "multi_turn",
+          "left_backend": "in_memory",
+          "right_backend": "sqlite",
+          "session_id": "session-multi_turn",
+          "path": "$.session.last_update_time",
+          "left_value": 1784098773.5377512,
+          "right_value": 1784098773.0,
+          "allowed": true,
+          "reason": "Persistent backends use their storage commit clock.",
+          "event_index": null,
+          "summary_id": null
+        }
+      ]
+    },
+    {
+      "case_id": "tool_call",
+      "passed": true,
+      "differences": [
+        {
+          "case_id": "tool_call",
+          "left_backend": "in_memory",
+          "right_backend": "sqlite",
+          "session_id": "session-tool_call",
+          "path": "$.session.last_update_time",
+          "left_value": 1784098773.552257,
+          "right_value": 1784098773.0,
+          "allowed": true,
+          "reason": "Persistent backends use their storage commit clock.",
+          "event_index": null,
+          "summary_id": null
+        }
+      ]
+    },
+    {
+      "case_id": "state_overwrite",
+      "passed": true,
+      "differences": [
+        {
+          "case_id": "state_overwrite",
+          "left_backend": "in_memory",
+          "right_backend": "sqlite",
+          "session_id": "session-state_overwrite",
+          "path": "$.session.last_update_time",
+          "left_value": 1784098773.5632598,
+          "right_value": 1784098773.0,
+          "allowed": true,
+          "reason": "Persistent backends use their storage commit clock.",
+          "event_index": null,
+          "summary_id": null
+        }
+      ]
+    },
+    {
+      "case_id": "scoped_state",
+      "passed": true,
+      "differences": [
+        {
+          "case_id": "scoped_state",
+          "left_backend": "in_memory",
+          "right_backend": "sqlite",
+          "session_id": "session-scoped_state",
+          "path": "$.session.last_update_time",
+          "left_value": 1784098773.5727682,
+          "right_value": 1784098773.0,
+          "allowed": true,
+          "reason": "Persistent backends use their storage commit clock.",
+          "event_index": null,
+          "summary_id": null
+        }
+      ]
+    },
+    {
+      "case_id": "memory_roundtrip",
+      "passed": true,
+      "differences": [
+        {
+          "case_id": "memory_roundtrip",
+          "left_backend": "in_memory",
+          "right_backend": "sqlite",
+          "session_id": "session-memory_roundtrip",
+          "path": "$.session.last_update_time",
+          "left_value": 1784098773.5827742,
+          "right_value": 1784098773.0,
+          "allowed": true,
+          "reason": "Persistent backends use their storage commit clock.",
+          "event_index": null,
+          "summary_id": null
+        }
+      ]
+    },
+    {
+      "case_id": "summary_create",
+      "passed": true,
+      "differences": [
+        {
+          "case_id": "summary_create",
+          "left_backend": "in_memory",
+          "right_backend": "sqlite",
+          "session_id": "session-summary_create",
+          "path": "$.session.last_update_time",
+          "left_value": 1784098773.6018045,
+          "right_value": 1784098773.0,
+          "allowed": true,
+          "reason": "Persistent backends use their storage commit clock.",
+          "event_index": null,
+          "summary_id": null
+        },
+        {
+          "case_id": "summary_create",
+          "left_backend": "in_memory",
+          "right_backend": "sqlite",
+          "session_id": "session-summary_create",
+          "path": "$.summary.summary_timestamp",
+          "left_value": 1784098773.6028042,
+          "right_value": 1784098773.6208267,
+          "allowed": true,
+          "reason": "Summary metadata is stamped independently by each manager.",
+          "event_index": null,
+          "summary_id": "session-summary_create:summary"
+        }
+      ]
+    },
+    {
+      "case_id": "summary_update",
+      "passed": true,
+      "differences": [
+        {
+          "case_id": "summary_update",
+          "left_backend": "in_memory",
+          "right_backend": "sqlite",
+          "session_id": "session-summary_update",
+          "path": "$.session.last_update_time",
+          "left_value": 1784098773.6318302,
+          "right_value": 1784098773.0,
+          "allowed": true,
+          "reason": "Persistent backends use their storage commit clock.",
+          "event_index": null,
+          "summary_id": null
+        },
+        {
+          "case_id": "summary_update",
+          "left_backend": "in_memory",
+          "right_backend": "sqlite",
+          "session_id": "session-summary_update",
+          "path": "$.summary.summary_timestamp",
+          "left_value": 1784098773.6353366,
+          "right_value": 1784098773.6728613,
+          "allowed": true,
+          "reason": "Summary metadata is stamped independently by each manager.",
+          "event_index": null,
+          "summary_id": "session-summary_update:summary"
+        }
+      ]
+    },
+    {
+      "case_id": "summary_truncation",
+      "passed": true,
+      "differences": [
+        {
+          "case_id": "summary_truncation",
+          "left_backend": "in_memory",
+          "right_backend": "sqlite",
+          "session_id": "session-summary_truncation",
+          "path": "$.session.last_update_time",
+          "left_value": 1784098773.6843684,
+          "right_value": 1784098773.0,
+          "allowed": true,
+          "reason": "Persistent backends use their storage commit clock.",
+          "event_index": null,
+          "summary_id": null
+        },
+        {
+          "case_id": "summary_truncation",
+          "left_backend": "in_memory",
+          "right_backend": "sqlite",
+          "session_id": "session-summary_truncation",
+          "path": "$.summary.summary_timestamp",
+          "left_value": 1784098773.6853678,
+          "right_value": 1784098773.7083766,
+          "allowed": true,
+          "reason": "Summary metadata is stamped independently by each manager.",
+          "event_index": null,
+          "summary_id": "session-summary_truncation:summary"
+        }
+      ]
+    },
+    {
+      "case_id": "partial_retry",
+      "passed": true,
+      "differences": [
+        {
+          "case_id": "partial_retry",
+          "left_backend": "in_memory",
+          "right_backend": "sqlite",
+          "session_id": "session-partial_retry",
+          "path": "$.session.last_update_time",
+          "left_value": 1784098773.7218988,
+          "right_value": 1784098773.0,
+          "allowed": true,
+          "reason": "Persistent backends use their storage commit clock.",
+          "event_index": null,
+          "summary_id": null
+        }
+      ]
+    }
+  ],
+  "injected_cases": [
+    {
+      "fault_id": "missing_event",
+      "case_id": "single_turn",
+      "detected": true,
+      "differences": [
+        {
+          "case_id": "single_turn",
+          "left_backend": "in_memory",
+          "right_backend": "injected:missing_event",
+          "session_id": "session-single_turn",
+          "path": "$.session.events[0].author",
+          "left_value": "user",
+          "right_value": "assistant",
+          "allowed": false,
+          "reason": null,
+          "event_index": 0,
+          "summary_id": null
+        },
+        {
+          "case_id": "single_turn",
+          "left_backend": "in_memory",
+          "right_backend": "injected:missing_event",
+          "session_id": "session-single_turn",
+          "path": "$.session.events[0].content.parts[0].text",
+          "left_value": "hello replay",
+          "right_value": "hello user",
+          "allowed": false,
+          "reason": null,
+          "event_index": 0,
+          "summary_id": null
+        },
+        {
+          "case_id": "single_turn",
+          "left_backend": "in_memory",
+          "right_backend": "injected:missing_event",
+          "session_id": "session-single_turn",
+          "path": "$.session.events[0].id",
+          "left_value": "single_turn-event-01",
+          "right_value": "single_turn-event-02",
+          "allowed": false,
+          "reason": null,
+          "event_index": 0,
+          "summary_id": null
+        },
+        {
+          "case_id": "single_turn",
+          "left_backend": "in_memory",
+          "right_backend": "injected:missing_event",
+          "session_id": "session-single_turn",
+          "path": "$.session.events[0].invocation_id",
+          "left_value": "single_turn-invocation-01",
+          "right_value": "single_turn-invocation-02",
+          "allowed": false,
+          "reason": null,
+          "event_index": 0,
+          "summary_id": null
+        },
+        {
+          "case_id": "single_turn",
+          "left_backend": "in_memory",
+          "right_backend": "injected:missing_event",
+          "session_id": "session-single_turn",
+          "path": "$.session.events[0].timestamp",
+          "left_value": 4102444801.0,
+          "right_value": 4102444802.0,
+          "allowed": false,
+          "reason": null,
+          "event_index": 0,
+          "summary_id": null
+        },
+        {
+          "case_id": "single_turn",
+          "left_backend": "in_memory",
+          "right_backend": "injected:missing_event",
+          "session_id": "session-single_turn",
+          "path": "$.session.events[1]",
+          "left_value": {
+            "actions": {
+              "artifact_delta": {},
+              "state_delta": {}
+            },
+            "author": "assistant",
+            "content": {
+              "parts": [
+                {
+                  "text": "hello user"
+                }
+              ]
+            },
+            "id": "single_turn-event-02",
+            "invocation_id": "single_turn-invocation-02",
+            "is_summary": false,
+            "model_flags": 1,
+            "partial": false,
+            "timestamp": 4102444802.0,
+            "turn_complete": true,
+            "version": 0,
+            "visible": true
+          },
+          "right_value": "<missing>",
+          "allowed": false,
+          "reason": null,
+          "event_index": 1,
+          "summary_id": null
+        }
+      ]
+    },
+    {
+      "fault_id": "event_order",
+      "case_id": "multi_turn",
+      "detected": true,
+      "differences": [
+        {
+          "case_id": "multi_turn",
+          "left_backend": "in_memory",
+          "right_backend": "injected:event_order",
+          "session_id": "session-multi_turn",
+          "path": "$.session.events[0].author",
+          "left_value": "user",
+          "right_value": "assistant",
+          "allowed": false,
+          "reason": null,
+          "event_index": 0,
+          "summary_id": null
+        },
+        {
+          "case_id": "multi_turn",
+          "left_backend": "in_memory",
+          "right_backend": "injected:event_order",
+          "session_id": "session-multi_turn",
+          "path": "$.session.events[0].content.parts[0].text",
+          "left_value": "multi user turn 1",
+          "right_value": "multi assistant turn 1",
+          "allowed": false,
+          "reason": null,
+          "event_index": 0,
+          "summary_id": null
+        },
+        {
+          "case_id": "multi_turn",
+          "left_backend": "in_memory",
+          "right_backend": "injected:event_order",
+          "session_id": "session-multi_turn",
+          "path": "$.session.events[0].id",
+          "left_value": "multi_turn-event-01",
+          "right_value": "multi_turn-event-02",
+          "allowed": false,
+          "reason": null,
+          "event_index": 0,
+          "summary_id": null
+        },
+        {
+          "case_id": "multi_turn",
+          "left_backend": "in_memory",
+          "right_backend": "injected:event_order",
+          "session_id": "session-multi_turn",
+          "path": "$.session.events[0].invocation_id",
+          "left_value": "multi_turn-invocation-01",
+          "right_value": "multi_turn-invocation-02",
+          "allowed": false,
+          "reason": null,
+          "event_index": 0,
+          "summary_id": null
+        },
+        {
+          "case_id": "multi_turn",
+          "left_backend": "in_memory",
+          "right_backend": "injected:event_order",
+          "session_id": "session-multi_turn",
+          "path": "$.session.events[0].timestamp",
+          "left_value": 4102444801.0,
+          "right_value": 4102444802.0,
+          "allowed": false,
+          "reason": null,
+          "event_index": 0,
+          "summary_id": null
+        },
+        {
+          "case_id": "multi_turn",
+          "left_backend": "in_memory",
+          "right_backend": "injected:event_order",
+          "session_id": "session-multi_turn",
+          "path": "$.session.events[1].author",
+          "left_value": "assistant",
+          "right_value": "user",
+          "allowed": false,
+          "reason": null,
+          "event_index": 1,
+          "summary_id": null
+        },
+        {
+          "case_id": "multi_turn",
+          "left_backend": "in_memory",
+          "right_backend": "injected:event_order",
+          "session_id": "session-multi_turn",
+          "path": "$.session.events[1].content.parts[0].text",
+          "left_value": "multi assistant turn 1",
+          "right_value": "multi user turn 1",
+          "allowed": false,
+          "reason": null,
+          "event_index": 1,
+          "summary_id": null
+        },
+        {
+          "case_id": "multi_turn",
+          "left_backend": "in_memory",
+          "right_backend": "injected:event_order",
+          "session_id": "session-multi_turn",
+          "path": "$.session.events[1].id",
+          "left_value": "multi_turn-event-02",
+          "right_value": "multi_turn-event-01",
+          "allowed": false,
+          "reason": null,
+          "event_index": 1,
+          "summary_id": null
+        },
+        {
+          "case_id": "multi_turn",
+          "left_backend": "in_memory",
+          "right_backend": "injected:event_order",
+          "session_id": "session-multi_turn",
+          "path": "$.session.events[1].invocation_id",
+          "left_value": "multi_turn-invocation-02",
+          "right_value": "multi_turn-invocation-01",
+          "allowed": false,
+          "reason": null,
+          "event_index": 1,
+          "summary_id": null
+        },
+        {
+          "case_id": "multi_turn",
+          "left_backend": "in_memory",
+          "right_backend": "injected:event_order",
+          "session_id": "session-multi_turn",
+          "path": "$.session.events[1].timestamp",
+          "left_value": 4102444802.0,
+          "right_value": 4102444801.0,
+          "allowed": false,
+          "reason": null,
+          "event_index": 1,
+          "summary_id": null
+        }
+      ]
+    },
+    {
+      "fault_id": "tool_response",
+      "case_id": "tool_call",
+      "detected": true,
+      "differences": [
+        {
+          "case_id": "tool_call",
+          "left_backend": "in_memory",
+          "right_backend": "injected:tool_response",
+          "session_id": "session-tool_call",
+          "path": "$.session.events[2].content.parts[0].function_response.response.result",
+          "left_value": "consistent",
+          "right_value": "corrupted",
+          "allowed": false,
+          "reason": null,
+          "event_index": 2,
+          "summary_id": null
+        }
+      ]
+    },
+    {
+      "fault_id": "state_overwrite",
+      "case_id": "state_overwrite",
+      "detected": true,
+      "differences": [
+        {
+          "case_id": "state_overwrite",
+          "left_backend": "in_memory",
+          "right_backend": "injected:state_overwrite",
+          "session_id": "session-state_overwrite",
+          "path": "$.session.state.phase",
+          "left_value": "done",
+          "right_value": "corrupted",
+          "allowed": false,
+          "reason": null,
+          "event_index": null,
+          "summary_id": null
+        }
+      ]
+    },
+    {
+      "fault_id": "state_scope",
+      "case_id": "scoped_state",
+      "detected": true,
+      "differences": [
+        {
+          "case_id": "scoped_state",
+          "left_backend": "in_memory",
+          "right_backend": "injected:state_scope",
+          "session_id": "session-scoped_state",
+          "path": "$.session.state.user:language",
+          "left_value": "go",
+          "right_value": "corrupted",
+          "allowed": false,
+          "reason": null,
+          "event_index": null,
+          "summary_id": null
+        }
+      ]
+    },
+    {
+      "fault_id": "memory_content",
+      "case_id": "memory_roundtrip",
+      "detected": true,
+      "differences": [
+        {
+          "case_id": "memory_roundtrip",
+          "left_backend": "in_memory",
+          "right_backend": "injected:memory_content",
+          "session_id": "session-memory_roundtrip",
+          "path": "$.memory.preference-token-oolong[0].content.parts[0].text",
+          "left_value": "I will remember that preference",
+          "right_value": "corrupted memory",
+          "allowed": false,
+          "reason": null,
+          "event_index": null,
+          "summary_id": null
+        }
+      ]
+    },
+    {
+      "fault_id": "summary_missing",
+      "case_id": "summary_create",
+      "detected": true,
+      "differences": [
+        {
+          "case_id": "summary_create",
+          "left_backend": "in_memory",
+          "right_backend": "injected:summary_missing",
+          "session_id": "session-summary_create",
+          "path": "$.summary",
+          "left_value": {
+            "compressed_event_count": 3,
+            "original_event_count": 8,
+            "session_id": "session-summary_create",
+            "summary_id": "session-summary_create:summary",
+            "summary_text": "summary version one",
+            "summary_timestamp": 1784098773.6028042,
+            "version": 1
+          },
+          "right_value": null,
+          "allowed": false,
+          "reason": null,
+          "event_index": null,
+          "summary_id": "session-summary_create:summary"
+        }
+      ]
+    },
+    {
+      "fault_id": "summary_overwrite",
+      "case_id": "summary_update",
+      "detected": true,
+      "differences": [
+        {
+          "case_id": "summary_update",
+          "left_backend": "in_memory",
+          "right_backend": "injected:summary_overwrite",
+          "session_id": "session-summary_update",
+          "path": "$.summary.summary_text",
+          "left_value": "summary update version two",
+          "right_value": "summary update version one",
+          "allowed": false,
+          "reason": null,
+          "event_index": null,
+          "summary_id": "session-summary_update:summary"
+        },
+        {
+          "case_id": "summary_update",
+          "left_backend": "in_memory",
+          "right_backend": "injected:summary_overwrite",
+          "session_id": "session-summary_update",
+          "path": "$.summary.version",
+          "left_value": 2,
+          "right_value": 1,
+          "allowed": false,
+          "reason": null,
+          "event_index": null,
+          "summary_id": "session-summary_update:summary"
+        }
+      ]
+    },
+    {
+      "fault_id": "summary_session_owner",
+      "case_id": "summary_truncation",
+      "detected": true,
+      "differences": [
+        {
+          "case_id": "summary_truncation",
+          "left_backend": "in_memory",
+          "right_backend": "injected:summary_session_owner",
+          "session_id": "session-summary_truncation",
+          "path": "$.summary.session_id",
+          "left_value": "session-summary_truncation",
+          "right_value": "session-wrong-owner",
+          "allowed": false,
+          "reason": null,
+          "event_index": null,
+          "summary_id": "session-summary_truncation:summary"
+        }
+      ]
+    },
+    {
+      "fault_id": "duplicate_retry",
+      "case_id": "partial_retry",
+      "detected": true,
+      "differences": [
+        {
+          "case_id": "partial_retry",
+          "left_backend": "in_memory",
+          "right_backend": "injected:duplicate_retry",
+          "session_id": "session-partial_retry",
+          "path": "$.session.events[2]",
+          "left_value": "<missing>",
+          "right_value": {
+            "actions": {
+              "artifact_delta": {},
+              "state_delta": {}
+            },
+            "author": "assistant",
+            "content": {
+              "parts": [
+                {
+                  "text": "finished answer"
+                }
+              ]
+            },
+            "id": "retry-event",
+            "invocation_id": "partial_retry-invocation-03",
+            "is_summary": false,
+            "model_flags": 1,
+            "partial": false,
+            "timestamp": 4102444803.0,
+            "turn_complete": true,
+            "version": 0,
+            "visible": true
+          },
+          "allowed": false,
+          "reason": null,
+          "event_index": 2,
+          "summary_id": null
+        }
+      ]
+    }
+  ],
+  "metrics": {
+    "false_positive_rate": 0.0,
+    "injected_detection_rate": 1.0,
+    "summary_fault_detection_rate": 1.0,
+    "duration_seconds": 0.223723
+  }
+}
