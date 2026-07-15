@@ -3,7 +3,7 @@
   "execution": {
     "mode": "fake",
     "fake_candidate_scenario": "improve",
-    "use_fake_judge": true
+    "use_fake_judge": false
   },
   "inputs": {
     "train_evalset": "data/train.evalset.json",

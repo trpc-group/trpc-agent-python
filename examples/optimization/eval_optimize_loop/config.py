@@ -34,7 +34,7 @@ class ExecutionConfig(EvalBaseModel):
 
     mode: Literal["fake", "real", "trace"] = "fake"
     fake_candidate_scenario: Literal["improve", "no_improvement", "overfit"] = "improve"
-    use_fake_judge: bool = True
+    use_fake_judge: bool = False
 
 
 class InputPathsConfig(EvalBaseModel):
