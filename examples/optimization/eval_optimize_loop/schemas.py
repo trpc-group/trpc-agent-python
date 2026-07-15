@@ -24,6 +24,27 @@ from trpc_agent_sdk.evaluation import EvalCaseResult
 
 
 FakeCandidateScenario = Literal["improve", "no_improvement", "overfit"]
+EvaluationStatus = Literal["passed", "failed", "not_evaluated"]
+FailureCategory = Literal[
+    "evaluation_error",
+    "tool_name_error",
+    "tool_argument_error",
+    "knowledge_recall",
+    "format_error",
+    "rubric_failure",
+    "routing_error",
+    "final_response_mismatch",
+    "unknown",
+]
+ChangeKind = Literal[
+    "newly_passed",
+    "newly_failed",
+    "improved",
+    "regressed",
+    "unchanged",
+    "incomparable",
+]
+OverfitStatus = Literal["detected", "not_detected", "unavailable"]
 
 
 class ObservableValue(EvalBaseModel):
@@ -118,6 +139,151 @@ class FakeEvaluationSnapshot(EvalBaseModel):
     )
 
 
+class ToolCallEvidence(EvalBaseModel):
+    """A compact tool call retained for attribution and reporting."""
+
+    name: str
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+class MetricOutcome(EvalBaseModel):
+    """One normalized metric outcome for a run or an aggregate."""
+
+    metric_name: str
+    threshold: float
+    status: EvaluationStatus
+    score: ObservableValue
+    reason: Optional[str] = None
+
+
+class InvocationEvidence(EvalBaseModel):
+    """Expected and actual evidence from one evaluated invocation."""
+
+    invocation_id: str
+    user_text: str
+    expected_response: Optional[str] = None
+    actual_response: Optional[str] = None
+    expected_tools: list[ToolCallEvidence] = Field(default_factory=list)
+    actual_tools: list[ToolCallEvidence] = Field(default_factory=list)
+    metrics: list[MetricOutcome] = Field(default_factory=list)
+
+
+class CaseRunOutcome(EvalBaseModel):
+    """Normalized evidence from one configured run of an eval case."""
+
+    run_id: int
+    status: EvaluationStatus
+    error_message: Optional[str] = None
+    metrics: list[MetricOutcome]
+    invocations: list[InvocationEvidence]
+
+
+class AttributionEvidence(EvalBaseModel):
+    """One concrete observation supporting a failure attribution."""
+
+    evidence_type: Literal["execution_error", "metric", "response", "tool"]
+    message: str
+    run_id: Optional[int] = None
+    invocation_id: Optional[str] = None
+    metric_name: Optional[str] = None
+    expected: Optional[Any] = None
+    actual: Optional[Any] = None
+
+
+class FailureAttribution(EvalBaseModel):
+    """Deterministic primary and secondary reasons for a failed case."""
+
+    primary_category: FailureCategory
+    secondary_categories: list[FailureCategory] = Field(default_factory=list)
+    summary: str
+    evidence: list[AttributionEvidence] = Field(default_factory=list)
+
+
+class CaseEvaluation(EvalBaseModel):
+    """One eval case aggregated across all configured runs."""
+
+    eval_id: str
+    status: EvaluationStatus
+    average_score: ObservableValue
+    metrics: list[MetricOutcome]
+    runs: list[CaseRunOutcome]
+    attribution: Optional[FailureAttribution] = None
+
+
+class StandardizedEvaluation(EvalBaseModel):
+    """Stable case-oriented representation of one SDK evaluation snapshot."""
+
+    phase: Literal["baseline", "candidate"]
+    split: Literal["train", "validation"]
+    eval_set_id: str
+    cases: list[CaseEvaluation]
+    passed_case_count: int = Field(ge=0)
+    failed_case_count: int = Field(ge=0)
+    not_evaluated_case_count: int = Field(ge=0)
+    average_score: ObservableValue
+
+
+class MetricDelta(EvalBaseModel):
+    """Before/after comparison for one metric."""
+
+    metric_name: str
+    baseline_status: EvaluationStatus
+    candidate_status: EvaluationStatus
+    baseline_score: ObservableValue
+    candidate_score: ObservableValue
+    score_delta: ObservableValue
+    change: ChangeKind
+
+
+class CaseDiff(EvalBaseModel):
+    """Before/after comparison and policy labels for one eval case."""
+
+    eval_id: str
+    split: Literal["train", "validation"]
+    baseline_status: EvaluationStatus
+    candidate_status: EvaluationStatus
+    baseline_score: ObservableValue
+    candidate_score: ObservableValue
+    score_delta: ObservableValue
+    change: ChangeKind
+    metrics: list[MetricDelta]
+    baseline_attribution: Optional[FailureAttribution] = None
+    candidate_attribution: Optional[FailureAttribution] = None
+    is_hard: bool = False
+    is_critical: bool = False
+    severe_regression: bool = False
+
+
+class DatasetDiff(EvalBaseModel):
+    """Case-level changes and aggregate deltas for one dataset split."""
+
+    split: Literal["train", "validation"]
+    eval_set_id: str
+    cases: list[CaseDiff]
+    baseline_average_score: ObservableValue
+    candidate_average_score: ObservableValue
+    score_delta: ObservableValue
+    newly_passed_count: int = Field(ge=0)
+    newly_failed_count: int = Field(ge=0)
+    improved_count: int = Field(ge=0)
+    regressed_count: int = Field(ge=0)
+    unchanged_count: int = Field(ge=0)
+    incomparable_count: int = Field(ge=0)
+
+
+class EvaluationAnalysis(EvalBaseModel):
+    """All normalized evidence and comparisons produced by stage 3a."""
+
+    baseline_train: StandardizedEvaluation
+    baseline_validation: StandardizedEvaluation
+    candidate_train: StandardizedEvaluation
+    candidate_validation: StandardizedEvaluation
+    train_diff: DatasetDiff
+    validation_diff: DatasetDiff
+    overfit_status: OverfitStatus
+    overfit_reason: str
+
+
 class FakeStageResult(EvalBaseModel):
     """The four full evaluations and candidate metadata produced in stage two."""
 
@@ -127,3 +293,4 @@ class FakeStageResult(EvalBaseModel):
     baseline_validation: FakeEvaluationSnapshot
     candidate_train: FakeEvaluationSnapshot
     candidate_validation: FakeEvaluationSnapshot
+    analysis: EvaluationAnalysis
