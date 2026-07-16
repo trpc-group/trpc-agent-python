@@ -45,6 +45,21 @@ ChangeKind = Literal[
     "incomparable",
 ]
 OverfitStatus = Literal["detected", "not_detected", "unavailable"]
+GateRuleId = Literal[
+    "evaluation_completeness",
+    "minimum_validation_score_delta",
+    "validation_pass_rate_non_decrease",
+    "no_new_hard_fail",
+    "no_critical_regression",
+    "no_severe_regression",
+    "required_metrics",
+    "no_overfitting",
+    "cost_budget",
+    "token_budget",
+    "duration_budget",
+]
+GateRuleOutcome = Literal["pass", "reject", "warning", "skipped"]
+GateDecisionValue = Literal["accept", "reject"]
 
 
 class ObservableValue(EvalBaseModel):
@@ -284,8 +299,37 @@ class EvaluationAnalysis(EvalBaseModel):
     overfit_reason: str
 
 
+class ResourceMeasurements(EvalBaseModel):
+    """Resource observations available when Gate evaluates a candidate."""
+
+    cost_usd: ObservableValue
+    total_tokens: ObservableValue
+    duration_seconds: ObservableValue
+
+
+class GateRuleResult(EvalBaseModel):
+    """One deterministic policy result with evidence for later reporting."""
+
+    rule_id: GateRuleId
+    outcome: GateRuleOutcome
+    message: str
+    case_ids: list[str] = Field(default_factory=list)
+    metric_names: list[str] = Field(default_factory=list)
+    observed: dict[str, ObservableValue] = Field(default_factory=dict)
+    threshold: Optional[float] = None
+
+
+class GateDecision(EvalBaseModel):
+    """The complete, auditable acceptance decision produced by Gate."""
+
+    decision: GateDecisionValue
+    rule_results: list[GateRuleResult]
+    rejection_reasons: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class FakeStageResult(EvalBaseModel):
-    """The four full evaluations and candidate metadata produced in stage two."""
+    """Evaluation, candidate, analysis, and Gate outputs from the offline stage."""
 
     scenario: FakeCandidateScenario
     candidate: FakeCandidateProposal
@@ -294,3 +338,5 @@ class FakeStageResult(EvalBaseModel):
     candidate_train: FakeEvaluationSnapshot
     candidate_validation: FakeEvaluationSnapshot
     analysis: EvaluationAnalysis
+    measurements: ResourceMeasurements
+    gate_decision: GateDecision

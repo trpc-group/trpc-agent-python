@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under the Apache License, Version 2.0.
-"""Run the deterministic offline evaluation/candidate stage."""
+"""Run the deterministic offline evaluation, candidate, analysis, and Gate stage."""
 
 from __future__ import annotations
 
@@ -34,7 +34,9 @@ def _format_snapshot(label: str, snapshot: object) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the deterministic offline eval/optimization stage.")
+    parser = argparse.ArgumentParser(
+        description="Run the deterministic offline evaluation and Gate stage."
+    )
     parser.add_argument("--config", type=Path, default=_HERE / "pipeline.json")
     parser.add_argument("--run-id", help="Optional reproducible run identifier.")
     parser.add_argument(
@@ -52,7 +54,19 @@ def main() -> None:
     print(_format_snapshot("Baseline validation", result.baseline_validation))
     print(_format_snapshot("Candidate train", result.candidate_train))
     print(_format_snapshot("Candidate validation", result.candidate_validation))
-    print("Stage 2 does not run Gate, write reports, or update source prompts.")
+    print(f"Gate decision: {result.gate_decision.decision.upper()}")
+    rejected_rules = [
+        rule for rule in result.gate_decision.rule_results if rule.outcome == "reject"
+    ]
+    if rejected_rules:
+        print("Rejection reasons:")
+        for rule in rejected_rules:
+            print(f"- [{rule.rule_id}] {rule.message}")
+    if result.gate_decision.warnings:
+        print("Warnings:")
+        for warning in result.gate_decision.warnings:
+            print(f"- {warning}")
+    print("Stage 3b does not write reports or update source prompts.")
 
 
 if __name__ == "__main__":

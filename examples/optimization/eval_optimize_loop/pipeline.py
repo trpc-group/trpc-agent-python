@@ -14,6 +14,7 @@ from datetime import datetime
 from datetime import timezone
 from hashlib import sha256
 from pathlib import Path
+from time import perf_counter
 from typing import Literal
 from uuid import uuid4
 
@@ -31,6 +32,8 @@ from .config import load_pipeline_config
 from .evaluation_adapter import EvaluationAnalysisError
 from .fake import DeterministicFakeAgent
 from .fake import DeterministicFakeCandidateProvider
+from .gate import evaluate_gate
+from .gate import GateEvaluationError
 from .prompt_workspace import PromptWorkspaceError
 from .prompt_workspace import resolve_inside_example_root
 from .prompt_workspace import stage_prompt_workspace
@@ -39,6 +42,8 @@ from .schemas import InputSnapshot
 from .schemas import FakeCandidateScenario
 from .schemas import FakeEvaluationSnapshot
 from .schemas import FakeStageResult
+from .schemas import ObservableValue
+from .schemas import ResourceMeasurements
 from .schemas import WorkspaceSnapshot
 
 
@@ -351,6 +356,7 @@ async def run_fake_stage(
             "the example uses deterministic final-response matching"
         )
 
+    started_at = perf_counter()
     selected_scenario = scenario or prepared.config.execution.fake_candidate_scenario
     train_evalset = _reload_prepared_evalset(
         Path(prepared.input_snapshot.train_evalset_path),
@@ -432,6 +438,32 @@ async def run_fake_stage(
         )
     except EvaluationAnalysisError as exc:
         raise FakeStageExecutionError(f"stage 3a analysis failed: {exc}") from exc
+    measurements = ResourceMeasurements(
+        cost_usd=ObservableValue(
+            status="unavailable",
+            unit="USD",
+            reason="Fake mode does not report monetary cost.",
+        ),
+        total_tokens=ObservableValue(
+            status="unavailable",
+            unit="tokens",
+            reason="Fake mode does not report token usage.",
+        ),
+        duration_seconds=ObservableValue(
+            status="available",
+            value=perf_counter() - started_at,
+            unit="seconds",
+        ),
+    )
+    try:
+        gate_decision = evaluate_gate(
+            analysis,
+            prepared.config.gate,
+            prepared.config.budget,
+            measurements,
+        )
+    except GateEvaluationError as exc:
+        raise FakeStageExecutionError(f"stage 3b gate failed: {exc}") from exc
     return FakeStageResult(
         scenario=selected_scenario,
         candidate=candidate,
@@ -440,4 +472,6 @@ async def run_fake_stage(
         candidate_train=candidate_train,
         candidate_validation=candidate_validation,
         analysis=analysis,
+        measurements=measurements,
+        gate_decision=gate_decision,
     )
