@@ -1,0 +1,12 @@
+--- a/app/misc.py
++++ b/app/misc.py
+@@ -1,3 +1,4 @@
+ def greet(name):
++    # trivial change used by the sandbox-failure scenario
+     return "hello " + name
+--- a/tests/test_misc.py
++++ b/tests/test_misc.py
+@@ -1,2 +1,3 @@
+ def test_greet():
++    assert True
+     pass
