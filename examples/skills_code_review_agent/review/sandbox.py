@@ -9,15 +9,15 @@ import shutil
 import sys
 from dataclasses import dataclass
 
-from trpc_agent_sdk.code_executors import (WorkspacePutFileInfo, WorkspaceRunProgramSpec,
+from trpc_agent_sdk.code_executors import (BaseWorkspaceRuntime, WorkspacePutFileInfo,
+                                           WorkspaceRunProgramSpec,
                                            WorkspaceStageOptions,
                                            create_container_workspace_runtime,
                                            create_local_workspace_runtime)
 
 SKILL_WS_DIR = "skills/code-review"
 DIFF_WS_PATH = "work/inputs/changes.diff"
-_PYTHON3_DIR = os.path.dirname(shutil.which("python3") or sys.executable)
-SANDBOX_ENV = {"PATH": f"{_PYTHON3_DIR}:/usr/local/bin:/usr/bin:/bin",
+SANDBOX_ENV = {"PATH": "/usr/local/bin:/usr/bin:/bin",
                "HOME": "/tmp", "LANG": "C.UTF-8"}
 
 RUNTIME_LOCAL = "local"
@@ -69,7 +69,7 @@ class SandboxRunOutcome:
 class SandboxSession:
     """One workspace: staged code-review skill + staged diff + script runs."""
 
-    def __init__(self, runtime, skill_root: str, timeout_sec: float = 60.0,
+    def __init__(self, runtime: BaseWorkspaceRuntime, skill_root: str, timeout_sec: float = 60.0,
                  max_output_bytes: int = 262144):
         self._runtime = runtime
         self._skill_root = skill_root
@@ -79,6 +79,8 @@ class SandboxSession:
         self._exec_id = ""
 
     async def open(self, exec_id: str) -> None:
+        if self._ws is not None:
+            raise RuntimeError("SandboxSession is already open; call close() first")
         self._exec_id = exec_id
         manager = self._runtime.manager(None)
         self._ws = await manager.create_workspace(exec_id, None)
@@ -97,10 +99,21 @@ class SandboxSession:
         return text.encode("utf-8", errors="replace")[:self._max_output].decode(
             "utf-8", errors="replace"), True
 
+    def _effective_env(self) -> dict:
+        """Whitelist stays PATH/HOME/LANG only; host python3 dir is appended as a
+        dev fallback for hosts without /usr/bin/python3 (e.g. Nix); harmless
+        nonexistent entry inside containers."""
+        env = dict(SANDBOX_ENV)
+        python3_dir = os.path.dirname(shutil.which("python3") or sys.executable)
+        if python3_dir and python3_dir not in env["PATH"].split(":"):
+            env["PATH"] = f"{env['PATH']}:{python3_dir}"
+        return env
+
     async def run_script(self, script_name: str,
                          args: tuple = (DIFF_WS_PATH,)) -> SandboxRunOutcome:
         """Run one skill script under `env -i` (environment whitelist)."""
-        env_args = [f"{k}={v}" for k, v in SANDBOX_ENV.items()]
+        env = self._effective_env()
+        env_args = [f"{k}={v}" for k, v in env.items()]
         argv = ["-i", *env_args, "python3",
                 f"{SKILL_WS_DIR}/scripts/{script_name}", *args]
         spec = WorkspaceRunProgramSpec(cmd="env", args=argv, env={}, cwd=".",
@@ -134,3 +147,4 @@ class SandboxSession:
             await self._runtime.manager(None).cleanup(self._exec_id, None)
         except Exception:  # noqa: BLE001 - best-effort cleanup
             pass
+        self._ws = None
