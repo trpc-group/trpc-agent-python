@@ -1,0 +1,14 @@
+--- a/app/util.py
++++ b/app/util.py
+@@ -1,4 +1,6 @@
+ def add(a, b):
++    # add two numbers and return the result
++    # used by the billing module
+     return a + b
+--- a/tests/test_util.py
++++ b/tests/test_util.py
+@@ -1,3 +1,4 @@
+ from app.util import add
++
+ def test_add():
+     assert add(1, 2) == 3
