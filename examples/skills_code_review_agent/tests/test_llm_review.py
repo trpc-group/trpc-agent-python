@@ -31,6 +31,14 @@ def test_parse_llm_output_fenced_json():
     assert summary == "s" and findings == []
 
 
+def test_parse_llm_output_fenced_nested_json():
+    text = ('```json\n{"summary": "s", "findings": [{"severity": "high", "category": "security",'
+            ' "file": "a.py", "line": 3, "title": "x", "confidence": 0.9}]}\n```')
+    findings, summary = parse_llm_output(text)
+    assert summary == "s"
+    assert findings[0]["severity"] == "high"
+
+
 def test_parse_llm_output_garbage_returns_empty():
     findings, summary = parse_llm_output("I could not review this.")
     assert findings == [] and summary == ""
