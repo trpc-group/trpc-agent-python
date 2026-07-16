@@ -14,7 +14,7 @@ def apply_gate(
     overfitting_warning = False
 
     # Rule 1: Overfitting check (always on, warning only)
-    if delta.train_pass_rate_delta > 0 and delta.val_pass_rate_delta <= 0:
+    if delta.train_pass_rate_delta > 0 and delta.val_pass_rate_delta < 0:
         overfitting_warning = True
         reasons.append(
             f"overfitting_warning: train pass_rate improved by {delta.train_pass_rate_delta:.4f} "
@@ -38,11 +38,13 @@ def apply_gate(
     else:
         reasons.append(f"new_fails check passed: allow_new_fails={gate_config.allow_new_fails}, newly_failing={len(delta.val.newly_failing)}")
 
-    # Rule 4: protected_cases
+    # Rule 4: protected_cases (checks both train and val)
     degraded_protected: list[str] = []
     for case_id in gate_config.protected_case_ids:
-        case_scores = delta.val.score_deltas.get(case_id, {})
-        if case_scores and any(v < 0 for v in case_scores.values()):
+        train_scores = delta.train.score_deltas.get(case_id, {})
+        val_scores = delta.val.score_deltas.get(case_id, {})
+        all_scores = {**train_scores, **val_scores}
+        if all_scores and any(v < 0 for v in all_scores.values()):
             degraded_protected.append(case_id)
     if degraded_protected:
         reject_reasons.append(f"protected cases degraded: {degraded_protected}")

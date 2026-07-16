@@ -38,7 +38,7 @@ async def main() -> None:
     pipeline = EvalOptimizePipeline.from_config(args.pipeline_config)
     result = await pipeline.run()
 
-    output_dir = Path(pipeline._config.output_dir).resolve()
+    output_dir = Path(pipeline.output_dir).resolve()
     print(f"\nPipeline complete: {result.gate_decision}")
     print(f"  Duration: {result.duration_seconds:.2f}s")
     print(f"  Reports: {output_dir}/")

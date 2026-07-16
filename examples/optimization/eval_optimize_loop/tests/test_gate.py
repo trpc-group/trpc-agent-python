@@ -89,12 +89,20 @@ def test_gate_reject_duration_over_budget():
 
 
 def test_gate_overfitting_warning():
-    """Train improves but val does not → overfitting_warning=True."""
-    delta = _make_delta(train_pass_rate_delta=0.5, val_pass_rate_delta=0.0)
+    """Train improves but val degrades → overfitting_warning=True."""
+    delta = _make_delta(train_pass_rate_delta=0.5, val_pass_rate_delta=-0.1)
     gate = GateConfig(min_improvement=0.0, allow_new_fails=False)
     decision = apply_gate(delta, gate, cost_usd=0.0, duration_seconds=10.0)
     assert decision.overfitting_warning is True
     assert any("overfitting" in r.lower() for r in decision.reasons)
+
+
+def test_gate_no_overfitting_when_val_flat():
+    """Train improves but val is flat (0.0) -> no overfitting warning."""
+    delta = _make_delta(train_pass_rate_delta=0.5, val_pass_rate_delta=0.0)
+    gate = GateConfig(min_improvement=0.0, allow_new_fails=False)
+    decision = apply_gate(delta, gate, cost_usd=0.0, duration_seconds=10.0)
+    assert decision.overfitting_warning is False
 
 
 def test_gate_reject_overfitting_with_degradation():

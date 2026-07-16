@@ -60,8 +60,9 @@ def _build_markdown(result: PipelineResult) -> list[str]:
     if result.baseline:
         base_ref = result.baseline.get("val") or result.baseline.get("train")
         cand_ref = result.candidate.get("val") or result.candidate.get("train")
+        split_label = "val" if result.baseline.get("val") else "train"
         if base_ref and base_ref.metric_breakdown:
-            lines.append("### Metric Breakdown (val)")
+            lines.append(f"### Metric Breakdown ({split_label})")
             lines.append("")
             lines.append("| Metric | Baseline | Candidate | Delta |")
             lines.append("|---|---|---|---|")

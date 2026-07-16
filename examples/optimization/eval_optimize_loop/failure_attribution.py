@@ -16,6 +16,9 @@ _METRIC_TO_CATEGORY: dict[str, str] = {
     "llm_rubric_knowledge_recall": "knowledge_recall_insufficient",
 }
 
+# Default format-violation patterns. These are heuristics tuned for the
+# sample evalsets. Real pipelines should make format patterns configurable
+# (e.g. via pipeline.json) to match their expected output format.
 _FORMAT_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("format_violation", re.compile(r"答案：")),
 ]
@@ -45,8 +48,8 @@ def _extract_expected_text(case_results: list[EvalCaseResult]) -> Optional[str]:
 
 def attribute_failures(eval_results: dict[str, list[EvalCaseResult]]) -> FailureAttribution:
     categories: dict[str, FailureCategory] = {}
-    total_cases = len(eval_results)
     failed_cases = 0
+    evaluable_cases = sum(1 for v in eval_results.values() if v)
 
     for case_id, case_results in eval_results.items():
         last_result = case_results[-1] if case_results else None
@@ -84,7 +87,7 @@ def attribute_failures(eval_results: dict[str, list[EvalCaseResult]]) -> Failure
                             categories[sub_cat].case_ids.append(case_id)
 
     return FailureAttribution(
-        total_cases=total_cases,
+        total_cases=evaluable_cases,
         failed_cases=failed_cases,
         categories=categories,
     )

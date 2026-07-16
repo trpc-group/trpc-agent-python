@@ -20,6 +20,13 @@ from trpc_agent_sdk.evaluation import (
 try:
     from trpc_agent_sdk.evaluation._agent_evaluator import _EvaluationCasesFailed
 except ImportError:
+    import warnings
+    warnings.warn(
+        "Could not import _EvaluationCasesFailed; falling back to AssertionError. "
+        "This may cause the pipeline to silently swallow unrelated assertions. "
+        "Update trpc_agent_sdk to the latest version.",
+        RuntimeWarning,
+    )
     _EvaluationCasesFailed = AssertionError
 
 from .delta import compute_delta
@@ -163,12 +170,9 @@ class EvalOptimizePipeline:
         delta = compute_delta(baseline_split, candidate_split)
 
         duration = time.monotonic() - t0
-        # Note: cost_usd is always 0.0 here because the pipeline does not
-        # yet collect per-round LLM costs from the optimizer.  The gate's
-        # max_cost_usd rule will therefore not reject on cost grounds.
-        # Users should monitor costs via their LLM provider dashboard.
+        cost_usd = self._collect_cost()
         gate = apply_gate(
-            delta, self._config.gate, cost_usd=0.0, duration_seconds=duration
+            delta, self._config.gate, cost_usd=cost_usd, duration_seconds=duration
         )
 
         finished_at = datetime.now(timezone.utc).isoformat()
@@ -313,6 +317,8 @@ class EvalOptimizePipeline:
         passed_count = 0
 
         for case_id, case_results in cases_by_id.items():
+            if not case_results:
+                continue
             all_passed = all(
                 cr.final_eval_status == EvalStatus.PASSED and not cr.error_message
                 for cr in case_results
@@ -354,3 +360,13 @@ class EvalOptimizePipeline:
             metric_breakdown=metric_breakdown,
             per_case=per_case,
         )
+
+    @property
+    def output_dir(self) -> str:
+        return self._config.output_dir
+
+    def _collect_cost(self) -> float:
+        # Cost tracking from AgentOptimizer is not yet implemented.
+        # The gate's max_cost_usd rule is therefore dormant — users
+        # should monitor costs via their LLM provider dashboard.
+        return 0.0

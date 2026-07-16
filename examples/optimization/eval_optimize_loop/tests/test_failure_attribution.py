@@ -143,7 +143,7 @@ def test_attribute_failures_empty_case_results():
         ],
     }
     attr = attribute_failures(results)
-    assert attr.total_cases == 2
+    assert attr.total_cases == 1
     assert attr.failed_cases == 1
     assert "final_response_mismatch" in attr.categories
     assert "case_b" in attr.categories["final_response_mismatch"].case_ids
