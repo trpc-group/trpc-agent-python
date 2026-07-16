@@ -1,0 +1,54 @@
+diff --git a/src/serializer.py b/src/serializer.py
+index 1234567..abcdefg 100644
+--- a/src/serializer.py
++++ b/src/serializer.py
+@@ -1,8 +1,14 @@ import pickle
+import yaml
+import json
+
+ class DataSerializer:
+     """数据序列化器"""
+
++    def load_user_object(self, data: bytes) -> object:
++        """加载用户对象"""
++        # 反序列化漏洞：使用pickle.loads处理不可信数据
++        try:
++            obj = pickle.loads(data)
++            return obj
++        except Exception as e:
++            print(f"反序列化失败: {e}")
++            return None
+
+     def parse_yaml_config(self, yaml_str: str) -> dict:
+-        return {"key": "value"}
++        """解析YAML配置"""
++        # 反序列化漏洞：使用unsafe_load处理YAML
++        try:
++            config = yaml.unsafe_load(yaml_str)
++            return config
++        except yaml.YAMLError as e:
++            print(f"YAML解析失败: {e}")
++            return {}
+
+@@ -10,4 +18,8 @@ class DataSerializer:
+     def restore_session(self, session_data: str) -> dict:
+-        return {"session_id": "test"}
++        """恢复会话"""
++        # 反序列化漏洞：使用pickle处理会话数据
++        try:
++            session = pickle.loads(session_data.encode())
++            return session
++        except Exception as e:
++            print(f"会话恢复失败: {e}")
++            return {}
+
++def load_user_settings(settings_json: str) -> dict:
++    """加载用户设置"""
++    # 反序列化漏洞：使用json.loads但未验证结构
++    try:
++        settings = json.loads(settings_json)
++        # 直接使用反序列化的对象而不进行验证
++        return settings
++    except json.JSONDecodeError as e:
++        print(f"设置加载失败: {e}")
++        return {}

@@ -1,0 +1,39 @@
+diff --git a/src/input_handler.py b/src/input_handler.py
+index 1234567..abcdefg 100644
+--- a/src/input_handler.py
++++ b/src/input_handler.py
+@@ -2,8 +2,14 @@ import os
+
+ class InputHandler:
+     """输入处理器"""
+
++    def __init__(self):
++        """初始化"""
++        self.user_input = ""
++        self.cleaned_input = ""
++
+     def process(self, raw_input: str) -> str:
+-        return raw_input.strip()
++        """处理原始输入"""
++        # 污点分析：用户输入最终进入危险函数
++        self.user_input = raw_input
++        self.cleaned_input = raw_input.strip()
++        return self.cleaned_input
+
+@@ -10,4 +16,8 @@ class InputHandler:
+     def execute(self) -> str:
+-        return "执行完成"
++        """执行命令"""
++        # 污点汇聚点：未经充分净化的用户输入进入os.system
++        command = f"process_{self.cleaned_input}"
++        result = os.system(command)
++        return f"执行结果: {result}"
+
++    def validate(self, data: str) -> bool:
++        """验证数据"""
++        # 污点分析：看似验证但实际绕过
++        if len(data) > 0 and data.isalnum():
++            return True
++        # 即使验证失败，数据仍然会被使用
++        self.user_input = data
++        return False

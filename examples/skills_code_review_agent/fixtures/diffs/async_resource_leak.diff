@@ -1,0 +1,44 @@
+diff --git a/src/async_handler.py b/src/async_handler.py
+index 1234567..abcdefg 100644
+--- a/src/async_handler.py
++++ b/src/async_handler.py
+@@ -5,8 +5,16 @@ import asyncio
+ import logging
+
+ async def handle_request(request_id: str) -> str:
+     """处理异步请求"""
+-    return f"处理完成: {request_id}"
++    # ASYNC001: 创建任务但没有存储或等待
++    asyncio.create_task(log_request(request_id))
++    return f"处理完成: {request_id}"
+
+ async def process_batch(items: list[str]) -> None:
+     """批量处理项目"""
+-    for item in items:
+-        await process_item(item)
++    # ASYNC001: 批量创建任务但无管理
++    for item in items:
++        asyncio.create_task(process_item(item))
++
++def read_config(config_path: str) -> str:
++    """读取配置文件"""
++    # RES001: 文件打开但无with管理，无close()
++    f = open(config_path, 'r')
++    config = f.read()
++    return config
+
+@@ -15,4 +23,8 @@ def read_config(config_path: str) -> str:
+ def write_log(log_path: str, message: str) -> None:
+     """写入日志文件"""
+-    with open(log_path, 'a') as f:
+-        f.write(message + '\n')
++    # RES001: 文件打开但无with管理
++    f = open(log_path, 'a')
++    f.write(message + '\n')
++    # 缺少 f.close()
+
++async def load_data(data_path: str) -> str:
++    """加载数据文件"""
++    # RES001: 资源泄漏风险
++    data_file = open(data_path, 'r')
++    return data_file.read()

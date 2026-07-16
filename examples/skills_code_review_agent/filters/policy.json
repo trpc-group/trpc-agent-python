@@ -1,0 +1,9 @@
+{
+  "forbidden_paths": [".env", ".ssh", "id_rsa", "/etc", ".."],
+  "high_risk_commands": ["rm -rf", "sudo", "| sh", ";", "&&", "curl", "wget"],
+  "network_whitelist": [],
+  "allowed_executables": ["python", "pytest", "ruff", "semgrep", "bandit"],
+  "max_timeout_sec": 120,
+  "max_output_bytes": 1048576,
+  "max_sandbox_runs": 12
+}

@@ -1,0 +1,133 @@
+{
+  "task_id": "08203620-4e7f-4168-b901-4cbba68bfefc",
+  "status": "completed",
+  "conclusion": "needs_human_review",
+  "findings": [],
+  "warnings": [
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "src/http_client.py",
+      "line": 8,
+      "title": "SEC008 触发",
+      "evidence": "            response = requests.get(user_url, timeout=10)",
+      "recommendation": "见 references 修复指引",
+      "confidence": 0.75,
+      "source": "rule",
+      "rule_id": "SEC008",
+      "bucket": "warnings",
+      "finding_id": "7a84d0f59d7d7ed3"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "src/http_client.py",
+      "line": 17,
+      "title": "SEC008 触发",
+      "evidence": "            response = urllib.request.urlopen(resource_url)",
+      "recommendation": "见 references 修复指引",
+      "confidence": 0.75,
+      "source": "rule",
+      "rule_id": "SEC008",
+      "bucket": "warnings",
+      "finding_id": "5ff683a328010e7a"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "src/http_client.py",
+      "line": 22,
+      "title": "SEC008 触发",
+      "evidence": "            response = requests.get(check_url, timeout=5)",
+      "recommendation": "见 references 修复指引",
+      "confidence": 0.75,
+      "source": "rule",
+      "rule_id": "SEC008",
+      "bucket": "warnings",
+      "finding_id": "ba58dafdc0ddfc50"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "src/http_client.py",
+      "line": 33,
+      "title": "SEC008 触发",
+      "evidence": "        response = requests.get(api_url, timeout=10)",
+      "recommendation": "见 references 修复指引",
+      "confidence": 0.75,
+      "source": "rule",
+      "rule_id": "SEC008",
+      "bucket": "warnings",
+      "finding_id": "3ea6492824cc1671"
+    },
+    {
+      "severity": "low",
+      "category": "missing_tests",
+      "file": "src/http_client.py",
+      "line": null,
+      "title": "生产代码变更缺少测试",
+      "evidence": "无 test_ 文件改动",
+      "recommendation": "补充对应测试",
+      "confidence": 0.65,
+      "source": "rule",
+      "rule_id": "TEST001",
+      "bucket": "warnings",
+      "finding_id": "ff2775e27596bbd1"
+    }
+  ],
+  "needs_human_review": [],
+  "filter_decisions": [
+    {
+      "stage": "pre_sandbox",
+      "decision": "allow",
+      "reason": "",
+      "command_redacted": ""
+    },
+    {
+      "stage": "pre_sandbox",
+      "decision": "allow",
+      "reason": "",
+      "command_redacted": ""
+    }
+  ],
+  "sandbox_runs": [
+    {
+      "runtime": "fake",
+      "script": "static_review.py",
+      "status": "success",
+      "exit_code": 0,
+      "stdout_redacted": "ok:static_review.py",
+      "stderr_redacted": "",
+      "truncated": false,
+      "error_type": null,
+      "duration_ms": 5
+    },
+    {
+      "runtime": "fake",
+      "script": "diff_summary.py",
+      "status": "success",
+      "exit_code": 0,
+      "stdout_redacted": "ok:diff_summary.py",
+      "stderr_redacted": "",
+      "truncated": false,
+      "error_type": null,
+      "duration_ms": 5
+    }
+  ],
+  "monitoring": {
+    "total_duration_ms": 7604,
+    "sandbox_duration_ms": 7604,
+    "tool_call_count": 2,
+    "blocked_count": 0,
+    "finding_count": 5,
+    "severity_distribution": {
+      "critical": 0,
+      "high": 4,
+      "medium": 0,
+      "low": 1
+    },
+    "exception_distribution": {}
+  },
+  "repository": "https://github.com/test/repo",
+  "input_summary": "diff --git a/src/http_client.py b/src/http_client.py\nindex 1234567..abcdefg 100644\n--- a/src/http_client.py\n+++ b/src/http_client.py\n@@ -1,8 +1,14 @@ import requests\n import urllib.request\n\n class Htt..."
+}

@@ -1,0 +1,55 @@
+diff --git a/src/mixed_lang_processor.py b/src/mixed_lang_processor.py
+index 1234567..abcdefg 100644
+--- a/src/mixed_lang_processor.py
++++ b/src/mixed_lang_processor.py
+@@ -1,8 +1,14 @@ import subprocess
+ import json
+
+ class MixedLanguageProcessor:
+     """多语言处理器"""
+
++    def execute_javascript(self, js_code: str) -> str:
++        """执行JavaScript代码"""
++        # 跨语言安全：通过Node.js执行任意JS代码
++        result = subprocess.run(
++            ["node", "-e", js_code],
++            capture_output=True,
++            text=True
++        )
++        return result.stdout
+
+     def process_ruby_script(self, script: str) -> str:
+-        return f"处理Ruby脚本: {script}"
++        """处理Ruby脚本"""
++        # 跨语言安全：通过Ruby执行任意代码
++        result = subprocess.run(
++            ["ruby", "-e", script],
++            capture_output=True,
++            text=True
++        )
++        return result.stdout
+
+@@ -10,4 +18,8 @@ class MixedLanguageProcessor:
+     def run_php_code(self, php_code: str) -> str:
+-        return f"运行PHP代码: {php_code}"
++        """运行PHP代码"""
++        # 跨语言安全：通过PHP执行任意代码
++        result = subprocess.run(
++            ["php", "-r", php_code],
++            capture_output=True,
++            text=True
++        )
++        return result.stdout
+
++def execute_user_script(script_path: str, language: str) -> str:
++    """执行用户脚本"""
++    # 跨语言安全：根据语言类型执行任意脚本
++    interpreters = {
++        "js": "node",
++        "py": "python",
++        "rb": "ruby",
++        "sh": "bash"
++    }
++    interpreter = interpreters.get(language, "python")
++    result = subprocess.run([interpreter, script_path], capture_output=True, text=True)
++    return result.stdout

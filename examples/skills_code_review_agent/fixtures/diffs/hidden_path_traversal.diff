@@ -1,0 +1,41 @@
+diff --git a/src/file_handler.py b/src/file_handler.py
+index 1234567..abcdefg 100644
+--- a/src/file_handler.py
++++ b/src/file_handler.py
+@@ -1,8 +1,14 @@ import os
+
+ class FileHandler:
+     """文件处理器"""
+
++    def read_user_file(self, filename: str) -> str:
++        """读取用户文件"""
++        # 路径遍历：直接使用用户输入构造文件路径
++        filepath = f"/home/users/{filename}"
++        with open(filepath, 'r') as f:
++            return f.read()
+
+     def get_config_value(self, config_path: str) -> str:
+-        return "default_value"
++        """获取配置值"""
++        # 路径遍历：用户输入进入文件路径
++        full_path = f"/etc/app/config/{config_path}"
++        with open(full_path, 'r') as f:
++            return f.read()
+
+@@ -10,4 +18,8 @@ class FileHandler:
+     def save_user_data(self, user_id: str, data: str) -> None:
+-        print(f"保存数据: {data}")
++        """保存用户数据"""
++        # 路径遍历：用户ID直接用于路径构造
++        user_dir = f"/var/data/users/{user_id}"
++        if not os.path.exists(user_dir):
++            os.makedirs(user_dir, mode=0o755)
++        with open(f"{user_dir}/data.txt", 'w') as f:
++            f.write(data)
+
++def read_upload_file(filename: str, upload_dir: str) -> bytes:
++    """读取上传文件"""
++    # 路径遍历：上传文件名未经充分净化
++    filepath = os.path.join(upload_dir, filename)
++    with open(filepath, 'rb') as f:
++        return f.read()
