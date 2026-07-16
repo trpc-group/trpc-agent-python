@@ -330,4 +330,4 @@ def test_stage_two_cli_smoke(tmp_path: Path):
     assert "Baseline validation: 1/3 passed" in completed.stdout
     assert "Candidate train: 3/3 passed" in completed.stdout
     assert "Candidate validation: 0/3 passed" in completed.stdout
-    assert "does not run Gate" in completed.stdout
+    assert "Gate decision: REJECT" in completed.stdout
