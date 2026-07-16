@@ -27,6 +27,12 @@ async def main() -> None:
         default=str(_HERE / "pipeline.json"),
         help="Path to pipeline.json (default: pipeline.json in same directory)",
     )
+    parser.add_argument(
+        "--fail-on-reject",
+        action="store_true",
+        help="Exit with code 1 when the pipeline REJECTs the candidate (for CI gating). "
+             "Without this flag, REJECT is considered a valid pipeline outcome and exits 0.",
+    )
     args = parser.parse_args()
 
     pipeline = EvalOptimizePipeline.from_config(args.pipeline_config)
@@ -39,7 +45,7 @@ async def main() -> None:
     print(f"    optimization_report.json")
     print(f"    optimization_report.md")
 
-    if result.gate_decision == "REJECT":
+    if args.fail_on_reject and result.gate_decision == "REJECT":
         sys.exit(1)
 
 

@@ -51,11 +51,24 @@ class EvalOptimizePipeline:
         config = PipelineConfig.model_validate_json(raw)
         cls._resolve_paths(config, config_dir)
 
-        if config.mode == "live" and (call_agent is None or target_prompt is None):
-            raise ValueError(
-                "live mode requires call_agent and target_prompt "
-                "to be passed to from_config()"
-            )
+        if config.mode == "live":
+            if call_agent is None or target_prompt is None:
+                raise ValueError(
+                    "live mode requires call_agent and target_prompt "
+                    "to be passed to from_config()"
+                )
+            missing = []
+            for attr in ("live_train_evalset", "live_val_evalset", "optimizer_config_path"):
+                value = getattr(config, attr, None)
+                if not value:
+                    missing.append(f"{attr} is empty")
+                elif not os.path.isfile(value):
+                    missing.append(f"{attr}: file not found ({value})")
+            if missing:
+                raise ValueError(
+                    "live mode requires valid evalset paths and optimizer config: "
+                    + "; ".join(missing)
+                )
 
         pipeline = cls(config)
         pipeline._live_call_agent = call_agent
@@ -93,10 +106,34 @@ class EvalOptimizePipeline:
             fa = attribute_failures(self._extract_case_results(baseline_train))
             candidate_train, candidate_val = await self._evaluate_trace_candidate()
         elif self._config.mode == "live":
-            baseline_train, baseline_val = await self._evaluate_live_baseline()
-            fa = attribute_failures(self._extract_case_results(baseline_train))
-            await self._run_optimization()
-            candidate_train, candidate_val = await self._evaluate_live_candidate()
+            # Enforce pipeline-level timeout via asyncio.wait_for.
+            # AgentOptimizer has its own internal timeout, but this gate-level
+            # limit ensures the entire run() does not exceed budget.
+            timeout = self._config.gate.max_duration_seconds
+            async def _run_live() -> tuple:
+                baseline_train, baseline_val = await self._evaluate_live_baseline()
+                fa = attribute_failures(self._extract_case_results(baseline_train))
+                await self._run_optimization()
+                candidate_train, candidate_val = await self._evaluate_live_candidate()
+                return baseline_train, baseline_val, fa, candidate_train, candidate_val
+
+            try:
+                baseline_train, baseline_val, fa, candidate_train, candidate_val = (
+                    await asyncio.wait_for(_run_live(), timeout=timeout)
+                )
+            except asyncio.TimeoutError:
+                duration = time.monotonic() - t0
+                finished_at = datetime.now(timezone.utc).isoformat()
+                return PipelineResult(
+                    mode=self._config.mode,
+                    gate_decision="REJECT",
+                    gate_reasons=[f"pipeline timed out after {timeout}s"],
+                    duration_seconds=duration,
+                    cost_usd=0.0,
+                    seed=self._config.seed,
+                    started_at=started_at,
+                    finished_at=finished_at,
+                )
         else:
             raise ValueError(f"unknown mode: {self._config.mode}")
 
@@ -112,6 +149,10 @@ class EvalOptimizePipeline:
         delta = compute_delta(baseline_split, candidate_split)
 
         duration = time.monotonic() - t0
+        # Note: cost_usd is always 0.0 here because the pipeline does not
+        # yet collect per-round LLM costs from the optimizer.  The gate's
+        # max_cost_usd rule will therefore not reject on cost grounds.
+        # Users should monitor costs via their LLM provider dashboard.
         gate = apply_gate(
             delta, self._config.gate, cost_usd=0.0, duration_seconds=duration
         )

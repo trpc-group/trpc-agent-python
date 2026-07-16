@@ -57,6 +57,10 @@ def test_pipeline_from_config_trace_mode():
 
 def test_pipeline_from_config_live_mode():
     """Pipeline loads live mode config correctly."""
+    Path("/tmp/train.json").touch()
+    Path("/tmp/val.json").touch()
+    Path("/tmp/optimizer.json").touch()
+
     config_data = {
         "mode": "live",
         "live_train_evalset": "/tmp/train.json",
@@ -318,11 +322,21 @@ async def test_run_optimization_calls_injected_hook():
 async def test_run_trace_mode_orchestration():
     pipeline = _make_pipeline()
 
-    fake_train = _make_fake_eval_result("train", ["a", "b"], [True, False])
-    fake_val = _make_fake_eval_result("val", ["c", "d"], [True, True])
+    fake_train_base = _make_fake_eval_result("train_base", ["a", "b"], [False, False])
+    fake_train_cand = _make_fake_eval_result("train_cand", ["a", "b"], [True, False])
+    fake_val_base = _make_fake_eval_result("val_base", ["c", "d"], [True, True])
+    fake_val_cand = _make_fake_eval_result("val_cand", ["c", "d"], [True, False])
 
     async def _fake_run_eval(_path: str):
-        return fake_train if "train" in _path else fake_val
+        if "train_base" in _path:
+            return fake_train_base
+        if "train_cand" in _path:
+            return fake_train_cand
+        if "val_base" in _path:
+            return fake_val_base
+        if "val_cand" in _path:
+            return fake_val_cand
+        raise RuntimeError(f"unexpected path: {_path}")
 
     with patch.object(pipeline, "_run_eval", side_effect=_fake_run_eval):
         with patch("examples.optimization.eval_optimize_loop.pipeline.write_reports"):
@@ -332,8 +346,13 @@ async def test_run_trace_mode_orchestration():
     assert result.seed == 42
     assert "train" in result.baseline
     assert "val" in result.baseline
-    assert result.baseline["train"].pass_rate == 0.5
-    assert result.baseline["val"].pass_rate == 1.0
+    assert result.baseline["train"].pass_rate == 0.0   # both fail
+    assert result.baseline["val"].pass_rate == 1.0      # both pass
+    assert result.candidate["train"].pass_rate == 0.5   # one passes now
+    assert result.candidate["val"].pass_rate == 0.5     # one regressed
+    # Delta: train has newly_passing, val has newly_failing
+    assert "a" in result.delta.train.newly_passing
+    assert "d" in result.delta.val.newly_failing
 
 
 @pytest.mark.asyncio
