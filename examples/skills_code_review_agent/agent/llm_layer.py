@@ -148,19 +148,17 @@ def _call_llm_with_openai_client(findings: list[Finding]) -> list[dict]:
         max_retries = 3
         for attempt in range(max_retries + 1):
             try:
-                response = client.chat.completions.create(model=config["model_name"],
-                                                        messages=[
-                                                            {
-                                                                "role": "system",
-                                                                "content": "代码评审专家，输出纯JSON格式。"
-                                                            },
-                                                            {
-                                                                "role": "user",
-                                                                "content": prompt
-                                                            },
-                                                        ],
-                                                        temperature=0.1,
-                                                        max_tokens=2000)  # 降低到2000减少400错误
+                # 准备 messages 参数（避免 continuation line 缩进问题）
+                messages = [
+                    {"role": "system", "content": "代码评审专家，输出纯JSON格式。"},
+                    {"role": "user", "content": prompt},
+                ]
+
+                response = client.chat.completions.create(
+                    model=config["model_name"],
+                    messages=messages,
+                    temperature=0.1,
+                    max_tokens=2000)  # 降低到2000减少400错误
 
                 response_text = response.choices[0].message.content
                 verdicts = _parse_llm_response(response_text)
@@ -347,19 +345,17 @@ def _call_llm_with_openai_client_supplementary(existing_findings: list[Finding],
     max_retries = 3
     for attempt in range(max_retries + 1):
         try:
-            response = client.chat.completions.create(model=config["model_name"],
-                                                    messages=[
-                                                        {
-                                                            "role": "system",
-                                                            "content": "代码评审专家，输出纯JSON格式。"
-                                                        },
-                                                        {
-                                                            "role": "user",
-                                                            "content": prompt
-                                                        },
-                                                    ],
-                                                    temperature=0.1,
-                                                    max_tokens=1500)  # 进一步降低到1500减少400错误
+            # 准备 messages 参数（避免 continuation line 缩进问题）
+            messages = [
+                {"role": "system", "content": "代码评审专家，输出纯JSON格式。"},
+                {"role": "user", "content": prompt},
+            ]
+
+            response = client.chat.completions.create(
+                model=config["model_name"],
+                messages=messages,
+                temperature=0.1,
+                max_tokens=1500)  # 进一步降低到1500减少400错误
 
             response_text = response.choices[0].message.content
             new_findings = _parse_supplementary_findings(response_text)
