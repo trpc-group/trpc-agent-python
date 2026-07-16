@@ -1,0 +1,100 @@
+{
+  "eval_set_id": "train_candidate",
+  "name": "Training set - candidate traces",
+  "description": "3 training cases with optimized prompt traces.",
+  "eval_cases": [
+    {
+      "eval_id": "case_train_optimizable",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "t1",
+          "user_content": {
+            "parts": [{"text": "小明有 5 个苹果，小红给了他 7 个苹果，小明现在一共有多少个苹果？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：12 个"}],
+            "role": "model"
+          }
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "t1",
+          "user_content": {
+            "parts": [{"text": "小明有 5 个苹果，小红给了他 7 个苹果，小明现在一共有多少个苹果？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：12 个"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_opt_loop", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "case_train_always_fail",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "t2",
+          "user_content": {
+            "parts": [{"text": "一辆车开了 60 公里每小时，开了 2 小时，一共开了多少公里？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：120 公里"}],
+            "role": "model"
+          }
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "t2",
+          "user_content": {
+            "parts": [{"text": "一辆车开了 60 公里每小时，开了 2 小时，一共开了多少公里？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "the answer is 120 公里"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_opt_loop", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "case_train_regression",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "t3",
+          "user_content": {
+            "parts": [{"text": "5 排座位，每排 8 个，一共多少个？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：40 个"}],
+            "role": "model"
+          }
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "t3",
+          "user_content": {
+            "parts": [{"text": "5 排座位，每排 8 个，一共多少个？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：35 个"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_opt_loop", "user_id": "trainer", "state": {}}
+    }
+  ]
+}
