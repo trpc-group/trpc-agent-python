@@ -13,7 +13,6 @@ from ..models import (
     PerCaseResult,
     FailureAttribution,
     FailureCategory,
-    GateDecision,
 )
 
 
@@ -123,3 +122,76 @@ def test_write_reports_reject():
             assert "REJECT" in md_content
             assert "overfitting" in md_content.lower()
             assert "newly failing" in md_content.lower()
+
+
+def test_write_reports_per_case_delta_all_transitions():
+    result = PipelineResult(
+        mode="trace",
+        gate_decision="MIXED",
+        gate_reasons=["all 4 transition types covered"],
+        baseline={
+            "train": SplitResult(
+                pass_rate=0.5,
+                metric_breakdown={"m1": 0.5},
+                per_case={
+                    "c_newp": PerCaseResult(case_id="c_newp", passed=False, metric_scores={"m1": 0.0}),
+                    "c_newf": PerCaseResult(case_id="c_newf", passed=True, metric_scores={"m1": 1.0}),
+                    "c_bothp": PerCaseResult(case_id="c_bothp", passed=True, metric_scores={"m1": 1.0}),
+                    "c_bothf": PerCaseResult(case_id="c_bothf", passed=False, metric_scores={"m1": 0.0}),
+                },
+            ),
+        },
+        candidate={
+            "train": SplitResult(
+                pass_rate=0.5,
+                metric_breakdown={"m1": 0.5},
+                per_case={
+                    "c_newp": PerCaseResult(case_id="c_newp", passed=True, metric_scores={"m1": 1.0}),
+                    "c_newf": PerCaseResult(case_id="c_newf", passed=False, metric_scores={"m1": 0.0}),
+                    "c_bothp": PerCaseResult(case_id="c_bothp", passed=True, metric_scores={"m1": 1.0}),
+                    "c_bothf": PerCaseResult(case_id="c_bothf", passed=False, metric_scores={"m1": 0.0}),
+                },
+            ),
+        },
+        delta=SplitDelta(
+            train=PerCaseDelta(
+                newly_passing=["c_newp"],
+                newly_failing=["c_newf"],
+                score_deltas={"c_newp": {"m1": 1.0}, "c_newf": {"m1": -1.0}},
+                unchanged=["c_bothp", "c_bothf"],
+            ),
+            val=PerCaseDelta(
+                newly_passing=[],
+                newly_failing=[],
+                score_deltas={},
+                unchanged=[],
+            ),
+            train_pass_rate_delta=0.0,
+            val_pass_rate_delta=0.0,
+        ),
+        failure_attribution=FailureAttribution(
+            total_cases=4,
+            failed_cases=2,
+            categories={},
+        ),
+        duration_seconds=0.5,
+        seed=42,
+        started_at="2026-01-01T00:00:00",
+        finished_at="2026-01-01T00:00:01",
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        write_reports(result, tmpdir)
+
+        md_path = os.path.join(tmpdir, "optimization_report.md")
+        assert os.path.isfile(md_path)
+
+        with open(md_path) as f:
+            md_content = f.read()
+
+        assert "## Per-Case Delta" in md_content
+        assert "newly passing" in md_content
+        assert "newly failing" in md_content
+        assert "passed (both)" in md_content
+        assert "failed (both)" in md_content
+        assert "MIXED" in md_content
