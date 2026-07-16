@@ -52,20 +52,48 @@ class CommandPolicy:
             FilterDecision: 过滤决策结果
         """
         # 1. 禁止路径检查（最高优先级，防止敏感文件泄露）
+        # 使用边界匹配避免误匹配（如 .environment 不应命中 .env）
+        # 边界包括：路径分隔符、引号、空格、字符串起止
         for fp in self.p["forbidden_paths"]:
-            if fp in command:
+            # 构造边界匹配正则：路径片段前后必须有边界
+            # 边界字符集：路径分隔符(/、\)、引号(" ' `)、空格、字符串起止(^ $)
+            escaped_fp = re.escape(fp)
+            pattern = rf'(^|[/\s"\']){escaped_fp}($|[/\s"\'])'
+            if re.search(pattern, command):
                 return FilterDecision(stage="pre_sandbox",
                                       decision="deny",
                                       reason=f"禁止路径 {fp}",
                                       command_redacted=command[:80])
 
         # 2. 高危命令检查（需要人工审查）
+        # 对完整命令词使用边界匹配，对 shell 操作符保留子串匹配
+        # shell 操作符：单字符或双字符操作符
+        shell_operators = {";", "&&", "|", "||"}
         for hc in self.p["high_risk_commands"]:
-            if hc in command:
-                return FilterDecision(stage="pre_sandbox",
-                                      decision="needs_human_review",
-                                      reason=f"高危命令 {hc}",
-                                      command_redacted=command[:80])
+            # shell 操作符保留子串匹配（| sh 中的 | 是管道，; 是命令分隔符）
+            if hc in shell_operators:
+                if hc in command:
+                    return FilterDecision(stage="pre_sandbox",
+                                          decision="needs_human_review",
+                                          reason=f"高危操作符 {hc}",
+                                          command_redacted=command[:80])
+            elif hc == "| sh":
+                # 特殊处理 | sh 组合
+                if "| sh" in command or "|sh" in command:
+                    return FilterDecision(stage="pre_sandbox",
+                                          decision="needs_human_review",
+                                          reason=f"高危命令 {hc}",
+                                          command_redacted=command[:80])
+            else:
+                # 完整命令词使用边界匹配（避免 rm -rf 误匹配 rm -rf-safe）
+                # 边界：空格、管道、分号、字符串起止
+                escaped_hc = re.escape(hc)
+                pattern = rf'(^|[\s|;]){escaped_hc}($|[\s|;])'
+                if re.search(pattern, command):
+                    return FilterDecision(stage="pre_sandbox",
+                                          decision="needs_human_review",
+                                          reason=f"高危命令 {hc}",
+                                          command_redacted=command[:80])
 
         # 3. 网络域名白名单检查
         for m in re.findall(r"https?://([^/\s]+)", command):
@@ -75,9 +103,14 @@ class CommandPolicy:
                                       reason=f"非白名单网络 {m}",
                                       command_redacted=command[:80])
 
-        # 4. 沙箱调用预算检查
-        if ctx.get("call_index", 0) > self.p["max_sandbox_runs"]:
-            return FilterDecision(stage="pre_sandbox", decision="deny", reason="超预算沙箱调用", command_redacted=command[:80])
+        # 4. 沙箱调用预算检查（>= 确保 call_index 达到 max_sandbox_runs 时即 deny）
+        if ctx.get("call_index", 0) >= self.p["max_sandbox_runs"]:
+            return FilterDecision(
+                stage="pre_sandbox",
+                decision="deny",
+                reason="超预算沙箱调用",
+                command_redacted=command[:80]
+            )
 
         # 5. 默认允许
         return FilterDecision(stage="pre_sandbox", decision="allow", reason="", command_redacted="")

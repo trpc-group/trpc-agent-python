@@ -16,6 +16,8 @@ Task 12: 编排管线 + CLI
 8. ReviewStore().save(report)（落库，内含脱敏）
 9. report.write_reports(report, "outputs/")
 """
+import os
+import shutil
 import time
 import uuid
 
@@ -33,6 +35,9 @@ from sandbox.factory import build_runtime
 
 # 沙箱脚本约定名（Task 13 会创建真实脚本文件）
 SKILL_SCRIPTS = ["static_review", "diff_summary"]
+
+# 沙箱脚本源目录（skills/code-review/scripts/）
+SCRIPTS_SRC_DIR = os.path.join(os.path.dirname(__file__), "..", "skills", "code-review", "scripts")
 
 
 def _conclusion(findings, warnings, needs_review, decisions, sandbox_runs) -> str:
@@ -96,6 +101,16 @@ def run_review(diff_text: str,
     """
     t0 = time.time()
 
+    # 0. 修复隐患4: 先 start_task 创建 task_id（确保 save 时 review_tasks 记录存在）
+    try:
+        store = ReviewStore()
+        scope = f"diff-{len(diff_text)}chars" if diff_text else "empty"
+        task_id = store.start_task(repo=repo, scope=scope)
+    except Exception as e:
+        # start_task 失败时使用生成的 UUID（降级处理）
+        print(f"[Pipeline] start_task 失败: {str(e)}")
+        task_id = str(uuid.uuid4())
+
     # 1. 解析 diff
     files = parse_diff(diff_text)
 
@@ -140,7 +155,33 @@ def run_review(diff_text: str,
                 # 执行脚本（使用临时工作目录）
                 import tempfile
                 with tempfile.TemporaryDirectory() as ws:
-                    run = runtime.run(script=f"{script}.py", workspace=ws, inputs={"diff_text": diff_text})
+                    # 修复隐患3: 把脚本文件写入 workspace（真沙箱需要脚本存在）
+                    script_src = os.path.join(SCRIPTS_SRC_DIR, f"{script}.py")
+                    script_dst = os.path.join(ws, f"{script}.py")
+                    if os.path.exists(script_src):
+                        shutil.copy(script_src, script_dst)
+                    else:
+                        # 脚本不存在时记录失败但不中断（防御性编程）
+                        from agent.models import SandboxRun
+                        failed_run = SandboxRun(
+                            runtime=sandbox,
+                            script=script,
+                            status="failed",
+                            exit_code=1,
+                            stdout_redacted="",
+                            stderr_redacted=f"脚本不存在: {script_src}",
+                            truncated=False,
+                            error_type="FileNotFoundError",
+                            duration_ms=0
+                        )
+                        runs.append(failed_run)
+                        continue
+
+                    run = runtime.run(
+                        script=f"{script}.py",
+                        workspace=ws,
+                        inputs={"diff_text": diff_text}
+                    )
                     runs.append(run)
             except Exception as e:
                 # 沙箱执行失败，记录失败但不中断
@@ -162,17 +203,16 @@ def run_review(diff_text: str,
     # 合并所有 findings 用于监控
     all_findings = list(findings) + list(warnings) + list(needs_review)
 
-    monitoring = build_monitoring(total_duration_ms=int((time.time() - t0) * 1000),
-                                  sandbox_duration_ms=t_sandbox,
-                                  tool_call_count=len(runs),
-                                  blocked_count=sum(1 for d in decisions if d.decision != "allow"),
-                                  findings=all_findings,
-                                  exceptions=[])
+    monitoring = build_monitoring(
+        total_duration_ms=int((time.time() - t0) * 1000),
+        sandbox_duration_ms=t_sandbox,
+        tool_call_count=len(runs),
+        blocked_count=sum(1 for d in decisions if d.decision != "allow"),
+        findings=all_findings,
+        exceptions=[]
+    )
 
-    # 7. 生成 task_id
-    task_id = str(uuid.uuid4())
-
-    # 8. 派生 conclusion
+    # 7. 派生 conclusion（使用已生成的 task_id）
     conclusion = _conclusion(findings, warnings, needs_review, decisions, runs)
 
     # 9. 构造 ReviewReport
@@ -188,15 +228,14 @@ def run_review(diff_text: str,
                           repository=repo,
                           input_summary=_summary(diff_text))
 
-    # 10. 落库（内含脱敏）
+    # 9. 落库（内含脱敏，使用已存在的 task_id）
     try:
-        store = ReviewStore()
         store.save(report)
     except Exception as e:
         # 落库失败不应中断报告生成
         print(f"[Pipeline] 落库失败: {str(e)}")
 
-    # 11. 写报告文件
+    # 10. 写报告文件
     try:
         write_reports(report, "outputs/")
     except Exception as e:

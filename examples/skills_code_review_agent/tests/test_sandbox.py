@@ -327,8 +327,11 @@ class TestCubeSandbox:
                 )
 
                 assert result.runtime == "cube"
-                # 超时会被捕获
-                assert result is not None
+                # 修复 Critical 2 测试: 严格断言超时返回 status="timeout"（非 failed）
+                msg = f"Expected timeout, got {result.status}"
+                assert result.status == "timeout", msg
+                assert result.exit_code == 124
+                assert result.error_type == "TimeoutError"
         finally:
             # 恢复原始模块状态
             if original_import:

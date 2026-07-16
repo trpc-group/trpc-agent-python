@@ -105,8 +105,23 @@ class CubeSandbox(SandboxProvider):
                 duration_ms=duration_ms,
             )
 
+        except subprocess.TimeoutExpired as e:
+            # subprocess.TimeoutExpired 优先捕获（subprocess.run 超时抛此异常）
+            duration_ms = int((time.time() - start_time) * 1000)
+
+            return SandboxRun(
+                runtime="cube",
+                script=script,
+                status="timeout",
+                exit_code=124,
+                stdout_redacted="",
+                stderr_redacted=f"远端沙箱执行超时: {str(e)}",
+                truncated=False,
+                error_type="TimeoutError",
+                duration_ms=duration_ms,
+            )
         except TimeoutError as e:
-            # 超时处理
+            # 内置 TimeoutError 兼容捕获（防御性编程）
             duration_ms = int((time.time() - start_time) * 1000)
 
             return SandboxRun(
