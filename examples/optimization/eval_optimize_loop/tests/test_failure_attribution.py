@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import pytest
 from trpc_agent_sdk.evaluation import (
     EvalCaseResult,
     EvalMetricResult,
     EvalMetricResultPerInvocation,
-    EvalMetric,
     EvalStatus,
     Invocation,
 )
@@ -134,3 +132,37 @@ def test_attribute_failures_unknown_metric():
     attr = attribute_failures(results)
     assert attr.failed_cases == 1
     assert "unknown_metric_failure" in attr.categories
+
+
+def test_attribute_failures_empty_case_results():
+    """Case with empty list of results is skipped."""
+    results = {
+        "case_empty": [],
+        "case_b": [
+            _make_case_result("case_b", [_make_metric_result("final_response_avg_score", 0.0, 1.0)])
+        ],
+    }
+    attr = attribute_failures(results)
+    assert attr.total_cases == 2
+    assert attr.failed_cases == 1
+    assert "final_response_mismatch" in attr.categories
+    assert "case_b" in attr.categories["final_response_mismatch"].case_ids
+
+
+def test_attribute_failures_mixed_metrics():
+    """Only failed metrics are attributed; passed ones are skipped."""
+    results = {
+        "case_m": [
+            _make_case_result(
+                "case_m",
+                [
+                    _make_metric_result("final_response_avg_score", 0.0, 1.0),
+                    _make_metric_result("tool_trajectory_avg_score", 1.0, 1.0),
+                ],
+            )
+        ],
+    }
+    attr = attribute_failures(results)
+    assert attr.failed_cases == 1
+    assert "final_response_mismatch" in attr.categories
+    assert "tool_trajectory_mismatch" not in attr.categories
