@@ -4,18 +4,15 @@ import os
 import time
 import tempfile
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from trpc_agent_sdk.evaluation import (
     AgentEvaluator,
     AgentOptimizer,
     CallAgent,
     EvalCaseResult,
-    EvalConfig,
     EvalStatus,
     EvaluateResult,
-    EvalSetAggregateResult,
     TargetPrompt,
 )
 
@@ -23,7 +20,6 @@ from .delta import compute_delta
 from .failure_attribution import attribute_failures
 from .gate import apply_gate
 from .models import (
-    GateDecision,
     PerCaseResult,
     PipelineConfig,
     PipelineResult,
@@ -37,7 +33,7 @@ class EvalOptimizePipeline:
         self._config = config
         self._live_call_agent: Optional[CallAgent] = None
         self._live_target_prompt: Optional[TargetPrompt] = None
-        self._optimizer_call: Optional[callable] = None  # type: ignore[valid-type]
+        self._optimizer_call: Optional[Callable] = None
 
     @classmethod
     def from_config(
