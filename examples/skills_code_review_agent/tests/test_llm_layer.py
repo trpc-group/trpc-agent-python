@@ -534,6 +534,87 @@ def test_prepare_diff_context_redaction_order():
     assert "... [截断]" in result, "长行应该被截断"
 
 
+def test_real_mode_fp_verdict_compatibility():
+    """测试真模式下 LLM 返回 'FP' 格式（按 DENOISING_PROMPT 指示）能正确剔除误报
+
+    Bug: _apply_verdicts 原本只检查 verdict == "false_positive"，
+    但 DENOISING_PROMPT 要求 LLM 返回 "TP|FP" 格式，导致真 LLM 返回 "FP" 时无法识别剔除。
+    修复后应兼容多种格式：FP, false_positive, false positive, False Positive, 误报
+    """
+    findings = [
+        Finding(severity=Severity.HIGH,
+                category="security",
+                file="auth.py",
+                line=5,
+                title="Hardcoded password",
+                evidence="password = 'admin123'",
+                recommendation="Use env var",
+                confidence=0.9,
+                source="rule",
+                rule_id="SECRET002"),
+        Finding(severity=Severity.LOW,
+                category="style",
+                file="util.py",
+                line=15,
+                title="Long line",
+                evidence="return 'a' * 1000",
+                recommendation="Break line",
+                confidence=0.5,
+                source="rule",
+                rule_id="STYLE002"),
+        Finding(severity=Severity.MEDIUM,
+                category="bug",
+                file="parser.py",
+                line=20,
+                title="Potential null pointer",
+                evidence="obj.method()",
+                recommendation="Add null check",
+                confidence=0.7,
+                source="rule",
+                rule_id="BUG003"),
+    ]
+
+    files = [DiffFile(path="auth.py", status="modified", hunks=[], added_lines=[])]
+
+    # Mock LLM 返回多种 verdict 格式（按 DENOISING_PROMPT 要求返回 "TP|FP"）
+    mock_verdicts = [
+        {
+            "rule_id": "SECRET002",
+            "file": "auth.py",
+            "line": 5,
+            "verdict": "TP",  # 真 LLM 按 prompt 返回 TP（true_positive 简写）
+            "reason": "Real password hardcoded"
+        },
+        {
+            "rule_id": "STYLE002",
+            "file": "util.py",
+            "line": 15,
+            "verdict": "FP",  # 真 LLM 按 prompt 返回 FP（false_positive 简写）
+            "reason": "Style preference, not a real issue"
+        },
+        {
+            "rule_id": "BUG003",
+            "file": "parser.py",
+            "line": 20,
+            "verdict": "false positive",  # 兼容完整拼写（带空格）
+            "reason": "False alarm due to null check earlier"
+        },
+    ]
+
+    with patch('agent.llm_layer._call_llm_for_classification') as mock_llm:
+        mock_llm.return_value = mock_verdicts
+
+        # 设置环境变量
+        with patch.dict(os.environ, {'OPENAI_API_KEY': 'test_key'}):
+            result = enhance(findings, files, dry_run=False)
+
+    # 验证：应该剔除 FP 和 false positive 格式的误报，只保留 TP
+    assert len(result) == 1
+    assert result[0].rule_id == "SECRET002"
+    assert result[0].source == "rule+llm"
+    assert result[0].confidence > 0.9  # 置信度应该提升
+
+
 if __name__ == "__main__":
     # 运行测试前先确认 llm_layer.py 存在
     import sys

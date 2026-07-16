@@ -413,7 +413,9 @@ def _apply_verdicts(findings: list[Finding], verdicts: list[dict]) -> list[Findi
 
         if verdict:
             # 如果被标记为 false_positive，跳过（剔除误报）
-            if verdict.get("verdict") == "false_positive":
+            # 兼容多种格式：FP, false_positive, false positive, False Positive, 误报
+            _v = str(verdict.get("verdict", "")).strip().lower().replace(" ", "_")
+            if _v in ("false_positive", "fp", "false", "误报"):
                 continue
 
             # 更新 source 和置信度（IMP-2：区分降噪确认和补召回新增）
