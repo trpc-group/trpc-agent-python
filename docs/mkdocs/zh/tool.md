@@ -2268,21 +2268,32 @@ print(regular_tool.is_streaming)  # False
 
 ## WebFetchTool (网页获取工具)
 
-`WebFetchTool` 是 trpc-agent-python 框架内置的**单 URL 联网抓取工具**。当 Agent 需要阅读、摘要或引用某个公开网页的内容时，可以通过该工具发起一次 HTTP GET 请求，框架会将响应统一转换为可供 LLM 消费的结构化文本：HTML 会被裁剪为 Markdown 纯文本，其它 `text/*` / `application/json` 等文本型 MIME 按原样返回，二进制响应则以结构化错误拒收。
+`WebFetchTool` 是 trpc-agent-python 框架内置的**单 URL 联网抓取工具**。当 Agent 需要阅读、摘要或引用某个公开网页的内容时，可以通过该工具获取页面文本，并统一转换为可供 LLM 消费的结构化结果。
+
+该工具采用**可插拔 provider** 设计，目前内置两种后端：
+
+- **`direct`（默认）**：直接发起 HTTP GET。HTML 会被裁剪为 Markdown 纯文本，其它 `text/*` / `application/json` 等文本型 MIME 按原样返回，二进制响应以结构化错误拒收
+- **`tavily`**：走 Tavily Extract API，由 Tavily 负责抽取页面正文；需要配置 `api_key`（或环境变量 `TAVILY_API_KEY`），适合希望减少本地 HTML 解析噪音、直接拿到较干净正文的场景
 
 ### 功能特性
 
-- **单次 HTTP GET**：HTML 自动转换为 Markdown 纯文本（去除 `<script>` / `<style>` / `<svg>` 等非内容块）；其他文本型 MIME 按原样返回；二进制响应（PDF、图片、归档等）以 `UNSUPPORTED_CONTENT_TYPE` 错误拒收
-- **SSRF 防护**：`block_private_network=True`（默认）会对请求目标及**每一跳重定向**做 DNS 解析校验，拒绝回环 / 私网 / 链路本地（含 `169.254.169.254` 云元数据端点）/ 保留 / 组播 / 未指定地址
+- **双 Provider 支持**：`direct`（本地直连抓取）与 `tavily`（Tavily Extract）通过 `provider` 参数切换；对 LLM 暴露的 `FunctionDeclaration` 保持一致
+- **文本化输出**：`direct` 模式下 HTML 自动转换为 Markdown 纯文本（去除 `<script>` / `<style>` / `<svg>` 等非内容块）；其他文本型 MIME 按原样返回；二进制响应（PDF、图片、归档等）以 `UNSUPPORTED_CONTENT_TYPE` 错误拒收。`tavily` 模式直接返回 Extract 抽取后的正文（`content_type` 标记为 `text/markdown`）
+- **SSRF 防护**：`block_private_network=True`（默认）时，`direct` 模式会对请求目标及**每一跳重定向**做 DNS 解析校验，拒绝回环 / 私网 / 链路本地（含 `169.254.169.254` 云元数据端点）/ 保留 / 组播 / 未指定地址；`tavily` 模式**仅校验用户传入的首跳 URL**，无法拦截 Tavily 服务端后续跟随的重定向（这是第三方抓取的固有限制，与 `direct` 的逐跳 SSRF 不等价）
 - **域名白/黑名单**：`allowed_domains` / `blocked_domains` 为**工具级**配置，子域感知匹配（`www.` 前缀剥离，`python.org` 同时匹配 `docs.python.org`）
 - **内容与字节双重裁剪**：`max_content_length`（字符）与 `max_response_bytes`（字节）分别控制返回文本长度与实际读取的原始字节；LLM 还可在调用时通过 `max_length` 参数进一步控制
-- **手动重定向控制**：`follow_redirects` / `max_redirects` 提供可预期的重定向循环上限，避免无限跳转
+- **手动重定向控制**：`follow_redirects` / `max_redirects` 提供可预期的重定向循环上限，避免无限跳转（仅 `direct` 模式生效）
 - **进程内 LRU 缓存**：`enable_cache=True` 时启用 URL → `FetchResult` LRU；`cache_ttl_seconds` / `cache_max_bytes` 控制TTL与缓存字节预算，命中时响应上 `cached=true`，缓存键会做 URL 归一化（统一 scheme 大小写、剥离 `www.`、忽略默认端口和尾部 `/`）
 
 ### WebFetchTool 参数
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
+| `provider` | `Literal["direct", "tavily"]` | `"direct"` | 抓取后端；`tavily` 需要配置 `api_key` 或环境变量 `TAVILY_API_KEY` |
+| `api_key` | `Optional[str]` | `None` | Tavily API Key；缺省时回退到环境变量 `TAVILY_API_KEY`（仅 `provider="tavily"` 使用） |
+| `base_url` | `Optional[str]` | Tavily 默认 Extract 地址 | 覆盖 Tavily Extract Base URL（主要用于测试 / 代理） |
+| `tavily_extract_depth` | `Literal["basic", "advanced"]` | `"basic"` | Tavily Extract 抽取深度；`advanced` 通常更完整，但也更慢、更贵 |
+| `tavily_extra_params` | `Optional[dict]` | `None` | 透传给 Tavily Extract 的额外 JSON 参数 |
 | `timeout` | `float` | `30.0` | HTTP 超时时间（秒） |
 | `user_agent` | `str` | `"trpc-agent-python-webfetch/1.0"` | HTTP `User-Agent` 头，便于下游日志区分来源流量 |
 | `proxy` | `Optional[str]` | `None` | 可选的 HTTP 代理 URL，直接转发给 `httpx` |
@@ -2292,8 +2303,8 @@ print(regular_tool.is_streaming)  # False
 | `allowed_domains` | `Optional[List[str]]` | `None` | 工具级 host 白名单（子域感知，`www.` 前缀剥离），LLM 无法覆盖 |
 | `blocked_domains` | `Optional[List[str]]` | `None` | 工具级 host 黑名单，匹配规则同白名单；**优先于白名单**检查 |
 | `block_private_network` | `bool` | `True` | SSRF 防护开关；开启时拒绝所有解析到私网 / 回环 / 链路本地等地址的目标 |
-| `follow_redirects` | `bool` | `True` | 是否手动跟随 3xx 重定向 |
-| `max_redirects` | `int` | `5` | 重定向最大跳数上限 |
+| `follow_redirects` | `bool` | `True` | 是否手动跟随 3xx 重定向（仅 `direct`） |
+| `max_redirects` | `int` | `5` | 重定向最大跳数上限（仅 `direct`） |
 | `enable_cache` | `bool` | `False` | 是否启用进程内 LRU 缓存 |
 | `cache_ttl_seconds` | `float` | `900.0`（15 分钟） | 缓存项 TTL，超时后下次访问穿透并淘汰 |
 | `cache_max_bytes` | `int` | `50 * 1024 * 1024`（50 MB） | 缓存总字节容量；超过该容量将被静默跳过 |
@@ -2319,13 +2330,13 @@ print(regular_tool.is_streaming)  # False
 | `bytes` | `int` | `content` 的 UTF-8 字节长度 |
 | `duration_ms` | `int` | 整个请求的耗时（毫秒） |
 | `cached` | `bool` | 是否命中进程内 LRU 缓存 |
-| `error` | `str` | 失败或被拒绝时的结构化错误码（如 `BLOCKED_URL` / `SSRF_BLOCKED_URL` / `HTTP_STATUS` / `UNSUPPORTED_CONTENT_TYPE` / `HTTP_ERROR`） |
+| `error` | `str` | 失败或被拒绝时的结构化错误码（如 `BLOCKED_URL` / `SSRF_BLOCKED_URL` / `HTTP_STATUS` / `UNSUPPORTED_CONTENT_TYPE` / `HTTP_ERROR` / `TAVILY_NOT_CONFIGURED` / `TAVILY_EXTRACT_ERROR`） |
 
 ### 使用方式
 
 #### 构造 WebFetchTool Agent
 
-在`agent/agent.py` 中创建 WebFetchTool Agent：
+在`agent/agent.py` 中创建 WebFetchTool Agent（默认 `provider="direct"`，无需 API Key）：
 
 ```python
 from trpc_agent_sdk.agents import LlmAgent
@@ -2345,6 +2356,7 @@ def _create_model() -> LLMModel:
 def create_default_fetch_agent() -> LlmAgent:
     """创建 WebFetchTool Agent"""
     web_fetch = WebFetchTool(
+        provider="direct", # 默认直连抓取，无需 API Key
         timeout=10.0, # 超时时间配置
         user_agent="trpc-agent-python-webfetch-example/1.0", # User-Agent 头
         max_content_length=4000, # 返回文本字符上限
@@ -2367,10 +2379,39 @@ def create_default_fetch_agent() -> LlmAgent:
     )
 ```
 
+**切换到 Tavily Extract**：当希望由 Tavily 负责页面正文抽取、减少本地 HTML 噪音时，切换到 `provider="tavily"`。可在 [Tavily](https://tavily.com) 申请 API Key，并通过构造参数或环境变量 `TAVILY_API_KEY` 注入：
+
+```python
+import os
+
+from trpc_agent_sdk.tools import WebFetchTool
+
+
+def create_tavily_fetch_agent() -> LlmAgent:
+    """创建基于 Tavily Extract 的 WebFetchTool Agent"""
+    web_fetch = WebFetchTool(
+        provider="tavily",
+        api_key=os.getenv("TAVILY_API_KEY"),
+        tavily_extract_depth="basic",          # 或 "advanced"
+        # tavily_extra_params={"include_images": False},
+        timeout=20.0,
+        max_content_length=8000,
+        block_private_network=True,            # Extract 前仍会做 SSRF 校验
+    )
+    return LlmAgent(
+        name="tavily_webfetch_assistant",
+        description="Web-reading assistant powered by Tavily Extract.",
+        model=_create_model(),
+        instruction=INSTRUCTION,
+        tools=[web_fetch],
+    )
+```
+
 > **注意**：
-> - `allowed_domains` / `blocked_domains` 是**工具级**配置，LLM **无法在调用参数里覆盖**；匹配规则为**子域感知**（`www.` 前缀会被剥离），且**每一跳重定向都会重新校验**，防止"合法首跳 → 跳到被禁主机"的绕过
-> - `block_private_network=True` 默认开启 SSRF 防护；仅当调用方已用外部白名单限定目标且确信输入可信时可以考虑关闭
+> - `allowed_domains` / `blocked_domains` 是**工具级**配置，LLM **无法在调用参数里覆盖**；匹配规则为**子域感知**（`www.` 前缀会被剥离）。`direct` 模式会对**每一跳重定向**重新校验域名策略与 SSRF；`tavily` 模式**仅校验首跳 URL**，不保证拦截 Tavily 服务端后续重定向
+> - `block_private_network=True` 默认开启 SSRF 防护；仅当调用方已用外部白名单限定目标且确信输入可信时可以考虑关闭。`tavily` 模式只会在调用 Extract 前校验首跳主机，**不要**把它当成与 `direct` 等价的逐跳 SSRF 防护
 > - `enable_cache` 默认关闭，需显式 opt-in；缓存键会做 URL 归一化（统一 scheme 大小写、剥离 `www.`、忽略默认端口、忽略尾 `/`），`https://example.com` 与 `https://www.example.com/` 共享同一条缓存项
+> - `tavily` 模式不会走本地 HTML → Markdown 转换链路，返回的是 Tavily Extract 的抽取正文；未配置 `api_key` / `TAVILY_API_KEY` 时会返回 `TAVILY_NOT_CONFIGURED`。Tavily HTTP 4xx/5xx 返回通用 `HTTP_ERROR`；API 正常响应但 `failed_results` 有错误或没有可用结果时返回 `TAVILY_EXTRACT_ERROR`
 
 #### 驱动 Agent 并打印工具事件
 
@@ -2491,13 +2532,23 @@ if __name__ == "__main__":
 
 # 二进制响应被拒
 {"url": "https://example.com/a.pdf", "error": "UNSUPPORTED_CONTENT_TYPE: application/pdf", ...}
+
+# Tavily 未配置 api_key
+{"url": "https://example.com", "error": "TAVILY_NOT_CONFIGURED: set api_key or TAVILY_API_KEY", ...}
+
+# Tavily Extract HTTP 失败
+{"url": "https://example.com", "error": "HTTP_ERROR: Client error '401 Unauthorized' ...", ...}
+
+# Tavily API 正常响应，但页面抽取失败
+{"url": "https://example.com", "error": "TAVILY_EXTRACT_ERROR: timeout while extracting", ...}
 ```
 
 建议在 Agent 的 `instruction` 中约定：当工具返回 `error` 字段时，应向用户**复述错误码并解释原因**，而不是编造内容；当 `content` 被截断或命中缓存时，也应在回答中显式说明
 
 ### WebFetchTool 最佳实践
 
-- **安全优先**：在能访问云元数据端点（如 AWS EC2 的 `169.254.169.254`）或内网资源的环境中部署 Agent 时，**保留 `block_private_network=True` 默认值**
+- **Provider 选择**：默认 `direct` 即可覆盖大多数公开文档页；当目标站点 HTML 噪音较大、或希望直接拿到较干净正文时，切换到 `tavily` 并配置 `TAVILY_API_KEY`
+- **安全优先**：在能访问云元数据端点（如 AWS EC2 的 `169.254.169.254`）或内网资源的环境中部署 Agent 时，**保留 `block_private_network=True` 默认值**；若需要逐跳 SSRF 防护，优先使用 `direct`（`tavily` 仅校验首跳）
 - **内容裁剪**：为防止长页面撑爆上下文窗口，建议为 `max_content_length` 设置一个与模型窗口匹配的合理值（例如 4000~20000 字符）；LLM 仅需摘要时可通过 `max_length`设置
 - **字节预算**：对大文件（如巨型 HTML、日志页）优先依赖 `max_response_bytes` 在网络层提前止损，而不是先下载再裁剪
 - **缓存策略**：对热点文档 / changelog / status page 打开 `enable_cache=True`，并依据页面平均大小设置 `cache_max_bytes`；注意 TTL 过长可能返回过期内容，`cached=true` 可用于下游判断
@@ -2521,35 +2572,36 @@ if __name__ == "__main__":
 
 `WebSearchTool` 是 trpc-agent-python 框架内置的**公网搜索工具**。当 Agent 需要回答"最新动态 / 版本号 / 事件 / 定义 / 事实类"等超出模型知识截止日期的问题时，可以通过该工具调用主流搜索引擎的检索 API，获取带标题、URL 与摘要的结构化结果，并按约定将所有引用以 Markdown 超链接的形式列在 `Sources:` 段落中。
 
-该工具采用**可插拔 provider** 设计，目前内置两种后端：
+该工具采用**可插拔 provider** 设计，目前内置三种后端：
 
 - **`duckduckgo`（默认）**：DuckDuckGo Instant Answer API，**无需 API Key**。返回 DDG 精选的 instant answer / abstract / definition 摘要及相关主题，适合百科/定义/事实类查询；注意返回的并非完整的实时网页结果，而是 DDG 的 curated 结果集
 - **`google`**：Google Custom Search（CSE）JSON API，需要配置 `api_key` 与 `engine_id`（即 CSE 的 `cx`）；返回真实的公网搜索结果，支持 `siteSearch`、`hl`（语言）、`safe`（SafeSearch）、`dateRestrict`（时效性）等 CSE 原生参数
+- **`tavily`**：Tavily Search API，需要配置 `api_key`（或环境变量 `TAVILY_API_KEY`）；返回面向 LLM 的网页结果，并可选返回图片 URL（调用参数 `include_images=true`）
 
 在此基础上，`WebSearchTool` 还内置了**域名白/黑名单过滤、URL 归一化去重、结果裁剪、引用规范强制注入、HTTP 连接池复用**等能力，帮助你在生产环境中稳定、可控地把联网检索接入 LLM Agent。
 
 ### 功能特性
 
-- **双 Provider 支持**：`duckduckgo`（keyless，适合定义/百科）与 `google`（需要 CSE API Key，支持真实公网搜索）通过 `provider` 参数切换，对 LLM 暴露的 `FunctionDeclaration` 保持一致
-- **域名白/黑名单**：LLM 可在调用时填入 `allowed_domains` / `blocked_domains`（二者互斥），工具会做**子域感知**匹配（`www.` 前缀剥离，`python.org` 同时匹配 `docs.python.org`）；Google 单域名时走服务端 `siteSearch` 快速路径，多域名自动回退到客户端过滤
+- **多 Provider 支持**：`duckduckgo`（keyless，适合定义/百科）、`google`（CSE，真实公网搜索）与 `tavily`（LLM-ready 搜索，可选图片）通过 `provider` 参数切换；基础 `FunctionDeclaration` 保持一致，`tavily` 额外暴露 `include_images`
+- **域名白/黑名单**：LLM 可在调用时填入 `allowed_domains` / `blocked_domains`（二者互斥），工具会做**子域感知**匹配（`www.` 前缀剥离，`python.org` 同时匹配 `docs.python.org`）；Google 单域名时走服务端 `siteSearch` 快速路径，多域名自动回退到客户端过滤；Tavily 会映射为 `include_domains` / `exclude_domains`，并仍做客户端二次过滤
 - **URL 归一化去重**：`dedup_urls=True`（默认）会按 scheme/host/path 归一化键合并重复命中，避免 `Sources:` 段里出现同一来源多次；设置为 `False` 可保留原始召回列表，便于接入下游 re-ranker / 多样化采样 / 离线评估
 - **结果裁剪**：`results_num` / `snippet_len` / `title_len` 分别控制返回条数、单条摘要与标题的字符上限，所有参数都会按 `[1, _MAX_*]` 做 clamp，避免误配超上下文窗口；LLM 还可通过 `count` 参数在调用时进一步控制返回条数
 - **强制引用规范**：工具在 `process_request` 阶段自动向 LLM 追加指令，**强制**要求：（1）回答末尾必须追加 `Sources:` 段并以 `[Title](URL)` 列出工具返回的 URL；（2）不得编造 URL；（3）涉及"最新/recent"类查询时使用**当前年月**入参，避免幻觉旧年份
-- **Provider 原生参数透传**：`ddg_extra_params` / `google_extra_params` 让你把 provider 专属的高级参数（如 Google CSE 的 `safe`、`dateRestrict`、`gl`、`cr`）固化在 agent 层，每次工具调用自动带上，无需在 `FunctionDeclaration` 里额外暴露
+- **Provider 原生参数透传**：`ddg_extra_params` / `google_extra_params` / `tavily_extra_params` 让你把 provider 专属的高级参数（如 Google CSE 的 `safe`、`dateRestrict`，或 Tavily 的 `search_depth`）固化在 agent 层，每次工具调用自动带上，无需在 `FunctionDeclaration` 里额外暴露
 - **共享 httpx 连接池**：通过构造参数 `http_client` 传入预建好的 `httpx.AsyncClient`，可在多个 agent / 多次调用之间复用连接池；调用方负责其生命周期（工具不会帮你 `aclose`）
-- **结构化输出**：统一返回 `WebSearchResult`，包含 `query` / `provider` / `results: List[{title, url, snippet}]` / `summary`，便于 LLM 引用拼装，也便于下游做 re-rank / RAG
+- **结构化输出**：统一返回 `WebSearchResult`（Tavily 为扩展的 `TavilyWebSearchResult`），包含 `query` / `provider` / `results: List[{title, url, snippet}]` / `summary`；Tavily 还可额外返回 `images`
 
 ### WebSearchTool 参数
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `provider` | `Literal["duckduckgo", "google"]` | `"duckduckgo"` | 搜索后端；`google` 需要同时配置 `api_key` 与 `engine_id`，否则调用时返回未配置提示 |
-| `api_key` | `Optional[str]` | `None` | Google CSE API Key，缺省时回退到环境变量 `GOOGLE_CSE_API_KEY` |
+| `provider` | `Literal["duckduckgo", "google", "tavily"]` | `"duckduckgo"` | 搜索后端；`google` 需要 `api_key` + `engine_id`，`tavily` 需要 `api_key`，否则调用时返回未配置提示 |
+| `api_key` | `Optional[str]` | `None` | Provider API Key。Google 缺省回退到 `GOOGLE_CSE_API_KEY`；Tavily 缺省回退到 `TAVILY_API_KEY` |
 | `engine_id` | `Optional[str]` | `None` | Google CSE 引擎 ID（即 `cx`），缺省时回退到环境变量 `GOOGLE_CSE_ENGINE_ID` |
 | `base_url` | `Optional[str]` | provider 默认 | 覆盖 provider 的 API Base URL（主要用于测试 / 代理） |
 | `user_agent` | `str` | `"trpc-agent-python-websearch/1.0"` | HTTP `User-Agent` 头，便于下游日志区分来源流量 |
 | `proxy` | `Optional[str]` | `None` | 可选的 HTTP 代理 URL，直接转发给 `httpx` |
-| `lang` | `Optional[str]` | `None` | Google CSE 默认语言（对应 `hl` 参数），DDG 会忽略；LLM 可通过调用参数 `lang` 覆盖 |
+| `lang` | `Optional[str]` | `None` | Google CSE 默认语言（对应 `hl` 参数），DDG / Tavily 会忽略；LLM 可通过调用参数 `lang` 覆盖 |
 | `http_client` | `Optional[httpx.AsyncClient]` | `None` | 可选的预构建 `httpx.AsyncClient`，用于复用连接池（调用方负责生命周期） |
 | `results_num` | `int` | `5` | 默认返回条数上限，clamp 到 `[1, 10]`；可被调用参数 `count` 覆盖 |
 | `snippet_len` | `int` | `300` | 单条 `snippet` 的字符上限，clamp 到 `[1, 1000]` |
@@ -2558,6 +2610,7 @@ if __name__ == "__main__":
 | `dedup_urls` | `bool` | `True` | 是否按归一化键合并重复 URL；`False` 时保留原始命中顺序 |
 | `ddg_extra_params` | `Optional[dict]` | `None` | 透传给 DDG 的额外查询参数 |
 | `google_extra_params` | `Optional[dict]` | `None` | 透传给 Google CSE 的额外查询参数（如 `{"safe": "active"}`、`{"dateRestrict": "m6"}`、`{"gl": "us"}` 等） |
+| `tavily_extra_params` | `Optional[dict]` | `None` | 透传给 Tavily Search 的额外 JSON 参数（如 `{"search_depth": "advanced"}`、`{"include_answer": True}`） |
 | `filters_name` | `Optional[List[str]]` | `None` | 关联的 filter 名称，透传给 `BaseTool` |
 | `filters` | `Optional[List[BaseFilter]]` | `None` | 直接注入的 filter 实例，透传给 `BaseTool` |
 
@@ -2569,16 +2622,18 @@ if __name__ == "__main__":
 | `count` | `integer` | 否 | 本次调用的返回条数上限，`1-10`（clamp）；默认为工具级 `results_num` |
 | `allowed_domains` | `array[string]` | 否 | 域名白名单（host only，子域感知，`www.` 自动剥离）；与 `blocked_domains` 互斥 |
 | `blocked_domains` | `array[string]` | 否 | 域名黑名单，匹配规则同上；与 `allowed_domains` 互斥 |
-| `lang` | `string` | 否 | 仅 Google CSE 生效（对应 `hl`），DDG 会忽略；覆盖工具级 `lang` |
+| `lang` | `string` | 否 | 仅 Google CSE 生效（对应 `hl`），DDG / Tavily 会忽略；覆盖工具级 `lang` |
+| `include_images` | `boolean` | 否 | **仅 `provider="tavily"` 暴露**。为 `true` 时请求 Tavily 返回图片 URL；默认 `false` |
 
 **`WebSearchResult` 返回字段**：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `query` | `str` | 本次检索的查询词（原样回显） |
-| `provider` | `"duckduckgo" \| "google"` | 实际使用的 provider |
+| `provider` | `"duckduckgo" \| "google" \| "tavily"` | 实际使用的 provider |
 | `results` | `List[SearchHit]` | 结构化命中列表，每项包含 `title` / `url` / `snippet` |
-| `summary` | `str` | DDG 的 instant answer / abstract / definition 聚合摘要；Google 在发生拼写纠错或 API 错误时也会写入此字段 |
+| `summary` | `str` | DDG 的 instant answer / abstract / definition 聚合摘要；Google 在发生拼写纠错或 API 错误时也会写入此字段；Tavily 响应包含 `answer` 时会将其写入此字段。工具默认发送 `include_answer=false`，可通过 `tavily_extra_params` 开启 |
+| `images` | `List[ImageHit]` | **仅 Tavily**：可选图片列表，每项包含 `url` / `description`（未请求图片时为空列表） |
 
 当调用参数非法（如同时传入 `allowed_domains` 与 `blocked_domains`、`query` 过短）或 HTTP 出错时，工具会返回结构化错误对象（如 `{"error": "INVALID_ARGS: ..."}` / `{"error": "HTTP_ERROR: ..."}`），便于 LLM 做降级处理。
 
@@ -2665,11 +2720,44 @@ def create_google_agent() -> LlmAgent:
     )
 ```
 
+**切换到 Tavily Search**：当需要面向 LLM 的网页检索结果，或希望可选返回图片 URL 时，切换到 `provider="tavily"`。可在 [Tavily](https://tavily.com) 申请 API Key，并通过构造参数或环境变量 `TAVILY_API_KEY` 注入：
+
+```python
+import os
+
+from trpc_agent_sdk.tools import WebSearchTool
+
+
+def create_tavily_agent() -> LlmAgent:
+    """创建基于 Tavily Search 的 WebSearchTool Agent"""
+    web_search = WebSearchTool(
+        provider="tavily",
+        api_key=os.getenv("TAVILY_API_KEY"),
+        results_num=5,
+        snippet_len=300,
+        title_len=100,
+        timeout=15.0,
+        tavily_extra_params={
+            "search_depth": "basic",     # 或 "advanced"
+            # "include_answer": True,    # 需要答案摘要时打开
+        },
+    )
+    return LlmAgent(
+        name="tavily_research_assistant",
+        description="Web research assistant powered by Tavily Search.",
+        model=_create_model(),
+        instruction=INSTRUCTION,
+        tools=[web_search],
+    )
+```
+
 > **注意**：
+> - `provider` 只接受 `duckduckgo` / `google` / `tavily`；传入其它值会在构造 `WebSearchTool` 时抛出 `ValueError`
 > - `allowed_domains` / `blocked_domains` 由 **LLM 在调用参数里**填入（而非构造参数），LLM 可根据用户 prompt 决定是否启用；两者互斥，同时传入会返回 `INVALID_ARGS`
 > - 当传入外部 `http_client` 时，`WebSearchTool` **不会**帮你调用 `aclose()`，需要调用方在**同一个事件循环**内显式关闭，避免 `Unclosed client` 警告
-> - 即使复用外部 client，工具内部仍会在每次 `GET` 时强制应用构造器里的 `timeout` 与 `user_agent`，保证 agent 层的约束始终生效
-> - 其他常用的 Google CSE 透传参数包括 `gl`（地理偏向）、`cr`（国家限制）、`filter`、`sort` 等；对 DuckDuckGo 可通过 `ddg_extra_params` 透传 `region`、`kl` 等
+> - 即使复用外部 client，工具内部仍会在每次请求时强制应用构造器里的 `timeout` 与 `user_agent`，保证 agent 层的约束始终生效
+> - 其他常用的 Google CSE 透传参数包括 `gl`（地理偏向）、`cr`（国家限制）、`filter`、`sort` 等；对 DuckDuckGo 可通过 `ddg_extra_params` 透传 `region`、`kl` 等；对 Tavily 可通过 `tavily_extra_params` 透传 `search_depth`、`include_answer` 等
+> - `include_images` 仅在 `provider="tavily"` 时出现在工具 schema 中；默认关闭，只有回答确实需要图片时再让模型打开
 
 #### 驱动 Agent 并打印工具事件
 
@@ -2798,6 +2886,29 @@ LLM 看到上述 prompt 后，会按 `FunctionDeclaration` 自动组装出类似
 
 DuckDuckGo provider 在命中 instant answer 时，`summary` 字段会包含 DDG 聚合的摘要文本（如维基摘要、词典定义等），LLM 可直接引用；当 DDG 没有 `Results` 时，工具会兜底把 DDG 搜索页 URL 作为唯一来源返回，保证 `Sources:` 段不为空。
 
+Tavily provider 成功时还会多返回 `images` 字段（仅当调用参数 `include_images=true` 时有内容）：
+
+```python
+{
+    "query": "Python logo",
+    "provider": "tavily",
+    "results": [
+        {
+            "title": "Python",
+            "url": "https://www.python.org/",
+            "snippet": "The official home of the Python Programming Language.",
+        },
+    ],
+    "summary": "",
+    "images": [
+        {
+            "url": "https://www.python.org/static/community_logos/python-logo.png",
+            "description": "Python logo",
+        },
+    ],
+}
+```
+
 **错误处理**：当参数非法或 HTTP 出错时，工具返回结构化错误对象：
 
 ```python
@@ -2810,6 +2921,10 @@ DuckDuckGo provider 在命中 instant answer 时，`summary` 字段会包含 DDG
 # Google CSE 未配置 api_key / engine_id
 {"query": "...", "provider": "google", "results": [],
  "summary": "Google provider is not configured: set api_key + engine_id ..."}
+
+# Tavily 未配置 api_key
+{"query": "...", "provider": "tavily", "results": [], "images": [],
+ "summary": "Tavily provider is not configured: set api_key or TAVILY_API_KEY."}
 
 # 网络 / HTTP 错误
 {"error": "HTTP_ERROR: ConnectTimeout(...)", "provider": "google", "query": "..."}
@@ -2827,15 +2942,16 @@ DuckDuckGo provider 在命中 instant answer 时，`summary` 字段会包含 DDG
 
 ### WebSearchTool 最佳实践
 
-- **Provider 选择**：仅需无 API Key、轻量的定义/百科/事实类检索时使用默认的 `duckduckgo`；需要真实公网搜索、支持 site/语言/SafeSearch/时效性时切换到 `google` 并配置 CSE 凭据
+- **Provider 选择**：仅需无 API Key、轻量的定义/百科/事实类检索时使用默认的 `duckduckgo`；需要真实公网搜索、支持 site/语言/SafeSearch/时效性时切换到 `google` 并配置 CSE 凭据；需要面向 LLM 的检索结果、或可选图片结果时切换到 `tavily` 并配置 `TAVILY_API_KEY`
 - **结果裁剪**：为防止长摘要超过上下文窗口，建议为 `snippet_len` / `title_len` / `results_num` 设置与模型窗口匹配的合理值；LLM 仅需少量来源时可通过调用参数 `count` 进一步收紧
 - **域名策略**：需要把 Agent 限定在可信站点（如企业官网、官方文档）时，在 prompt 中显式要求 LLM 填入 `allowed_domains`；想屏蔽内容农场或噪声站点时使用 `blocked_domains`；两者互斥
 - **Google 多域名过滤**：Google CSE 的 `siteSearch` 只接受单个值，因此多域名白/黑名单时工具会自动回退到客户端过滤。若希望单域名走服务端快速路径，prompt 中约束 LLM 一次只传一个域名即可
+- **Tavily 图片参数**：默认不要打开 `include_images`；只有用户明确需要图片、或回答需要配图时再启用，避免额外 token 开销
 - **去重开关**：默认开启URL归一化去重，避免 `Sources:` 段里出现同一来源多次；设置为 `False` 可保留原始召回列表，便于接入下游 re-ranker / 多样化采样 / 离线评估
-- **时效性控制**：对"最新/what's new/today"类 Agent，把 `google_extra_params={"dateRestrict": "m6"}`（最近 6 个月）/ `"m1"`（1 个月）/ `"d7"`（7 天）固化在 agent 层，比在 prompt 里反复强调更可靠
+- **时效性控制**：对"最新/what's new/today"类 Agent，把 `google_extra_params={"dateRestrict": "m6"}`（最近 6 个月）/ `"m1"`（1 个月）/ `"d7"`（7 天）固化在 agent 层，比在 prompt 里反复强调更可靠；Tavily 侧可用 `tavily_extra_params={"search_depth": "advanced"}` 提升召回质量
 - **连接池复用**：同一进程内挂载多个 `WebSearchTool` 或高频调用时，通过 `http_client` 传入共享的 `httpx.AsyncClient`，并在程序退出时由调用方显式 `aclose()`
-- **凭据与代理**：Google CSE 的 `api_key` / `engine_id` 建议通过环境变量（`GOOGLE_CSE_API_KEY` / `GOOGLE_CSE_ENGINE_ID`）注入，不硬编码在源码；需要经过企业出口代理时通过 `proxy` 参数配置
-- **与 WebFetchTool 配合**：`WebSearchTool` 用来"发现 URL"，`WebFetchTool` 用来"读取 URL 全文"——当 LLM 需要对某条搜索结果做深入阅读 / 摘要 / 引述时，把两个工具同时挂到 Agent 上，形成"搜索 → 精读"的两阶段工作流
+- **凭据与代理**：Google CSE 的 `api_key` / `engine_id` 建议通过环境变量（`GOOGLE_CSE_API_KEY` / `GOOGLE_CSE_ENGINE_ID`）注入；Tavily 建议通过 `TAVILY_API_KEY` 注入，不硬编码在源码；需要经过企业出口代理时通过 `proxy` 参数配置
+- **与 WebFetchTool 配合**：`WebSearchTool` 用来"发现 URL"，`WebFetchTool` 用来"读取 URL 全文"——当 LLM 需要对某条搜索结果做深入阅读 / 摘要 / 引述时，把两个工具同时挂到 Agent 上，形成"搜索 → 精读"的两阶段工作流。两端都可以切到 `tavily`（Search + Extract）
 - **与 Knowledge/RAG 配合**：把搜索结果作为实时补充语料接入 RAG 流程时，参考 [examples/knowledge_with_searchtool_rag_agent](../../../examples/knowledge_with_searchtool_rag_agent)
 
 ### WebSearchTool 完整示例

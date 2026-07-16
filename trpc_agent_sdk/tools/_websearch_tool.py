@@ -6,8 +6,8 @@
 """Web search tool for TRPC Agent framework.
 
 Provides a client-side :class:`WebSearchTool` that lets LLMs search the
-public web for up-to-date information. Two pluggable provider backends
-are supported, ``duckduckgo`` and ``google search``:
+public web for up-to-date information. Three pluggable provider backends
+are supported, ``duckduckgo``, ``google search``, and ``tavily``:
 
 1. ``duckduckgo`` — DuckDuckGo(DDG) Instant Answer API. Keyless, good for
    factual/encyclopedic/definition lookups. Returns curated instant
@@ -15,6 +15,8 @@ are supported, ``duckduckgo`` and ``google search``:
 2. ``google`` — Google Custom Search (CSE). Requires ``api_key`` +
    ``engine_id``; returns true web results with snippet support, domain
    filtering and language targeting.
+3. ``tavily`` — Tavily Search API. Requires ``api_key``; returns LLM-ready
+   web results and optionally direct image URLs.
 """
 
 from __future__ import annotations
@@ -64,12 +66,15 @@ _DEFAULT_TITLE_LEN = 100
 _DDG_BASE_URL = "https://api.duckduckgo.com"
 # Google Custom Search base URL
 _GOOGLE_BASE_URL = "https://www.googleapis.com/customsearch/v1"
+# Tavily Search base URL
+_TAVILY_BASE_URL = "https://api.tavily.com/search"
 # Description shown to the LLM as part of the tool schema.
 _BASE_DESCRIPTION = """\
 Search the public web and use the results to inform responses.
 - Provides up-to-date information for current events and recent data.
 - Returns structured results as {title, url, snippet} plus, for DuckDuckGo, an instant-answer summary.
   All URLs are citable as markdown hyperlinks.
+- Tavily can additionally return direct image URLs when `include_images=true`.
 - Use this tool for accessing information beyond the model's knowledge cutoff.
 - Each invocation performs a single search request; prefer one well-formed query over many narrow ones.
 
@@ -90,7 +95,7 @@ Usage notes:
     for the required 'Sources:' format.\
 """
 
-ProviderType = Literal["duckduckgo", "google"]
+ProviderType = Literal["duckduckgo", "google", "tavily"]
 
 
 class SearchHit(BaseModel):
@@ -99,6 +104,13 @@ class SearchHit(BaseModel):
     title: str = Field(default="", description="Title of the result")
     url: str = Field(default="", description="URL of the result")
     snippet: str = Field(default="", description="Short description / excerpt")
+
+
+class ImageHit(BaseModel):
+    """A direct image result returned by a provider that supports images."""
+
+    url: str = Field(default="", description="Direct image URL")
+    description: str = Field(default="", description="Provider-supplied image description")
 
 
 class WebSearchResult(BaseModel):
@@ -110,6 +122,12 @@ class WebSearchResult(BaseModel):
     results: List[SearchHit] = Field(default_factory=list)
     # DDG-only: summary is the aggregated instant answer / abstract / definition text.
     summary: str = ""
+
+
+class TavilyWebSearchResult(WebSearchResult):
+    """Tavily search output, including optional direct image URLs."""
+
+    images: List[ImageHit] = Field(default_factory=list)
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -259,7 +277,7 @@ class WebSearchTool(BaseTool):
     """LLM tool that searches the public web.
 
     The WebSearchTool enables LLM agents to search the public web using major search engines
-    such as DuckDuckGo (default, no API key required) and Google Custom Search (API key required).
+    such as DuckDuckGo (default, no API key required), Google Custom Search, and Tavily.
     It retrieves up-to-date information including titles, URLs, and content snippets, and also
     provides instant-answer summaries when available (e.g., via DuckDuckGo). This tool is best
     used for queries about recent events, new releases, factual lookups, or definitions that benefit
@@ -268,8 +286,9 @@ class WebSearchTool(BaseTool):
     sources as Markdown hyperlinks in the final output.
 
     Args:
-        provider: Backend name, ``"duckduckgo"`` (default) or ``"google"``.
-        api_key: Google CSE API key; falls back to ``GOOGLE_CSE_API_KEY``.
+        provider: Backend name: ``"duckduckgo"`` (default), ``"google"``, or ``"tavily"``.
+        api_key: Provider API key. Falls back to ``GOOGLE_CSE_API_KEY`` for
+            Google or ``TAVILY_API_KEY`` for Tavily.
         engine_id: Google CSE engine id (``cx``); falls back to ``GOOGLE_CSE_ENGINE_ID``.
         results_num: Default result count, clamped to ``[1, _MAX_COUNT]``.
         snippet_len: Max snippet length, clamped to ``[1, _MAX_SNIPPET_LEN]``.
@@ -302,6 +321,7 @@ class WebSearchTool(BaseTool):
         dedup_urls: bool = True,
         ddg_extra_params: Optional[dict[str, Any]] = None,
         google_extra_params: Optional[dict[str, Any]] = None,
+        tavily_extra_params: Optional[dict[str, Any]] = None,
         filters_name: Optional[List[str]] = None,
         filters: Optional[List[BaseFilter]] = None,
     ) -> None:
@@ -313,14 +333,26 @@ class WebSearchTool(BaseTool):
             filters=filters,
         )
 
+        if provider not in ("duckduckgo", "google", "tavily"):
+            raise ValueError(f"Unsupported web search provider: {provider!r}")
         self._provider: ProviderType = provider
-        self._api_key = api_key or os.environ.get("GOOGLE_CSE_API_KEY", "")
+        if provider == "google":
+            self._api_key = api_key or os.environ.get("GOOGLE_CSE_API_KEY", "")
+        elif provider == "tavily":
+            self._api_key = api_key or os.environ.get("TAVILY_API_KEY", "")
+        else:
+            self._api_key = api_key or ""
         self._engine_id = engine_id or os.environ.get("GOOGLE_CSE_ENGINE_ID", "")
         self._results_num = max(1, min(int(results_num), _MAX_COUNT))
         self._snippet_len = max(1, min(int(snippet_len), _MAX_SNIPPET_LEN))
         self._title_len = max(1, min(int(title_len), _MAX_TITLE_LEN))
         self._timeout = float(timeout)
-        self._base_url = base_url or (_GOOGLE_BASE_URL if provider == "google" else _DDG_BASE_URL)
+        default_base_urls = {
+            "duckduckgo": _DDG_BASE_URL,
+            "google": _GOOGLE_BASE_URL,
+            "tavily": _TAVILY_BASE_URL,
+        }
+        self._base_url = base_url or default_base_urls[provider]
         self._user_agent = user_agent
         self._proxy = proxy
         self._lang = lang
@@ -328,61 +360,72 @@ class WebSearchTool(BaseTool):
         self._dedup_urls = bool(dedup_urls)
         self._ddg_extra_params = ddg_extra_params or {}
         self._google_extra_params = google_extra_params or {}
+        self._tavily_extra_params = tavily_extra_params or {}
 
         if provider == "google" and not (self._api_key and self._engine_id):
             logger.warning("WebSearchTool: provider='google' but api_key or "
                            "engine_id is missing; calls will return an error.")
+        if provider == "tavily" and not self._api_key:
+            logger.warning("WebSearchTool: provider='tavily' but api_key is "
+                           "missing; calls will return an error.")
 
     @override
     def _get_declaration(self) -> FunctionDeclaration:
+        properties = {
+            "query":
+            Schema(
+                type=Type.STRING,
+                description=("Required. Search query to send to the provider. Min 2 chars. "
+                             "Include year/version for recent topics. "
+                             "Example: 'Python 3.13 release notes', 'OpenAI GPT-5 pricing 2026', "
+                             "'FastAPI websocket auth', 'vector database definition'."),
+            ),
+            "count":
+            Schema(
+                type=Type.INTEGER,
+                description=(f"Optional. Max results to return, 1-{_MAX_COUNT} (clamped). "
+                             f"Default: {self._results_num}. Prefer small values to save context. "
+                             f"Example: 3, 5."),
+                minimum=1,
+                maximum=_MAX_COUNT,
+            ),
+            "allowed_domains":
+            Schema(
+                type=Type.ARRAY,
+                items=Schema(type=Type.STRING),
+                description=("Optional. Whitelist of domains, host only (subdomain-aware, "
+                             "'www.' stripped). Mutually exclusive with blocked_domains. "
+                             "Default: None. "
+                             "Example: ['python.org'], ['github.com', 'stackoverflow.com']."),
+            ),
+            "blocked_domains":
+            Schema(
+                type=Type.ARRAY,
+                items=Schema(type=Type.STRING),
+                description=("Optional. Blacklist of domains (same matching as allowed_domains). "
+                             "Mutually exclusive with allowed_domains. Default: None. "
+                             "Example: ['pinterest.com'], ['content-farm.net']."),
+            ),
+            "lang":
+            Schema(
+                type=Type.STRING,
+                description=("Optional. Language hint for the provider (Google CSE 'hl'); "
+                             "ignored by DuckDuckGo and Tavily. Default: tool-level lang or unset. "
+                             "Example: 'en', 'zh-CN', 'ja'."),
+            ),
+        }
+        if self._provider == "tavily":
+            properties["include_images"] = Schema(
+                type=Type.BOOLEAN,
+                description=("Optional. Ask Tavily to return direct image URLs. Default: false. "
+                             "Use only when images are useful in the answer."),
+            )
         return FunctionDeclaration(
             name="websearch",
             description=_BASE_DESCRIPTION,
             parameters=Schema(
                 type=Type.OBJECT,
-                properties={
-                    "query":
-                    Schema(
-                        type=Type.STRING,
-                        description=("Required. Search query to send to the provider. Min 2 chars. "
-                                     "Include year/version for recent topics. "
-                                     "Example: 'Python 3.13 release notes', 'OpenAI GPT-5 pricing 2026', "
-                                     "'FastAPI websocket auth', 'vector database definition'."),
-                    ),
-                    "count":
-                    Schema(
-                        type=Type.INTEGER,
-                        description=(f"Optional. Max results to return, 1-{_MAX_COUNT} (clamped). "
-                                     f"Default: {self._results_num}. Prefer small values to save context. "
-                                     f"Example: 3, 5."),
-                        minimum=1,
-                        maximum=_MAX_COUNT,
-                    ),
-                    "allowed_domains":
-                    Schema(
-                        type=Type.ARRAY,
-                        items=Schema(type=Type.STRING),
-                        description=("Optional. Whitelist of domains, host only (subdomain-aware, "
-                                     "'www.' stripped). Mutually exclusive with blocked_domains. "
-                                     "Default: None. "
-                                     "Example: ['python.org'], ['github.com', 'stackoverflow.com']."),
-                    ),
-                    "blocked_domains":
-                    Schema(
-                        type=Type.ARRAY,
-                        items=Schema(type=Type.STRING),
-                        description=("Optional. Blacklist of domains (same matching as allowed_domains). "
-                                     "Mutually exclusive with allowed_domains. Default: None. "
-                                     "Example: ['pinterest.com'], ['content-farm.net']."),
-                    ),
-                    "lang":
-                    Schema(
-                        type=Type.STRING,
-                        description=("Optional. Language hint for the provider (Google CSE 'hl'); "
-                                     "ignored by DuckDuckGo. Default: tool-level lang or unset. "
-                                     "Example: 'en', 'zh-CN', 'ja'."),
-                    ),
-                },
+                properties=properties,
                 required=["query"],
             ),
         )
@@ -454,10 +497,19 @@ class WebSearchTool(BaseTool):
         n = max(1, min(n, _MAX_COUNT))
 
         lang = (args.get("lang") or self._lang or "").strip() or None
+        include_images = bool(args.get("include_images", False))
 
         try:
             if self._provider == "duckduckgo":
                 result = await self._search_duckduckgo(query, n, allowed, blocked)
+            elif self._provider == "tavily":
+                result = await self._search_tavily(
+                    query,
+                    n,
+                    allowed,
+                    blocked,
+                    include_images,
+                )
             else:
                 result = await self._search_google(query, n, allowed, blocked, lang)
         except httpx.HTTPError as e:
@@ -496,6 +548,138 @@ class WebSearchTool(BaseTool):
         finally:
             if close:
                 await client.aclose()
+
+    async def _post_json(
+        self,
+        url: str,
+        payload: dict[str, Any],
+        *,
+        headers: Optional[dict[str, str]] = None,
+    ) -> dict[str, Any]:
+        """Issue a POST and decode the JSON body."""
+        client = self._get_client()
+        close = self._http_client is None
+        request_headers = {"User-Agent": self._user_agent}
+        if headers:
+            request_headers.update(headers)
+        try:
+            resp = await client.post(
+                url,
+                json=payload,
+                timeout=self._timeout,
+                headers=request_headers,
+            )
+            resp.raise_for_status()
+            return resp.json()
+        finally:
+            if close:
+                await client.aclose()
+
+    async def _search_tavily(
+        self,
+        query: str,
+        n: int,
+        allowed: Optional[List[str]],
+        blocked: Optional[List[str]],
+        include_images: bool,
+    ) -> TavilyWebSearchResult:
+        """Hit the Tavily Search API."""
+        if not self._api_key:
+            return TavilyWebSearchResult(
+                query=query,
+                provider="tavily",
+                results=[],
+                summary=("Tavily provider is not configured: set api_key "
+                         "or TAVILY_API_KEY."),
+                images=[],
+            )
+
+        payload: dict[str, Any] = {
+            "query": query,
+            "max_results": n,
+            "search_depth": "basic",
+            "include_answer": False,
+            "include_raw_content": False,
+            "include_images": include_images,
+        }
+        if allowed:
+            payload["include_domains"] = allowed
+        if blocked:
+            payload["exclude_domains"] = blocked
+        payload.update(self._tavily_extra_params)
+
+        data = await self._post_json(
+            self._base_url,
+            payload,
+            headers={"Authorization": f"Bearer {self._api_key}"},
+        )
+        if err := (data.get("error") or data.get("detail")):
+            return TavilyWebSearchResult(
+                query=query,
+                provider="tavily",
+                results=[],
+                summary=f"Tavily Search API error: {err}",
+                images=[],
+            )
+
+        hits: List[SearchHit] = []
+        seen: set[str] = set()
+        for item in data.get("results") or []:
+            if not isinstance(item, dict):
+                continue
+            url = str(item.get("url") or "").strip()
+            if _is_blocked(url, allowed, blocked):
+                continue
+            if self._dedup_urls:
+                key = _dedup_key(url)
+                if key in seen:
+                    continue
+                seen.add(key)
+            hits.append(
+                SearchHit(
+                    title=_truncate(str(item.get("title") or ""), self._title_len),
+                    url=url,
+                    snippet=_truncate(str(item.get("content") or ""), self._snippet_len),
+                ))
+            if len(hits) >= n:
+                break
+
+        images: List[ImageHit] = []
+        seen_images: set[str] = set()
+        if include_images:
+            image_candidates = list(data.get("images") or [])
+            for result_item in data.get("results") or []:
+                if isinstance(result_item, dict):
+                    image_candidates.extend(result_item.get("images") or [])
+            for item in image_candidates:
+                if isinstance(item, str):
+                    image_url = item.strip()
+                    description = ""
+                elif isinstance(item, dict):
+                    image_url = str(item.get("url") or "").strip()
+                    description = str(item.get("description") or "").strip()
+                else:
+                    continue
+                if not image_url or image_url in seen_images:
+                    continue
+                if _extract_domain_from_url(image_url) == "":
+                    continue
+                seen_images.add(image_url)
+                images.append(ImageHit(
+                    url=image_url,
+                    description=_truncate(description, self._snippet_len),
+                ))
+                if len(images) >= n:
+                    break
+
+        answer = str(data.get("answer") or "").strip()
+        return TavilyWebSearchResult(
+            query=query,
+            provider="tavily",
+            results=hits,
+            summary=_truncate(answer, self._snippet_len),
+            images=images,
+        )
 
     async def _search_duckduckgo(
         self,
