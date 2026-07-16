@@ -1,0 +1,130 @@
+{
+  "task_id": "03ed666b0d2245f4a68fb83e4987c3a1",
+  "generated_at": "2026-07-16T19:46:47",
+  "input": {
+    "ref": "security_eval.diff",
+    "runtime": "local",
+    "dry_run": true,
+    "diff_summary": {
+      "files_changed": 2,
+      "additions": 4,
+      "deletions": 0,
+      "files": [
+        "app/handler.py",
+        "tests/test_handler.py"
+      ]
+    }
+  },
+  "conclusion": "blocked",
+  "summary": {
+    "total_findings": 3,
+    "by_severity": {
+      "high": 3
+    },
+    "needs_human_review_count": 0,
+    "deduplicated": 0,
+    "intercepts": 0
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "app/handler.py",
+      "line": 11,
+      "title": "Use of eval() on dynamic data",
+      "evidence": "result = eval(data)",
+      "recommendation": "Avoid eval(); use ast.literal_eval or explicit parsing.",
+      "confidence": 0.9,
+      "source": "static"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "app/handler.py",
+      "line": 12,
+      "title": "subprocess with shell=True",
+      "evidence": "subprocess.run(cmd, shell=True)",
+      "recommendation": "Pass an argument list and shell=False to avoid shell injection.",
+      "confidence": 0.85,
+      "source": "static"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "app/handler.py",
+      "line": 13,
+      "title": "SQL built with f-string (possible injection)",
+      "evidence": "row = cursor.execute(f\"SELECT * FROM users WHERE name = '{name}'\")",
+      "recommendation": "Use parameterized queries (placeholders) instead of string interpolation.",
+      "confidence": 0.85,
+      "source": "static"
+    }
+  ],
+  "needs_human_review": [],
+  "filter_intercepts": [],
+  "sandbox_runs": [
+    {
+      "script": "parse_diff.py",
+      "status": "ok",
+      "exit_code": 0,
+      "duration_ms": 23,
+      "timed_out": false,
+      "error_type": ""
+    },
+    {
+      "script": "check_security.py",
+      "status": "ok",
+      "exit_code": 0,
+      "duration_ms": 25,
+      "timed_out": false,
+      "error_type": ""
+    },
+    {
+      "script": "check_async_leak.py",
+      "status": "ok",
+      "exit_code": 0,
+      "duration_ms": 26,
+      "timed_out": false,
+      "error_type": ""
+    },
+    {
+      "script": "check_db_lifecycle.py",
+      "status": "ok",
+      "exit_code": 0,
+      "duration_ms": 23,
+      "timed_out": false,
+      "error_type": ""
+    },
+    {
+      "script": "check_tests_missing.py",
+      "status": "ok",
+      "exit_code": 0,
+      "duration_ms": 21,
+      "timed_out": false,
+      "error_type": ""
+    },
+    {
+      "script": "check_secrets.py",
+      "status": "ok",
+      "exit_code": 0,
+      "duration_ms": 27,
+      "timed_out": false,
+      "error_type": ""
+    }
+  ],
+  "metrics": {
+    "total_duration_ms": 245,
+    "sandbox_duration_ms": 145,
+    "tool_calls": 7,
+    "intercepts": 0,
+    "findings_total": 3,
+    "severity_distribution": {
+      "high": 3
+    },
+    "error_distribution": {}
+  },
+  "llm_summary": "Dry-run review complete. Static findings are authoritative.",
+  "warnings": [
+    "local runtime is a development fallback; use container or cube in production"
+  ]
+}
