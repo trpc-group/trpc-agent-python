@@ -7,7 +7,7 @@
 
 Provides a client-side :class:`WebFetchTool` that:
 
-- issues an unauthenticated HTTP GET against a single URL,
+- fetches a single URL directly or through Tavily Extract,
 - converts the response to text (Markdown for HTML; verbatim for
   textual MIME types),
 - optionally caches raw fetch results in a TTL + byte-bounded LRU so
@@ -18,12 +18,14 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import os
 import re
 import socket
 import time
 from collections import OrderedDict
 from typing import Any
 from typing import List
+from typing import Literal
 from typing import Optional
 from typing import Tuple
 from urllib.parse import urlparse
@@ -58,6 +60,8 @@ _BINARY_SNIFF_BYTES = 4096
 # Cache defaults (15 minutes / 50 MiB)
 _DEFAULT_CACHE_TTL_SECONDS = 15.0 * 60
 _DEFAULT_CACHE_MAX_BYTES = 50 * 1024 * 1024
+# Tavily Extract base URL.
+_TAVILY_BASE_URL = "https://api.tavily.com/extract"
 # MIME types we render as Markdown-ish text.
 _HTML_TYPES = frozenset(["text/html", "application/xhtml+xml"])
 # MIME types we return verbatim. Any unknown ``text/*`` MIME is accepted
@@ -77,14 +81,14 @@ _TEXT_TYPES = frozenset([
 ])
 # WebFetchTool description shown to the LLM
 _BASE_DESCRIPTION = """\
-Fetch a single URL via HTTP GET and return its textual content.
+Fetch a single public URL and return its textual content.
 - HTML pages are stripped to Markdown-ish plain text; other textual MIME types are returned verbatim.
 - Content is capped to a finite length (override via `max_length`) so large pages do not overflow the context window.
 - Binary content (PDF / image / archive / ...) is rejected with a structured error; use a dedicated tool for it.
 - The URL must be an absolute http(s) URL. The tool's domain allow/block lists are enforced before the request.
 - By default the tool refuses to dial loopback / private / link-local targets
   (e.g. 127.0.0.1, 169.254.169.254, intranet IPs) so it cannot be abused as an SSRF probe.
-- This tool is read-only and does not modify any files or remote state.
+  - This tool is read-only and does not modify any files or remote state.
 
 USE WHEN the user asks to:
   - read, summarise, quote or extract a fact from a specific webpage, doc page, RFC, changelog, or news article
@@ -94,7 +98,7 @@ DO NOT USE WHEN:
   - an MCP-provided web fetch tool is available — prefer it, as it may have fewer restrictions and richer auth
   - the URL requires authentication or session cookies (Google Docs, Confluence, Jira, private GitHub, intranet)
     — prefer a dedicated MCP/authenticated tool
-  - you need to render JavaScript, submit forms, or perform interactive browsing (this tool only issues one GET)
+  - you need to render JavaScript, submit forms, or perform interactive browsing
   - the content is binary — the tool rejects non-textual responses
 
 Usage notes:
@@ -103,6 +107,8 @@ Usage notes:
   - Includes a self-cleaning 15-minute cache for faster responses when repeatedly accessing the same URL.
   \
 """
+
+FetchProviderType = Literal["direct", "tavily"]
 
 
 class FetchResult(BaseModel):
@@ -372,8 +378,8 @@ class _LRUCache:
 class WebFetchTool(BaseTool):
     """LLM tool that fetches a single URL and returns its textual content.
 
-    The tool issues an unauthenticated HTTP GET, converts the response
-    to text (Markdown-ish for HTML, verbatim for other textual types),
+    The tool fetches directly with an unauthenticated HTTP GET or delegates
+    extraction to Tavily, then converts the response to text,
     enforces tool-level allow/block lists, and caps the returned content
     to protect the model context window. Binary responses are rejected
     with a structured error rather than dumped as base64 blobs.
@@ -385,6 +391,11 @@ class WebFetchTool(BaseTool):
     freshness.
 
     Args:
+        provider: Fetch backend, ``"direct"`` (default) or ``"tavily"``.
+        api_key: Tavily API key; falls back to ``TAVILY_API_KEY``.
+        base_url: Override the Tavily Extract endpoint for tests or proxies.
+        tavily_extract_depth: Tavily extraction depth, ``"basic"`` or ``"advanced"``.
+        tavily_extra_params: Additional Tavily Extract JSON parameters.
         timeout: HTTP timeout in seconds.
         user_agent: HTTP ``User-Agent`` header.
         proxy: Optional HTTP proxy URL forwarded to httpx.
@@ -407,6 +418,11 @@ class WebFetchTool(BaseTool):
     def __init__(
         self,
         *,
+        provider: FetchProviderType = "direct",
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        tavily_extract_depth: Literal["basic", "advanced"] = "basic",
+        tavily_extra_params: Optional[dict[str, Any]] = None,
         timeout: float = _DEFAULT_TIMEOUT,
         user_agent: str = _DEFAULT_USER_AGENT,
         proxy: Optional[str] = None,
@@ -424,12 +440,21 @@ class WebFetchTool(BaseTool):
         filters_name: Optional[List[str]] = None,
         filters: Optional[List[BaseFilter]] = None,
     ) -> None:
+        if provider not in ("direct", "tavily"):
+            raise ValueError(f"Unsupported web fetch provider: {provider!r}")
+        if tavily_extract_depth not in ("basic", "advanced"):
+            raise ValueError("tavily_extract_depth must be 'basic' or 'advanced'")
         super().__init__(
             name="webfetch",
             description=_BASE_DESCRIPTION,
             filters_name=filters_name,
             filters=filters,
         )
+        self._provider: FetchProviderType = provider
+        self._api_key = api_key or os.environ.get("TAVILY_API_KEY", "")
+        self._base_url = base_url or _TAVILY_BASE_URL
+        self._tavily_extract_depth = tavily_extract_depth
+        self._tavily_extra_params = tavily_extra_params or {}
         self._timeout = float(timeout)
         self._user_agent = user_agent
         self._proxy = proxy
@@ -450,6 +475,9 @@ class WebFetchTool(BaseTool):
                 ttl_seconds=cache_ttl_seconds,
                 max_bytes=cache_max_bytes,
             )
+        if provider == "tavily" and not self._api_key:
+            logger.warning("WebFetchTool: provider='tavily' but api_key is "
+                           "missing; calls will return an error.")
 
     @staticmethod
     def _clean_domains(value: Optional[List[str]]) -> Optional[List[str]]:
@@ -551,6 +579,8 @@ class WebFetchTool(BaseTool):
         """Issue a streaming GET and map the response to :class:`FetchResult`."""
         start = time.monotonic()
         try:
+            if self._provider == "tavily":
+                return await self._extract_with_tavily(url, start)
             return await self._do_fetch(url, start)
         except _DomainBlockedError as e:
             return FetchResult(
@@ -578,6 +608,71 @@ class WebFetchTool(BaseTool):
                 error=f"FETCH_ERROR: {e}",
                 duration_ms=int((time.monotonic() - start) * 1000),
             )
+
+    async def _extract_with_tavily(self, url: str, start: float) -> FetchResult:
+        """Extract one public URL with Tavily."""
+        if not self._api_key:
+            return FetchResult(
+                url=url,
+                error=("TAVILY_NOT_CONFIGURED: set api_key or "
+                       "TAVILY_API_KEY"),
+                duration_ms=int((time.monotonic() - start) * 1000),
+            )
+        await self._check_ssrf(url)
+
+        payload: dict[str, Any] = {
+            "urls": [url],
+            "extract_depth": self._tavily_extract_depth,
+            "include_images": False,
+        }
+        payload.update(self._tavily_extra_params)
+        client = self._get_client()
+        owns_client = self._http_client is None
+        try:
+            response = await client.post(
+                self._base_url,
+                json=payload,
+                timeout=self._timeout,
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "User-Agent": self._user_agent,
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+        finally:
+            if owns_client:
+                await client.aclose()
+
+        results = data.get("results") or []
+        result_data = next(
+            (item for item in results if isinstance(item, dict)),
+            None,
+        )
+        if result_data is None:
+            failed = data.get("failed_results") or data.get("failed_urls") or []
+            detail = failed[0] if isinstance(failed, list) and failed else data.get("detail") or data.get("error")
+            return FetchResult(
+                url=url,
+                error=f"TAVILY_EXTRACT_ERROR: {detail or 'no content returned'}",
+                duration_ms=int((time.monotonic() - start) * 1000),
+            )
+
+        final_url = str(result_data.get("url") or url)
+        content = str(result_data.get("raw_content") or result_data.get("content") or "")
+        encoded = content.encode("utf-8", errors="ignore")
+        if self._max_response_bytes > 0 and len(encoded) > self._max_response_bytes:
+            encoded = encoded[:self._max_response_bytes]
+            content = encoded.decode("utf-8", errors="ignore")
+        return FetchResult(
+            url=final_url,
+            status_code=200,
+            status_text="OK",
+            content_type="text/markdown",
+            content=content,
+            bytes=len(content.encode("utf-8", errors="ignore")),
+            duration_ms=int((time.monotonic() - start) * 1000),
+        )
 
     async def _do_fetch(self, url: str, start: float) -> FetchResult:
         """Drive the request + manual-redirect loop and build the result."""
