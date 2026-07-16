@@ -11,7 +11,10 @@ _REPO_ROOT = _HERE.parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from pipeline import EvalOptimizePipeline  # noqa: E402
+try:
+    from .pipeline import EvalOptimizePipeline  # noqa: E402
+except ImportError:
+    from pipeline import EvalOptimizePipeline  # type: ignore
 
 
 async def main() -> None:

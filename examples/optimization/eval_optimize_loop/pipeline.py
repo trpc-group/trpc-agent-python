@@ -44,10 +44,12 @@ class EvalOptimizePipeline:
         call_agent: Optional[CallAgent] = None,
         target_prompt: Optional[TargetPrompt] = None,
     ) -> "EvalOptimizePipeline":
+        config_dir = os.path.dirname(os.path.abspath(config_path))
         with open(config_path, "r", encoding="utf-8") as f:
             raw = f.read()
 
         config = PipelineConfig.model_validate_json(raw)
+        cls._resolve_paths(config, config_dir)
 
         if config.mode == "live" and (call_agent is None or target_prompt is None):
             raise ValueError(
@@ -59,6 +61,28 @@ class EvalOptimizePipeline:
         pipeline._live_call_agent = call_agent
         pipeline._live_target_prompt = target_prompt
         return pipeline
+
+    @staticmethod
+    def _resolve_paths(config: PipelineConfig, base_dir: str) -> None:
+        """Resolve relative paths in config against the config file directory."""
+        paths = [
+            ("baseline_prompt_path", config.baseline_prompt_path),
+            ("candidate_prompt_path", config.candidate_prompt_path),
+            ("train_baseline_evalset", config.train_baseline_evalset),
+            ("train_candidate_evalset", config.train_candidate_evalset),
+            ("val_baseline_evalset", config.val_baseline_evalset),
+            ("val_candidate_evalset", config.val_candidate_evalset),
+            ("live_train_evalset", config.live_train_evalset),
+            ("live_val_evalset", config.live_val_evalset),
+            ("optimizer_config_path", config.optimizer_config_path),
+        ]
+        import tempfile
+        for name, value in paths:
+            if value is not None and not os.path.isabs(value) and not value.startswith("/tmp"):
+                setattr(config, name, os.path.normpath(os.path.join(base_dir, value)))
+
+        if not os.path.isabs(config.output_dir):
+            config.output_dir = os.path.normpath(os.path.join(base_dir, config.output_dir))
 
     async def run(self) -> PipelineResult:
         started_at = datetime.now(timezone.utc).isoformat()

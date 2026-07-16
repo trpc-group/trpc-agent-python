@@ -1,0 +1,203 @@
+{
+  "schemaVersion": "v1",
+  "mode": "trace",
+  "gateDecision": "REJECT",
+  "gateReasons": [
+    "newly failing in val not allowed: ['case_val_regression']",
+    "min_improvement met: val pass_rate delta 0.0000 >= 0.0000",
+    "duration check passed: 0.01s <= 180s"
+  ],
+  "baseline": {
+    "train": {
+      "passRate": 0.3333333333333333,
+      "metricBreakdown": {
+        "final_response_avg_score": 0.3333333333333333
+      },
+      "perCase": {
+        "case_train_regression": {
+          "caseId": "case_train_regression",
+          "passed": true,
+          "metricScores": {
+            "final_response_avg_score": 1.0
+          }
+        },
+        "case_train_optimizable": {
+          "caseId": "case_train_optimizable",
+          "passed": false,
+          "metricScores": {
+            "final_response_avg_score": 0.0
+          }
+        },
+        "case_train_always_fail": {
+          "caseId": "case_train_always_fail",
+          "passed": false,
+          "metricScores": {
+            "final_response_avg_score": 0.0
+          }
+        }
+      }
+    },
+    "val": {
+      "passRate": 0.3333333333333333,
+      "metricBreakdown": {
+        "final_response_avg_score": 0.3333333333333333
+      },
+      "perCase": {
+        "case_val_no_change": {
+          "caseId": "case_val_no_change",
+          "passed": false,
+          "metricScores": {
+            "final_response_avg_score": 0.0
+          }
+        },
+        "case_val_regression": {
+          "caseId": "case_val_regression",
+          "passed": true,
+          "metricScores": {
+            "final_response_avg_score": 1.0
+          }
+        },
+        "case_val_improves": {
+          "caseId": "case_val_improves",
+          "passed": false,
+          "metricScores": {
+            "final_response_avg_score": 0.0
+          }
+        }
+      }
+    }
+  },
+  "candidate": {
+    "train": {
+      "passRate": 0.3333333333333333,
+      "metricBreakdown": {
+        "final_response_avg_score": 0.3333333333333333
+      },
+      "perCase": {
+        "case_train_always_fail": {
+          "caseId": "case_train_always_fail",
+          "passed": false,
+          "metricScores": {
+            "final_response_avg_score": 0.0
+          }
+        },
+        "case_train_regression": {
+          "caseId": "case_train_regression",
+          "passed": false,
+          "metricScores": {
+            "final_response_avg_score": 0.0
+          }
+        },
+        "case_train_optimizable": {
+          "caseId": "case_train_optimizable",
+          "passed": true,
+          "metricScores": {
+            "final_response_avg_score": 1.0
+          }
+        }
+      }
+    },
+    "val": {
+      "passRate": 0.3333333333333333,
+      "metricBreakdown": {
+        "final_response_avg_score": 0.3333333333333333
+      },
+      "perCase": {
+        "case_val_no_change": {
+          "caseId": "case_val_no_change",
+          "passed": false,
+          "metricScores": {
+            "final_response_avg_score": 0.0
+          }
+        },
+        "case_val_regression": {
+          "caseId": "case_val_regression",
+          "passed": false,
+          "metricScores": {
+            "final_response_avg_score": 0.0
+          }
+        },
+        "case_val_improves": {
+          "caseId": "case_val_improves",
+          "passed": true,
+          "metricScores": {
+            "final_response_avg_score": 1.0
+          }
+        }
+      }
+    }
+  },
+  "delta": {
+    "train": {
+      "newlyPassing": [
+        "case_train_optimizable"
+      ],
+      "newlyFailing": [
+        "case_train_regression"
+      ],
+      "scoreDeltas": {
+        "case_train_regression": {
+          "final_response_avg_score": -1.0
+        },
+        "case_train_always_fail": {
+          "final_response_avg_score": 0.0
+        },
+        "case_train_optimizable": {
+          "final_response_avg_score": 1.0
+        }
+      },
+      "unchanged": [
+        "case_train_always_fail"
+      ]
+    },
+    "val": {
+      "newlyPassing": [
+        "case_val_improves"
+      ],
+      "newlyFailing": [
+        "case_val_regression"
+      ],
+      "scoreDeltas": {
+        "case_val_regression": {
+          "final_response_avg_score": -1.0
+        },
+        "case_val_no_change": {
+          "final_response_avg_score": 0.0
+        },
+        "case_val_improves": {
+          "final_response_avg_score": 1.0
+        }
+      },
+      "unchanged": [
+        "case_val_no_change"
+      ]
+    },
+    "trainPassRateDelta": 0.0,
+    "valPassRateDelta": 0.0
+  },
+  "failureAttribution": {
+    "totalCases": 3,
+    "failedCases": 2,
+    "categories": {
+      "final_response_mismatch": {
+        "count": 2,
+        "caseIds": [
+          "case_train_optimizable",
+          "case_train_always_fail"
+        ]
+      },
+      "format_violation": {
+        "count": 1,
+        "caseIds": [
+          "case_train_always_fail"
+        ]
+      }
+    }
+  },
+  "overfittingWarning": false,
+  "durationSeconds": 0.010774361000585486,
+  "costUsd": 0.0,
+  "seed": 42,
+  "startedAt": "2026-07-16T03:39:56.304373+00:00",
+  "finishedAt": "2026-07-16T03:39:56.315185+00:00"
+}
