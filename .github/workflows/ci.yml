@@ -75,7 +75,7 @@ jobs:
 
       - name: Run tests with coverage
         # run: pytest --cov=trpc_agent_sdk --cov-report=xml --cov-report=term tests/
-        run: pytest --cov=trpc_agent_sdk --cov-report=xml --cov-report=term --cov-fail-under=80 tests/
+        run: pytest --cov=trpc_agent_sdk --cov-report=xml --cov-report=term --cov-fail-under=80 tests/ examples/optimization/eval_optimize_loop/tests/
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4

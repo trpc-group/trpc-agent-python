@@ -57,17 +57,22 @@ def test_pipeline_from_config_trace_mode():
 
 def test_pipeline_from_config_live_mode():
     """Pipeline loads live mode config correctly."""
-    Path("/tmp/train.json").touch()
-    Path("/tmp/val.json").touch()
-    Path("/tmp/optimizer.json").touch()
+    import json
+
+    train_f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+    val_f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+    opt_f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+    train_f.close()
+    val_f.close()
+    opt_f.close()
 
     config_data = {
         "mode": "live",
-        "live_train_evalset": "/tmp/train.json",
-        "live_val_evalset": "/tmp/val.json",
-        "optimizer_config_path": "/tmp/optimizer.json",
+        "live_train_evalset": train_f.name,
+        "live_val_evalset": val_f.name,
+        "optimizer_config_path": opt_f.name,
         "target_prompt_name": "system_prompt",
-        "output_dir": "/tmp/outputs",
+        "output_dir": tempfile.mkdtemp(),
         "evaluate": {
             "metrics": [
                 {
@@ -81,8 +86,6 @@ def test_pipeline_from_config_live_mode():
         "seed": 42,
     }
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        import json
-
         json.dump(config_data, f)
         config_path = f.name
 
@@ -94,6 +97,9 @@ def test_pipeline_from_config_live_mode():
         assert pipeline._live_call_agent is not None
     finally:
         os.unlink(config_path)
+        os.unlink(train_f.name)
+        os.unlink(val_f.name)
+        os.unlink(opt_f.name)
 
 
 def test_pipeline_live_mode_missing_params():

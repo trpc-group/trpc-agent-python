@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import os
-import time
+import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 from typing import Callable, Optional
 
@@ -15,7 +17,10 @@ from trpc_agent_sdk.evaluation import (
     EvaluateResult,
     TargetPrompt,
 )
-from trpc_agent_sdk.evaluation._agent_evaluator import _EvaluationCasesFailed
+try:
+    from trpc_agent_sdk.evaluation._agent_evaluator import _EvaluationCasesFailed
+except ImportError:
+    _EvaluationCasesFailed = AssertionError
 
 from .delta import compute_delta
 from .failure_attribution import attribute_failures
@@ -73,6 +78,16 @@ class EvalOptimizePipeline:
         pipeline = cls(config)
         pipeline._live_call_agent = call_agent
         pipeline._live_target_prompt = target_prompt
+
+        if config.gate.max_cost_usd is not None:
+            print(
+                "Note: gate.max_cost_usd is set but cost tracking is not yet "
+                "implemented in the pipeline (cost_usd is always 0.0). "
+                "The cost gate rule will not reject candidates on cost grounds. "
+                "Monitor costs via your LLM provider dashboard.",
+                file=sys.stderr,
+            )
+
         return pipeline
 
     @staticmethod
@@ -89,9 +104,8 @@ class EvalOptimizePipeline:
             ("live_val_evalset", config.live_val_evalset),
             ("optimizer_config_path", config.optimizer_config_path),
         ]
-        import tempfile
         for name, value in paths:
-            if value is not None and not os.path.isabs(value) and not value.startswith("/tmp"):
+            if value is not None and not os.path.isabs(value):
                 setattr(config, name, os.path.normpath(os.path.join(base_dir, value)))
 
         if not os.path.isabs(config.output_dir):

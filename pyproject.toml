@@ -204,5 +204,5 @@ split_before_logical_operator = true
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "-ra -q"
-testpaths = ["tests"]
+testpaths = ["tests", "examples/optimization/eval_optimize_loop/tests"]
 asyncio_mode = "auto"
