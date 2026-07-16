@@ -15,6 +15,7 @@ from trpc_agent_sdk.evaluation import (
     EvaluateResult,
     TargetPrompt,
 )
+from trpc_agent_sdk.evaluation._agent_evaluator import _EvaluationCasesFailed
 
 from .delta import compute_delta
 from .failure_attribution import attribute_failures
@@ -137,8 +138,14 @@ class EvalOptimizePipeline:
                 print_detailed_results=False,
                 print_summary_report=False,
             )
-            await executer.evaluate()
-            return executer.get_result()
+            try:
+                await executer.evaluate()
+            except _EvaluationCasesFailed:
+                pass
+            result = executer.get_result()
+            if result is None:
+                result = EvaluateResult()
+            return result
         finally:
             os.unlink(eval_config_path)
 
@@ -177,8 +184,14 @@ class EvalOptimizePipeline:
                 print_detailed_results=False,
                 print_summary_report=False,
             )
-            await executer.evaluate()
-            return executer.get_result()
+            try:
+                await executer.evaluate()
+            except _EvaluationCasesFailed:
+                pass
+            result = executer.get_result()
+            if result is None:
+                result = EvaluateResult()
+            return result
         finally:
             os.unlink(eval_config_path)
 
