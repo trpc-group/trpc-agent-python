@@ -5,6 +5,7 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """ReviewStore: persistence built on the SDK's SqlStorage (SQLite by default,
 any SQLAlchemy db_url works)."""
+import uuid
 from datetime import datetime
 
 from trpc_agent_sdk.storage import SqlCondition, SqlKey, SqlStorage
@@ -38,7 +39,6 @@ class ReviewStore:
                             runtime=runtime, dry_run=dry_run, status="running")
         task_id = row.id or ""
         if not task_id:
-            import uuid
             task_id = uuid.uuid4().hex
             row.id = task_id
         await self._add(row)
