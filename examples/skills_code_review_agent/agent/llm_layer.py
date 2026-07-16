@@ -71,11 +71,7 @@ def _get_llm_config() -> dict:
     if not api_key:
         raise ValueError("需要 OPENAI_API_KEY 或 TRPC_AGENT_API_KEY 环境变量")
 
-    return {
-        "api_key": api_key,
-        "base_url": base_url,
-        "model_name": model_name
-    }
+    return {"api_key": api_key, "base_url": base_url, "model_name": model_name}
 
 
 def _findings_to_json(findings: list[Finding]) -> str:
@@ -152,20 +148,19 @@ def _call_llm_with_openai_client(findings: list[Finding]) -> list[dict]:
         max_retries = 3
         for attempt in range(max_retries + 1):
             try:
-                response = client.chat.completions.create(
-                    model=config["model_name"],
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "代码评审专家，输出纯JSON格式。"
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt
-                        },
-                    ],
-                    temperature=0.1,
-                    max_tokens=2000)  # 降低到2000减少400错误
+                response = client.chat.completions.create(model=config["model_name"],
+                                                        messages=[
+                                                            {
+                                                                "role": "system",
+                                                                "content": "代码评审专家，输出纯JSON格式。"
+                                                            },
+                                                            {
+                                                                "role": "user",
+                                                                "content": prompt
+                                                            },
+                                                        ],
+                                                        temperature=0.1,
+                                                        max_tokens=2000)  # 降低到2000减少400错误
 
                 response_text = response.choices[0].message.content
                 verdicts = _parse_llm_response(response_text)
@@ -180,7 +175,7 @@ def _call_llm_with_openai_client(findings: list[Finding]) -> list[dict]:
                     raise Exception(f"OpenAI API 400错误: {str(e)}") from e
                 # 超时/5xx/Upstream错误指数退避重试
                 elif attempt < max_retries and ("timeout" in error_msg or "5" in error_msg or "upstream" in error_msg):
-                    wait_time = 2 ** attempt  # 指数退避：1s, 2s, 4s
+                    wait_time = 2**attempt  # 指数退避：1s, 2s, 4s
                     print(f"[LLM Layer] 调用失败，{wait_time}秒后重试 {attempt + 1}/{max_retries}: {str(e)}")
                     time.sleep(wait_time)
                     continue
@@ -352,20 +347,19 @@ def _call_llm_with_openai_client_supplementary(existing_findings: list[Finding],
     max_retries = 3
     for attempt in range(max_retries + 1):
         try:
-            response = client.chat.completions.create(
-                model=config["model_name"],
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "代码评审专家，输出纯JSON格式。"
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    },
-                ],
-                temperature=0.1,
-                max_tokens=1500)  # 进一步降低到1500减少400错误
+            response = client.chat.completions.create(model=config["model_name"],
+                                                    messages=[
+                                                        {
+                                                            "role": "system",
+                                                            "content": "代码评审专家，输出纯JSON格式。"
+                                                        },
+                                                        {
+                                                            "role": "user",
+                                                            "content": prompt
+                                                        },
+                                                    ],
+                                                    temperature=0.1,
+                                                    max_tokens=1500)  # 进一步降低到1500减少400错误
 
             response_text = response.choices[0].message.content
             new_findings = _parse_supplementary_findings(response_text)
@@ -375,11 +369,11 @@ def _call_llm_with_openai_client_supplementary(existing_findings: list[Finding],
             error_msg = str(e).lower()
             # 400错误不重试，直接抛出
             if "400" in error_msg or "bad request" in error_msg:
-                print(f"[LLM Layer] 补召回400错误（prompt太大），不重试")
+                print("[LLM Layer] 补召回400错误（prompt太大），不重试")
                 raise Exception(f"OpenAI 补召回400错误: {str(e)}") from e
             # 超时/5xx/Upstream错误指数退避重试
             elif attempt < max_retries and ("timeout" in error_msg or "5" in error_msg or "upstream" in error_msg):
-                wait_time = 2 ** attempt  # 指数退避：1s, 2s, 4s
+                wait_time = 2**attempt  # 指数退避：1s, 2s, 4s
                 print(f"[LLM Layer] 补召回失败，{wait_time}秒后重试 {attempt + 1}/{max_retries}: {str(e)}")
                 time.sleep(wait_time)
                 continue

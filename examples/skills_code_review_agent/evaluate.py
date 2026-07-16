@@ -94,8 +94,10 @@ def load_env_file(env_file: str) -> bool:
                     value = value.strip()
 
                     # 只设置 LLM 相关的环境变量
-                    if key in ["OPENAI_API_KEY", "TRPC_AGENT_API_KEY", "OPENAI_BASE_URL",
-                               "TRPC_AGENT_BASE_URL", "MODEL_NAME", "TRPC_AGENT_MODEL_NAME"]:
+                    if key in [
+                            "OPENAI_API_KEY", "TRPC_AGENT_API_KEY", "OPENAI_BASE_URL", "TRPC_AGENT_BASE_URL",
+                            "MODEL_NAME", "TRPC_AGENT_MODEL_NAME"
+                    ]:
                         os.environ[key] = value
 
         # 验证是否成功加载 API Key
@@ -160,8 +162,7 @@ def load_fixture_diff(fixture_name: str) -> str:
         return f.read()
 
 
-def evaluate_fixture(fixture_name: str, expected_data: Dict[str, Any],
-                     use_llm: bool = False) -> Dict[str, Any]:
+def evaluate_fixture(fixture_name: str, expected_data: Dict[str, Any], use_llm: bool = False) -> Dict[str, Any]:
     """评估单个fixture
 
     Args:
@@ -186,11 +187,12 @@ def evaluate_fixture(fixture_name: str, expected_data: Dict[str, Any],
         print("[OK] 成功加载diff文件")
 
         # 运行审查管线
-        report = run_review(diff_text=diff_text,
-                            repo="https://github.com/test/repo",
-                            sandbox="fake",
-                            dry_run=not use_llm,  # llm=True 时 dry_run=False
-                            llm=use_llm)  # 传递 llm 参数
+        report = run_review(
+            diff_text=diff_text,
+            repo="https://github.com/test/repo",
+            sandbox="fake",
+            dry_run=not use_llm,  # llm=True 时 dry_run=False
+            llm=use_llm)  # 传递 llm 参数
         mode_str = "LLM 增强" if use_llm else "基础"
         print(f"[OK] 完成审查（{mode_str}模式），发现 {len(report.findings)} 个findings")
 
@@ -211,7 +213,6 @@ def evaluate_fixture(fixture_name: str, expected_data: Dict[str, Any],
 
         # 高置信度桶（findings + warnings）：正常算 TP/FP
         high_confidence_findings = findings_findings + warnings_findings
-        high_confidence_rule_ids = set(finding.rule_id for finding in high_confidence_findings)
 
         # 所有实际检测（用于召回率计算）：包含三个桶
         all_actual_findings = high_confidence_findings + needs_review_findings
@@ -311,48 +312,27 @@ def evaluate_fixture(fixture_name: str, expected_data: Dict[str, Any],
 
         # 构造结果
         result = {
-            "fixture_name":
-            fixture_name,
-            "description":
-            expected_data.get("description", ""),
-            "expected_rule_ids":
-            list(expected_rule_ids),
-            "actual_rule_ids":
-            list(actual_rule_ids),
-            "expected_instances":
-            expected_instances,
-            "actual_instances":
-            all_instances,
-            "high_confidence_instances":
-            high_conf_instances,
-            "needs_review_instances":
-            needs_review_instances,
-            "expected_count":
-            expected_count,
-            "actual_count":
-            len(all_actual_findings),
-            "high_confidence_count":
-            len(high_confidence_findings),
-            "needs_review_count":
-            len(needs_review_findings),
-            "tp":
-            tp,
-            "fp":
-            fp,
-            "fn":
-            fn,
-            "precision":
-            precision_val,
-            "recall":
-            recall_val,
-            "f1":
-            f1_val,
-            "redaction_rate":
-            redaction_check["redaction_rate"],
-            "note":
-            expected_data.get("note", ""),
-            "success":
-            True
+            "fixture_name": fixture_name,
+            "description": expected_data.get("description", ""),
+            "expected_rule_ids": list(expected_rule_ids),
+            "actual_rule_ids": list(actual_rule_ids),
+            "expected_instances": expected_instances,
+            "actual_instances": all_instances,
+            "high_confidence_instances": high_conf_instances,
+            "needs_review_instances": needs_review_instances,
+            "expected_count": expected_count,
+            "actual_count": len(all_actual_findings),
+            "high_confidence_count": len(high_confidence_findings),
+            "needs_review_count": len(needs_review_findings),
+            "tp": tp,
+            "fp": fp,
+            "fn": fn,
+            "precision": precision_val,
+            "recall": recall_val,
+            "f1": f1_val,
+            "redaction_rate": redaction_check["redaction_rate"],
+            "note": expected_data.get("note", ""),
+            "success": True
         }
 
         # 打印结果
@@ -599,10 +579,8 @@ def main():
     """主函数"""
     # 解析命令行参数
     parser = argparse.ArgumentParser(description="代码审查Agent量化评测")
-    parser.add_argument("--llm", action="store_true",
-                        help="启用真实 LLM 模式（默认为 dry_run 模式）")
-    parser.add_argument("--env-file", type=str, default=None,
-                        help="指定 .env 文件路径（默认自动探测）")
+    parser.add_argument("--llm", action="store_true", help="启用真实 LLM 模式（默认为 dry_run 模式）")
+    parser.add_argument("--env-file", type=str, default=None, help="指定 .env 文件路径（默认自动探测）")
 
     args = parser.parse_args()
 
