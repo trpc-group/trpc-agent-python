@@ -165,11 +165,10 @@ async def run_review(opts: ReviewOptions) -> ReviewResult:
             needs_review=needs_review, deduped_count=len(dropped),
             filter_events=filter_events, sandbox_outcomes=sandbox_outcomes,
             metrics=metrics, llm_summary=llm_summary, warnings=warnings)
+        report = json.loads(redact_text(json.dumps(report, indent=2, ensure_ascii=False, default=str)))
         json_path, md_path = write_reports(report, opts.output_dir)
-        report_json_text = redact_text(json.dumps(report, indent=2, ensure_ascii=False, default=str))
-        report_for_db = json.loads(report_json_text)
         md_text = render_markdown(report)
-        await store.add_report(task_id, report_for_db, md_text)
+        await store.add_report(task_id, report, md_text)
         await store.update_task(task_id, status="completed",
                                 diff_summary=diff_summary, finished=True)
         return ReviewResult(task_id=task_id, report=report,
