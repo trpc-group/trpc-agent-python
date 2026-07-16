@@ -1,0 +1,44 @@
+diff --git a/src/config.py b/src/config.py
+index 1234567..abcdefg 100644
+--- a/src/config.py
++++ b/src/config.py
+@@ -1,8 +1,16 @@ import os
+
+ class Config:
+     """配置类"""
+
++    def __init__(self):
++        """初始化配置"""
++        # SECRET001: 多个敏感信息实例
++        self.api_key = "sk-1234567890abcdef"
++        self.database_url = "postgresql://user:password@localhost/db"
++        self.aws_secret = "aws_secret_access_key_ABCDEF123456"
++        self.jwt_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
++        self.private_key = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQ=="
++        self.password = "super_secret_password_123"
++
+     def get_database_config(self) -> dict:
+-        return {"host": "localhost"}
++        """获取数据库配置"""
++        return {
++            "host": "localhost",
++            "password": "admin_password_456",  # SECRET001
++            "api_key": "sk_test_abcdef123456"   # SECRET001
++        }
+
+@@ -10,4 +18,10 @@ class Config:
+     def get_aws_config(self) -> dict:
+-        return {"region": "us-east-1"}
++        """获取AWS配置"""
++        return {
++            "region": "us-east-1",
++            "access_key": "AKIAIOSFODNN7EXAMPLE",     # SECRET001
++            "secret_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"  # SECRET001
++        }
+
++def get_auth_headers() -> dict:
++    """获取认证头"""
++    return {
++        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",  # SECRET001
++        "X-API-Key": "sk_live_1234567890abcdef"  # SECRET001
++    }

@@ -1,0 +1,45 @@
+diff --git a/src/auth.py b/src/auth.py
+index 1234567..abcdefg 100644
+--- a/src/auth.py
++++ b/src/auth.py
+@@ -3,8 +3,16 @@ import hashlib
+ import os
+
++def execute_user_command(user_cmd: str) -> str:
++    """执行用户命令"""
++    # SEC001: 第一个os.system实例
++    result = os.system(user_cmd)
++    return f"命令执行结果: {result}"
++
+ def verify_password(input_password: str, stored_hash: str) -> bool:
+     """验证密码"""
+-    return hashlib.sha256(input_password.encode()).hexdigest() == stored_hash
++    salt = "固定盐值"  # SECRET001: 硬编码的盐值
++    return hashlib.sha256(input_password.encode() + salt.encode()).hexdigest() == stored_hash
+
+@@ -9,8 +17,16 @@ def verify_password(input_password: str, stored_hash: str) -> bool:
+ def run_system_script(script_name: str) -> None:
+     """运行系统脚本"""
+-    print(f"运行脚本: {script_name}")
++    # SEC001: 第二个os.system实例（与第一行重复）
++    os.system(f"python {script_name}")
+
++def eval_config(config_code: str) -> dict:
++    """评估配置代码"""
++    # SEC003: 第一个eval实例
++    config = eval(config_code)
++    return config
+
+@@ -17,4 +25,8 @@ def eval_config(config_code: str) -> dict:
+ def load_user_data(user_script: str) -> any:
+     """加载用户数据"""
+-    return json.loads(user_script)
++    # SEC003: 第二个eval实例（与上一行重复）
++    data = eval(user_script)
++    return data
+
++def execute_shell(user_input: str) -> str:
++    """执行shell命令"""
++    # SEC002: 重复的subprocess.shell=True实例
++    subprocess.call(user_input, shell=True)
++    return subprocess.call(f"bash -c '{user_input}'", shell=True)

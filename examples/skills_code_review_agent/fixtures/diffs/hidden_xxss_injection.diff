@@ -1,0 +1,56 @@
+diff --git a/src/web_renderer.py b/src/web_renderer.py
+index 1234567..abcdefg 100644
+--- a/src/web_renderer.py
++++ b/src/web_renderer.py
+@@ -1,8 +1,14 @@ from django.http import HttpResponse
+
+ class WebRenderer:
+     """Web渲染器"""
+
++    def render_user_profile(self, username: str, bio: str) -> str:
++        """渲染用户档案"""
++        # XSS注入：用户输入直接插入HTML
++        html = f"""
++        <div class="profile">
++            <h1>User: {username}</h1>
++            <p>Bio: {bio}</p>
++        </div>
++        """
++        return html
+
+     def render_search_results(self, query: str, results: list) -> str:
+-        return f"<div>搜索结果: {query}</div>"
++        """渲染搜索结果"""
++        # XSS注入：搜索查询未经转义
++        html = "<div class='results'>"
++        html += f"<h2>搜索: {query}</h2>"
++        for result in results:
++            html += f"<p>{result['title']}</p>"
++        html += "</div>"
++        return html
+
+@@ -10,4 +18,8 @@ class WebRenderer:
+     def render_error_page(self, error_message: str) -> HttpResponse:
+-        return HttpResponse(f"错误: {error_message}")
++        """渲染错误页面"""
++        # XSS注入：错误信息直接输出到HTML
++        html = f"""
++        <html>
++            <body>
++                <h1>错误</h1>
++                <p>{error_message}</p>
++            </body>
++        </html>
++        """
++        return HttpResponse(html)
+
++def render_comment(user_input: str) -> str:
++    """渲染评论"""
++    # XSS注入：用户输入直接插入到JavaScript中
++    html = f"""
++    <script>
++        var comment = '{user_input}';
++        document.getElementById('comment').innerHTML = comment;
++    </script>
++    """
++    return html

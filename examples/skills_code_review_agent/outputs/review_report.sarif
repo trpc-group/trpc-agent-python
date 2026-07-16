@@ -1,0 +1,120 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "trpc-code-review-agent",
+          "version": "1.0.0",
+          "informationUri": "https://github.com/your-org/trpc-agent-python"
+        }
+      },
+      "results": [
+        {
+          "ruleId": "SEC008",
+          "level": "error",
+          "message": {
+            "text": "SEC008 触发: 见 references 修复指引"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/http_client.py"
+                },
+                "region": {
+                  "startLine": 8
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "SEC008",
+          "level": "error",
+          "message": {
+            "text": "SEC008 触发: 见 references 修复指引"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/http_client.py"
+                },
+                "region": {
+                  "startLine": 17
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "SEC008",
+          "level": "error",
+          "message": {
+            "text": "SEC008 触发: 见 references 修复指引"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/http_client.py"
+                },
+                "region": {
+                  "startLine": 22
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "SEC008",
+          "level": "error",
+          "message": {
+            "text": "SEC008 触发: 见 references 修复指引"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/http_client.py"
+                },
+                "region": {
+                  "startLine": 33
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "TEST001",
+          "level": "note",
+          "message": {
+            "text": "生产代码变更缺少测试: 补充对应测试"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/http_client.py"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "invocations": [
+        {
+          "startTimeUtc": "2026-07-16T17:31:47.768689Z",
+          "endTimeUtc": "2026-07-16T17:31:47.768689Z",
+          "exitCode": 0,
+          "toolExecutionNotifications": []
+        }
+      ]
+    }
+  ]
+}

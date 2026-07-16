@@ -1,0 +1,40 @@
+diff --git a/src/database.py b/src/database.py
+index 1234567..abcdefg 100644
+--- a/src/database.py
++++ b/src/database.py
+@@ -2,8 +2,16 @@ import sqlite3
+ import psycopg2
+ import pymysql
+
+ class DatabaseManager:
+     """数据库管理器"""
+
++    def __init__(self, connection_string: str):
++        """初始化数据库连接"""
++        # DB001: 直接创建连接但无生命周期管理
++        self.conn = sqlite3.connect(connection_string)
++        self.cursor = self.conn.cursor()
++
+     def query_user(self, user_id: int) -> dict:
+         """查询用户信息"""
+-        return {"id": user_id, "name": "test"}
++        # DB001: 使用未管理的连接
++        self.cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
++        return self.cursor.fetchone()
+
+@@ -12,4 +20,10 @@ class DatabaseManager:
+     def insert_log(self, message: str) -> None:
+         """插入日志记录"""
+-        print(f"日志: {message}")
++        # DB001: postgres连接无管理
++        pg_conn = psycopg2.connect("dbname=test user=postgres")
++        pg_conn.execute("INSERT INTO logs (message) VALUES (?)", (message,))
++        # 缺少 pg_conn.close()
+
+ def backup_database(host: str, sql: str) -> None:
+     """备份数据库"""
+-    print(f"备份: {host}")
++    # DB001: MySQL连接无管理
++    mysql_conn = pymysql.connect(host=host, user='root', password='123456')
++    mysql_conn.execute(sql)
++    # 缺少 mysql_conn.close()

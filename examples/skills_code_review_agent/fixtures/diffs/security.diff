@@ -1,0 +1,36 @@
+diff --git a/src/processor.py b/src/processor.py
+index 1234567..abcdefg 100644
+--- a/src/processor.py
++++ b/src/processor.py
+@@ -3,6 +3,12 @@ import subprocess
+ import pickle
+ import os
+
++def execute_command(user_input: str) -> str:
++    """执行用户提供的系统命令"""
++    result = os.system(user_input)  # SEC001: 直接执行用户输入
++    return f"执行结果: {result}"
++
+ def process_data(data: str) -> str:
+     """处理数据并返回结果"""
+     return data.upper()
+@@ -8,4 +14,10 @@ def process_data(data: str) -> str:
+ def run_shell_script(script: str) -> None:
+     """运行shell脚本"""
+-    subprocess.call(script, shell=True)  # 原有代码
++    subprocess.call(script, shell=True)  # SEC002: shell=True存在注入风险
++    subprocess.call(f"bash {script}", shell=True)  # SEC002: 多个实例
++
++def evaluate_config(config_str: str) -> dict:
++    """动态执行配置字符串"""
++    config = eval(config_str)  # SEC003: eval执行任意代码
++    return config
+
+@@ -15,3 +21,8 @@ def load_serialized_data(data: bytes) -> object:
+     """加载序列化的数据"""
+-    return json.loads(data)
++    return pickle.loads(data)  # SEC004: pickle.loads不安全
++
++def execute_user_code(code: str) -> any:
++    """执行用户代码"""
++    return exec(code)  # SEC003: exec执行任意代码

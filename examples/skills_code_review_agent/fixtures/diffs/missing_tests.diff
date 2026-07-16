@@ -1,0 +1,43 @@
+diff --git a/src/calculator.py b/src/calculator.py
+index 1234567..abcdefg 100644
+--- a/src/calculator.py
++++ b/src/calculator.py
+@@ -1,8 +1,16 @@ class Calculator:
+     """计算器类"""
+
+     def add(self, a: int, b: int) -> int:
+-        return a + b
++        """加法运算"""
++        result = a + b
++        if result > 1000:
++            result = 1000  # 添加上限保护
++        return result
+
+     def multiply(self, a: int, b: int) -> int:
+-        return a * b
++        """乘法运算"""
++        if a == 0 or b == 0:
++            return 0  # 优化零值处理
++        return a * b
+
+@@ -10,4 +18,10 @@ class Calculator:
+     def divide(self, a: int, b: int) -> float:
+-        if b == 0:
+-            raise ValueError("除零错误")
+-        return a / b
++        """除法运算"""
++        if b == 0:
++            raise ZeroDivisionError("除零错误")  # 更精确的异常类型
++        return a / b
+
++    def power(self, base: int, exponent: int) -> int:
++        """幂运算"""
++        if exponent < 0:
++            raise ValueError("不支持负指数")
++        return base ** exponent
++
++    def modulo(self, a: int, b: int) -> int:
++        """取模运算"""
++        if b == 0:
++            raise ZeroDivisionError("取模除零错误")
++        return a % b

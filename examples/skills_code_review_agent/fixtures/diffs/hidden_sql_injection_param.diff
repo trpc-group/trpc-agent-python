@@ -1,0 +1,39 @@
+diff --git a/src/database_query.py b/src/database_query.py
+index 1234567..abcdefg 100644
+--- a/src/database_query.py
++++ b/src/database_query.py
+@@ -2,8 +2,14 @@ import sqlite3
+
+ class DatabaseQuery:
+     """数据库查询类"""
+
++    def __init__(self, db_path: str):
++        """初始化数据库连接"""
++        self.conn = sqlite3.connect(db_path)
++        self.cursor = self.conn.cursor()
++
+     def search_user(self, username: str) -> list:
+-        return [{"name": "test"}]
++        """搜索用户"""
++        # SQL注入：字符串拼接构造SQL查询
++        query = f"SELECT * FROM users WHERE username = '{username}'"
++        self.cursor.execute(query)
++        return self.cursor.fetchall()
+
+@@ -10,4 +18,8 @@ class DatabaseQuery:
+     def get_user_by_id(self, user_id: str) -> dict:
+-        return {"id": user_id, "name": "test"}
++        """根据ID获取用户"""
++        # SQL注入：动态SQL构造
++        sql = "SELECT * FROM users WHERE id = " + user_id
++        self.cursor.execute(sql)
++        return self.cursor.fetchone()
+
++def search_products(category: str, keyword: str) -> list:
++    """搜索产品"""
++    # SQL注入：多参数动态SQL构造
++    conn = sqlite3.connect(":memory:")
++    cursor = conn.cursor()
++    query = f"SELECT * FROM products WHERE category = '{category}' AND name LIKE '%{keyword}%'"
++    cursor.execute(query)
++    return cursor.fetchall()
