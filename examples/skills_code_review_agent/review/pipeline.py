@@ -18,7 +18,8 @@ from storage.store import ReviewStore
 from .findings import Finding, dedupe, gate, severity_distribution
 from .governance import DEFAULT_ALLOWED_SCRIPTS, GovernanceEngine
 from .llm_review import run_llm_review
-from .report import build_report, write_reports
+from .redaction import redact_text
+from .report import build_report, render_markdown, write_reports
 from .sandbox import DIFF_WS_PATH, SandboxSession, create_runtime
 
 DEFAULT_SKILL_ROOT = str(Path(__file__).resolve().parents[1] / "skills" / "code-review")
@@ -165,7 +166,10 @@ async def run_review(opts: ReviewOptions) -> ReviewResult:
             filter_events=filter_events, sandbox_outcomes=sandbox_outcomes,
             metrics=metrics, llm_summary=llm_summary, warnings=warnings)
         json_path, md_path = write_reports(report, opts.output_dir)
-        await store.add_report(task_id, report, Path(md_path).read_text(encoding="utf-8"))
+        report_json_text = redact_text(json.dumps(report, indent=2, ensure_ascii=False, default=str))
+        report_for_db = json.loads(report_json_text)
+        md_text = render_markdown(report)
+        await store.add_report(task_id, report_for_db, md_text)
         await store.update_task(task_id, status="completed",
                                 diff_summary=diff_summary, finished=True)
         return ReviewResult(task_id=task_id, report=report,
