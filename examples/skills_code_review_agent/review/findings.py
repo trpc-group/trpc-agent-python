@@ -39,7 +39,7 @@ def _merge(winner: Finding, loser: Finding) -> Finding:
     return winner.model_copy(update=update) if update else winner
 
 
-def dedupe(findings):
+def dedupe(findings: list[Finding]) -> tuple[list[Finding], list[Finding]]:
     """Collapse findings sharing (file, line, category). Returns (kept, dropped)."""
     kept: dict[str, Finding] = {}
     dropped = []
@@ -53,14 +53,14 @@ def dedupe(findings):
     return list(kept.values()), dropped
 
 
-def gate(findings, threshold: float = CONFIDENCE_THRESHOLD):
+def gate(findings: list[Finding], threshold: float = CONFIDENCE_THRESHOLD) -> tuple[list[Finding], list[Finding]]:
     """Split into (reported, needs_human_review) by confidence."""
     reported = [f for f in findings if f.confidence >= threshold]
     needs = [f for f in findings if f.confidence < threshold]
     return reported, needs
 
 
-def severity_distribution(findings):
+def severity_distribution(findings: list[Finding]) -> dict[str, int]:
     """Count findings per severity."""
     dist: dict[str, int] = {}
     for f in findings:
