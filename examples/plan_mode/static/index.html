@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan Mode · AG-UI Demo</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1e222b;
+    --border: #2a2f3a;
+    --text: #e6e8ee;
+    --text-dim: #8b93a7;
+    --accent: #5b8cff;
+    --accent-2: #7c5bff;
+    --green: #35c88a;
+    --red: #ef5a6f;
+    --amber: #e2a93b;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #1a2036 0%, var(--bg) 55%);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(23, 26, 33, 0.7);
+    backdrop-filter: blur(6px);
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  header h1 .dot { color: var(--accent); }
+  header .meta { font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 12px; }
+  header button {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  header button:hover { color: var(--text); border-color: var(--accent); }
+
+  .mode-toggle {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 999px;
+    background: rgba(8, 10, 14, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+  .mode-toggle button {
+    border: none;
+    border-radius: 999px;
+    padding: 7px 13px;
+    min-width: 58px;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  }
+  .mode-toggle button:hover:not(.active) {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .mode-toggle button.active {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+  .mode-toggle button.active[data-mode="plan"] {
+    color: #b8ccff;
+    background: linear-gradient(180deg, rgba(91, 140, 255, 0.22), rgba(91, 140, 255, 0.12));
+    box-shadow: 0 0 0 1px rgba(91, 140, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.25);
+  }
+  .mode-toggle button .mode-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.45;
+    flex-shrink: 0;
+  }
+  .mode-toggle button.active .mode-dot { opacity: 1; }
+
+  #composer {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    background: linear-gradient(180deg, rgba(23, 26, 33, 0.35), rgba(23, 26, 33, 0.15));
+  }
+  #composer input {
+    flex: 1;
+    min-width: 0;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 14px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  #composer input:focus {
+    outline: none;
+    border-color: rgba(91, 140, 255, 0.55);
+    box-shadow: 0 0 0 3px rgba(91, 140, 255, 0.12);
+  }
+  #send-btn {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 0 18px;
+    min-height: 42px;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  }
+  #send-btn:hover:not(:disabled) { filter: brightness(1.06); }
+  #send-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.9fr);
+    gap: 16px;
+    padding: 16px;
+    height: calc(100vh - 57px);
+  }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; height: auto; }
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .panel-title {
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  #chat { padding: 14px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 88%; padding: 10px 13px; border-radius: 12px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+  .msg.user { align-self: flex-end; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; border-bottom-right-radius: 3px; }
+  .msg.assistant { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--border); border-bottom-left-radius: 3px; }
+  .msg.sys { align-self: center; color: var(--text-dim); background: transparent; font-size: 12px; padding: 2px 6px; max-width: 100%; }
+  .msg.error { align-self: center; color: var(--red); background: rgba(239, 90, 111, 0.08); border: 1px solid rgba(239, 90, 111, 0.3); font-size: 12px; }
+
+  .hitl-card {
+    align-self: stretch;
+    border: 1px solid var(--amber);
+    background: rgba(226, 169, 59, 0.08);
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 14px;
+  }
+  .hitl-card .label { color: var(--amber); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+  .hitl-card .content { white-space: pre-wrap; margin-bottom: 10px; }
+  .hitl-card textarea {
+    width: 100%; min-height: 56px; resize: vertical; margin-bottom: 10px;
+    background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px; font-size: 13px; font-family: inherit;
+  }
+  .hitl-card .options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .hitl-card .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn {
+    border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  .btn.approve { background: var(--green); color: #06281a; }
+  .btn.reject { background: var(--red); color: #2a0910; }
+  .btn.option { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  .btn.option:hover { border-color: var(--accent); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  #plan-body { padding: 14px; overflow-y: auto; flex: 1; font-size: 13px; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .badge.exploring, .badge.drafting { background: rgba(91, 140, 255, .15); color: var(--accent); }
+  .badge.pending_enter { background: rgba(124, 91, 255, .16); color: var(--accent-2); }
+  .badge.pending_approval { background: rgba(226, 169, 59, .18); color: var(--amber); }
+  .badge.approved { background: rgba(53, 200, 138, .18); color: var(--green); }
+  .kv { display: flex; justify-content: space-between; margin: 6px 0; color: var(--text-dim); }
+  .kv b { color: var(--text); font-weight: 500; }
+  #plan-content {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    white-space: pre-wrap; margin-top: 10px; font-size: 13px; line-height: 1.6; max-height: 40vh; overflow-y: auto;
+  }
+  .empty { color: var(--text-dim); font-size: 13px; text-align: center; padding: 24px 8px; }
+  .qa { border-top: 1px dashed var(--border); margin-top: 12px; padding-top: 10px; }
+  .qa .q { color: var(--text-dim); font-size: 12px; }
+  .qa .a { color: var(--green); font-size: 12px; margin-top: 2px; }
+  .side-section-title {
+    font-size: 11px; font-weight: 600; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px;
+  }
+  .todos-block { border-top: 1px dashed var(--border); margin-top: 14px; padding-top: 12px; }
+  .todos-block:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+  .todos-empty { color: var(--text-dim); font-size: 12px; line-height: 1.5; }
+  .todo-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .todo-item {
+    display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; line-height: 1.45;
+  }
+  .todo-item.in_progress { border-color: rgba(91, 140, 255, .55); background: rgba(91, 140, 255, .06); }
+  .todo-item.completed { opacity: .58; }
+  .todo-item.completed .todo-title { text-decoration: line-through; color: var(--text-dim); }
+  .todo-icon { flex-shrink: 0; width: 16px; text-align: center; font-weight: 700; }
+  .todo-item.pending .todo-icon { color: var(--text-dim); }
+  .todo-item.in_progress .todo-icon { color: var(--accent); }
+  .todo-item.completed .todo-icon { color: var(--green); }
+  .todo-body { flex: 1; min-width: 0; }
+  .todo-title { word-break: break-word; }
+  .todo-active { font-size: 11px; color: var(--accent); margin-top: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="dot">●</span> Plan Mode <span style="color:var(--text-dim); font-weight:400;">/ AG-UI Demo</span></h1>
+  <div class="meta">
+    <span id="thread-label">thread: -</span>
+    <button id="reset-btn">重置会话</button>
+  </div>
+</header>
+
+<main>
+  <section class="panel">
+    <div class="panel-title">对话</div>
+    <div id="chat"></div>
+    <form id="composer">
+      <div class="mode-toggle" role="group" aria-label="Agent 模式">
+        <button type="button" id="mode-agent-btn" class="active" data-mode="agent">
+          <span class="mode-dot" aria-hidden="true"></span>Agent
+        </button>
+        <button type="button" id="mode-plan-btn" data-mode="plan">
+          <span class="mode-dot" aria-hidden="true"></span>Plan
+        </button>
+      </div>
+      <input id="input" type="text" value="帮我参考QQ音乐生成一个类似的前端项目" placeholder="向 orchestrator 描述你的需求…" autocomplete="off" />
+      <button id="send-btn" type="submit">发送</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <div class="panel-title">计划 &amp; 待办</div>
+    <div id="plan-body"><div class="empty">还没有计划，先发一条消息让 agent 进入 Plan Mode 吧。</div></div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const AGENT_URL = window.location.origin + "/plan_agent";
+  const STATE_KEY_PREFIX = "plan"; // must match setup_plan()'s state_key_prefix
+  const FORCE_ENTER_PLAN_STATE_KEY = "agent_mode"; // must match PlanOptions default
+  const FORCE_ENTER_PLAN_STATE_VALUE = "plan";
+  const TODO_STATE_KEY_PREFIX = "todos"; // must match TodoWriteTool default prefix
+  const AGENT_BRANCH = "orchestrator"; // must match the orchestrator LlmAgent's name
+
+  const chatEl = document.getElementById("chat");
+  const planBodyEl = document.getElementById("plan-body");
+  const inputEl = document.getElementById("input");
+  const sendBtn = document.getElementById("send-btn");
+  const composer = document.getElementById("composer");
+  const threadLabel = document.getElementById("thread-label");
+  const resetBtn = document.getElementById("reset-btn");
+  const modeAgentBtn = document.getElementById("mode-agent-btn");
+  const modePlanBtn = document.getElementById("mode-plan-btn");
+
+  let threadId = crypto.randomUUID();
+  let agentMode = "agent"; // "agent" | "plan" — synced to AG-UI session state
+  let running = false;
+  let latestPlan = null;
+  let latestTodos = [];
+  // toolCallName -> most recent unresolved tool_call_id seen this run.
+  let lastToolCallIdByName = {};
+  // toolCallId -> toolCallName for TOOL_CALL_RESULT handling.
+  let lastToolNameByCallId = {};
+  // questionId -> tool_call_id for ask_user_question HITL resume.
+  let questionToolCallIds = {};
+  let pendingAskToolCallId = null;
+  let lastAutoEnterNotifyRunId = null;
+
+  threadLabel.textContent = "thread: " + threadId.slice(0, 8);
+
+  function buildRunState() {
+    return {
+      [FORCE_ENTER_PLAN_STATE_KEY]: agentMode === "plan" ? FORCE_ENTER_PLAN_STATE_VALUE : "agent",
+    };
+  }
+
+  function setAgentMode(mode) {
+    agentMode = mode === "plan" ? "plan" : "agent";
+    modeAgentBtn.classList.toggle("active", agentMode === "agent");
+    modePlanBtn.classList.toggle("active", agentMode === "plan");
+    addSystemLine(agentMode === "plan"
+      ? "已切换到 Plan 模式 — 下一条消息将自动进入规划"
+      : "已切换到 Agent 模式 — 由模型自行决定是否 enter_plan_mode");
+  }
+
+  modeAgentBtn.addEventListener("click", () => setAgentMode("agent"));
+  modePlanBtn.addEventListener("click", () => setAgentMode("plan"));
+
+  function scrollChatToBottom() {
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  function addMessageBubble(role, text) {
+    const div = document.createElement("div");
+    div.className = "msg " + role;
+    div.textContent = text;
+    chatEl.appendChild(div);
+    scrollChatToBottom();
+    return div;
+  }
+
+  function addSystemLine(text) {
+    return addMessageBubble("sys", text);
+  }
+
+  function addErrorLine(text) {
+    return addMessageBubble("error", "⚠ " + text);
+  }
+
+  function removeHitlCards() {
+    chatEl.querySelectorAll(".hitl-card").forEach((el) => el.remove());
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    }[c]));
+  }
+
+  // ---- Plan & todo side panel -----------------------------------------
+
+  function findBranchStateKey(snapshot, prefix) {
+    return Object.keys(snapshot).find(
+      (k) => k === `${prefix}:${AGENT_BRANCH}` || k === prefix
+    );
+  }
+
+  function parseTodosRaw(raw) {
+    if (raw == null) return [];
+    if (typeof raw === "string") {
+      try {
+        raw = JSON.parse(raw);
+      } catch (e) {
+        console.error("Failed to parse todos snapshot", e);
+        return [];
+      }
+    }
+    return Array.isArray(raw) ? raw : [];
+  }
+
+  function applyTodosFromToolResult(content) {
+    if (!content) return;
+    try {
+      const payload = typeof content === "string" ? JSON.parse(content) : content;
+      if (Array.isArray(payload.todos)) {
+        latestTodos = payload.todos;
+        renderSidePanel();
+      }
+    } catch (e) {
+      console.error("Failed to parse todo_write result", e);
+    }
+  }
+
+  function applyStateSnapshot(snapshot) {
+    const planKey = findBranchStateKey(snapshot, STATE_KEY_PREFIX);
+    if (planKey) {
+      try {
+        latestPlan = JSON.parse(snapshot[planKey]);
+        correlateAskToolCall(latestPlan);
+      } catch (e) {
+        console.error("Failed to parse plan snapshot", e);
+      }
+    }
+    const todoKey = findBranchStateKey(snapshot, TODO_STATE_KEY_PREFIX);
+    if (todoKey) {
+      latestTodos = parseTodosRaw(snapshot[todoKey]);
+    }
+    renderSidePanel();
+  }
+
+  function correlateAskToolCall(plan) {
+    if (!pendingAskToolCallId || !plan) return;
+    const unanswered = (plan.askedQuestions || []).filter((q) => q.answer == null);
+    if (unanswered.length === 0) return;
+    const newest = unanswered[unanswered.length - 1];
+    if (!questionToolCallIds[newest.id]) {
+      questionToolCallIds[newest.id] = pendingAskToolCallId;
+    }
+    pendingAskToolCallId = null;
+  }
+
+  function renderPlanSectionHtml(p) {
+    let html = '<div class="plan-block">';
+    html += '<div class="side-section-title">当前计划</div>';
+    html += `<div class="kv"><span>状态</span><span class="badge ${p.status}">${p.status}</span></div>`;
+    html += `<div class="kv"><span>目标</span><b>${escapeHtml(p.objective || "-")}</b></div>`;
+    html += `<div class="kv"><span>修改次数</span><b>${p.contentRevisions ?? 0}</b></div>`;
+    if (p.approval && p.approval.reviewerNote) {
+      html += `<div class="kv"><span>审批意见</span><b>${escapeHtml(p.approval.reviewerNote)}</b></div>`;
+    }
+    html += `<div id="plan-content">${escapeHtml(p.content || "(计划内容为空)")}</div>`;
+
+    const questions = p.askedQuestions || [];
+    if (questions.length) {
+      html += '<div class="qa">';
+      for (const q of questions) {
+        html += `<div class="q">Q${q.id}: ${escapeHtml(q.question)}</div>`;
+        html += q.answer != null
+          ? `<div class="a">A: ${escapeHtml(q.answer)}</div>`
+          : `<div class="a" style="color:var(--amber)">等待回答…</div>`;
+      }
+      html += "</div>";
+    }
+    html += "</div>";
+    return html;
+  }
+
+  function renderTodosSectionHtml(todos) {
+    let html = '<div class="todos-block">';
+    html += '<div class="side-section-title">实施待办</div>';
+    if (!todos || todos.length === 0) {
+      html += '<div class="todos-empty">审批通过后可由 agent 调用 todo_write 跟踪实施进度。</div>';
+      html += "</div>";
+      return html;
+    }
+
+    const done = todos.filter((t) => t.status === "completed").length;
+    html += `<div class="kv"><span>进度</span><b>${done} / ${todos.length}</b></div>`;
+    html += '<ul class="todo-list">';
+    for (const item of todos) {
+      const status = item.status || "pending";
+      const icon = status === "completed" ? "✓" : status === "in_progress" ? "▸" : "○";
+      const title = item.content || "(无标题)";
+      html += `<li class="todo-item ${status}">`;
+      html += `<span class="todo-icon">${icon}</span>`;
+      html += '<div class="todo-body">';
+      html += `<div class="todo-title">${escapeHtml(title)}</div>`;
+      if (status === "in_progress" && item.activeForm && item.activeForm !== title) {
+        html += `<div class="todo-active">${escapeHtml(item.activeForm)}</div>`;
+      }
+      html += "</div></li>";
+    }
+    html += "</ul></div>";
+    return html;
+  }
+
+  function renderSidePanel() {
+    if (!latestPlan && latestTodos.length === 0) {
+      planBodyEl.innerHTML = '<div class="empty">还没有计划，先发一条消息让 agent 进入 Plan Mode 吧。</div>';
+      return;
+    }
+    let html = "";
+    if (latestPlan) html += renderPlanSectionHtml(latestPlan);
+    html += renderTodosSectionHtml(latestTodos);
+    planBodyEl.innerHTML = html;
+  }
+
+  // ---- HITL cards -------------------------------------------------------
+
+  function renderEnterPlanModeCard(toolCallId) {
+    removeHitlCards();
+    const objective = latestPlan && latestPlan.objective ? latestPlan.objective : "（无目标描述）";
+    const card = document.createElement("div");
+    card.className = "hitl-card";
+    card.innerHTML = `
+      <div class="label">确认进入 Plan Mode</div>
+      <div class="content">模型请求进入规划模式，目标：${escapeHtml(objective)}</div>
+      <textarea placeholder="备注（可选）"></textarea>
+      <div class="actions">
+        <button class="btn approve">✅ 确认进入</button>
+        <button class="btn reject">❌ 拒绝</button>
+      </div>`;
+    const [textarea] = card.querySelectorAll("textarea");
+    const [approveBtn, rejectBtn] = card.querySelectorAll("button");
+    approveBtn.onclick = () => respondEnterPlanMode(toolCallId, "approved", textarea.value);
+    rejectBtn.onclick = () => respondEnterPlanMode(toolCallId, "rejected", textarea.value);
+    chatEl.appendChild(card);
+    scrollChatToBottom();
+  }
+
+  function renderApprovalCard(toolCallId) {
+    removeHitlCards();
+    const card = document.createElement("div");
+    card.className = "hitl-card";
+    card.innerHTML = `
+      <div class="label">需要人工审批计划</div>
+      <div class="content">模型已提交计划，请在右侧「计划 &amp; 待办」面板查看完整内容，然后决定是否通过。</div>
+      <textarea placeholder="审批意见（可选）"></textarea>
+      <div class="actions">
+        <button class="btn approve">✅ 通过</button>
+        <button class="btn reject">❌ 拒绝</button>
+      </div>`;
+    const [textarea] = card.querySelectorAll("textarea");
+    const [approveBtn, rejectBtn] = card.querySelectorAll("button");
+    approveBtn.onclick = () => respondExitPlanMode(toolCallId, "approved", textarea.value);
+    rejectBtn.onclick = () => respondExitPlanMode(toolCallId, "rejected", textarea.value);
+    chatEl.appendChild(card);
+    scrollChatToBottom();
+  }
+
+  function renderQuestionCard(toolCallId, question) {
+    removeHitlCards();
+    const card = document.createElement("div");
+    card.className = "hitl-card";
+    const optionsHtml = (question.options || [])
+      .map((opt) => `<button class="btn option" data-opt="${escapeHtml(opt)}">${escapeHtml(opt)}</button>`)
+      .join("");
+    card.innerHTML = `
+      <div class="label">模型有一个澄清问题</div>
+      <div class="content">${escapeHtml(question.question)}</div>
+      ${optionsHtml ? `<div class="options">${optionsHtml}</div>` : ""}
+      <textarea placeholder="${optionsHtml ? '或者输入自定义回答…' : '输入回答…'}"></textarea>
+      <div class="actions"><button class="btn approve" data-submit="1">提交回答</button></div>`;
+    const textarea = card.querySelector("textarea");
+    card.querySelectorAll("button[data-opt]").forEach((btn) => {
+      btn.onclick = () => respondAskPlanQuestion(toolCallId, question.id, btn.dataset.opt);
+    });
+    card.querySelector("button[data-submit]").onclick = () => {
+      if (textarea.value.trim()) respondAskPlanQuestion(toolCallId, question.id, textarea.value.trim());
+    };
+    chatEl.appendChild(card);
+    scrollChatToBottom();
+  }
+
+  function maybeNotifyUiAutoEnter(runId) {
+    if (agentMode !== "plan" || !latestPlan || lastAutoEnterNotifyRunId === runId) return;
+    if (latestPlan.status === "exploring" || latestPlan.status === "drafting") {
+      addSystemLine("✅ 已通过 UI Plan 模式自动进入规划（无需确认 enter_plan_mode）");
+      lastAutoEnterNotifyRunId = runId;
+    }
+  }
+
+  function maybeRenderHitlCard() {
+    if (!latestPlan) return;
+    if (latestPlan.status === "pending_enter" && lastToolCallIdByName["enter_plan_mode"]) {
+      if (agentMode === "plan") {
+        addSystemLine("ℹ️ UI 已选 Plan 模式，忽略 enter_plan_mode 确认卡片");
+        return;
+      }
+      renderEnterPlanModeCard(lastToolCallIdByName["enter_plan_mode"]);
+      return;
+    }
+    if (latestPlan.status === "pending_approval" && lastToolCallIdByName["exit_plan_mode"]) {
+      renderApprovalCard(lastToolCallIdByName["exit_plan_mode"]);
+      return;
+    }
+    const pendingQuestion = (latestPlan.askedQuestions || []).slice().reverse().find((q) => q.answer == null);
+    const toolCallId = pendingQuestion
+      ? (questionToolCallIds[pendingQuestion.id] || lastToolCallIdByName["ask_user_question"])
+      : null;
+    if (pendingQuestion && toolCallId) {
+      renderQuestionCard(toolCallId, pendingQuestion);
+    }
+  }
+
+  // ---- AG-UI SSE run ------------------------------------------------
+
+  /** Minimal HITL resume: assistant (tool_calls) + tool result for AgUiAgent name resolution. */
+  function buildHitlToolResultMessages(toolCallId, toolName, toolPayload) {
+    return [
+      {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        toolCalls: [{
+          id: toolCallId,
+          type: "function",
+          function: { name: toolName, arguments: "{}" },
+        }],
+      },
+      {
+        id: crypto.randomUUID(),
+        role: "tool",
+        toolCallId,
+        content: JSON.stringify(toolPayload),
+      },
+    ];
+  }
+
+  function setRunning(value) {
+    running = value;
+    inputEl.disabled = value;
+    sendBtn.disabled = value;
+    sendBtn.textContent = value ? "运行中…" : "发送";
+  }
+
+  async function runOnce(messagesOrSingle) {
+    const messages = Array.isArray(messagesOrSingle) ? messagesOrSingle : [messagesOrSingle];
+    setRunning(true);
+    removeHitlCards();
+    const runId = crypto.randomUUID();
+    let streamingBubble = null;
+
+    try {
+      const res = await fetch(AGENT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        body: JSON.stringify({
+          threadId,
+          runId,
+          state: buildRunState(),
+          messages,
+          tools: [],
+          context: [],
+          forwardedProps: {},
+        }),
+      });
+      if (!res.ok || !res.body) {
+        addErrorLine(`HTTP ${res.status}: ${await res.text()}`);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let sepIdx;
+        while ((sepIdx = buf.indexOf("\n\n")) >= 0) {
+          const rawChunk = buf.slice(0, sepIdx);
+          buf = buf.slice(sepIdx + 2);
+          const line = rawChunk.split("\n").find((l) => l.startsWith("data:"));
+          if (!line) continue;
+          let event;
+          try {
+            event = JSON.parse(line.slice(5).trim());
+          } catch (e) {
+            console.error("Failed to parse AG-UI event", e, line);
+            continue;
+          }
+
+          switch (event.type) {
+            case "TEXT_MESSAGE_START":
+              streamingBubble = addMessageBubble("assistant", "");
+              break;
+            case "TEXT_MESSAGE_CONTENT":
+              if (streamingBubble) streamingBubble.textContent += event.delta || "";
+              scrollChatToBottom();
+              break;
+            case "TEXT_MESSAGE_END":
+              streamingBubble = null;
+              break;
+            case "TOOL_CALL_START":
+              lastToolCallIdByName[event.toolCallName] = event.toolCallId;
+              lastToolNameByCallId[event.toolCallId] = event.toolCallName;
+              if (event.toolCallName === "ask_user_question") {
+                pendingAskToolCallId = event.toolCallId;
+              }
+              addSystemLine(`🔧 调用工具 ${event.toolCallName}`);
+              break;
+            case "TOOL_CALL_RESULT": {
+              const toolName = lastToolNameByCallId[event.toolCallId];
+              if (toolName === "todo_write") {
+                applyTodosFromToolResult(event.content);
+                addSystemLine(`📋 待办已更新（${latestTodos.length} 项）`);
+              } else {
+                addSystemLine(`✅ 工具返回: ${String(event.content || "").slice(0, 200)}`);
+              }
+              break;
+            }
+            case "STATE_SNAPSHOT":
+              applyStateSnapshot(event.snapshot || {});
+              break;
+            case "RUN_ERROR":
+              addErrorLine(event.message || "run error");
+              break;
+            default:
+              break; // RUN_STARTED / TOOL_CALL_ARGS / THINKING_* etc. — not rendered
+          }
+        }
+      }
+
+      maybeNotifyUiAutoEnter(runId);
+      maybeRenderHitlCard();
+    } catch (err) {
+      addErrorLine(err.message || String(err));
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  function respondEnterPlanMode(toolCallId, status, reviewerNote) {
+    removeHitlCards();
+    addSystemLine(status === "approved" ? "👤 已确认进入 Plan Mode" : "👤 已拒绝进入 Plan Mode");
+    runOnce(buildHitlToolResultMessages(toolCallId, "enter_plan_mode", {
+      status,
+      reviewer_note: reviewerNote || "",
+    }));
+  }
+
+  function respondExitPlanMode(toolCallId, status, reviewerNote) {
+    removeHitlCards();
+    addSystemLine(status === "approved" ? "👤 已通过计划" : "👤 已拒绝计划");
+    runOnce(buildHitlToolResultMessages(toolCallId, "exit_plan_mode", {
+      status,
+      reviewer_note: reviewerNote || "",
+    }));
+  }
+
+  function respondAskPlanQuestion(toolCallId, questionId, answer) {
+    removeHitlCards();
+    addMessageBubble("user", answer);
+    runOnce(buildHitlToolResultMessages(toolCallId, "ask_user_question", {
+      answer,
+      question_id: questionId,
+    }));
+  }
+
+  composer.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = inputEl.value.trim();
+    if (!text || running) return;
+    addMessageBubble("user", text);
+    inputEl.value = "";
+    runOnce({ id: crypto.randomUUID(), role: "user", content: text });
+  });
+
+  resetBtn.addEventListener("click", () => {
+    threadId = crypto.randomUUID();
+    threadLabel.textContent = "thread: " + threadId.slice(0, 8);
+    latestPlan = null;
+    latestTodos = [];
+    lastToolCallIdByName = {};
+    lastToolNameByCallId = {};
+    questionToolCallIds = {};
+    pendingAskToolCallId = null;
+    lastAutoEnterNotifyRunId = null;
+    chatEl.innerHTML = "";
+    renderSidePanel();
+  });
+})();
+</script>
+</body>
+</html>

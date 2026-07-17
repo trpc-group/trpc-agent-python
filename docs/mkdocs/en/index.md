@@ -16,6 +16,7 @@ Welcome to the English documentation for tRPC-Agent-Python.
 - [Memory](./memory.md): Store and retrieve long-term memories.
 - [Knowledge](./knowledge.md): Build RAG workflows with LangChain components.
 - [Multi-Agent](./multi_agents.md): Compose agents for complex workflows.
+- [Plan Mode](./plan.md): Design-then-implement workflow with write gate and HITL approval.
 - [Evaluation](./evaluation.md): Evaluate agent behavior and response quality.
 
 For source code and examples, see the [GitHub repository](https://github.com/trpc-group/trpc-agent-python).
