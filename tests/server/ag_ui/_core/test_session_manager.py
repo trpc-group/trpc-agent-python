@@ -186,6 +186,35 @@ class TestUpdateSessionState:
 
         assert result is True
         svc.append_event.assert_called_once()
+        appended_event = svc.append_event.call_args[0][1]
+        assert appended_event.partial is False
+
+    async def test_persists_session_state_with_in_memory_service(self):
+        from trpc_agent_sdk.plan_mode._helpers import DEFAULT_FORCE_ENTER_PLAN_STATE_KEY
+        from trpc_agent_sdk.plan_mode._helpers import DEFAULT_FORCE_ENTER_PLAN_STATE_VALUE
+        from trpc_agent_sdk.sessions import InMemorySessionService
+
+        svc = InMemorySessionService()
+        try:
+            await svc.create_session(
+                app_name="app",
+                user_id="u1",
+                session_id="s1",
+                state={DEFAULT_FORCE_ENTER_PLAN_STATE_KEY: "agent"},
+            )
+            mgr = SessionManager(session_service=svc, auto_cleanup=False)
+            result = await mgr.update_session_state(
+                "s1",
+                "app",
+                "u1",
+                {DEFAULT_FORCE_ENTER_PLAN_STATE_KEY: DEFAULT_FORCE_ENTER_PLAN_STATE_VALUE},
+            )
+            assert result is True
+
+            stored = await svc.get_session(app_name="app", user_id="u1", session_id="s1")
+            assert stored.state[DEFAULT_FORCE_ENTER_PLAN_STATE_KEY] == DEFAULT_FORCE_ENTER_PLAN_STATE_VALUE
+        finally:
+            await svc.close()
 
     async def test_session_not_found(self):
         svc = _make_session_service()
