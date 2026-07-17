@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 
 # 复用现有模型
@@ -72,6 +73,31 @@ def _get_llm_config() -> dict:
         raise ValueError("需要 OPENAI_API_KEY 或 TRPC_AGENT_API_KEY 环境变量")
 
     return {"api_key": api_key, "base_url": base_url, "model_name": model_name}
+
+
+def _is_retryable_error(e: Exception) -> bool:
+    """判断异常是否值得重试（5xx/超时/上游错误）。
+
+    W3 修复：精确判定，避免 "5" in msg 误匹配 "500 tokens"/"line 5"。
+    优先级：status_code 属性(5xx) → TimeoutError → 异常名含 timeout →
+    msg 含 upstream → msg 精确匹配 5xx 状态码。
+    """
+    status = getattr(e, "status_code", None)
+    if status is not None:
+        try:
+            return 500 <= int(status) < 600
+        except (TypeError, ValueError):
+            pass
+    if isinstance(e, TimeoutError):
+        return True
+    name = type(e).__name__.lower()
+    if "timeout" in name:
+        return True
+    msg = str(e).lower()
+    if "upstream" in msg:
+        return True
+    # 精确匹配 5xx（前后非数字），避免 "500 tokens"/"line 5" 误命中
+    return bool(re.search(r'(?:^|\D)5\d{2}(?:\D|$)', msg))
 
 
 def _findings_to_json(findings: list[Finding]) -> str:
@@ -160,7 +186,10 @@ def _call_llm_with_openai_client(findings: list[Finding]) -> list[dict]:
                     temperature=0.1,
                     max_tokens=2000)  # 降低到2000减少400错误
 
-                response_text = response.choices[0].message.content
+                # W2 修复: 空响应防护，避免 IndexError 导致全部裁决丢失
+                if not response.choices:
+                    raise Exception("LLM 返回空 choices（限流/内容过滤）")
+                response_text = response.choices[0].message.content or ""
                 verdicts = _parse_llm_response(response_text)
                 all_verdicts.extend(verdicts)
                 break  # 成功，跳出重试循环
@@ -171,8 +200,8 @@ def _call_llm_with_openai_client(findings: list[Finding]) -> list[dict]:
                 if "400" in error_msg or "bad request" in error_msg:
                     print("[LLM Layer] 400错误（prompt太大），不重试")
                     raise Exception(f"OpenAI API 400错误: {str(e)}") from e
-                # 超时/5xx/Upstream错误指数退避重试
-                elif attempt < max_retries and ("timeout" in error_msg or "5" in error_msg or "upstream" in error_msg):
+                # 超时/5xx/Upstream错误指数退避重试（W3 修复: 精确判定，避免 "5"/"timeout" 子串误匹配）
+                elif attempt < max_retries and _is_retryable_error(e):
                     wait_time = 2**attempt  # 指数退避：1s, 2s, 4s
                     print(f"[LLM Layer] 调用失败，{wait_time}秒后重试 {attempt + 1}/{max_retries}: {str(e)}")
                     time.sleep(wait_time)
@@ -357,7 +386,10 @@ def _call_llm_with_openai_client_supplementary(existing_findings: list[Finding],
                 temperature=0.1,
                 max_tokens=1500)  # 进一步降低到1500减少400错误
 
-            response_text = response.choices[0].message.content
+            # W2 修复: 空响应防护
+            if not response.choices:
+                raise Exception("LLM 补召回返回空 choices（限流/内容过滤）")
+            response_text = response.choices[0].message.content or ""
             new_findings = _parse_supplementary_findings(response_text)
             return new_findings
 
@@ -367,8 +399,8 @@ def _call_llm_with_openai_client_supplementary(existing_findings: list[Finding],
             if "400" in error_msg or "bad request" in error_msg:
                 print("[LLM Layer] 补召回400错误（prompt太大），不重试")
                 raise Exception(f"OpenAI 补召回400错误: {str(e)}") from e
-            # 超时/5xx/Upstream错误指数退避重试
-            elif attempt < max_retries and ("timeout" in error_msg or "5" in error_msg or "upstream" in error_msg):
+            # 超时/5xx/Upstream错误指数退避重试（W3 修复: 精确判定）
+            elif attempt < max_retries and _is_retryable_error(e):
                 wait_time = 2**attempt  # 指数退避：1s, 2s, 4s
                 print(f"[LLM Layer] 补召回失败，{wait_time}秒后重试 {attempt + 1}/{max_retries}: {str(e)}")
                 time.sleep(wait_time)
@@ -495,20 +527,20 @@ def enhance(
         verdict_list = []
         for key, verdict_data in recorded_verdicts.items():
             # 解析 key: "rule_id:file:line"
-            parts = key.split(":")
-            if len(parts) == 3:
-                rule_id, file_path, line_str = parts
-                try:
-                    line = int(line_str)
-                    verdict_list.append({
-                        "rule_id": rule_id,
-                        "file": file_path,
-                        "line": line,
-                        "verdict": verdict_data["verdict"],
-                        "reason": verdict_data["reason"],
-                    })
-                except ValueError:
-                    continue
+            # S2 修复: rpartition/partition 切分，避免文件路径含 ":"（Windows 盘符）时切错
+            key_path, _, line_str = key.rpartition(":")
+            rule_id, _, file_path = key_path.partition(":")
+            try:
+                line = int(line_str)
+                verdict_list.append({
+                    "rule_id": rule_id,
+                    "file": file_path,
+                    "line": line,
+                    "verdict": verdict_data["verdict"],
+                    "reason": verdict_data["reason"],
+                })
+            except ValueError:
+                continue
 
         # 应用降噪裁决
         enhanced_findings = _apply_verdicts(findings, verdict_list)

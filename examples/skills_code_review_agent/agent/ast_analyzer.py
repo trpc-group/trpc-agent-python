@@ -264,6 +264,10 @@ def analyze(files: list[DiffFile]) -> list[Finding]:
         if not diff_file.path.endswith('.py'):
             continue
 
+        # W1 修复: visitor 提到文件级，跨 hunk 复用 tainted 集合，捕获跨 hunk 污点传播
+        # （局限：diff 仅含 added 行，函数体可能截断；跨 hunk 污点累积可部分缓解漏报）
+        visitor = _Visitor(diff_file.path)
+
         # 处理每个 hunk
         for hunk in diff_file.hunks:
             if not hunk.added:
@@ -281,8 +285,7 @@ def analyze(files: list[DiffFile]) -> list[Finding]:
                 findings.extend(_analyze_with_fallback(diff_file.path, hunk))
                 continue
 
-            # 创建 visitor 并分析
-            visitor = _Visitor(diff_file.path)
+            # 复用文件级 visitor（tainted 跨 hunk 累积），分析当前 hunk
             visitor.visit(tree)
 
             # 转换 findings
@@ -304,6 +307,9 @@ def analyze(files: list[DiffFile]) -> list[Finding]:
                                   rule_id=rule_id,
                                   bucket=Bucket.FINDINGS)
                 findings.append(finding)
+
+            # 清空当前 hunk 的 findings，保留 tainted（跨 hunk 污点累积）
+            visitor.findings = []
 
     return findings
 

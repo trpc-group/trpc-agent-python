@@ -47,6 +47,20 @@ class LocalSandbox(SandboxProvider):
 
         script_path = os.path.join(workspace, script)
 
+        # Critical 1 加固：校验脚本路径未逃逸出 workspace（防路径穿越）
+        if not self._validate_script_path(workspace, script):
+            return SandboxRun(
+                runtime="local",
+                script=script,
+                status="failed",
+                exit_code=1,
+                stdout_redacted="",
+                stderr_redacted=f"脚本路径逃逸出 workspace，拒绝执行: {script}",
+                truncated=False,
+                error_type="PathEscapeError",
+                duration_ms=0,
+            )
+
         try:
             # 执行脚本
             result = subprocess.run(
@@ -80,9 +94,19 @@ class LocalSandbox(SandboxProvider):
             # 超时处理
             duration_ms = int((time.time() - start_time) * 1000)
 
-            # 尝试获取部分输出
-            stdout = e.stdout.decode('utf-8', errors='ignore') if e.stdout else ""
-            stderr = e.stderr.decode('utf-8', errors='ignore') if e.stderr else ""
+            # 尝试获取部分输出（text=True 时 e.stdout/e.stderr 已是 str，不可再 .decode，Critical 2）
+            if isinstance(e.stdout, str):
+                stdout = e.stdout
+            elif e.stdout:
+                stdout = e.stdout.decode("utf-8", "ignore")
+            else:
+                stdout = ""
+            if isinstance(e.stderr, str):
+                stderr = e.stderr
+            elif e.stderr:
+                stderr = e.stderr.decode("utf-8", "ignore")
+            else:
+                stderr = ""
             stdout_redacted, _ = self._sanitize_output(stdout)
             stderr_redacted, _ = self._sanitize_output(stderr)
 

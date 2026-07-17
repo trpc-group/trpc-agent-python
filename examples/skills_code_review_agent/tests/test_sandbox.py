@@ -71,7 +71,9 @@ class TestFakeSandbox:
         assert result.runtime == "fake"
         assert result.status == "success"
         assert result.exit_code == 0
-        assert "sk-leaked-secret" in result.stdout_redacted
+        # W6: 断言脱敏生效（明文不应残留，占位符应存在），修复原断言与脱敏实现的矛盾
+        assert "sk-leakedsecret0123456789abcdef" not in result.stdout_redacted
+        assert "REDACTED" in result.stdout_redacted
         assert result.duration_ms == 5
 
     def test_normal_success(self):

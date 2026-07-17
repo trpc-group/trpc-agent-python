@@ -8,6 +8,7 @@
 定义 SandboxProvider 抽象基类，所有沙箱实现都需要继承此类。
 """
 
+import os
 from abc import ABC, abstractmethod
 
 from agent.models import SandboxRun
@@ -93,3 +94,25 @@ class SandboxProvider(ABC):
         # 简单替换 sk- 开头的内容为 sk-REDACTED
         pattern = r'sk-[a-zA-Z0-9]{20,}'
         return re.sub(pattern, 'sk-REDACTED', output)
+
+    @staticmethod
+    def _validate_script_path(workspace: str, script: str) -> bool:
+        """校验脚本路径解析后仍在 workspace 内（防路径穿越逃逸）。
+
+        Trust-boundary 输入校验：即使上层 pipeline 已用约定脚本名，Local/Cube 后端
+        也独立校验 script 不含 "../" 等逃逸（纵深防御，绕过 Filter 时的最后闸门）。
+
+        Args:
+            workspace: 工作目录路径
+            script: 脚本文件名（相对 workspace）
+
+        Returns:
+            True 若脚本路径在 workspace 内；False（含跨盘符 ValueError）则拒绝
+        """
+        try:
+            ws_real = os.path.realpath(workspace)
+            script_real = os.path.realpath(os.path.join(workspace, script))
+            return os.path.commonpath([ws_real, script_real]) == ws_real
+        except ValueError:
+            # 不同盘符/无法求公共路径 → 视为逃逸，拒绝
+            return False

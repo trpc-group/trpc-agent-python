@@ -71,6 +71,20 @@ class CubeSandbox(SandboxProvider):
             import subprocess
             script_path = os.path.join(workspace, script)
 
+            # Critical 1 加固：校验脚本路径未逃逸出 workspace（防路径穿越）
+            if not self._validate_script_path(workspace, script):
+                return SandboxRun(
+                    runtime="cube",
+                    script=script,
+                    status="failed",
+                    exit_code=1,
+                    stdout_redacted="",
+                    stderr_redacted=f"脚本路径逃逸出 workspace，拒绝执行: {script}",
+                    truncated=False,
+                    error_type="PathEscapeError",
+                    duration_ms=0,
+                )
+
             # 使用 subprocess 执行（简化实现）
             result = subprocess.run(
                 ["python", script_path],

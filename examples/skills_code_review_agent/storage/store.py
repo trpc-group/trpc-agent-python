@@ -209,6 +209,7 @@ class ReviewStore:
         if report.needs_human_review:
             all_findings.extend(report.needs_human_review)
 
+        ignored = 0  # W8: 统计被 INSERT OR IGNORE 吞掉的 UNIQUE 冲突条数
         for finding in all_findings:
             # 验收5 命门：脱敏 title, evidence, recommendation
             title_redacted, _ = redact_text(finding.title)
@@ -217,7 +218,7 @@ class ReviewStore:
 
             finding_id = str(uuid.uuid4())
             # 使用 INSERT OR IGNORE 处理 UNIQUE 约束（幂等）
-            conn.execute(
+            cursor = conn.execute(
                 "INSERT OR IGNORE INTO findings "
                 "(finding_id, task_id, bucket, severity, category, file, line, "
                 "title, evidence, recommendation, confidence, source, rule_id) "
@@ -236,6 +237,13 @@ class ReviewStore:
                     finding.confidence,
                     finding.source,
                     finding.rule_id))
+            # W8: rowcount==0 表示该行因 UNIQUE 冲突被忽略
+            if cursor.rowcount == 0:
+                ignored += 1
+
+        # W8: 若有被忽略的 finding，记录日志（幂等 save 下重复 save 可能丢新增）
+        if ignored > 0:
+            print(f"[Store] {ignored} 条 finding 因 UNIQUE 约束被 INSERT OR IGNORE 忽略")
 
     def _insert_monitoring_summary(self, conn: sqlite3.Connection, report: ReviewReport):
         """插入监控汇总表"""

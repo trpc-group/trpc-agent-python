@@ -123,8 +123,7 @@ def redact_text(text: str) -> tuple[str, int]:
     Returns:
         (脱敏后文本, 命中的密钥数量)
     """
-    # 重复脱敏保护：避免对已脱敏内容重复处理
-    if "[REDACTED_" in text:
+    if not text:
         return text, 0
 
     count = 0
@@ -149,6 +148,12 @@ def redact_text(text: str) -> tuple[str, int]:
                                        "R0lGO")):  # /9j/=JPEG, iVBOR=PNG, R0lGO=GIF
                 text = text.replace(literal, "[REDACTED_ENTROPY]")
                 count += 1
+
+    # W4 修复: 回扫自检 —— 末尾对所有正则再扫一遍，捕获任何漏网明文残留
+    # （幂等：占位符 [REDACTED_*] 不会被同一正则重复匹配，故不会二次替换）
+    for pattern, replacement in SECRET_PATTERNS:
+        text, n = pattern.subn(replacement, text)
+        count += n
 
     return text, count
 

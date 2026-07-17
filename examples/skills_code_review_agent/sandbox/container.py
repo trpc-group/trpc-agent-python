@@ -137,12 +137,17 @@ class ContainerSandbox(SandboxProvider):
         try:
             # 资源限制（单向收紧）
             timeout_limit = _bounded_int("SANDBOX_TIMEOUT_SEC", timeout, 300)  # 最多 5 分钟
-            _bounded_int("SANDBOX_MEMORY_MB", 512, 1024)  # 默认 512MB，最多 1GB（预留给未来使用）
+            # W7 修复: memory 限制真正接线到 host_config（字节），避免环境变量形同虚设
+            memory_mb = _bounded_int("SANDBOX_MEMORY_MB", 512, 1024)  # 默认 512MB，最多 1GB
 
             # 创建容器客户端
             config = ContainerConfig(
                 image="skills-code-review-agent:latest",
-                host_config={"Binds": [f"{workspace}:/workspace:ro"]},  # 只读挂载
+                # 只读挂载 + 内存限制（Memory 单位为字节）
+                host_config={
+                    "Binds": [f"{workspace}:/workspace:ro"],
+                    "Memory": memory_mb * 1024 * 1024,
+                },
             )
 
             client = ContainerClient(config)

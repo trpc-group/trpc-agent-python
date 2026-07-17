@@ -83,8 +83,8 @@ class FakeSandbox(SandboxProvider):
 
         # Trigger 3: force_secret_output → 模拟密钥泄露（Critical 1 加固：返回前脱敏）
         if "force_secret_output" in blob:
-            # 模拟明文密钥输出，但在返回前脱敏（纵深防御）
-            raw_stdout = "out sk-leaked-secret"
+            # 模拟明文密钥输出（真实格式 sk- + 20字母数字，确保被正则脱敏），返回前脱敏（纵深防御）
+            raw_stdout = "out sk-leakedsecret0123456789abcdef"
             stdout_redacted, _ = redact_text(raw_stdout)  # 应输出 "out [REDACTED_SK]"
             return SandboxRun(
                 runtime="fake",

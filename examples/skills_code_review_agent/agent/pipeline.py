@@ -102,14 +102,17 @@ def run_review(diff_text: str,
     t0 = time.time()
 
     # 0. 修复隐患4: 先 start_task 创建 task_id（确保 save 时 review_tasks 记录存在）
+    # Critical 3 修复: start_task 失败时置 store=None，避免 save 对孤儿 task_id 落库
+    store = None
     try:
         store = ReviewStore()
         scope = f"diff-{len(diff_text)}chars" if diff_text else "empty"
         task_id = store.start_task(repo=repo, scope=scope)
     except Exception as e:
-        # start_task 失败时使用生成的 UUID（降级处理）
+        # start_task 失败时使用生成的 UUID（降级处理），并标记不落库
         print(f"[Pipeline] start_task 失败: {str(e)}")
         task_id = str(uuid.uuid4())
+        store = None
 
     # 1. 解析 diff
     files = parse_diff(diff_text)
@@ -198,7 +201,8 @@ def run_review(diff_text: str,
                 runs.append(failed_run)
 
     # 6. 构建监控摘要
-    t_sandbox = int((time.time() - t0) * 1000)
+    # S1 修复: sandbox_duration 累加各沙箱 run 实际耗时（而非等于 total_duration）
+    t_sandbox = sum(run.duration_ms for run in runs)
 
     # 合并所有 findings 用于监控
     all_findings = list(findings) + list(warnings) + list(needs_review)
@@ -229,11 +233,15 @@ def run_review(diff_text: str,
                           input_summary=_summary(diff_text))
 
     # 9. 落库（内含脱敏，使用已存在的 task_id）
-    try:
-        store.save(report)
-    except Exception as e:
-        # 落库失败不应中断报告生成
-        print(f"[Pipeline] 落库失败: {str(e)}")
+    # Critical 3 修复: store=None（start_task 失败）时跳过落库，避免外键孤儿
+    if store is not None:
+        try:
+            store.save(report)
+        except Exception as e:
+            # 落库失败不应中断报告生成
+            print(f"[Pipeline] 落库失败: {str(e)}")
+    else:
+        print(f"[Pipeline] 跳过落库（task 未注册，task_id={task_id}）")
 
     # 10. 写报告文件
     try:

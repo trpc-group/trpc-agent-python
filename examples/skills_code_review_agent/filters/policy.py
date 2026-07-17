@@ -112,5 +112,17 @@ class CommandPolicy:
                 command_redacted=command[:80]
             )
 
-        # 5. 默认允许
+        # 5. 可执行文件白名单校验（命令首词必须在白名单内，fail-closed）
+        # W5 修复: allowed_executables 此前完全未生效，任何非高危命令均 allow
+        allowed = self.p.get("allowed_executables", [])
+        first_word = command.strip().split()[0] if command.strip() else ""
+        if allowed and first_word not in allowed:
+            return FilterDecision(
+                stage="pre_sandbox",
+                decision="deny",
+                reason=f"非白名单可执行文件 {first_word}",
+                command_redacted=command[:80]
+            )
+
+        # 6. 默认允许
         return FilterDecision(stage="pre_sandbox", decision="allow", reason="", command_redacted="")

@@ -195,11 +195,12 @@ class TestCommandPolicyEvaluate:
         policy = CommandPolicy(policy_data)
 
         # .environment 不应该命中 .env（修复隐患2前：会误匹配）
-        decision = policy.evaluate("cat .environment/config", {"call_index": 0})
+        # W5: 用白名单内首词 python，避免被非白名单 deny 干扰本用例
+        decision = policy.evaluate("python .environment/config", {"call_index": 0})
         msg = f".environment 不应命中 .env，实际 {decision.decision}"
         assert decision.decision == "allow", msg
 
-        # .env 应该正确命中
+        # .env 应该正确命中（禁止路径优先级最高，不受白名单影响）
         decision = policy.evaluate("cat .env/passwords", {"call_index": 0})
         msg = f".env 应该命中，实际 {decision.decision}"
         assert decision.decision == "deny", msg
@@ -212,7 +213,8 @@ class TestCommandPolicyEvaluate:
             "forbidden_paths": [],
             "high_risk_commands": ["rm -rf", "curl", ";", "&&"],
             "network_whitelist": [],
-            "allowed_executables": ["python"],
+            # W5: 加入 rm/echo/cd 到白名单，本用例聚焦"边界匹配"，避免被非白名单 deny 干扰
+            "allowed_executables": ["python", "rm", "echo", "cd"],
             "max_timeout_sec": 120,
             "max_output_bytes": 1048576,
             "max_sandbox_runs": 12
