@@ -84,6 +84,42 @@ source .venv/bin/activate        # Linux / macOS
 pip install -e .
 ```
 
+### uv Installation
+
+[uv](https://docs.astral.sh/uv/) manages the Python toolchain, virtual environment and dependencies based on the repository's `pyproject.toml` for fast, reproducible installs. This project provides a script for one-shot setup on macOS:
+
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+
+# Install uv on macOS (see https://docs.astral.sh/uv/getting-started/installation/)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# One-shot setup
+bash build_mac_uv.sh
+
+# add optional extras
+EXTRAS="a2a knowledge" bash build_mac_uv.sh
+```
+
+Or run the steps manually:
+
+```bash
+uv venv --python-preference only-system   # use the local Python
+uv sync --extra dev                       # core + dev tooling
+uv sync --extra a2a --extra knowledge     # add optional extras
+uv sync                                   # production install (core only)
+
+# Run commands inside the environment without activating it for evaluation
+uv run python -c "from trpc_agent_sdk.version import __version__; print(__version__)"
+```
+
+To speed up downloads via a mirror, pass `--default-index`, e.g.:
+
+```bash
+uv sync --default-index https://mirrors.cloud.tencent.com/pypi/simple
+```
+
 ### Optional Dependencies Reference
 
 | Extension        | Purpose                       | Install Command                         |

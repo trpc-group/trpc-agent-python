@@ -44,7 +44,7 @@ flowchart TD
 
 ### 1) 环境准备
 
-- Python `>=3.10`（推荐 `3.12`）
+- Python `>=3.11`（推荐 `3.12`；依赖 `nanobot-ai`）
 - 建议使用虚拟环境（`uv` 或 `venv`）
 
 ```bash
