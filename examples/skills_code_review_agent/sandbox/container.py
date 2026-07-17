@@ -43,7 +43,8 @@ def _bounded_int(env_name: str, default: int, max_val: int) -> int:
     """
     value = os.getenv(env_name)
     if value is None:
-        return default
+        # env 未设置：返回 default，但单向收紧到 max_val（防止调用方参数绕过上限）
+        return min(default, max_val)
 
     try:
         int_value = int(value)

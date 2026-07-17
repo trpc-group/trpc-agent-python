@@ -317,6 +317,31 @@ index 123..456 789
         report4 = run_review(diff_clean, "test", "fake", True, False)
         self.assertEqual(report4.conclusion, "approve", "无问题应该 → approve")
 
+    def test_11_conclusion_warnings_bucket_high_severity(self):
+        """测试11: warnings 桶中 HIGH 严重级别 finding → changes_requested（修复 _conclusion 遗漏 warnings 桶）"""
+        from agent.pipeline import _conclusion
+        from agent.models import Finding
+
+        # 构造 HIGH severity、低置信度(0.75)的 finding（会被路由到 warnings 桶，如 SEC008 SSRF）
+        high_in_warnings = Finding(
+            severity=Severity.HIGH,
+            category="security",
+            file="test.py",
+            line=10,
+            title="SSRF",
+            evidence="requests.get(user_url)",
+            recommendation="校验/白名单 URL",
+            confidence=0.75,
+            source="rule",
+            rule_id="SEC008",
+            bucket=Bucket.WARNINGS,
+        )
+
+        # warnings 桶有 HIGH → 应 changes_requested（修复前会走到 needs_human_review）
+        conclusion = _conclusion([], [high_in_warnings], [], [], [])
+        self.assertEqual(conclusion, "changes_requested",
+                         "warnings 桶的 HIGH severity 应 → changes_requested，而非 needs_human_review")
+
 
 if __name__ == "__main__":
     unittest.main()

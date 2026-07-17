@@ -50,9 +50,12 @@ def _conclusion(findings, warnings, needs_review, decisions, sandbox_runs) -> st
     4. 都无 → approve
     """
     # 1. 有 critical/high finding → changes_requested (最高优先级)
-    for finding in findings:
-        if finding.severity in [Severity.CRITICAL, Severity.HIGH]:
-            return "changes_requested"
+    # Warning 修复: 覆盖 findings + warnings 两桶，避免高危安全问题(如 SEC008 SSRF
+    #   confidence=0.75 进 warnings 桶)只得出 needs_human_review 而非 changes_requested
+    for bucket in (findings, warnings):
+        for finding in bucket:
+            if finding.severity in [Severity.CRITICAL, Severity.HIGH]:
+                return "changes_requested"
 
     # 2. 有 warnings 或 filter block → needs_human_review
     if warnings:

@@ -192,6 +192,15 @@ class TestBoundedInt:
             with pytest.raises(ValueError, match="TEST_VAR 不能超过 60"):
                 _bounded_int("TEST_VAR", 30, 60)
 
+    def test_bounded_int_default_capped_to_max(self):
+        """测试 env 未设置时 default 超过 max_val 被收紧（防止调用方参数绕过上限）。"""
+        from sandbox.container import _bounded_int
+
+        with patch.dict(os.environ, {}, clear=True):
+            # env 未设置，default=100 > max=60 → 单向收紧到 60（修复参数绕过）
+            result = _bounded_int("TEST_VAR", 100, 60)
+            assert result == 60
+
 
 class TestContainerSandbox:
     """测试 ContainerSandbox 的 Docker 容器执行。"""
