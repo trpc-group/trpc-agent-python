@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.1.13](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.13) (2026-07-17)
+
+### Features
+
+* Plan Mode: Added Claude Code-style Plan Mode (`setup_plan` / `PlanToolSet`), so agents can enter a design-and-approval phase before implementation. Supports model-initiated entry via `enter_plan_mode` and user/UI-driven entry through session state, with plan drafting (`update_plan_content`), clarifying questions, approval gating (`exit_plan_mode`), and write-tool restrictions while planning.
+* Tools: Added Tavily as a provider for `WebSearchTool` and `WebFetchTool`. Search can return LLM-ready answers plus optional image hits; fetch can use Tavily Extract as an alternative to direct HTTP fetching.
+* AG-UI: Expanded long-running tool discovery so nested `ToolSet` tools (including Plan Mode tools) are recognized during AG-UI runs, and tool names can be resolved from session history when the client payload only carries a tool call id.
+
+### Bug Fixes
+
+* AG-UI: Fixed session state updates from the AG-UI protocol not being persisted. State-change events are now appended as non-partial events so session services apply them correctly.
+* Runner: Avoided repeated string concatenation while accumulating streaming partial text. Partial chunks are kept as a list and joined only when cancellation cleanup needs the full text.
+* Examples: Fixed a few example agents (LangGraph and Mem0) so the full example pipeline can run more reliably.
+
+### Docs
+
+* Docs: Added English and Chinese Plan Mode guides, plus dedicated pages for TodoWrite, Task, and Goal tools.
+* Docs: Documented Tavily configuration and usage for web search and web fetch.
+* Examples: Added `plan_mode` and `plan_mode_with_goal_and_task` AG-UI examples for trying Plan Mode end to end.
+
+### Internal
+
+* CI: Added a GitHub Actions release workflow for publishing releases.
+* CI: Added code-review helper prompts and scripts under `.github/code_review/`.
+* CI: Added `pipeline_test/run_all_examples.sh` to drive the full examples pipeline more consistently.
+
 ## [1.1.12](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.12) (2026-07-10)
 
 ### Features
