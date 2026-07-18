@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+from typing import Any
 from typing import Optional
 
 from ._audit import AuditLogger
@@ -15,6 +16,7 @@ from ._filter import ToolSafetyFilter
 from ._policy import PolicyConfig
 from ._scanner import SafetyScanner
 from ._types import Decision
+from ._types import RiskLevel
 from ._types import ScanInput
 
 
@@ -25,22 +27,25 @@ def wrap_tool(tool, policy: PolicyConfig, *, audit_path: Optional[str] = None):
     return tool
 
 
-def _load_create_code_execution_result():
-    """Load create_code_execution_result without importing code_executors package.
+class _Outcome:
+    """Minimal stand-in for trpc_agent_sdk.types.Outcome used in deny results."""
 
-    ``import trpc_agent_sdk.code_executors`` pulls optional docker deps via
-    package ``__init__``. Load the leaf module by file path instead.
-    """
-    import importlib.util
-    from pathlib import Path
+    def __init__(self, name: str):
+        self.name = name
 
-    path = Path(__file__).resolve().parents[1] / "code_executors" / "_types.py"
-    spec = importlib.util.spec_from_file_location("_safety_code_exec_types", path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"cannot load code executor types from {path}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod.create_code_execution_result
+
+class _CodeExecutionResult:
+    """Minimal CodeExecutionResult-compatible object (no code_executors import)."""
+
+    def __init__(self, *, output: str, outcome_name: str):
+        self.output = output
+        self.outcome = _Outcome(outcome_name)
+
+
+def _deny_code_result(rule_ids: list[str]) -> _CodeExecutionResult:
+    """Build a failed code-execution result without importing code_executors."""
+    msg = f"Code execution error:\nTOOL_SAFETY_DENY: {rule_ids}\n"
+    return _CodeExecutionResult(output=msg, outcome_name="OUTCOME_FAILED")
 
 
 def _normalize_block_language(raw_lang: str | None, code: str) -> str:
@@ -59,8 +64,6 @@ def _normalize_block_language(raw_lang: str | None, code: str) -> str:
 
 def _scan_code_input(scanner: SafetyScanner, input_data, *, block_on_review: bool):
     """Scan code / code_blocks with per-block language; return worst report."""
-    from ._types import RiskLevel
-
     order = {
         RiskLevel.NONE: 0,
         RiskLevel.LOW: 1,
@@ -77,7 +80,15 @@ def _scan_code_input(scanner: SafetyScanner, input_data, *, block_on_review: boo
     worst = None
     for block in blocks:
         code = getattr(block, "code", None) or ""
-        lang = _normalize_block_language(getattr(block, "language", None), code)
+        declared = (getattr(block, "language", None) or "").strip().lower()
+        # Mislabeled bash-as-python must still hit bash rules via content check.
+        if declared in ("sh", "shell", "bash"):
+            lang = "bash"
+        elif declared in ("python", ) or "py" in declared:
+            inferred = _normalize_block_language("", code)
+            lang = "bash" if inferred == "bash" else "python"
+        else:
+            lang = _normalize_block_language(declared, code)
         report = scanner.scan(ScanInput(script=code, language=lang, tool_name="code_executor"))
         if worst is None:
             worst = report
@@ -98,56 +109,50 @@ def _should_block_report(report, block_on_review: bool) -> bool:
 class SafetyGuardedCodeExecutor:
     """Code-executor wrapper that scans code before delegating.
 
-    Prefer this over the factory-style :func:`safe_code_executor` when you need
-    an explicit class. Constructed lazily so optional docker deps are only
-    imported when used.
+    Does **not** import ``trpc_agent_sdk.code_executors`` (avoids optional docker).
+    Deny results use a minimal object with ``.output`` / ``.outcome.name``.
     """
 
-    def __init__(self, inner, policy: PolicyConfig, *, audit_path: Optional[str] = None, block_on_review: bool = False):
+    def __init__(
+        self,
+        inner,
+        policy: PolicyConfig,
+        *,
+        audit_path: Optional[str] = None,
+        block_on_review: bool = False,
+    ):
         self._inner = inner
         self._scanner = SafetyScanner(policy=policy)
         self._audit = AuditLogger(audit_path)
         self._block_on_review = block_on_review or policy.block_on_review
 
     async def execute_code(self, invocation_context, input_data):
-        create_code_execution_result = _load_create_code_execution_result()
-
         report = _scan_code_input(self._scanner, input_data, block_on_review=self._block_on_review)
         should_block = _should_block_report(report, self._block_on_review)
         if report is not None:
             self._audit.log(report, intercepted=should_block)
         if should_block and report is not None:
-            return create_code_execution_result(stderr=f"TOOL_SAFETY_DENY: {report.rule_ids}")
+            return _deny_code_result(report.rule_ids)
         return await self._inner.execute_code(invocation_context, input_data)
 
 
-def safe_code_executor(inner, policy: PolicyConfig, *, audit_path: Optional[str] = None, block_on_review: bool = False):
+def safe_code_executor(
+    inner,
+    policy: PolicyConfig,
+    *,
+    audit_path: Optional[str] = None,
+    block_on_review: bool = False,
+):
     """Create a code-executor wrapper that scans code before delegating.
 
-    Returns an instance of a dynamically built ``BaseCodeExecutor`` subclass so
-    it remains type-compatible with the executor hierarchy.
+    Returns a simple object with ``execute_code`` (does not subclass
+    BaseCodeExecutor, to avoid importing optional code_executors deps).
     """
-    import importlib.util
-    from pathlib import Path
-
-    base_path = Path(__file__).resolve().parents[1] / "code_executors" / "_base_code_executor.py"
-    types_path = Path(__file__).resolve().parents[1] / "code_executors" / "_types.py"
-    base_spec = importlib.util.spec_from_file_location("_safety_base_code_executor", base_path)
-    types_spec = importlib.util.spec_from_file_location("_safety_code_exec_types", types_path)
-    if base_spec is None or base_spec.loader is None or types_spec is None or types_spec.loader is None:
-        raise ImportError("cannot load code executor helpers without package init")
-    base_mod = importlib.util.module_from_spec(base_spec)
-    types_mod = importlib.util.module_from_spec(types_spec)
-    base_spec.loader.exec_module(base_mod)
-    types_spec.loader.exec_module(types_mod)
-    BaseCodeExecutor = base_mod.BaseCodeExecutor
-    create_code_execution_result = types_mod.create_code_execution_result
-
     scanner = SafetyScanner(policy=policy)
     audit = AuditLogger(audit_path)
     block_review = block_on_review or policy.block_on_review
 
-    class _SafeCodeExecutor(BaseCodeExecutor):
+    class _SafeCodeExecutor:
 
         async def execute_code(self, invocation_context, input_data):
             report = _scan_code_input(scanner, input_data, block_on_review=block_review)
@@ -155,14 +160,13 @@ def safe_code_executor(inner, policy: PolicyConfig, *, audit_path: Optional[str]
             if report is not None:
                 audit.log(report, intercepted=should_block)
             if should_block and report is not None:
-                return create_code_execution_result(stderr=f"TOOL_SAFETY_DENY: {report.rule_ids}")
+                return _deny_code_result(report.rule_ids)
             return await inner.execute_code(invocation_context, input_data)
 
     return _SafeCodeExecutor()
 
 
-# Backwards-compatible factory alias (returns a BaseCodeExecutor instance).
-# Prefer SafetyGuardedCodeExecutor for an explicit class, or safe_code_executor().
+# Backwards-compatible factory alias (returns an object with execute_code).
 SafeCodeExecutor = safe_code_executor
 
 

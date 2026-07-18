@@ -79,36 +79,36 @@ def test_wrap_tool_allows_safe_bash(tmp_path: Path):
     assert rsp.is_continue is True
 
 
-def _try_import_code_executors():
-    try:
-        from trpc_agent_sdk.code_executors import CodeExecutionInput
-        from trpc_agent_sdk.code_executors import create_code_execution_result
-        return CodeExecutionInput, create_code_execution_result
-    except Exception:  # pylint: disable=broad-except
-        return None, None
+class _SimpleCodeInput:
+    """Minimal stand-in for CodeExecutionInput (no code_executors import)."""
+
+    def __init__(self, code: str = "", code_blocks=None, language: str = "python"):
+        self.code = code
+        self.code_blocks = code_blocks or []
+        self.language = language
 
 
 class _FakeInnerExecutor:
 
-    def __init__(self, create_fn: Any) -> None:
-        self._create_fn = create_fn
+    def __init__(self) -> None:
         self.calls: list[Any] = []
 
     async def execute_code(self, invocation_context, input_data):
         self.calls.append(input_data)
-        return self._create_fn(stdout="ok")
+
+        class _Ok:
+            output = "ok"
+            outcome = type("O", (), {"name": "OUTCOME_OK"})()
+
+        return _Ok()
 
 
 def test_safe_code_executor_blocks_dangerous_python(tmp_path: Path):
-    CodeExecutionInput, create_fn = _try_import_code_executors()
-    if CodeExecutionInput is None:
-        pytest.skip("trpc_agent_sdk.code_executors not importable")
-
-    inner = _FakeInnerExecutor(create_fn)
+    inner = _FakeInnerExecutor()
     safe = SafeCodeExecutor(inner, _policy(tmp_path), audit_path=str(tmp_path / "audit.jsonl"))
 
     code = "import os\nos.system('rm -rf /')"
-    inp = CodeExecutionInput(code=code)
+    inp = _SimpleCodeInput(code=code)
     result = asyncio.run(safe.execute_code(None, inp))
 
     assert inner.calls == []
@@ -123,15 +123,11 @@ def test_safe_code_executor_blocks_dangerous_python(tmp_path: Path):
 
 
 def test_safe_code_executor_allows_safe_python(tmp_path: Path):
-    CodeExecutionInput, create_fn = _try_import_code_executors()
-    if CodeExecutionInput is None:
-        pytest.skip("trpc_agent_sdk.code_executors not importable")
-
-    inner = _FakeInnerExecutor(create_fn)
+    inner = _FakeInnerExecutor()
     safe = SafeCodeExecutor(inner, _policy(tmp_path))
 
     code = "print('hello world')"
-    inp = CodeExecutionInput(code=code)
+    inp = _SimpleCodeInput(code=code)
     result = asyncio.run(safe.execute_code(None, inp))
 
     assert len(inner.calls) == 1
