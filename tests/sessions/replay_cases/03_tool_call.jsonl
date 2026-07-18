@@ -1,0 +1,1 @@
+{"id":"03_tool_call","operations":[{"op":"append","author":"agent","type":"function_call","name":"weather","args":{"city":"Shenzhen"}},{"op":"append","author":"tool","type":"function_response","name":"weather","response":{"temperature":28}}]}

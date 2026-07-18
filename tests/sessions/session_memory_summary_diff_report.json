@@ -1,0 +1,410 @@
+{
+  "cases": [
+    {
+      "case_id": "01_single_turn",
+      "baseline": "in_memory",
+      "status": "match",
+      "comparisons": [
+        {
+          "backend": "sql",
+          "session_id": "replay-session",
+          "status": "match",
+          "diffs": []
+        },
+        {
+          "backend": "redis_mock",
+          "session_id": "replay-session",
+          "status": "match",
+          "diffs": []
+        }
+      ]
+    },
+    {
+      "case_id": "02_multi_turn",
+      "baseline": "in_memory",
+      "status": "match",
+      "comparisons": [
+        {
+          "backend": "sql",
+          "session_id": "replay-session",
+          "status": "match",
+          "diffs": []
+        },
+        {
+          "backend": "redis_mock",
+          "session_id": "replay-session",
+          "status": "match",
+          "diffs": []
+        }
+      ]
+    },
+    {
+      "case_id": "03_tool_call",
+      "baseline": "in_memory",
+      "status": "match",
+      "comparisons": [
+        {
+          "backend": "sql",
+          "session_id": "replay-session",
+          "status": "match",
+          "diffs": []
+        },
+        {
+          "backend": "redis_mock",
+          "session_id": "replay-session",
+          "status": "match",
+          "diffs": []
+        }
+      ]
+    },
+    {
+      "case_id": "04_session_state",
+      "baseline": "in_memory",
+      "status": "match",
+      "comparisons": [
+        {
+          "backend": "sql",
+          "session_id": "replay-session",
+          "status": "match",
+          "diffs": []
+        },
+        {
+          "backend": "redis_mock",
+          "session_id": "replay-session",
+          "status": "match",
+          "diffs": []
+        }
+      ]
+    },
+    {
+      "case_id": "05_scoped_state",
+      "baseline": "in_memory",
+      "status": "match",
+      "comparisons": [
+        {
+          "backend": "sql",
+          "session_id": "replay-session",
+          "status": "match",
+          "diffs": []
+        },
+        {
+          "backend": "redis_mock",
+          "session_id": "replay-session",
+          "status": "match",
+          "diffs": []
+        }
+      ]
+    },
+    {
+      "case_id": "06_memory",
+      "baseline": "in_memory",
+      "status": "match",
+      "comparisons": [
+        {
+          "backend": "sql",
+          "session_id": "replay-session",
+          "status": "match",
+          "diffs": []
+        },
+        {
+          "backend": "redis_mock",
+          "session_id": "replay-session",
+          "status": "match",
+          "diffs": []
+        }
+      ]
+    },
+    {
+      "case_id": "07_summary_create_update",
+      "baseline": "in_memory",
+      "status": "different",
+      "comparisons": [
+        {
+          "backend": "sql",
+          "session_id": "replay-session",
+          "status": "different",
+          "diffs": [
+            {
+              "path": "events[0].summary_metadata.summary_replaces_event_ids[4]",
+              "expected": "event-10",
+              "actual": null,
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 0,
+              "target": "session"
+            },
+            {
+              "path": "events[0].summary_metadata.summary_replaces_event_ids[5]",
+              "expected": "event-10",
+              "actual": null,
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 0,
+              "target": "session"
+            },
+            {
+              "path": "events[1].author",
+              "expected": "user",
+              "actual": "agent",
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 1,
+              "target": "session"
+            },
+            {
+              "path": "events[1].text",
+              "expected": "Give me a final short itinerary",
+              "actual": "Shenzhen will be sunny and warm",
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 1,
+              "target": "session"
+            },
+            {
+              "path": "events[2].author",
+              "expected": "agent",
+              "actual": "user",
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 2,
+              "target": "session"
+            },
+            {
+              "path": "events[2].text",
+              "expected": "Take the train, stay near the station, and pack light clothes",
+              "actual": "Give me a final short itinerary",
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 2,
+              "target": "session"
+            }
+          ]
+        },
+        {
+          "backend": "redis_mock",
+          "session_id": "replay-session",
+          "status": "different",
+          "diffs": [
+            {
+              "path": "events[0].summary_metadata.summary_replaces_event_ids[4]",
+              "expected": "event-10",
+              "actual": null,
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 0,
+              "target": "session"
+            },
+            {
+              "path": "events[0].summary_metadata.summary_replaces_event_ids[5]",
+              "expected": "event-10",
+              "actual": null,
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 0,
+              "target": "session"
+            },
+            {
+              "path": "events[1].author",
+              "expected": "user",
+              "actual": "agent",
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 1,
+              "target": "session"
+            },
+            {
+              "path": "events[1].text",
+              "expected": "Give me a final short itinerary",
+              "actual": "Shenzhen will be sunny and warm",
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 1,
+              "target": "session"
+            },
+            {
+              "path": "events[2].author",
+              "expected": "agent",
+              "actual": "user",
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 2,
+              "target": "session"
+            },
+            {
+              "path": "events[2].text",
+              "expected": "Take the train, stay near the station, and pack light clothes",
+              "actual": "Give me a final short itinerary",
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 2,
+              "target": "session"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "08_summary_truncation",
+      "baseline": "in_memory",
+      "status": "different",
+      "comparisons": [
+        {
+          "backend": "sql",
+          "session_id": "replay-session",
+          "status": "different",
+          "diffs": [
+            {
+              "path": "events[5].author",
+              "expected": "user",
+              "actual": "agent",
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 5,
+              "target": "session"
+            },
+            {
+              "path": "events[5].text",
+              "expected": "Please add one visualization exercise",
+              "actual": "Create a matplotlib chart from a CSV file",
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 5,
+              "target": "session"
+            },
+            {
+              "path": "events[6]",
+              "expected": {
+                "author": "agent",
+                "text": "Create a matplotlib chart from a CSV file",
+                "function_calls": [],
+                "function_responses": [],
+                "state_delta": {},
+                "is_summary": false,
+                "summary_metadata": {}
+              },
+              "actual": null,
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 6,
+              "target": "session"
+            },
+            {
+              "path": "events[7]",
+              "expected": {
+                "author": "agent",
+                "text": "Create a matplotlib chart from a CSV file",
+                "function_calls": [],
+                "function_responses": [],
+                "state_delta": {},
+                "is_summary": false,
+                "summary_metadata": {}
+              },
+              "actual": null,
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 7,
+              "target": "session"
+            }
+          ]
+        },
+        {
+          "backend": "redis_mock",
+          "session_id": "replay-session",
+          "status": "different",
+          "diffs": [
+            {
+              "path": "events[5].author",
+              "expected": "user",
+              "actual": "agent",
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 5,
+              "target": "session"
+            },
+            {
+              "path": "events[5].text",
+              "expected": "Please add one visualization exercise",
+              "actual": "Create a matplotlib chart from a CSV file",
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 5,
+              "target": "session"
+            },
+            {
+              "path": "events[6]",
+              "expected": {
+                "author": "agent",
+                "text": "Create a matplotlib chart from a CSV file",
+                "function_calls": [],
+                "function_responses": [],
+                "state_delta": {},
+                "is_summary": false,
+                "summary_metadata": {}
+              },
+              "actual": null,
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 6,
+              "target": "session"
+            },
+            {
+              "path": "events[7]",
+              "expected": {
+                "author": "agent",
+                "text": "Create a matplotlib chart from a CSV file",
+                "function_calls": [],
+                "function_responses": [],
+                "state_delta": {},
+                "is_summary": false,
+                "summary_metadata": {}
+              },
+              "actual": null,
+              "allowed": false,
+              "session_id": "replay-session",
+              "event_index": 7,
+              "target": "session"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "09_duplicate_store",
+      "baseline": "in_memory",
+      "status": "match",
+      "comparisons": [
+        {
+          "backend": "sql",
+          "session_id": "replay-session",
+          "status": "match",
+          "diffs": []
+        },
+        {
+          "backend": "redis_mock",
+          "session_id": "replay-session",
+          "status": "match",
+          "diffs": []
+        }
+      ]
+    },
+    {
+      "case_id": "10_failure_recovery",
+      "baseline": "in_memory",
+      "status": "match",
+      "comparisons": [
+        {
+          "backend": "sql",
+          "session_id": "replay-session",
+          "status": "match",
+          "diffs": []
+        },
+        {
+          "backend": "redis_mock",
+          "session_id": "replay-session",
+          "status": "match",
+          "diffs": []
+        }
+      ]
+    }
+  ]
+}
