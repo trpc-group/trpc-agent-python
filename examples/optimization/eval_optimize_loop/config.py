@@ -165,6 +165,12 @@ class WritebackConfig(EvalBaseModel):
     enabled: bool = False
     require_source_hash_match: bool = True
 
+    @model_validator(mode="after")
+    def _require_hash_guard_when_enabled(self) -> "WritebackConfig":
+        if self.enabled and not self.require_source_hash_match:
+            raise ValueError("enabled writeback requires require_source_hash_match=true")
+        return self
+
 
 class PipelineConfig(EvalBaseModel):
     """The complete, example-local ``pipeline.json`` schema (version 1)."""

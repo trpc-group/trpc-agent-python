@@ -19,7 +19,9 @@ if __package__ in (None, ""):
         sys.path.insert(0, str(_REPO_ROOT))
     from examples.optimization.eval_optimize_loop.pipeline import prepare_run
     from examples.optimization.eval_optimize_loop.pipeline import run_fake_stage
+    from examples.optimization.eval_optimize_loop.config import load_pipeline_config
 else:
+    from .config import load_pipeline_config
     from .pipeline import prepare_run
     from .pipeline import run_fake_stage
 
@@ -46,6 +48,15 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    config = load_pipeline_config(args.config)
+    if config.execution.mode == "real":
+        parser.error(
+            "real mode requires an injected business agent; use the Python API "
+            "run_real_stage(prepared, call_agent=...)"
+        )
+    if config.execution.mode != "fake":
+        parser.error("this CLI currently supports execution.mode='fake' only")
+
     prepared = prepare_run(args.config, run_id=args.run_id)
     result = asyncio.run(run_fake_stage(prepared, scenario=args.scenario))
     print(f"Completed deterministic pipeline stage: {prepared.workspace.run_dir}")
@@ -66,7 +77,11 @@ def main() -> None:
         print("Warnings:")
         for warning in result.gate_decision.warnings:
             print(f"- {warning}")
-    print("Stage 3b does not write reports or update source prompts.")
+    print(
+        f"Writeback: {result.writeback.status.upper()} "
+        f"({result.writeback.reason})"
+    )
+    print("Stage 4 does not write optimization reports; reporting is added in Stage 5.")
 
 
 if __name__ == "__main__":
