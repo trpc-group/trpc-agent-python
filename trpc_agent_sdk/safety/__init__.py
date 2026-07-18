@@ -34,6 +34,7 @@ from ._scanner import SCANNER_VERSION
 from ._scanner import SafetyScanner
 from ._scanner import clear_custom_rules
 from ._scanner import register_custom_rule
+from ._scanner import register_rule
 from ._scanner import unregister_custom_rule
 from ._types import Decision
 from ._types import RiskLevel
@@ -76,6 +77,7 @@ __all__ = [
     "SCANNER_VERSION",
     "SafetyScanner",
     "register_custom_rule",
+    "register_rule",
     "unregister_custom_rule",
     "clear_custom_rules",
     "ToolSafetyFilter",

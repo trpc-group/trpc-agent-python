@@ -4,7 +4,10 @@ The Tool Script Safety Guard is an **opt-in** pre-execution static scanner for
 Tool, Skill, and CodeExecutor payloads. It analyzes Python and Bash content
 before execution and returns `allow`, `deny`, or `needs_human_review`.
 
-Package: `trpc_agent_sdk.safety`
+Packages:
+
+- `trpc_agent_sdk.safety` — implementation
+- `trpc_agent_sdk.tools.safety` — official re-export
 
 ## Quick start
 
@@ -12,15 +15,23 @@ Package: `trpc_agent_sdk.safety`
 from trpc_agent_sdk.safety import PolicyConfig, SafetyScanner, ScanInput
 
 policy = PolicyConfig.from_yaml("examples/tool_safety/tool_safety_policy.yaml")
+# or: policy = PolicyConfig.from_env()  # TOOL_SAFETY_POLICY_PATH
 scanner = SafetyScanner(policy=policy)
 report = scanner.scan(ScanInput(script="rm -rf /", language="bash"))
 assert report.decision.value == "deny"
 ```
 
+Opt-in on built-in tools / executors (default remains off):
+
+```python
+BashTool(enable_safety_guard=True, safety_policy_path="...")
+UnsafeLocalCodeExecutor(enable_safety_guard=True)
+```
+
 Attach as a Tool Filter:
 
 ```python
-from trpc_agent_sdk.safety import ToolSafetyFilter, PolicyConfig
+from trpc_agent_sdk.tools.safety import ToolSafetyFilter, PolicyConfig
 
 policy = PolicyConfig.from_yaml("examples/tool_safety/tool_safety_policy.yaml")
 tool = BashTool(filters=[ToolSafetyFilter(policy=policy, audit_path="audit.jsonl")])

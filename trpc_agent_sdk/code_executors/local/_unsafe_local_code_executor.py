@@ -47,6 +47,26 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
     clean_temp_files: bool = Field(default=True,
                                    description="Whether to clean temporary files after the code execution.")
 
+    enable_safety_guard: bool = Field(
+        default=False,
+        description="When True, scan code with Tool Script Safety Guard before execution.",
+    )
+
+    safety_policy_path: str = Field(
+        default="",
+        description="Optional path to tool_safety_policy.yaml used when enable_safety_guard is True.",
+    )
+
+    safety_audit_path: str = Field(
+        default="",
+        description="Optional JSONL audit path used when enable_safety_guard is True.",
+    )
+
+    safety_block_on_review: bool = Field(
+        default=False,
+        description="When True with enable_safety_guard, also block needs_human_review decisions.",
+    )
+
     def __init__(self, **data):
         """Initialize the UnsafeLocalCodeExecutor."""
         if "stateful" in data and data["stateful"]:
@@ -54,6 +74,25 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         if "optimize_data_file" in data and data["optimize_data_file"]:
             raise ValueError("Cannot set `optimize_data_file=True` in UnsafeLocalCodeExecutor.")
         super().__init__(**data)
+        self._safety_scanner = None
+        self._safety_audit = None
+        if self.enable_safety_guard:
+            self._init_safety_guard()
+
+    def _init_safety_guard(self) -> None:
+        from trpc_agent_sdk.safety import AuditLogger
+        from trpc_agent_sdk.safety import PolicyConfig
+        from trpc_agent_sdk.safety import SafetyScanner
+
+        if self.safety_policy_path:
+            policy = PolicyConfig.from_yaml(self.safety_policy_path)
+        else:
+            policy = PolicyConfig.from_env()
+        if self.safety_block_on_review:
+            policy.block_on_review = True
+        self._safety_scanner = SafetyScanner(policy=policy)
+        self._safety_audit = AuditLogger(self.safety_audit_path or None)
+        self._safety_block_on_review = policy.block_on_review
 
     @override
     async def execute_code(self, invocation_context: InvocationContext,
@@ -67,6 +106,24 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         Returns:
             CodeExecutionResult with combined output
         """
+        if self._safety_scanner is not None:
+            from trpc_agent_sdk.safety import Decision
+            from trpc_agent_sdk.safety import ScanInput
+
+            code = input_data.code or "\n".join(b.code for b in (input_data.code_blocks or []))
+            report = self._safety_scanner.scan(
+                ScanInput(script=code, language="python", tool_name="code_executor")
+            )
+            should_block = report.decision == Decision.DENY or (
+                report.decision == Decision.NEEDS_HUMAN_REVIEW and getattr(self, "_safety_block_on_review", False)
+            )
+            if self._safety_audit is not None:
+                self._safety_audit.log(report, intercepted=should_block)
+            if should_block:
+                return create_code_execution_result(
+                    stderr=f"TOOL_SAFETY_DENY: {report.rule_ids}"
+                )
+
         output_parts = []
         error_parts = []
         if not input_data.code_blocks and input_data.code:

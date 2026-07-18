@@ -105,6 +105,24 @@ class PolicyConfig:
             raise ValueError(f"policy file {path} must contain a YAML mapping at top level")
         return cls.from_dict(data)
 
+    @classmethod
+    def from_env(cls, env_var: str = "TOOL_SAFETY_POLICY_PATH") -> "PolicyConfig":
+        """Load policy from ``TOOL_SAFETY_POLICY_PATH`` or return defaults."""
+        import os
+
+        path = (os.environ.get(env_var) or "").strip()
+        if not path:
+            return cls()
+        p = Path(path)
+        if not p.is_file():
+            raise ValueError(f"{env_var} points to missing policy file: {path}")
+        return cls.from_yaml(p)
+
+    @classmethod
+    def default(cls) -> "PolicyConfig":
+        """Return a default fail-closed policy (no network allow-list)."""
+        return cls()
+
     def decision_for(self, max_level: RiskLevel) -> Decision:
         """Map an aggregate risk level to a final decision per policy."""
         if risk_order(max_level) >= risk_order(self.deny_risk_level):

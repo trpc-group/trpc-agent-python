@@ -5,14 +5,16 @@ It performs static analysis on Python and Bash content **before** execution, emi
 `allow` / `deny` / `needs_human_review` decisions, and produces structured reports +
 audit events + OpenTelemetry span attributes.
 
-Implementation lives in the SDK package:
+Implementation lives in the SDK package (two equivalent import paths):
 
 ```python
 from trpc_agent_sdk.safety import PolicyConfig, SafetyScanner, ScanInput, ToolSafetyFilter
+# official tools path (re-export):
+from trpc_agent_sdk.tools.safety import PolicyConfig, SafetyScanner, ToolSafetyFilter
 ```
 
 This example directory provides the policy file, sample scripts, CLI wrappers, and
-generated report / audit fixtures.
+generated report / audit fixtures. See also [DESIGN.md](DESIGN.md).
 
 > This is a **defense-in-depth** layer. It does **not** replace sandbox isolation —
 > see [Relationship with Sandbox / Filter / Telemetry / CodeExecutor](#relationship-with-sandbox--filter--telemetry--codeexecutor).
@@ -73,6 +75,7 @@ print(report.rule_ids)   # ['R001_dangerous_files', ...]
 | `R004_dependency_install` | Dependency Installation | dependency_install | HIGH | `pip`/`npm`/`apt`/`yarn`/`conda` 等，含 subprocess list 形态 |
 | `R005_resource_abuse` | Resource Abuse | resource_abuse | HIGH | 无限循环、fork bomb、`dd`、超长 sleep、高并发池 |
 | `R006_secret_leak` | Sensitive Information Leakage | secret_leak | CRITICAL | API key / JWT / 私钥模式、`os.environ[SECRET]` sink、curl 上传凭据 |
+| `R007_code_execution` | Dynamic Code Execution | code_execution | CRITICAL | `eval`/`exec`/`compile`、decode-to-shell、`find -delete`/`xargs rm` |
 
 ### 判定逻辑
 
@@ -118,13 +121,32 @@ disabled_rules: []
 
 ## 接入方式
 
-### 1. Tool Filter（推荐）
+### 1. 官方 opt-in 开关（推荐）
+
+```python
+from trpc_agent_sdk.tools.file_tools import BashTool
+from trpc_agent_sdk.code_executors import UnsafeLocalCodeExecutor
+
+# 默认关闭，不改变历史行为；显式启用：
+tool = BashTool(
+    enable_safety_guard=True,
+    safety_policy_path="examples/tool_safety/tool_safety_policy.yaml",
+    safety_audit_path="audit.jsonl",
+)
+executor = UnsafeLocalCodeExecutor(
+    enable_safety_guard=True,
+    safety_policy_path="examples/tool_safety/tool_safety_policy.yaml",
+)
+```
+
+### 2. Tool Filter
 
 ```python
 from trpc_agent_sdk.safety import ToolSafetyFilter, PolicyConfig
 from trpc_agent_sdk.tools.file_tools import BashTool
 
 policy = PolicyConfig.from_yaml("examples/tool_safety/tool_safety_policy.yaml")
+# 也可: policy = PolicyConfig.from_env()  # 读 TOOL_SAFETY_POLICY_PATH
 safety_filter = ToolSafetyFilter(policy=policy, audit_path="audit.jsonl")
 tool = BashTool(filters=[safety_filter])
 ```

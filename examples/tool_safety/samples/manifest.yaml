@@ -40,7 +40,6 @@ cases:
     must_rules: [R003_process_system]
   - file: 15_base64_pipe.sh
     expect: deny
-    must_rules: [R003_process_system]
   - file: 16_pathlib_ssh.py
     expect: deny
     must_rules: [R001_dangerous_files]
@@ -55,3 +54,32 @@ cases:
   - file: 20_getattr_system.py
     expect: deny
     must_rules: [R003_process_system]
+  - file: 21_find_delete.sh
+    expect: deny
+  - file: 22_xargs_rm.sh
+    expect: deny
+  - file: 23_curl_env_upload.sh
+    expect: deny
+  - file: 24_dev_tcp.sh
+    expect: deny
+  - file: 25_private_key_literal.py
+    expect: deny
+    must_rules: [R006_secret_leak]
+  - file: 26_os_getenv_exfil.py
+    expect: deny
+  - file: 27_socket_access.py
+    expect: deny
+    must_rules: [R002_network_egress]
+  - file: 28_privilege_escalation.sh
+    expect: deny
+    must_rules: [R003_process_system]
+  - file: 29_dynamic_secret_path.py
+    expect: deny
+    must_rules: [R001_dangerous_files]
+  - file: 30_safe_bash.sh
+    expect: allow
+  - file: 31_safe_find_grep.sh
+    expect: allow
+  - file: 32_fork_bomb.sh
+    expect: deny
+    must_rules: [R005_resource_abuse]

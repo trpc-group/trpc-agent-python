@@ -24,7 +24,7 @@ from ._types import SafetyReport
 from ._types import ScanInput
 from ._types import max_risk_level
 
-SCANNER_VERSION = "1.1.0"
+SCANNER_VERSION = "1.2.0"
 
 _custom_rules: list[SafetyRule] = []
 
@@ -38,6 +38,27 @@ def register_custom_rule(rule: SafetyRule) -> None:
     global _custom_rules
     _custom_rules = [r for r in _custom_rules if r.rule_id != rule.rule_id]
     _custom_rules.append(rule)
+
+
+def register_rule(cls: type | None = None):
+    """Class decorator that registers a SafetyRule subclass instance.
+
+    Usage::
+
+        @register_rule
+        class MyRule(SafetyRule):
+            rule_id = "CUSTOM_001"
+            ...
+    """
+
+    def _decorate(rule_cls: type) -> type:
+        instance = rule_cls()
+        register_custom_rule(instance)
+        return rule_cls
+
+    if cls is None:
+        return _decorate
+    return _decorate(cls)
 
 
 def unregister_custom_rule(rule_id: str) -> bool:

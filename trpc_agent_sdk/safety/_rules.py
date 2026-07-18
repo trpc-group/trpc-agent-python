@@ -95,6 +95,8 @@ _DELETE_PATTERNS = [
     re.compile(r"\brm\s+-rf\b", re.IGNORECASE),
     re.compile(r"\brmdir\s+/s\b", re.IGNORECASE),
     re.compile(r"\bdel\s+/[sq]\b", re.IGNORECASE),
+    re.compile(r"\bfind\b.*(-delete|-exec\s+rm\b)", re.IGNORECASE),
+    re.compile(r"\bxargs\b.*\brm\b", re.IGNORECASE),
 ]
 
 _SYSTEM_DIRS = [
@@ -150,6 +152,9 @@ class DangerousFilesRule(SafetyRule):
         if tree is None:
             return findings
         aliases = build_import_aliases(tree)
+        # Track local vars assigned from path-join expressions that mention
+        # sensitive path fragments (e.g. path = os.path.join(..., ".ssh", ...)).
+        path_vars = _collect_sensitive_path_vars(tree, aliases, policy)
 
         for node, name in iter_python_calls(tree, aliases):
             lname = name.lower()
@@ -170,6 +175,10 @@ class DangerousFilesRule(SafetyRule):
 
             if lname in {"open", "builtins.open"} or lname.endswith(".open"):
                 target = _first_str_or_path(node) or "<dynamic>"
+                if isinstance(node.args[0], ast.Name) if node.args else False:
+                    var = node.args[0].id
+                    if var in path_vars:
+                        target = path_vars[var]
                 if _is_write_open(node):
                     if _matches_sensitive(target) or _matches_forbidden(target, policy) or _matches_system_dir(target):
                         findings.append(self._finding(
@@ -199,15 +208,26 @@ class DangerousFilesRule(SafetyRule):
                     ))
 
             # Path(...).joinpath(...).read_text pattern: also inspect path construction
-            if "pathlib" in lname or lname.endswith("path") or lname.endswith("joinpath"):
+            if "pathlib" in lname or lname.endswith("path") or lname.endswith("joinpath") or lname in {
+                "os.path.join", "os.path.expanduser", "posixpath.join", "ntpath.join",
+            }:
                 target = path_expr_text(node)
-                if _matches_sensitive(target):
+                if _matches_sensitive(target) or _matches_forbidden(target, policy):
                     findings.append(self._finding(
                         evidence_snippet(target) or name,
                         node.lineno,
                         "Do not construct paths into credential directories.",
                         message=f"Path construction toward sensitive location {target!r}",
                     ))
+
+        # Flag assignments that build sensitive paths even if never opened.
+        for var, target in path_vars.items():
+            findings.append(self._finding(
+                f"{var}={target!r}",
+                None,
+                "Do not construct credential paths in tool scripts.",
+                message=f"Sensitive path assigned to {var!r}: {target!r}",
+            ))
 
         return findings
 
@@ -297,6 +317,47 @@ def _path_from_attr_call(node: ast.Call, aliases: dict[str, str]) -> str:
     if isinstance(func, ast.Attribute):
         return path_expr_text(func.value)
     return ""
+
+
+def _collect_sensitive_path_vars(
+    tree: ast.AST,
+    aliases: dict[str, str],
+    policy: PolicyConfig,
+) -> dict[str, str]:
+    """Map local names bound to path expressions that mention sensitive fragments."""
+    path_vars: dict[str, str] = {}
+    join_names = {
+        "os.path.join", "posixpath.join", "ntpath.join", "os.path.expanduser",
+        "pathlib.path.joinpath", "pathlib.Path.joinpath",
+    }
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        value = node.value
+        text = ""
+        if isinstance(value, ast.Call):
+            cname = resolve_name(value.func, aliases).lower()
+            if cname in join_names or cname.endswith(".join") or cname.endswith(".joinpath") or cname.endswith(".expanduser"):
+                text = path_expr_text(value)
+            else:
+                text = path_expr_text(value)
+        else:
+            text = path_expr_text(value)
+        # Also collect constant string fragments from nested calls/args.
+        if not text and isinstance(value, ast.Call):
+            parts = []
+            for arg in value.args:
+                s = get_string_literal(arg)
+                if s:
+                    parts.append(s)
+                else:
+                    parts.append(path_expr_text(arg))
+            text = "/".join(p for p in parts if p)
+        if text and (_matches_sensitive(text) or _matches_forbidden(text, policy)):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    path_vars[target.id] = text
+    return path_vars
 
 
 # ---------------------------------------------------------------------------
@@ -480,10 +541,14 @@ def _collect_session_vars(tree: ast.AST, aliases: dict[str, str]) -> dict[str, s
 def _extract_host_from_call(node: ast.Call) -> str | None:
     if not node.args:
         for kw in node.keywords:
-            if kw.arg in {"url", "host", "address"}:
+            if kw.arg in {"url", "host", "address", "server_hostname"}:
                 return _host_from_value(kw.value)
         return None
-    return _host_from_value(node.args[0])
+    first = node.args[0]
+    # socket.create_connection(("host", port)) / connect((host, port))
+    if isinstance(first, (ast.Tuple, ast.List)) and first.elts:
+        return _host_from_value(first.elts[0])
+    return _host_from_value(first)
 
 
 def _host_from_value(value: ast.AST) -> str | None:
@@ -1205,6 +1270,87 @@ def redact(text: str, keep: int = 4) -> str:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# R007 Dynamic code execution
+# ---------------------------------------------------------------------------
+
+
+class CodeExecutionRule(SafetyRule):
+    """Detect dynamic code execution patterns that enable arbitrary code run."""
+
+    rule_id = "R007_code_execution"
+    rule_name = "Dynamic Code Execution"
+    risk_type = "code_execution"
+    default_level = RiskLevel.CRITICAL
+    languages = ("python", "bash")
+
+    def check(self, scan_input: ScanInput, policy: PolicyConfig) -> list[SafetyFinding]:
+        findings: list[SafetyFinding] = []
+        lang = normalize_language(scan_input)
+        if lang == "python":
+            tree = parse_python_ast(scan_input.script)
+            if tree is None:
+                return findings
+            aliases = build_import_aliases(tree)
+            for node, name in iter_python_calls(tree, aliases):
+                lname = name.lower()
+                if lname in {"eval", "exec", "compile", "builtins.eval", "builtins.exec", "builtins.compile"}:
+                    findings.append(self._finding(
+                        f"{name}(...)",
+                        node.lineno,
+                        f"Remove {name}(); it allows arbitrary code execution.",
+                        level=RiskLevel.CRITICAL,
+                        message=f"Dynamic code execution via {name}()",
+                    ))
+                if lname in {"__import__", "importlib.import_module"}:
+                    mod = get_string_literal(node.args[0]) if node.args else None
+                    if mod in {"os", "subprocess", "pty", "ctypes"}:
+                        findings.append(self._finding(
+                            f"{name}({mod!r})",
+                            node.lineno,
+                            "Do not dynamically import process-control modules.",
+                            level=RiskLevel.HIGH,
+                            message=f"Dynamic import of process module {mod!r}",
+                        ))
+        for lineno, line in bash_lines(scan_input.script):
+            if re.search(r"\beval\b", line):
+                findings.append(self._finding(
+                    line,
+                    lineno,
+                    "Remove eval; it enables shell injection.",
+                    level=RiskLevel.CRITICAL,
+                    message="Use of eval in bash",
+                ))
+            if re.search(r"base64\s+(-d|--decode).*\|\s*(sh|bash|zsh|python)", line, re.I) or (
+                re.search(r"\|\s*(sh|bash|zsh)\b", line) and re.search(r"base64|xxd|openssl", line, re.I)
+            ):
+                findings.append(self._finding(
+                    line,
+                    lineno,
+                    "Decode-and-execute pipelines are not allowed.",
+                    level=RiskLevel.CRITICAL,
+                    message="Decode-to-shell pipeline (base64/xxd | sh)",
+                ))
+            # find -delete / xargs rm
+            if re.search(r"\bfind\b.*(-delete|-exec\s+rm\b)", line, re.I):
+                findings.append(self._finding(
+                    line,
+                    lineno,
+                    "Avoid find -delete / -exec rm in tool scripts.",
+                    level=RiskLevel.HIGH,
+                    message="find-based mass delete",
+                ))
+            if re.search(r"\bxargs\b.*\brm\b", line, re.I):
+                findings.append(self._finding(
+                    line,
+                    lineno,
+                    "Avoid xargs rm pipelines.",
+                    level=RiskLevel.HIGH,
+                    message="xargs rm mass delete",
+                ))
+        return findings
+
+
 def default_rules() -> list[SafetyRule]:
     """Return the default ordered set of built-in safety rules."""
     return [
@@ -1214,4 +1360,5 @@ def default_rules() -> list[SafetyRule]:
         DependencyInstallRule(),
         ResourceAbuseRule(),
         SecretLeakRule(),
+        CodeExecutionRule(),
     ]
