@@ -76,6 +76,32 @@ def test_run_filters_needs_review_does_not_crash_when_not_blocking():
     assert result["success"] is True
 
 
+def test_run_filters_needs_review_merges_warning_into_result():
+    """Non-blocking review must merge safety_warning into the tool result.
+
+    Regression for CongkeChen's review comment: setting rsp.rsp in _before is
+    useless because BaseFilter.run overwrites result.rsp with the tool's return
+    value in the handle() step. _after must merge the warning fields so the
+    caller actually sees them.
+    """
+    # A bash command that triggers NEEDS_HUMAN_REVIEW (MEDIUM): backgrounding a
+    # non-network process. Network backgrounding is HIGH/DENY, but plain
+    # background is MEDIUM/review under the default policy.
+    flt = ToolSafetyFilter(_policy(block_on_review=False))
+
+    async def _handle():
+        return {"success": True, "stdout": "ran"}
+
+    async def _run():
+        return await run_filters(None, {"command": "sleep 100 &"}, [flt], _handle)
+
+    result = asyncio.run(_run())
+    assert result["success"] is True
+    assert result.get("safety_warning") == "TOOL_SAFETY_NEEDS_REVIEW"
+    assert "safety_risk_level" in result
+    assert "safety_rule_ids" in result
+
+
 def test_base_filter_run_deny_keeps_error_none():
     """Direct BaseFilter.run must keep error=None and is_continue=False on deny."""
     flt = ToolSafetyFilter(_policy())

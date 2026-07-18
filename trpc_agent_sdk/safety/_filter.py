@@ -6,6 +6,7 @@
 """ToolSafetyFilter: pre-execution safety filter for Tool / Skill scripts."""
 from __future__ import annotations
 
+import contextvars
 from typing import Any
 from typing import Optional
 
@@ -17,11 +18,20 @@ from ._audit import AuditLogger
 from ._policy import PolicyConfig
 from ._scanner import SafetyScanner
 from ._types import Decision
+from ._types import SafetyReport
 from ._types import ScanInput
 
 _SCRIPT_ARG_KEYS = ("command", "script", "code", "cmd", "bash", "shell_command")
 _LANGUAGE_ARG_KEYS = ("language", "lang")
 _WORKDIR_ARG_KEYS = ("cwd", "workdir", "working_dir")
+
+# ContextVar carries the non-blocking review report from _before to _after.
+# We cannot stash it on the FilterResult because BaseFilter.run may replace
+# the whole result object with the one returned by handle(). ContextVar is
+# async-safe: each task sees its own value across awaits.
+_REVIEW_REPORT: contextvars.ContextVar[Optional[SafetyReport]] = contextvars.ContextVar(
+    "_safety_review_report", default=None
+)
 
 
 class ToolSafetyFilter(BaseFilter):
@@ -31,6 +41,13 @@ class ToolSafetyFilter(BaseFilter):
     ``policy.block_on_review``), the filter sets ``is_continue=False`` so the
     tool's ``_run_async_impl`` is never called. An audit record is always
     written, and OpenTelemetry span attributes are set on the current span.
+
+    For non-blocking NEEDS_HUMAN_REVIEW (``block_on_review=False``), the tool
+    is allowed to run, and the warning is merged into the tool's result dict
+    (keys ``safety_warning`` / ``safety_risk_level`` / ``safety_rule_ids``) in
+    ``_after`` so the caller actually sees it. This is necessary because
+    ``BaseFilter.run`` overwrites ``result.rsp`` with the tool's return value
+    after ``_before`` returns.
     """
 
     def __init__(
@@ -105,14 +122,34 @@ class ToolSafetyFilter(BaseFilter):
             return
 
         if report.decision == Decision.NEEDS_HUMAN_REVIEW:
-            # Non-blocking review: annotate rsp.rsp with a warning field. Do NOT
-            # put a string into rsp.error (would crash run_filters). Full details
-            # remain in audit / OTel.
-            if not isinstance(rsp.rsp, dict):
-                rsp.rsp = {}
-            rsp.rsp["safety_warning"] = "TOOL_SAFETY_NEEDS_REVIEW"
-            rsp.rsp["safety_risk_level"] = report.risk_level.value
-            rsp.rsp["safety_rule_ids"] = list(report.rule_ids)
+            # Non-blocking review: stash the report via ContextVar so _after
+            # (run after the tool executes) can merge the warning into the
+            # tool's actual result. Setting rsp.rsp here is useless because
+            # BaseFilter.run's handle() step overwrites result.rsp with the
+            # tool's return value.
+            _REVIEW_REPORT.set(report)
+
+    async def _after(self, ctx: Any, req: Any, rsp: FilterResult) -> None:
+        """Merge non-blocking safety review warnings into the tool result.
+
+        ``_before`` cannot attach the warning to ``rsp.rsp`` because
+        ``BaseFilter.run`` overwrites ``result.rsp`` with the tool's return
+        value in the handle() step. We instead stash the report in a
+        ContextVar during ``_before`` and merge the warning fields here,
+        after the tool has run, so the caller actually sees them.
+        """
+        report = _REVIEW_REPORT.get()
+        if report is None:
+            return
+        # Clear the stash so it does not leak to the next call in this context.
+        _REVIEW_REPORT.set(None)
+        if not isinstance(rsp.rsp, dict):
+            # Wrap non-dict results so we can attach warning fields without
+            # losing the original payload.
+            rsp.rsp = {"result": rsp.rsp}
+        rsp.rsp["safety_warning"] = "TOOL_SAFETY_NEEDS_REVIEW"
+        rsp.rsp["safety_risk_level"] = report.risk_level.value
+        rsp.rsp["safety_rule_ids"] = list(report.rule_ids)
 
     def _resolve_tool_name(self, ctx: Any) -> str:
         get_tool_var = self._get_tool_var

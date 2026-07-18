@@ -213,3 +213,64 @@ def test_skill_runner_allows_safe_command(tmp_path: Path):
 
     assert result["success"] is True
     assert runner.calls == 1
+
+
+def test_skill_runner_block_review_overrides_policy_records_intercepted(tmp_path: Path):
+    """When block_review=True overrides policy.block_on_review=False, audit
+    must record intercepted=True for a NEEDS_HUMAN_REVIEW hit.
+
+    Regression for CongkeChen's review: intercepted=report.blocked used
+    policy.block_on_review, so when the runner blocked review via the
+    block_review parameter, the audit falsely showed intercepted=False.
+    """
+    runner = _FakeSkillRunner()
+    # policy.block_on_review=False (default); block_review=True overrides it.
+    safe = SafetyReviewedSkillRunner(
+        runner,
+        PolicyConfig(),
+        audit_path=str(tmp_path / "audit.jsonl"),
+        block_review=True,
+        tool_name="skill_run",
+    )
+
+    # sleep 100 & triggers NEEDS_HUMAN_REVIEW (MEDIUM): background non-network process.
+    args = {"command": "sleep 100 &"}
+    result = asyncio.run(safe.run(None, args))
+
+    assert result["success"] is False
+    assert result["error"] == "SKILL_NEEDS_REVIEW"
+    assert runner.calls == 0
+
+    audit_path = tmp_path / "audit.jsonl"
+    assert audit_path.exists()
+    rec = json.loads(audit_path.read_text(encoding="utf-8").strip().splitlines()[-1])
+    assert rec["decision"] == "needs_human_review"
+    assert rec["intercepted"] is True
+
+
+def test_safety_wrapper_raise_on_deny_false_records_intercepted_false(tmp_path: Path):
+    """When raise_on_deny=False, a DENY hit must not be recorded as intercepted.
+
+    Regression for CongkeChen's review: intercepted=report.blocked used
+    policy.block_on_review, so a DENY with raise_on_deny=False was falsely
+    recorded as intercepted=True. The actual interception is raise_on_deny.
+    """
+
+    @safety_wrapper(
+        tool_name="denied_tool",
+        policy=PolicyConfig(),
+        audit_path=str(tmp_path / "audit.jsonl"),
+        raise_on_deny=False,
+    )
+    async def run_tool(*, script):
+        return "ran"
+
+    result = asyncio.run(run_tool(script="rm -rf /"))
+
+    assert result == "ran"
+
+    audit_path = tmp_path / "audit.jsonl"
+    assert audit_path.exists()
+    rec = json.loads(audit_path.read_text(encoding="utf-8").strip().splitlines()[-1])
+    assert rec["decision"] == "deny"
+    assert rec["intercepted"] is False

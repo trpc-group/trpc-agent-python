@@ -61,7 +61,7 @@ def _normalize_block_language(raw_lang: str | None, code: str) -> str:
     return normalize_language(ScanInput(script=code or "", language=""))
 
 
-def _scan_code_input(scanner: SafetyScanner, input_data, *, block_on_review: bool):
+def _scan_code_input(scanner: SafetyScanner, input_data):
     """Scan code / code_blocks with per-block language; return worst report."""
     order = {
         RiskLevel.NONE: 0,
@@ -126,7 +126,7 @@ class SafetyGuardedCodeExecutor:
         self._block_on_review = block_on_review or policy.block_on_review
 
     async def execute_code(self, invocation_context, input_data):
-        report = _scan_code_input(self._scanner, input_data, block_on_review=self._block_on_review)
+        report = _scan_code_input(self._scanner, input_data)
         should_block = _should_block_report(report, self._block_on_review)
         if report is not None:
             self._audit.log(report, intercepted=should_block)
@@ -154,7 +154,7 @@ def safe_code_executor(
     class _SafeCodeExecutor:
 
         async def execute_code(self, invocation_context, input_data):
-            report = _scan_code_input(scanner, input_data, block_on_review=block_review)
+            report = _scan_code_input(scanner, input_data)
             should_block = _should_block_report(report, block_review)
             if report is not None:
                 audit.log(report, intercepted=should_block)
@@ -209,8 +209,12 @@ def safety_wrapper(
         if not script or not isinstance(script, str):
             return
         report = _scanner.scan(ScanInput(script=script, tool_name=tool_name))
-        _audit.log(report, intercepted=report.blocked)
-        if report.decision == Decision.DENY and raise_on_deny:
+        # intercepted must reflect the actual interception below, not
+        # report.blocked (which uses policy.block_on_review). safety_wrapper
+        # only blocks on DENY when raise_on_deny=True; review is never blocked.
+        intercepted = report.decision == Decision.DENY and raise_on_deny
+        _audit.log(report, intercepted=intercepted)
+        if intercepted:
             raise SafetyDeniedError(report)
 
     def decorator(func):
@@ -253,7 +257,11 @@ class SafetyReviewedSkillRunner:
         script = self._extract_script(args)
         if script:
             report = self._scanner.scan(ScanInput(script=script, tool_name=self._tool_name))
-            self._audit.log(report, intercepted=report.blocked)
+            # intercepted must reflect the actual interception below, not
+            # report.blocked (which uses policy.block_on_review). Reuse
+            # _should_block_report so audit matches the real control flow.
+            intercepted = _should_block_report(report, self._block_review)
+            self._audit.log(report, intercepted=intercepted)
             if report.decision == Decision.DENY:
                 return {
                     "success": False,

@@ -44,7 +44,7 @@ class _Inner:
 def test_scan_code_input_bash_block_denies_rm():
     scanner = SafetyScanner(PolicyConfig())
     inp = _Input(code_blocks=[_Block("rm -rf /", language="bash")])
-    report = _scan_code_input(scanner, inp, block_on_review=False)
+    report = _scan_code_input(scanner, inp)
     assert report is not None
     assert report.decision.value == "deny"
     assert "R001_dangerous_files" in report.rule_ids
@@ -53,7 +53,7 @@ def test_scan_code_input_bash_block_denies_rm():
 def test_scan_code_input_infers_bash_when_language_empty():
     scanner = SafetyScanner(PolicyConfig())
     inp = _Input(code_blocks=[_Block("curl https://evil.example.com", language="")])
-    report = _scan_code_input(scanner, inp, block_on_review=False)
+    report = _scan_code_input(scanner, inp)
     assert report is not None
     assert report.decision.value == "deny"
 
@@ -73,8 +73,8 @@ def test_mislabeled_python_bash_payload_still_denied():
     """language='python' but content is bash rm -rf must still deny."""
     scanner = SafetyScanner(PolicyConfig())
     inp = _Input(code_blocks=[_Block("rm -rf /", language="python")])
-    report = _scan_code_input(scanner, inp, block_on_review=False)
-    # Content inference on empty/mislabel path: force-check via normalize.
+    report = _scan_code_input(scanner, inp)
+    assert report.decision.value == "deny"
     from trpc_agent_sdk.safety._ast_utils import normalize_language
     from trpc_agent_sdk.safety import ScanInput as SI
     lang = normalize_language(SI(script="rm -rf /", language=""))
