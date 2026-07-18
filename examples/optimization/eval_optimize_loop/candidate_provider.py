@@ -23,6 +23,7 @@ from .fake.candidate_provider import DeterministicFakeCandidateProvider
 from .schemas import CandidateProposal
 from .schemas import FakeCandidateScenario
 from .schemas import OptimizerCandidateProposal
+from .schemas import OptimizerRuntimeParameters
 
 
 class CandidateProviderError(RuntimeError):
@@ -52,6 +53,8 @@ class CandidateRequest:
     output_dir: Path
     seed: int
     retain_native_artifacts: bool = True
+    runtime_parameters: OptimizerRuntimeParameters | None = None
+    expected_optimizer_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -90,10 +93,85 @@ class AgentOptimizerCandidateProvider:
     def __init__(self, call_agent: CallAgent) -> None:
         self._call_agent = call_agent
 
+    @staticmethod
+    def _replace_persisted_connection_values(value: object) -> object:
+        """递归将可能被 SDK 复制到产物的连接值替换为环境占位符。"""
+        if isinstance(value, list):
+            return [
+                AgentOptimizerCandidateProvider._replace_persisted_connection_values(item)
+                for item in value
+            ]
+        if not isinstance(value, dict):
+            return value
+        placeholders = {
+            "api_key": "${TRPC_AGENT_API_KEY}",
+            "apiKey": "${TRPC_AGENT_API_KEY}",
+            "base_url": "${TRPC_AGENT_BASE_URL}",
+            "baseUrl": "${TRPC_AGENT_BASE_URL}",
+        }
+        return {
+            key: placeholders.get(
+                key,
+                AgentOptimizerCandidateProvider._replace_persisted_connection_values(item),
+            )
+            for key, item in value.items()
+        }
+
+    @staticmethod
+    def _prepare_runtime_config(request: CandidateRequest) -> Path:
+        """由已校验模板生成无明文凭据的本次运行配置。"""
+        if request.runtime_parameters is None:
+            return request.optimizer_config_path
+
+        try:
+            raw = request.optimizer_config_path.read_bytes()
+            if (
+                request.expected_optimizer_sha256 is not None
+                and sha256(raw).hexdigest() != request.expected_optimizer_sha256
+            ):
+                raise CandidateProviderError("optimizer config changed after preparation")
+            payload = AgentOptimizerCandidateProvider._replace_persisted_connection_values(
+                json.loads(raw.decode("utf-8"))
+            )
+            algorithm = payload["optimize"]["algorithm"]
+        except CandidateProviderError:
+            raise
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+            raise CandidateProviderError(f"failed to prepare optimizer runtime config: {exc}") from exc
+
+        parameters = request.runtime_parameters
+        reflection_lm: dict[str, object] = {
+            "provider_name": parameters.provider_name,
+            "model_name": parameters.model_name,
+            "variant": parameters.variant,
+            "base_url": "${TRPC_AGENT_BASE_URL}",
+            "api_key": "${TRPC_AGENT_API_KEY}",
+            "generation_config": {
+                "temperature": parameters.temperature,
+                "max_tokens": parameters.max_tokens,
+            },
+        }
+        if parameters.think is not None:
+            reflection_lm["think"] = parameters.think
+        algorithm["reflection_lm"] = reflection_lm
+        algorithm["max_candidate_proposals"] = parameters.max_candidate_proposals
+
+        runtime_path = request.output_dir.parent / "optimizer.runtime.json"
+        try:
+            runtime_path.parent.mkdir(parents=True, exist_ok=True)
+            runtime_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            raise CandidateProviderError(f"failed to write optimizer runtime config: {exc}") from exc
+        return runtime_path
+
     async def propose(self, request: CandidateRequest) -> CandidateGeneration:
+        runtime_config_path = self._prepare_runtime_config(request)
         try:
             result = await AgentOptimizer.optimize(
-                config_path=str(request.optimizer_config_path),
+                config_path=str(runtime_config_path),
                 call_agent=self._call_agent,
                 target_prompt=request.target_prompt,
                 train_dataset_path=str(request.train_evalset_path),

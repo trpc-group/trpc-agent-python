@@ -17,10 +17,32 @@ python examples/optimization/eval_optimize_loop/run_pipeline.py \
   --scenario improve
 ```
 
-The CLI is intentionally self-contained and supports fake mode only. Real mode
-is a Python integration point because the pipeline cannot construct an
-application-specific agent. Set `execution.mode` to `real`, prepare the run,
-and inject an async SDK-compatible `call_agent`:
+The offline CLI remains self-contained and supports fake mode only. For an
+explicit real integration smoke run, configure the OpenAI-compatible business
+model connection in the environment:
+
+```bash
+export TRPC_AGENT_API_KEY=...
+export TRPC_AGENT_BASE_URL=...
+export TRPC_AGENT_MODEL_NAME=...
+
+.venv/bin/python examples/optimization/eval_optimize_loop/run_real_integration.py \
+  --run-real \
+  --optimizer-model-name mimo-v2.5 \
+  --max-candidate-proposals 1
+```
+
+The business model uses the three environment values above. The reflection
+optimizer model is selected explicitly with CLI arguments; its endpoint and
+credential reuse the environment without writing their resolved values to run
+artifacts. `--run-real` is mandatory so an accidental command cannot spend API
+quota. This entry always uses `pipeline.real.json`, where source writeback is
+disabled, and reports ACCEPT or REJECT without treating REJECT as a process
+failure.
+
+Applications with a custom agent can still use the Python integration point.
+Set `execution.mode` to `real`, prepare the run, and inject an async
+SDK-compatible `call_agent`:
 
 ```python
 import asyncio
@@ -73,5 +95,6 @@ Run the Stage 1–4 tests with:
   tests/evaluation/test_eval_optimize_loop_stage2.py \
   tests/evaluation/test_eval_optimize_loop_stage3a.py \
   tests/evaluation/test_eval_optimize_loop_stage3b.py \
-  tests/evaluation/test_eval_optimize_loop_stage4.py
+  tests/evaluation/test_eval_optimize_loop_stage4.py \
+  tests/evaluation/test_eval_optimize_loop_real_integration.py
 ```

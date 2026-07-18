@@ -17,6 +17,7 @@ from typing import Literal
 from typing import Optional
 
 from pydantic import Field
+from pydantic import field_validator
 from pydantic import model_validator
 
 from trpc_agent_sdk.evaluation import EvalBaseModel
@@ -70,6 +71,25 @@ WritebackReason = Literal[
     "readback_mismatch",
     "written",
 ]
+
+
+class OptimizerRuntimeParameters(EvalBaseModel):
+    """命令行显式传入的反思优化模型参数，不包含任何凭据。"""
+
+    provider_name: str = "openai"
+    model_name: str
+    variant: str = ""
+    temperature: float = Field(default=0.8, ge=0.0, allow_inf_nan=False)
+    max_tokens: int = Field(default=4096, gt=0)
+    think: Optional[bool] = None
+    max_candidate_proposals: int = Field(default=1, gt=0)
+
+    @field_validator("provider_name", "model_name")
+    @classmethod
+    def _require_non_empty_model_identity(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("model identity must not be empty")
+        return value.strip()
 
 
 class ObservableValue(EvalBaseModel):
