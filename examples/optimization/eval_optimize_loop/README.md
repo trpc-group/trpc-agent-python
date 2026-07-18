@@ -1,67 +1,77 @@
-# Evaluation + Optimization Loop — Stage 3b
+# Evaluation + Optimization Loop — Stage 4
 
-This example now provides the deterministic offline foundation for an auditable
-evaluation and prompt-optimization loop. Stage 1 validates inputs and creates
-an isolated prompt workspace. Stage 2 evaluates that baseline on train and
-validation data, generates a fake prompt candidate, and evaluates the candidate
-on both datasets again. Stage 3a normalizes the four SDK result sets, attributes
-failures from available evidence, and builds train/validation case diffs. Stage
-3b applies an independent Gate to those diffs and returns a complete acceptance
-decision without writing the source prompt.
+This example provides an auditable evaluation and prompt-optimization loop.
+Stages 1–3 prepare an isolated prompt workspace, run baseline and candidate
+evaluations on both train and validation datasets, normalize failures, build
+case diffs, detect overfitting, and apply an independent Gate. Stage 4 adds a
+common Candidate Provider boundary, an `AgentOptimizer` adapter, and guarded
+source-prompt writeback.
 
-No model, API key, judge, or optimizer is used. The fake agent reads explicit
-capability rules from the current working prompt, while the fake candidate
-provider can generate an improving, behaviorally equivalent, or overfit
-candidate. The returned result retains both the raw SDK outputs and a
-serializable analysis with metric deltas, hard/critical labels, severe
-regressions, and overfit status. The Gate checks validation improvement and pass
-rate, protected cases, required metrics, overfitting, and configured budgets.
-Reporting and source writeback remain later-stage work.
-
-Run the deterministic stage from the repository root:
+The deterministic fake mode still runs without a model, API key, judge, or
+optimizer. Its built-in scenarios produce ACCEPT for `improve` and REJECT for
+both `no_improvement` and `overfit`:
 
 ```bash
 python examples/optimization/eval_optimize_loop/run_pipeline.py \
-  --run-id local_stage3b \
+  --run-id local_stage4 \
   --scenario improve
 ```
 
-The command creates:
+The CLI is intentionally self-contained and supports fake mode only. Real mode
+is a Python integration point because the pipeline cannot construct an
+application-specific agent. Set `execution.mode` to `real`, prepare the run,
+and inject an async SDK-compatible `call_agent`:
 
-```text
-runs/local_stage3b/
-└── workspace/
-    └── prompts/
-        └── 01_system_prompt.md
+```python
+import asyncio
+
+from examples.optimization.eval_optimize_loop.pipeline import prepare_run
+from examples.optimization.eval_optimize_loop.pipeline import run_real_stage
+
+prepared = prepare_run("examples/optimization/eval_optimize_loop/pipeline.json")
+agent = MyBusinessAgent(target_prompt=prepared.working_target)
+result = asyncio.run(
+    run_real_stage(prepared, call_agent=agent.call_agent)
+)
 ```
 
-All paths in `pipeline.json` are relative to the example directory. Prompt
-sources are never written. The candidate remains in the isolated run workspace
-after evaluation so it can be inspected. `optimizer.json` remains the native
-SDK optimizer configuration, while orchestration settings stay in
-`pipeline.json`.
+The injected agent must reread `prepared.working_target` on every call. The
+same callable is used for baseline regression, optimizer search, and final
+candidate regression. Optimizer minibatches never replace the four complete
+pipeline evaluations: baseline train/validation and candidate train/validation.
 
-For cases with multiple runs or invocations, normalization keeps every
-invocation's expected/actual response, tool calls, and metric results. Case
-status and score are aggregated from the SDK's overall metrics; invocation
-metrics are evidence and do not receive extra weight in that aggregate.
-Attribution scans evidence from every run and invocation, retains all matching
-evidence, and chooses one primary category using the fixed priority in
-`attribution.py`; the other distinct matches become secondary categories.
+`AgentOptimizer` always receives the isolated working target and
+`update_source=False`. Its native `result.json`, round records, prompt snapshots,
+scores, and configuration snapshot are retained under `runs/<run-id>/optimizer/`
+when `artifacts.retain_optimizer_native_artifacts` is enabled.
 
-Gate always evaluates every rule so a rejection retains all reasons. In fake
-mode elapsed duration is measured, while monetary cost and token usage are
-explicitly `unavailable` rather than recorded as zero. Configured unavailable
-budgets follow `budget.on_unavailable`; budgets without a limit are skipped.
-The built-in scenarios produce ACCEPT for `improve` and REJECT for both
-`no_improvement` and `overfit`.
+Source prompts are updated only when all of these conditions hold:
 
-Run the stage-one through stage-3b tests with:
+- Gate returns ACCEPT;
+- `writeback.enabled` is true;
+- every source Prompt still matches its preparation-time SHA-256 hash;
+- the write succeeds and an exact readback matches the accepted candidate.
+
+Writeback returns `written`, `skipped`, `blocked`, or `failed` with an auditable
+reason. Gate rejection and disabled writeback are skipped; concurrent source
+edits are blocked; recoverable write/readback failures are rolled back and
+returned as failed. If rollback integrity cannot be proven, the pipeline raises
+an error instead of claiming the source is safe. The checked-in configuration
+keeps writeback disabled by default.
+
+Elapsed duration is observable. Full monetary cost and token usage remain
+`unavailable` because an injected business agent may make calls that the SDK
+optimizer does not account for; native optimizer resource fields are retained
+without treating missing values as zero. JSON/Markdown reports and an artifact
+index are Stage 5 work.
+
+Run the Stage 1–4 tests with:
 
 ```bash
-pytest -q \
+.venv/bin/pytest -q \
   tests/evaluation/test_eval_optimize_loop_stage1.py \
   tests/evaluation/test_eval_optimize_loop_stage2.py \
   tests/evaluation/test_eval_optimize_loop_stage3a.py \
-  tests/evaluation/test_eval_optimize_loop_stage3b.py
+  tests/evaluation/test_eval_optimize_loop_stage3b.py \
+  tests/evaluation/test_eval_optimize_loop_stage4.py
 ```

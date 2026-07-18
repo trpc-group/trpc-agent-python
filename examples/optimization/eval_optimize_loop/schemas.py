@@ -21,6 +21,7 @@ from pydantic import model_validator
 
 from trpc_agent_sdk.evaluation import EvalBaseModel
 from trpc_agent_sdk.evaluation import EvalCaseResult
+from trpc_agent_sdk.evaluation import OptimizeResult
 
 
 FakeCandidateScenario = Literal["improve", "no_improvement", "overfit"]
@@ -60,6 +61,15 @@ GateRuleId = Literal[
 ]
 GateRuleOutcome = Literal["pass", "reject", "warning", "skipped"]
 GateDecisionValue = Literal["accept", "reject"]
+WritebackStatus = Literal["skipped", "written", "blocked", "failed"]
+WritebackReason = Literal[
+    "gate_rejected",
+    "disabled",
+    "source_drift",
+    "write_error",
+    "readback_mismatch",
+    "written",
+]
 
 
 class ObservableValue(EvalBaseModel):
@@ -113,17 +123,38 @@ class WorkspaceSnapshot(EvalBaseModel):
     prompts_dir: str
 
 
-class FakeCandidateProposal(EvalBaseModel):
-    """One deterministic prompt proposal produced without a real optimizer."""
+class CandidateProposal(EvalBaseModel):
+    """Common, serializable identity and prompt payload for any provider."""
 
-    scenario: FakeCandidateScenario
+    provider: Literal["fake", "agent_optimizer"]
     prompts: dict[str, str]
     changed_fields: list[str]
     rationale: str
-    seed: int
     parent_prompt_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     candidate_prompt_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    candidate_id: str
+
+
+class FakeCandidateProposal(CandidateProposal):
+    """One deterministic prompt proposal produced without a real optimizer."""
+
+    provider: Literal["fake"] = "fake"
+    scenario: FakeCandidateScenario
+    seed: int
     candidate_id: str = Field(pattern=r"^fake-(improve|no_improvement|overfit)-[0-9a-f]{12}$")
+
+
+class OptimizerCandidateProposal(CandidateProposal):
+    """Best candidate returned by a successful real AgentOptimizer run."""
+
+    provider: Literal["agent_optimizer"] = "agent_optimizer"
+    optimizer_status: Literal["SUCCEEDED"] = "SUCCEEDED"
+    finish_reason: str
+    stop_reason: Optional[str] = None
+    baseline_pass_rate: float = Field(ge=0.0, le=1.0)
+    best_pass_rate: float = Field(ge=0.0, le=1.0)
+    optimizer_output_dir: Optional[str] = None
+    candidate_id: str = Field(pattern=r"^optimizer-[0-9a-f]{12}$")
 
 
 class FakeEvaluationSnapshot(EvalBaseModel):
@@ -328,11 +359,21 @@ class GateDecision(EvalBaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
-class FakeStageResult(EvalBaseModel):
-    """Evaluation, candidate, analysis, and Gate outputs from the offline stage."""
+class WritebackResult(EvalBaseModel):
+    """Auditable outcome of the post-Gate source prompt operation."""
 
-    scenario: FakeCandidateScenario
-    candidate: FakeCandidateProposal
+    status: WritebackStatus
+    reason: WritebackReason
+    attempted: bool = False
+    changed_fields: list[str] = Field(default_factory=list)
+    source_hashes_before: dict[str, str] = Field(default_factory=dict)
+    source_hashes_after: dict[str, str] = Field(default_factory=dict)
+    error_message: Optional[str] = None
+
+
+class PipelineStageResult(EvalBaseModel):
+    """Evaluation, analysis, Gate, and writeback fields shared by all modes."""
+
     baseline_train: FakeEvaluationSnapshot
     baseline_validation: FakeEvaluationSnapshot
     candidate_train: FakeEvaluationSnapshot
@@ -340,3 +381,18 @@ class FakeStageResult(EvalBaseModel):
     analysis: EvaluationAnalysis
     measurements: ResourceMeasurements
     gate_decision: GateDecision
+    writeback: WritebackResult
+
+
+class FakeStageResult(PipelineStageResult):
+    """Full deterministic fake-mode pipeline result."""
+
+    scenario: FakeCandidateScenario
+    candidate: FakeCandidateProposal
+
+
+class RealStageResult(PipelineStageResult):
+    """Full regression and Gate result for an AgentOptimizer proposal."""
+
+    candidate: OptimizerCandidateProposal
+    optimize_result: OptimizeResult
