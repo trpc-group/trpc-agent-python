@@ -12,9 +12,11 @@ and the full stage-two evaluation outputs consumed by later pipeline phases.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from typing import Literal
 from typing import Optional
+from typing import Union
 
 from pydantic import Field
 from pydantic import field_validator
@@ -416,3 +418,109 @@ class RealStageResult(PipelineStageResult):
 
     candidate: OptimizerCandidateProposal
     optimize_result: OptimizeResult
+
+ReportPhase = Literal[
+    "baseline_train", "baseline_validation", "candidate_generation", "candidate_train",
+    "candidate_validation", "analysis", "gate", "writeback", "reporting",
+]
+
+class ReportProgress(EvalBaseModel):
+    started_at: datetime
+    current_phase: ReportPhase
+    completed_phases: list[ReportPhase] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_phases(self) -> "ReportProgress":
+        if len(self.completed_phases) != len(set(self.completed_phases)):
+            raise ValueError("completed phases must not contain duplicates")
+        if self.current_phase in self.completed_phases:
+            raise ValueError("completed phases must not include current phase")
+        return self
+
+class OptimizerResourceObservation(EvalBaseModel):
+    status: Literal["available", "unavailable", "not_applicable"]
+    scope_note: str
+    total_rounds: Optional[int] = Field(default=None, ge=0)
+    reflection_lm_calls: Optional[int] = Field(default=None, ge=0)
+    cost_usd: Optional[float] = Field(default=None, ge=0.0)
+    token_usage: Optional[dict[str, int]] = None
+    duration_seconds: Optional[float] = Field(default=None, ge=0.0)
+
+    @model_validator(mode="after")
+    def _validate_status(self) -> "OptimizerResourceObservation":
+        values = (self.total_rounds, self.reflection_lm_calls, self.cost_usd, self.token_usage, self.duration_seconds)
+        if self.status == "available" and any(value is None for value in values):
+            raise ValueError("available optimizer observations require all resource values")
+        if self.status != "available" and any(value is not None for value in values):
+            raise ValueError("non-available optimizer observations must not carry resource values")
+        return self
+
+class ArtifactReference(EvalBaseModel):
+    artifact_id: str
+    artifact_type: Literal["input", "prompt", "evaluation", "candidate", "optimizer_native", "report"]
+    relative_path: Optional[str] = None
+    required: bool
+    produced_by: ReportPhase
+    status: Literal["available", "unavailable"]
+    size_bytes: Optional[int] = Field(default=None, ge=0)
+    sha256: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    unavailable_reason: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _validate_status(self) -> "ArtifactReference":
+        if self.status == "available":
+            if self.relative_path is None or self.size_bytes is None or self.sha256 is None or self.unavailable_reason is not None:
+                raise ValueError("available artifacts require path, size, hash, and no unavailable reason")
+        elif self.unavailable_reason is None or self.size_bytes is not None or self.sha256 is not None:
+            raise ValueError("unavailable artifacts require a reason and no size or hash")
+        return self
+
+class ArtifactIndex(EvalBaseModel):
+    schema_version: Literal[1] = 1
+    run_id: str
+    generated_at: datetime
+    artifacts: list[ArtifactReference]
+
+    @model_validator(mode="after")
+    def _validate_artifacts(self) -> "ArtifactIndex":
+        artifact_ids = [artifact.artifact_id for artifact in self.artifacts]
+        paths = [artifact.relative_path for artifact in self.artifacts if artifact.relative_path is not None]
+        if len(artifact_ids) != len(set(artifact_ids)):
+            raise ValueError("artifact IDs must be unique")
+        if len(paths) != len(set(paths)):
+            raise ValueError("artifact relative paths must be unique")
+        return self
+
+class OptimizationReport(EvalBaseModel):
+    schema_version: Literal[1] = 1
+    status: Literal["completed"] = "completed"
+    run_id: str
+    execution_mode: Literal["fake", "real"]
+    seed: int
+    started_at: datetime
+    finished_at: datetime
+    input_snapshot: InputSnapshot
+    candidate: Union[FakeCandidateProposal, OptimizerCandidateProposal]
+    baseline_train: FakeEvaluationSnapshot
+    baseline_validation: FakeEvaluationSnapshot
+    candidate_train: FakeEvaluationSnapshot
+    candidate_validation: FakeEvaluationSnapshot
+    analysis: EvaluationAnalysis
+    pipeline_resources: ResourceMeasurements
+    optimizer_resources: OptimizerResourceObservation
+    gate_decision: GateDecision
+    writeback: WritebackResult
+
+class FailureReport(EvalBaseModel):
+    schema_version: Literal[1] = 1
+    status: Literal["failed"] = "failed"
+    run_id: str
+    execution_mode: Literal["fake", "real"]
+    failed_phase: ReportPhase
+    exception_type: str
+    error_message: str
+    generated_at: datetime
+    input_snapshot: InputSnapshot
+    source_prompt_hashes: dict[str, str]
+    completed_phases: list[ReportPhase]
+    existing_artifacts: list[str]
