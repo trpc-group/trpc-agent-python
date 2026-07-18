@@ -24,20 +24,25 @@ from ._types import SafetyReport
 from ._types import ScanInput
 from ._types import max_risk_level
 
+import threading
+
 SCANNER_VERSION = "1.2.0"
 
 _custom_rules: list[SafetyRule] = []
+_custom_rules_lock = threading.RLock()
 
 
 def register_custom_rule(rule: SafetyRule) -> None:
     """Register a custom rule included in new scanners by default.
 
     Existing SafetyScanner instances are unaffected. Registration is
-    idempotent by rule_id.
+    idempotent by rule_id. Prefer passing ``rules=`` to SafetyScanner for
+    process-local isolation; the global registry is a convenience for plugins.
     """
-    global _custom_rules
-    _custom_rules = [r for r in _custom_rules if r.rule_id != rule.rule_id]
-    _custom_rules.append(rule)
+    with _custom_rules_lock:
+        global _custom_rules
+        _custom_rules = [r for r in _custom_rules if r.rule_id != rule.rule_id]
+        _custom_rules.append(rule)
 
 
 def register_rule(cls: type | None = None):
@@ -63,16 +68,23 @@ def register_rule(cls: type | None = None):
 
 def unregister_custom_rule(rule_id: str) -> bool:
     """Remove a previously registered custom rule. Returns True if removed."""
-    global _custom_rules
-    before = len(_custom_rules)
-    _custom_rules = [r for r in _custom_rules if r.rule_id != rule_id]
-    return len(_custom_rules) < before
+    with _custom_rules_lock:
+        global _custom_rules
+        before = len(_custom_rules)
+        _custom_rules = [r for r in _custom_rules if r.rule_id != rule_id]
+        return len(_custom_rules) < before
 
 
 def clear_custom_rules() -> None:
     """Remove all custom rules from the registry."""
-    global _custom_rules
-    _custom_rules = []
+    with _custom_rules_lock:
+        global _custom_rules
+        _custom_rules = []
+
+
+def _snapshot_custom_rules() -> list[SafetyRule]:
+    with _custom_rules_lock:
+        return list(_custom_rules)
 
 
 class SafetyScanner:
@@ -84,7 +96,8 @@ class SafetyScanner:
         rules: Optional[list[SafetyRule]] = None,
     ):
         self.policy = policy
-        self.rules = rules if rules is not None else default_rules() + list(_custom_rules)
+        # Prefer explicit rules= for isolation; global registry is a snapshot.
+        self.rules = rules if rules is not None else default_rules() + _snapshot_custom_rules()
 
     def scan(self, scan_input: ScanInput) -> SafetyReport:
         """Scan *scan_input* and return a structured SafetyReport."""

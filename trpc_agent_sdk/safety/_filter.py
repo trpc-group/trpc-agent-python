@@ -49,6 +49,14 @@ class ToolSafetyFilter(BaseFilter):
         self.audit = AuditLogger(audit_path)
         self._configured_tool_name = tool_name
         self._block_on_review = (policy.block_on_review if block_on_review is None else block_on_review)
+        # Prefer lightweight context-var import; never pull trpc_agent_sdk.tools
+        # package (heavy optional deps like anthropic) on every scan.
+        self._get_tool_var = None
+        try:
+            from trpc_agent_sdk.tools._context_var import get_tool_var
+            self._get_tool_var = get_tool_var
+        except Exception:  # pylint: disable=broad-except
+            self._get_tool_var = None
 
     async def _before(self, ctx: Any, req: Any, rsp: FilterResult) -> None:
         """Scan the tool args; block execution when decision is DENY."""
@@ -98,8 +106,10 @@ class ToolSafetyFilter(BaseFilter):
                          f"rules={','.join(report.rule_ids)}")
 
     def _resolve_tool_name(self, ctx: Any) -> str:
+        get_tool_var = self._get_tool_var
+        if get_tool_var is None:
+            return self._configured_tool_name
         try:
-            from trpc_agent_sdk.tools import get_tool_var
             tool = get_tool_var()
             if tool is not None and getattr(tool, "name", None):
                 return tool.name
