@@ -123,17 +123,22 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
                 RiskLevel.HIGH: 3,
                 RiskLevel.CRITICAL: 4,
             }
+            from trpc_agent_sdk.safety._ast_utils import normalize_language
+
             worst = None
             for block in code_blocks:
-                lang = (getattr(block, "language", None) or "python").lower()
-                if lang in ("sh", "shell", "bash"):
+                raw_lang = (getattr(block, "language", None) or "").strip().lower()
+                code = block.code or ""
+                if raw_lang in ("sh", "shell", "bash"):
                     lang = "bash"
-                elif "py" in lang:
+                elif "py" in raw_lang:
                     lang = "python"
+                elif raw_lang in ("python", "bash"):
+                    lang = raw_lang
                 else:
-                    lang = "python" if lang not in ("python", "bash") else lang
-                report = self._safety_scanner.scan(
-                    ScanInput(script=block.code or "", language=lang, tool_name="code_executor"))
+                    # Missing/unknown language: infer from content, not force python.
+                    lang = normalize_language(ScanInput(script=code, language=""))
+                report = self._safety_scanner.scan(ScanInput(script=code, language=lang, tool_name="code_executor"))
                 if worst is None:
                     worst = report
                 elif report.decision == Decision.DENY and worst.decision != Decision.DENY:

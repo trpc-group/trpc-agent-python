@@ -873,14 +873,16 @@ class ProcessRule(SafetyRule):
                         level=RiskLevel.LOW,
                         message=f"Complex shell pipeline ({line.count('|')} stages)",
                     ))
-            if re.search(r"\$\([^)]*\$\{?[A-Za-z_][A-Za-z0-9_]*\}?[^)]*\)", line):
+            # Only flag nested command substitution ($( ... $( ... ) ...)), not
+            # common $(echo $HOME) / x=$(basename $f) patterns.
+            if re.search(r"\$\([^)]*\$\(", line):
                 findings.append(
                     self._finding(
                         line,
                         lineno,
-                        "Avoid nesting $() with variable expansion; sanitize inputs.",
+                        "Avoid nested $() command substitution; sanitize inputs.",
                         level=RiskLevel.HIGH,
-                        message="Nested command substitution with variable expansion (injection risk)",
+                        message="Nested command substitution (injection risk)",
                     ))
             if re.search(r"\beval\b", line):
                 findings.append(
@@ -1037,7 +1039,12 @@ def _subprocess_args_text(node: ast.Call) -> str:
 # R005 Resource abuse
 # ---------------------------------------------------------------------------
 
-_FORK_BOMB = re.compile(r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\};\s*:", re.IGNORECASE)
+# Allow flexible whitespace around fork-bomb tokens.
+# Classic form: :(){ :|:& };:  and spaced variants.
+_FORK_BOMB = re.compile(
+    r":\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*;?\s*\}\s*;?\s*:",
+    re.IGNORECASE,
+)
 _LONG_SLEEP_BASH = re.compile(r"\bsleep\s+(\d+)", re.IGNORECASE)
 _DD_WRITE = re.compile(r"\bdd\b", re.IGNORECASE)
 _BIG_WRITE = re.compile(r"(head|tail|yes|/dev/zero|/dev/urandom)", re.IGNORECASE)

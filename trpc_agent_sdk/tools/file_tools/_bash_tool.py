@@ -75,8 +75,7 @@ class BashTool(BaseTool):
             policy = PolicyConfig.from_yaml(policy_path)
         else:
             policy = PolicyConfig.from_env()
-        if block_on_review:
-            policy.block_on_review = True
+        # Do not mutate the loaded policy object; pass override to the filter.
         safety_filter = ToolSafetyFilter(
             policy=policy,
             audit_path=audit_path,
