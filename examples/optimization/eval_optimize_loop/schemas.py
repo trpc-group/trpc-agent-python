@@ -14,8 +14,10 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from typing import Generic
 from typing import Literal
 from typing import Optional
+from typing import TypeVar
 from typing import Union
 
 from pydantic import Field
@@ -437,23 +439,38 @@ class ReportProgress(EvalBaseModel):
             raise ValueError("completed phases must not include current phase")
         return self
 
-class OptimizerResourceObservation(EvalBaseModel):
+
+OptimizerResourceValueT = TypeVar("OptimizerResourceValueT")
+
+
+class OptimizerResourceValue(EvalBaseModel, Generic[OptimizerResourceValueT]):
     status: Literal["available", "unavailable", "not_applicable"]
-    scope_note: str
-    total_rounds: Optional[int] = Field(default=None, ge=0)
-    reflection_lm_calls: Optional[int] = Field(default=None, ge=0)
-    cost_usd: Optional[float] = Field(default=None, ge=0.0)
-    token_usage: Optional[dict[str, int]] = None
-    duration_seconds: Optional[float] = Field(default=None, ge=0.0)
+    value: Optional[OptimizerResourceValueT] = None
+    unit: str = Field(min_length=1)
+    reason: Optional[str] = None
 
     @model_validator(mode="after")
-    def _validate_status(self) -> "OptimizerResourceObservation":
-        values = (self.total_rounds, self.reflection_lm_calls, self.cost_usd, self.token_usage, self.duration_seconds)
-        if self.status == "available" and any(value is None for value in values):
-            raise ValueError("available optimizer observations require all resource values")
-        if self.status != "available" and any(value is not None for value in values):
-            raise ValueError("non-available optimizer observations must not carry resource values")
+    def _validate_status(self) -> "OptimizerResourceValue[OptimizerResourceValueT]":
+        if self.status == "available":
+            if self.value is None:
+                raise ValueError("available optimizer resource values require a value")
+            if isinstance(self.value, (int, float)) and not self.value >= 0:
+                raise ValueError("optimizer numeric resource values must be non-negative")
+        else:
+            if self.value is not None:
+                raise ValueError("non-available optimizer resource values must not carry a value")
+            if self.reason is None or not self.reason.strip():
+                raise ValueError("non-available optimizer resource values require a reason")
         return self
+
+
+class OptimizerResourceObservation(EvalBaseModel):
+    scope_note: str
+    total_rounds: OptimizerResourceValue[int]
+    reflection_lm_calls: OptimizerResourceValue[int]
+    cost_usd: OptimizerResourceValue[float]
+    token_usage: OptimizerResourceValue[dict[str, int]]
+    duration_seconds: OptimizerResourceValue[float]
 
 class ArtifactReference(EvalBaseModel):
     artifact_id: str

@@ -11,7 +11,7 @@ from examples.optimization.eval_optimize_loop.report_builder import (
     build_failure_report, build_optimization_report, render_optimization_markdown,
 )
 from examples.optimization.eval_optimize_loop.schemas import (
-    ArtifactIndex, ArtifactReference, OptimizationReport, OptimizerResourceObservation, ReportProgress,
+    ArtifactIndex, ArtifactReference, OptimizationReport, OptimizerResourceValue, ReportProgress,
 )
 from examples.optimization.eval_optimize_loop.schemas import OptimizerCandidateProposal, RealStageResult
 from trpc_agent_sdk.evaluation import OptimizeResult
@@ -54,7 +54,17 @@ async def test_fake_report_is_serializable_and_marks_optimizer_resources_not_app
     )
     assert report.status == "completed"
     assert report.execution_mode == "fake"
-    assert report.optimizer_resources.status == "not_applicable"
+    optimizer_resources = report.optimizer_resources
+    for observation in (
+        optimizer_resources.total_rounds,
+        optimizer_resources.reflection_lm_calls,
+        optimizer_resources.cost_usd,
+        optimizer_resources.token_usage,
+        optimizer_resources.duration_seconds,
+    ):
+        assert observation.status == "not_applicable"
+        assert observation.value is None
+        assert observation.reason == "Fake mode does not run AgentOptimizer."
     assert report.pipeline_resources.total_tokens.status == "unavailable"
     assert OptimizationReport.model_validate_json(report.model_dump_json()) == report
 
@@ -78,12 +88,66 @@ async def test_real_report_includes_optimizer_resource_observations(tmp_path):
         prepared, result, progress=_progress(),
         finished_at=datetime(2026, 7, 18, 0, 1, tzinfo=timezone.utc),
     )
-    assert report.optimizer_resources.status == "available"
-    assert report.optimizer_resources.total_rounds == 1
-    assert report.optimizer_resources.reflection_lm_calls == 1
+    assert report.optimizer_resources.total_rounds.status == "available"
+    assert report.optimizer_resources.total_rounds.value == 1
+    assert report.optimizer_resources.total_rounds.unit == "rounds"
+    assert report.optimizer_resources.reflection_lm_calls.status == "available"
+    assert report.optimizer_resources.reflection_lm_calls.value == 1
+    assert report.optimizer_resources.cost_usd.status == "available"
+    assert report.optimizer_resources.token_usage.status == "available"
+    assert report.optimizer_resources.duration_seconds.status == "available"
     assert report.optimizer_resources.scope_note == (
         "Optimizer-only observation; excludes complete business Agent evaluation usage."
     )
+
+
+@pytest.mark.asyncio
+async def test_real_report_marks_incomplete_cost_and_token_telemetry_unavailable(tmp_path):
+    root = _copy_example(tmp_path)
+    prepared = prepare_run(root / "pipeline.json", run_id="report_real_incomplete")
+    fake_result = await run_fake_stage(prepared, scenario="improve")
+    candidate = OptimizerCandidateProposal.model_validate({
+        **fake_result.candidate.model_dump(exclude={"scenario", "seed"}), "provider": "agent_optimizer",
+        "optimizer_status": "SUCCEEDED", "finish_reason": "completed",
+        "baseline_pass_rate": 1 / 3, "best_pass_rate": 1.0,
+        "candidate_id": f"optimizer-{fake_result.candidate.candidate_id[-12:]}",
+    })
+    native = _optimize_result(
+        await prepared.source_target.read_all(), candidate.prompts,
+    ).model_copy(update={
+        "total_reflection_lm_calls": 2,
+        "total_llm_cost": 0.0,
+        "total_token_usage": {"prompt": 0, "completion": 0, "total": 0},
+    })
+    result = RealStageResult(
+        **fake_result.model_dump(exclude={"scenario", "candidate"}), candidate=candidate,
+        optimize_result=native,
+    )
+
+    report = build_optimization_report(
+        prepared, result, progress=_progress(),
+        finished_at=datetime(2026, 7, 18, 0, 1, tzinfo=timezone.utc),
+    )
+
+    assert report.optimizer_resources.total_rounds.status == "available"
+    assert report.optimizer_resources.total_rounds.value == 1
+    assert report.optimizer_resources.reflection_lm_calls.status == "available"
+    assert report.optimizer_resources.reflection_lm_calls.value == 2
+    assert report.optimizer_resources.duration_seconds.status == "available"
+    assert report.optimizer_resources.duration_seconds.value == 0.5
+    assert report.optimizer_resources.cost_usd.status == "unavailable"
+    assert report.optimizer_resources.cost_usd.value is None
+    assert report.optimizer_resources.cost_usd.reason
+    assert report.optimizer_resources.token_usage.status == "unavailable"
+    assert report.optimizer_resources.token_usage.value is None
+    assert report.optimizer_resources.token_usage.reason
+
+    markdown = render_optimization_markdown(report)
+    assert "Rounds: available" in markdown
+    assert "Reflection calls: available" in markdown
+    assert "Cost: unavailable" in markdown
+    assert "Token usage: unavailable" in markdown
+    assert "Duration: available" in markdown
 
 @pytest.mark.asyncio
 async def test_markdown_includes_accept_and_reject_report_evidence(tmp_path):
@@ -124,11 +188,46 @@ async def test_failure_report_is_deterministic_and_records_only_error_identity(t
     assert list(report.source_prompt_hashes) == ["a", "z"]
     assert report.existing_artifacts == ["a.json", "z.json"]
 
-def test_report_dto_invariants_reject_inconsistent_resource_and_artifact_states():
-    with pytest.raises(ValueError, match="available optimizer observations"):
-        OptimizerResourceObservation(status="available", scope_note="missing values")
-    with pytest.raises(ValueError, match="non-available optimizer observations"):
-        OptimizerResourceObservation(status="unavailable", scope_note="none", total_rounds=1)
+
+@pytest.mark.asyncio
+async def test_failure_report_redacts_environment_values_and_common_secret_forms(tmp_path, monkeypatch):
+    root = _copy_example(tmp_path)
+    prepared = prepare_run(root / "pipeline.json", run_id="report_failure_redacted")
+    api_key = "env-api-key-secret"
+    base_url = "https://env-base-url-secret.example/v1"
+    monkeypatch.setenv("TRPC_AGENT_API_KEY", api_key)
+    monkeypatch.setenv("TRPC_AGENT_BASE_URL", base_url)
+    error = RuntimeError(
+        f"timeout contacting {base_url} with {api_key}; "
+        "api_key=snake-secret apiKey:'camel-secret' "
+        "Authorization: Bearer authorization-secret Bearer loose-bearer-secret "
+        "base_url=https://snake-url-secret.example/v1 "
+        'baseUrl="https://camel-url-secret.example/v1"; retryable=true'
+    )
+
+    report = build_failure_report(
+        prepared, progress=_progress(), error=error,
+        source_prompt_hashes={}, existing_artifacts=[],
+        generated_at=datetime(2026, 7, 18, 0, 1, tzinfo=timezone.utc),
+    )
+
+    for secret in (
+        api_key,
+        base_url,
+        "snake-secret",
+        "camel-secret",
+        "authorization-secret",
+        "loose-bearer-secret",
+        "https://snake-url-secret.example/v1",
+        "https://camel-url-secret.example/v1",
+    ):
+        assert secret not in report.error_message
+    assert report.error_message.count("[REDACTED]") >= 8
+    assert "timeout contacting" in report.error_message
+    assert "retryable=true" in report.error_message
+
+
+def test_report_dto_invariants_reject_inconsistent_artifact_states():
     with pytest.raises(ValueError, match="available artifacts require"):
         ArtifactReference(
             artifact_id="input", artifact_type="input", required=True,
@@ -147,4 +246,11 @@ def test_report_dto_invariants_reject_inconsistent_resource_and_artifact_states(
                     produced_by="candidate_generation", status="unavailable", unavailable_reason="not found",
                 ),
             ],
+        )
+
+
+def test_optimizer_resource_value_rejects_negative_numeric_value():
+    with pytest.raises(ValueError, match="non-negative"):
+        OptimizerResourceValue[int](
+            status="available", value=-1, unit="calls",
         )
