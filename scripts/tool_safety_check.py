@@ -83,7 +83,6 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     all_reports: list[dict] = []
     any_denied = False
-    review = 0
 
     for target in targets:
         if not target.is_file():
@@ -102,8 +101,6 @@ def main(argv: Optional[list[str]] = None) -> int:
 
         if report.decision.value == "deny":
             any_denied = True
-        if report.decision.value == "needs_human_review":
-            review += 1
         if args.verbose or report.decision.value != "allow":
             print(f"[{report.decision.value.upper():>20}] {target.name} "
                   f"(risk={report.risk_level.value}, rules={report.rule_ids})")
@@ -125,24 +122,27 @@ def main(argv: Optional[list[str]] = None) -> int:
     print(f"\nSummary: {len(all_reports)} scanned | "
           f"{allowed} allow | {denied} deny | {review_count} needs_review")
 
+    manifest_failed = False
     if args.manifest:
-        _check_manifest(Path(args.manifest), all_reports)
+        manifest_failed = not _check_manifest(Path(args.manifest), all_reports)
 
-    if any_denied:
+    # Manifest mismatch is a CI failure even when no deny was produced.
+    if manifest_failed or any_denied:
         return 1
     if review_count > 0:
         return 2
     return 0
 
 
-def _check_manifest(manifest_path: Path, reports: list[dict]) -> None:
+def _check_manifest(manifest_path: Path, reports: list[dict]) -> bool:
+    """Validate reports against manifest. Returns True when all cases match."""
     import yaml
 
     data = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
     cases = data.get("cases") or data.get("samples") or data
     if not isinstance(cases, list):
         print("manifest: unexpected format", file=sys.stderr)
-        return
+        return False
     by_name = {Path(r["script_path"]).name: r for r in reports}
     ok = 0
     fail = 0
@@ -156,12 +156,19 @@ def _check_manifest(manifest_path: Path, reports: list[dict]) -> None:
             print(f"manifest MISS {name}")
             fail += 1
             continue
-        if rec["decision"] == expect:
+        got = rec["decision"]
+        # needs_human_review expectations also accept deny (stricter is fine).
+        if expect == "needs_human_review":
+            matched = got in ("needs_human_review", "deny")
+        else:
+            matched = got == expect
+        if matched:
             ok += 1
         else:
-            print(f"manifest FAIL {name}: got {rec['decision']}, expect {expect}")
+            print(f"manifest FAIL {name}: got {got}, expect {expect}")
             fail += 1
     print(f"Manifest: {ok} ok | {fail} fail")
+    return fail == 0
 
 
 def _infer_language(path: Path) -> str:

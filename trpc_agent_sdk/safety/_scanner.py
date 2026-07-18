@@ -110,7 +110,7 @@ class SafetyScanner:
             )
             findings.extend(self._run_rules(nested, payload_lang, disabled))
 
-        # Also scan command-line args if provided
+        # Also scan command-line args if provided (including nested -c payloads).
         if scan_input.args:
             joined = " ".join(str(a) for a in scan_input.args)
             if joined.strip():
@@ -120,6 +120,13 @@ class SafetyScanner:
                     tool_name=scan_input.tool_name,
                 )
                 findings.extend(self._run_rules(arg_input, "bash", disabled))
+                for payload_lang, payload in extract_inline_payloads(joined):
+                    nested = ScanInput(
+                        script=payload,
+                        language=payload_lang,
+                        tool_name=scan_input.tool_name,
+                    )
+                    findings.extend(self._run_rules(nested, payload_lang, disabled))
 
         for f in findings:
             f.evidence = _redact_evidence(f.evidence)

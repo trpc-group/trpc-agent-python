@@ -7,12 +7,16 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from pathlib import Path
 from typing import Any
 from typing import Optional
 
 from ._types import SafetyReport
+
+# Process-local lock so concurrent threads do not interleave long JSONL lines.
+_AUDIT_LOCK = threading.Lock()
 
 
 class AuditLogger:
@@ -32,8 +36,11 @@ class AuditLogger:
         record = self._build_record(report, script_path=script_path, intercepted=intercepted)
         if self.path is not None:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            with self.path.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+            line = json.dumps(record, ensure_ascii=False) + "\n"
+            with _AUDIT_LOCK:
+                with self.path.open("a", encoding="utf-8") as fh:
+                    fh.write(line)
+                    fh.flush()
         _emit_telemetry(report)
         return record
 

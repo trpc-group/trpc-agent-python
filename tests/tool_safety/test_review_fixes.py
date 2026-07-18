@@ -59,3 +59,28 @@ def test_python_c_escaped_quotes_rescanned_and_denied():
     report = SafetyScanner(PolicyConfig()).scan(ScanInput(script=cmd, language="bash"))
     assert report.decision == Decision.DENY
     assert report.rule_ids  # process and/or dangerous files from nested payload
+
+
+def test_dynamic_network_target_is_high_and_denied():
+    """curl $URL must not silently allow under default policy."""
+    report = SafetyScanner(PolicyConfig()).scan(ScanInput(script="curl $URL", language="bash"))
+    assert report.decision == Decision.DENY
+    assert "R002_network_egress" in report.rule_ids
+
+
+def test_filter_deny_response_has_success_false():
+    try:
+        from trpc_agent_sdk.abc import FilterResult
+        from trpc_agent_sdk.safety import ToolSafetyFilter
+    except Exception as ex:  # pylint: disable=broad-except
+        import pytest
+        pytest.skip(f"filter stack unavailable: {ex}")
+    import asyncio
+
+    flt = ToolSafetyFilter(PolicyConfig())
+    rsp = FilterResult()
+    asyncio.run(flt._before(None, {"command": "rm -rf /"}, rsp))
+    assert rsp.is_continue is False
+    assert isinstance(rsp.rsp, dict)
+    assert rsp.rsp.get("success") is False
+    assert "error" in rsp.rsp

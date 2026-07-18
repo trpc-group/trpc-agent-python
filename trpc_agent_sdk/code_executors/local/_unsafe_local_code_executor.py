@@ -110,13 +110,47 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             from trpc_agent_sdk.safety import Decision
             from trpc_agent_sdk.safety import ScanInput
 
-            code = input_data.code or "\n".join(b.code for b in (input_data.code_blocks or []))
-            report = self._safety_scanner.scan(ScanInput(script=code, language="python", tool_name="code_executor"))
-            should_block = report.decision == Decision.DENY or (report.decision == Decision.NEEDS_HUMAN_REVIEW
-                                                                and getattr(self, "_safety_block_on_review", False))
-            if self._safety_audit is not None:
-                self._safety_audit.log(report, intercepted=should_block)
-            if should_block:
+            code_blocks = list(input_data.code_blocks or [])
+            if not code_blocks and input_data.code:
+                code_blocks = [CodeBlock(code=input_data.code, language="python")]
+            # Scan each block with its own language so bash is not missed.
+            from trpc_agent_sdk.safety import RiskLevel
+            from trpc_agent_sdk.safety import max_risk_level
+
+            _ORDER = {
+                RiskLevel.NONE: 0,
+                RiskLevel.LOW: 1,
+                RiskLevel.MEDIUM: 2,
+                RiskLevel.HIGH: 3,
+                RiskLevel.CRITICAL: 4,
+            }
+            worst = None
+            for block in code_blocks:
+                lang = (getattr(block, "language", None) or "python").lower()
+                if lang in ("sh", "shell", "bash"):
+                    lang = "bash"
+                elif "py" in lang:
+                    lang = "python"
+                else:
+                    lang = "python" if lang not in ("python", "bash") else lang
+                report = self._safety_scanner.scan(
+                    ScanInput(script=block.code or "", language=lang, tool_name="code_executor"))
+                if worst is None:
+                    worst = report
+                elif report.decision == Decision.DENY and worst.decision != Decision.DENY:
+                    worst = report
+                elif report.decision == worst.decision:
+                    if _ORDER.get(report.risk_level, 0) > _ORDER.get(worst.risk_level, 0):
+                        worst = report
+
+            report = worst
+            should_block = False
+            if report is not None:
+                should_block = report.decision == Decision.DENY or (report.decision == Decision.NEEDS_HUMAN_REVIEW
+                                                                    and getattr(self, "_safety_block_on_review", False))
+                if self._safety_audit is not None:
+                    self._safety_audit.log(report, intercepted=should_block)
+            if should_block and report is not None:
                 return create_code_execution_result(stderr=f"TOOL_SAFETY_DENY: {report.rule_ids}")
 
         output_parts = []

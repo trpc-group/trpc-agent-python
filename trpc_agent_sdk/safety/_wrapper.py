@@ -82,7 +82,8 @@ def safe_code_executor(inner, policy: PolicyConfig, *, audit_path: Optional[str]
     return _SafeCodeExecutor()
 
 
-# Backwards-compatible alias used by earlier examples/tests.
+# Backwards-compatible factory alias (returns a BaseCodeExecutor instance).
+# Prefer SafetyGuardedCodeExecutor for an explicit class, or safe_code_executor().
 SafeCodeExecutor = safe_code_executor
 
 

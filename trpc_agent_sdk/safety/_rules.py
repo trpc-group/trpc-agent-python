@@ -495,12 +495,14 @@ class NetworkRule(SafetyRule):
 
             host = _extract_host_from_call(node)
             if host is None:
+                # Dynamic targets cannot be proven allow-listed: HIGH so default
+                # policy (deny_risk_level=high) blocks rather than silent allow.
                 findings.append(
                     self._finding(
                         f"{name}(<dynamic>)",
                         node.lineno,
-                        "Use a static, allow-listed URL. Dynamic targets require human review.",
-                        level=RiskLevel.MEDIUM,
+                        "Use a static, allow-listed URL. Dynamic targets are treated as high risk.",
+                        level=RiskLevel.HIGH,
                         message=f"Network call {name}() with non-static target",
                         extra={"host": "<dynamic>"},
                     ))
@@ -547,8 +549,8 @@ class NetworkRule(SafetyRule):
                     self._finding(
                         line,
                         lineno,
-                        "Use a static, allow-listed URL.",
-                        level=RiskLevel.MEDIUM,
+                        "Use a static, allow-listed URL. Dynamic targets are treated as high risk.",
+                        level=RiskLevel.HIGH,
                         message=f"{cmd_base} with non-static target",
                         extra={"host": "<dynamic>"},
                     ))

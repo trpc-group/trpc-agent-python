@@ -31,7 +31,8 @@ cases:
   - file: 11_bash_pipeline.sh
     expect: deny
   - file: 12_human_review.py
-    expect: needs_human_review
+    # Dynamic network targets are HIGH → default policy denies (fail-closed).
+    expect: deny
   - file: 13_alias_os_system.py
     expect: deny
     must_rules: [R003_process_system]

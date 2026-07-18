@@ -24,3 +24,7 @@ test-ngtest-ut-trpc-agent-py.xml
 node_modules
 package-lock.json
 pyrightconfig.json
+
+# Generated tool-safety CLI fixtures (regenerate with scripts/tool_safety_check.py)
+examples/tool_safety/tool_safety_audit.jsonl
+examples/tool_safety/tool_safety_report.json

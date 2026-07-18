@@ -74,8 +74,12 @@ class ToolSafetyFilter(BaseFilter):
 
         if should_block:
             error_code = ("TOOL_SAFETY_DENY" if report.decision == Decision.DENY else "TOOL_SAFETY_NEEDS_REVIEW")
+            # Align with BashTool / tool return schema: success + error + command.
+            command = script if isinstance(script, str) else ""
             rsp.rsp = {
+                "success": False,
                 "error": error_code,
+                "command": command,
                 "decision": report.decision.value,
                 "risk_level": report.risk_level.value,
                 "rule_ids": report.rule_ids,
@@ -83,15 +87,15 @@ class ToolSafetyFilter(BaseFilter):
                 "recommendation": "Review the flagged patterns; see audit log for details.",
             }
             rsp.is_continue = False
-            rsp.error = None
+            # Keep a short error string for filter chain consumers.
+            rsp.error = error_code
             return
 
         if report.decision == Decision.NEEDS_HUMAN_REVIEW:
-            rsp.rsp = {
-                "warning": "TOOL_SAFETY_NEEDS_REVIEW",
-                "risk_level": report.risk_level.value,
-                "rule_ids": report.rule_ids,
-            }
+            # Non-blocking review: surface via rsp.error (survives tool result
+            # overwrite of rsp.rsp) and still write audit/OTel above.
+            rsp.error = (f"TOOL_SAFETY_NEEDS_REVIEW risk={report.risk_level.value} "
+                         f"rules={','.join(report.rule_ids)}")
 
     def _resolve_tool_name(self, ctx: Any) -> str:
         try:
