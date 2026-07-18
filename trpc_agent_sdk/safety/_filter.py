@@ -18,7 +18,6 @@ from ._audit import AuditLogger
 from ._policy import PolicyConfig
 from ._scanner import SafetyScanner
 from ._types import Decision
-from ._types import SafetyReport
 from ._types import ScanInput
 
 _SCRIPT_ARG_KEYS = ("command", "script", "code", "cmd", "bash", "shell_command")
@@ -29,9 +28,7 @@ _WORKDIR_ARG_KEYS = ("cwd", "workdir", "working_dir")
 # We cannot stash it on the FilterResult because BaseFilter.run may replace
 # the whole result object with the one returned by handle(). ContextVar is
 # async-safe: each task sees its own value across awaits.
-_REVIEW_REPORT: contextvars.ContextVar[Optional[SafetyReport]] = contextvars.ContextVar(
-    "_safety_review_report", default=None
-)
+_REVIEW_REPORT = contextvars.ContextVar("_safety_review_report", default=None)
 
 
 class ToolSafetyFilter(BaseFilter):
