@@ -366,8 +366,8 @@ def _collect_sensitive_path_vars(
         text = ""
         if isinstance(value, ast.Call):
             cname = resolve_name(value.func, aliases).lower()
-            if (cname in join_names or cname.endswith(".join")
-                    or cname.endswith(".joinpath") or cname.endswith(".expanduser")):
+            if cname in join_names or cname.endswith(".join") or cname.endswith(".joinpath") or cname.endswith(
+                    ".expanduser"):
                 text = path_expr_text(value)
             else:
                 text = path_expr_text(value)
@@ -736,15 +736,10 @@ class ProcessRule(SafetyRule):
 
         for node, name in iter_python_calls(tree, aliases):
             lname = name.lower()
-            is_process_call = (
-                lname in _PY_PROCESS_CALLS
-                or lname in {c.lower() for c in _PY_PROCESS_CALLS}
-                or any(
+            if lname in _PY_PROCESS_CALLS or any(
                     lname.endswith("." + c.split(".")[-1]) and c.split(".")[0] in lname
-                    for c in _PY_PROCESS_CALLS
-                )
-            )
-            if is_process_call:
+                    for c in _PY_PROCESS_CALLS) or lname in {c.lower()
+                                                             for c in _PY_PROCESS_CALLS}:
                 shell_true = _has_shell_true(node)
                 findings.append(
                     self._finding(
@@ -897,9 +892,8 @@ class ProcessRule(SafetyRule):
                         level=RiskLevel.CRITICAL,
                         message="Use of eval in bash",
                     ))
-            if (_DECODE_EXEC_BASH.search(line)
-                    or (re.search(r"\|\s*(sh|bash|zsh)\b", line)
-                        and re.search(r"base64|xxd|openssl", line, re.IGNORECASE))):
+            if _DECODE_EXEC_BASH.search(line) or re.search(r"\|\s*(sh|bash|zsh)\b", line) and re.search(
+                    r"base64|xxd|openssl", line, re.IGNORECASE):
                 findings.append(
                     self._finding(
                         line,
@@ -1272,9 +1266,8 @@ _LEAK_SINKS_PY = {
     "httpx.post",
 }
 
-_ENV_SECRET_KEYS = re.compile(
-    r"(?i)(API[_-]?KEY|TOKEN|SECRET|PASSWORD|PASSWD|PRIVATE[_-]?KEY|"
-    r"ACCESS[_-]?KEY|OPENAI|ANTHROPIC|AWS_SECRET|GITHUB_TOKEN|GH_TOKEN)")
+_ENV_SECRET_KEYS = re.compile(r"(?i)(API[_-]?KEY|TOKEN|SECRET|PASSWORD|PASSWD|PRIVATE[_-]?KEY|"
+                              r"ACCESS[_-]?KEY|OPENAI|ANTHROPIC|AWS_SECRET|GITHUB_TOKEN|GH_TOKEN)")
 
 
 class SecretLeakRule(SafetyRule):
@@ -1376,11 +1369,8 @@ class SecretLeakRule(SafetyRule):
         # Direct print(os.environ["X"])
         for node in ast.walk(tree):
             if isinstance(node, ast.Subscript) and _is_environ_subscript(node, aliases):
-                # ast.Subscript always has .slice in py>=3.9; fall back to None
-                # for older interpreters or unusual AST shapes.
-                key = getattr(getattr(node, "slice", None), "value", None)
-                key_str = get_string_literal(key) if key is not None else None
-                if key_str is None or _ENV_SECRET_KEYS.search(str(key_str if key_str else "SECRET")):
+                key = get_string_literal(node.slice) if hasattr(node, "slice") else None
+                if key is None or _ENV_SECRET_KEYS.search(str(key) if key else "SECRET"):
                     # Flag any environ subscript used as expression; severity HIGH
                     findings.append(
                         self._finding(

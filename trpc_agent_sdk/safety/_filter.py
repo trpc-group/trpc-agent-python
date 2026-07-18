@@ -76,10 +76,8 @@ class ToolSafetyFilter(BaseFilter):
         )
         report = self.scanner.scan(scan_input)
 
-        should_block = (
-            report.decision == Decision.DENY
-            or (report.decision == Decision.NEEDS_HUMAN_REVIEW and self._block_on_review)
-        )
+        should_block = report.decision == Decision.DENY or (report.decision == Decision.NEEDS_HUMAN_REVIEW
+                                                            and self._block_on_review)
         self.audit.log(report, intercepted=should_block)
 
         if should_block:
