@@ -37,6 +37,7 @@ def _policy(tmp_path: Path) -> PolicyConfig:
 
 
 class _FakeTool:
+
     def __init__(self, name: str = "fake_bash") -> None:
         self.name = name
         self.filters: list[Any] = []
@@ -88,6 +89,7 @@ def _try_import_code_executors():
 
 
 class _FakeInnerExecutor:
+
     def __init__(self, create_fn: Any) -> None:
         self._create_fn = create_fn
         self.calls: list[Any] = []
@@ -140,8 +142,7 @@ def test_safe_code_executor_allows_safe_python(tmp_path: Path):
 def test_safety_wrapper_blocks_dangerous_script(tmp_path: Path):
     policy = PolicyConfig(forbidden_paths=[".env"])
 
-    @safety_wrapper(tool_name="deco_test", policy=policy,
-                    audit_path=str(tmp_path / "audit.jsonl"))
+    @safety_wrapper(tool_name="deco_test", policy=policy, audit_path=str(tmp_path / "audit.jsonl"))
     async def run_script(*, script: str = ""):
         return "executed"
 
@@ -156,6 +157,7 @@ def test_safety_wrapper_blocks_dangerous_script(tmp_path: Path):
 
 
 def test_safety_wrapper_allows_safe_script(tmp_path: Path):
+
     @safety_wrapper(tool_name="deco_safe", policy=PolicyConfig())
     async def run_script(*, script: str = ""):
         return "executed"
@@ -165,6 +167,7 @@ def test_safety_wrapper_allows_safe_script(tmp_path: Path):
 
 
 def test_safety_wrapper_sync_function(tmp_path: Path):
+
     @safety_wrapper(tool_name="deco_sync", policy=PolicyConfig())
     def run_script(*, script: str = ""):
         return "sync_executed"
@@ -174,6 +177,7 @@ def test_safety_wrapper_sync_function(tmp_path: Path):
 
 
 class _FakeSkillRunner:
+
     def __init__(self):
         self.calls = 0
 
@@ -185,7 +189,9 @@ class _FakeSkillRunner:
 def test_skill_runner_blocks_dangerous_command(tmp_path: Path):
     runner = _FakeSkillRunner()
     safe = SafetyReviewedSkillRunner(
-        runner, PolicyConfig(), audit_path=str(tmp_path / "audit.jsonl"),
+        runner,
+        PolicyConfig(),
+        audit_path=str(tmp_path / "audit.jsonl"),
         tool_name="skill_run",
     )
 

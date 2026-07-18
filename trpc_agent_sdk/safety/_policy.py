@@ -29,6 +29,8 @@ class PolicyConfig:
     forbidden_paths: list[str] = field(default_factory=list)
     allowed_commands: list[str] = field(default_factory=list)
     max_timeout_seconds: int = 300
+    # Runtime executor limits (documented placeholders). Static scanning cannot
+    # enforce byte caps; keep fields for policy compatibility / future runtime.
     max_output_bytes: int = 10 * 1024 * 1024
     max_file_write_bytes: int = 100 * 1024 * 1024
     deny_risk_level: RiskLevel = RiskLevel.HIGH

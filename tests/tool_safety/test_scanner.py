@@ -131,19 +131,19 @@ def test_12_human_review(scanner, samples_dir):
 
 def test_detection_rate(scanner, samples_dir):
     dangerous = [
-        "02_dangerous_delete.sh", "03_read_credentials.py", "04_network_exfil.py",
-        "06_subprocess_call.py", "07_shell_injection.sh", "08_dependency_install.sh",
-        "09_infinite_loop.py", "10_secret_leak.py", "11_bash_pipeline.sh",
+        "02_dangerous_delete.sh",
+        "03_read_credentials.py",
+        "04_network_exfil.py",
+        "06_subprocess_call.py",
+        "07_shell_injection.sh",
+        "08_dependency_install.sh",
+        "09_infinite_loop.py",
+        "10_secret_leak.py",
+        "11_bash_pipeline.sh",
     ]
     safe = ["01_safe_python.py", "05_whitelist_network.py"]
-    detected = sum(
-        1 for name in dangerous
-        if _scan(scanner, samples_dir / name).decision == Decision.DENY
-    )
-    false_pos = sum(
-        1 for name in safe
-        if _scan(scanner, samples_dir / name).decision != Decision.ALLOW
-    )
+    detected = sum(1 for name in dangerous if _scan(scanner, samples_dir / name).decision == Decision.DENY)
+    false_pos = sum(1 for name in safe if _scan(scanner, samples_dir / name).decision != Decision.ALLOW)
     assert detected / len(dangerous) >= 0.9
     assert false_pos / len(safe) <= 0.1
 
@@ -186,15 +186,17 @@ class _NoOpRule(SafetyRule):
     default_level = RiskLevel.LOW
 
     def check(self, scan_input, policy):
-        return [SafetyFinding(
-            rule_id=self.rule_id,
-            rule_name=self.rule_name,
-            risk_type=self.risk_type,
-            risk_level=self.default_level,
-            evidence="custom rule triggered",
-            line=1,
-            recommendation="this is a test rule",
-        )]
+        return [
+            SafetyFinding(
+                rule_id=self.rule_id,
+                rule_name=self.rule_name,
+                risk_type=self.risk_type,
+                risk_level=self.default_level,
+                evidence="custom rule triggered",
+                line=1,
+                recommendation="this is a test rule",
+            )
+        ]
 
 
 def test_register_custom_rule_is_picked_up_by_new_scanner():

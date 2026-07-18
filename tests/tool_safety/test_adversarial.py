@@ -16,10 +16,11 @@ from trpc_agent_sdk.safety import ScanInput
 
 @pytest.fixture
 def scanner():
-    return SafetyScanner(PolicyConfig.from_dict({
-        "whitelisted_domains": ["api.github.com", "localhost"],
-        "forbidden_paths": [".env", ".ssh", "id_rsa"],
-    }))
+    return SafetyScanner(
+        PolicyConfig.from_dict({
+            "whitelisted_domains": ["api.github.com", "localhost"],
+            "forbidden_paths": [".env", ".ssh", "id_rsa"],
+        }))
 
 
 def _scan(scanner, script, language="python"):

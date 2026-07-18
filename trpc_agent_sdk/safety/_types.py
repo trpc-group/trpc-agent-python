@@ -75,28 +75,34 @@ class SafetyReport:
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-friendly dict for report files and audit."""
         return {
-            "decision": self.decision.value,
-            "risk_level": self.risk_level.value,
-            "findings": [
-                {
-                    "rule_id": f.rule_id,
-                    "rule_name": f.rule_name,
-                    "risk_type": f.risk_type,
-                    "risk_level": f.risk_level.value,
-                    "evidence": f.evidence,
-                    "line": f.line,
-                    "recommendation": f.recommendation,
-                    "metadata": f.metadata,
-                }
-                for f in self.findings
-            ],
-            "rule_ids": self.rule_ids,
-            "scanner_version": self.scanner_version,
-            "scan_duration_ms": round(self.scan_duration_ms, 3),
-            "sanitized": self.sanitized,
-            "blocked": self.blocked,
-            "tool_name": self.tool_name,
-            "language": self.language,
+            "decision":
+            self.decision.value,
+            "risk_level":
+            self.risk_level.value,
+            "findings": [{
+                "rule_id": f.rule_id,
+                "rule_name": f.rule_name,
+                "risk_type": f.risk_type,
+                "risk_level": f.risk_level.value,
+                "evidence": f.evidence,
+                "line": f.line,
+                "recommendation": f.recommendation,
+                "metadata": f.metadata,
+            } for f in self.findings],
+            "rule_ids":
+            self.rule_ids,
+            "scanner_version":
+            self.scanner_version,
+            "scan_duration_ms":
+            round(self.scan_duration_ms, 3),
+            "sanitized":
+            self.sanitized,
+            "blocked":
+            self.blocked,
+            "tool_name":
+            self.tool_name,
+            "language":
+            self.language,
         }
 
 

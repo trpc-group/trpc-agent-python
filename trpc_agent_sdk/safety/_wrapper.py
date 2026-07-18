@@ -21,9 +21,7 @@ from ._types import ScanInput
 
 def wrap_tool(tool, policy: PolicyConfig, *, audit_path: Optional[str] = None):
     """Return *tool* with a :class:`ToolSafetyFilter` prepended to its filters."""
-    safety_filter = ToolSafetyFilter(
-        policy=policy, audit_path=audit_path, tool_name=getattr(tool, "name", "tool")
-    )
+    safety_filter = ToolSafetyFilter(policy=policy, audit_path=audit_path, tool_name=getattr(tool, "name", "tool"))
     tool.add_one_filter(safety_filter, force=True)
     return tool
 
@@ -36,8 +34,7 @@ class SafetyGuardedCodeExecutor:
     imported when used.
     """
 
-    def __init__(self, inner, policy: PolicyConfig, *, audit_path: Optional[str] = None,
-                 block_on_review: bool = False):
+    def __init__(self, inner, policy: PolicyConfig, *, audit_path: Optional[str] = None, block_on_review: bool = False):
         self._inner = inner
         self._scanner = SafetyScanner(policy=policy)
         self._audit = AuditLogger(audit_path)
@@ -46,26 +43,18 @@ class SafetyGuardedCodeExecutor:
     async def execute_code(self, invocation_context, input_data):
         from trpc_agent_sdk.code_executors import create_code_execution_result
 
-        code = input_data.code or "\n".join(
-            b.code for b in (input_data.code_blocks or [])
-        )
+        code = input_data.code or "\n".join(b.code for b in (input_data.code_blocks or []))
         language = getattr(input_data, "language", None) or "python"
-        report = self._scanner.scan(
-            ScanInput(script=code, language=language, tool_name="code_executor")
-        )
-        should_block = report.decision == Decision.DENY or (
-            report.decision == Decision.NEEDS_HUMAN_REVIEW and self._block_on_review
-        )
+        report = self._scanner.scan(ScanInput(script=code, language=language, tool_name="code_executor"))
+        should_block = report.decision == Decision.DENY or (report.decision == Decision.NEEDS_HUMAN_REVIEW
+                                                            and self._block_on_review)
         self._audit.log(report, intercepted=should_block)
         if should_block:
-            return create_code_execution_result(
-                stderr=f"TOOL_SAFETY_DENY: {report.rule_ids}"
-            )
+            return create_code_execution_result(stderr=f"TOOL_SAFETY_DENY: {report.rule_ids}")
         return await self._inner.execute_code(invocation_context, input_data)
 
 
-def safe_code_executor(inner, policy: PolicyConfig, *, audit_path: Optional[str] = None,
-                       block_on_review: bool = False):
+def safe_code_executor(inner, policy: PolicyConfig, *, audit_path: Optional[str] = None, block_on_review: bool = False):
     """Create a code-executor wrapper that scans code before delegating.
 
     Returns an instance of a dynamically built ``BaseCodeExecutor`` subclass so
@@ -79,22 +68,16 @@ def safe_code_executor(inner, policy: PolicyConfig, *, audit_path: Optional[str]
     block_review = block_on_review or policy.block_on_review
 
     class _SafeCodeExecutor(BaseCodeExecutor):
+
         async def execute_code(self, invocation_context, input_data):
-            code = input_data.code or "\n".join(
-                b.code for b in (input_data.code_blocks or [])
-            )
+            code = input_data.code or "\n".join(b.code for b in (input_data.code_blocks or []))
             language = getattr(input_data, "language", None) or "python"
-            report = scanner.scan(
-                ScanInput(script=code, language=language, tool_name="code_executor")
-            )
-            should_block = report.decision == Decision.DENY or (
-                report.decision == Decision.NEEDS_HUMAN_REVIEW and block_review
-            )
+            report = scanner.scan(ScanInput(script=code, language=language, tool_name="code_executor"))
+            should_block = report.decision == Decision.DENY or (report.decision == Decision.NEEDS_HUMAN_REVIEW
+                                                                and block_review)
             audit.log(report, intercepted=should_block)
             if should_block:
-                return create_code_execution_result(
-                    stderr=f"TOOL_SAFETY_DENY: {report.rule_ids}"
-                )
+                return create_code_execution_result(stderr=f"TOOL_SAFETY_DENY: {report.rule_ids}")
             return await inner.execute_code(invocation_context, input_data)
 
     return _SafeCodeExecutor()
@@ -145,6 +128,7 @@ def safety_wrapper(
             raise SafetyDeniedError(report)
 
     def decorator(func):
+
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
             _guard(args, kwargs)
@@ -182,9 +166,7 @@ class SafetyReviewedSkillRunner:
         """Scan skill args and delegate to the wrapped runner when allowed."""
         script = self._extract_script(args)
         if script:
-            report = self._scanner.scan(
-                ScanInput(script=script, tool_name=self._tool_name)
-            )
+            report = self._scanner.scan(ScanInput(script=script, tool_name=self._tool_name))
             self._audit.log(report, intercepted=report.blocked)
             if report.decision == Decision.DENY:
                 return {

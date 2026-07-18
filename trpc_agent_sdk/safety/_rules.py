@@ -100,8 +100,16 @@ _DELETE_PATTERNS = [
 ]
 
 _SYSTEM_DIRS = [
-    "/etc", "/usr", "/bin", "/sbin", "/boot", "/sys", "/proc", "/dev",
-    "C:\\Windows", "C:\\Program Files",
+    "/etc",
+    "/usr",
+    "/bin",
+    "/sbin",
+    "/boot",
+    "/sys",
+    "/proc",
+    "/dev",
+    "C:\\Windows",
+    "C:\\Program Files",
 ]
 
 
@@ -159,19 +167,24 @@ class DangerousFilesRule(SafetyRule):
         for node, name in iter_python_calls(tree, aliases):
             lname = name.lower()
             if lname in {
-                "shutil.rmtree", "os.rmdir", "os.remove", "os.unlink",
-                "pathlib.path.unlink", "pathlib.Path.unlink",
+                    "shutil.rmtree",
+                    "os.rmdir",
+                    "os.remove",
+                    "os.unlink",
+                    "pathlib.path.unlink",
+                    "pathlib.Path.unlink",
             } or lname.endswith(".unlink") or lname.endswith(".rmtree"):
                 arg = node.args[0] if node.args else None
                 target = get_string_literal(arg) or path_expr_text(arg) if arg else "<dynamic>"
                 target = target or "<dynamic>"
                 if "rmtree" in lname or _is_recursive_delete(name, node):
-                    findings.append(self._finding(
-                        f"{name}({target})",
-                        node.lineno,
-                        "Avoid recursive deletion; restrict to known workspace paths.",
-                        message=f"Recursive/forced delete via {name}({target!r})",
-                    ))
+                    findings.append(
+                        self._finding(
+                            f"{name}({target})",
+                            node.lineno,
+                            "Avoid recursive deletion; restrict to known workspace paths.",
+                            message=f"Recursive/forced delete via {name}({target!r})",
+                        ))
 
             if lname in {"open", "builtins.open"} or lname.endswith(".open"):
                 target = _first_str_or_path(node) or "<dynamic>"
@@ -181,53 +194,61 @@ class DangerousFilesRule(SafetyRule):
                         target = path_vars[var]
                 if _is_write_open(node):
                     if _matches_sensitive(target) or _matches_forbidden(target, policy) or _matches_system_dir(target):
-                        findings.append(self._finding(
-                            f"open({target!r}, 'w')",
-                            node.lineno,
-                            "Do not write to system or credential paths.",
-                            message=f"Write to sensitive path {target!r}",
-                        ))
+                        findings.append(
+                            self._finding(
+                                f"open({target!r}, 'w')",
+                                node.lineno,
+                                "Do not write to system or credential paths.",
+                                message=f"Write to sensitive path {target!r}",
+                            ))
                 else:
                     if _matches_sensitive(target) or _matches_forbidden(target, policy):
-                        findings.append(self._finding(
-                            f"{name}({target!r})",
-                            node.lineno,
-                            "Do not read credential/secret files in tool scripts.",
-                            message=f"Read sensitive file {target!r}",
-                        ))
+                        findings.append(
+                            self._finding(
+                                f"{name}({target!r})",
+                                node.lineno,
+                                "Do not read credential/secret files in tool scripts.",
+                                message=f"Read sensitive file {target!r}",
+                            ))
 
             # pathlib Path.read_text / read_bytes with sensitive target
             if lname.endswith(".read_text") or lname.endswith(".read_bytes"):
                 target = _path_from_attr_call(node, aliases)
                 if _matches_sensitive(target) or _matches_forbidden(target, policy):
-                    findings.append(self._finding(
-                        f"{name}(...)",
-                        node.lineno,
-                        "Do not read credential/secret files in tool scripts.",
-                        message=f"Read sensitive file via pathlib {target!r}",
-                    ))
+                    findings.append(
+                        self._finding(
+                            f"{name}(...)",
+                            node.lineno,
+                            "Do not read credential/secret files in tool scripts.",
+                            message=f"Read sensitive file via pathlib {target!r}",
+                        ))
 
             # Path(...).joinpath(...).read_text pattern: also inspect path construction
             if "pathlib" in lname or lname.endswith("path") or lname.endswith("joinpath") or lname in {
-                "os.path.join", "os.path.expanduser", "posixpath.join", "ntpath.join",
+                    "os.path.join",
+                    "os.path.expanduser",
+                    "posixpath.join",
+                    "ntpath.join",
             }:
                 target = path_expr_text(node)
                 if _matches_sensitive(target) or _matches_forbidden(target, policy):
-                    findings.append(self._finding(
-                        evidence_snippet(target) or name,
-                        node.lineno,
-                        "Do not construct paths into credential directories.",
-                        message=f"Path construction toward sensitive location {target!r}",
-                    ))
+                    findings.append(
+                        self._finding(
+                            evidence_snippet(target) or name,
+                            node.lineno,
+                            "Do not construct paths into credential directories.",
+                            message=f"Path construction toward sensitive location {target!r}",
+                        ))
 
         # Flag assignments that build sensitive paths even if never opened.
         for var, target in path_vars.items():
-            findings.append(self._finding(
-                f"{var}={target!r}",
-                None,
-                "Do not construct credential paths in tool scripts.",
-                message=f"Sensitive path assigned to {var!r}: {target!r}",
-            ))
+            findings.append(
+                self._finding(
+                    f"{var}={target!r}",
+                    None,
+                    "Do not construct credential paths in tool scripts.",
+                    message=f"Sensitive path assigned to {var!r}: {target!r}",
+                ))
 
         return findings
 
@@ -236,39 +257,43 @@ class DangerousFilesRule(SafetyRule):
         for lineno, line in bash_lines(scan_input.script):
             for pat in _DELETE_PATTERNS:
                 if pat.search(line):
-                    findings.append(self._finding(
-                        line,
-                        lineno,
-                        "Avoid rm -rf and recursive deletion of unknown paths.",
-                        message=f"Recursive/forced delete: {evidence_snippet(line)}",
-                    ))
+                    findings.append(
+                        self._finding(
+                            line,
+                            lineno,
+                            "Avoid rm -rf and recursive deletion of unknown paths.",
+                            message=f"Recursive/forced delete: {evidence_snippet(line)}",
+                        ))
                     break
             for pat, desc in _SENSITIVE_PATH_PATTERNS:
                 if re.search(pat, line):
-                    findings.append(self._finding(
-                        line,
-                        lineno,
-                        f"Do not touch {desc} from tool scripts.",
-                        message=f"Access to sensitive path ({desc}): {evidence_snippet(line)}",
-                    ))
+                    findings.append(
+                        self._finding(
+                            line,
+                            lineno,
+                            f"Do not touch {desc} from tool scripts.",
+                            message=f"Access to sensitive path ({desc}): {evidence_snippet(line)}",
+                        ))
                     break
             for sd in _SYSTEM_DIRS:
                 if sd in line and (">" in line or "rm " in line or "chmod" in line or "chown" in line):
-                    findings.append(self._finding(
-                        line,
-                        lineno,
-                        "Never modify or delete system directories.",
-                        message=f"Operation on system directory {sd!r}",
-                    ))
+                    findings.append(
+                        self._finding(
+                            line,
+                            lineno,
+                            "Never modify or delete system directories.",
+                            message=f"Operation on system directory {sd!r}",
+                        ))
                     break
             for fb in policy.forbidden_paths:
                 if fb in line:
-                    findings.append(self._finding(
-                        line,
-                        lineno,
-                        f"Path {fb!r} is forbidden by policy.",
-                        message=f"Access to forbidden path ({fb!r})",
-                    ))
+                    findings.append(
+                        self._finding(
+                            line,
+                            lineno,
+                            f"Path {fb!r} is forbidden by policy.",
+                            message=f"Access to forbidden path ({fb!r})",
+                        ))
                     break
         return findings
 
@@ -327,8 +352,12 @@ def _collect_sensitive_path_vars(
     """Map local names bound to path expressions that mention sensitive fragments."""
     path_vars: dict[str, str] = {}
     join_names = {
-        "os.path.join", "posixpath.join", "ntpath.join", "os.path.expanduser",
-        "pathlib.path.joinpath", "pathlib.Path.joinpath",
+        "os.path.join",
+        "posixpath.join",
+        "ntpath.join",
+        "os.path.expanduser",
+        "pathlib.path.joinpath",
+        "pathlib.Path.joinpath",
     }
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign):
@@ -337,7 +366,8 @@ def _collect_sensitive_path_vars(
         text = ""
         if isinstance(value, ast.Call):
             cname = resolve_name(value.func, aliases).lower()
-            if cname in join_names or cname.endswith(".join") or cname.endswith(".joinpath") or cname.endswith(".expanduser"):
+            if cname in join_names or cname.endswith(".join") or cname.endswith(".joinpath") or cname.endswith(
+                    ".expanduser"):
                 text = path_expr_text(value)
             else:
                 text = path_expr_text(value)
@@ -365,16 +395,34 @@ def _collect_sensitive_path_vars(
 # ---------------------------------------------------------------------------
 
 _PY_NET_CALLS = {
-    "requests.get", "requests.post", "requests.put", "requests.delete", "requests.patch",
-    "requests.head", "requests.options", "requests.request",
-    "requests.session.get", "requests.session.post", "requests.session.put",
-    "requests.session.delete", "requests.session.request",
-    "httpx.get", "httpx.post", "httpx.request", "httpx.client.get", "httpx.client.post",
-    "httpx.asyncclient.get", "httpx.asyncclient.post",
-    "aiohttp.clientsession.get", "aiohttp.clientsession.post",
-    "urllib.request.urlopen", "urllib.urlopen",
-    "http.client.httpconnection", "http.client.httpsconnection",
-    "socket.socket", "socket.create_connection",
+    "requests.get",
+    "requests.post",
+    "requests.put",
+    "requests.delete",
+    "requests.patch",
+    "requests.head",
+    "requests.options",
+    "requests.request",
+    "requests.session.get",
+    "requests.session.post",
+    "requests.session.put",
+    "requests.session.delete",
+    "requests.session.request",
+    "httpx.get",
+    "httpx.post",
+    "httpx.request",
+    "httpx.client.get",
+    "httpx.client.post",
+    "httpx.asyncclient.get",
+    "httpx.asyncclient.post",
+    "aiohttp.clientsession.get",
+    "aiohttp.clientsession.post",
+    "urllib.request.urlopen",
+    "urllib.urlopen",
+    "http.client.httpconnection",
+    "http.client.httpsconnection",
+    "socket.socket",
+    "socket.create_connection",
 }
 
 _BASH_NET_COMMANDS = {"curl", "wget", "nc", "netcat", "telnet", "ftp", "scp", "rsync"}
@@ -411,7 +459,13 @@ class NetworkRule(SafetyRule):
             if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
                 var = node.func.value.id
                 if var in session_vars and node.func.attr.lower() in {
-                    "get", "post", "put", "delete", "patch", "request", "head",
+                        "get",
+                        "post",
+                        "put",
+                        "delete",
+                        "patch",
+                        "request",
+                        "head",
                 }:
                     lname = session_vars[var] + "." + node.func.attr.lower()
             # Chained constructor call: httpx.Client().get(...) / requests.Session().post(...)
@@ -420,9 +474,11 @@ class NetworkRule(SafetyRule):
                 method = node.func.attr.lower()
                 if method in {"get", "post", "put", "delete", "patch", "request", "head"}:
                     if ctor in {
-                        "requests.session", "requests.sessions.session",
-                        "httpx.client", "httpx.asyncclient",
-                        "aiohttp.clientsession",
+                            "requests.session",
+                            "requests.sessions.session",
+                            "httpx.client",
+                            "httpx.asyncclient",
+                            "aiohttp.clientsession",
                     }:
                         if "httpx" in ctor:
                             lname = "httpx.client." + method
@@ -432,32 +488,32 @@ class NetworkRule(SafetyRule):
                             lname = "requests.session." + method
 
             if lname not in _PY_NET_CALLS and not any(
-                lname.endswith("." + m.split(".")[-1]) and m.split(".")[0] in lname
-                for m in _PY_NET_CALLS
-            ):
+                    lname.endswith("." + m.split(".")[-1]) and m.split(".")[0] in lname for m in _PY_NET_CALLS):
                 # Accept any *.get/post under requests/httpx/aiohttp namespaces
                 if not _is_net_call(lname):
                     continue
 
             host = _extract_host_from_call(node)
             if host is None:
-                findings.append(self._finding(
-                    f"{name}(<dynamic>)",
-                    node.lineno,
-                    "Use a static, allow-listed URL. Dynamic targets require human review.",
-                    level=RiskLevel.MEDIUM,
-                    message=f"Network call {name}() with non-static target",
-                    extra={"host": "<dynamic>"},
-                ))
+                findings.append(
+                    self._finding(
+                        f"{name}(<dynamic>)",
+                        node.lineno,
+                        "Use a static, allow-listed URL. Dynamic targets require human review.",
+                        level=RiskLevel.MEDIUM,
+                        message=f"Network call {name}() with non-static target",
+                        extra={"host": "<dynamic>"},
+                    ))
                 continue
             if not policy.is_domain_allowed(host):
-                findings.append(self._finding(
-                    f"{name}(host={host!r})",
-                    node.lineno,
-                    f"Add {host!r} to whitelisted_domains or remove the call.",
-                    message=f"Network call {name}() to non-allow-listed host {host!r}",
-                    extra={"host": host},
-                ))
+                findings.append(
+                    self._finding(
+                        f"{name}(host={host!r})",
+                        node.lineno,
+                        f"Add {host!r} to whitelisted_domains or remove the call.",
+                        message=f"Network call {name}() to non-allow-listed host {host!r}",
+                        extra={"host": host},
+                    ))
         return findings
 
     def _check_bash(self, scan_input: ScanInput, policy: PolicyConfig) -> list[SafetyFinding]:
@@ -477,32 +533,35 @@ class NetworkRule(SafetyRule):
             if cmd_base not in _BASH_NET_COMMANDS:
                 # Also catch /dev/tcp redirections
                 if "/dev/tcp/" in line:
-                    findings.append(self._finding(
-                        line,
-                        lineno,
-                        "Avoid /dev/tcp redirections for network egress.",
-                        message="Bash /dev/tcp network egress",
-                    ))
+                    findings.append(
+                        self._finding(
+                            line,
+                            lineno,
+                            "Avoid /dev/tcp redirections for network egress.",
+                            message="Bash /dev/tcp network egress",
+                        ))
                 continue
             host = _extract_host_from_bash(line, cmd_base)
             if host is None:
-                findings.append(self._finding(
-                    line,
-                    lineno,
-                    "Use a static, allow-listed URL.",
-                    level=RiskLevel.MEDIUM,
-                    message=f"{cmd_base} with non-static target",
-                    extra={"host": "<dynamic>"},
-                ))
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        "Use a static, allow-listed URL.",
+                        level=RiskLevel.MEDIUM,
+                        message=f"{cmd_base} with non-static target",
+                        extra={"host": "<dynamic>"},
+                    ))
                 continue
             if not policy.is_domain_allowed(host):
-                findings.append(self._finding(
-                    line,
-                    lineno,
-                    f"Add {host!r} to whitelisted_domains or remove the call.",
-                    message=f"{cmd_base} to non-allow-listed host {host!r}",
-                    extra={"host": host},
-                ))
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        f"Add {host!r} to whitelisted_domains or remove the call.",
+                        message=f"{cmd_base} to non-allow-listed host {host!r}",
+                        extra={"host": host},
+                    ))
         return findings
 
 
@@ -602,12 +661,29 @@ def _extract_host_from_bash(line: str, cmd: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 _PY_PROCESS_CALLS = {
-    "os.system", "os.popen", "os.exec", "os.execv", "os.execve", "os.spawn",
-    "os.spawnl", "os.spawnle", "os.spawnlp", "os.spawnlpe", "os.spawnv",
-    "os.spawnve", "os.spawnvp", "os.spawnvpe",
-    "subprocess.popen", "subprocess.run", "subprocess.call", "subprocess.check_call",
-    "subprocess.check_output", "subprocess.getoutput", "subprocess.getstatusoutput",
-    "commands.getoutput", "commands.getstatusoutput",
+    "os.system",
+    "os.popen",
+    "os.exec",
+    "os.execv",
+    "os.execve",
+    "os.spawn",
+    "os.spawnl",
+    "os.spawnle",
+    "os.spawnlp",
+    "os.spawnlpe",
+    "os.spawnv",
+    "os.spawnve",
+    "os.spawnvp",
+    "os.spawnvpe",
+    "subprocess.popen",
+    "subprocess.run",
+    "subprocess.call",
+    "subprocess.check_call",
+    "subprocess.check_output",
+    "subprocess.getoutput",
+    "subprocess.getstatusoutput",
+    "commands.getoutput",
+    "commands.getstatusoutput",
 }
 
 _PRIVILEGE_CMDS = {"sudo", "su", "doas", "pkexec", "runuser"}
@@ -653,51 +729,62 @@ class ProcessRule(SafetyRule):
         for node, name in iter_python_calls(tree, aliases):
             lname = name.lower()
             if lname in _PY_PROCESS_CALLS or any(
-                lname.endswith("." + c.split(".")[-1]) and c.split(".")[0] in lname
-                for c in _PY_PROCESS_CALLS
-            ) or lname in {c.lower() for c in _PY_PROCESS_CALLS}:
+                    lname.endswith("." + c.split(".")[-1]) and c.split(".")[0] in lname
+                    for c in _PY_PROCESS_CALLS) or lname in {c.lower()
+                                                             for c in _PY_PROCESS_CALLS}:
                 shell_true = _has_shell_true(node)
-                findings.append(self._finding(
-                    f"{name}(...)",
-                    node.lineno,
-                    "Avoid spawning subprocesses; if unavoidable use shell=False and validate args.",
-                    level=RiskLevel.CRITICAL if shell_true else RiskLevel.HIGH,
-                    message=f"Process spawn via {name}()",
-                    extra={"shell_true": shell_true},
-                ))
+                findings.append(
+                    self._finding(
+                        f"{name}(...)",
+                        node.lineno,
+                        "Avoid spawning subprocesses; if unavoidable use shell=False and validate args.",
+                        level=RiskLevel.CRITICAL if shell_true else RiskLevel.HIGH,
+                        message=f"Process spawn via {name}()",
+                        extra={"shell_true": shell_true},
+                    ))
             # getattr(os, "system") pattern, including local aliases of getattr.
             if (lname in getattr_names or name in getattr_names) and node.args:
                 obj = resolve_name(node.args[0], aliases).lower() if node.args else ""
                 attr = get_string_literal(node.args[1]) if len(node.args) > 1 else None
                 if obj in {"os", "subprocess"} and attr in {
-                    "system", "popen", "exec", "execv", "run", "call", "Popen", "popen",
+                        "system",
+                        "popen",
+                        "exec",
+                        "execv",
+                        "run",
+                        "call",
+                        "Popen",
+                        "popen",
                 }:
-                    findings.append(self._finding(
-                        f"getattr({obj}, {attr!r})",
-                        node.lineno,
-                        "Dynamic process binding via getattr is not allowed.",
-                        level=RiskLevel.CRITICAL,
-                        message=f"Dynamic process spawn via getattr({obj}, {attr!r})",
-                    ))
+                    findings.append(
+                        self._finding(
+                            f"getattr({obj}, {attr!r})",
+                            node.lineno,
+                            "Dynamic process binding via getattr is not allowed.",
+                            level=RiskLevel.CRITICAL,
+                            message=f"Dynamic process spawn via getattr({obj}, {attr!r})",
+                        ))
             if lname in _INJECTION_BUILTINS or name in _INJECTION_BUILTINS:
-                findings.append(self._finding(
-                    f"{name}(...)",
-                    node.lineno,
-                    f"Remove {name}(); it allows arbitrary code execution.",
-                    level=RiskLevel.CRITICAL,
-                    message=f"Use of {name}() enables shell/code injection",
-                ))
+                findings.append(
+                    self._finding(
+                        f"{name}(...)",
+                        node.lineno,
+                        f"Remove {name}(); it allows arbitrary code execution.",
+                        level=RiskLevel.CRITICAL,
+                        message=f"Use of {name}() enables shell/code injection",
+                    ))
             # importlib.import_module("os") — flag dynamic import of process modules
             if lname in {"importlib.import_module", "importlib.__import__", "__import__"}:
                 mod = get_string_literal(node.args[0]) if node.args else None
                 if mod in {"os", "subprocess", "commands", "pty"}:
-                    findings.append(self._finding(
-                        f"{name}({mod!r})",
-                        node.lineno,
-                        "Do not dynamically import process-control modules.",
-                        level=RiskLevel.HIGH,
-                        message=f"Dynamic import of process module {mod!r}",
-                    ))
+                    findings.append(
+                        self._finding(
+                            f"{name}({mod!r})",
+                            node.lineno,
+                            "Do not dynamically import process-control modules.",
+                            level=RiskLevel.HIGH,
+                            message=f"Dynamic import of process module {mod!r}",
+                        ))
         return findings
 
     def _check_bash(self, scan_input: ScanInput, policy: PolicyConfig) -> list[SafetyFinding]:
@@ -714,67 +801,90 @@ class ProcessRule(SafetyRule):
                 if "=" in check_cmd and len(tokens) > 1:
                     check_cmd = tokens[1].split("/")[-1]
                 if check_cmd not in policy.allowed_commands and check_cmd not in {
-                    "if", "then", "fi", "for", "do", "done", "while", "case", "esac",
-                    "[", "[[", "]", "]]", "export", "set", "unset", ":", "true", "false",
+                        "if",
+                        "then",
+                        "fi",
+                        "for",
+                        "do",
+                        "done",
+                        "while",
+                        "case",
+                        "esac",
+                        "[",
+                        "[[",
+                        "]",
+                        "]]",
+                        "export",
+                        "set",
+                        "unset",
+                        ":",
+                        "true",
+                        "false",
                 }:
-                    findings.append(self._finding(
-                        line,
-                        lineno,
-                        f"Command {check_cmd!r} is not in allowed_commands.",
-                        level=RiskLevel.HIGH,
-                        message=f"Command not in allow-list: {check_cmd}",
-                    ))
+                    findings.append(
+                        self._finding(
+                            line,
+                            lineno,
+                            f"Command {check_cmd!r} is not in allowed_commands.",
+                            level=RiskLevel.HIGH,
+                            message=f"Command not in allow-list: {check_cmd}",
+                        ))
 
             if cmd in _PRIVILEGE_CMDS:
-                findings.append(self._finding(
-                    line,
-                    lineno,
-                    f"Remove {cmd}; tool scripts must not escalate privileges.",
-                    level=RiskLevel.CRITICAL,
-                    message=f"Privilege escalation via {cmd}",
-                ))
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        f"Remove {cmd}; tool scripts must not escalate privileges.",
+                        level=RiskLevel.CRITICAL,
+                        message=f"Privilege escalation via {cmd}",
+                    ))
             if line.rstrip().endswith("&") and not line.rstrip().endswith("&&"):
-                findings.append(self._finding(
-                    line,
-                    lineno,
-                    "Avoid backgrounding processes in tool scripts.",
-                    level=RiskLevel.MEDIUM,
-                    message="Background process spawn",
-                ))
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        "Avoid backgrounding processes in tool scripts.",
+                        level=RiskLevel.MEDIUM,
+                        message="Background process spawn",
+                    ))
             if line.count("|") >= 3:
-                findings.append(self._finding(
-                    line,
-                    lineno,
-                    "Review long pipelines for resource abuse.",
-                    level=RiskLevel.LOW,
-                    message=f"Complex shell pipeline ({line.count('|')} stages)",
-                ))
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        "Review long pipelines for resource abuse.",
+                        level=RiskLevel.LOW,
+                        message=f"Complex shell pipeline ({line.count('|')} stages)",
+                    ))
             if re.search(r"\$\([^)]*\$\{?[A-Za-z_][A-Za-z0-9_]*\}?[^)]*\)", line):
-                findings.append(self._finding(
-                    line,
-                    lineno,
-                    "Avoid nesting $() with variable expansion; sanitize inputs.",
-                    level=RiskLevel.HIGH,
-                    message="Nested command substitution with variable expansion (injection risk)",
-                ))
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        "Avoid nesting $() with variable expansion; sanitize inputs.",
+                        level=RiskLevel.HIGH,
+                        message="Nested command substitution with variable expansion (injection risk)",
+                    ))
             if re.search(r"\beval\b", line):
-                findings.append(self._finding(
-                    line,
-                    lineno,
-                    "Remove eval; it enables shell injection.",
-                    level=RiskLevel.CRITICAL,
-                    message="Use of eval in bash",
-                ))
-            if _DECODE_EXEC_BASH.search(line) or re.search(
-                r"\|\s*(sh|bash|zsh)\b", line
-            ) and re.search(r"base64|xxd|openssl", line, re.IGNORECASE):
-                findings.append(self._finding(
-                    line,
-                    lineno,
-                    "Decode-and-execute pipelines are not allowed.",
-                    level=RiskLevel.CRITICAL,
-                    message="Decode-to-shell pipeline (base64/xxd | sh)",
-                ))
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        "Remove eval; it enables shell injection.",
+                        level=RiskLevel.CRITICAL,
+                        message="Use of eval in bash",
+                    ))
+            if _DECODE_EXEC_BASH.search(line) or re.search(r"\|\s*(sh|bash|zsh)\b", line) and re.search(
+                    r"base64|xxd|openssl", line, re.IGNORECASE):
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        "Decode-and-execute pipelines are not allowed.",
+                        level=RiskLevel.CRITICAL,
+                        message="Decode-to-shell pipeline (base64/xxd | sh)",
+                    ))
         return findings
 
 
@@ -839,23 +949,25 @@ class DependencyInstallRule(SafetyRule):
         for node, name in iter_python_calls(tree, aliases):
             lname = name.lower()
             if lname == "pip.main":
-                findings.append(self._finding(
-                    f"{name}(...)",
-                    node.lineno,
-                    "Do not install packages at runtime; declare dependencies up front.",
-                    message="Programmatic pip install via pip.main()",
-                ))
+                findings.append(
+                    self._finding(
+                        f"{name}(...)",
+                        node.lineno,
+                        "Do not install packages at runtime; declare dependencies up front.",
+                        message="Programmatic pip install via pip.main()",
+                    ))
             # subprocess.run(["pip", "install", ...])
             if lname in _PY_PROCESS_CALLS or "subprocess" in lname:
                 args_text = _subprocess_args_text(node)
                 for pat in _INSTALL_REGEXES:
                     if pat.search(args_text):
-                        findings.append(self._finding(
-                            args_text,
-                            node.lineno,
-                            "Pin dependencies in a lockfile instead of installing at runtime.",
-                            message=f"Dependency install via {name}: {evidence_snippet(args_text)}",
-                        ))
+                        findings.append(
+                            self._finding(
+                                args_text,
+                                node.lineno,
+                                "Pin dependencies in a lockfile instead of installing at runtime.",
+                                message=f"Dependency install via {name}: {evidence_snippet(args_text)}",
+                            ))
                         break
         return findings
 
@@ -864,12 +976,13 @@ class DependencyInstallRule(SafetyRule):
         for lineno, line in bash_lines(scan_input.script):
             for pat in _INSTALL_REGEXES:
                 if pat.search(line):
-                    findings.append(self._finding(
-                        line,
-                        lineno,
-                        "Pin dependencies in a lockfile instead of installing at runtime.",
-                        message=f"Dependency install: {evidence_snippet(line)}",
-                    ))
+                    findings.append(
+                        self._finding(
+                            line,
+                            lineno,
+                            "Pin dependencies in a lockfile instead of installing at runtime.",
+                            message=f"Dependency install: {evidence_snippet(line)}",
+                        ))
                     break
         if normalize_language(scan_input) == "python":
             tree = parse_python_ast(scan_input.script)
@@ -878,12 +991,13 @@ class DependencyInstallRule(SafetyRule):
                     if isinstance(node, ast.Constant) and isinstance(node.value, str):
                         for pat in _INSTALL_REGEXES:
                             if pat.search(node.value):
-                                findings.append(self._finding(
-                                    node.value,
-                                    getattr(node, "lineno", None),
-                                    "Do not embed install commands in string literals.",
-                                    message="Embedded dependency install in string literal",
-                                ))
+                                findings.append(
+                                    self._finding(
+                                        node.value,
+                                        getattr(node, "lineno", None),
+                                        "Do not embed install commands in string literals.",
+                                        message="Embedded dependency install in string literal",
+                                    ))
                                 break
         return findings
 
@@ -945,13 +1059,14 @@ class ResourceAbuseRule(SafetyRule):
         for node in ast.walk(tree):
             if isinstance(node, ast.While):
                 if _is_truthy_constant(node.test) and not _has_direct_break(node):
-                    findings.append(self._finding(
-                        f"while {ast.unparse(node.test)}: ...",
-                        node.lineno,
-                        "Add a termination condition or bounded iteration.",
-                        level=RiskLevel.HIGH,
-                        message="Infinite while loop with no break",
-                    ))
+                    findings.append(
+                        self._finding(
+                            f"while {ast.unparse(node.test)}: ...",
+                            node.lineno,
+                            "Add a termination condition or bounded iteration.",
+                            level=RiskLevel.HIGH,
+                            message="Infinite while loop with no break",
+                        ))
             if isinstance(node, ast.Call):
                 fname = resolve_name(node.func, aliases)
                 fl = fname.lower()
@@ -959,74 +1074,80 @@ class ResourceAbuseRule(SafetyRule):
                     arg = node.args[0] if node.args else None
                     secs = _const_int(arg)
                     if secs is not None and secs >= policy.max_timeout_seconds:
-                        findings.append(self._finding(
-                            f"sleep({secs})",
-                            node.lineno,
-                            f"Keep sleeps below {policy.max_timeout_seconds}s.",
-                            level=RiskLevel.MEDIUM,
-                            message=f"Long sleep({secs}s) exceeds timeout budget",
-                        ))
+                        findings.append(
+                            self._finding(
+                                f"sleep({secs})",
+                                node.lineno,
+                                f"Keep sleeps below {policy.max_timeout_seconds}s.",
+                                level=RiskLevel.MEDIUM,
+                                message=f"Long sleep({secs}s) exceeds timeout budget",
+                            ))
                     elif secs is None and arg is not None:
-                        findings.append(self._finding(
-                            "sleep(<dynamic>)",
-                            node.lineno,
-                            "Use a bounded constant sleep duration.",
-                            level=RiskLevel.LOW,
-                            message="sleep() with non-constant duration",
-                        ))
+                        findings.append(
+                            self._finding(
+                                "sleep(<dynamic>)",
+                                node.lineno,
+                                "Use a bounded constant sleep duration.",
+                                level=RiskLevel.LOW,
+                                message="sleep() with non-constant duration",
+                            ))
                 if fl in _HIGH_CONCURRENCY or any(c in fl for c in _HIGH_CONCURRENCY):
-                    findings.append(self._finding(
-                        f"{fname}(...)",
-                        node.lineno,
-                        "Bound max_workers; unbounded pools can exhaust resources.",
-                        level=RiskLevel.MEDIUM,
-                        message=f"High-concurrency primitive {fname}()",
-                    ))
+                    findings.append(
+                        self._finding(
+                            f"{fname}(...)",
+                            node.lineno,
+                            "Bound max_workers; unbounded pools can exhaust resources.",
+                            level=RiskLevel.MEDIUM,
+                            message=f"High-concurrency primitive {fname}()",
+                        ))
         return findings
 
     def _check_bash(self, scan_input: ScanInput, policy: PolicyConfig) -> list[SafetyFinding]:
         findings: list[SafetyFinding] = []
         for lineno, line in bash_lines(scan_input.script):
             if _FORK_BOMB.search(line):
-                findings.append(self._finding(
-                    line,
-                    lineno,
-                    "Remove fork bomb patterns entirely.",
-                    level=RiskLevel.CRITICAL,
-                    message="Fork bomb detected",
-                ))
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        "Remove fork bomb patterns entirely.",
+                        level=RiskLevel.CRITICAL,
+                        message="Fork bomb detected",
+                    ))
             m = _LONG_SLEEP_BASH.search(line)
             if m and int(m.group(1)) >= policy.max_timeout_seconds:
-                findings.append(self._finding(
-                    line,
-                    lineno,
-                    f"Keep sleeps below {policy.max_timeout_seconds}s.",
-                    level=RiskLevel.MEDIUM,
-                    message=f"Long sleep {m.group(1)}s exceeds timeout budget",
-                ))
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        f"Keep sleeps below {policy.max_timeout_seconds}s.",
+                        level=RiskLevel.MEDIUM,
+                        message=f"Long sleep {m.group(1)}s exceeds timeout budget",
+                    ))
             if _DD_WRITE.search(line):
-                findings.append(self._finding(
-                    line,
-                    lineno,
-                    "Avoid dd in tool scripts; use bounded file operations.",
-                    level=RiskLevel.HIGH,
-                    message="dd can write large amounts of data",
-                ))
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        "Avoid dd in tool scripts; use bounded file operations.",
+                        level=RiskLevel.HIGH,
+                        message="dd can write large amounts of data",
+                    ))
             if _BIG_WRITE.search(line) and ">" in line:
-                findings.append(self._finding(
-                    line,
-                    lineno,
-                    "Cap output size; unbounded writes can fill disk.",
-                    level=RiskLevel.MEDIUM,
-                    message="Unbounded large write via shell",
-                ))
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        "Cap output size; unbounded writes can fill disk.",
+                        level=RiskLevel.MEDIUM,
+                        message="Unbounded large write via shell",
+                    ))
         return findings
 
 
 def _is_truthy_constant(node: ast.AST) -> bool:
-    return (
-        isinstance(node, ast.Constant) and bool(node.value)
-    ) or (isinstance(node, ast.Name) and node.id in {"True", "__debug__"})
+    return (isinstance(node, ast.Constant) and bool(node.value)) or (isinstance(node, ast.Name)
+                                                                     and node.id in {"True", "__debug__"})
 
 
 def _has_direct_break(loop_node: ast.AST) -> bool:
@@ -1077,10 +1198,8 @@ _DEFAULT_SECRET_PATTERNS = [
     re.compile(r"sk-[A-Za-z0-9]{20,}"),
     re.compile(r"AKIA[0-9A-Z]{16}"),
     re.compile(r"(?i)aws(.{0,20})?(secret|sk)[^\n]{0,20}[A-Za-z0-9/+=]{40}"),
-    re.compile(
-        r"(?i)(api[_-]?key|access[_-]?token|auth[_-]?token|secret[_-]?key)"
-        r"\s*[=:]\s*['\"][A-Za-z0-9_\-]{16,}['\"]"
-    ),
+    re.compile(r"(?i)(api[_-]?key|access[_-]?token|auth[_-]?token|secret[_-]?key)"
+               r"\s*[=:]\s*['\"][A-Za-z0-9_\-]{16,}['\"]"),
     re.compile(r"(?i)bearer\s+[A-Za-z0-9_\-\.]{20,}"),
     re.compile(r"xox[baprs]-[A-Za-z0-9-]{10,}"),
     re.compile(r"gh[ps]_[A-Za-z0-9]{36}"),
@@ -1089,22 +1208,42 @@ _DEFAULT_SECRET_PATTERNS = [
 ]
 
 _SECRET_NAME_HINTS = {
-    "api_key", "apikey", "token", "password", "passwd", "secret",
-    "access_key", "private_key", "client_secret", "openai_api_key",
-    "auth_token", "access_token", "secret_key",
+    "api_key",
+    "apikey",
+    "token",
+    "password",
+    "passwd",
+    "secret",
+    "access_key",
+    "private_key",
+    "client_secret",
+    "openai_api_key",
+    "auth_token",
+    "access_token",
+    "secret_key",
 }
 
 _LEAK_SINKS_PY = {
-    "print", "logging.info", "logging.debug", "logging.warning",
-    "logging.error", "logging.critical", "logger.info", "logger.debug",
-    "logger.warning", "logger.error", "logger.critical", "open",
-    "requests.post", "requests.put", "requests.get", "httpx.post",
+    "print",
+    "logging.info",
+    "logging.debug",
+    "logging.warning",
+    "logging.error",
+    "logging.critical",
+    "logger.info",
+    "logger.debug",
+    "logger.warning",
+    "logger.error",
+    "logger.critical",
+    "open",
+    "requests.post",
+    "requests.put",
+    "requests.get",
+    "httpx.post",
 }
 
-_ENV_SECRET_KEYS = re.compile(
-    r"(?i)(API[_-]?KEY|TOKEN|SECRET|PASSWORD|PASSWD|PRIVATE[_-]?KEY|ACCESS[_-]?KEY|"
-    r"OPENAI|ANTHROPIC|AWS_SECRET|GITHUB_TOKEN|GH_TOKEN)"
-)
+_ENV_SECRET_KEYS = re.compile(r"(?i)(API[_-]?KEY|TOKEN|SECRET|PASSWORD|PASSWD|PRIVATE[_-]?KEY|ACCESS[_-]?KEY|"
+                              r"OPENAI|ANTHROPIC|AWS_SECRET|GITHUB_TOKEN|GH_TOKEN)")
 
 
 class SecretLeakRule(SafetyRule):
@@ -1145,12 +1284,13 @@ class SecretLeakRule(SafetyRule):
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 for pat in patterns:
                     if pat.search(node.value):
-                        findings.append(self._finding(
-                            redact(node.value),
-                            getattr(node, "lineno", None),
-                            "Move secrets to env vars / secret manager; never hardcode.",
-                            message="Hardcoded secret in string literal",
-                        ))
+                        findings.append(
+                            self._finding(
+                                redact(node.value),
+                                getattr(node, "lineno", None),
+                                "Move secrets to env vars / secret manager; never hardcode.",
+                                message="Hardcoded secret in string literal",
+                            ))
                         break
 
         for node, name in iter_python_calls(tree, aliases):
@@ -1159,57 +1299,63 @@ class SecretLeakRule(SafetyRule):
             if lname in {"os.getenv", "os.environ.get"} or lname.endswith(".getenv"):
                 key = get_string_literal(node.args[0]) if node.args else None
                 if key and _ENV_SECRET_KEYS.search(key):
-                    findings.append(self._finding(
-                        f"{name}({key!r})",
-                        node.lineno,
-                        "Do not read secret env vars for logging or exfiltration.",
-                        message=f"Secret environment variable access {key!r}",
-                        level=RiskLevel.HIGH,
-                    ))
+                    findings.append(
+                        self._finding(
+                            f"{name}({key!r})",
+                            node.lineno,
+                            "Do not read secret env vars for logging or exfiltration.",
+                            message=f"Secret environment variable access {key!r}",
+                            level=RiskLevel.HIGH,
+                        ))
 
+            # Only inspect arguments of known leak sinks / network calls.
+            # Non-sink helpers like validate(token) must not be auto-denied.
             if lname not in {s.lower() for s in _LEAK_SINKS_PY} and not _is_net_call(lname):
-                # still check print of subscript os.environ[...]
-                pass
+                continue
             for arg in node.args:
                 if isinstance(arg, ast.Name) and _looks_like_secret_name(arg.id):
-                    findings.append(self._finding(
-                        f"{name}(..., {arg.id}, ...)",
-                        node.lineno,
-                        f"Do not log or write {arg.id}; redact before output.",
-                        message=f"Secret-like variable {arg.id!r} passed to {name}()",
-                    ))
+                    findings.append(
+                        self._finding(
+                            f"{name}(..., {arg.id}, ...)",
+                            node.lineno,
+                            f"Do not log or write {arg.id}; redact before output.",
+                            message=f"Secret-like variable {arg.id!r} passed to {name}()",
+                        ))
                 elif isinstance(arg, ast.Constant) and isinstance(arg.value, str):
                     for pat in patterns:
                         if pat.search(arg.value):
-                            findings.append(self._finding(
-                                f"{name}({redact(arg.value)})",
-                                node.lineno,
-                                "Do not pass secrets to logging/file functions.",
-                                message=f"Secret literal passed to {name}()",
-                            ))
+                            findings.append(
+                                self._finding(
+                                    f"{name}({redact(arg.value)})",
+                                    node.lineno,
+                                    "Do not pass secrets to logging/file functions.",
+                                    message=f"Secret literal passed to {name}()",
+                                ))
                             break
                 elif isinstance(arg, ast.Subscript):
                     # os.environ["OPENAI_API_KEY"]
                     if _is_environ_subscript(arg, aliases):
-                        findings.append(self._finding(
-                            f"{name}(os.environ[...])",
-                            node.lineno,
-                            "Do not print or transmit secret environment variables.",
-                            message=f"Environment secret passed to {name}()",
-                        ))
+                        findings.append(
+                            self._finding(
+                                f"{name}(os.environ[...])",
+                                node.lineno,
+                                "Do not print or transmit secret environment variables.",
+                                message=f"Environment secret passed to {name}()",
+                            ))
         # Direct print(os.environ["X"])
         for node in ast.walk(tree):
             if isinstance(node, ast.Subscript) and _is_environ_subscript(node, aliases):
                 key = get_string_literal(node.slice) if hasattr(node, "slice") else None
                 if key is None or _ENV_SECRET_KEYS.search(str(key) if key else "SECRET"):
                     # Flag any environ subscript used as expression; severity HIGH
-                    findings.append(self._finding(
-                        "os.environ[...]",
-                        getattr(node, "lineno", None),
-                        "Avoid reading secret environment keys in tool scripts.",
-                        message="Direct access to environment secret key",
-                        level=RiskLevel.HIGH,
-                    ))
+                    findings.append(
+                        self._finding(
+                            "os.environ[...]",
+                            getattr(node, "lineno", None),
+                            "Avoid reading secret environment keys in tool scripts.",
+                            message="Direct access to environment secret key",
+                            level=RiskLevel.HIGH,
+                        ))
         return findings
 
     def _check_bash(self, scan_input: ScanInput, policy: PolicyConfig) -> list[SafetyFinding]:
@@ -1220,30 +1366,33 @@ class SecretLeakRule(SafetyRule):
             if assign_match and _looks_like_secret_name(assign_match.group(1)):
                 val = assign_match.group(2).strip("'\"")
                 if len(val) >= 12:
-                    findings.append(self._finding(
-                        f"{assign_match.group(1)}={redact(val)}",
-                        lineno,
-                        "Load secrets from env, not inline assignment.",
-                        message=f"Secret assigned to {assign_match.group(1)!r}",
-                    ))
+                    findings.append(
+                        self._finding(
+                            f"{assign_match.group(1)}={redact(val)}",
+                            lineno,
+                            "Load secrets from env, not inline assignment.",
+                            message=f"Secret assigned to {assign_match.group(1)!r}",
+                        ))
             for pat in patterns:
                 if pat.search(line):
-                    findings.append(self._finding(
-                        redact(line),
-                        lineno,
-                        "Remove hardcoded secrets from scripts.",
-                        message="Secret pattern in command",
-                    ))
+                    findings.append(
+                        self._finding(
+                            redact(line),
+                            lineno,
+                            "Remove hardcoded secrets from scripts.",
+                            message="Secret pattern in command",
+                        ))
                     break
             # curl --data @.env / -d @$HOME/.env
             if re.search(r"(curl|wget).*(--data|-d|--upload-file|-T)\s*@?", line, re.I):
                 if re.search(r"\.env|id_rsa|credentials|token|secret", line, re.I):
-                    findings.append(self._finding(
-                        line,
-                        lineno,
-                        "Do not upload credential files over the network.",
-                        message="Possible credential exfiltration via curl/wget",
-                    ))
+                    findings.append(
+                        self._finding(
+                            line,
+                            lineno,
+                            "Do not upload credential files over the network.",
+                            message="Possible credential exfiltration via curl/wget",
+                        ))
         return findings
 
 
@@ -1268,7 +1417,6 @@ def redact(text: str, keep: int = 4) -> str:
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
-
 
 # ---------------------------------------------------------------------------
 # R007 Dynamic code execution
@@ -1295,59 +1443,65 @@ class CodeExecutionRule(SafetyRule):
             for node, name in iter_python_calls(tree, aliases):
                 lname = name.lower()
                 if lname in {"eval", "exec", "compile", "builtins.eval", "builtins.exec", "builtins.compile"}:
-                    findings.append(self._finding(
-                        f"{name}(...)",
-                        node.lineno,
-                        f"Remove {name}(); it allows arbitrary code execution.",
-                        level=RiskLevel.CRITICAL,
-                        message=f"Dynamic code execution via {name}()",
-                    ))
+                    findings.append(
+                        self._finding(
+                            f"{name}(...)",
+                            node.lineno,
+                            f"Remove {name}(); it allows arbitrary code execution.",
+                            level=RiskLevel.CRITICAL,
+                            message=f"Dynamic code execution via {name}()",
+                        ))
                 if lname in {"__import__", "importlib.import_module"}:
                     mod = get_string_literal(node.args[0]) if node.args else None
                     if mod in {"os", "subprocess", "pty", "ctypes"}:
-                        findings.append(self._finding(
-                            f"{name}({mod!r})",
-                            node.lineno,
-                            "Do not dynamically import process-control modules.",
-                            level=RiskLevel.HIGH,
-                            message=f"Dynamic import of process module {mod!r}",
-                        ))
+                        findings.append(
+                            self._finding(
+                                f"{name}({mod!r})",
+                                node.lineno,
+                                "Do not dynamically import process-control modules.",
+                                level=RiskLevel.HIGH,
+                                message=f"Dynamic import of process module {mod!r}",
+                            ))
         for lineno, line in bash_lines(scan_input.script):
             if re.search(r"\beval\b", line):
-                findings.append(self._finding(
-                    line,
-                    lineno,
-                    "Remove eval; it enables shell injection.",
-                    level=RiskLevel.CRITICAL,
-                    message="Use of eval in bash",
-                ))
-            if re.search(r"base64\s+(-d|--decode).*\|\s*(sh|bash|zsh|python)", line, re.I) or (
-                re.search(r"\|\s*(sh|bash|zsh)\b", line) and re.search(r"base64|xxd|openssl", line, re.I)
-            ):
-                findings.append(self._finding(
-                    line,
-                    lineno,
-                    "Decode-and-execute pipelines are not allowed.",
-                    level=RiskLevel.CRITICAL,
-                    message="Decode-to-shell pipeline (base64/xxd | sh)",
-                ))
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        "Remove eval; it enables shell injection.",
+                        level=RiskLevel.CRITICAL,
+                        message="Use of eval in bash",
+                    ))
+            if re.search(r"base64\s+(-d|--decode).*\|\s*(sh|bash|zsh|python)", line,
+                         re.I) or (re.search(r"\|\s*(sh|bash|zsh)\b", line)
+                                   and re.search(r"base64|xxd|openssl", line, re.I)):
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        "Decode-and-execute pipelines are not allowed.",
+                        level=RiskLevel.CRITICAL,
+                        message="Decode-to-shell pipeline (base64/xxd | sh)",
+                    ))
             # find -delete / xargs rm
             if re.search(r"\bfind\b.*(-delete|-exec\s+rm\b)", line, re.I):
-                findings.append(self._finding(
-                    line,
-                    lineno,
-                    "Avoid find -delete / -exec rm in tool scripts.",
-                    level=RiskLevel.HIGH,
-                    message="find-based mass delete",
-                ))
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        "Avoid find -delete / -exec rm in tool scripts.",
+                        level=RiskLevel.HIGH,
+                        message="find-based mass delete",
+                    ))
             if re.search(r"\bxargs\b.*\brm\b", line, re.I):
-                findings.append(self._finding(
-                    line,
-                    lineno,
-                    "Avoid xargs rm pipelines.",
-                    level=RiskLevel.HIGH,
-                    message="xargs rm mass delete",
-                ))
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        "Avoid xargs rm pipelines.",
+                        level=RiskLevel.HIGH,
+                        message="xargs rm mass delete",
+                    ))
         return findings
 
 

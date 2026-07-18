@@ -111,18 +111,13 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             from trpc_agent_sdk.safety import ScanInput
 
             code = input_data.code or "\n".join(b.code for b in (input_data.code_blocks or []))
-            report = self._safety_scanner.scan(
-                ScanInput(script=code, language="python", tool_name="code_executor")
-            )
-            should_block = report.decision == Decision.DENY or (
-                report.decision == Decision.NEEDS_HUMAN_REVIEW and getattr(self, "_safety_block_on_review", False)
-            )
+            report = self._safety_scanner.scan(ScanInput(script=code, language="python", tool_name="code_executor"))
+            should_block = report.decision == Decision.DENY or (report.decision == Decision.NEEDS_HUMAN_REVIEW
+                                                                and getattr(self, "_safety_block_on_review", False))
             if self._safety_audit is not None:
                 self._safety_audit.log(report, intercepted=should_block)
             if should_block:
-                return create_code_execution_result(
-                    stderr=f"TOOL_SAFETY_DENY: {report.rule_ids}"
-                )
+                return create_code_execution_result(stderr=f"TOOL_SAFETY_DENY: {report.rule_ids}")
 
         output_parts = []
         error_parts = []

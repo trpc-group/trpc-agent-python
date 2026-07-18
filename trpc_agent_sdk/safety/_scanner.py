@@ -123,6 +123,10 @@ class SafetyScanner:
 
         for f in findings:
             f.evidence = _redact_evidence(f.evidence)
+            # metadata.message may embed original script lines; redact too so
+            # SafetyReport.to_dict() / report JSON never leaks secrets.
+            if isinstance(f.metadata, dict) and "message" in f.metadata:
+                f.metadata["message"] = _redact_evidence(str(f.metadata["message"]))
 
         elapsed_ms = (time.perf_counter() - start) * 1000
         agg_level = max_risk_level([f.risk_level for f in findings])
@@ -163,16 +167,20 @@ class SafetyScanner:
             try:
                 findings.extend(rule.check(scan_input, self.policy))
             except Exception as ex:  # pylint: disable=broad-except
-                findings.append(SafetyFinding(
-                    rule_id="SCANNER_ERROR",
-                    rule_name="Scanner Rule Error",
-                    risk_type="scanner",
-                    risk_level=RiskLevel.LOW,
-                    evidence=f"{rule.rule_id} raised {type(ex).__name__}: {ex}",
-                    line=None,
-                    recommendation="Fix the rule implementation.",
-                    metadata={"rule_id": rule.rule_id, "error": str(ex)},
-                ))
+                findings.append(
+                    SafetyFinding(
+                        rule_id="SCANNER_ERROR",
+                        rule_name="Scanner Rule Error",
+                        risk_type="scanner",
+                        risk_level=RiskLevel.LOW,
+                        evidence=f"{rule.rule_id} raised {type(ex).__name__}: {ex}",
+                        line=None,
+                        recommendation="Fix the rule implementation.",
+                        metadata={
+                            "rule_id": rule.rule_id,
+                            "error": str(ex)
+                        },
+                    ))
         return findings
 
 

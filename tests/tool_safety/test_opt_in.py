@@ -69,14 +69,16 @@ def test_register_rule_decorator():
         default_level = RiskLevel.LOW
 
         def check(self, scan_input, policy):
-            return [SafetyFinding(
-                rule_id=self.rule_id,
-                rule_name=self.rule_name,
-                risk_type=self.risk_type,
-                risk_level=self.default_level,
-                evidence="deco",
-                recommendation="test",
-            )]
+            return [
+                SafetyFinding(
+                    rule_id=self.rule_id,
+                    rule_name=self.rule_name,
+                    risk_type=self.risk_type,
+                    risk_level=self.default_level,
+                    evidence="deco",
+                    recommendation="test",
+                )
+            ]
 
     try:
         scanner = SafetyScanner(PolicyConfig())
@@ -87,9 +89,7 @@ def test_register_rule_decorator():
 
 
 def test_r007_code_execution_eval():
-    report = SafetyScanner(PolicyConfig()).scan(
-        ScanInput(script="eval('1+1')", language="python")
-    )
+    report = SafetyScanner(PolicyConfig()).scan(ScanInput(script="eval('1+1')", language="python"))
     assert report.decision.value == "deny"
     assert "R007_code_execution" in report.rule_ids or "R003_process_system" in report.rule_ids
 
@@ -111,9 +111,8 @@ def test_dev_tcp_and_fork_bomb():
 
 
 def test_safe_bash_samples_allow(samples_dir):
-    s = SafetyScanner(PolicyConfig.from_yaml(
-        Path(__file__).resolve().parents[2] / "examples/tool_safety/tool_safety_policy.yaml"
-    ))
+    s = SafetyScanner(
+        PolicyConfig.from_yaml(Path(__file__).resolve().parents[2] / "examples/tool_safety/tool_safety_policy.yaml"))
     for name in ("30_safe_bash.sh", "31_safe_find_grep.sh", "01_safe_python.py"):
         script = (samples_dir / name).read_text(encoding="utf-8")
         lang = "python" if name.endswith(".py") else "bash"
@@ -142,8 +141,7 @@ def test_bash_tool_enable_safety_guard_signature():
 def test_unsafe_local_code_executor_safety_fields():
     try:
         from trpc_agent_sdk.code_executors.local._unsafe_local_code_executor import (
-            UnsafeLocalCodeExecutor,
-        )
+            UnsafeLocalCodeExecutor, )
         from trpc_agent_sdk.code_executors import CodeExecutionInput
     except Exception as ex:  # pylint: disable=broad-except
         pytest.skip(f"code executor not importable: {ex}")

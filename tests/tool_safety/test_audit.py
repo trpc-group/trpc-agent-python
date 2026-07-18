@@ -30,8 +30,7 @@ def test_audit_writes_jsonl(tmp_path: Path):
     lines = (tmp_path / "audit.jsonl").read_text(encoding="utf-8").strip().splitlines()
     assert lines
     parsed = json.loads(lines[-1])
-    for field in ("tool_name", "decision", "risk_level", "rule_ids",
-                  "scan_duration_ms", "sanitized", "intercepted"):
+    for field in ("tool_name", "decision", "risk_level", "rule_ids", "scan_duration_ms", "sanitized", "intercepted"):
         assert field in parsed
 
 
@@ -40,8 +39,7 @@ def test_audit_required_fields(tmp_path: Path):
     scanner = SafetyScanner(PolicyConfig())
     report = scanner.scan(ScanInput(script="import os\nos.system('x')", language="python"))
     rec = audit.log(report)
-    for key in ("tool_name", "decision", "risk_level", "rule_ids",
-                "scan_duration_ms", "sanitized", "intercepted"):
+    for key in ("tool_name", "decision", "risk_level", "rule_ids", "scan_duration_ms", "sanitized", "intercepted"):
         assert key in rec, key
 
 
@@ -64,8 +62,7 @@ def test_telemetry_sets_span_attributes_when_recording():
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
-            InMemorySpanExporter,
-        )
+            InMemorySpanExporter, )
     except ImportError:
         import pytest
         pytest.skip("opentelemetry-sdk not installed")

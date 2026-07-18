@@ -105,10 +105,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         if report.decision.value == "needs_human_review":
             review += 1
         if args.verbose or report.decision.value != "allow":
-            print(
-                f"[{report.decision.value.upper():>20}] {target.name} "
-                f"(risk={report.risk_level.value}, rules={report.rule_ids})"
-            )
+            print(f"[{report.decision.value.upper():>20}] {target.name} "
+                  f"(risk={report.risk_level.value}, rules={report.rule_ids})")
             for f in report.findings:
                 print(f"    - {f.rule_id} L{f.line}: {f.evidence}")
 
@@ -124,10 +122,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     allowed = sum(1 for r in all_reports if r["decision"] == "allow")
     denied = sum(1 for r in all_reports if r["decision"] == "deny")
     review_count = sum(1 for r in all_reports if r["decision"] == "needs_human_review")
-    print(
-        f"\nSummary: {len(all_reports)} scanned | "
-        f"{allowed} allow | {denied} deny | {review_count} needs_review"
-    )
+    print(f"\nSummary: {len(all_reports)} scanned | "
+          f"{allowed} allow | {denied} deny | {review_count} needs_review")
 
     if args.manifest:
         _check_manifest(Path(args.manifest), all_reports)

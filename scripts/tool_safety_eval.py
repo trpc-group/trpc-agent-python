@@ -92,11 +92,9 @@ def main(argv=None) -> int:
     det = (dangerous_hit / dangerous_total) if dangerous_total else 1.0
     fpr = (safe_fp / safe_total) if safe_total else 0.0
     avg_ms = sum(durations) / len(durations) if durations else 0.0
-    print(
-        f"detection_rate={det:.1%} ({dangerous_hit}/{dangerous_total})  "
-        f"false_positive_rate={fpr:.1%} ({safe_fp}/{safe_total})  "
-        f"avg_scan_ms={avg_ms:.3f}"
-    )
+    print(f"detection_rate={det:.1%} ({dangerous_hit}/{dangerous_total})  "
+          f"false_positive_rate={fpr:.1%} ({safe_fp}/{safe_total})  "
+          f"avg_scan_ms={avg_ms:.3f}")
     if det < 0.9 or fpr > 0.1:
         return 1
     return 0

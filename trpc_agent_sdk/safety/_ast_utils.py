@@ -82,8 +82,7 @@ def resolve_name(node: ast.AST, aliases: dict[str, str]) -> str:
     return raw
 
 
-def iter_python_calls(tree: ast.AST, aliases: dict[str, str] | None = None
-                      ) -> Iterable[tuple[ast.Call, str]]:
+def iter_python_calls(tree: ast.AST, aliases: dict[str, str] | None = None) -> Iterable[tuple[ast.Call, str]]:
     """Yield (call_node, resolved_dotted_name) for every Call in *tree*."""
     aliases = aliases if aliases is not None else build_import_aliases(tree)
     for node in ast.walk(tree):
@@ -116,7 +115,7 @@ def collect_string_parts(node: ast.AST) -> list[str]:
         for v in node.values:
             if isinstance(v, ast.Constant) and isinstance(v.value, str):
                 parts.append(v.value)
-    elif isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add,)):
+    elif isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, )):
         parts.extend(collect_string_parts(node.left))
         parts.extend(collect_string_parts(node.right))
     elif isinstance(node, ast.Call):
@@ -166,23 +165,54 @@ def evidence_snippet(text: str, max_len: int = 120) -> str:
 
 
 def extract_inline_payloads(script: str) -> list[tuple[str, str]]:
-    """Extract (language, payload) pairs from python/bash -c style invocations."""
+    """Extract (language, payload) pairs from python/bash -c style invocations.
+
+    Handles escaped quotes inside double/single-quoted payloads, e.g.::
+
+        python -c "import os; os.system(\\"rm -rf /\\")"
+    """
     payloads: list[tuple[str, str]] = []
-    # python[3] -c '...'  /  python -c "..."
-    for m in re.finditer(
-        r"""\bpython3?\s+-c\s+(['"])(.*?)\1""",
-        script,
-        flags=re.IGNORECASE | re.DOTALL,
-    ):
-        payloads.append(("python", m.group(2)))
-    # bash/sh -c '...'
-    for m in re.finditer(
-        r"""\b(?:bash|sh|zsh)\s+-c\s+(['"])(.*?)\1""",
-        script,
-        flags=re.IGNORECASE | re.DOTALL,
-    ):
-        payloads.append(("bash", m.group(2)))
+    patterns = (
+        (r"\bpython3?\s+-c\s+", "python"),
+        (r"\b(?:bash|sh|zsh)\s+-c\s+", "bash"),
+    )
+    for prefix_re, lang in patterns:
+        for m in re.finditer(prefix_re, script, flags=re.IGNORECASE):
+            payload = _read_quoted_or_token(script, m.end())
+            if payload:
+                payloads.append((lang, payload))
     return payloads
+
+
+def _read_quoted_or_token(text: str, start: int) -> str:
+    """Read a shell-quoted string starting at *start*, honoring backslash escapes."""
+    n = len(text)
+    i = start
+    while i < n and text[i].isspace():
+        i += 1
+    if i >= n:
+        return ""
+    quote = text[i]
+    if quote in ("'", '"'):
+        i += 1
+        buf: list[str] = []
+        while i < n:
+            ch = text[i]
+            if ch == "\\" and i + 1 < n:
+                # Keep escape semantics for the inner language: store unescaped char.
+                buf.append(text[i + 1])
+                i += 2
+                continue
+            if ch == quote:
+                return "".join(buf)
+            buf.append(ch)
+            i += 1
+        return "".join(buf)
+    # Unquoted token until whitespace / shell metachar.
+    j = i
+    while j < n and not text[j].isspace() and text[j] not in ";&|":
+        j += 1
+    return text[i:j]
 
 
 def looks_like_url(value: str) -> bool:

@@ -48,9 +48,7 @@ class ToolSafetyFilter(BaseFilter):
         self.scanner = SafetyScanner(policy=policy)
         self.audit = AuditLogger(audit_path)
         self._configured_tool_name = tool_name
-        self._block_on_review = (
-            policy.block_on_review if block_on_review is None else block_on_review
-        )
+        self._block_on_review = (policy.block_on_review if block_on_review is None else block_on_review)
 
     async def _before(self, ctx: Any, req: Any, rsp: FilterResult) -> None:
         """Scan the tool args; block execution when decision is DENY."""
@@ -70,17 +68,12 @@ class ToolSafetyFilter(BaseFilter):
         )
         report = self.scanner.scan(scan_input)
 
-        should_block = report.decision == Decision.DENY or (
-            report.decision == Decision.NEEDS_HUMAN_REVIEW and self._block_on_review
-        )
+        should_block = report.decision == Decision.DENY or (report.decision == Decision.NEEDS_HUMAN_REVIEW
+                                                            and self._block_on_review)
         self.audit.log(report, intercepted=should_block)
 
         if should_block:
-            error_code = (
-                "TOOL_SAFETY_DENY"
-                if report.decision == Decision.DENY
-                else "TOOL_SAFETY_NEEDS_REVIEW"
-            )
+            error_code = ("TOOL_SAFETY_DENY" if report.decision == Decision.DENY else "TOOL_SAFETY_NEEDS_REVIEW")
             rsp.rsp = {
                 "error": error_code,
                 "decision": report.decision.value,
