@@ -115,7 +115,6 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
                 code_blocks = [CodeBlock(code=input_data.code, language="python")]
             # Scan each block with its own language so bash is not missed.
             from trpc_agent_sdk.safety import RiskLevel
-            from trpc_agent_sdk.safety import max_risk_level
 
             _ORDER = {
                 RiskLevel.NONE: 0,
