@@ -27,3 +27,6 @@ pyrightconfig.json
 
 # Generated artifacts for the evaluation/optimization loop example.
 examples/optimization/eval_optimize_loop/runs/
+
+# Local isolated development worktrees.
+/.worktrees/
