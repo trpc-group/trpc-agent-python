@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import functools
-from typing import Any
 from typing import Optional
 
 from ._audit import AuditLogger
