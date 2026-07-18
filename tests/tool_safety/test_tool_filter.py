@@ -7,16 +7,16 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 
 import pytest
 
-from examples.tool_safety.safety import PolicyConfig
+from trpc_agent_sdk.safety import PolicyConfig
 
-# SDK-bound imports; skip the whole module when the SDK tree is unavailable.
 try:
-    from examples.tool_safety.safety import ToolSafetyFilter
-    from examples.tool_safety.safety import _SDK_AVAILABLE
+    from trpc_agent_sdk.safety import ToolSafetyFilter
+    from trpc_agent_sdk.safety import _SDK_AVAILABLE
     from trpc_agent_sdk.abc import FilterResult
 except Exception:  # pylint: disable=broad-except
     _SDK_AVAILABLE = False
@@ -26,13 +26,20 @@ except Exception:  # pylint: disable=broad-except
 pytestmark = pytest.mark.skipif(not _SDK_AVAILABLE, reason="tRPC-Agent SDK not importable")
 
 
-def _make_filter(tmp_path: Path) -> ToolSafetyFilter:
-    policy = PolicyConfig(whitelisted_domains=[], forbidden_paths=[".env"])
-    return ToolSafetyFilter(policy=policy, audit_path=str(tmp_path / "audit.jsonl"))
+def _make_filter(tmp_path: Path, **kwargs) -> ToolSafetyFilter:
+    policy = PolicyConfig(
+        whitelisted_domains=[],
+        forbidden_paths=[".env"],
+        block_on_review=kwargs.pop("block_on_review", False),
+    )
+    return ToolSafetyFilter(
+        policy=policy,
+        audit_path=str(tmp_path / "audit.jsonl"),
+        **kwargs,
+    )
 
 
 def test_filter_blocks_dangerous_script(tmp_path: Path):
-    """Issue criterion 7: filter must block before execution + write audit."""
     flt = _make_filter(tmp_path)
     rsp = FilterResult()
     req = {"command": "rm -rf / && cat /etc/shadow"}
@@ -44,7 +51,6 @@ def test_filter_blocks_dangerous_script(tmp_path: Path):
     audit_path = Path(tmp_path / "audit.jsonl")
     assert audit_path.exists()
     line = audit_path.read_text(encoding="utf-8").strip().splitlines()[-1]
-    import json
     rec = json.loads(line)
     assert rec["decision"] == "deny"
     assert rec["intercepted"] is True
@@ -59,14 +65,21 @@ def test_filter_allows_safe_script(tmp_path: Path):
     assert rsp.is_continue is True
 
 
-def test_filter_review_does_not_block(tmp_path: Path):
-    flt = _make_filter(tmp_path)
+def test_filter_review_does_not_block_by_default(tmp_path: Path):
+    flt = _make_filter(tmp_path, block_on_review=False)
     rsp = FilterResult()
-    # Dynamic target => needs_human_review, but not blocked.
     req = {"command": "curl $URL"}
     asyncio.run(flt._before(None, req, rsp))  # pylint: disable=protected-access
-    # is_continue stays True (review warns but allows).
     assert rsp.is_continue is True
+
+
+def test_filter_block_on_review(tmp_path: Path):
+    flt = _make_filter(tmp_path, block_on_review=True)
+    rsp = FilterResult()
+    req = {"command": "curl $URL"}
+    asyncio.run(flt._before(None, req, rsp))  # pylint: disable=protected-access
+    assert rsp.is_continue is False
+    assert rsp.rsp["error"] in ("TOOL_SAFETY_DENY", "TOOL_SAFETY_NEEDS_REVIEW")
 
 
 def test_filter_extracts_code_blocks(tmp_path: Path):

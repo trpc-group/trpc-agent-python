@@ -5,8 +5,8 @@
       "risk_level": "none",
       "findings": [],
       "rule_ids": [],
-      "scanner_version": "1.0.0",
-      "scan_duration_ms": 1.075,
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 1.574,
       "sanitized": true,
       "blocked": false,
       "tool_name": "01_safe_python.py",
@@ -74,19 +74,15 @@
           "line": 6,
           "recommendation": "Path '~/.ssh' is forbidden by policy.",
           "metadata": {
-            "message": "Access to forbidden path ('~/.ssh'): rm -rf ~/.ssh"
+            "message": "Access to forbidden path ('~/.ssh')"
           }
         }
       ],
       "rule_ids": [
-        "R001_dangerous_files",
-        "R001_dangerous_files",
-        "R001_dangerous_files",
-        "R001_dangerous_files",
         "R001_dangerous_files"
       ],
-      "scanner_version": "1.0.0",
-      "scan_duration_ms": 0.68,
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 0.889,
       "sanitized": true,
       "blocked": true,
       "tool_name": "02_dangerous_delete.sh",
@@ -135,12 +131,10 @@
         }
       ],
       "rule_ids": [
-        "R001_dangerous_files",
-        "R001_dangerous_files",
         "R001_dangerous_files"
       ],
-      "scanner_version": "1.0.0",
-      "scan_duration_ms": 0.656,
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 1.156,
       "sanitized": true,
       "blocked": true,
       "tool_name": "03_read_credentials.py",
@@ -182,22 +176,20 @@
           "rule_name": "Network Egress",
           "risk_type": "network",
           "risk_level": "high",
-          "evidence": "urllib.request.urlopen(host='malware.badcorp.net')",
+          "evidence": "urllib.request.request.urlopen(host='malware.badcorp.net')",
           "line": 13,
           "recommendation": "Add 'malware.badcorp.net' to whitelisted_domains or remove the call.",
           "metadata": {
-            "message": "Network call urllib.request.urlopen() to non-allow-listed host 'malware.badcorp.net'",
+            "message": "Network call urllib.request.request.urlopen() to non-allow-listed host 'malware.badcorp.net'",
             "host": "malware.badcorp.net"
           }
         }
       ],
       "rule_ids": [
-        "R002_network_egress",
-        "R002_network_egress",
         "R002_network_egress"
       ],
-      "scanner_version": "1.0.0",
-      "scan_duration_ms": 0.797,
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 1.361,
       "sanitized": true,
       "blocked": true,
       "tool_name": "04_network_exfil.py",
@@ -209,8 +201,8 @@
       "risk_level": "none",
       "findings": [],
       "rule_ids": [],
-      "scanner_version": "1.0.0",
-      "scan_duration_ms": 0.397,
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 0.838,
       "sanitized": true,
       "blocked": false,
       "tool_name": "05_whitelist_network.py",
@@ -288,14 +280,10 @@
         }
       ],
       "rule_ids": [
-        "R003_process_system",
-        "R003_process_system",
-        "R003_process_system",
-        "R003_process_system",
         "R003_process_system"
       ],
-      "scanner_version": "1.0.0",
-      "scan_duration_ms": 0.579,
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 1.166,
       "sanitized": true,
       "blocked": true,
       "tool_name": "06_subprocess_call.py",
@@ -339,7 +327,7 @@
           "line": 7,
           "recommendation": "Path '/etc' is forbidden by policy.",
           "metadata": {
-            "message": "Access to forbidden path ('/etc'): sudo cat /etc/shadow"
+            "message": "Access to forbidden path ('/etc')"
           }
         },
         {
@@ -353,6 +341,18 @@
           "metadata": {
             "message": "nc to non-allow-listed host 'attacker.evil.com'",
             "host": "attacker.evil.com"
+          }
+        },
+        {
+          "rule_id": "R003_process_system",
+          "rule_name": "Process / System Command",
+          "risk_type": "process",
+          "risk_level": "critical",
+          "evidence": "eval \"ls $USER_INPUT\"",
+          "line": 5,
+          "recommendation": "Remove eval; it enables shell injection.",
+          "metadata": {
+            "message": "Use of eval in bash"
           }
         },
         {
@@ -394,15 +394,11 @@
       ],
       "rule_ids": [
         "R001_dangerous_files",
-        "R001_dangerous_files",
-        "R001_dangerous_files",
         "R002_network_egress",
-        "R003_process_system",
-        "R003_process_system",
         "R003_process_system"
       ],
-      "scanner_version": "1.0.0",
-      "scan_duration_ms": 0.314,
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 0.459,
       "sanitized": true,
       "blocked": true,
       "tool_name": "07_shell_injection.sh",
@@ -475,14 +471,10 @@
         }
       ],
       "rule_ids": [
-        "R004_dependency_install",
-        "R004_dependency_install",
-        "R004_dependency_install",
-        "R004_dependency_install",
         "R004_dependency_install"
       ],
-      "scanner_version": "1.0.0",
-      "scan_duration_ms": 0.119,
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 0.15,
       "sanitized": true,
       "blocked": true,
       "tool_name": "08_dependency_install.sh",
@@ -528,15 +520,25 @@
           "metadata": {
             "message": "Long sleep(99999s) exceeds timeout budget"
           }
+        },
+        {
+          "rule_id": "R005_resource_abuse",
+          "rule_name": "Resource Abuse",
+          "risk_type": "resource_abuse",
+          "risk_level": "medium",
+          "evidence": "concurrent.futures.ThreadPoolExecutor(...)",
+          "line": 12,
+          "recommendation": "Bound max_workers; unbounded pools can exhaust resources.",
+          "metadata": {
+            "message": "High-concurrency primitive concurrent.futures.ThreadPoolExecutor()"
+          }
         }
       ],
       "rule_ids": [
-        "R005_resource_abuse",
-        "R005_resource_abuse",
         "R005_resource_abuse"
       ],
-      "scanner_version": "1.0.0",
-      "scan_duration_ms": 0.567,
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 1.234,
       "sanitized": true,
       "blocked": true,
       "tool_name": "09_infinite_loop.py",
@@ -582,6 +584,18 @@
           "recommendation": "Move secrets to env vars / secret manager; never hardcode.",
           "metadata": {
             "message": "Hardcoded secret in string literal"
+          }
+        },
+        {
+          "rule_id": "R006_secret_leak",
+          "rule_name": "Sensitive Information Leakage",
+          "risk_type": "secret_leak",
+          "risk_level": "critical",
+          "evidence": "f.write(..., AWS_SECRET, ...)",
+          "line": 15,
+          "recommendation": "Do not log or write AWS_SECRET; redact before output.",
+          "metadata": {
+            "message": "Secret-like variable 'AWS_SECRET' passed to f.write()"
           }
         },
         {
@@ -635,15 +649,10 @@
       ],
       "rule_ids": [
         "R002_network_egress",
-        "R006_secret_leak",
-        "R006_secret_leak",
-        "R006_secret_leak",
-        "R006_secret_leak",
-        "R006_secret_leak",
         "R006_secret_leak"
       ],
-      "scanner_version": "1.0.0",
-      "scan_duration_ms": 1.06,
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 1.527,
       "sanitized": true,
       "blocked": true,
       "tool_name": "10_secret_leak.py",
@@ -675,7 +684,7 @@
           "line": 4,
           "recommendation": "Path '/etc' is forbidden by policy.",
           "metadata": {
-            "message": "Access to forbidden path ('/etc'): cat /etc/passwd | grep root | awk '{print $1}' | sort | uniq -c | head"
+            "message": "Access to forbidden path ('/etc')"
           }
         },
         {
@@ -754,16 +763,12 @@
       ],
       "rule_ids": [
         "R001_dangerous_files",
-        "R001_dangerous_files",
         "R002_network_egress",
         "R003_process_system",
-        "R003_process_system",
-        "R003_process_system",
-        "R005_resource_abuse",
         "R005_resource_abuse"
       ],
-      "scanner_version": "1.0.0",
-      "scan_duration_ms": 0.25,
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 0.337,
       "sanitized": true,
       "blocked": true,
       "tool_name": "11_bash_pipeline.sh",
@@ -791,13 +796,278 @@
       "rule_ids": [
         "R002_network_egress"
       ],
-      "scanner_version": "1.0.0",
-      "scan_duration_ms": 0.67,
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 1.012,
       "sanitized": true,
       "blocked": false,
       "tool_name": "12_human_review.py",
       "language": "python",
       "script_path": "examples\\tool_safety\\samples\\12_human_review.py"
+    },
+    {
+      "decision": "deny",
+      "risk_level": "high",
+      "findings": [
+        {
+          "rule_id": "R003_process_system",
+          "rule_name": "Process / System Command",
+          "risk_type": "process",
+          "risk_level": "high",
+          "evidence": "os.system(...)",
+          "line": 4,
+          "recommendation": "Avoid spawning subprocesses; if unavoidable use shell=False and validate args.",
+          "metadata": {
+            "message": "Process spawn via os.system()",
+            "shell_true": false
+          }
+        }
+      ],
+      "rule_ids": [
+        "R003_process_system"
+      ],
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 0.262,
+      "sanitized": true,
+      "blocked": true,
+      "tool_name": "13_alias_os_system.py",
+      "language": "python",
+      "script_path": "examples\\tool_safety\\samples\\13_alias_os_system.py"
+    },
+    {
+      "decision": "deny",
+      "risk_level": "high",
+      "findings": [
+        {
+          "rule_id": "R003_process_system",
+          "rule_name": "Process / System Command",
+          "risk_type": "process",
+          "risk_level": "high",
+          "evidence": "os.system(...)",
+          "line": 3,
+          "recommendation": "Avoid spawning subprocesses; if unavoidable use shell=False and validate args.",
+          "metadata": {
+            "message": "Process spawn via os.system()",
+            "shell_true": false
+          }
+        }
+      ],
+      "rule_ids": [
+        "R003_process_system"
+      ],
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 0.238,
+      "sanitized": true,
+      "blocked": true,
+      "tool_name": "14_from_import_system.py",
+      "language": "python",
+      "script_path": "examples\\tool_safety\\samples\\14_from_import_system.py"
+    },
+    {
+      "decision": "deny",
+      "risk_level": "critical",
+      "findings": [
+        {
+          "rule_id": "R003_process_system",
+          "rule_name": "Process / System Command",
+          "risk_type": "process",
+          "risk_level": "critical",
+          "evidence": "echo cm0gLXJmIC8= | base64 -d | sh",
+          "line": 3,
+          "recommendation": "Decode-and-execute pipelines are not allowed.",
+          "metadata": {
+            "message": "Decode-to-shell pipeline (base64/xxd | sh)"
+          }
+        }
+      ],
+      "rule_ids": [
+        "R003_process_system"
+      ],
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 0.076,
+      "sanitized": true,
+      "blocked": true,
+      "tool_name": "15_base64_pipe.sh",
+      "language": "bash",
+      "script_path": "examples\\tool_safety\\samples\\15_base64_pipe.sh"
+    },
+    {
+      "decision": "deny",
+      "risk_level": "critical",
+      "findings": [
+        {
+          "rule_id": "R001_dangerous_files",
+          "rule_name": "Dangerous File Operation",
+          "risk_type": "dangerous_files",
+          "risk_level": "critical",
+          "evidence": "<expr>.read_text(...)",
+          "line": 3,
+          "recommendation": "Do not read credential/secret files in tool scripts.",
+          "metadata": {
+            "message": "Read sensitive file via pathlib '.ssh/id_rsa'"
+          }
+        },
+        {
+          "rule_id": "R001_dangerous_files",
+          "rule_name": "Dangerous File Operation",
+          "risk_type": "dangerous_files",
+          "risk_level": "critical",
+          "evidence": ".ssh/id_rsa",
+          "line": 3,
+          "recommendation": "Do not construct paths into credential directories.",
+          "metadata": {
+            "message": "Path construction toward sensitive location '.ssh/id_rsa'"
+          }
+        }
+      ],
+      "rule_ids": [
+        "R001_dangerous_files"
+      ],
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 0.481,
+      "sanitized": true,
+      "blocked": true,
+      "tool_name": "16_pathlib_ssh.py",
+      "language": "python",
+      "script_path": "examples\\tool_safety\\samples\\16_pathlib_ssh.py"
+    },
+    {
+      "decision": "deny",
+      "risk_level": "high",
+      "findings": [
+        {
+          "rule_id": "R002_network_egress",
+          "rule_name": "Network Egress",
+          "risk_type": "network",
+          "risk_level": "high",
+          "evidence": "s.get(host='evil.example.com')",
+          "line": 4,
+          "recommendation": "Add 'evil.example.com' to whitelisted_domains or remove the call.",
+          "metadata": {
+            "message": "Network call s.get() to non-allow-listed host 'evil.example.com'",
+            "host": "evil.example.com"
+          }
+        }
+      ],
+      "rule_ids": [
+        "R002_network_egress"
+      ],
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 0.451,
+      "sanitized": true,
+      "blocked": true,
+      "tool_name": "17_requests_session.py",
+      "language": "python",
+      "script_path": "examples\\tool_safety\\samples\\17_requests_session.py"
+    },
+    {
+      "decision": "deny",
+      "risk_level": "critical",
+      "findings": [
+        {
+          "rule_id": "R006_secret_leak",
+          "rule_name": "Sensitive Information Leakage",
+          "risk_type": "secret_leak",
+          "risk_level": "critical",
+          "evidence": "print(os.environ[...])",
+          "line": 3,
+          "recommendation": "Do not print or transmit secret environment variables.",
+          "metadata": {
+            "message": "Environment secret passed to print()"
+          }
+        },
+        {
+          "rule_id": "R006_secret_leak",
+          "rule_name": "Sensitive Information Leakage",
+          "risk_type": "secret_leak",
+          "risk_level": "high",
+          "evidence": "os.environ[...]",
+          "line": 3,
+          "recommendation": "Avoid reading secret environment keys in tool scripts.",
+          "metadata": {
+            "message": "Direct access to environment secret key"
+          }
+        }
+      ],
+      "rule_ids": [
+        "R006_secret_leak"
+      ],
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 0.301,
+      "sanitized": true,
+      "blocked": true,
+      "tool_name": "18_env_secret_print.py",
+      "language": "python",
+      "script_path": "examples\\tool_safety\\samples\\18_env_secret_print.py"
+    },
+    {
+      "decision": "deny",
+      "risk_level": "critical",
+      "findings": [
+        {
+          "rule_id": "R001_dangerous_files",
+          "rule_name": "Dangerous File Operation",
+          "risk_type": "dangerous_files",
+          "risk_level": "critical",
+          "evidence": "python -c \"import os; os.system('rm -rf /tmp/x')\"",
+          "line": 3,
+          "recommendation": "Avoid rm -rf and recursive deletion of unknown paths.",
+          "metadata": {
+            "message": "Recursive/forced delete: python -c \"import os; os.system('rm -rf /tmp/x')\""
+          }
+        },
+        {
+          "rule_id": "R003_process_system",
+          "rule_name": "Process / System Command",
+          "risk_type": "process",
+          "risk_level": "high",
+          "evidence": "os.system(...)",
+          "line": 1,
+          "recommendation": "Avoid spawning subprocesses; if unavoidable use shell=False and validate args.",
+          "metadata": {
+            "message": "Process spawn via os.system()",
+            "shell_true": false
+          }
+        }
+      ],
+      "rule_ids": [
+        "R001_dangerous_files",
+        "R003_process_system"
+      ],
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 0.31,
+      "sanitized": true,
+      "blocked": true,
+      "tool_name": "19_python_c_inline.sh",
+      "language": "bash",
+      "script_path": "examples\\tool_safety\\samples\\19_python_c_inline.sh"
+    },
+    {
+      "decision": "deny",
+      "risk_level": "critical",
+      "findings": [
+        {
+          "rule_id": "R003_process_system",
+          "rule_name": "Process / System Command",
+          "risk_type": "process",
+          "risk_level": "critical",
+          "evidence": "getattr(os, 'system')",
+          "line": 3,
+          "recommendation": "Dynamic process binding via getattr is not allowed.",
+          "metadata": {
+            "message": "Dynamic process spawn via getattr(os, 'system')"
+          }
+        }
+      ],
+      "rule_ids": [
+        "R003_process_system"
+      ],
+      "scanner_version": "1.1.0",
+      "scan_duration_ms": 0.425,
+      "sanitized": true,
+      "blocked": true,
+      "tool_name": "20_getattr_system.py",
+      "language": "python",
+      "script_path": "examples\\tool_safety\\samples\\20_getattr_system.py"
     }
   ]
 }

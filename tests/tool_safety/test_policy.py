@@ -8,10 +8,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from examples.tool_safety.safety import Decision
-from examples.tool_safety.safety import PolicyConfig
-from examples.tool_safety.safety import SafetyScanner
-from examples.tool_safety.safety import ScanInput
+import pytest
+
+from trpc_agent_sdk.safety import Decision
+from trpc_agent_sdk.safety import PolicyConfig
+from trpc_agent_sdk.safety import SafetyScanner
+from trpc_agent_sdk.safety import ScanInput
 
 
 def test_policy_loads_yaml(policy_path):
@@ -28,7 +30,6 @@ def test_policy_from_dict_defaults():
 
 
 def test_hot_reload_changes_whitelist(tmp_path: Path):
-    """Issue criterion 6: changing YAML changes behavior without code change."""
     yaml_a = tmp_path / "a.yaml"
     yaml_b = tmp_path / "b.yaml"
     yaml_a.write_text("whitelisted_domains: []\n", encoding="utf-8")
@@ -37,12 +38,10 @@ def test_hot_reload_changes_whitelist(tmp_path: Path):
     script = "import requests\nrequests.get('https://api.github.com')\n"
     inp = ScanInput(script=script, language="python")
 
-    # Empty allow-list => deny
     pa = PolicyConfig.from_yaml(yaml_a)
     ra = SafetyScanner(pa).scan(inp)
     assert ra.decision == Decision.DENY
 
-    # Allow-list now includes host => allow
     pb = PolicyConfig.from_yaml(yaml_b)
     rb = SafetyScanner(pb).scan(inp)
     assert rb.decision == Decision.ALLOW
@@ -59,7 +58,6 @@ def test_hot_reload_changes_forbidden_path(tmp_path: Path):
 
     ra = SafetyScanner(PolicyConfig.from_yaml(yaml_a)).scan(inp)
     rb = SafetyScanner(PolicyConfig.from_yaml(yaml_b)).scan(inp)
-    # Adding forbidden path must not reduce findings.
     assert len(rb.findings) >= len(ra.findings)
 
 
@@ -68,6 +66,28 @@ def test_disabled_rules_skipped(tmp_path: Path):
     yaml.write_text("disabled_rules: [R003_process_system]\n", encoding="utf-8")
     p = PolicyConfig.from_yaml(yaml)
     scanner = SafetyScanner(p)
-    inp = ScanInput(script="import subprocess\nsubprocess.run('ls')\n", language="python")
+    inp = ScanInput(
+        script="import subprocess\nsubprocess.run('ls')\n",
+        language="python",
+    )
     report = scanner.scan(inp)
     assert "R003_process_system" not in report.rule_ids
+
+
+def test_strict_policy_rejects_unknown_keys():
+    with pytest.raises(ValueError, match="unknown policy keys"):
+        PolicyConfig.from_dict({"strict_policy": True, "not_a_real_key": 1})
+
+
+def test_strict_command_allowlist(tmp_path: Path):
+    p = PolicyConfig.from_dict({
+        "allowed_commands": ["ls", "echo"],
+        "strict_command_allowlist": True,
+    })
+    report = SafetyScanner(p).scan(ScanInput(script="curl https://x", language="bash"))
+    assert report.decision == Decision.DENY
+
+
+def test_block_on_review_flag_in_policy():
+    p = PolicyConfig.from_dict({"block_on_review": True})
+    assert p.block_on_review is True

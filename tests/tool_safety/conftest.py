@@ -6,22 +6,17 @@
 """Shared fixtures for tool safety tests."""
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
+from trpc_agent_sdk.safety import PolicyConfig
+from trpc_agent_sdk.safety import SafetyScanner
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-
-
-from examples.tool_safety.safety import PolicyConfig
-from examples.tool_safety.safety import SafetyScanner
-
-
 POLICY_PATH = _REPO_ROOT / "examples" / "tool_safety" / "tool_safety_policy.yaml"
 SAMPLES_DIR = _REPO_ROOT / "examples" / "tool_safety" / "samples"
+MANIFEST_PATH = SAMPLES_DIR / "manifest.yaml"
 
 
 @pytest.fixture
@@ -42,3 +37,8 @@ def samples_dir() -> Path:
 @pytest.fixture
 def policy_path() -> Path:
     return POLICY_PATH
+
+
+@pytest.fixture
+def manifest_path() -> Path:
+    return MANIFEST_PATH

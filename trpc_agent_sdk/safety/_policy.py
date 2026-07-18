@@ -1,16 +1,9 @@
-# Tencent is pleased to support the open source community by making trpc-agent-python available.
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
 #
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
-# trpc-agent-python is licensed under the Apache License Version 2.0.
-"""Policy configuration loading for the Tool Script Safety Guard.
-
-Reads ``tool_safety_policy.yaml`` into a :class:`PolicyConfig` object. The
-policy drives every rule: allow-listed domains, forbidden paths, allowed
-commands, thresholds, and the deny/review decision boundaries.
-
-Changing the YAML is sufficient to change behavior — no code edits required.
-"""
+# tRPC-Agent-Python is licensed under Apache-2.0.
+"""Policy configuration loading for the Tool Script Safety Guard."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -20,27 +13,18 @@ from typing import Any
 
 import yaml
 
-from .types import Decision
-from .types import RiskLevel
+from ._types import Decision
+from ._types import RiskLevel
+from ._types import risk_order
 
 
 @dataclass
 class PolicyConfig:
     """In-memory representation of the safety policy.
 
-    Attributes:
-        whitelisted_domains: Domains network access is allowed to (suffix match).
-        forbidden_paths: Path substrings/regex that must never be touched.
-        allowed_commands: Bash commands permitted without further scrutiny.
-        max_timeout_seconds: Hard cap on script execution timeout.
-        max_output_bytes: Hard cap on captured output size.
-        max_file_write_bytes: Threshold above which file writes are flagged.
-        deny_risk_level: Findings at or above this level produce a DENY.
-        review_risk_level: Findings at or above this level (below deny) produce REVIEW.
-        secret_patterns: Regex patterns that look like leaked secrets.
-        disabled_rules: Rule ids to skip entirely.
-        extra: Free-form per-rule overrides keyed by rule id.
+    Changing the YAML is sufficient to change behavior — no code edits required.
     """
+
     whitelisted_domains: list[str] = field(default_factory=list)
     forbidden_paths: list[str] = field(default_factory=list)
     allowed_commands: list[str] = field(default_factory=list)
@@ -51,13 +35,47 @@ class PolicyConfig:
     review_risk_level: RiskLevel = RiskLevel.MEDIUM
     secret_patterns: list[str] = field(default_factory=list)
     disabled_rules: list[str] = field(default_factory=list)
+    # When True, bash commands not present in allowed_commands are flagged HIGH.
+    strict_command_allowlist: bool = False
+    # When True, ToolSafetyFilter blocks NEEDS_HUMAN_REVIEW the same as DENY.
+    block_on_review: bool = False
+    # When True, unknown YAML keys raise ValueError.
+    strict_policy: bool = False
     extra: dict[str, Any] = field(default_factory=dict)
+
+    _KNOWN_KEYS = frozenset({
+        "whitelisted_domains",
+        "forbidden_paths",
+        "allowed_commands",
+        "max_timeout_seconds",
+        "max_output_bytes",
+        "max_file_write_bytes",
+        "deny_risk_level",
+        "review_risk_level",
+        "secret_patterns",
+        "disabled_rules",
+        "strict_command_allowlist",
+        "block_on_review",
+        "strict_policy",
+        "extra",
+    })
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "PolicyConfig":
         """Build a PolicyConfig from a parsed YAML mapping."""
         data = data or {}
-        # Normalize risk levels from strings.
+        if not isinstance(data, dict):
+            raise ValueError("policy must be a mapping")
+
+        strict = bool(data.get("strict_policy", False))
+        if strict:
+            unknown = set(data.keys()) - cls._KNOWN_KEYS
+            if unknown:
+                raise ValueError(f"unknown policy keys: {sorted(unknown)}")
+            for key in ("max_timeout_seconds", "max_output_bytes", "max_file_write_bytes"):
+                if key in data and data[key] is not None and int(data[key]) < 0:
+                    raise ValueError(f"{key} must be non-negative")
+
         deny_lvl = _parse_risk_level(data.get("deny_risk_level"), RiskLevel.HIGH)
         review_lvl = _parse_risk_level(data.get("review_risk_level"), RiskLevel.MEDIUM)
 
@@ -72,6 +90,9 @@ class PolicyConfig:
             review_risk_level=review_lvl,
             secret_patterns=list(data.get("secret_patterns", []) or []),
             disabled_rules=list(data.get("disabled_rules", []) or []),
+            strict_command_allowlist=bool(data.get("strict_command_allowlist", False)),
+            block_on_review=bool(data.get("block_on_review", False)),
+            strict_policy=strict,
             extra=dict(data.get("extra", {}) or {}),
         )
 
@@ -86,29 +107,33 @@ class PolicyConfig:
 
     def decision_for(self, max_level: RiskLevel) -> Decision:
         """Map an aggregate risk level to a final decision per policy."""
-        order = _RISK_ORDER
-        if order[max_level] >= order[self.deny_risk_level]:
+        if risk_order(max_level) >= risk_order(self.deny_risk_level):
             return Decision.DENY
-        if order[max_level] >= order[self.review_risk_level]:
+        if risk_order(max_level) >= risk_order(self.review_risk_level):
             return Decision.NEEDS_HUMAN_REVIEW
         return Decision.ALLOW
 
     def is_domain_allowed(self, host: str) -> bool:
         """True when *host* matches any whitelisted suffix (empty list => none allowed)."""
         if not self.whitelisted_domains:
-            # No allow-list configured: deny all network egress by default.
             return False
         host = (host or "").lower().strip()
-        return any(host == d or host.endswith("." + d) for d in self.whitelisted_domains)
+        # Reject spoofed suffix hosts such as evil-api.github.com.attacker.tld
+        # by requiring exact match or a proper DNS label boundary.
+        for domain in self.whitelisted_domains:
+            d = domain.lower().strip()
+            if not d:
+                continue
+            if host == d or host.endswith("." + d):
+                return True
+        return False
 
-
-_RISK_ORDER = {
-    RiskLevel.NONE: 0,
-    RiskLevel.LOW: 1,
-    RiskLevel.MEDIUM: 2,
-    RiskLevel.HIGH: 3,
-    RiskLevel.CRITICAL: 4,
-}
+    def is_command_allowed(self, cmd: str) -> bool:
+        """True when *cmd* is present in allowed_commands (case-sensitive basename)."""
+        if not self.allowed_commands:
+            return False
+        base = (cmd or "").split("/")[-1].split("\\")[-1]
+        return base in self.allowed_commands
 
 
 def _parse_risk_level(value: Any, default: RiskLevel) -> RiskLevel:

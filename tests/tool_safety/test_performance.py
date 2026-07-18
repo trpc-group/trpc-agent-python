@@ -7,26 +7,16 @@
 from __future__ import annotations
 
 import time
-from pathlib import Path
 
-from examples.tool_safety.safety import Decision
-from examples.tool_safety.safety import PolicyConfig
-from examples.tool_safety.safety import SafetyScanner
-from examples.tool_safety.safety import ScanInput
+from trpc_agent_sdk.safety import PolicyConfig
+from trpc_agent_sdk.safety import SafetyScanner
+from trpc_agent_sdk.safety import ScanInput
 
 
 def test_scan_500_lines_under_1s():
-    """Issue criterion 4: single 500-line script scan <= 1s.
-
-    The 500-line script is generated in-memory to avoid committing a large
-    placeholder file to the repo. The mix of safe assignments and function
-    defs exercises AST traversal on realistic Python.
-    """
     lines = []
-    # 250 safe assignments
     for i in range(250):
         lines.append(f"x{i} = {i}")
-    # 250 function defs (each 2 lines => 500 actual lines)
     for i in range(250):
         lines.append(f"def f{i}():\n    return {i}")
     script = "\n".join(lines)

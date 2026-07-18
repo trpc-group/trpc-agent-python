@@ -1,0 +1,57 @@
+# Manifest for sample evaluation. Used by scripts/tool_safety_eval.py and tests.
+cases:
+  - file: 01_safe_python.py
+    expect: allow
+  - file: 02_dangerous_delete.sh
+    expect: deny
+    must_rules: [R001_dangerous_files]
+  - file: 03_read_credentials.py
+    expect: deny
+    must_rules: [R001_dangerous_files]
+  - file: 04_network_exfil.py
+    expect: deny
+    must_rules: [R002_network_egress]
+  - file: 05_whitelist_network.py
+    expect: allow
+  - file: 06_subprocess_call.py
+    expect: deny
+    must_rules: [R003_process_system]
+  - file: 07_shell_injection.sh
+    expect: deny
+    must_rules: [R003_process_system]
+  - file: 08_dependency_install.sh
+    expect: deny
+    must_rules: [R004_dependency_install]
+  - file: 09_infinite_loop.py
+    expect: deny
+    must_rules: [R005_resource_abuse]
+  - file: 10_secret_leak.py
+    expect: deny
+    must_rules: [R006_secret_leak]
+  - file: 11_bash_pipeline.sh
+    expect: deny
+  - file: 12_human_review.py
+    expect: needs_human_review
+  - file: 13_alias_os_system.py
+    expect: deny
+    must_rules: [R003_process_system]
+  - file: 14_from_import_system.py
+    expect: deny
+    must_rules: [R003_process_system]
+  - file: 15_base64_pipe.sh
+    expect: deny
+    must_rules: [R003_process_system]
+  - file: 16_pathlib_ssh.py
+    expect: deny
+    must_rules: [R001_dangerous_files]
+  - file: 17_requests_session.py
+    expect: deny
+    must_rules: [R002_network_egress]
+  - file: 18_env_secret_print.py
+    expect: deny
+    must_rules: [R006_secret_leak]
+  - file: 19_python_c_inline.sh
+    expect: deny
+  - file: 20_getattr_system.py
+    expect: deny
+    must_rules: [R003_process_system]

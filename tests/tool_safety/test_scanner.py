@@ -3,33 +3,46 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # trpc-agent-python is licensed under the Apache License Version 2.0
-"""End-to-end scan tests for the 12 sample scripts required by the issue.
-
-Each sample maps to one of the issue's required test cases. The scanner must
-produce a structured report with the expected decision and rule hits.
-"""
+"""End-to-end scan tests for sample scripts and custom rule registration."""
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
+import yaml
 
-from examples.tool_safety.safety import Decision
-from examples.tool_safety.safety import RiskLevel
-from examples.tool_safety.safety import SafetyScanner
-from examples.tool_safety.safety import ScanInput
-from examples.tool_safety.safety import register_custom_rule
-from examples.tool_safety.safety.rules.base import SafetyRule
+from trpc_agent_sdk.safety import Decision
+from trpc_agent_sdk.safety import PolicyConfig
+from trpc_agent_sdk.safety import RiskLevel
+from trpc_agent_sdk.safety import SafetyFinding
+from trpc_agent_sdk.safety import SafetyRule
+from trpc_agent_sdk.safety import SafetyScanner
+from trpc_agent_sdk.safety import ScanInput
+from trpc_agent_sdk.safety import clear_custom_rules
+from trpc_agent_sdk.safety import register_custom_rule
+from trpc_agent_sdk.safety import unregister_custom_rule
 
 
-def _scan(scanner: SafetyScanner, path: Path) -> "object":
+def _scan(scanner: SafetyScanner, path: Path):
     script = path.read_text(encoding="utf-8")
     lang = "python" if path.suffix == ".py" else "bash"
     return scanner.scan(ScanInput(script=script, language=lang, tool_name=path.name))
 
 
+def _assert_report_well_formed(report) -> None:
+    d = report.to_dict()
+    for field in ("decision", "risk_level", "rule_ids"):
+        assert field in d
+    if report.findings:
+        f = report.findings[0]
+        assert f.rule_id
+        assert f.evidence is not None
+        assert f.recommendation
+        assert f.risk_level in RiskLevel
+
+
 # ---------------------------------------------------------------------------
-# 12 sample tests (issue required coverage)
+# Canonical 12 samples
 # ---------------------------------------------------------------------------
 
 
@@ -51,7 +64,6 @@ def test_03_read_credentials(scanner, samples_dir):
     report = _scan(scanner, samples_dir / "03_read_credentials.py")
     assert report.decision == Decision.DENY
     assert "R001_dangerous_files" in report.rule_ids
-    # 100% detection required by issue acceptance criterion 3
     _assert_report_well_formed(report)
 
 
@@ -59,7 +71,6 @@ def test_04_network_exfil(scanner, samples_dir):
     report = _scan(scanner, samples_dir / "04_network_exfil.py")
     assert report.decision == Decision.DENY
     assert "R002_network_egress" in report.rule_ids
-    # 100% detection required by issue acceptance criterion 3
     _assert_report_well_formed(report)
 
 
@@ -106,7 +117,6 @@ def test_10_secret_leak(scanner, samples_dir):
 
 def test_11_bash_pipeline(scanner, samples_dir):
     report = _scan(scanner, samples_dir / "11_bash_pipeline.sh")
-    # Must flag at least one risk (network/process/resource).
     assert report.decision == Decision.DENY
     assert len(report.rule_ids) > 0
     _assert_report_well_formed(report)
@@ -114,26 +124,18 @@ def test_11_bash_pipeline(scanner, samples_dir):
 
 def test_12_human_review(scanner, samples_dir):
     report = _scan(scanner, samples_dir / "12_human_review.py")
-    # Dynamic target => cannot prove safety => must NOT be ALLOW.
     assert report.decision in (Decision.NEEDS_HUMAN_REVIEW, Decision.DENY)
     assert report.decision != Decision.ALLOW
     _assert_report_well_formed(report)
 
 
-# ---------------------------------------------------------------------------
-# Aggregate acceptance criteria
-# ---------------------------------------------------------------------------
-
-
 def test_detection_rate(scanner, samples_dir):
-    """Issue criterion 2: high-risk detection >= 90%, safe false-positive <= 10%."""
     dangerous = [
         "02_dangerous_delete.sh", "03_read_credentials.py", "04_network_exfil.py",
         "06_subprocess_call.py", "07_shell_injection.sh", "08_dependency_install.sh",
         "09_infinite_loop.py", "10_secret_leak.py", "11_bash_pipeline.sh",
     ]
     safe = ["01_safe_python.py", "05_whitelist_network.py"]
-
     detected = sum(
         1 for name in dangerous
         if _scan(scanner, samples_dir / name).decision == Decision.DENY
@@ -147,45 +149,43 @@ def test_detection_rate(scanner, samples_dir):
 
 
 def test_required_100_percent_detection(scanner, samples_dir):
-    """Issue criterion 3: read-creds / dangerous-delete / non-allowlist net = 100%."""
     must = ["02_dangerous_delete.sh", "03_read_credentials.py", "04_network_exfil.py"]
     for name in must:
         assert _scan(scanner, samples_dir / name).decision == Decision.DENY, name
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _assert_report_well_formed(report) -> None:
-    """Issue criterion 5: report must carry the 5 required fields."""
-    d = report.to_dict()
-    for field in ("decision", "risk_level", "rule_ids"):
-        assert field in d
-    if report.findings:
-        f = report.findings[0]
-        assert f.rule_id
-        assert f.evidence is not None
-        assert f.recommendation
-        assert f.risk_level in RiskLevel
-
-
-# ---------------------------------------------------------------------------
-# register_custom_rule
-# ---------------------------------------------------------------------------
+def test_manifest_cases(scanner, samples_dir, manifest_path):
+    """All manifest cases must produce the expected decision."""
+    data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    cases = data["cases"]
+    failures = []
+    for case in cases:
+        name = case["file"]
+        expect = case["expect"]
+        report = _scan(scanner, samples_dir / name)
+        ok = False
+        if expect == "allow":
+            ok = report.decision == Decision.ALLOW
+        elif expect == "deny":
+            ok = report.decision == Decision.DENY
+        elif expect == "needs_human_review":
+            ok = report.decision in (Decision.NEEDS_HUMAN_REVIEW, Decision.DENY)
+        if not ok:
+            failures.append(f"{name}: got {report.decision.value}, expect {expect}, rules={report.rule_ids}")
+        must_rules = case.get("must_rules") or []
+        for rid in must_rules:
+            if rid not in report.rule_ids:
+                failures.append(f"{name}: missing rule {rid}, got {report.rule_ids}")
+    assert not failures, "\n".join(failures)
 
 
 class _NoOpRule(SafetyRule):
-    """A custom rule that always fires, for testing the registry."""
-
     rule_id = "TEST_CUSTOM_001"
     rule_name = "test custom rule"
     risk_type = "test"
     default_level = RiskLevel.LOW
 
     def check(self, scan_input, policy):
-        from examples.tool_safety.safety.types import SafetyFinding
         return [SafetyFinding(
             rule_id=self.rule_id,
             rule_name=self.rule_name,
@@ -198,19 +198,12 @@ class _NoOpRule(SafetyRule):
 
 
 def test_register_custom_rule_is_picked_up_by_new_scanner():
-    """register_custom_rule must make the rule appear in new scanners."""
+    clear_custom_rules()
     custom = _NoOpRule()
     register_custom_rule(custom)
     try:
-        scanner = SafetyScanner(policy=_minimal_policy())
+        scanner = SafetyScanner(policy=PolicyConfig())
         rule_ids = [r.rule_id for r in scanner.rules]
         assert "TEST_CUSTOM_001" in rule_ids
     finally:
-        # Clean up the registry so other tests are unaffected.
-        from examples.tool_safety.safety.scanner import _custom_rules
-        _custom_rules.remove(custom)
-
-
-def _minimal_policy():
-    from examples.tool_safety.safety import PolicyConfig
-    return PolicyConfig()
+        unregister_custom_rule("TEST_CUSTOM_001")

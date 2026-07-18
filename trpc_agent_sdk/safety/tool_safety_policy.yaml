@@ -1,7 +1,7 @@
-# Tool Script Safety Guard policy (example)
+# Tool Script Safety Guard policy (SDK default)
 #
 # Edit this file to change scanner behavior WITHOUT touching code.
-# Reload via PolicyConfig.from_yaml(...) at runtime (hot reload).
+# Reload via PolicyConfig.from_yaml(...) at runtime.
 
 whitelisted_domains:
   - localhost
@@ -48,8 +48,14 @@ max_file_write_bytes: 104857600
 
 deny_risk_level: high
 review_risk_level: medium
+
+# When true, bash commands not in allowed_commands are flagged HIGH.
 strict_command_allowlist: false
+
+# When true, ToolSafetyFilter also blocks needs_human_review decisions.
 block_on_review: false
+
+# When true, unknown YAML keys raise ValueError.
 strict_policy: false
 
 secret_patterns:

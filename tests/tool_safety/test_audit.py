@@ -9,11 +9,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from examples.tool_safety.safety import AuditLogger
-from examples.tool_safety.safety import PolicyConfig
-from examples.tool_safety.safety import SafetyScanner
-from examples.tool_safety.safety import ScanInput
-from examples.tool_safety.safety.audit import _emit_telemetry
+from trpc_agent_sdk.safety import AuditLogger
+from trpc_agent_sdk.safety import PolicyConfig
+from trpc_agent_sdk.safety import SafetyScanner
+from trpc_agent_sdk.safety import ScanInput
+from trpc_agent_sdk.safety._audit import _emit_telemetry
 
 
 def test_audit_writes_jsonl(tmp_path: Path):
@@ -36,8 +36,6 @@ def test_audit_writes_jsonl(tmp_path: Path):
 
 
 def test_audit_required_fields(tmp_path: Path):
-    """Issue: audit must contain tool name, decision, risk level, rule id,
-    duration, sanitized flag, and intercepted flag."""
     audit = AuditLogger(tmp_path / "a.jsonl")
     scanner = SafetyScanner(PolicyConfig())
     report = scanner.scan(ScanInput(script="import os\nos.system('x')", language="python"))
@@ -51,7 +49,6 @@ def test_audit_no_path_is_noop():
     audit = AuditLogger(None)
     scanner = SafetyScanner(PolicyConfig())
     report = scanner.scan(ScanInput(script="print('hi')", language="python"))
-    # Must not raise.
     rec = audit.log(report)
     assert rec["decision"] == "allow"
 
@@ -59,12 +56,10 @@ def test_audit_no_path_is_noop():
 def test_telemetry_does_not_raise_without_otel():
     scanner = SafetyScanner(PolicyConfig())
     report = scanner.scan(ScanInput(script="print('x')", language="python"))
-    # No active span / no otel => must be a no-op.
     _emit_telemetry(report)
 
 
 def test_telemetry_sets_span_attributes_when_recording():
-    """When a recording span is active, tool.safety.* attributes are set."""
     try:
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -75,12 +70,6 @@ def test_telemetry_sets_span_attributes_when_recording():
         import pytest
         pytest.skip("opentelemetry-sdk not installed")
 
-    from opentelemetry import trace
-
-    # Use a dedicated provider with an in-memory exporter. We do NOT call
-    # set_tracer_provider: the global provider may already be set by the SDK
-    # and OTel silently ignores subsequent calls. Instead we build a tracer
-    # directly from our provider so span export is self-contained.
     exporter = InMemorySpanExporter()
     provider = TracerProvider()
     provider.add_span_processor(SimpleSpanProcessor(exporter))
@@ -88,7 +77,7 @@ def test_telemetry_sets_span_attributes_when_recording():
 
     scanner = SafetyScanner(PolicyConfig())
     inp = ScanInput(script="rm -rf /", language="bash")
-    with tracer.start_as_current_span("safety-test") as span:
+    with tracer.start_as_current_span("safety-test"):
         report = scanner.scan(inp)
         _emit_telemetry(report)
 
