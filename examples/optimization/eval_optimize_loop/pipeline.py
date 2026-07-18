@@ -47,6 +47,7 @@ from .schemas import FakeCandidateScenario
 from .schemas import FakeEvaluationSnapshot
 from .schemas import FakeStageResult
 from .schemas import ObservableValue
+from .schemas import OptimizerRuntimeParameters
 from .schemas import ResourceMeasurements
 from .schemas import RealStageResult
 from .schemas import WorkspaceSnapshot
@@ -536,6 +537,7 @@ async def run_real_stage(
     prepared: PreparedRun,
     *,
     call_agent: CallAgent,
+    optimizer_parameters: OptimizerRuntimeParameters | None = None,
 ) -> RealStageResult:
     """Generate a real optimizer candidate and run the full guarded regression."""
     if prepared.config.execution.mode != "real":
@@ -595,6 +597,8 @@ async def run_real_stage(
         output_dir=Path(prepared.workspace.run_dir) / "optimizer",
         seed=prepared.input_snapshot.seed,
         retain_native_artifacts=prepared.config.artifacts.retain_optimizer_native_artifacts,
+        runtime_parameters=optimizer_parameters,
+        expected_optimizer_sha256=prepared.input_snapshot.optimizer_config_sha256,
     )
     try:
         generated = await AgentOptimizerCandidateProvider(call_agent).propose(request)
