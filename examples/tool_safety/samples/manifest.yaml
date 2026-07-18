@@ -1,5 +1,8 @@
 # Manifest for sample evaluation. Used by scripts/tool_safety_eval.py and tests.
+# expect: allow | deny | needs_human_review
+# needs_human_review also accepts deny (stricter is OK).
 cases:
+  # --- issue #90 required 12 scenarios ---
   - file: 01_safe_python.py
     expect: allow
   - file: 02_dangerous_delete.sh
@@ -33,6 +36,8 @@ cases:
   - file: 12_human_review.py
     # Dynamic network targets are HIGH → default policy denies (fail-closed).
     expect: deny
+
+  # --- hardened / adversarial coverage ---
   - file: 13_alias_os_system.py
     expect: deny
     must_rules: [R003_process_system]
@@ -84,3 +89,22 @@ cases:
   - file: 32_fork_bomb.sh
     expect: deny
     must_rules: [R005_resource_abuse]
+  - file: 33_safe_git_status.sh
+    expect: allow
+  - file: 34_safe_python_math.py
+    expect: allow
+  - file: 35_long_sleep.sh
+    expect: deny
+  - file: 36_httpx_client_evil.py
+    expect: deny
+    must_rules: [R002_network_egress]
+  - file: 37_eval_exec.py
+    expect: deny
+  - file: 38_npm_install.sh
+    expect: deny
+    must_rules: [R004_dependency_install]
+  - file: 39_curl_dynamic_url.sh
+    expect: deny
+    must_rules: [R002_network_egress]
+  - file: 40_background_nc.sh
+    expect: deny

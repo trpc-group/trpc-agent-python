@@ -532,7 +532,15 @@ class NetworkRule(SafetyRule):
             if idx < len(tokens):
                 cmd = tokens[idx]
             cmd_base = cmd.split("/")[-1]
-            if cmd_base not in _BASH_NET_COMMANDS:
+            # Detect net commands even mid-pipeline: echo x | nc host 4444
+            net_cmd = cmd_base if cmd_base in _BASH_NET_COMMANDS else None
+            if net_cmd is None:
+                for tok in tokens:
+                    base = tok.split("/")[-1]
+                    if base in _BASH_NET_COMMANDS:
+                        net_cmd = base
+                        break
+            if net_cmd is None:
                 # Also catch /dev/tcp redirections
                 if "/dev/tcp/" in line:
                     findings.append(
@@ -543,6 +551,7 @@ class NetworkRule(SafetyRule):
                             message="Bash /dev/tcp network egress",
                         ))
                 continue
+            cmd_base = net_cmd
             host = _extract_host_from_bash(line, cmd_base)
             if host is None:
                 findings.append(
@@ -842,12 +851,17 @@ class ProcessRule(SafetyRule):
                         message=f"Privilege escalation via {cmd}",
                     ))
             if line.rstrip().endswith("&") and not line.rstrip().endswith("&&"):
+                # Background + network tool is high risk; plain background alone
+                # stays medium for review.
+                bg_level = RiskLevel.MEDIUM
+                if any(tok.split("/")[-1] in _BASH_NET_COMMANDS for tok in tokens):
+                    bg_level = RiskLevel.HIGH
                 findings.append(
                     self._finding(
                         line,
                         lineno,
                         "Avoid backgrounding processes in tool scripts.",
-                        level=RiskLevel.MEDIUM,
+                        level=bg_level,
                         message="Background process spawn",
                     ))
             if line.count("|") >= 3:
@@ -1123,7 +1137,9 @@ class ResourceAbuseRule(SafetyRule):
                         line,
                         lineno,
                         f"Keep sleeps below {policy.max_timeout_seconds}s.",
-                        level=RiskLevel.MEDIUM,
+                        # Exceeding the configured timeout budget is high risk:
+                        # default policy (deny_risk_level=high) must block it.
+                        level=RiskLevel.HIGH,
                         message=f"Long sleep {m.group(1)}s exceeds timeout budget",
                     ))
             if _DD_WRITE.search(line):
