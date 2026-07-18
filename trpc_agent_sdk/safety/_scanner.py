@@ -161,7 +161,10 @@ class SafetyScanner:
 
         # blocked means "would be intercepted under this policy": DENY always,
         # and NEEDS_HUMAN_REVIEW when policy.block_on_review is enabled.
-        blocked = decision == Decision.DENY or (decision == Decision.NEEDS_HUMAN_REVIEW and self.policy.block_on_review)
+        blocked = (
+            decision == Decision.DENY
+            or (decision == Decision.NEEDS_HUMAN_REVIEW and self.policy.block_on_review)
+        )
         return SafetyReport(
             decision=decision,
             risk_level=agg_level,

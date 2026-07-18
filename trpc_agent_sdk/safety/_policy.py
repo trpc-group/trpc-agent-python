@@ -74,9 +74,12 @@ class PolicyConfig:
             unknown = set(data.keys()) - cls._KNOWN_KEYS
             if unknown:
                 raise ValueError(f"unknown policy keys: {sorted(unknown)}")
-            for key in ("max_timeout_seconds", "max_output_bytes", "max_file_write_bytes"):
-                if key in data and data[key] is not None and int(data[key]) < 0:
-                    raise ValueError(f"{key} must be non-negative")
+        # max_output_bytes / max_file_write_bytes are runtime placeholders
+        # (static scanning cannot enforce byte caps). Validate as non-negative
+        # ints regardless of strict mode so malformed YAML fails fast.
+        for key in ("max_timeout_seconds", "max_output_bytes", "max_file_write_bytes"):
+            if key in data and data[key] is not None and int(data[key]) < 0:
+                raise ValueError(f"{key} must be non-negative")
 
         deny_lvl = _parse_risk_level(data.get("deny_risk_level"), RiskLevel.HIGH)
         review_lvl = _parse_risk_level(data.get("review_risk_level"), RiskLevel.MEDIUM)

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import functools
-from typing import Any
 from typing import Optional
 
 from ._audit import AuditLogger
@@ -166,7 +165,11 @@ def safe_code_executor(
     return _SafeCodeExecutor()
 
 
-# Backwards-compatible factory alias (returns an object with execute_code).
+# Backwards-compatible alias. SafeCodeExecutor is exposed as a "class-like"
+# callable that returns an object with execute_code; it is intentionally a
+# factory function (not a class) so we can avoid importing the optional
+# code_executors package. Existing code that writes ``SafeCodeExecutor(inner,
+# policy)`` continues to work.
 SafeCodeExecutor = safe_code_executor
 
 

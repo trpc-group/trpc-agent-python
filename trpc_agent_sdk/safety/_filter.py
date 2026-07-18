@@ -76,8 +76,10 @@ class ToolSafetyFilter(BaseFilter):
         )
         report = self.scanner.scan(scan_input)
 
-        should_block = report.decision == Decision.DENY or (report.decision == Decision.NEEDS_HUMAN_REVIEW
-                                                            and self._block_on_review)
+        should_block = (
+            report.decision == Decision.DENY
+            or (report.decision == Decision.NEEDS_HUMAN_REVIEW and self._block_on_review)
+        )
         self.audit.log(report, intercepted=should_block)
 
         if should_block:
@@ -110,10 +112,9 @@ class ToolSafetyFilter(BaseFilter):
             # remain in audit / OTel.
             if not isinstance(rsp.rsp, dict):
                 rsp.rsp = {}
-            if isinstance(rsp.rsp, dict):
-                rsp.rsp["safety_warning"] = "TOOL_SAFETY_NEEDS_REVIEW"
-                rsp.rsp["safety_risk_level"] = report.risk_level.value
-                rsp.rsp["safety_rule_ids"] = list(report.rule_ids)
+            rsp.rsp["safety_warning"] = "TOOL_SAFETY_NEEDS_REVIEW"
+            rsp.rsp["safety_risk_level"] = report.risk_level.value
+            rsp.rsp["safety_rule_ids"] = list(report.rule_ids)
 
     def _resolve_tool_name(self, ctx: Any) -> str:
         get_tool_var = self._get_tool_var
