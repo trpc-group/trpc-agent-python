@@ -251,6 +251,34 @@ pytest tests/tool_safety/ -v
 
 静态分析无法覆盖所有动态构造。本工具是第一道防线，**不能替代沙箱隔离**。
 
+### 非阻断 `needs_human_review` 的可见性
+
+当决策为 `needs_human_review` 且 **未** 开启 `block_on_review` / `policy.block_on_review` 时：
+
+- 扫描**不会**阻止 tool 继续执行（`is_continue=True`）
+- 完整结果仍写入 **审计 JSONL** 与 **OpenTelemetry** `tool.safety.*`
+- Filter 链路上的 warning 字段可能被后续 tool 返回值覆盖，**调用方不应依赖返回 dict 中的 warning**
+- 若要求 review 也必须拦截，请设置 `block_on_review=True`（Filter / BashTool / CodeExecutor 均支持）
+
+---
+
+## 示例 report / audit 交付物
+
+仓库提供稳定示例（posix 路径、固定时间戳占位）：
+
+- [`tool_safety_report.json`](tool_safety_report.json)
+- [`tool_safety_audit.jsonl`](tool_safety_audit.jsonl)
+
+可用 CLI 重新生成：
+
+```bash
+python scripts/tool_safety_check.py \
+  --samples examples/tool_safety/samples/ \
+  --policy examples/tool_safety/tool_safety_policy.yaml \
+  --report examples/tool_safety/tool_safety_report.json \
+  --audit examples/tool_safety/tool_safety_audit.jsonl
+```
+
 ---
 
 ## 扩展新规则

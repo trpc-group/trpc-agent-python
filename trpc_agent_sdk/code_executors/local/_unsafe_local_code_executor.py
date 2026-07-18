@@ -88,11 +88,10 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             policy = PolicyConfig.from_yaml(self.safety_policy_path)
         else:
             policy = PolicyConfig.from_env()
-        if self.safety_block_on_review:
-            policy.block_on_review = True
+        # Do not mutate the loaded policy object; keep override on the executor.
         self._safety_scanner = SafetyScanner(policy=policy)
         self._safety_audit = AuditLogger(self.safety_audit_path or None)
-        self._safety_block_on_review = policy.block_on_review
+        self._safety_block_on_review = bool(self.safety_block_on_review or policy.block_on_review)
 
     @override
     async def execute_code(self, invocation_context: InvocationContext,
@@ -110,10 +109,9 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             from trpc_agent_sdk.safety import Decision
             from trpc_agent_sdk.safety import ScanInput
 
-            code_blocks = list(input_data.code_blocks or [])
-            if not code_blocks and input_data.code:
-                code_blocks = [CodeBlock(code=input_data.code, language="python")]
-            # Scan each block with its own language so bash is not missed.
+            # Always scan via content-aware language normalization so a mislabeled
+            # language="python" bash payload still hits bash rules.
+            from trpc_agent_sdk.safety._ast_utils import normalize_language
             from trpc_agent_sdk.safety import RiskLevel
 
             _ORDER = {
@@ -123,20 +121,23 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
                 RiskLevel.HIGH: 3,
                 RiskLevel.CRITICAL: 4,
             }
-            from trpc_agent_sdk.safety._ast_utils import normalize_language
+            code_blocks = list(input_data.code_blocks or [])
+            if not code_blocks and input_data.code:
+                # Prefer content inference over hardcoding python.
+                inferred = normalize_language(ScanInput(script=input_data.code, language=""))
+                code_blocks = [CodeBlock(code=input_data.code, language=inferred)]
 
             worst = None
             for block in code_blocks:
-                raw_lang = (getattr(block, "language", None) or "").strip().lower()
                 code = block.code or ""
-                if raw_lang in ("sh", "shell", "bash"):
+                declared = (getattr(block, "language", None) or "").strip().lower()
+                if declared in ("sh", "shell", "bash"):
                     lang = "bash"
-                elif "py" in raw_lang:
-                    lang = "python"
-                elif raw_lang in ("python", "bash"):
-                    lang = raw_lang
+                elif declared in ("python", ) or "py" in declared:
+                    # Still re-check content: mislabeled bash as python must not bypass.
+                    inferred = normalize_language(ScanInput(script=code, language=""))
+                    lang = "bash" if inferred == "bash" else "python"
                 else:
-                    # Missing/unknown language: infer from content, not force python.
                     lang = normalize_language(ScanInput(script=code, language=""))
                 report = self._safety_scanner.scan(ScanInput(script=code, language=lang, tool_name="code_executor"))
                 if worst is None:

@@ -84,3 +84,17 @@ def test_filter_deny_response_has_success_false():
     assert isinstance(rsp.rsp, dict)
     assert rsp.rsp.get("success") is False
     assert "error" in rsp.rsp
+    assert rsp.rsp.get("return_code") == -1
+    assert rsp.error is None
+
+
+def test_getattr_case_variants_denied():
+    """getattr(os, 'System'/'POPEN') must not bypass case-sensitive matching."""
+    for script in (
+            "import os\ngattr=getattr\ngattr(os, 'System')('id')\n",
+            "import os\ngattrattr=getattr\ngattrattr(os, 'POPEN')('id')\n",
+            "import os\ngetattr(os, 'system')('id')\n",
+    ):
+        report = SafetyScanner(PolicyConfig()).scan(ScanInput(script=script, language="python"))
+        assert report.decision == Decision.DENY, script
+        assert "R003_process_system" in report.rule_ids

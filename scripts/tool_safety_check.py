@@ -162,10 +162,16 @@ def _check_manifest(manifest_path: Path, reports: list[dict]) -> bool:
             matched = got in ("needs_human_review", "deny")
         else:
             matched = got == expect
-        if matched:
+        must_rules = case.get("must_rules") or []
+        rule_ids = rec.get("rule_ids") or []
+        missing = [rid for rid in must_rules if rid not in rule_ids]
+        if matched and not missing:
             ok += 1
         else:
-            print(f"manifest FAIL {name}: got {got}, expect {expect}")
+            if not matched:
+                print(f"manifest FAIL {name}: got {got}, expect {expect}")
+            if missing:
+                print(f"manifest FAIL {name}: missing rules {missing}, got {rule_ids}")
             fail += 1
     print(f"Manifest: {ok} ok | {fail} fail")
     return fail == 0

@@ -487,11 +487,8 @@ class NetworkRule(SafetyRule):
                         else:
                             lname = "requests.session." + method
 
-            if lname not in _PY_NET_CALLS and not any(
-                    lname.endswith("." + m.split(".")[-1]) and m.split(".")[0] in lname for m in _PY_NET_CALLS):
-                # Accept any *.get/post under requests/httpx/aiohttp namespaces
-                if not _is_net_call(lname):
-                    continue
+            if lname not in _PY_NET_CALLS and not _is_net_call(lname):
+                continue
 
             host = _extract_host_from_call(node)
             if host is None:
@@ -754,9 +751,11 @@ class ProcessRule(SafetyRule):
                         extra={"shell_true": shell_true},
                     ))
             # getattr(os, "system") pattern, including local aliases of getattr.
+            # Attribute names are case-normalized so System/POPEN/etc. cannot bypass.
             if (lname in getattr_names or name in getattr_names) and node.args:
                 obj = resolve_name(node.args[0], aliases).lower() if node.args else ""
-                attr = get_string_literal(node.args[1]) if len(node.args) > 1 else None
+                attr_raw = get_string_literal(node.args[1]) if len(node.args) > 1 else None
+                attr = attr_raw.lower() if isinstance(attr_raw, str) else None
                 if obj in {"os", "subprocess"} and attr in {
                         "system",
                         "popen",
@@ -764,16 +763,14 @@ class ProcessRule(SafetyRule):
                         "execv",
                         "run",
                         "call",
-                        "Popen",
-                        "popen",
                 }:
                     findings.append(
                         self._finding(
-                            f"getattr({obj}, {attr!r})",
+                            f"getattr({obj}, {attr_raw!r})",
                             node.lineno,
                             "Dynamic process binding via getattr is not allowed.",
                             level=RiskLevel.CRITICAL,
-                            message=f"Dynamic process spawn via getattr({obj}, {attr!r})",
+                            message=f"Dynamic process spawn via getattr({obj}, {attr_raw!r})",
                         ))
             if lname in _INJECTION_BUILTINS or name in _INJECTION_BUILTINS:
                 findings.append(
@@ -807,31 +804,33 @@ class ProcessRule(SafetyRule):
             cmd = tokens[0].split("/")[-1]
 
             if policy.strict_command_allowlist and policy.allowed_commands:
-                # Skip env assignments
+                # Skip env assignments; reuse PolicyConfig.is_command_allowed
+                # so Windows basenames (\) stay consistent with policy helpers.
                 check_cmd = cmd
                 if "=" in check_cmd and len(tokens) > 1:
-                    check_cmd = tokens[1].split("/")[-1]
-                if check_cmd not in policy.allowed_commands and check_cmd not in {
-                        "if",
-                        "then",
-                        "fi",
-                        "for",
-                        "do",
-                        "done",
-                        "while",
-                        "case",
-                        "esac",
-                        "[",
-                        "[[",
-                        "]",
-                        "]]",
-                        "export",
-                        "set",
-                        "unset",
-                        ":",
-                        "true",
-                        "false",
-                }:
+                    check_cmd = tokens[1].split("/")[-1].split("\\")[-1]
+                shell_builtins = {
+                    "if",
+                    "then",
+                    "fi",
+                    "for",
+                    "do",
+                    "done",
+                    "while",
+                    "case",
+                    "esac",
+                    "[",
+                    "[[",
+                    "]",
+                    "]]",
+                    "export",
+                    "set",
+                    "unset",
+                    ":",
+                    "true",
+                    "false",
+                }
+                if check_cmd not in shell_builtins and not policy.is_command_allowed(check_cmd):
                     findings.append(
                         self._finding(
                             line,

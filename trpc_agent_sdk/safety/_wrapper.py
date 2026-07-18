@@ -25,6 +25,76 @@ def wrap_tool(tool, policy: PolicyConfig, *, audit_path: Optional[str] = None):
     return tool
 
 
+def _load_create_code_execution_result():
+    """Load create_code_execution_result without importing code_executors package.
+
+    ``import trpc_agent_sdk.code_executors`` pulls optional docker deps via
+    package ``__init__``. Load the leaf module by file path instead.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "code_executors" / "_types.py"
+    spec = importlib.util.spec_from_file_location("_safety_code_exec_types", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load code executor types from {path}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.create_code_execution_result
+
+
+def _normalize_block_language(raw_lang: str | None, code: str) -> str:
+    """Resolve code-block language without forcing python for unknown/empty."""
+    from ._ast_utils import normalize_language
+
+    raw = (raw_lang or "").strip().lower()
+    if raw in ("sh", "shell", "bash"):
+        return "bash"
+    if "py" in raw or raw == "python":
+        return "python"
+    if raw == "bash":
+        return "bash"
+    return normalize_language(ScanInput(script=code or "", language=""))
+
+
+def _scan_code_input(scanner: SafetyScanner, input_data, *, block_on_review: bool):
+    """Scan code / code_blocks with per-block language; return worst report."""
+    from ._types import RiskLevel
+
+    order = {
+        RiskLevel.NONE: 0,
+        RiskLevel.LOW: 1,
+        RiskLevel.MEDIUM: 2,
+        RiskLevel.HIGH: 3,
+        RiskLevel.CRITICAL: 4,
+    }
+    blocks = list(getattr(input_data, "code_blocks", None) or [])
+    top_code = getattr(input_data, "code", None) or ""
+    if not blocks and top_code:
+        top_lang = getattr(input_data, "language", None) or ""
+        blocks = [type("B", (), {"code": top_code, "language": top_lang})()]
+
+    worst = None
+    for block in blocks:
+        code = getattr(block, "code", None) or ""
+        lang = _normalize_block_language(getattr(block, "language", None), code)
+        report = scanner.scan(ScanInput(script=code, language=lang, tool_name="code_executor"))
+        if worst is None:
+            worst = report
+        elif report.decision == Decision.DENY and worst.decision != Decision.DENY:
+            worst = report
+        elif report.decision == worst.decision:
+            if order.get(report.risk_level, 0) > order.get(worst.risk_level, 0):
+                worst = report
+    return worst
+
+
+def _should_block_report(report, block_on_review: bool) -> bool:
+    if report is None:
+        return False
+    return report.decision == Decision.DENY or (report.decision == Decision.NEEDS_HUMAN_REVIEW and block_on_review)
+
+
 class SafetyGuardedCodeExecutor:
     """Code-executor wrapper that scans code before delegating.
 
@@ -40,15 +110,13 @@ class SafetyGuardedCodeExecutor:
         self._block_on_review = block_on_review or policy.block_on_review
 
     async def execute_code(self, invocation_context, input_data):
-        from trpc_agent_sdk.code_executors import create_code_execution_result
+        create_code_execution_result = _load_create_code_execution_result()
 
-        code = input_data.code or "\n".join(b.code for b in (input_data.code_blocks or []))
-        language = getattr(input_data, "language", None) or "python"
-        report = self._scanner.scan(ScanInput(script=code, language=language, tool_name="code_executor"))
-        should_block = report.decision == Decision.DENY or (report.decision == Decision.NEEDS_HUMAN_REVIEW
-                                                            and self._block_on_review)
-        self._audit.log(report, intercepted=should_block)
-        if should_block:
+        report = _scan_code_input(self._scanner, input_data, block_on_review=self._block_on_review)
+        should_block = _should_block_report(report, self._block_on_review)
+        if report is not None:
+            self._audit.log(report, intercepted=should_block)
+        if should_block and report is not None:
             return create_code_execution_result(stderr=f"TOOL_SAFETY_DENY: {report.rule_ids}")
         return await self._inner.execute_code(invocation_context, input_data)
 
@@ -59,8 +127,21 @@ def safe_code_executor(inner, policy: PolicyConfig, *, audit_path: Optional[str]
     Returns an instance of a dynamically built ``BaseCodeExecutor`` subclass so
     it remains type-compatible with the executor hierarchy.
     """
-    from trpc_agent_sdk.code_executors import BaseCodeExecutor
-    from trpc_agent_sdk.code_executors import create_code_execution_result
+    import importlib.util
+    from pathlib import Path
+
+    base_path = Path(__file__).resolve().parents[1] / "code_executors" / "_base_code_executor.py"
+    types_path = Path(__file__).resolve().parents[1] / "code_executors" / "_types.py"
+    base_spec = importlib.util.spec_from_file_location("_safety_base_code_executor", base_path)
+    types_spec = importlib.util.spec_from_file_location("_safety_code_exec_types", types_path)
+    if base_spec is None or base_spec.loader is None or types_spec is None or types_spec.loader is None:
+        raise ImportError("cannot load code executor helpers without package init")
+    base_mod = importlib.util.module_from_spec(base_spec)
+    types_mod = importlib.util.module_from_spec(types_spec)
+    base_spec.loader.exec_module(base_mod)
+    types_spec.loader.exec_module(types_mod)
+    BaseCodeExecutor = base_mod.BaseCodeExecutor
+    create_code_execution_result = types_mod.create_code_execution_result
 
     scanner = SafetyScanner(policy=policy)
     audit = AuditLogger(audit_path)
@@ -69,13 +150,11 @@ def safe_code_executor(inner, policy: PolicyConfig, *, audit_path: Optional[str]
     class _SafeCodeExecutor(BaseCodeExecutor):
 
         async def execute_code(self, invocation_context, input_data):
-            code = input_data.code or "\n".join(b.code for b in (input_data.code_blocks or []))
-            language = getattr(input_data, "language", None) or "python"
-            report = scanner.scan(ScanInput(script=code, language=language, tool_name="code_executor"))
-            should_block = report.decision == Decision.DENY or (report.decision == Decision.NEEDS_HUMAN_REVIEW
-                                                                and block_review)
-            audit.log(report, intercepted=should_block)
-            if should_block:
+            report = _scan_code_input(scanner, input_data, block_on_review=block_review)
+            should_block = _should_block_report(report, block_review)
+            if report is not None:
+                audit.log(report, intercepted=should_block)
+            if should_block and report is not None:
                 return create_code_execution_result(stderr=f"TOOL_SAFETY_DENY: {report.rule_ids}")
             return await inner.execute_code(invocation_context, input_data)
 
