@@ -105,12 +105,6 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         Returns:
             CodeExecutionResult with combined output
         """
-        # Initialize at the top so the variable always has a defined value
-        # regardless of which branch (scanner on/off, report None/not) runs.
-        # Previously it was only assigned inside the `if self._safety_scanner`
-        # branch and the `else`, making later `if _pending_review_warning`
-        # depend on branch ordering — fragile for refactors.
-        _pending_review_warning = None
         if self._safety_scanner is not None:
             from trpc_agent_sdk.safety import Decision
             from trpc_agent_sdk.safety._wrapper import _scan_code_input
@@ -139,15 +133,20 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
                 # from "real execution error" so the agent does not retry.
                 code_label = ("TOOL_SAFETY_DENY" if report.decision == Decision.DENY else "TOOL_SAFETY_NEEDS_REVIEW")
                 return create_code_execution_result(stderr=f"{code_label}: {report.rule_ids}")
-            # Non-blocking NEEDS_HUMAN_REVIEW: do NOT block execution, but
-            # surface the warning so the caller is not silently unaware
-            # (matches _filter._after's merge semantics). Stash the warning
-            # and prepend it to stderr after execution completes below.
-            # Use logging (not sys.stderr.write) to avoid polluting captured
-            # stderr streams in CI / subprocess stdout/stderr separation.
+            # Non-blocking NEEDS_HUMAN_REVIEW: do NOT block execution. Surface
+            # the warning via the SDK logger (matches ToolSafetyFilter._before)
+            # instead of appending to stderr. Writing to stderr would make
+            # create_code_execution_result set outcome=OUTCOME_FAILED, which
+            # _code_execution_processor treats as an execution error and
+            # retries via error_retry_attempts — re-running already-allowed
+            # code. Logging keeps outcome=OUTCOME_OK so the agent does not
+            # retry, while operators still see the warning and the audit log
+            # records the decision.
             if (report is not None and report.decision == Decision.NEEDS_HUMAN_REVIEW and not should_block):
-                _pending_review_warning = (f"TOOL_SAFETY_NEEDS_REVIEW: {list(report.rule_ids)} "
-                                           f"(risk={report.risk_level.value})")
+                import logging
+                logging.getLogger("trpc_agent_sdk.safety").warning(
+                    "TOOL_SAFETY_NEEDS_REVIEW: %s (risk=%s)",
+                    list(report.rule_ids), report.risk_level.value)
 
         output_parts = []
         error_parts = []
@@ -172,8 +171,6 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             if should_cleanup:
                 shutil.rmtree(work_dir, ignore_errors=True)
 
-        if _pending_review_warning:
-            error_parts.append(_pending_review_warning)
         return create_code_execution_result(stdout="\n".join(output_parts) if output_parts else "",
                                             stderr="\n".join(error_parts) if error_parts else "")
 

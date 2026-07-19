@@ -66,14 +66,20 @@ class ToolSafetyFilter(BaseFilter):
         self.audit = AuditLogger(audit_path)
         self._configured_tool_name = tool_name
         self._block_on_review = (policy.block_on_review if block_on_review is None else block_on_review)
-        # Prefer lightweight context-var import; never pull trpc_agent_sdk.tools
-        # package (heavy optional deps like anthropic) on every scan.
+        # Resolve the tool name from the async context var set by the SDK tool
+        # runner, so audit records show "Bash" instead of the generic configured
+        # name. We only attach get_tool_var when the host application has
+        # already imported trpc_agent_sdk.tools._context_var — importing it
+        # ourselves would execute trpc_agent_sdk/tools/__init__.py, which pulls
+        # mcp_tool / file_tools / webfetch_tool and their optional deps (mcp,
+        # anthropic, ...). Checking sys.modules keeps the safety package
+        # lightweight when tools are not in use; when they are, we reuse the
+        # exact same ContextVar instance so names resolve correctly.
+        import sys
         self._get_tool_var = None
-        try:
-            from trpc_agent_sdk.tools._context_var import get_tool_var
-            self._get_tool_var = get_tool_var
-        except Exception:  # pylint: disable=broad-except
-            self._get_tool_var = None
+        ctx_mod = sys.modules.get("trpc_agent_sdk.tools._context_var")
+        if ctx_mod is not None:
+            self._get_tool_var = getattr(ctx_mod, "get_tool_var", None)
 
     async def _before(self, ctx: Any, req: Any, rsp: FilterResult) -> None:
         """Scan the tool args; block execution when decision is DENY."""
