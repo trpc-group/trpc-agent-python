@@ -37,6 +37,8 @@ from trpc_agent_sdk.sessions._session import Session
 from trpc_agent_sdk.sessions._session_summarizer import SessionSummarizer
 from trpc_agent_sdk.sessions._sql_session_service import SqlSessionService
 from trpc_agent_sdk.sessions._types import SessionServiceConfig
+from trpc_agent_sdk.storage import RedisCommand
+from trpc_agent_sdk.storage import RedisCondition
 from trpc_agent_sdk.types import Content, EventActions, FunctionCall, FunctionResponse, Part
 
 _APP_NAME = "replay-app"
@@ -97,7 +99,20 @@ class _MockRedisStorage:
         keys = self._keys(pattern)
         if conditions.limit > 0:
             keys = keys[:conditions.limit]
-        return [(key, list(self._lists[key])) for key in keys if key in self._lists]
+        results = []
+        for key in keys:
+            if key in self._strings and self._strings[key]:
+                value = self._strings[key]
+                try:
+                    value = json.loads(value)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                results.append((key, value))
+            elif key in self._hashes and self._hashes[key]:
+                results.append((key, dict(self._hashes[key])))
+            elif key in self._lists and self._lists[key]:
+                results.append((key, list(self._lists[key])))
+        return results
 
     async def expire(self, _session: Any, _command: Any) -> None:
         return None
@@ -354,6 +369,9 @@ async def _replay_case(case: dict[str, Any]) -> dict[str, dict[str, Any]]:
                     ):
                         with pytest.raises(RuntimeError, match="injected summary persistence failure"):
                             await _create_summary(session, session_service, operation, summary_version, timestamp)
+                    pending_summary = next(event for event in session.events if event.is_summary_event())
+                    assert pending_summary.custom_metadata["summary_session_id"] == session.id
+                    assert pending_summary.custom_metadata["summary_version"] == summary_version
                     await original_update(session)
                 elif operation["op"] == "store_memory_retry":
                     original_store = memory_service.store_session
@@ -455,8 +473,8 @@ def _inject_case_difference(case_id: str, snapshot: dict[str, Any]) -> tuple[dic
     return injected, expected_path
 
 
-def _write_report(results: list[dict[str, Any]]) -> None:
-    _REPORT_PATH.write_text(json.dumps({"cases": results}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+def _write_report(results: list[dict[str, Any]], report_path: Path) -> None:
+    report_path.write_text(json.dumps({"cases": results}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def _compare_snapshot(
@@ -516,13 +534,18 @@ class TestReplayCases:
         assert result["status"] == "match"
         assert [item["backend"] for item in result["comparisons"]] == _expected_comparison_backends()
 
-    async def test_all_public_cases_match_and_write_report(self):
+    async def test_all_public_cases_match_and_write_report(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("REPLAY_LIGHTWEIGHT", raising=False)
+        monkeypatch.delenv("REPLAY_SQL_URL", raising=False)
+        monkeypatch.delenv("REPLAY_REDIS_URL", raising=False)
         results = [await _compare_case(case) for case in _load_cases()]
-        _write_report(results)
+        report_path = tmp_path / _REPORT_PATH.name
+        _write_report(results, report_path)
         expected = {case["id"]: "match" for case in _load_cases()}
         assert {result["case_id"]: result["status"] for result in results} == expected
-        report = json.loads(_REPORT_PATH.read_text(encoding="utf-8"))
+        report = json.loads(report_path.read_text(encoding="utf-8"))
         assert len(report["cases"]) == 10
+        assert report == json.loads(_REPORT_PATH.read_text(encoding="utf-8"))
 
     async def test_all_public_cases_detect_injected_difference(self):
         for case in _load_cases():
@@ -551,6 +574,15 @@ class TestReplayCases:
 
 
 class TestReplayComparison:
+
+    async def test_mock_redis_query_returns_string_and_hash_values(self):
+        storage = _MockRedisStorage()
+        await storage.execute_command(None, RedisCommand(method="set", args=("value:key", '"stored"')))
+        await storage.execute_command(None, RedisCommand(method="hset", args=("hash:key", "field", "value")))
+
+        result = await storage.query(None, "*:key", RedisCondition())
+
+        assert result == [("hash:key", {"field": "value"}), ("value:key", "stored")]
 
     def test_design_note_contains_150_to_300_chinese_characters(self):
         design = _DESIGN_PATH.read_text(encoding="utf-8")
@@ -624,8 +656,18 @@ class TestReplayComparison:
     def test_allowed_difference_includes_its_reason_in_the_report(self):
         comparison = _compare_snapshot(
             "sql",
-            {"session_id": "replay-session", "state": {"backend": "a"}},
-            {"session_id": "replay-session", "state": {"backend": "b"}},
+            {
+                "session_id": "replay-session",
+                "state": {
+                    "backend": "a"
+                }
+            },
+            {
+                "session_id": "replay-session",
+                "state": {
+                    "backend": "b"
+                }
+            },
             {"state.backend"},
             "Persistent backend stores this field differently.",
         )
