@@ -155,8 +155,8 @@ class SafetyScanner:
                 decision=Decision.DENY if blocklist_hit else Decision.DENY,
                 risk_level=RiskLevel.CRITICAL if blocklist_hit else RiskLevel.HIGH,
                 findings=oversized_findings,
-                summary=f"Script is too large: {script_lines} lines (max {self._policy.max_script_lines})."
-                + (" Blocklist pattern matched — denied." if blocklist_hit else " Denied for safety."),
+                summary=f"Script is too large: {script_lines} lines (max {self._policy.max_script_lines})." +
+                (" Blocklist pattern matched — denied." if blocklist_hit else " Denied for safety."),
                 scan_duration_ms=round(duration_ms, 2),
                 policy_version=self._policy.content_hash,
                 sanitized=False,
@@ -182,8 +182,7 @@ class SafetyScanner:
                 findings = rule(script, scan_input, self._policy)
                 all_findings.extend(findings)
             except Exception:  # pylint: disable=broad-except
-                logger.error("Safety rule raised an exception; skipping: %s",
-                             str(getattr(rule, "__class__", rule)))
+                logger.error("Safety rule raised an exception; skipping: %s", str(getattr(rule, "__class__", rule)))
 
         # Check environment variables against blocklist
         if scan_input.environment_variables:
@@ -218,7 +217,8 @@ class SafetyScanner:
             decision = self._check_blocklist_override(script, decision)
 
         # Apply allow-pattern override — allow patterns → allow
-        if decision != Decision.ALLOW and self._check_allow_patterns(script):
+        # Only upgrades NEEDS_HUMAN_REVIEW; never overrides DENY (blocklist wins).
+        if decision == Decision.NEEDS_HUMAN_REVIEW and self._check_allow_patterns(script):
             decision = Decision.ALLOW
 
         # ══════════════════════════════════════════════════════════════
@@ -270,11 +270,9 @@ class SafetyScanner:
         """Run the AST-based Python scanner and convert to SafetyFinding list."""
         findings: List[SafetyFinding] = []
         try:
-            from ._python_scanner import (get_python_concurrency, get_python_dynamic_exec,
-                                          get_python_file_deletes, get_python_file_reads,
-                                          get_python_file_writes, get_python_loops,
-                                          get_python_secret_flow, get_python_sleep, get_python_urls,
-                                          scan_python)
+            from ._python_scanner import (get_python_concurrency, get_python_dynamic_exec, get_python_file_deletes,
+                                          get_python_file_reads, get_python_file_writes, get_python_loops,
+                                          get_python_secret_flow, get_python_sleep, get_python_urls, scan_python)
             ast_findings = scan_python(script, max_lines=self._policy.max_script_lines)
 
             # File deletions
@@ -391,8 +389,8 @@ class SafetyScanner:
                             risk,
                             f.evidence,
                             f"AST: {'privilege escalation' if f.extra.get('risk') == 'privilege' else 'process execution'} via {f.canonical_name}",
-                            "Avoid spawning child processes in agent tools."
-                            if f.extra.get("risk") != "privilege" else "Privilege escalation is not allowed in tool scripts.",
+                            "Avoid spawning child processes in agent tools." if f.extra.get("risk") != "privilege" else
+                            "Privilege escalation is not allowed in tool scripts.",
                             f.line_number,
                             f.canonical_name,
                         ))
@@ -473,11 +471,9 @@ class SafetyScanner:
         """Run the shlex-based Bash scanner and convert to SafetyFinding list."""
         findings: List[SafetyFinding] = []
         try:
-            from ._bash_scanner import (get_bash_dynamic_exec, get_bash_fork_bombs,
-                                        get_bash_install_commands, get_bash_long_sleeps,
-                                        get_bash_network_commands, get_bash_pipes,
-                                        get_bash_privilege_commands, get_bash_rm_rf,
-                                        get_bash_secret_refs, scan_bash)
+            from ._bash_scanner import (get_bash_dynamic_exec, get_bash_fork_bombs, get_bash_install_commands,
+                                        get_bash_long_sleeps, get_bash_network_commands, get_bash_pipes,
+                                        get_bash_privilege_commands, get_bash_rm_rf, get_bash_secret_refs, scan_bash)
             bash_findings = scan_bash(script, max_lines=self._policy.max_script_lines)
 
             # rm -rf
@@ -714,18 +710,33 @@ class SafetyScanner:
 
         # Bash indicators
         bash_indicators = [
-            "#!/bin/bash", "#!/bin/sh", "#!/usr/bin/env bash",
-            "set -e", "set -u", "set -o pipefail",
-            "if [[", "if [ ", "then", "fi", "esac", "done", "elif [",
-            "case ", "in ", ";;", "function ", "source ",
+            "#!/bin/bash",
+            "#!/bin/sh",
+            "#!/usr/bin/env bash",
+            "set -e",
+            "set -u",
+            "set -o pipefail",
+            "if [[",
+            "if [ ",
+            "then",
+            "fi",
+            "esac",
+            "done",
+            "elif [",
+            "case ",
+            "in ",
+            ";;",
+            "function ",
+            "source ",
         ]
         bash_score = sum(1 for ind in bash_indicators if ind in script)
         bash_score += script.count("$(") + script.count("${") + script.count("|")
 
         # Python indicators (conservative — no more ``print(``)
-        py_indicators = ["import ", "from ", "def ", "class ", "async def ",
-                         "with ", "try:", "except ", "finally:", "yield ",
-                         "__name__", "__main__"]
+        py_indicators = [
+            "import ", "from ", "def ", "class ", "async def ", "with ", "try:", "except ", "finally:", "yield ",
+            "__name__", "__main__"
+        ]
         py_score = sum(1 for ind in py_indicators if ind in script)
 
         if py_score > bash_score + 1:
@@ -922,8 +933,7 @@ def _strip_python_comment_line(line: str) -> str:
             i += 2
             continue
         # Triple-quote
-        if (not in_single and not in_double and i + 2 < n
-                and ch in ("'", '"') and line[i:i + 3] == ch * 3):
+        if (not in_single and not in_double and i + 2 < n and ch in ("'", '"') and line[i:i + 3] == ch * 3):
             marker = ch * 3
             result.append(marker)
             i += 3
@@ -982,9 +992,9 @@ def _is_in_echo_string(line: str, pattern: str) -> bool:
     printed, not executed.
     """
     stripped = line.strip()
-    if not (stripped.startswith("echo ") or stripped.startswith("echo\t")
-            or stripped.startswith("printf ") or stripped.startswith("printf\t")
-            or stripped.startswith("/bin/echo ") or stripped.startswith("/usr/bin/echo ")):
+    if not (stripped.startswith("echo ") or stripped.startswith("echo\t") or stripped.startswith("printf ")
+            or stripped.startswith("printf\t") or stripped.startswith("/bin/echo ")
+            or stripped.startswith("/usr/bin/echo ")):
         return False
     try:
         pat = re.compile(pattern, re.IGNORECASE)

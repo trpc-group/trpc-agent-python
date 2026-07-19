@@ -67,35 +67,82 @@ class BashScanFinding:
 # ═══════════════════════════════════════════════════════════════════════════
 
 _NETWORK_COMMANDS: Set[str] = {
-    "curl", "wget", "nc", "ncat", "netcat", "telnet", "ssh", "scp",
-    "sftp", "rsync", "ftp", "socat", "aria2c", "axel",
+    "curl",
+    "wget",
+    "nc",
+    "ncat",
+    "netcat",
+    "telnet",
+    "ssh",
+    "scp",
+    "sftp",
+    "rsync",
+    "ftp",
+    "socat",
+    "aria2c",
+    "axel",
 }
 
 _INSTALL_COMMANDS: Set[str] = {
-    "pip", "pip3", "pipx", "npm", "yarn", "pnpm", "npx",
-    "apt", "apt-get", "yum", "dnf", "zypper", "pacman",
-    "brew", "cargo", "go", "gem",
+    "pip",
+    "pip3",
+    "pipx",
+    "npm",
+    "yarn",
+    "pnpm",
+    "npx",
+    "apt",
+    "apt-get",
+    "yum",
+    "dnf",
+    "zypper",
+    "pacman",
+    "brew",
+    "cargo",
+    "go",
+    "gem",
 }
 
 _PRIVILEGE_COMMANDS: Set[str] = {
-    "sudo", "su", "doas", "pkexec", "chroot",
+    "sudo",
+    "su",
+    "doas",
+    "pkexec",
+    "chroot",
 }
 
 _DESTRUCTIVE_COMMANDS: Set[str] = {
-    "mkfs", "mkfs.ext4", "mkfs.xfs", "mkfs.btrfs",
+    "mkfs",
+    "mkfs.ext4",
+    "mkfs.xfs",
+    "mkfs.btrfs",
 }
 
 _FILE_READ_COMMANDS: Set[str] = {
-    "cat", "head", "tail", "grep", "awk", "sed", "less", "more",
-    "strings", "od", "xxd", "hexdump",
+    "cat",
+    "head",
+    "tail",
+    "grep",
+    "awk",
+    "sed",
+    "less",
+    "more",
+    "strings",
+    "od",
+    "xxd",
+    "hexdump",
 }
 
 _FILE_WRITE_COMMANDS: Set[str] = {
-    "tee", "dd",
+    "tee",
+    "dd",
 }
 
 _DYNAMIC_COMMANDS: Set[str] = {
-    "eval", "exec", "source", ".",
+    "eval",
+    "exec",
+    "source",
+    ".",
 }
 
 # Commands whose sub-command is also checked
@@ -110,7 +157,6 @@ _SUBCOMMAND_MAP: Dict[str, Set[str]] = {
     "go": {"install", "get"},
     "gem": {"install", "uninstall"},
 }
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Bash Scanner
@@ -276,7 +322,10 @@ class BashScanner:
                                 args=args_str,
                                 line_number=line_no,
                                 evidence=raw_line.strip()[:300],
-                                extra={"risk": "sensitive_file_read", "path": pa},
+                                extra={
+                                    "risk": "sensitive_file_read",
+                                    "path": pa
+                                },
                             ))
                         break
             elif cmd_lower in _FILE_WRITE_COMMANDS and cmd_lower == "dd":
@@ -286,22 +335,15 @@ class BashScanner:
     # Specific checks
     # ------------------------------------------------------------------
 
-    def _check_rm(self, line_no: int, raw_line: str, tokens: List[str],
-                   args: List[str]) -> None:
+    def _check_rm(self, line_no: int, raw_line: str, tokens: List[str], args: List[str]) -> None:
         """Check for recursive-delete.  Flags both ``rm -rf`` and ``rm -r -f``."""
         all_tokens = set(tokens)
         # Handles combined flags: -rf, -fr, -r, -R, --recursive
-        has_r = any(
-            ("r" in t.replace("-", "").lower() and not t.startswith("--"))
-            or t in ("-r", "-R", "--recursive")
-            for t in tokens if t.startswith("-")
-        )
+        has_r = any(("r" in t.replace("-", "").lower() and not t.startswith("--")) or t in ("-r", "-R", "--recursive")
+                    for t in tokens if t.startswith("-"))
         # Handles combined flags: -rf, -fr, -f, --force
-        has_f = any(
-            ("f" in t.replace("-", "").lower() and not t.startswith("--"))
-            or t in ("-f", "--force")
-            for t in tokens if t.startswith("-")
-        )
+        has_f = any(("f" in t.replace("-", "").lower() and not t.startswith("--")) or t in ("-f", "--force")
+                    for t in tokens if t.startswith("-"))
 
         # Check recursive via long option
         has_recursive = "--recursive" in all_tokens
@@ -315,7 +357,11 @@ class BashScanner:
                     args=" ".join(args),
                     line_number=line_no,
                     evidence=raw_line.strip()[:300],
-                    extra={"target": target, "recursive": True, "force": True},
+                    extra={
+                        "target": target,
+                        "recursive": True,
+                        "force": True
+                    },
                 ))
         elif has_r or has_recursive:
             target = args[-1] if args else "?"
@@ -367,32 +413,44 @@ class BashScanner:
                         ))
 
     def _check_operators(self, line_no: int, raw_line: str, tokens: List[str]) -> None:
-        """Detect pipes and background operators."""
-        raw_tokens = _tokenize_line(raw_line)
-        # Pipe
-        if "|" in raw_tokens:
-            self._findings.append(
-                BashScanFinding(
-                    kind="pipe",
-                    command="|",
-                    line_number=line_no,
-                    evidence=raw_line.strip()[:300],
-                ))
+        """Detect pipes and background operators.
 
-        # Background: standalone & (not &&, not |&)
-        # Check raw token positions for standalone &
-        if "&" in raw_tokens:
-            for i, t in enumerate(raw_tokens):
-                if t == "&":
-                    # Not part of && or ||& or >&
-                    self._findings.append(
-                        BashScanFinding(
-                            kind="background",
-                            command="&",
-                            line_number=line_no,
-                            evidence=raw_line.strip()[:300],
-                        ))
-                    break
+        Distinguishes single ``|`` from ``||`` (logical OR) and single ``&``
+        from ``&&`` (logical AND), ``|&``, and ``>&`` so that shell
+        short-circuit operators do not produce false pipe/background findings.
+        """
+        raw_tokens = _tokenize_line(raw_line)
+
+        # Pipe: single | not adjacent to another | (i.e. not ||)
+        for i, t in enumerate(raw_tokens):
+            if t == "|":
+                # Skip if this | is part of || or |&
+                if (i > 0 and raw_tokens[i - 1] == "|") or (i + 1 < len(raw_tokens) and raw_tokens[i + 1] == "|"):
+                    continue
+                self._findings.append(
+                    BashScanFinding(
+                        kind="pipe",
+                        command="|",
+                        line_number=line_no,
+                        evidence=raw_line.strip()[:300],
+                    ))
+                break
+
+        # Background: standalone & (not &&, not |&, not >&)
+        for i, t in enumerate(raw_tokens):
+            if t == "&":
+                # Skip if part of &&, |&, or >&
+                if (i > 0 and raw_tokens[i - 1] in ("|", ">")) or (i > 0 and raw_tokens[i - 1] == "&") or (
+                        i + 1 < len(raw_tokens) and raw_tokens[i + 1] == "&"):
+                    continue
+                self._findings.append(
+                    BashScanFinding(
+                        kind="background",
+                        command="&",
+                        line_number=line_no,
+                        evidence=raw_line.strip()[:300],
+                    ))
+                break
 
     def _check_dd(self, line_no: int, raw_line: str, args: List[str]) -> None:
         """Parse dd arguments for output-device detection."""
@@ -424,7 +482,10 @@ class BashScanner:
                     args=" ".join(args),
                     line_number=line_no,
                     evidence=raw_line.strip()[:300],
-                    extra={"risk": "device_write", "of": of_target},
+                    extra={
+                        "risk": "device_write",
+                        "of": of_target
+                    },
                 ))
         elif is_large_write:
             self._findings.append(
@@ -434,7 +495,10 @@ class BashScanner:
                     args=" ".join(args),
                     line_number=line_no,
                     evidence=raw_line.strip()[:300],
-                    extra={"risk": "large_write", "estimated_bytes": bs_val * count_val},
+                    extra={
+                        "risk": "large_write",
+                        "estimated_bytes": bs_val * count_val
+                    },
                 ))
 
     def _check_fork_bomb(self) -> None:
@@ -454,9 +518,7 @@ class BashScanner:
 
         # Generalised: <name>(){ <name>|<name>& };<name>
         # This catches renamed variants
-        generalized = re.compile(
-            r"([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s*\{\s*\1\s*\|\s*\1\s*&[^}]*\}\s*;?\s*\1",
-        )
+        generalized = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s*\{\s*\1\s*\|\s*\1\s*&[^}]*\}\s*;?\s*\1", )
         for m in generalized.finditer(self._source):
             line_no = self._source[:m.start()].count("\n") + 1
             self._findings.append(
@@ -465,7 +527,10 @@ class BashScanner:
                     command="fork_bomb",
                     line_number=line_no,
                     evidence=m.group(0)[:200],
-                    extra={"pattern": "generalized", "name": m.group(1)},
+                    extra={
+                        "pattern": "generalized",
+                        "name": m.group(1)
+                    },
                 ))
 
     def _check_heredocs(self) -> None:
@@ -482,7 +547,10 @@ class BashScanner:
                     command=m.group(1),
                     line_number=line_no,
                     evidence=m.group(0),
-                    extra={"interpreter": m.group(1), "delimiter": m.group(2)},
+                    extra={
+                        "interpreter": m.group(1),
+                        "delimiter": m.group(2)
+                    },
                 ))
 
     def _check_long_sleeps(self, default_threshold: int = 60) -> None:

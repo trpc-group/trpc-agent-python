@@ -312,8 +312,8 @@ python scripts/tool_safety_check.py -p custom_policy.yaml -f script.sh
 ```yaml
 # ---- 全局设置 ----
 global:
-  max_script_lines: 500        # 超过此行数触发 needs_human_review
-  max_script_bytes: 524288     # 超过此字节数触发 needs_human_review
+  max_script_lines: 500        # 超过此行数直接 DENY（先做黑名单预检查，防止填充绕过）
+  max_script_bytes: 524288     # 超过此字节数触发 DENY
   max_timeout_seconds: 300     # 建议的最长执行时间
   max_output_bytes: 10485760   # 最大输出大小
 

@@ -61,35 +61,41 @@ Examples:
         """,
     )
     parser.add_argument(
-        "--file", "-f",
+        "--file",
+        "-f",
         type=str,
         help="Path to a script file to scan.",
     )
     parser.add_argument(
-        "--type", "-t",
+        "--type",
+        "-t",
         type=str,
         choices=["python", "bash", "auto"],
         default="auto",
         help="Script language hint (default: auto-detect).",
     )
     parser.add_argument(
-        "--tool-name", "-n",
+        "--tool-name",
+        "-n",
         type=str,
         default="cli_tool",
         help="Name of the tool being scanned (for audit / report).",
     )
     parser.add_argument(
-        "--policy", "-p",
+        "--policy",
+        "-p",
         type=str,
         help="Path to a custom safety policy YAML file.",
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         type=str,
         help="Write the JSON report to this file (default: stdout).",
     )
     parser.add_argument(
-        "--audit", "-a",
+        "--audit",
+        "-a",
         type=str,
         help="Append an audit event to this JSONL file.",
     )
@@ -173,7 +179,7 @@ Examples:
 def _print_summary(report, no_color: bool) -> None:
     """Print a colourised summary to stderr."""
     if no_color:
-        R, G, Y, W, B = "", "", "", "", ""
+        R, G, Y, W, B, RESET = "", "", "", "", "", ""
     else:
         R, G, Y, W, B = "\033[91m", "\033[92m", "\033[93m", "\033[97m", "\033[94m"
         RESET = "\033[0m"
@@ -200,7 +206,11 @@ def _print_summary(report, no_color: bool) -> None:
         print(f"\n{B}  Findings:{RESET}", file=sys.stderr)
         for f in report.findings:
             colour = {
-                "critical": R, "high": R, "medium": Y, "low": W, "info": W,
+                "critical": R,
+                "high": R,
+                "medium": Y,
+                "low": W,
+                "info": W,
             }.get(f.risk_level.value, W)
             print(f"    [{colour}{f.rule_id}{RESET}] {f.message}", file=sys.stderr)
             if f.evidence:

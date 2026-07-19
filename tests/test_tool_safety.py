@@ -1298,8 +1298,8 @@ def test_scanner_allow_patterns_override():
     assert report.decision == Decision.ALLOW
 
 
-def test_scanner_allow_patterns_override_with_dangerous():
-    """allow_patterns must override DENY even for dangerous scripts (when pattern matches)."""
+def test_scanner_allow_patterns_never_overrides_deny():
+    """allow_patterns must NOT override DENY — blocklist always wins (security fix)."""
     from trpc_agent_sdk.tools.safety._policy import SafetyPolicy
     policy = SafetyPolicy(
         allow_patterns=[r"rm\s+-rf\s+/tmp/safedir"],
@@ -1312,8 +1312,9 @@ def test_scanner_allow_patterns_override_with_dangerous():
             script_type=ScriptType.BASH,
             tool_name="allow_dangerous_test",
         ))
-    # allow_patterns should take effect
-    assert report.decision == Decision.ALLOW
+    # allow_patterns must NOT override DENY from CRITICAL risk (rm -rf)
+    assert report.decision == Decision.DENY, \
+        f"allow_patterns should NOT override DENY, got {report.decision}"
 
 
 def test_scanner_reload_policy():
@@ -1541,9 +1542,7 @@ def test_process_medium_risk_for_pipe():
             script_type=ScriptType.BASH,
             tool_name="pipe_test",
         ))
-    proc_findings = [
-        f for f in report.findings if f.category == RiskCategory.PROCESS_AND_SYSTEM
-    ]
+    proc_findings = [f for f in report.findings if f.category == RiskCategory.PROCESS_AND_SYSTEM]
     assert len(proc_findings) > 0, "Pipe should still trigger a PROC finding (INFO level)"
     # Verify it's INFO, not MEDIUM — whitelisted commands → safe pipe
     assert all(f.risk_level == RiskLevel.INFO for f in proc_findings), \
@@ -1556,9 +1555,7 @@ def test_process_medium_risk_for_pipe():
             script_type=ScriptType.BASH,
             tool_name="pipe_test2",
         ))
-    med_findings = [
-        f for f in report2.findings if f.risk_level == RiskLevel.MEDIUM
-    ]
+    med_findings = [f for f in report2.findings if f.risk_level == RiskLevel.MEDIUM]
     assert len(med_findings) > 0, "Pipe with non-whitelisted commands should trigger MEDIUM"
 
 
@@ -2080,16 +2077,18 @@ def test_scanner_blocklist_override_invalid_regex():
 
 
 def test_scanner_allow_override_with_findings():
-    """allow_patterns must override DENY to ALLOW when script triggers rules."""
+    """allow_patterns upgrades NEEDS_HUMAN_REVIEW → ALLOW (never overrides DENY)."""
     import tempfile
     import yaml
-    # Build a temp policy that blocks curl but allows a specific domain pattern
+    # Build a temp policy that allows a specific pattern.
+    # The script triggers MEDIUM risk (long sleep → NEEDS_HUMAN_REVIEW),
+    # and allow_patterns upgrades the decision to ALLOW.
     policy_data = {
         "global": {
             "max_script_lines": 500
         },
         "whitelists": {
-            "domains": ["localhost"],
+            "domains": [],
             "commands": [],
             "patterns": []
         },
@@ -2100,10 +2099,10 @@ def test_scanner_allow_override_with_findings():
             "patterns": []
         },
         "rules": {
-            "network_egress": {
+            "resource_abuse": {
                 "enabled": True,
-                "risk_level": "high",
-                "bash_commands": ["curl", "wget"],
+                "risk_level": "medium",
+                "long_sleep_threshold_seconds": 60,
             }
         },
         "sanitization": {
@@ -2118,16 +2117,16 @@ def test_scanner_allow_override_with_findings():
         from trpc_agent_sdk.tools.safety._policy import PolicyLoader
         policy = PolicyLoader(policy_path).load()
         scanner = SafetyScanner(policy)
-        # Script triggers NET egress (curl to non-whitelisted domain) AND
-        # has an allow_pattern match → should be ALLOW
+        # Script triggers MEDIUM risk (sleep 120 > 60s threshold → NEEDS_HUMAN_REVIEW)
+        # AND has an allow_pattern match → should be ALLOW
         report = scanner.scan(
             SafetyScanInput(
-                script_content="echo safe_override_test; curl https://evil.com",
+                script_content="echo safe_override_test; sleep 120",
                 script_type=ScriptType.BASH,
                 tool_name="allow_override2",
             ))
         assert report.decision == Decision.ALLOW, \
-            f"allow_patterns should override, got {report.decision}"
+            f"allow_patterns should upgrade NEEDS_HUMAN_REVIEW to ALLOW, got {report.decision}"
     finally:
         os.unlink(policy_path)
 
