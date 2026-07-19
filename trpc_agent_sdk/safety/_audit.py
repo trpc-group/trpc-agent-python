@@ -16,6 +16,16 @@ from typing import Optional
 from ._types import SafetyReport
 
 # Process-local lock so concurrent threads do not interleave long JSONL lines.
+#
+# Cross-process note: this lock does NOT coordinate across OS processes. If
+# multiple worker processes write to the same audit_path simultaneously, long
+# JSONL lines (above PIPE_BUF, typically 4096 bytes on Linux) may interleave
+# or truncate because O_APPEND atomicity is only guaranteed up to PIPE_BUF.
+# For multi-process deployments, either (a) give each worker a distinct
+# audit_path, (b) funnel audit writes through a single writer process, or
+# (c) use fcntl.flock for cross-process exclusion. The current single-process
+# design matches the typical Tool/SafetyFilter usage where one agent process
+# owns the audit log.
 _AUDIT_LOCK = threading.Lock()
 
 

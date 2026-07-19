@@ -279,3 +279,49 @@ def test_strict_command_allowlist_empty_list_is_fail_closed():
     findings = rule.check(inp, policy)
     allow_list_findings = [f for f in findings if "allow-list" in f.metadata.get("message", "")]
     assert allow_list_findings, "strict_command_allowlist=True with empty allowed_commands must flag rm (fail-closed)"
+
+
+def test_dangerous_files_bash_system_dir_boundary_not_substring():
+    """Regression for CongkeChen review: bash side used `sd in line` substring
+    matching, so '/etc' matched 'cat /etcetera/foo' (false-positive CRITICAL →
+    DENY). Now uses _matches_system_dir for path-boundary consistency with the
+    Python side."""
+    rule = DangerousFilesRule()
+    # '/etcetera/foo' must NOT match system dir '/etc' (no path boundary).
+    inp = ScanInput(script="cat /etcetera/foo\n", language="bash")
+    findings = rule.check(inp, _policy())
+    assert not any("system directory" in f.metadata.get("message", "") for f in findings)
+
+
+def test_dangerous_files_bash_forbidden_path_boundary_not_substring():
+    """Regression for CongkeChen review: bash side used `fb in line` substring
+    matching, so '.env' matched 'cat my.envrc' (false-positive → DENY). Now
+    uses _matches_forbidden for path-boundary consistency with the Python
+    side."""
+    rule = DangerousFilesRule()
+    policy = PolicyConfig(forbidden_paths=[".env"])
+    # 'my.envrc' must NOT match forbidden path '.env' (no path boundary).
+    inp = ScanInput(script="cat my.envrc\n", language="bash")
+    findings = rule.check(inp, policy)
+    assert not any("forbidden" in f.metadata.get("message", "").lower() for f in findings)
+
+
+def test_resource_long_sleep_above_threshold_is_high():
+    """sleep N where N > max_timeout_seconds must be flagged HIGH.
+    Threshold is > (strict), so max+1 triggers and max does not."""
+    from trpc_agent_sdk.safety._rules import ResourceAbuseRule
+    rule = ResourceAbuseRule()
+    policy = PolicyConfig(max_timeout_seconds=300)
+    inp = ScanInput(script="sleep 301\n", language="bash")
+    findings = rule.check(inp, policy)
+    assert any("Long sleep" in f.metadata.get("message", "") for f in findings)
+
+
+def test_resource_sleep_at_threshold_is_allowed_bash():
+    """sleep N where N == max_timeout_seconds must NOT be flagged (boundary)."""
+    from trpc_agent_sdk.safety._rules import ResourceAbuseRule
+    rule = ResourceAbuseRule()
+    policy = PolicyConfig(max_timeout_seconds=300)
+    inp = ScanInput(script="sleep 300\n", language="bash")
+    findings = rule.check(inp, policy)
+    assert not any("Long sleep" in f.metadata.get("message", "") for f in findings)

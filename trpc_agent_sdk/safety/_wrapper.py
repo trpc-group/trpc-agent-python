@@ -68,10 +68,12 @@ def _deny_code_result(rule_ids: list[str]):
     )
 
     class _Outcome:
+
         def __init__(self, name: str):
             self.name = name
 
     class _CodeExecutionResult:
+
         def __init__(self, *, output: str, outcome_name: str):
             self.output = output
             self.outcome = _Outcome(outcome_name)

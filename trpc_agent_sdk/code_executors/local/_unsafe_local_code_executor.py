@@ -127,6 +127,16 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
                 # Distinguish DENY vs NEEDS_HUMAN_REVIEW in stderr so audits and
                 # logs don't mislabel a review-block as a deny (matches
                 # ToolSafetyFilter's error_code selection).
+                #
+                # Side effect: create_code_execution_result maps non-empty
+                # stderr to OUTCOME_FAILED, and _code_execution_processor
+                # treats outcome != OUTCOME_OK as an execution error, which
+                # may trigger up to error_retry_attempts (default 2) retries
+                # of the same blocked code. Each retry is still intercepted
+                # (so this is safe), but it wastes a scan/LLM round-trip per
+                # retry. This is accepted for now; a future refinement could
+                # use a dedicated outcome/marker to distinguish "safety block"
+                # from "real execution error" so the agent does not retry.
                 code_label = ("TOOL_SAFETY_DENY" if report.decision == Decision.DENY else "TOOL_SAFETY_NEEDS_REVIEW")
                 return create_code_execution_result(stderr=f"{code_label}: {report.rule_ids}")
             # Non-blocking NEEDS_HUMAN_REVIEW: do NOT block execution, but

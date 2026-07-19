@@ -313,7 +313,11 @@ class DangerousFilesRule(SafetyRule):
                         ))
                     break
             for sd in _SYSTEM_DIRS:
-                if sd in line and (">" in line or "rm " in line or "chmod" in line or "chown" in line):
+                # Path-boundary match (consistent with _matches_system_dir on
+                # the Python side) so '/etc' matches '/etc/passwd' but NOT
+                # '/etcetera/foo'. Without this, safe scripts touching
+                # /etcetera would be false-positive CRITICAL → DENY.
+                if _matches_system_dir(line) and (">" in line or "rm " in line or "chmod" in line or "chown" in line):
                     findings.append(
                         self._finding(
                             line,
@@ -323,7 +327,11 @@ class DangerousFilesRule(SafetyRule):
                         ))
                     break
             for fb in policy.forbidden_paths:
-                if fb in line:
+                # Path-boundary match (consistent with _matches_forbidden on
+                # the Python side) so '.env' matches '/app/.env' but NOT
+                # 'my.envrc'. Without this, safe scripts touching my.envrc
+                # would be false-positive → DENY.
+                if _matches_forbidden(line, policy):
                     findings.append(
                         self._finding(
                             line,
