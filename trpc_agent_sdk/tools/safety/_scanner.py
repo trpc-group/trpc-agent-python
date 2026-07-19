@@ -157,6 +157,7 @@ class SafetyScanner:
                     ))
 
             duration_ms = (time.perf_counter() - t0) * 1000.0
+            blocklist_detail = (" Blocklist pattern matched — denied." if blocklist_hit else " Denied for safety.")
             return SafetyScanReport(
                 tool_name=scan_input.tool_name,
                 script_type=scan_input.script_type,
@@ -164,8 +165,7 @@ class SafetyScanner:
                 decision=Decision.DENY,
                 risk_level=RiskLevel.CRITICAL if blocklist_hit else RiskLevel.HIGH,
                 findings=oversized_findings,
-                summary=(f"{oversized_reason}." +
-                         (" Blocklist pattern matched — denied." if blocklist_hit else " Denied for safety.")),
+                summary=f"{oversized_reason}." + blocklist_detail,
                 scan_duration_ms=round(duration_ms, 2),
                 policy_version=self._policy.content_hash,
                 sanitized=False,
