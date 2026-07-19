@@ -60,8 +60,12 @@ def get_extra_rules() -> list[RuleCallable]:
 # ---------------------------------------------------------------------------
 
 
-def _find_lines(script: str, pattern: str) -> list[tuple[int, str]]:
-    """Return (line_number, line_text) for every line matching *pattern* (regex)."""
+def _find_lines(script: str, pattern: str, *, script_type: Optional[ScriptType] = None) -> list[tuple[int, str]]:
+    """Return (line_number, line_text) for every line matching *pattern* (regex).
+
+    When *script_type* is PYTHON, ``#`` comments are stripped from each line
+    before matching to avoid flagging commented-out code.
+    """
     hits: list[tuple[int, str]] = []
     try:
         compiled = re.compile(pattern, re.IGNORECASE)
@@ -69,23 +73,146 @@ def _find_lines(script: str, pattern: str) -> list[tuple[int, str]]:
         logger.warning("Invalid regex pattern in safety rule: %s", pattern)
         return hits
     for idx, line in enumerate(script.splitlines(), start=1):
-        if compiled.search(line):
+        search_text = _strip_comments_for_script(line, script_type)
+        if compiled.search(search_text):
             hits.append((idx, line.strip()))
     return hits
 
 
-def _find_literal(script: str, pattern: str) -> list[tuple[int, str]]:
+def _find_literal(script: str, pattern: str, *, script_type: Optional[ScriptType] = None) -> list[tuple[int, str]]:
     """Return (line_number, line_text) for every line containing *pattern* literally.
 
     Uses simple substring matching (case-insensitive) — safe for patterns
     with regex-special characters like ``|``, ``$(``, `` ` `` etc.
+
+    When *script_type* is PYTHON or BASH, comments are stripped.
     """
     hits: list[tuple[int, str]] = []
     pattern_lower = pattern.lower()
     for idx, line in enumerate(script.splitlines(), start=1):
-        if pattern_lower in line.lower():
+        search_text = _strip_comments_for_script(line, script_type)
+        if pattern_lower in search_text.lower():
             hits.append((idx, line.strip()))
     return hits
+
+
+def _strip_comments_for_script(line: str, script_type: Optional[ScriptType]) -> str:
+    """Strip comments from a line based on script type.
+
+    - PYTHON: strip ``# comment`` suffix (respects quotes).
+    - BASH:   strip lines that start with ``#`` (full-line comments only;
+              inline ``#`` in bash can be parameter expansion, so we keep it).
+    - Other:  no stripping.
+    """
+    if script_type == ScriptType.PYTHON:
+        return _strip_python_comment_line(line)
+    if script_type == ScriptType.BASH:
+        stripped = line.lstrip()
+        if stripped.startswith("#") and not stripped.startswith("#!"):
+            return ""  # whole line is a comment
+    return line
+
+
+def _strip_python_comment_line(line: str) -> str:
+    """Remove ``# comment`` suffix AND string-literal content from a Python line.
+
+    String literal content (``'…'``, ``\"…\"``, ``r'…'``, ``r\"…\"``,
+    ``f'…'``, triple-quoted) is replaced with spaces so that regex patterns
+    do not match code inside strings.  ``#`` outside strings terminates
+    the line.
+    """
+    if line.lstrip().startswith("#!"):
+        return line
+
+    result: list[str] = []
+    in_single = False
+    in_double = False
+    i = 0
+    n = len(line)
+
+    while i < n:
+        ch = line[i]
+
+        # Escape sequences
+        if ch == "\\" and i + 1 < n:
+            if in_single or in_double:
+                result.append(" ")  # hide string content
+                i += 2
+                continue
+            result.append(ch)
+            result.append(line[i + 1])
+            i += 2
+            continue
+
+        # Triple-quote detection (simplified — checks for ''' or \"\"\")
+        if (not in_single and not in_double
+                and i + 2 < n and ch in ("'", '"')
+                and line[i:i + 3] == ch * 3):
+            marker = ch * 3
+            result.append(marker)
+            i += 3
+            # Skip until closing triple quote
+            while i < n - 2:
+                if line[i:i + 3] == marker:
+                    result.append(marker)
+                    i += 3
+                    break
+                result.append(" ")  # hide triple-quoted content
+                i += 1
+            continue
+
+        # String start detection
+        if ch in ("'", '"') and not in_double and not in_single:
+            # Check for prefix: r, f, b, u, rf, fr, rb, br
+            prefix = ""
+            j = i - 1
+            while j >= 0 and line[j].isalpha():
+                j -= 1
+            if j < i - 1:
+                prefix = line[j + 1:i].lower()
+            valid_prefix = prefix in ("", "r", "f", "b", "u", "rf", "fr", "rb", "br")
+            is_string = valid_prefix or prefix == ""
+
+            if ch == "'" and is_string:
+                in_single = True
+                result.append(ch)
+                i += 1
+                continue
+            if ch == '"' and is_string:
+                in_double = True
+                result.append(ch)
+                i += 1
+                continue
+            # Fall through — not a string start
+            result.append(ch)
+            i += 1
+            continue
+
+        if ch == "'" and in_single and not in_double:
+            in_single = False
+            result.append(ch)
+            i += 1
+            continue
+        if ch == '"' and in_double and not in_single:
+            in_double = False
+            result.append(ch)
+            i += 1
+            continue
+
+        # Inside string: hide content
+        if in_single or in_double:
+            result.append(" ")  # replace with space so regex doesn't match
+            i += 1
+            continue
+
+        # Comment outside strings
+        if ch == "#":
+            break
+
+        result.append(ch)
+        i += 1
+
+    return "".join(result)
 
 
 def _build_finding(
@@ -145,7 +272,7 @@ class DangerousFileOpsRule:
         for blocked in policy.blocklist_paths:
             # Normalise path for matching
             pattern = re.escape(blocked).replace(r"\*", ".*")
-            for line_no, line_text in _find_lines(script, pattern):
+            for line_no, line_text in _find_lines(script, pattern, script_type=scan_input.script_type):
                 findings.append(
                     _build_finding(
                         rule_id=f"{self.RULE_ID_PREFIX}-001",
@@ -161,7 +288,10 @@ class DangerousFileOpsRule:
 
         # 1b. Blocklisted patterns
         for blocked_pat in policy.blocklist_patterns:
-            for line_no, line_text in _find_lines(script, blocked_pat):
+            for line_no, line_text in _find_lines(script, blocked_pat, script_type=scan_input.script_type):
+                # Skip Bash echo/printf lines where rm/mkfs appears in a string
+                if scan_input.script_type == ScriptType.BASH and _is_in_echo_string(line_text, blocked_pat):
+                    continue
                 if "rm" in blocked_pat.lower() or "mkfs" in blocked_pat.lower() or "dd" in blocked_pat.lower():
                     findings.append(
                         _build_finding(
@@ -178,8 +308,9 @@ class DangerousFileOpsRule:
         # 1c. Sensitive paths
         sensitive = cfg.get("sensitive_paths", [])
         for sens_path in sensitive:
-            pattern = re.escape(sens_path).replace(r"\*", ".*")
-            for line_no, line_text in _find_lines(script, pattern):
+            # Use word-boundary-aware matching to avoid .env matching "environ"
+            pattern = _path_boundary_pattern(sens_path)
+            for line_no, line_text in _find_lines(script, pattern, script_type=scan_input.script_type):
                 findings.append(
                     _build_finding(
                         rule_id=f"{self.RULE_ID_PREFIX}-003",
@@ -196,7 +327,7 @@ class DangerousFileOpsRule:
         # 1d. Credential file patterns
         cred_patterns = cfg.get("credential_file_patterns", [])
         for cred_pat in cred_patterns:
-            for line_no, line_text in _find_lines(script, cred_pat):
+            for line_no, line_text in _find_lines(script, cred_pat, script_type=scan_input.script_type):
                 findings.append(
                     _build_finding(
                         rule_id=f"{self.RULE_ID_PREFIX}-004",
@@ -213,7 +344,10 @@ class DangerousFileOpsRule:
         # 1e. Destructive operations
         destructive = cfg.get("destructive_patterns", [])
         for dest_pat in destructive:
-            for line_no, line_text in _find_lines(script, dest_pat):
+            for line_no, line_text in _find_lines(script, dest_pat, script_type=scan_input.script_type):
+                # Skip Bash echo/printf lines where pattern appears in a string
+                if scan_input.script_type == ScriptType.BASH and _is_in_echo_string(line_text, dest_pat):
+                    continue
                 findings.append(
                     _build_finding(
                         rule_id=f"{self.RULE_ID_PREFIX}-005",
@@ -256,7 +390,7 @@ class NetworkEgressRule:
 
         if scan_input.script_type in (ScriptType.PYTHON, ScriptType.UNKNOWN):
             for func_pat in python_funcs:
-                for line_no, line_text in _find_lines(script, func_pat):
+                for line_no, line_text in _find_lines(script, func_pat, script_type=scan_input.script_type):
                     # Extract URL / domain for whitelist check (same as Bash branch)
                     url_match = _extract_url(line_text)
                     if url_match and policy.is_domain_whitelisted(url_match):
@@ -287,7 +421,24 @@ class NetworkEgressRule:
 
         if scan_input.script_type in (ScriptType.BASH, ScriptType.UNKNOWN):
             for cmd in bash_cmds:
-                for line_no, line_text in _find_literal(script, cmd):
+                for line_no, line_text in _find_literal(script, cmd, script_type=scan_input.script_type):
+                    cmd_key = cmd.strip()
+
+                    # FIXED: Check whitelist_commands — was dead code before
+                    if policy.is_command_whitelisted(cmd_key):
+                        findings.append(
+                            _build_finding(
+                                rule_id=f"{self.RULE_ID_PREFIX}-003",
+                                category=RiskCategory.NETWORK_EGRESS,
+                                risk_level=RiskLevel.INFO,
+                                evidence=line_text,
+                                message=f"Network command '{cmd_key}' is whitelisted — allowed.",
+                                recommendation="No action needed — command is whitelisted.",
+                                line_number=line_no,
+                                matched_pattern=cmd_key,
+                            ))
+                        continue
+
                     # Extract potential URL / domain for whitelist check
                     url_match = _extract_url(line_text)
                     if url_match and policy.is_domain_whitelisted(url_match):
@@ -298,11 +449,11 @@ class NetworkEgressRule:
                                 category=RiskCategory.NETWORK_EGRESS,
                                 risk_level=RiskLevel.INFO,
                                 evidence=line_text,
-                                message=f"Network command '{cmd.strip()}' targeting "
+                                message=f"Network command '{cmd_key}' targeting "
                                 f"whitelisted domain '{url_match}'.",
                                 recommendation="No action needed — domain is whitelisted.",
                                 line_number=line_no,
-                                matched_pattern=cmd,
+                                matched_pattern=cmd_key,
                             ))
                     else:
                         findings.append(
@@ -311,11 +462,11 @@ class NetworkEgressRule:
                                 category=RiskCategory.NETWORK_EGRESS,
                                 risk_level=RiskLevel.HIGH,
                                 evidence=line_text,
-                                message=f"Network command detected: {cmd.strip()}",
+                                message=f"Network command detected: {cmd_key}",
                                 recommendation="Verify the target domain. If safe, add it to "
                                 "the policy whitelist domains.",
                                 line_number=line_no,
-                                matched_pattern=cmd,
+                                matched_pattern=cmd_key,
                             ))
 
         return findings
@@ -347,8 +498,12 @@ class ProcessAndSystemRule:
 
         if scan_input.script_type in (ScriptType.PYTHON, ScriptType.UNKNOWN):
             for func_pat in python_funcs:
-                for line_no, line_text in _find_lines(script, func_pat):
+                for line_no, line_text in _find_lines(script, func_pat, script_type=scan_input.script_type):
                     # Privilege escalation is critical
+                    # Skip safe compile() calls: re.compile() is regex compilation, not code injection
+                    if "compile" in func_pat.lower() and "re.compile" in line_text.lower():
+                        continue
+
                     if any(kw in func_pat.lower() for kw in ("setuid", "setgid", "seteuid", "setegid")):
                         risk = RiskLevel.CRITICAL
                     elif any(kw in func_pat.lower()
@@ -372,14 +527,38 @@ class ProcessAndSystemRule:
 
         if scan_input.script_type in (ScriptType.BASH, ScriptType.UNKNOWN):
             for bash_pat in bash_patterns:
-                for line_no, line_text in _find_literal(script, bash_pat):
+                for line_no, line_text in _find_literal(script, bash_pat, script_type=scan_input.script_type):
+                    cmd_key = bash_pat.strip()
+
+                    # Pipe operator on a whitelisted-commands-only line → downgrade to INFO
+                    pipe_is_safe = False
+                    if cmd_key == "|" and _all_commands_whitelisted(line_text, policy):
+                        pipe_is_safe = True
+
+                    # FIXED: Check whitelist_commands — was dead code before
+                    # Whitelisted commands get downgraded to INFO or skipped
+                    if policy.is_command_whitelisted(cmd_key) and cmd_key not in ("|", "$(", "`", "&>", "nohup", "disown"):
+                        # Explicitly whitelisted → informational only
+                        findings.append(
+                            _build_finding(
+                                rule_id=f"{self.RULE_ID_PREFIX}-003",
+                                category=RiskCategory.PROCESS_AND_SYSTEM,
+                                risk_level=RiskLevel.INFO,
+                                evidence=line_text,
+                                message=f"Shell command '{cmd_key}' is whitelisted — allowed.",
+                                recommendation="No action needed — command is whitelisted.",
+                                line_number=line_no,
+                                matched_pattern=cmd_key,
+                            ))
+                        continue  # Don't add a second finding for the same match
+
                     # Privilege escalation
-                    if bash_pat.strip() in ("sudo", "su", "chroot"):
+                    if cmd_key in ("sudo", "su", "chroot"):
                         risk = RiskLevel.CRITICAL
-                    elif bash_pat.strip() in ("mount", "umount", "systemctl", "kill -9"):
+                    elif cmd_key in ("mount", "umount", "systemctl", "kill -9"):
                         risk = RiskLevel.HIGH
-                    elif bash_pat.strip() in ("|", "$(", "`"):
-                        risk = RiskLevel.MEDIUM
+                    elif cmd_key in ("|", "$(", "`"):
+                        risk = RiskLevel.INFO if pipe_is_safe else RiskLevel.MEDIUM
                     else:
                         risk = RiskLevel.HIGH
 
@@ -389,11 +568,11 @@ class ProcessAndSystemRule:
                             category=RiskCategory.PROCESS_AND_SYSTEM,
                             risk_level=risk,
                             evidence=line_text,
-                            message=f"Potentially dangerous shell pattern: {bash_pat.strip()}",
+                            message=f"Potentially dangerous shell pattern: {cmd_key}",
                             recommendation="Use safe alternatives or explicitly whitelist "
                             "the command in the policy.",
                             line_number=line_no,
-                            matched_pattern=bash_pat.strip(),
+                            matched_pattern=cmd_key,
                         ))
 
         return findings
@@ -425,7 +604,7 @@ class DependencyInstallRule:
 
         if scan_input.script_type in (ScriptType.PYTHON, ScriptType.UNKNOWN):
             for func_pat in python_funcs:
-                for line_no, line_text in _find_lines(script, func_pat):
+                for line_no, line_text in _find_lines(script, func_pat, script_type=scan_input.script_type):
                     findings.append(
                         _build_finding(
                             rule_id=f"{self.RULE_ID_PREFIX}-001",
@@ -441,7 +620,7 @@ class DependencyInstallRule:
 
         if scan_input.script_type in (ScriptType.BASH, ScriptType.UNKNOWN):
             for cmd in bash_cmds:
-                for line_no, line_text in _find_literal(script, cmd):
+                for line_no, line_text in _find_literal(script, cmd, script_type=scan_input.script_type):
                     findings.append(
                         _build_finding(
                             rule_id=f"{self.RULE_ID_PREFIX}-002",
@@ -483,7 +662,7 @@ class ResourceAbuseRule:
         # 5a. Infinite loops
         loop_patterns = cfg.get("infinite_loop_patterns", [])
         for loop_pat in loop_patterns:
-            for line_no, line_text in _find_lines(script, loop_pat):
+            for line_no, line_text in _find_lines(script, loop_pat, script_type=scan_input.script_type):
                 findings.append(
                     _build_finding(
                         rule_id=f"{self.RULE_ID_PREFIX}-001",
@@ -499,7 +678,7 @@ class ResourceAbuseRule:
         # 5b. Fork bombs
         fork_patterns = cfg.get("fork_bomb_patterns", [])
         for fork_pat in fork_patterns:
-            for line_no, line_text in _find_lines(script, fork_pat):
+            for line_no, line_text in _find_lines(script, fork_pat, script_type=scan_input.script_type):
                 findings.append(
                     _build_finding(
                         rule_id=f"{self.RULE_ID_PREFIX}-002",
@@ -515,7 +694,7 @@ class ResourceAbuseRule:
         # 5c. Resource-heavy patterns
         heavy_patterns = cfg.get("resource_heavy_patterns", [])
         for heavy_pat in heavy_patterns:
-            for line_no, line_text in _find_lines(script, heavy_pat):
+            for line_no, line_text in _find_lines(script, heavy_pat, script_type=scan_input.script_type):
                 findings.append(
                     _build_finding(
                         rule_id=f"{self.RULE_ID_PREFIX}-003",
@@ -540,7 +719,7 @@ class ResourceAbuseRule:
                     _build_finding(
                         rule_id=f"{self.RULE_ID_PREFIX}-004",
                         category=RiskCategory.RESOURCE_ABUSE,
-                        risk_level=RiskLevel.LOW,
+                        risk_level=RiskLevel.MEDIUM,  # MEDIUM → needs_human_review
                         evidence=m.group(0),
                         message=f"Long sleep ({duration}s) exceeds threshold ({threshold}s)",
                         recommendation="Reduce sleep duration or use a task scheduler.",
@@ -558,7 +737,7 @@ class ResourceAbuseRule:
             r"&[\s\n]*done",
         ]
         for conc_pat in conc_patterns:
-            for line_no, line_text in _find_lines(script, conc_pat):
+            for line_no, line_text in _find_lines(script, conc_pat, script_type=scan_input.script_type):
                 findings.append(
                     _build_finding(
                         rule_id=f"{self.RULE_ID_PREFIX}-005",
@@ -599,7 +778,7 @@ class SensitiveInfoLeakRule:
         # 6a. Secrets in hard-coded assignments
         secret_patterns = cfg.get("secret_patterns", [])
         for secret_pat in secret_patterns:
-            for line_no, line_text in _find_lines(script, secret_pat):
+            for line_no, line_text in _find_lines(script, secret_pat, script_type=scan_input.script_type):
                 findings.append(
                     _build_finding(
                         rule_id=f"{self.RULE_ID_PREFIX}-001",
@@ -617,7 +796,7 @@ class SensitiveInfoLeakRule:
         # 6b. Output / logging of secrets
         output_commands = cfg.get("output_commands", [])
         for out_cmd in output_commands:
-            for line_no, line_text in _find_lines(script, out_cmd):
+            for line_no, line_text in _find_lines(script, out_cmd, script_type=scan_input.script_type):
                 findings.append(
                     _build_finding(
                         rule_id=f"{self.RULE_ID_PREFIX}-002",
@@ -634,7 +813,7 @@ class SensitiveInfoLeakRule:
         # 6c. File writes of secrets
         file_writes = cfg.get("sensitive_file_writes", [])
         for fw_pat in file_writes:
-            for line_no, line_text in _find_lines(script, fw_pat):
+            for line_no, line_text in _find_lines(script, fw_pat, script_type=scan_input.script_type):
                 findings.append(
                     _build_finding(
                         rule_id=f"{self.RULE_ID_PREFIX}-003",
@@ -651,7 +830,7 @@ class SensitiveInfoLeakRule:
         # 6d. Environment variable leakage (blocklisted env vars)
         for env_var in policy.blocklist_env_vars:
             env_pattern = rf"\b{re.escape(env_var)}\b"
-            for line_no, line_text in _find_lines(script, env_pattern):
+            for line_no, line_text in _find_lines(script, env_pattern, script_type=scan_input.script_type):
                 findings.append(
                     _build_finding(
                         rule_id=f"{self.RULE_ID_PREFIX}-004",
@@ -671,6 +850,59 @@ class SensitiveInfoLeakRule:
 # ========================================================================
 # Helpers
 # ========================================================================
+
+
+def _is_in_echo_string(line: str, pattern: str) -> bool:
+    """Return True if *pattern* match is inside an echo/printf string literal.
+
+    In Bash, ``echo 'rm -rf /'`` is harmless — the dangerous command is just
+    printed, not executed.  This helper avoids flagging such lines.
+    """
+    stripped = line.strip()
+    # Only applies to echo / printf commands
+    if not (stripped.startswith("echo ") or stripped.startswith("echo\t")
+            or stripped.startswith("printf ") or stripped.startswith("printf\t")
+            or stripped.startswith("/bin/echo ") or stripped.startswith("/usr/bin/echo ")):
+        return False
+    # Check if the pattern *matches* inside single or double quotes
+    try:
+        pat = re.compile(pattern, re.IGNORECASE)
+    except re.error:
+        return False
+    for m in re.finditer(r"'[^']*'", stripped):
+        if pat.search(m.group(0)):
+            return True
+    for m in re.finditer(r'"[^"]*"', stripped):
+        if pat.search(m.group(0)):
+            return True
+    return False
+
+
+def _all_commands_whitelisted(line: str, policy: SafetyPolicy) -> bool:
+    """Return True if every command in a piped bash line is whitelisted."""
+    cmds = []
+    for part in line.split("|"):
+        part = part.strip()
+        if part:
+            first_word = part.split()[0] if part.split() else ""
+            if first_word and not first_word.startswith("-"):
+                cmds.append(first_word)
+    if not cmds:
+        return False
+    return all(policy.is_command_whitelisted(c) for c in cmds)
+
+
+def _path_boundary_pattern(path: str) -> str:
+    """Build a regex that matches *path* as a path component, not a substring.
+
+    ``.env`` should match ``./.env`` and ``cat .env`` but NOT ``os.environ``.
+    """
+    escaped = re.escape(path)
+    # If the path starts with a dot (like .env), require a path boundary before it
+    if path.startswith("."):
+        return r"(?:^|[\\s/'\"`;|&(])" + escaped + r"(?:$|[\\s/'\"`;|&)])"
+    else:
+        return escaped.replace(r"\*", ".*")
 
 
 def _extract_url(text: str) -> Optional[str]:

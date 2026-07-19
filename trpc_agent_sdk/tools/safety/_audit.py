@@ -22,6 +22,7 @@ import datetime
 import json
 import logging
 import os
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -29,6 +30,20 @@ from ._types import SafetyAuditEvent
 from ._types import SafetyScanReport
 
 _AUDIT_LOGGER = logging.getLogger("trpc_agent_sdk.tools.safety.audit")
+
+# Per-path locks for thread/process-safe concurrent writes.
+# Each JSONL file gets its own lock so different audit files can be written
+# concurrently without contention.
+_FILE_LOCKS: dict[str, threading.Lock] = {}
+_FILE_LOCKS_LOCK = threading.Lock()
+
+
+def _get_file_lock(path: str) -> threading.Lock:
+    """Return (and cache) a threading.Lock for the given JSONL path."""
+    with _FILE_LOCKS_LOCK:
+        if path not in _FILE_LOCKS:
+            _FILE_LOCKS[path] = threading.Lock()
+        return _FILE_LOCKS[path]
 
 
 class AuditLogger:
@@ -45,6 +60,8 @@ class AuditLogger:
         self._also_log = also_log
         if output_path:
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            # Ensure the lock exists
+            _get_file_lock(str(output_path))
 
     # ------------------------------------------------------------------
     # Public API
@@ -52,6 +69,10 @@ class AuditLogger:
 
     def log_event(self, report: SafetyScanReport) -> SafetyAuditEvent:
         """Convert *report* to an audit event and persist it.
+
+        Unlike the previous version, writes to the JSONL file are now
+        **thread-safe** — concurrent calls from multiple tool invocations
+        will not interleave JSON lines.
 
         Args:
             report: The scan report to audit.
@@ -62,13 +83,16 @@ class AuditLogger:
         event = self._build_event(report)
         line = json.dumps(event.to_dict(), ensure_ascii=False, default=str)
 
-        # File output
+        # File output — thread-safe via per-path lock
         if self._output_path:
-            try:
-                with open(self._output_path, "a", encoding="utf-8") as fh:
-                    fh.write(line + "\n")
-            except OSError as exc:
-                _AUDIT_LOGGER.error("Failed to write audit event: %s", exc)
+            lock = _get_file_lock(str(self._output_path))
+            with lock:
+                try:
+                    with open(self._output_path, "a", encoding="utf-8") as fh:
+                        fh.write(line + "\n")
+                        fh.flush()
+                except OSError as exc:
+                    _AUDIT_LOGGER.error("Failed to write audit event: %s", exc)
 
         # Logger output
         if self._also_log:

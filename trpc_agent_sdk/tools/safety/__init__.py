@@ -26,10 +26,12 @@ Quick start::
 """
 
 from ._audit import AuditLogger
+from ._bash_scanner import scan_bash
 from ._policy import PolicyLoader
 from ._policy import SafetyPolicy
 from ._policy import get_policy
 from ._policy import reload_policy
+from ._python_scanner import scan_python
 from ._report import ReportGenerator
 from ._report import generate_report_json
 from ._report import save_report
@@ -73,6 +75,9 @@ __all__ = [
     "SafetyScanner",
     "get_scanner",
     "quick_scan",
+    # Low-level scanners
+    "scan_python",
+    "scan_bash",
     # Rules
     "get_all_rules",
     "get_builtin_rules",
