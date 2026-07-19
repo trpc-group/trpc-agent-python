@@ -9,13 +9,14 @@ import shutil
 import pytest
 
 from examples.optimization.eval_optimize_loop import artifact_writer
+from examples.optimization.eval_optimize_loop import pipeline as pipeline_module
 from examples.optimization.eval_optimize_loop.artifact_writer import (
     ArtifactWriteError,
     discover_run_artifacts,
     publish_report_bundle,
     write_failure_report,
 )
-from examples.optimization.eval_optimize_loop.pipeline import prepare_run, run_fake_stage
+from examples.optimization.eval_optimize_loop.pipeline import prepare_run
 from examples.optimization.eval_optimize_loop.report_builder import (
     build_failure_report,
     build_optimization_report,
@@ -35,8 +36,14 @@ def _copy_example(tmp_path: Path) -> Path:
 
 async def _build_fake_report_for_root(root: Path, run_id: str):
     prepared = prepare_run(root / "pipeline.json", run_id=run_id)
-    result = await run_fake_stage(prepared, scenario="improve")
-    shutil.rmtree(Path(prepared.workspace.run_dir) / "report", ignore_errors=True)
+    execution_progress = pipeline_module._MutableReportProgress(
+        started_at=datetime(2026, 7, 18, tzinfo=timezone.utc)
+    )
+    result = await pipeline_module._execute_fake_stage(
+        prepared,
+        scenario="improve",
+        progress=execution_progress,
+    )
     progress = ReportProgress(
         started_at=datetime(2026, 7, 18, tzinfo=timezone.utc),
         current_phase="reporting",
@@ -163,7 +170,16 @@ async def test_publish_rejects_input_hash_drift(tmp_path):
 
 @pytest.mark.parametrize(
     "sensitive_key",
-    ["api_key", "access_token", "client_secret", "password", "x-api-key"],
+    [
+        "api_key",
+        "access_token",
+        "client_secret",
+        "password",
+        "x-api-key",
+        "openai_api_key",
+        "provider_api_key",
+        "endpoint_url",
+    ],
 )
 @pytest.mark.asyncio
 async def test_publish_rejects_plaintext_secret_in_optimizer_config_without_leaking_it(
@@ -192,6 +208,36 @@ async def test_publish_rejects_plaintext_secret_in_optimizer_config_without_leak
     secret_bytes = secret.encode("utf-8")
     assert all(
         secret_bytes not in path.read_bytes()
+        for path in run_dir.rglob("*")
+        if path.is_file()
+    )
+
+
+@pytest.mark.asyncio
+async def test_publish_rejects_literal_url_hidden_under_provider_specific_key(
+    tmp_path,
+):
+    root = _copy_example(tmp_path)
+    optimizer_path = root / "optimizer.json"
+    payload = json.loads(optimizer_path.read_text(encoding="utf-8"))
+    endpoint = "https://private-provider.example.test/v1"
+    payload["optimize"]["algorithm"]["reflection_lm"]["extra_fields"] = {
+        "service_location": endpoint
+    }
+    optimizer_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    prepared, report = await _build_fake_report_for_root(root, "artifact_url")
+    run_dir = Path(prepared.workspace.run_dir)
+
+    with pytest.raises(ArtifactWriteError, match="sensitive optimizer config"):
+        publish_report_bundle(report, run_dir=run_dir, copy_input_files=True)
+
+    assert not (run_dir / "report").exists()
+    endpoint_bytes = endpoint.encode("utf-8")
+    assert all(
+        endpoint_bytes not in path.read_bytes()
         for path in run_dir.rglob("*")
         if path.is_file()
     )

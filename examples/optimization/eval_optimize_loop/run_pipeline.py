@@ -81,7 +81,10 @@ def main() -> None:
         f"Writeback: {result.writeback.status.upper()} "
         f"({result.writeback.reason})"
     )
-    print("Stage 4 does not write optimization reports; reporting is added in Stage 5.")
+    report_dir = Path(prepared.workspace.run_dir) / "report"
+    print(f"JSON report: {report_dir / 'optimization_report.json'}")
+    print(f"Markdown report: {report_dir / 'optimization_report.md'}")
+    print(f"Artifact index: {report_dir / 'artifact_index.json'}")
 
 
 if __name__ == "__main__":

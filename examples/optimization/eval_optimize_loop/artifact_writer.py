@@ -54,6 +54,21 @@ _SENSITIVE_CONFIG_KEYS = {
     "token",
     "xapikey",
 }
+_SENSITIVE_CONFIG_KEY_SUFFIXES = {
+    "accesstoken",
+    "apikey",
+    "authtoken",
+    "baseurl",
+    "bearertoken",
+    "clientsecret",
+    "credential",
+    "credentials",
+    "endpointurl",
+    "password",
+    "passwd",
+    "privatekey",
+    "secretkey",
+}
 _APPROVED_SENSITIVE_VALUES = {
     "",
     "${TRPC_AGENT_API_KEY}",
@@ -167,7 +182,22 @@ def _normalized_sensitive_key(key: str) -> str:
     return key.replace("_", "").replace("-", "").casefold()
 
 
+def _is_sensitive_config_key(key: str) -> bool:
+    normalized = _normalized_sensitive_key(key)
+    return normalized in _SENSITIVE_CONFIG_KEYS or any(
+        normalized.endswith(suffix)
+        for suffix in _SENSITIVE_CONFIG_KEY_SUFFIXES
+    )
+
+
 def _validate_sensitive_config_values(value: object, *, path: str = "$") -> None:
+    if isinstance(value, str):
+        if value.strip().casefold().startswith(("http://", "https://")):
+            raise ArtifactWriteError(
+                "sensitive optimizer config value is not an approved "
+                f"placeholder: {path}"
+            )
+        return
     if isinstance(value, list):
         for index, item in enumerate(value):
             _validate_sensitive_config_values(item, path=f"{path}[{index}]")
@@ -176,7 +206,7 @@ def _validate_sensitive_config_values(value: object, *, path: str = "$") -> None
         return
     for key, item in value.items():
         item_path = f"{path}.{key}"
-        if _normalized_sensitive_key(key) in _SENSITIVE_CONFIG_KEYS:
+        if _is_sensitive_config_key(key):
             if not isinstance(item, str) or item not in _APPROVED_SENSITIVE_VALUES:
                 raise ArtifactWriteError(
                     "sensitive optimizer config value is not an approved "
