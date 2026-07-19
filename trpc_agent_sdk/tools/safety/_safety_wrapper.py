@@ -189,6 +189,7 @@ def safety_wrapper(
     policy: Optional[SafetyPolicy] = None,
     audit_log_path: Optional[str] = None,
     raise_on_deny: bool = True,
+    require_script: bool = True,
 ):
     """Decorator that applies safety checks before a function executes.
 
@@ -201,6 +202,10 @@ def safety_wrapper(
         policy: Optional policy override.
         audit_log_path: Path to JSONL audit file.
         raise_on_deny: Raise ``SafetyDeniedError`` on DENY.
+        require_script: If True (default), raise ``RuntimeError`` when
+            *script_arg_name* is not found — fail-closed so that a
+            misconfigured decorator does not silently allow execution
+            without scanning.
 
     Example::
 
@@ -222,14 +227,17 @@ def safety_wrapper(
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             script: Optional[str] = kwargs.get(script_arg_name)
             if script is None:
-                # Try to find it in positional args (e.g. tool_context, args)
                 for arg in args:
                     if isinstance(arg, dict) and script_arg_name in arg:
                         script = arg[script_arg_name]
                         break
             if script and isinstance(script, str):
                 wrapper_inst.check(script)
-            elif script is not None and not isinstance(script, str):
+            elif require_script:
+                raise RuntimeError(f"safety_wrapper: '{script_arg_name}' not found in kwargs or positional "
+                                   f"dict args for {func.__name__}.  Check the decorator configuration "
+                                   f"or set require_script=False to skip scanning.")
+            elif script is not None:
                 _logger.warning("safety_wrapper: '%s' value is not a string (type=%s) — scan skipped.", script_arg_name,
                                 type(script).__name__)
             else:
@@ -248,7 +256,11 @@ def safety_wrapper(
                         break
             if script and isinstance(script, str):
                 wrapper_inst.check(script)
-            elif script is not None and not isinstance(script, str):
+            elif require_script:
+                raise RuntimeError(f"safety_wrapper: '{script_arg_name}' not found in kwargs or positional "
+                                   f"dict args for {func.__name__}.  Check the decorator configuration "
+                                   f"or set require_script=False to skip scanning.")
+            elif script is not None:
                 _logger.warning("safety_wrapper: '%s' value is not a string (type=%s) — scan skipped.", script_arg_name,
                                 type(script).__name__)
             else:

@@ -1873,14 +1873,25 @@ def test_safety_wrapper_sync_positional_args():
 
 
 def test_safety_wrapper_decorator_sync_no_script():
-    """@safety_wrapper sync must skip scan when script is None."""
+    """@safety_wrapper sync with require_script=False must skip scan and execute."""
 
-    @safety_wrapper(tool_name="sync_noscript_test", script_arg_name="code")
+    @safety_wrapper(tool_name="sync_noscript_test", script_arg_name="code", require_script=False)
     def sync_tool(*args, **kwargs):
         return "executed"
 
     result = sync_tool(args={})
     assert result == "executed"
+
+
+def test_safety_wrapper_decorator_sync_fail_closed():
+    """@safety_wrapper sync must raise RuntimeError when script arg is missing (fail-closed)."""
+
+    @safety_wrapper(tool_name="sync_failclosed_test", script_arg_name="code")
+    def sync_tool(*args, **kwargs):
+        return "executed"
+
+    with pytest.raises(RuntimeError, match="not found"):
+        sync_tool(args={})
 
 
 # ==========================================================================
@@ -1975,14 +1986,25 @@ def test_dependency_install_python():
 
 
 async def test_safety_wrapper_decorator_async_no_script():
-    """@safety_wrapper async must skip scan when script is None."""
+    """@safety_wrapper async with require_script=False must skip scan and execute."""
 
-    @safety_wrapper(tool_name="async_noscript_test", script_arg_name="code")
+    @safety_wrapper(tool_name="async_noscript_test", script_arg_name="code", require_script=False)
     async def async_tool(*args, **kwargs):
         return "executed"
 
     result = await async_tool(args={})
     assert result == "executed"
+
+
+async def test_safety_wrapper_decorator_async_fail_closed():
+    """@safety_wrapper async must raise RuntimeError when script arg is missing (fail-closed)."""
+
+    @safety_wrapper(tool_name="async_failclosed_test", script_arg_name="code")
+    async def async_tool(*args, **kwargs):
+        return "executed"
+
+    with pytest.raises(RuntimeError, match="not found"):
+        await async_tool(args={})
 
 
 def test_scanner_empty_script():
