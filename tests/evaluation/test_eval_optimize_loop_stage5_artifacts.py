@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from hashlib import sha256
+import json
 from pathlib import Path
 import shutil
 
@@ -32,8 +33,7 @@ def _copy_example(tmp_path: Path) -> Path:
     return target
 
 
-async def _build_fake_report(tmp_path: Path, run_id: str):
-    root = _copy_example(tmp_path)
+async def _build_fake_report_for_root(root: Path, run_id: str):
     prepared = prepare_run(root / "pipeline.json", run_id=run_id)
     result = await run_fake_stage(prepared, scenario="improve")
     shutil.rmtree(Path(prepared.workspace.run_dir) / "report", ignore_errors=True)
@@ -60,6 +60,10 @@ async def _build_fake_report(tmp_path: Path, run_id: str):
     return prepared, report
 
 
+async def _build_fake_report(tmp_path: Path, run_id: str):
+    return await _build_fake_report_for_root(_copy_example(tmp_path), run_id)
+
+
 @pytest.mark.asyncio
 async def test_publish_report_bundle_materializes_and_indexes_required_files(tmp_path):
     prepared, report = await _build_fake_report(tmp_path, "artifact_complete")
@@ -71,14 +75,61 @@ async def test_publish_report_bundle_materializes_and_indexes_required_files(tmp
     assert (report_dir / "optimization_report.json").is_file()
     assert (report_dir / "optimization_report.md").is_file()
     assert (report_dir / "artifact_index.json").is_file()
-    for name in (
-        "baseline_train",
-        "baseline_validation",
-        "candidate_train",
-        "candidate_validation",
-    ):
-        assert (report_dir / "evaluations" / f"{name}.json").is_file()
     assert all(ref.relative_path != "report/artifact_index.json" for ref in index.artifacts)
+
+    input_paths = {
+        ref.artifact_id: ref.relative_path
+        for ref in index.artifacts
+        if ref.artifact_type == "input"
+    }
+    assert input_paths == {
+        "input.pipeline_config": "report/inputs/pipeline_config.json",
+        "input.optimizer_config": "report/inputs/optimizer_config.json",
+        "input.train_evalset": "report/inputs/train_evalset.json",
+        "input.validation_evalset": "report/inputs/validation_evalset.json",
+    }
+    assert {
+        ref.artifact_id: ref.relative_path
+        for ref in index.artifacts
+        if ref.artifact_type == "prompt"
+    } == {
+        "prompt.baseline.system_prompt": (
+            "report/prompts/baseline/000-system_prompt.md"
+        ),
+        "prompt.candidate.system_prompt": (
+            "report/prompts/candidate/000-system_prompt.md"
+        ),
+    }
+    baseline_prompt = report_dir / "prompts" / "baseline" / "000-system_prompt.md"
+    candidate_prompt = report_dir / "prompts" / "candidate" / "000-system_prompt.md"
+    assert baseline_prompt.read_text(encoding="utf-8") == (
+        report.input_snapshot.prompt_snapshots[0].content
+    )
+    assert candidate_prompt.read_text(encoding="utf-8") == (
+        report.candidate.prompts["system_prompt"]
+    )
+    evaluation_paths = {
+        ref.artifact_id: ref.relative_path
+        for ref in index.artifacts
+        if ref.artifact_type == "evaluation"
+    }
+    assert evaluation_paths == {
+        f"evaluation.{name}": f"report/evaluations/{name}.json"
+        for name in (
+            "baseline_train",
+            "baseline_validation",
+            "candidate_train",
+            "candidate_validation",
+        )
+    }
+    assert {
+        path.name for path in (report_dir / "evaluations").iterdir()
+    } == {
+        "baseline_train.json",
+        "baseline_validation.json",
+        "candidate_train.json",
+        "candidate_validation.json",
+    }
 
     available = [ref for ref in index.artifacts if ref.status == "available"]
     assert available
@@ -111,6 +162,36 @@ async def test_publish_rejects_input_hash_drift(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_publish_rejects_plaintext_secret_in_optimizer_config_without_leaking_it(
+    tmp_path,
+):
+    root = _copy_example(tmp_path)
+    optimizer_path = root / "optimizer.json"
+    payload = json.loads(optimizer_path.read_text(encoding="utf-8"))
+    secret = "sk-real-sentinel-secret-must-not-be-copied"
+    payload["optimize"]["algorithm"]["reflection_lm"]["api_key"] = secret
+    optimizer_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    prepared, report = await _build_fake_report_for_root(root, "artifact_secret")
+    run_dir = Path(prepared.workspace.run_dir)
+
+    with pytest.raises(ArtifactWriteError, match="sensitive optimizer config"):
+        publish_report_bundle(report, run_dir=run_dir, copy_input_files=True)
+
+    assert secret in optimizer_path.read_text(encoding="utf-8")
+    assert not (run_dir / "report").exists()
+    assert list(run_dir.glob(".report.tmp-*")) == []
+    secret_bytes = secret.encode("utf-8")
+    assert all(
+        secret_bytes not in path.read_bytes()
+        for path in run_dir.rglob("*")
+        if path.is_file()
+    )
+
+
+@pytest.mark.asyncio
 async def test_publish_rejects_existing_report_directory(tmp_path):
     prepared, report = await _build_fake_report(tmp_path, "artifact_existing")
     report_dir = Path(prepared.workspace.run_dir) / "report"
@@ -122,6 +203,34 @@ async def test_publish_rejects_existing_report_directory(tmp_path):
             run_dir=Path(prepared.workspace.run_dir),
             copy_input_files=True,
         )
+
+
+@pytest.mark.asyncio
+async def test_publish_does_not_replace_report_directory_created_during_staging(
+    tmp_path, monkeypatch
+):
+    prepared, report = await _build_fake_report(tmp_path, "artifact_report_race")
+    run_dir = Path(prepared.workspace.run_dir)
+    report_dir = run_dir / "report"
+    original_write = artifact_writer._write_text
+
+    def create_competing_report_before_publish(path, content):
+        original_write(path, content)
+        if path.name == "artifact_index.json":
+            report_dir.mkdir()
+
+    monkeypatch.setattr(
+        artifact_writer,
+        "_write_text",
+        create_competing_report_before_publish,
+    )
+
+    with pytest.raises(ArtifactWriteError, match="already exists"):
+        publish_report_bundle(report, run_dir=run_dir, copy_input_files=True)
+
+    assert report_dir.is_dir()
+    assert list(report_dir.iterdir()) == []
+    assert list(run_dir.glob(".report.tmp-*")) == []
 
 
 @pytest.mark.parametrize("target_inside_run", [False, True])

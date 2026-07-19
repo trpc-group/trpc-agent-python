@@ -7,11 +7,15 @@
 
 from __future__ import annotations
 
+import ctypes
+import errno
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
-from typing import Literal, TypeAlias
+import sys
+from typing import Callable, Literal, TypeAlias
 from uuid import uuid4
 
 from pydantic import BaseModel
@@ -31,6 +35,20 @@ ArtifactType: TypeAlias = Literal[
 ]
 
 _INPUT_COPY_DISABLED = "artifacts.copy_input_files=false"
+_SENSITIVE_CONFIG_KEYS = {"apikey", "authorization", "baseurl"}
+_APPROVED_SENSITIVE_VALUES = {
+    "",
+    "${TRPC_AGENT_API_KEY}",
+    "${TRPC_AGENT_BASE_URL}",
+    "fake-not-used-in-offline-mode",
+}
+_AT_FDCWD = -100
+_RENAME_NOREPLACE = 1
+_RENAMEAT2_UNAVAILABLE = {
+    errno.ENOSYS,
+    errno.EINVAL,
+    getattr(errno, "EOPNOTSUPP", errno.ENOTSUP),
+}
 
 
 class ArtifactWriteError(RuntimeError):
@@ -126,6 +144,87 @@ def _json_text(model: BaseModel) -> str:
     return model.model_dump_json(by_alias=False, indent=2) + "\n"
 
 
+def _normalized_sensitive_key(key: str) -> str:
+    return key.replace("_", "").replace("-", "").casefold()
+
+
+def _validate_sensitive_config_values(value: object, *, path: str = "$") -> None:
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            _validate_sensitive_config_values(item, path=f"{path}[{index}]")
+        return
+    if not isinstance(value, dict):
+        return
+    for key, item in value.items():
+        item_path = f"{path}.{key}"
+        if _normalized_sensitive_key(key) in _SENSITIVE_CONFIG_KEYS:
+            if not isinstance(item, str) or item not in _APPROVED_SENSITIVE_VALUES:
+                raise ArtifactWriteError(
+                    "sensitive optimizer config value is not an approved "
+                    f"placeholder: {item_path}"
+                )
+        else:
+            _validate_sensitive_config_values(item, path=item_path)
+
+
+def _validate_optimizer_config_for_copy(path: Path) -> None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ArtifactWriteError(
+            f"failed to parse optimizer config snapshot: {path}: {exc}"
+        ) from exc
+    _validate_sensitive_config_values(payload)
+
+
+def _target_exists(path: Path) -> bool:
+    return path.exists() or path.is_symlink()
+
+
+def _rename_directory_no_replace(source: Path, target: Path) -> None:
+    """Atomically publish a directory without replacing an existing target.
+
+    Linux uses renameat2 with RENAME_NOREPLACE. Platforms without that primitive
+    use a controlled fallback that rechecks the target immediately before rename.
+    """
+    if sys.platform.startswith("linux"):
+        try:
+            libc = ctypes.CDLL(None, use_errno=True)
+            renameat2 = libc.renameat2
+        except (AttributeError, OSError):
+            renameat2 = None
+        if renameat2 is not None:
+            renameat2.argtypes = [
+                ctypes.c_int,
+                ctypes.c_char_p,
+                ctypes.c_int,
+                ctypes.c_char_p,
+                ctypes.c_uint,
+            ]
+            renameat2.restype = ctypes.c_int
+            ctypes.set_errno(0)
+            result = renameat2(
+                _AT_FDCWD,
+                os.fsencode(source),
+                _AT_FDCWD,
+                os.fsencode(target),
+                _RENAME_NOREPLACE,
+            )
+            if result == 0:
+                return
+            error_number = ctypes.get_errno()
+            if error_number == errno.EEXIST:
+                raise ArtifactWriteError(
+                    f"report directory already exists: {target}"
+                )
+            if error_number not in _RENAMEAT2_UNAVAILABLE:
+                raise OSError(error_number, os.strerror(error_number), target)
+
+    if _target_exists(target):
+        raise ArtifactWriteError(f"report directory already exists: {target}")
+    source.rename(target)
+
+
 def _published_relative_path(root: Path, path: Path) -> str:
     relative = path.relative_to(root)
     if relative.parts and relative.parts[0].startswith(".report.tmp-"):
@@ -216,6 +315,7 @@ def _copy_input(
     destination_name: str,
     artifact_id: str,
     produced_by: ReportPhase,
+    content_validator: Callable[[Path], None] | None = None,
 ) -> ArtifactReference:
     if source.is_symlink():
         raise ArtifactWriteError(f"input must not be a symbolic link: {source}")
@@ -225,6 +325,8 @@ def _copy_input(
         raise ArtifactWriteError(f"failed to read input {source}: {exc}") from exc
     if actual_sha256 != expected_sha256:
         raise ArtifactWriteError(f"input hash mismatch: {source}")
+    if content_validator is not None:
+        content_validator(source)
 
     destination = staging / "inputs" / destination_name
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -387,6 +489,11 @@ def publish_report_bundle(
         )
         for artifact_id, source, expected_hash, destination_name, produced_by in input_specs:
             if copy_input_files:
+                content_validator = (
+                    _validate_optimizer_config_for_copy
+                    if artifact_id == "input.optimizer_config"
+                    else None
+                )
                 references.append(
                     _copy_input(
                         root=root,
@@ -396,6 +503,7 @@ def publish_report_bundle(
                         destination_name=destination_name,
                         artifact_id=artifact_id,
                         produced_by=produced_by,
+                        content_validator=content_validator,
                     )
                 )
             else:
@@ -433,7 +541,7 @@ def publish_report_bundle(
         )
         _validate_available_references(root, staging, validated_index)
 
-        staging.rename(target)
+        _rename_directory_no_replace(staging, target)
         staging = None
         return validated_index
     except Exception as exc:
