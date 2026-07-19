@@ -706,7 +706,6 @@ class NetworkRule(SafetyRule):
             for i, tok in enumerate(tokens):
                 base = tok.split("/")[-1].lower()
                 if base == "git" and i + 1 < len(tokens):
-                    sub = tokens[i + 1].lstrip("-").lower()
                     # skip global flags like -C / --git-dir between git and subcmd
                     j = i + 1
                     while j < len(tokens) and tokens[j].startswith("-"):
