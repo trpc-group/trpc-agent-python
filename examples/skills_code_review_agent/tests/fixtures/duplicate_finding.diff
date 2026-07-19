@@ -1,0 +1,10 @@
+diff --git a/src/settings.py b/src/settings.py
+index 1111111..2222222 100644
+--- a/src/settings.py
++++ b/src/settings.py
+@@ -1,2 +1,5 @@
+ DEBUG = False
++API_TOKEN = "super-secret-token"
++PASSWORD = "super-secret-token"
++
++# Both lines should be flagged, but duplicate matches on the same line should collapse.

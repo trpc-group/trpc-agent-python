@@ -1,0 +1,22 @@
+diff --git a/src/calculator.py b/src/calculator.py
+index 1111111..2222222 100644
+--- a/src/calculator.py
++++ b/src/calculator.py
+@@ -8,4 +8,9 @@ def calculate(expression: str) -> int:
+     expression = expression.strip()
+     if not expression:
+         return 0
+-    return parse_expression(expression)
++    return eval(expression)
++
++def run_shell(command: str) -> str:
++    return subprocess.run(command, shell=True, check=True, text=True)
+diff --git a/tests/test_calculator.py b/tests/test_calculator.py
+index 3333333..4444444 100644
+--- a/tests/test_calculator.py
++++ b/tests/test_calculator.py
+@@ -1,3 +1,5 @@
+ def test_calculate_addition():
+     assert calculate("1 + 2") == 3
++
++# Tests changed as well, so this fixture should not trigger missing_tests.

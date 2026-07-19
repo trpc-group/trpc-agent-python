@@ -1,0 +1,11 @@
+diff --git a/src/payment_service.py b/src/payment_service.py
+index 1111111..2222222 100644
+--- a/src/payment_service.py
++++ b/src/payment_service.py
+@@ -20,3 +20,8 @@ def create_order(amount: int) -> dict:
+     return {"amount": amount}
+ 
++def create_order(amount: int) -> dict:
++    if amount <= 0:
++        raise ValueError("amount must be positive")
++    return {"amount": amount, "status": "pending"}
