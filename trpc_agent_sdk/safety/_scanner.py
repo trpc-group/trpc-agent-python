@@ -16,7 +16,6 @@ from ._ast_utils import normalize_language
 from ._policy import PolicyConfig
 from ._rules import SafetyRule
 from ._rules import default_rules
-from ._rules import redact
 from ._types import Decision
 from ._types import RiskLevel
 from ._types import SafetyFinding
@@ -209,7 +208,14 @@ class SafetyScanner:
 
 
 def _redact_evidence(text: str) -> str:
-    """Best-effort redaction of obvious secret tokens in evidence snippets."""
+    """Best-effort redaction of obvious secret tokens in evidence snippets.
+
+    Only redacts the matched secret substring, not the whole evidence line.
+    The previous `len > 80 and 32+ run` branch truncated the entire line to
+    8 chars, which destroyed diagnostic context for evidence that merely
+    contained a long identifier/URL path (e.g. requests.get('https://api.
+    github.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')).
+    """
     redacted = evidence_snippet(text)
     redacted = re.sub(r"(?i)bearer\s+[A-Za-z0-9_\-\.]{20,}", "bearer ***", redacted)
     redacted = re.sub(r"AKIA[0-9A-Z]{16}", "AKIA***", redacted)
@@ -219,7 +225,7 @@ def _redact_evidence(text: str) -> str:
         redacted,
         flags=re.IGNORECASE,
     )
-    # Also apply generic redact for long tokens
-    if len(redacted) > 80 and re.search(r"[A-Za-z0-9_\-]{32,}", redacted):
-        redacted = redact(redacted, keep=8)
+    # Localized replacement: only the 32+ char token itself becomes ***,
+    # not the whole line. Keeps the surrounding diagnostic context intact.
+    redacted = re.sub(r"[A-Za-z0-9_\-]{32,}", "***", redacted)
     return redacted

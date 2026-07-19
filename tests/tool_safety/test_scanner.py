@@ -208,3 +208,19 @@ def test_register_custom_rule_is_picked_up_by_new_scanner():
         assert "TEST_CUSTOM_001" in rule_ids
     finally:
         unregister_custom_rule("TEST_CUSTOM_001")
+
+
+def test_redact_evidence_preserves_diagnostic_context():
+    """Regression for CongkeChen review: _redact_evidence used to truncate the
+    whole line to 8 chars when len>80 AND a 32+ char token was present, which
+    destroyed diagnostic context for evidence with long identifiers/URL paths.
+    Now only the matched 32+ token is replaced with ***, preserving the rest."""
+    from trpc_agent_sdk.safety._scanner import _redact_evidence
+    # Long URL with a 32-char path segment. The segment itself should be
+    # redacted to ***, but `requests.get('https://api.github.com/` and the
+    # closing `')` must survive so the operator can see what was flagged.
+    evidence = "requests.get('https://api.github.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')"
+    redacted = _redact_evidence(evidence)
+    assert "requests.get" in redacted, f"diagnostic context lost: {redacted!r}"
+    assert "api.github.com" in redacted, f"domain lost: {redacted!r}"
+    assert "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" not in redacted, f"long token not redacted: {redacted!r}"

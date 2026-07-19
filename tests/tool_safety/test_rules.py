@@ -325,3 +325,57 @@ def test_resource_sleep_at_threshold_is_allowed_bash():
     inp = ScanInput(script="sleep 300\n", language="bash")
     findings = rule.check(inp, policy)
     assert not any("Long sleep" in f.metadata.get("message", "") for f in findings)
+
+
+def test_process_bash_sudo_with_env_prefix_is_caught():
+    """Regression for CongkeChen review: `FOO=bar sudo rm -rf /` used to bypass
+    the privilege rule because cmd=tokens[0]=`FOO=bar` was not in
+    _PRIVILEGE_CMDS. Now we scan ALL tokens for privilege-cmd basenames."""
+    rule = ProcessRule()
+    inp = ScanInput(script="FOO=bar sudo rm -rf /\n", language="bash")
+    findings = rule.check(inp, _policy())
+    priv = [f for f in findings if "Privilege escalation" in f.metadata.get("message", "")]
+    assert priv, "FOO=bar sudo ... must trigger privilege CRITICAL"
+    assert priv[0].risk_level == RiskLevel.CRITICAL
+
+
+def test_process_bash_sudo_after_pipe_is_caught():
+    """Regression for CongkeChen review: `echo x | sudo tee /etc/passwd` used
+    to bypass privilege because cmd=tokens[0]=`echo`. Now all tokens are
+    scanned."""
+    rule = ProcessRule()
+    inp = ScanInput(script="echo x | sudo tee /etc/passwd\n", language="bash")
+    findings = rule.check(inp, _policy())
+    priv = [f for f in findings if "Privilege escalation" in f.metadata.get("message", "")]
+    assert priv, "echo x | sudo ... must trigger privilege CRITICAL"
+
+
+def test_process_bash_sudo_with_multiple_env_prefix_is_caught():
+    """Regression for CongkeChen review: `FOO=bar A=b sudo ls` has TWO leading
+    env-assignment tokens; the old single-step skip landed on `A=b` and missed
+    `sudo`. Now strict allowlist loops through all KEY=VAL prefixes."""
+    rule = ProcessRule()
+    inp = ScanInput(script="FOO=bar A=b sudo ls\n", language="bash")
+    findings = rule.check(inp, _policy())
+    priv = [f for f in findings if "Privilege escalation" in f.metadata.get("message", "")]
+    assert priv, "FOO=bar A=b sudo ... must trigger privilege CRITICAL"
+
+
+def test_strict_command_allowlist_multiple_env_prefix_is_fail_closed():
+    """Regression for CongkeChen review: strict allowlist with multiple
+    leading env-assignment tokens must skip ALL of them and check the real
+    command, not stop at the first KEY=VAL token."""
+    from trpc_agent_sdk.safety._rules import ProcessRule
+    rule = ProcessRule()
+    policy = PolicyConfig(strict_command_allowlist=True, allowed_commands=["ls"])
+    # `FOO=bar A=b ls` should be ALLOWED (ls is whitelisted).
+    inp = ScanInput(script="FOO=bar A=b ls /tmp\n", language="bash")
+    findings = rule.check(inp, policy)
+    allow_list_findings = [f for f in findings if "allow-list" in f.metadata.get("message", "")]
+    assert not allow_list_findings, "ls is in allowed_commands; multi-env-prefix must still resolve to ls"
+
+    # `FOO=bar A=b rm` should be FLAGGED (rm not in allowed_commands).
+    inp2 = ScanInput(script="FOO=bar A=b rm /tmp\n", language="bash")
+    findings2 = rule.check(inp2, policy)
+    allow_list_findings2 = [f for f in findings2 if "allow-list" in f.metadata.get("message", "")]
+    assert allow_list_findings2, "rm is not in allowed_commands; multi-env-prefix must still flag rm"

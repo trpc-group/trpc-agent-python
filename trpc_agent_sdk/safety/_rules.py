@@ -852,7 +852,14 @@ class ProcessRule(SafetyRule):
             tokens = line.split()
             if not tokens:
                 continue
-            cmd = tokens[0].split("/")[-1]
+
+            # Scan ALL tokens for privilege-escalation commands, not just the
+            # first. `FOO=bar sudo rm -rf /` and `echo x | sudo tee /etc/passwd`
+            # would otherwise bypass the CRITICAL privilege rule because the
+            # line-leading token is `FOO=bar` / `echo`, not `sudo`. The network
+            # side already scans all tokens; privilege must too.
+            privilege_hits = [t.split("/")[-1].split("\\")[-1] for t in tokens
+                              if t.split("/")[-1].split("\\")[-1] in _PRIVILEGE_CMDS]
 
             if policy.strict_command_allowlist:
                 # Fail-closed: when strict mode is on but allowed_commands is
@@ -860,9 +867,18 @@ class ProcessRule(SafetyRule):
                 # flagged HIGH. The previous `and policy.allowed_commands`
                 # guard turned strict mode into a no-op for empty allow-lists,
                 # letting rm/chmod slip through.
-                check_cmd = cmd
-                if "=" in check_cmd and len(tokens) > 1:
-                    check_cmd = tokens[1].split("/")[-1].split("\\")[-1]
+                #
+                # Skip ALL leading KEY=VAL env-assignment tokens, not just one.
+                # `A=b sudo ls` was caught, but `FOO=bar A=b sudo ls` slipped
+                # through because tokens[1]=="A=b" (has =) and the loop did not
+                # advance. Loop until the first non-assignment token.
+                check_idx = 0
+                while check_idx < len(tokens) - 1:
+                    tok = tokens[check_idx]
+                    if "=" not in tok or tok.startswith("("):
+                        break
+                    check_idx += 1
+                check_cmd = tokens[check_idx].split("/")[-1].split("\\")[-1] if tokens else ""
                 shell_builtins = {
                     "if",
                     "then",
@@ -884,7 +900,7 @@ class ProcessRule(SafetyRule):
                     "true",
                     "false",
                 }
-                if check_cmd not in shell_builtins and not policy.is_command_allowed(check_cmd):
+                if check_cmd and check_cmd not in shell_builtins and not policy.is_command_allowed(check_cmd):
                     findings.append(
                         self._finding(
                             line,
@@ -894,7 +910,7 @@ class ProcessRule(SafetyRule):
                             message=f"Command not in allow-list: {check_cmd}",
                         ))
 
-            if cmd in _PRIVILEGE_CMDS:
+            for cmd in privilege_hits:
                 findings.append(
                     self._finding(
                         line,
