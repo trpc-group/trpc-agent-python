@@ -161,15 +161,21 @@ async def test_publish_rejects_input_hash_drift(tmp_path):
     assert list(run_dir.glob(".report.tmp-*")) == []
 
 
+@pytest.mark.parametrize(
+    "sensitive_key",
+    ["api_key", "access_token", "client_secret", "password", "x-api-key"],
+)
 @pytest.mark.asyncio
 async def test_publish_rejects_plaintext_secret_in_optimizer_config_without_leaking_it(
-    tmp_path,
+    tmp_path, sensitive_key
 ):
     root = _copy_example(tmp_path)
     optimizer_path = root / "optimizer.json"
     payload = json.loads(optimizer_path.read_text(encoding="utf-8"))
     secret = "sk-real-sentinel-secret-must-not-be-copied"
-    payload["optimize"]["algorithm"]["reflection_lm"]["api_key"] = secret
+    payload["optimize"]["algorithm"]["reflection_lm"]["extra_fields"] = {
+        sensitive_key: secret
+    }
     optimizer_path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",

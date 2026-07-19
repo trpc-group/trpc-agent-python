@@ -35,7 +35,25 @@ ArtifactType: TypeAlias = Literal[
 ]
 
 _INPUT_COPY_DISABLED = "artifacts.copy_input_files=false"
-_SENSITIVE_CONFIG_KEYS = {"apikey", "authorization", "baseurl"}
+_SENSITIVE_CONFIG_KEYS = {
+    "accesstoken",
+    "apikey",
+    "auth",
+    "authorization",
+    "authtoken",
+    "baseurl",
+    "bearertoken",
+    "clientsecret",
+    "credential",
+    "credentials",
+    "password",
+    "passwd",
+    "privatekey",
+    "secret",
+    "secretkey",
+    "token",
+    "xapikey",
+}
 _APPROVED_SENSITIVE_VALUES = {
     "",
     "${TRPC_AGENT_API_KEY}",
