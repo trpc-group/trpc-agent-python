@@ -776,10 +776,11 @@ class SafetyScanner:
                 stripped = line.lstrip()
                 if stripped.startswith("#"):
                     continue
-                # Strip Python string-literal content only for Python
-                # scripts so that Bash single-quoted paths like
-                # cat '/etc/shadow' are not masked.
-                if script_type in (ScriptType.PYTHON, ScriptType.UNKNOWN):
+                # Strip Python string-literal content ONLY for Python
+                # scripts.  For Bash (or UNKNOWN, which may be Bash),
+                # keep the raw line so that patterns inside eval "...",
+                # bash -c '...', and similar quoting are still matched.
+                if script_type == ScriptType.PYTHON:
                     search_line = _strip_python_comment_line(line)
                 else:
                     search_line = line

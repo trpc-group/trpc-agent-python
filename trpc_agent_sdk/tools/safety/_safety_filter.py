@@ -83,7 +83,8 @@ class ToolSafetyFilter(BaseFilter):
         self._block_on_deny = block_on_deny
 
         # Identify ourselves within the filter chain
-        self._type = None  # will be set by registry
+        from trpc_agent_sdk.abc import FilterType
+        self._type = FilterType.TOOL
         self._name = "tool_safety"
 
     # ------------------------------------------------------------------
