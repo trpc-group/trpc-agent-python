@@ -101,7 +101,20 @@ _DELETE_PATTERNS = [
     re.compile(r"\bdel\s+/[sq]\b", re.IGNORECASE),
     re.compile(r"\bfind\b.*(-delete|-exec\s+rm\b)", re.IGNORECASE),
     re.compile(r"\bxargs\b.*\brm\b", re.IGNORECASE),
+    # Alternate delete primitives (workspace wipe without classic rm -rf).
+    re.compile(r"\bshred\b", re.IGNORECASE),
+    re.compile(r"\bunlink\b", re.IGNORECASE),
+    re.compile(r"\bsrm\b", re.IGNORECASE),
+    re.compile(r"\bwipe\b", re.IGNORECASE),
+    re.compile(r"\bbusybox\s+rm\b", re.IGNORECASE),
+    re.compile(r"\bbusybox\s+unlink\b", re.IGNORECASE),
 ]
+
+# Commands that mutate filesystem content when aimed at a system directory.
+_SYSTEM_DIR_MUTATORS = re.compile(
+    r"(?i)(?:^|[\s;|&])(?:rm|cp|mv|install|ln|tee|sed|dd|chmod|chown|chgrp|truncate|"
+    r"install|rsync|tar|unzip|gzip|bzip2|xz)\b|>|>>",
+)
 
 _SYSTEM_DIRS = [
     "/etc",
@@ -126,37 +139,65 @@ def _matches_sensitive(target: str) -> bool:
     return False
 
 
-def _matches_system_dir(target: str) -> bool:
+def _path_tokens(target: str) -> list[str]:
+    """Split *target* into path-ish tokens (handles pure paths and command lines)."""
     if not target:
-        return False
-    # Use path-boundary matching so '/etc' matches '/etc/passwd' but NOT
-    # '/etcetera/foo'. We treat '/', '\\', start-of-string, and end-of-string
-    # as valid path boundaries around each system dir prefix.
-    for sd in _SYSTEM_DIRS:
-        # Normalize backslashes to forward slashes for uniform matching.
-        sd_norm = sd.replace("\\", "/")
-        tgt_norm = target.replace("\\", "/")
-        if tgt_norm == sd_norm or tgt_norm.startswith(sd_norm + "/"):
-            return True
-    return False
+        return []
+    tgt_norm = target.replace("\\", "/").replace("\t", " ")
+    # Always include the full string so pure-path inputs keep working.
+    tokens = [tgt_norm]
+    tokens.extend(t.strip("'\"") for t in tgt_norm.split() if t.strip("'\""))
+    return tokens
+
+
+def _find_system_dir(target: str) -> str | None:
+    """Return the first system-dir prefix that matches *target*, or None.
+
+    Path-boundary matching: ``/etc`` matches ``/etc/passwd`` but NOT
+    ``/etcetera/foo``. Also inspects tokens so whole bash lines like
+    ``chmod 777 /usr/local`` resolve to ``/usr``.
+    """
+    if not target:
+        return None
+    for tok in _path_tokens(target):
+        for sd in _SYSTEM_DIRS:
+            sd_norm = sd.replace("\\", "/")
+            if tok == sd_norm or tok.startswith(sd_norm + "/"):
+                return sd
+    return None
+
+
+def _matches_system_dir(target: str) -> bool:
+    return _find_system_dir(target) is not None
+
+
+def _find_forbidden_path(target: str, policy: PolicyConfig) -> str | None:
+    """Return the first policy forbidden path that matches *target*, or None.
+
+    Path-boundary match so ``.env`` matches ``/app/.env`` / ``.env.production``
+    but NOT ``my.envrc``.
+    """
+    if not target:
+        return None
+    for tok in _path_tokens(target):
+        for fb in policy.forbidden_paths:
+            fb_norm = fb.replace("\\", "/")
+            if not fb_norm:
+                continue
+            if (tok == fb_norm or tok.startswith(fb_norm + "/") or tok.endswith("/" + fb_norm)
+                    or ("/" not in tok and tok == fb_norm)):
+                return fb
+            # Bare path component: '/app/.env.production' → '.env.production'
+            # should still match forbidden '.env' (common convention).
+            # 'my.envrc' does NOT start with '.env.' / '.env-' / equal '.env'.
+            base = tok.rsplit("/", 1)[-1]
+            if base == fb_norm or base.startswith(fb_norm + ".") or base.startswith(fb_norm + "-"):
+                return fb
+    return None
 
 
 def _matches_forbidden(target: str, policy: PolicyConfig) -> bool:
-    if not target:
-        return False
-    # Path-boundary match so '.env' matches '/app/.env' but NOT 'my.envrc'.
-    # We accept the forbidden path appearing at start-of-string or after a
-    # path separator; a trailing separator or end-of-string is NOT required
-    # so that '.env' matches '.env.production' too (common convention).
-    tgt_norm = target.replace("\\", "/")
-    for fb in policy.forbidden_paths:
-        fb_norm = fb.replace("\\", "/")
-        if not fb_norm:
-            continue
-        if (tgt_norm == fb_norm or tgt_norm.startswith(fb_norm + "/") or tgt_norm.endswith("/" + fb_norm)
-                or ("/" not in tgt_norm and tgt_norm == fb_norm)):
-            return True
-    return False
+    return _find_forbidden_path(target, policy) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -312,34 +353,29 @@ class DangerousFilesRule(SafetyRule):
                             message=f"Access to sensitive path ({desc}): {evidence_snippet(line)}",
                         ))
                     break
-            for sd in _SYSTEM_DIRS:
-                # Path-boundary match (consistent with _matches_system_dir on
-                # the Python side) so '/etc' matches '/etc/passwd' but NOT
-                # '/etcetera/foo'. Without this, safe scripts touching
-                # /etcetera would be false-positive CRITICAL → DENY.
-                if _matches_system_dir(line) and (">" in line or "rm " in line or "chmod" in line or "chown" in line):
-                    findings.append(
-                        self._finding(
-                            line,
-                            lineno,
-                            "Never modify or delete system directories.",
-                            message=f"Operation on system directory {sd!r}",
-                        ))
-                    break
-            for fb in policy.forbidden_paths:
-                # Path-boundary match (consistent with _matches_forbidden on
-                # the Python side) so '.env' matches '/app/.env' but NOT
-                # 'my.envrc'. Without this, safe scripts touching my.envrc
-                # would be false-positive → DENY.
-                if _matches_forbidden(line, policy):
-                    findings.append(
-                        self._finding(
-                            line,
-                            lineno,
-                            f"Path {fb!r} is forbidden by policy.",
-                            message=f"Access to forbidden path ({fb!r})",
-                        ))
-                    break
+            # Report the directory that actually matched, not a loop variable.
+            # Path-boundary match so '/etc' hits '/etc/passwd' but not
+            # '/etcetera/foo'. Flag any mutator (cp/mv/install/ln/tee/sed/…),
+            # not only >/rm/chmod/chown — otherwise planting a binary under
+            # /usr/bin via cp is ALLOW.
+            matched_sd = _find_system_dir(line)
+            if matched_sd and _SYSTEM_DIR_MUTATORS.search(line):
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        "Never modify or delete system directories.",
+                        message=f"Operation on system directory {matched_sd!r}",
+                    ))
+            matched_fb = _find_forbidden_path(line, policy)
+            if matched_fb:
+                findings.append(
+                    self._finding(
+                        line,
+                        lineno,
+                        f"Path {matched_fb!r} is forbidden by policy.",
+                        message=f"Access to forbidden path ({matched_fb!r})",
+                    ))
         return findings
 
 
@@ -456,21 +492,56 @@ _PY_NET_CALLS = {
     "httpx.get",
     "httpx.post",
     "httpx.request",
+    "httpx.stream",
     "httpx.client.get",
     "httpx.client.post",
+    "httpx.client.stream",
     "httpx.asyncclient.get",
     "httpx.asyncclient.post",
+    "httpx.asyncclient.stream",
     "aiohttp.clientsession.get",
     "aiohttp.clientsession.post",
+    "aiohttp.clientsession.request",
     "urllib.request.urlopen",
     "urllib.urlopen",
+    "urllib3.poolmanager.request",
+    "urllib3.poolmanager.urlopen",
+    "urllib3.request",
     "http.client.httpconnection",
     "http.client.httpsconnection",
+    "http.client.httpconnection.request",
+    "http.client.httpsconnection.request",
     "socket.socket",
     "socket.create_connection",
 }
 
-_BASH_NET_COMMANDS = {"curl", "wget", "nc", "netcat", "telnet", "ftp", "scp", "rsync"}
+_BASH_NET_COMMANDS = {
+    "curl",
+    "wget",
+    "nc",
+    "ncat",
+    "netcat",
+    "telnet",
+    "ftp",
+    "scp",
+    "sftp",
+    "rsync",
+    "ssh",
+    "socat",
+}
+
+# git is only a network risk for remote-touching subcommands; local
+# status/log/diff must remain ALLOW (sample 33_safe_git_status).
+_GIT_NET_SUBCOMMANDS = {
+    "clone",
+    "fetch",
+    "pull",
+    "push",
+    "ls-remote",
+    "remote",
+    "submodule",
+    "archive",
+}
 
 
 class NetworkRule(SafetyRule):
@@ -511,26 +582,75 @@ class NetworkRule(SafetyRule):
                         "patch",
                         "request",
                         "head",
+                        "stream",
+                        "urlopen",
                 }:
                     lname = session_vars[var] + "." + node.func.attr.lower()
             # Chained constructor call: httpx.Client().get(...) / requests.Session().post(...)
+            # / urllib3.PoolManager().request(...) / http.client.HTTPSConnection(...).request
             if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Call):
                 ctor = resolve_name(node.func.value.func, aliases).lower()
                 method = node.func.attr.lower()
-                if method in {"get", "post", "put", "delete", "patch", "request", "head"}:
+                if method in {
+                        "get",
+                        "post",
+                        "put",
+                        "delete",
+                        "patch",
+                        "request",
+                        "head",
+                        "stream",
+                        "urlopen",
+                }:
                     if ctor in {
                             "requests.session",
                             "requests.sessions.session",
                             "httpx.client",
                             "httpx.asyncclient",
                             "aiohttp.clientsession",
+                            "urllib3.poolmanager",
+                            "http.client.httpconnection",
+                            "http.client.httpsconnection",
                     }:
                         if "httpx" in ctor:
                             lname = "httpx.client." + method
                         elif "aiohttp" in ctor:
                             lname = "aiohttp.clientsession." + method
+                        elif "urllib3" in ctor:
+                            lname = "urllib3.poolmanager." + method
+                        elif "http.client" in ctor:
+                            lname = ctor + "." + method
                         else:
                             lname = "requests.session." + method
+
+            # Constructor itself is a network call (connection open / pool create
+            # with host) — flag even without a subsequent .request/.get.
+            if lname in {
+                    "http.client.httpconnection",
+                    "http.client.httpsconnection",
+                    "urllib3.poolmanager",
+            } or lname.endswith(".httpconnection") or lname.endswith(".httpsconnection"):
+                host = _extract_host_from_call(node)
+                if host is None:
+                    findings.append(
+                        self._finding(
+                            f"{name}(<dynamic>)",
+                            node.lineno,
+                            "Use a static, allow-listed host. Dynamic targets are high risk.",
+                            level=RiskLevel.HIGH,
+                            message=f"Network connection {name}() with non-static target",
+                            extra={"host": "<dynamic>"},
+                        ))
+                elif not policy.is_domain_allowed(host):
+                    findings.append(
+                        self._finding(
+                            f"{name}(host={host!r})",
+                            node.lineno,
+                            f"Add {host!r} to whitelisted_domains or remove the call.",
+                            message=f"Network connection {name}() to non-allow-listed host {host!r}",
+                            extra={"host": host},
+                        ))
+                continue
 
             if lname not in _PY_NET_CALLS and not _is_net_call(lname):
                 continue
@@ -582,7 +702,25 @@ class NetworkRule(SafetyRule):
                     if base in _BASH_NET_COMMANDS:
                         net_cmd = base
                         break
-            if net_cmd is None:
+            # git clone/fetch/pull/push… are network; git status/log are not.
+            git_net = False
+            for i, tok in enumerate(tokens):
+                base = tok.split("/")[-1].lower()
+                if base == "git" and i + 1 < len(tokens):
+                    sub = tokens[i + 1].lstrip("-").lower()
+                    # skip global flags like -C / --git-dir between git and subcmd
+                    j = i + 1
+                    while j < len(tokens) and tokens[j].startswith("-"):
+                        # flags that take a value
+                        if tokens[j] in {"-C", "--git-dir", "--work-tree"} and j + 1 < len(tokens):
+                            j += 2
+                            continue
+                        j += 1
+                    if j < len(tokens) and tokens[j].lower() in _GIT_NET_SUBCOMMANDS:
+                        git_net = True
+                        net_cmd = "git"
+                        break
+            if net_cmd is None and not git_net:
                 # Also catch /dev/tcp redirections
                 if "/dev/tcp/" in line:
                     findings.append(
@@ -593,7 +731,7 @@ class NetworkRule(SafetyRule):
                             message="Bash /dev/tcp network egress",
                         ))
                 continue
-            cmd_base = net_cmd
+            cmd_base = net_cmd or "git"
             host = _extract_host_from_bash(line, cmd_base)
             if host is None:
                 findings.append(
@@ -619,15 +757,46 @@ class NetworkRule(SafetyRule):
 
 
 def _is_net_call(lname: str) -> bool:
-    roots = ("requests.", "httpx.", "aiohttp.", "urllib.", "http.client.", "socket.")
-    methods = (".get", ".post", ".put", ".delete", ".patch", ".request", ".urlopen", ".connect")
-    if lname in {"socket.socket", "socket.create_connection"}:
+    roots = (
+        "requests.",
+        "httpx.",
+        "aiohttp.",
+        "urllib.",
+        "urllib3.",
+        "http.client.",
+        "socket.",
+    )
+    methods = (
+        ".get",
+        ".post",
+        ".put",
+        ".delete",
+        ".patch",
+        ".request",
+        ".urlopen",
+        ".connect",
+        ".stream",
+        ".fetch",
+    )
+    if lname in {
+            "socket.socket",
+            "socket.create_connection",
+            "http.client.httpconnection",
+            "http.client.httpsconnection",
+            "urllib3.poolmanager",
+            "urllib3.poolmanager.request",
+    }:
+        return True
+    # Constructor forms: http.client.HTTPSConnection(...), urllib3.PoolManager()
+    if lname.endswith(".httpconnection") or lname.endswith(".httpsconnection"):
+        return True
+    if lname.endswith(".poolmanager") or "urllib3" in lname and lname.endswith(".request"):
         return True
     return any(lname.startswith(r) for r in roots) and any(lname.endswith(m) for m in methods)
 
 
 def _collect_session_vars(tree: ast.AST, aliases: dict[str, str]) -> dict[str, str]:
-    """Map local var names bound to requests.Session / httpx.Client instances."""
+    """Map local var names bound to HTTP client/session constructors."""
     sessions: dict[str, str] = {}
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign):
@@ -642,6 +811,10 @@ def _collect_session_vars(tree: ast.AST, aliases: dict[str, str]) -> dict[str, s
             tag = "httpx.client"
         elif name in {"aiohttp.clientsession"}:
             tag = "aiohttp.clientsession"
+        elif name in {"urllib3.poolmanager", "urllib3.poolmanager.poolmanager"}:
+            tag = "urllib3.poolmanager"
+        elif name in {"http.client.httpconnection", "http.client.httpsconnection"}:
+            tag = name
         if tag is None:
             continue
         for target in node.targets:
@@ -723,8 +896,14 @@ _PY_PROCESS_CALLS = {
     "os.system",
     "os.popen",
     "os.exec",
+    "os.execl",
+    "os.execle",
+    "os.execlp",
+    "os.execlpe",
     "os.execv",
     "os.execve",
+    "os.execvp",
+    "os.execvpe",
     "os.spawn",
     "os.spawnl",
     "os.spawnle",
@@ -734,6 +913,7 @@ _PY_PROCESS_CALLS = {
     "os.spawnve",
     "os.spawnvp",
     "os.spawnvpe",
+    "pty.spawn",
     "subprocess.popen",
     "subprocess.run",
     "subprocess.call",
@@ -744,6 +924,19 @@ _PY_PROCESS_CALLS = {
     "commands.getoutput",
     "commands.getstatusoutput",
 }
+
+
+def _is_process_call(lname: str) -> bool:
+    """True for known process APIs, including os.exec*/os.spawn* families."""
+    if lname in _PY_PROCESS_CALLS:
+        return True
+    if lname.startswith("os.exec") or lname.startswith("os.spawn"):
+        return True
+    if lname.startswith("subprocess.") or lname.startswith("commands."):
+        return True
+    if lname in {"pty.spawn"} or lname.endswith(".spawn") and "pty" in lname:
+        return True
+    return False
 
 _PRIVILEGE_CMDS = {"sudo", "su", "doas", "pkexec", "runuser"}
 _INJECTION_BUILTINS = {"eval", "exec", "compile", "builtins.eval", "builtins.exec"}
@@ -787,10 +980,7 @@ class ProcessRule(SafetyRule):
 
         for node, name in iter_python_calls(tree, aliases):
             lname = name.lower()
-            if lname in _PY_PROCESS_CALLS or any(
-                    lname.endswith("." + c.split(".")[-1]) and c.split(".")[0] in lname
-                    for c in _PY_PROCESS_CALLS) or lname in {c.lower()
-                                                             for c in _PY_PROCESS_CALLS}:
+            if _is_process_call(lname):
                 shell_true = _has_shell_true(node)
                 findings.append(
                     self._finding(
@@ -807,14 +997,16 @@ class ProcessRule(SafetyRule):
                 obj = resolve_name(node.args[0], aliases).lower() if node.args else ""
                 attr_raw = get_string_literal(node.args[1]) if len(node.args) > 1 else None
                 attr = attr_raw.lower() if isinstance(attr_raw, str) else None
-                if obj in {"os", "subprocess"} and attr in {
-                        "system",
-                        "popen",
-                        "exec",
-                        "execv",
-                        "run",
-                        "call",
-                }:
+                # Match any process API attr, including exec*/spawn* families.
+                if obj in {"os", "subprocess", "pty"} and attr and (
+                        attr in {
+                            "system",
+                            "popen",
+                            "exec",
+                            "run",
+                            "call",
+                            "spawn",
+                        } or attr.startswith("exec") or attr.startswith("spawn")):
                     findings.append(
                         self._finding(
                             f"getattr({obj}, {attr_raw!r})",
@@ -856,11 +1048,20 @@ class ProcessRule(SafetyRule):
             # Scan ALL tokens for privilege-escalation commands, not just the
             # first. `FOO=bar sudo rm -rf /` and `echo x | sudo tee /etc/passwd`
             # would otherwise bypass the CRITICAL privilege rule because the
-            # line-leading token is `FOO=bar` / `echo`, not `sudo`. The network
-            # side already scans all tokens; privilege must too.
-            privilege_hits = [
-                t.split("/")[-1].split("\\")[-1] for t in tokens if t.split("/")[-1].split("\\")[-1] in _PRIVILEGE_CMDS
-            ]
+            # line-leading token is `FOO=bar` / `echo`, not `sudo`. Also strip
+            # glued shell metachars and case-fold so `(sudo` / `SUDO` hit.
+            privilege_hits = []
+            for t in tokens:
+                base = t.split("/")[-1].split("\\")[-1]
+                base = base.strip("(){}[]`'\"")
+                base_l = base.lower()
+                if base_l in _PRIVILEGE_CMDS:
+                    privilege_hits.append(base_l)
+            # Whole-line fallback for forms tokenize poorly, e.g. glued paren.
+            if not privilege_hits:
+                for priv in _PRIVILEGE_CMDS:
+                    if re.search(rf"(?i)(?:^|[\s;|&(]){re.escape(priv)}\b", line):
+                        privilege_hits.append(priv)
 
             if policy.strict_command_allowlist:
                 # Fail-closed: when strict mode is on but allowed_commands is
@@ -1024,9 +1225,16 @@ class DependencyInstallRule(SafetyRule):
 
     def check(self, scan_input: ScanInput, policy: PolicyConfig) -> list[SafetyFinding]:
         findings: list[SafetyFinding] = []
-        if normalize_language(scan_input) == "python":
+        lang = normalize_language(scan_input)
+        if lang == "python":
             findings.extend(self._check_python(scan_input, policy))
-        findings.extend(self._check_shell_substrings(scan_input, policy))
+        else:
+            # Bash/shell scripts: scan logical lines for install commands.
+            # Python scripts intentionally skip whole-script line scanning —
+            # inert string literals / docstrings mentioning "pip install" must
+            # not trigger DENY (CongkeChen review). Executable contexts are
+            # covered by _check_python (subprocess / os.system / pip.main).
+            findings.extend(self._check_bash_lines(scan_input, policy))
         return findings
 
     def _check_python(self, scan_input: ScanInput, policy: PolicyConfig) -> list[SafetyFinding]:
@@ -1045,8 +1253,8 @@ class DependencyInstallRule(SafetyRule):
                         "Do not install packages at runtime; declare dependencies up front.",
                         message="Programmatic pip install via pip.main()",
                     ))
-            # subprocess.run(["pip", "install", ...])
-            if lname in _PY_PROCESS_CALLS or "subprocess" in lname:
+            # subprocess.run(["pip", "install", ...]) / os.system("pip install x")
+            if _is_process_call(lname) or "subprocess" in lname:
                 args_text = _subprocess_args_text(node)
                 for pat in _INSTALL_REGEXES:
                     if pat.search(args_text):
@@ -1060,7 +1268,7 @@ class DependencyInstallRule(SafetyRule):
                         break
         return findings
 
-    def _check_shell_substrings(self, scan_input: ScanInput, policy: PolicyConfig) -> list[SafetyFinding]:
+    def _check_bash_lines(self, scan_input: ScanInput, policy: PolicyConfig) -> list[SafetyFinding]:
         findings: list[SafetyFinding] = []
         for lineno, line in bash_lines(scan_input.script):
             for pat in _INSTALL_REGEXES:
@@ -1073,21 +1281,6 @@ class DependencyInstallRule(SafetyRule):
                             message=f"Dependency install: {evidence_snippet(line)}",
                         ))
                     break
-        if normalize_language(scan_input) == "python":
-            tree = parse_python_ast(scan_input.script)
-            if tree is not None:
-                for node in ast.walk(tree):
-                    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-                        for pat in _INSTALL_REGEXES:
-                            if pat.search(node.value):
-                                findings.append(
-                                    self._finding(
-                                        node.value,
-                                        getattr(node, "lineno", None),
-                                        "Do not embed install commands in string literals.",
-                                        message="Embedded dependency install in string literal",
-                                    ))
-                                break
         return findings
 
 

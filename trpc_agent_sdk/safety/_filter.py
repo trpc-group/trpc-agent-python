@@ -88,23 +88,49 @@ class ToolSafetyFilter(BaseFilter):
         # that call would leak into this one. Always reset before scanning.
         _REVIEW_REPORT.set(None)
         args = req if isinstance(req, dict) else {}
-        script = _extract_script(args)
-        if script is None or not script.strip():
+        tool_name = self._resolve_tool_name(ctx)
+
+        # Prefer per-block scan for code_blocks so mixed python+bash blobs do
+        # not get joined and mis-classified as a single language (fail-open).
+        # Falls back to single-script extraction for BashTool-style args.
+        report = None
+        code_blocks = args.get("code_blocks")
+        if isinstance(code_blocks, list) and code_blocks:
+            from ._wrapper import _scan_code_input
+            from ._wrapper import _should_block_report
+
+            class _Input:
+
+                def __init__(self, blocks, code="", language=""):
+                    self.code_blocks = blocks
+                    self.code = code
+                    self.language = language
+
+            report = _scan_code_input(self.scanner, _Input(code_blocks))
+            if report is not None:
+                should_block = _should_block_report(report, self._block_on_review)
+            else:
+                should_block = False
+            script = _extract_script(args) or ""
+        else:
+            script = _extract_script(args)
+            if script is None or not script.strip():
+                return
+            scan_input = ScanInput(
+                script=script,
+                language=_extract_language(args),
+                workdir=_extract_workdir(args),
+                env=_extract_env(args),
+                args=_extract_args_list(args),
+                tool_name=tool_name,
+            )
+            report = self.scanner.scan(scan_input)
+            from ._wrapper import _should_block_report
+            should_block = _should_block_report(report, self._block_on_review)
+
+        if report is None:
             return
 
-        tool_name = self._resolve_tool_name(ctx)
-        scan_input = ScanInput(
-            script=script,
-            language=_extract_language(args),
-            workdir=_extract_workdir(args),
-            env=_extract_env(args),
-            args=_extract_args_list(args),
-            tool_name=tool_name,
-        )
-        report = self.scanner.scan(scan_input)
-
-        should_block = report.decision == Decision.DENY or (report.decision == Decision.NEEDS_HUMAN_REVIEW
-                                                            and self._block_on_review)
         self.audit.log(report, intercepted=should_block)
 
         if should_block:

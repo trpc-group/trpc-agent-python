@@ -12,7 +12,9 @@ from typing import Optional
 
 from ._ast_utils import evidence_snippet
 from ._ast_utils import extract_inline_payloads
+from ._ast_utils import has_shell_command_lines
 from ._ast_utils import normalize_language
+from ._ast_utils import parse_python_ast
 from ._policy import PolicyConfig
 from ._rules import SafetyRule
 from ._rules import default_rules
@@ -106,8 +108,30 @@ class SafetyScanner:
         findings: list[SafetyFinding] = []
         disabled = set(self.policy.disabled_rules)
 
-        # Primary script
+        # Primary script under the resolved language.
         findings.extend(self._run_rules(scan_input, language, disabled))
+
+        # Fail-closed dual-scan: when language is forced/guessed as python but
+        # the body is unparseable, contains shell command lines, or is a mixed
+        # blob (Filter multi-block join), also run bash rules so ``rm -rf /``
+        # cannot slip through as ALLOW.
+        if language == "python":
+            script = scan_input.script or ""
+            needs_bash = (
+                parse_python_ast(script) is None
+                or has_shell_command_lines(script)
+            )
+            if needs_bash:
+                bash_input = ScanInput(
+                    script=script,
+                    language="bash",
+                    args=scan_input.args,
+                    workdir=scan_input.workdir,
+                    env=scan_input.env,
+                    tool_name=scan_input.tool_name,
+                    tool_description=scan_input.tool_description,
+                )
+                findings.extend(self._run_rules(bash_input, "bash", disabled))
 
         # Secondary: rescan python/bash -c payloads embedded in the script
         for payload_lang, payload in extract_inline_payloads(scan_input.script or ""):
@@ -188,17 +212,31 @@ class SafetyScanner:
             if not rule.applies(language):
                 continue
             try:
-                findings.extend(rule.check(scan_input, self.policy))
+                # Force the language we intend so rules do not re-guess and
+                # take the wrong branch under dual-scan.
+                forced = ScanInput(
+                    script=scan_input.script,
+                    language=language,
+                    args=scan_input.args,
+                    workdir=scan_input.workdir,
+                    env=scan_input.env,
+                    tool_name=scan_input.tool_name,
+                    tool_description=scan_input.tool_description,
+                )
+                findings.extend(rule.check(forced, self.policy))
             except Exception as ex:  # pylint: disable=broad-except
+                # Fail-closed: a broken rule must not silently ALLOW a script
+                # that only that rule would have denied. HIGH so default
+                # deny_risk_level=high → DENY.
                 findings.append(
                     SafetyFinding(
                         rule_id="SCANNER_ERROR",
                         rule_name="Scanner Rule Error",
                         risk_type="scanner",
-                        risk_level=RiskLevel.LOW,
+                        risk_level=RiskLevel.HIGH,
                         evidence=f"{rule.rule_id} raised {type(ex).__name__}: {ex}",
                         line=None,
-                        recommendation="Fix the rule implementation.",
+                        recommendation="Fix the rule implementation; scan fail-closed.",
                         metadata={
                             "rule_id": rule.rule_id,
                             "error": str(ex)

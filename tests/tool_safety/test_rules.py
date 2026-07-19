@@ -379,3 +379,76 @@ def test_strict_command_allowlist_multiple_env_prefix_is_fail_closed():
     findings2 = rule.check(inp2, policy)
     allow_list_findings2 = [f for f in findings2 if "allow-list" in f.metadata.get("message", "")]
     assert allow_list_findings2, "rm is not in allowed_commands; multi-env-prefix must still flag rm"
+
+
+def test_dangerous_files_bash_backslash_continuation_rm_rf():
+    """Regression for CongkeChen review: physical-line bash_lines missed
+    backslash-continued ``rm \\n -rf \\n /`` because _DELETE_PATTERNS only
+    saw ``rm \\``, ``-rf \\``, ``/`` separately. Logical-line merge must
+    reassemble to ``rm -rf /`` and DENY."""
+    rule = DangerousFilesRule()
+    for script in (
+            "rm \\\n-rf \\\n/",
+            "rm \\\n  -rf \\\n  /",
+            "rm \\\n--recursive \\\n--force \\\n/",
+            "find . \\\n-delete",
+    ):
+        findings = rule.check(ScanInput(script=script, language="bash"), _policy())
+        assert any("R001" in f.rule_id for f in findings), f"continuation bypass: {script!r}"
+
+
+def test_dangerous_files_bash_system_dir_message_reports_matched_dir():
+    """Regression for CongkeChen review: the system-dir loop used the loop
+    variable ``sd`` in the message even when a later/other dir was the one
+    that matched. Message must name the actually matched directory."""
+    rule = DangerousFilesRule()
+    # /usr is not the first entry in _SYSTEM_DIRS (/etc is); previously the
+    # message could report '/etc' while evidence was '/usr/...'.
+    inp = ScanInput(script="chmod 777 /usr/local\n", language="bash")
+    findings = rule.check(inp, _policy())
+    sys_findings = [f for f in findings if "system directory" in f.metadata.get("message", "")]
+    assert sys_findings, "chmod on /usr/local must flag system directory"
+    msg = sys_findings[0].metadata.get("message", "")
+    assert "/usr" in msg, msg
+    assert "/etc" not in msg, f"message reported wrong dir: {msg}"
+
+
+def test_dependency_inert_string_literal_not_flagged():
+    """Regression for CongkeChen review: scanning every ast.Constant for
+    install regexes false-positive DENY'd docstrings / log messages that
+    merely mentioned 'pip install' / 'npm install'."""
+    rule = DependencyInstallRule()
+    for script in (
+            '"""How to setup: pip install requests"""\nprint("ok")\n',
+            'msg = "please run npm install"\nprint(msg)\n',
+            "# pip install foo\nprint(1)\n",
+    ):
+        findings = rule.check(ScanInput(script=script, language="python"), _policy())
+        assert findings == [], f"inert mention should not flag R004: {script!r} -> {findings}"
+
+
+def test_dependency_executable_context_still_flagged():
+    """Executable install contexts must still fire R004 after the inert-string
+    false-positive fix."""
+    rule = DependencyInstallRule()
+    # bash real command
+    bash_findings = rule.check(ScanInput(script="pip install evil-pkg\n", language="bash"), _policy())
+    assert bash_findings
+    # python subprocess
+    py_findings = rule.check(
+        ScanInput(
+            script="import subprocess\nsubprocess.run(['pip', 'install', 'x'])\n",
+            language="python",
+        ),
+        _policy(),
+    )
+    assert py_findings
+    # python os.system
+    os_findings = rule.check(
+        ScanInput(
+            script="import os\nos.system('pip install evil')\n",
+            language="python",
+        ),
+        _policy(),
+    )
+    assert os_findings

@@ -45,7 +45,7 @@ def wrap_tool(tool, policy: PolicyConfig, *, audit_path: Optional[str] = None):
     return tool
 
 
-def _deny_code_result(rule_ids: list[str]):
+def _deny_code_result(rule_ids: list[str], *, label: str = "TOOL_SAFETY_DENY"):
     """Build a failed CodeExecutionResult using the real SDK types.
 
     Falls back to a minimal stand-in only if ``trpc_agent_sdk.types`` cannot be
@@ -53,8 +53,11 @@ def _deny_code_result(rule_ids: list[str]):
     SDK. The real ``Outcome.OUTCOME_FAILED`` is an enum with ``.value`` and
     ``.name``, so downstream code (Part.from_code_execution_result,
     _openai_model) that reads ``.outcome.value`` works correctly.
+
+    *label* distinguishes DENY vs NEEDS_HUMAN_REVIEW blocks so audits/UI do
+    not mislabel a review-block as deny.
     """
-    msg = f"Code execution error:\nTOOL_SAFETY_DENY: {rule_ids}\n"
+    msg = f"Code execution error:\n{label}: {rule_ids}\n"
     if _REAL_RESULT_TYPES_AVAILABLE:
         return CodeExecutionResult(outcome=Outcome.OUTCOME_FAILED, output=msg)
     # Last-resort fallback (SDK core itself is broken). Emit a clear error so
@@ -179,7 +182,8 @@ class SafetyGuardedCodeExecutor:
         if report is not None:
             self._audit.log(report, intercepted=should_block)
         if should_block and report is not None:
-            return _deny_code_result(report.rule_ids)
+            label = ("TOOL_SAFETY_DENY" if report.decision == Decision.DENY else "TOOL_SAFETY_NEEDS_REVIEW")
+            return _deny_code_result(report.rule_ids, label=label)
         return await self._inner.execute_code(invocation_context, input_data)
 
 
@@ -207,7 +211,9 @@ def safe_code_executor(
             if report is not None:
                 audit.log(report, intercepted=should_block)
             if should_block and report is not None:
-                return _deny_code_result(report.rule_ids)
+                label = ("TOOL_SAFETY_DENY"
+                         if report.decision == Decision.DENY else "TOOL_SAFETY_NEEDS_REVIEW")
+                return _deny_code_result(report.rule_ids, label=label)
             return await inner.execute_code(invocation_context, input_data)
 
     return _SafeCodeExecutor()
@@ -237,40 +243,51 @@ def safety_wrapper(
     policy=None,
     audit_path=None,
     raise_on_deny=True,
+    block_on_review=None,
 ):
     """Decorator: scan the *script_arg* of a function before it runs.
 
-    .. note::
-        Only keyword arguments are scanned. Positional arguments are not
-        mapped to *script_arg* (doing so reliably would require inspecting
-        the wrapped function's signature, which is brittle for *args/**kwargs
-        variadic callables). Callers MUST pass the script as a keyword
-        argument, e.g. ``run(script="rm -rf /")`` rather than
-        ``run("rm -rf /")``. A positional argument that is itself a dict
-        containing *script_arg* is also accepted as a legacy convenience.
+    Keyword args are preferred. Positional args are bound via
+    ``inspect.signature`` when possible so ``run("rm -rf /")`` is still
+    scanned for simple callables. A positional dict containing *script_arg*
+    is also accepted. Variadic ``*args`` callables without a named parameter
+    still require a keyword.
     """
+    import inspect
+
     if policy is None:
         policy = PolicyConfig()
     _scanner = SafetyScanner(policy=policy)
     _audit = AuditLogger(audit_path)
+    _block_review = policy.block_on_review if block_on_review is None else block_on_review
 
-    def _extract_script(args, kwargs):
-        script = kwargs.get(script_arg)
-        if script is None:
-            for arg in args:
-                if isinstance(arg, dict) and script_arg in arg:
-                    return arg[script_arg]
-        return script
+    def _extract_script(func, args, kwargs):
+        if script_arg in kwargs and isinstance(kwargs.get(script_arg), str):
+            return kwargs.get(script_arg)
+        for arg in args:
+            if isinstance(arg, dict) and script_arg in arg:
+                return arg[script_arg]
+        # Map positionals via signature when the parameter is named.
+        try:
+            sig = inspect.signature(func)
+            bound = sig.bind_partial(*args, **kwargs)
+            bound.apply_defaults()
+            val = bound.arguments.get(script_arg)
+            if isinstance(val, str):
+                return val
+        except (TypeError, ValueError):
+            pass
+        return None
 
-    def _guard(args, kwargs):
-        script = _extract_script(args, kwargs)
+    def _guard(func, args, kwargs):
+        script = _extract_script(func, args, kwargs)
         if not script or not isinstance(script, str):
             return
         report = _scanner.scan(ScanInput(script=script, tool_name=tool_name))
-        # intercepted must reflect the actual interception below, not
-        # report.blocked (which uses policy.block_on_review). safety_wrapper
-        # only blocks on DENY when raise_on_deny=True; review is never blocked.
-        intercepted = report.decision == Decision.DENY and raise_on_deny
+        # Honor block_on_review (policy or explicit) so decorator semantics
+        # match ToolSafetyFilter / SafetyGuardedCodeExecutor.
+        should_block = _should_block_report(report, _block_review)
+        intercepted = should_block and raise_on_deny
         _audit.log(report, intercepted=intercepted)
         if intercepted:
             raise SafetyDeniedError(report)
@@ -279,12 +296,12 @@ def safety_wrapper(
 
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
-            _guard(args, kwargs)
+            _guard(func, args, kwargs)
             return await func(*args, **kwargs)
 
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs):
-            _guard(args, kwargs)
+            _guard(func, args, kwargs)
             return func(*args, **kwargs)
 
         return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
@@ -345,8 +362,10 @@ class SafetyReviewedSkillRunner:
     def _extract_script(args):
         if not isinstance(args, dict):
             return None
-        for key in ("script", "code", "command", "cmd"):
+        # Keep in sync with ToolSafetyFilter._SCRIPT_ARG_KEYS so skill paths
+        # do not miss shell_command / bash keys the filter would catch.
+        for key in ("command", "script", "code", "cmd", "bash", "shell_command"):
             val = args.get(key)
-            if isinstance(val, str):
+            if isinstance(val, str) and val.strip():
                 return val
         return None

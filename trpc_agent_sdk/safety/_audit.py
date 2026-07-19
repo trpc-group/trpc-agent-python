@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import time
 from pathlib import Path
@@ -14,6 +15,8 @@ from typing import Any
 from typing import Optional
 
 from ._types import SafetyReport
+
+_logger = logging.getLogger(__name__)
 
 # Process-local lock so concurrent threads do not interleave long JSONL lines.
 #
@@ -42,15 +45,28 @@ class AuditLogger:
         script_path: Optional[str] = None,
         intercepted: bool = False,
     ) -> dict[str, Any]:
-        """Emit one audit record. Safe to call when *path* is None (no-op)."""
+        """Emit one audit record. Safe to call when *path* is None (no-op).
+
+        Audit I/O failures (unwritable parent, disk full, path is a file, etc.)
+        are swallowed and logged as a warning. Callers in the filter / wrapper
+        path must never have tool execution blocked by audit plumbing — the
+        scan decision already lives in the returned *record*.
+        """
         record = self._build_record(report, script_path=script_path, intercepted=intercepted)
         if self.path is not None:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            line = json.dumps(record, ensure_ascii=False) + "\n"
-            with _AUDIT_LOCK:
-                with self.path.open("a", encoding="utf-8") as fh:
-                    fh.write(line)
-                    fh.flush()
+            try:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                line = json.dumps(record, ensure_ascii=False) + "\n"
+                with _AUDIT_LOCK:
+                    with self.path.open("a", encoding="utf-8") as fh:
+                        fh.write(line)
+                        fh.flush()
+            except OSError as ex:
+                _logger.warning(
+                    "safety audit write failed path=%s err=%s",
+                    self.path,
+                    ex,
+                )
         _emit_telemetry(report)
         return record
 

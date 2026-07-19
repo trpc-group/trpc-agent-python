@@ -51,6 +51,25 @@ def test_audit_no_path_is_noop():
     assert rec["decision"] == "allow"
 
 
+def test_audit_write_failure_does_not_raise(tmp_path: Path):
+    """Regression for CongkeChen review: mkdir/open failures must not bubble
+    out of AuditLogger.log. Filter/wrapper call sites have no try/except, so
+    an unwritable audit_path would otherwise abort ALLOW tool execution.
+
+    Simulate by making the audit path's parent a regular file so mkdir fails.
+    """
+    blocker = tmp_path / "not_a_dir"
+    blocker.write_text("x", encoding="utf-8")
+    bad_path = blocker / "nested" / "audit.jsonl"
+    audit = AuditLogger(bad_path)
+    scanner = SafetyScanner(PolicyConfig())
+    report = scanner.scan(ScanInput(script="echo hi", language="bash", tool_name="t"))
+    # Must return the record and NOT raise OSError/FileExistsError.
+    rec = audit.log(report, intercepted=False)
+    assert rec["decision"] == "allow"
+    assert rec["tool_name"] == "t"
+
+
 def test_telemetry_does_not_raise_without_otel():
     scanner = SafetyScanner(PolicyConfig())
     report = scanner.scan(ScanInput(script="print('x')", language="python"))
