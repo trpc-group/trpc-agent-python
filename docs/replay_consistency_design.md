@@ -2,16 +2,16 @@
 
 ## 归一化策略
 
-测试会先把各后端读回的数据转换为统一快照。时间戳和自动生成的 ID 不参与比较；字典按键排序，集合和 memory 结果转为稳定顺序。事件顺序、state、记忆内容及工具调用参数仍进行严格比较。
+各后端读回后生成统一快照，仅保留 session、state、当前与历史事件、memory 检索结果和 summary 版本。事件快照保留作者、文本、工具请求与响应及 state_delta；省略时间戳和自动 ID，字典按键排序、memory 按内容排序，事件列表顺序不变。
 
 ## Summary 比较策略
 
-摘要文本统一大小写、空白和中英文标点后再比较，仅消除不影响语义的展示差异。摘要所属 session、版本、更新时间、覆盖事件范围以及截断后保留的事件仍严格比较，用于发现摘要丢失、错误覆盖或跨 session 绑定。
+摘要文本转为小写，并统一空白和中英文标点；生成的 UUID 替换为固定占位符。summary_session_id、summary_version、summary_updated_at、被覆盖事件 ID、截断后保留事件及 historical_events 均按字段和下标严格比较。
 
 ## 允许差异
 
-确实由存储机制产生的差异，必须在样例的 `allowed_diff` 中按完整字段路径声明。允许差异仍会写入报告并明确标记，不会通过忽略整个对象或某类字段来掩盖其他异常。
+`_diff` 递归比较字典键和列表下标。样例只能通过 `allowed_diff` 声明完整路径，并用 `allowed_diff_reason` 解释原因；报告仍记录两侧值、session、event index、允许标记和原因，任何未声明差异都会使结果为 different。
 
 ## 后端接入方式
 
-InMemory 作为比较基准，默认接入内存 SQLite 和 Mock Redis，无需额外服务即可运行。设置 `REPLAY_REDIS_URL` 后追加真实 Redis，设置 `REPLAY_SQL_URL` 可替换 SQL 地址；设置 `REPLAY_LIGHTWEIGHT=1` 时仅执行 InMemory 回放，并要求三十秒内完成。
+默认以 InMemory 为基准，对比内存 SQLite 和共享存储的 Mock Redis。`REPLAY_SQL_URL` 用于替换 SQL 地址，`REPLAY_REDIS_URL` 用于追加真实 Redis；外部持久化模式以 UUID 隔离每次回放，`REPLAY_LIGHTWEIGHT=1` 时仅运行 InMemory。

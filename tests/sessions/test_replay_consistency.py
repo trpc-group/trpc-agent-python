@@ -24,6 +24,8 @@ from typing import Any
 from unittest.mock import patch
 from uuid import uuid4
 
+import pytest
+
 from trpc_agent_sdk.abc import MemoryServiceConfig
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.memory._in_memory_memory_service import InMemoryMemoryService
@@ -125,7 +127,8 @@ def _load_cases() -> list[dict[str, Any]]:
 
 
 def _replay_identity() -> tuple[str, str, str]:
-    if not os.getenv("REPLAY_REDIS_URL") or os.getenv("REPLAY_LIGHTWEIGHT") == "1":
+    persistent_backend = os.getenv("REPLAY_REDIS_URL") or os.getenv("REPLAY_SQL_URL")
+    if not persistent_backend or os.getenv("REPLAY_LIGHTWEIGHT") == "1":
         return _APP_NAME, _USER_ID, _SESSION_ID
     suffix = uuid4().hex
     return f"{_APP_NAME}-{suffix}", f"{_USER_ID}-{suffix}", f"{_SESSION_ID}-{suffix}"
@@ -188,9 +191,18 @@ async def _create_backends() -> dict[str, tuple[Any, Any]]:
         await sql[0]._sql_storage.create_sql_engine()
         await sql[1]._sql_storage.create_sql_engine()
         backends["sql"] = sql
+        # Constructors create RedisStorage immediately. Return one shared mock
+        # so Session and Memory exercise the same Redis key space.
+        mock_storage = _MockRedisStorage()
         with (
-                patch("trpc_agent_sdk.sessions._redis_session_service.RedisStorage"),
-                patch("trpc_agent_sdk.memory._redis_memory_service.RedisStorage"),
+                patch(
+                    "trpc_agent_sdk.sessions._redis_session_service.RedisStorage",
+                    return_value=mock_storage,
+                ),
+                patch(
+                    "trpc_agent_sdk.memory._redis_memory_service.RedisStorage",
+                    return_value=mock_storage,
+                ),
         ):
             redis_mock = (
                 RedisSessionService(db_url="redis://mock", session_config=session_config, is_async=False),
@@ -199,9 +211,6 @@ async def _create_backends() -> dict[str, tuple[Any, Any]]:
                                    enabled=True,
                                    is_async=False),
             )
-        mock_storage = _MockRedisStorage()
-        redis_mock[0]._redis_storage = mock_storage
-        redis_mock[1]._redis_storage = mock_storage
         backends["redis_mock"] = redis_mock
 
         redis_url = os.getenv("REPLAY_REDIS_URL")
@@ -337,17 +346,25 @@ async def _replay_case(case: dict[str, Any]) -> dict[str, dict[str, Any]]:
                     await _create_summary(session, session_service, operation, summary_version, timestamp)
                 elif operation["op"] == "summary_retry":
                     summary_version += 1
-                    await _create_summary(session, session_service, operation, summary_version, timestamp)
-                    try:
-                        raise RuntimeError("injected summary persistence failure")
-                    except RuntimeError:
-                        await session_service.update_session(session)
+                    original_update = session_service.update_session
+                    with patch.object(
+                            session_service,
+                            "update_session",
+                            side_effect=RuntimeError("injected summary persistence failure"),
+                    ):
+                        with pytest.raises(RuntimeError, match="injected summary persistence failure"):
+                            await _create_summary(session, session_service, operation, summary_version, timestamp)
+                    await original_update(session)
                 elif operation["op"] == "store_memory_retry":
-                    try:
-                        await memory_service.store_session(session)
-                        raise RuntimeError("injected store failure")
-                    except RuntimeError:
-                        await memory_service.store_session(session)
+                    original_store = memory_service.store_session
+                    with patch.object(
+                            memory_service,
+                            "store_session",
+                            side_effect=RuntimeError("injected memory persistence failure"),
+                    ):
+                        with pytest.raises(RuntimeError, match="injected memory persistence failure"):
+                            await memory_service.store_session(session)
+                    await original_store(session)
                 else:
                     raise ValueError(f"Unsupported replay operation: {operation['op']}")
             stored = await session_service.get_session(app_name=app_name, user_id=user_id, session_id=session_id)
@@ -447,11 +464,14 @@ def _compare_snapshot(
     baseline: dict[str, Any],
     actual: dict[str, Any],
     allowed_diff: set[str],
+    allowed_diff_reason: str | None = None,
 ) -> dict[str, Any]:
     diffs = _diff(baseline, actual, allowed_diff)
     _add_diff_context(diffs, baseline["session_id"])
     for diff in diffs:
         diff["target"] = "memory" if diff["path"].startswith("memory") else "session"
+        if diff["allowed"] and allowed_diff_reason:
+            diff["allowed_reason"] = allowed_diff_reason
     has_unallowed_diff = any(not diff["allowed"] for diff in diffs)
     return {
         "backend": backend,
@@ -468,7 +488,13 @@ async def _compare_case(case: dict[str, Any]) -> dict[str, Any]:
         if backend == "in_memory":
             continue
         comparisons.append(
-            _compare_snapshot(backend, snapshots["in_memory"], snapshot, set(case.get("allowed_diff", []))))
+            _compare_snapshot(
+                backend,
+                snapshots["in_memory"],
+                snapshot,
+                set(case.get("allowed_diff", [])),
+                case.get("allowed_diff_reason"),
+            ))
     status = "match" if all(comparison["status"] == "match" for comparison in comparisons) else "different"
     return {
         "case_id": case["id"],
@@ -493,10 +519,7 @@ class TestReplayCases:
     async def test_all_public_cases_match_and_write_report(self):
         results = [await _compare_case(case) for case in _load_cases()]
         _write_report(results)
-        expected = {
-            case["id"]: "match" if os.getenv("REPLAY_LIGHTWEIGHT") == "1" else case.get("expected_status", "match")
-            for case in _load_cases()
-        }
+        expected = {case["id"]: "match" for case in _load_cases()}
         assert {result["case_id"]: result["status"] for result in results} == expected
         report = json.loads(_REPORT_PATH.read_text(encoding="utf-8"))
         assert len(report["cases"]) == 10
@@ -509,11 +532,10 @@ class TestReplayCases:
             diffs = _diff(source, injected, set())
             assert expected_path in {diff["path"] for diff in diffs if not diff["allowed"]}, case["id"]
 
-    async def test_normal_case_false_positive_rate_is_at_most_five_percent(self):
-        normal_cases = [case for case in _load_cases() if case.get("expected_status", "match") == "match"]
-        results = [await _compare_case(case) for case in normal_cases]
+    async def test_normal_cases_have_no_false_positives(self):
+        results = [await _compare_case(case) for case in _load_cases()]
         false_positives = sum(result["status"] != "match" for result in results)
-        assert false_positives / len(normal_cases) <= 0.05
+        assert false_positives == 0
 
     async def test_lightweight_mode_runs_without_a_persistent_backend(self, monkeypatch):
         monkeypatch.setenv("REPLAY_LIGHTWEIGHT", "1")
@@ -542,6 +564,28 @@ class TestReplayComparison:
         assert user_id.startswith(f"{_USER_ID}-")
         assert session_id.startswith(f"{_SESSION_ID}-")
 
+    def test_external_sql_replays_use_isolated_identities(self, monkeypatch):
+        monkeypatch.delenv("REPLAY_LIGHTWEIGHT", raising=False)
+        monkeypatch.delenv("REPLAY_REDIS_URL", raising=False)
+        monkeypatch.setenv("REPLAY_SQL_URL", "sqlite:///replay.db")
+        first = _replay_identity()
+        second = _replay_identity()
+        assert first != second
+        assert first[0].startswith(f"{_APP_NAME}-")
+        assert first[1].startswith(f"{_USER_ID}-")
+        assert first[2].startswith(f"{_SESSION_ID}-")
+
+    @pytest.mark.skipif(not os.getenv("REPLAY_REDIS_URL"), reason="REPLAY_REDIS_URL is not configured")
+    async def test_real_redis_replays_use_distinct_identities(self):
+        case = _load_cases()[0]
+        first = await _replay_case(case)
+        second = await _replay_case(case)
+        first_ids = {snapshot["session_id"] for snapshot in first.values()}
+        second_ids = {snapshot["session_id"] for snapshot in second.values()}
+        assert len(first_ids) == 1
+        assert len(second_ids) == 1
+        assert first_ids != second_ids
+
     def test_diff_reports_event_index_and_field(self):
         diffs = _diff({"events": [{"author": "user"}]}, {"events": [{"author": "agent"}]}, set())
         assert diffs == [{"path": "events[0].author", "expected": "user", "actual": "agent", "allowed": False}]
@@ -563,9 +607,30 @@ class TestReplayComparison:
         )
         assert diffs[0]["path"] == "events[0].summary_metadata.summary_version"
 
+    def test_normalization_preserves_business_field_differences(self):
+        expected = _normalize({"state": {"mode": "normal"}})
+        actual = _normalize({"state": {"mode": "wrong"}})
+        assert _diff(expected, actual, set()) == [{
+            "path": "state.mode",
+            "expected": "normal",
+            "actual": "wrong",
+            "allowed": False,
+        }]
+
     def test_allowed_difference_is_retained_in_report_data(self):
         diffs = _diff({"state": {"backend": "a"}}, {"state": {"backend": "b"}}, {"state.backend"})
         assert diffs == [{"path": "state.backend", "expected": "a", "actual": "b", "allowed": True}]
+
+    def test_allowed_difference_includes_its_reason_in_the_report(self):
+        comparison = _compare_snapshot(
+            "sql",
+            {"session_id": "replay-session", "state": {"backend": "a"}},
+            {"session_id": "replay-session", "state": {"backend": "b"}},
+            {"state.backend"},
+            "Persistent backend stores this field differently.",
+        )
+        assert comparison["status"] == "match"
+        assert comparison["diffs"][0]["allowed_reason"] == "Persistent backend stores this field differently."
 
 
 class TestReplaySummaryMismatches:
