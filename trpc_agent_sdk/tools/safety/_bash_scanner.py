@@ -237,115 +237,118 @@ class BashScanner:
             # Check pipes and background
             self._check_operators(line_no, raw_line, tokens)
 
-            # Command analysis
-            cmd = tokens[0]
-            # Skip variable assignments (FOO=bar cmd)
-            if "=" in cmd and "=" == cmd.split(None, 1)[0][-1:]:
-                # VAR=val — skip to next token
-                if len(tokens) > 1:
-                    cmd = tokens[1]
-                    tokens = tokens[1:]
-                else:
-                    continue
+            # Command analysis — process each sub-command in the token stream
+            # (splits on ; && || so that "echo x; rm -rf /" is fully analysed)
+            self._dispatch_commands(line_no, raw_line, tokens)
 
-            cmd_lower = cmd.lower()
-            args = tokens[1:]
-            args_str = " ".join(args)
+    # ------------------------------------------------------------------
+    # Sub-command dispatcher (handles ; && || on a line)
+    # ------------------------------------------------------------------
 
-            # --- Dispatch ---
-            if cmd_lower == "rm":
-                self._check_rm(line_no, raw_line, tokens, args)
-            elif cmd_lower in _NETWORK_COMMANDS:
-                self._findings.append(
-                    BashScanFinding(
-                        kind=cmd_lower,
-                        command=cmd_lower,
-                        args=args_str,
-                        line_number=line_no,
-                        evidence=raw_line.strip()[:300],
-                    ))
-            elif cmd_lower in _PRIVILEGE_COMMANDS:
-                self._findings.append(
-                    BashScanFinding(
-                        kind="sudo" if cmd_lower != "chroot" else "sudo",
-                        command=cmd_lower,
-                        args=args_str,
-                        line_number=line_no,
-                        evidence=raw_line.strip()[:300],
-                        extra={"privilege_command": cmd_lower},
-                    ))
-            elif cmd_lower in _INSTALL_COMMANDS:
-                sub = args[0].lower() if args else ""
-                is_install = sub in _SUBCOMMAND_MAP.get(cmd_lower, set())
-                if is_install or cmd_lower in ("pip", "pip3", "pipx"):
-                    self._findings.append(
-                        BashScanFinding(
-                            kind="install",
-                            command=cmd_lower,
-                            args=args_str,
-                            line_number=line_no,
-                            evidence=raw_line.strip()[:300],
-                            extra={
-                                "package_manager": cmd_lower,
-                                "subcommand": sub if is_install else "",
-                            },
-                        ))
-            elif cmd_lower in _DESTRUCTIVE_COMMANDS:
-                self._findings.append(
-                    BashScanFinding(
-                        kind="command",
-                        command=cmd_lower,
-                        args=args_str,
-                        line_number=line_no,
-                        evidence=raw_line.strip()[:300],
-                        extra={"risk": "destructive"},
-                    ))
-            elif cmd_lower in _DYNAMIC_COMMANDS:
-                self._findings.append(
-                    BashScanFinding(
-                        kind="eval",
-                        command=cmd_lower,
-                        args=args_str,
-                        line_number=line_no,
-                        evidence=raw_line.strip()[:300],
-                    ))
-            elif cmd_lower in _FILE_READ_COMMANDS:
-                # Check if reads a sensitive path
-                path_args = [a for a in args if not a.startswith("-")]
-                for pa in path_args:
-                    if _is_sensitive_path(pa):
-                        self._findings.append(
-                            BashScanFinding(
-                                kind="command",
+    def _dispatch_commands(self, line_no: int, raw_line: str, tokens: List[str]) -> None:
+        """Analyse each sub-command in *tokens*, splitting on ``;`` ``&&`` ``||``.
+
+        This ensures that ``echo x; rm -rf /`` and ``FOO=bar rm -rf /`` are
+        both fully analysed, not just the first token.
+        """
+        seg_start = 0
+        for i, t in enumerate(tokens):
+            if t in (";", "&&", "||"):
+                self._analyse_one_command(line_no, raw_line, tokens[seg_start:i])
+                seg_start = i + 1
+        # Tail segment (or the whole line if no separators)
+        if seg_start < len(tokens):
+            self._analyse_one_command(line_no, raw_line, tokens[seg_start:])
+
+    def _analyse_one_command(self, line_no: int, raw_line: str, cmd_tokens: List[str]) -> None:
+        """Dispatch a single command segment to the appropriate checker."""
+        if not cmd_tokens:
+            return
+        # Skip variable assignments (FOO=bar cmd ...)
+        idx = 0
+        while idx < len(cmd_tokens) and re.match(r"[A-Za-z_]\w*=", cmd_tokens[idx]):
+            idx += 1
+        if idx >= len(cmd_tokens):
+            return  # pure assignment, no command
+        cmd = cmd_tokens[idx]
+        args = cmd_tokens[idx + 1:]
+        cmd_lower = cmd.lower()
+        args_str = " ".join(args)
+        evidence = " ".join(cmd_tokens)[:300]
+
+        if cmd_lower == "rm":
+            self._check_rm(line_no, raw_line, cmd_tokens[idx:], args)
+        elif cmd_lower in _NETWORK_COMMANDS:
+            self._findings.append(
+                BashScanFinding(kind=cmd_lower,
                                 command=cmd_lower,
                                 args=args_str,
                                 line_number=line_no,
-                                evidence=raw_line.strip()[:300],
-                                extra={
-                                    "risk": "sensitive_file_read",
-                                    "path": pa
-                                },
-                            ))
-                        break
-            elif cmd_lower == "dd":
-                self._check_dd(line_no, raw_line, args)
-            elif cmd_lower == "tee":
-                # tee writes to files; check for sensitive paths in args
-                for pa in args:
-                    if pa and not pa.startswith("-") and (_is_sensitive_path(pa) or pa.startswith("/dev/sd")):
-                        self._findings.append(
-                            BashScanFinding(
-                                kind="command",
-                                command="tee",
+                                evidence=evidence))
+        elif cmd_lower in _PRIVILEGE_COMMANDS:
+            self._findings.append(
+                BashScanFinding(kind="sudo",
+                                command=cmd_lower,
                                 args=args_str,
                                 line_number=line_no,
-                                evidence=raw_line.strip()[:300],
-                                extra={
-                                    "risk": "sensitive_file_write",
-                                    "path": pa
-                                },
-                            ))
-                        break
+                                evidence=evidence,
+                                extra={"privilege_command": cmd_lower}))
+        elif cmd_lower in _INSTALL_COMMANDS:
+            sub = args[0].lower() if args else ""
+            is_install = sub in _SUBCOMMAND_MAP.get(cmd_lower, set())
+            if is_install or cmd_lower in ("pip", "pip3", "pipx"):
+                self._findings.append(
+                    BashScanFinding(kind="install",
+                                    command=cmd_lower,
+                                    args=args_str,
+                                    line_number=line_no,
+                                    evidence=evidence,
+                                    extra={
+                                        "package_manager": cmd_lower,
+                                        "subcommand": sub if is_install else ""
+                                    }))
+        elif cmd_lower in _DESTRUCTIVE_COMMANDS:
+            self._findings.append(
+                BashScanFinding(kind="command",
+                                command=cmd_lower,
+                                args=args_str,
+                                line_number=line_no,
+                                evidence=evidence,
+                                extra={"risk": "destructive"}))
+        elif cmd_lower in _DYNAMIC_COMMANDS:
+            self._findings.append(
+                BashScanFinding(kind="eval", command=cmd_lower, args=args_str, line_number=line_no, evidence=evidence))
+        elif cmd_lower in _FILE_READ_COMMANDS:
+            path_args = [a for a in args if not a.startswith("-")]
+            for pa in path_args:
+                if _is_sensitive_path(pa):
+                    self._findings.append(
+                        BashScanFinding(kind="command",
+                                        command=cmd_lower,
+                                        args=args_str,
+                                        line_number=line_no,
+                                        evidence=evidence,
+                                        extra={
+                                            "risk": "sensitive_file_read",
+                                            "path": pa
+                                        }))
+                    break
+        elif cmd_lower == "dd":
+            self._check_dd(line_no, raw_line, args)
+        elif cmd_lower == "tee":
+            for pa in args:
+                if pa and not pa.startswith("-") and (_is_sensitive_path(pa) or pa.startswith("/dev/sd")):
+                    self._findings.append(
+                        BashScanFinding(kind="command",
+                                        command="tee",
+                                        args=args_str,
+                                        line_number=line_no,
+                                        evidence=evidence,
+                                        extra={
+                                            "risk": "sensitive_file_write",
+                                            "path": pa
+                                        }))
+                    break
 
     # ------------------------------------------------------------------
     # Specific checks

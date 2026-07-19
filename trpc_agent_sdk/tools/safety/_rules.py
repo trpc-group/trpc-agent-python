@@ -852,10 +852,12 @@ class SensitiveInfoLeakRule:
 
 
 def _is_in_echo_string(line: str, pattern: str) -> bool:
-    """Return True if *pattern* match is inside an echo/printf string literal.
+    """Return True if *pattern* matches are ALL inside echo/printf string literals.
 
-    In Bash, ``echo 'rm -rf /'`` is harmless — the dangerous command is just
-    printed, not executed.  This helper avoids flagging such lines.
+    In Bash, ``echo 'rm -rf /'`` is harmless.  But ``echo "rm -rf /"; rm -rf /``
+    is dangerous — the first ``rm`` is harmless but the second is real.  This
+    helper only suppresses a finding when the pattern appears **nowhere** outside
+    echo/printf quoted strings on the line.
     """
     stripped = line.strip()
     # Only applies to echo / printf commands
@@ -863,18 +865,33 @@ def _is_in_echo_string(line: str, pattern: str) -> bool:
             or stripped.startswith("printf\t") or stripped.startswith("/bin/echo ")
             or stripped.startswith("/usr/bin/echo ")):
         return False
-    # Check if the pattern *matches* inside single or double quotes
+    # Check if the pattern matches inside any quoted string
     try:
         pat = re.compile(pattern, re.IGNORECASE)
     except re.error:
         return False
+
+    in_quotes = False
     for m in re.finditer(r"'[^']*'", stripped):
         if pat.search(m.group(0)):
-            return True
-    for m in re.finditer(r'"[^"]*"', stripped):
-        if pat.search(m.group(0)):
-            return True
-    return False
+            in_quotes = True
+            break
+    if not in_quotes:
+        for m in re.finditer(r'"[^"]*"', stripped):
+            if pat.search(m.group(0)):
+                in_quotes = True
+                break
+    if not in_quotes:
+        return False  # pattern not in any quoted string — normal danger report
+
+    # Pattern found inside quotes.  Now check whether it ALSO appears
+    # outside quotes (e.g. after ; / &&).  If so, it is a real danger.
+    outside = re.sub(r"'[^']*'", " ", stripped)
+    outside = re.sub(r'"[^"]*"', " ", outside)
+    if pat.search(outside):
+        return False  # match outside quotes → real danger
+
+    return True
 
 
 def _all_commands_whitelisted(line: str, policy: SafetyPolicy) -> bool:

@@ -1014,10 +1014,10 @@ def _strip_python_comment_line(line: str) -> str:
 
 
 def _is_in_echo_string(line: str, pattern: str) -> bool:
-    """Return True if *pattern* matches inside an echo/printf string literal.
+    """Return True if *pattern* matches are ALL inside echo/printf string literals.
 
-    In Bash, ``echo 'rm -rf /'`` is harmless — the dangerous command is just
-    printed, not executed.
+    In Bash, ``echo 'rm -rf /'`` is harmless.  But ``echo "rm -rf /"; rm -rf /``
+    is dangerous — the first match is harmless but the second is real.
     """
     stripped = line.strip()
     if not (stripped.startswith("echo ") or stripped.startswith("echo\t") or stripped.startswith("printf ")
@@ -1028,10 +1028,21 @@ def _is_in_echo_string(line: str, pattern: str) -> bool:
         pat = re.compile(pattern, re.IGNORECASE)
     except re.error:
         return False
+    in_quotes = False
     for m in re.finditer(r"'[^']*'", stripped):
         if pat.search(m.group(0)):
-            return True
-    for m in re.finditer(r'"[^"]*"', stripped):
-        if pat.search(m.group(0)):
-            return True
-    return False
+            in_quotes = True
+            break
+    if not in_quotes:
+        for m in re.finditer(r'"[^"]*"', stripped):
+            if pat.search(m.group(0)):
+                in_quotes = True
+                break
+    if not in_quotes:
+        return False
+    # Pattern found inside quotes — also check if it appears outside.
+    outside = re.sub(r"'[^']*'", " ", stripped)
+    outside = re.sub(r'"[^"]*"', " ", outside)
+    if pat.search(outside):
+        return False
+    return True

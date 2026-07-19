@@ -127,6 +127,9 @@ class ToolSafetyFilter(BaseFilter):
         # Always set OTel attributes (no-op if OTel not installed)
         set_safety_span_attributes(report)
 
+        # Always expose the report for downstream inspection
+        setattr(rsp, "safety_report", report)
+
         if report.decision == Decision.DENY:
             logger.warning(
                 "ToolSafetyFilter BLOCKED tool '%s': %s",
@@ -143,14 +146,12 @@ class ToolSafetyFilter(BaseFilter):
                 tool_name,
                 report.summary,
             )
-            setattr(rsp, "safety_report", report)
             if self._block_on_review:
                 rsp.error = ToolSafetyDeniedError(report)
                 rsp.is_continue = False
 
         else:
             logger.debug("ToolSafetyFilter allowed tool '%s'.", tool_name)
-            setattr(rsp, "safety_report", report)
 
 
 class ToolSafetyDeniedError(RuntimeError):
