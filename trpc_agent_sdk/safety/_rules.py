@@ -113,8 +113,7 @@ _DELETE_PATTERNS = [
 # Commands that mutate filesystem content when aimed at a system directory.
 _SYSTEM_DIR_MUTATORS = re.compile(
     r"(?i)(?:^|[\s;|&])(?:rm|cp|mv|install|ln|tee|sed|dd|chmod|chown|chgrp|truncate|"
-    r"install|rsync|tar|unzip|gzip|bzip2|xz)\b|>|>>",
-)
+    r"install|rsync|tar|unzip|gzip|bzip2|xz)\b|>|>>", )
 
 _SYSTEM_DIRS = [
     "/etc",
@@ -938,6 +937,7 @@ def _is_process_call(lname: str) -> bool:
         return True
     return False
 
+
 _PRIVILEGE_CMDS = {"sudo", "su", "doas", "pkexec", "runuser"}
 _INJECTION_BUILTINS = {"eval", "exec", "compile", "builtins.eval", "builtins.exec"}
 _DECODE_EXEC_BASH = re.compile(
@@ -998,15 +998,14 @@ class ProcessRule(SafetyRule):
                 attr_raw = get_string_literal(node.args[1]) if len(node.args) > 1 else None
                 attr = attr_raw.lower() if isinstance(attr_raw, str) else None
                 # Match any process API attr, including exec*/spawn* families.
-                if obj in {"os", "subprocess", "pty"} and attr and (
-                        attr in {
-                            "system",
-                            "popen",
-                            "exec",
-                            "run",
-                            "call",
-                            "spawn",
-                        } or attr.startswith("exec") or attr.startswith("spawn")):
+                if obj in {"os", "subprocess", "pty"} and attr and (attr in {
+                        "system",
+                        "popen",
+                        "exec",
+                        "run",
+                        "call",
+                        "spawn",
+                } or attr.startswith("exec") or attr.startswith("spawn")):
                     findings.append(
                         self._finding(
                             f"getattr({obj}, {attr_raw!r})",

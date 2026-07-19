@@ -211,8 +211,7 @@ def safe_code_executor(
             if report is not None:
                 audit.log(report, intercepted=should_block)
             if should_block and report is not None:
-                label = ("TOOL_SAFETY_DENY"
-                         if report.decision == Decision.DENY else "TOOL_SAFETY_NEEDS_REVIEW")
+                label = ("TOOL_SAFETY_DENY" if report.decision == Decision.DENY else "TOOL_SAFETY_NEEDS_REVIEW")
                 return _deny_code_result(report.rule_ids, label=label)
             return await inner.execute_code(invocation_context, input_data)
 

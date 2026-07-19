@@ -44,13 +44,13 @@ def test_dangerous_files_bash_rm_gnu_long_options():
     """
     rule = DangerousFilesRule()
     for cmd in (
-        "rm --recursive /",
-        "rm --force /",
-        "rm --recursive --force /",
-        "rm --force --recursive /",
-        "rm --recursive -f /",
-        "rm -r --force /",
-        "rm --recursive=yes /",
+            "rm --recursive /",
+            "rm --force /",
+            "rm --recursive --force /",
+            "rm --force --recursive /",
+            "rm --recursive -f /",
+            "rm -r --force /",
+            "rm --recursive=yes /",
     ):
         findings = rule.check(ScanInput(script=cmd, language="bash"), _policy())
         assert any("R001" in f.rule_id for f in findings), f"failed to flag: {cmd!r}"

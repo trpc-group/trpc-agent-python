@@ -147,6 +147,7 @@ def test_safe_git_status_still_allowed():
 
 
 def test_scanner_error_is_high_fail_closed():
+
     class BoomRule(SafetyRule):
         rule_id = "BOOM_TEST"
         rule_name = "boom"

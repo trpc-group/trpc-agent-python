@@ -117,10 +117,7 @@ class SafetyScanner:
         # cannot slip through as ALLOW.
         if language == "python":
             script = scan_input.script or ""
-            needs_bash = (
-                parse_python_ast(script) is None
-                or has_shell_command_lines(script)
-            )
+            needs_bash = (parse_python_ast(script) is None or has_shell_command_lines(script))
             if needs_bash:
                 bash_input = ScanInput(
                     script=script,
