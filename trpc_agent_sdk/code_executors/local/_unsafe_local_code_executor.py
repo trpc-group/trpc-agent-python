@@ -129,10 +129,8 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             # and prepend it to stderr after execution completes below.
             _pending_review_warning = None
             if (report is not None and report.decision == Decision.NEEDS_HUMAN_REVIEW and not should_block):
-                _pending_review_warning = (
-                    f"TOOL_SAFETY_NEEDS_REVIEW: {list(report.rule_ids)} "
-                    f"(risk={report.risk_level.value})"
-                )
+                _pending_review_warning = (f"TOOL_SAFETY_NEEDS_REVIEW: {list(report.rule_ids)} "
+                                           f"(risk={report.risk_level.value})")
         else:
             _pending_review_warning = None
 

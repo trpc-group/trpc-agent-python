@@ -72,13 +72,13 @@ except Exception as ex:  # pylint: disable=broad-except
     safety_wrapper = None  # type: ignore[assignment]
     wrap_tool = None  # type: ignore[assignment]
     for _name in (
-        "SafeCodeExecutor",
-        "SafetyDeniedError",
-        "SafetyGuardedCodeExecutor",
-        "SafetyReviewedSkillRunner",
-        "safe_code_executor",
-        "safety_wrapper",
-        "wrap_tool",
+            "SafeCodeExecutor",
+            "SafetyDeniedError",
+            "SafetyGuardedCodeExecutor",
+            "SafetyReviewedSkillRunner",
+            "safe_code_executor",
+            "safety_wrapper",
+            "wrap_tool",
     ):
         _IMPORT_ERRORS[_name] = ex
 
