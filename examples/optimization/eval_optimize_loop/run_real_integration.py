@@ -133,6 +133,10 @@ def main() -> int:
         print(f"- {reason}")
     print(f"Writeback: {result.writeback.status.upper()} ({result.writeback.reason})")
     print("Source Prompt unchanged: yes")
+    report_dir = Path(prepared.workspace.run_dir) / "report"
+    print(f"JSON report: {report_dir / 'optimization_report.json'}")
+    print(f"Markdown report: {report_dir / 'optimization_report.md'}")
+    print(f"Artifact index: {report_dir / 'artifact_index.json'}")
     return 0
 
 

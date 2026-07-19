@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 import shutil
 from dataclasses import dataclass
+from dataclasses import field
 from datetime import datetime
 from datetime import timezone
 from hashlib import sha256
@@ -28,6 +29,9 @@ from trpc_agent_sdk.evaluation import TargetPrompt
 from trpc_agent_sdk.evaluation import load_optimize_config
 
 from .analysis import build_evaluation_analysis
+from .artifact_writer import discover_run_artifacts
+from .artifact_writer import publish_report_bundle
+from .artifact_writer import write_failure_report
 from .candidate_provider import AgentOptimizerCandidateProvider
 from .candidate_provider import CandidateProviderError
 from .candidate_provider import CandidateRequest
@@ -42,6 +46,8 @@ from .prompt_workspace import PromptWorkspaceError
 from .prompt_workspace import resolve_inside_example_root
 from .prompt_workspace import stage_prompt_workspace
 from .prompt_workspace import validate_prompt_sources
+from .report_builder import build_failure_report
+from .report_builder import build_optimization_report
 from .schemas import InputSnapshot
 from .schemas import FakeCandidateScenario
 from .schemas import FakeEvaluationSnapshot
@@ -50,6 +56,8 @@ from .schemas import ObservableValue
 from .schemas import OptimizerRuntimeParameters
 from .schemas import ResourceMeasurements
 from .schemas import RealStageResult
+from .schemas import ReportPhase
+from .schemas import ReportProgress
 from .schemas import WorkspaceSnapshot
 from .writeback import perform_writeback
 
@@ -77,6 +85,111 @@ class PreparedRun:
     source_target: TargetPrompt
     working_target: TargetPrompt
     example_root: Path
+
+
+@dataclass
+class _MutableReportProgress:
+    """Track the active report phase without marking it complete too early."""
+
+    started_at: datetime
+    current_phase: ReportPhase = "baseline_train"
+    completed_phases: list[ReportPhase] = field(default_factory=list)
+
+    def enter(self, phase: ReportPhase) -> None:
+        if self.current_phase not in self.completed_phases and self.current_phase != phase:
+            self.completed_phases.append(self.current_phase)
+        self.current_phase = phase
+
+    def snapshot(self) -> ReportProgress:
+        return ReportProgress(
+            started_at=self.started_at,
+            current_phase=self.current_phase,
+            completed_phases=list(self.completed_phases),
+        )
+
+
+async def _source_prompt_hashes(prepared: PreparedRun) -> dict[str, str]:
+    try:
+        prompts = await prepared.source_target.read_all()
+    except Exception:
+        # Failure evidence must remain writable even when the source itself is
+        # unavailable. An empty mapping means the final source state could not
+        # be observed; it must never be replaced with stale snapshot hashes.
+        return {}
+    return {
+        name: sha256(value.encode("utf-8")).hexdigest()
+        for name, value in sorted(prompts.items())
+    }
+
+
+async def _record_failure(
+    prepared: PreparedRun,
+    progress: _MutableReportProgress,
+    error: Exception,
+) -> None:
+    run_dir = Path(prepared.workspace.run_dir)
+    existing = discover_run_artifacts(run_dir)
+    report = build_failure_report(
+        prepared,
+        progress=progress.snapshot(),
+        error=error,
+        source_prompt_hashes=await _source_prompt_hashes(prepared),
+        existing_artifacts=existing,
+        generated_at=datetime.now(timezone.utc),
+    )
+    write_failure_report(report, run_dir=run_dir)
+
+
+async def _rollback_written_source(
+    prepared: PreparedRun,
+    result: FakeStageResult | RealStageResult,
+) -> None:
+    """Restore the prepared source Prompt if success reporting cannot publish."""
+    if result.writeback.status != "written":
+        return
+    baseline = {
+        snapshot.field_name: snapshot.content
+        for snapshot in prepared.input_snapshot.prompt_snapshots
+    }
+    current = await prepared.source_target.read_all()
+    if current != result.candidate.prompts:
+        raise PipelineExecutionError(
+            "source Prompt changed after writeback; refusing reporting-failure rollback"
+        )
+    # Path-backed TargetPrompt.write_all performs its atomic replacements
+    # synchronously, so this task does not yield between the adjacent check and
+    # write. Callback-backed sources retain the caller's documented atomicity
+    # responsibility, as they do for the normal writeback path.
+    await prepared.source_target.write_all(baseline)
+    restored = await prepared.source_target.read_all()
+    if restored != baseline:
+        raise PipelineExecutionError(
+            "source Prompt rollback after reporting failure could not be verified"
+        )
+
+
+async def _handle_stage_failure(
+    prepared: PreparedRun,
+    progress: _MutableReportProgress,
+    error: Exception,
+    result: FakeStageResult | RealStageResult | None,
+) -> None:
+    failure_error: Exception = error
+    if progress.current_phase == "reporting" and result is not None:
+        try:
+            await _rollback_written_source(prepared, result)
+        except Exception as rollback_exc:
+            failure_error = PipelineExecutionError(
+                f"{error}; additionally failed to roll back source Prompt: {rollback_exc}"
+            )
+    try:
+        await _record_failure(prepared, progress, failure_error)
+    except Exception as report_exc:
+        raise PipelineExecutionError(
+            f"{failure_error}; additionally failed to write failure report: {report_exc}"
+        ) from error
+    if failure_error is not error:
+        raise failure_error from error
 
 
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
@@ -377,10 +490,11 @@ async def _restore_working_baseline(
     return was_modified
 
 
-async def run_fake_stage(
+async def _execute_fake_stage(
     prepared: PreparedRun,
     *,
     scenario: FakeCandidateScenario | None = None,
+    progress: _MutableReportProgress,
 ) -> FakeStageResult:
     """Run four deterministic evaluations without a model, judge, or optimizer.
 
@@ -388,6 +502,7 @@ async def run_fake_stage(
     the isolated working target on success or candidate-evaluation failure so
     the run can be inspected later.
     """
+    progress.enter("baseline_train")
     if prepared.config.execution.mode != "fake":
         raise FakeStageExecutionError(
             f"run_fake_stage requires execution.mode='fake', got {prepared.config.execution.mode!r}"
@@ -422,6 +537,7 @@ async def run_fake_stage(
         raise FakeStageExecutionError("working prompts no longer match the prepared baseline snapshot")
 
     agent = DeterministicFakeAgent(prepared.working_target)
+    progress.enter("baseline_train")
     baseline_train = await _evaluate_split(
         prepared=prepared,
         eval_set=train_evalset,
@@ -429,6 +545,7 @@ async def run_fake_stage(
         phase="baseline",
         split="train",
     )
+    progress.enter("baseline_validation")
     baseline_validation = await _evaluate_split(
         prepared=prepared,
         eval_set=validation_evalset,
@@ -437,6 +554,7 @@ async def run_fake_stage(
         split="validation",
     )
 
+    progress.enter("candidate_generation")
     request = CandidateRequest(
         current_prompts=baseline_prompts,
         target_prompt=prepared.working_target,
@@ -460,6 +578,7 @@ async def run_fake_stage(
     if written_prompts != candidate.prompts:
         raise FakeStageExecutionError("candidate prompt readback did not match the generated proposal")
 
+    progress.enter("candidate_train")
     candidate_train = await _evaluate_split(
         prepared=prepared,
         eval_set=train_evalset,
@@ -467,6 +586,7 @@ async def run_fake_stage(
         phase="candidate",
         split="train",
     )
+    progress.enter("candidate_validation")
     candidate_validation = await _evaluate_split(
         prepared=prepared,
         eval_set=validation_evalset,
@@ -474,6 +594,7 @@ async def run_fake_stage(
         phase="candidate",
         split="validation",
     )
+    progress.enter("analysis")
     try:
         analysis = build_evaluation_analysis(
             baseline_train=baseline_train,
@@ -503,6 +624,7 @@ async def run_fake_stage(
             unit="seconds",
         ),
     )
+    progress.enter("gate")
     try:
         gate_decision = evaluate_gate(
             analysis,
@@ -512,6 +634,7 @@ async def run_fake_stage(
         )
     except GateEvaluationError as exc:
         raise FakeStageExecutionError(f"stage 3b gate failed: {exc}") from exc
+    progress.enter("writeback")
     writeback = await perform_writeback(
         decision=gate_decision,
         config=prepared.config.writeback,
@@ -533,13 +656,15 @@ async def run_fake_stage(
     )
 
 
-async def run_real_stage(
+async def _execute_real_stage(
     prepared: PreparedRun,
     *,
     call_agent: CallAgent,
     optimizer_parameters: OptimizerRuntimeParameters | None = None,
+    progress: _MutableReportProgress,
 ) -> RealStageResult:
     """Generate a real optimizer candidate and run the full guarded regression."""
+    progress.enter("baseline_train")
     if prepared.config.execution.mode != "real":
         raise FakeStageExecutionError(
             f"run_real_stage requires execution.mode='real', got {prepared.config.execution.mode!r}"
@@ -573,6 +698,7 @@ async def run_real_stage(
     if baseline_prompts != expected_baseline:
         raise FakeStageExecutionError("working prompts no longer match the prepared baseline snapshot")
 
+    progress.enter("baseline_train")
     baseline_train = await _evaluate_split(
         prepared=prepared,
         eval_set=train_evalset,
@@ -580,6 +706,7 @@ async def run_real_stage(
         phase="baseline",
         split="train",
     )
+    progress.enter("baseline_validation")
     baseline_validation = await _evaluate_split(
         prepared=prepared,
         eval_set=validation_evalset,
@@ -588,6 +715,7 @@ async def run_real_stage(
         split="validation",
     )
 
+    progress.enter("candidate_generation")
     request = CandidateRequest(
         current_prompts=baseline_prompts,
         target_prompt=prepared.working_target,
@@ -618,6 +746,7 @@ async def run_real_stage(
     if written_prompts != candidate.prompts:
         raise FakeStageExecutionError("candidate prompt readback did not match the generated proposal")
 
+    progress.enter("candidate_train")
     candidate_train = await _evaluate_split(
         prepared=prepared,
         eval_set=train_evalset,
@@ -625,6 +754,7 @@ async def run_real_stage(
         phase="candidate",
         split="train",
     )
+    progress.enter("candidate_validation")
     candidate_validation = await _evaluate_split(
         prepared=prepared,
         eval_set=validation_evalset,
@@ -632,6 +762,7 @@ async def run_real_stage(
         phase="candidate",
         split="validation",
     )
+    progress.enter("analysis")
     try:
         analysis = build_evaluation_analysis(
             baseline_train=baseline_train,
@@ -661,6 +792,7 @@ async def run_real_stage(
             unit="seconds",
         ),
     )
+    progress.enter("gate")
     try:
         gate_decision = evaluate_gate(
             analysis,
@@ -671,6 +803,7 @@ async def run_real_stage(
     except GateEvaluationError as exc:
         raise FakeStageExecutionError(f"stage 3b gate failed: {exc}") from exc
 
+    progress.enter("writeback")
     writeback = await perform_writeback(
         decision=gate_decision,
         config=prepared.config.writeback,
@@ -692,3 +825,69 @@ async def run_real_stage(
         gate_decision=gate_decision,
         writeback=writeback,
     )
+
+
+async def run_fake_stage(
+    prepared: PreparedRun,
+    *,
+    scenario: FakeCandidateScenario | None = None,
+) -> FakeStageResult:
+    """Run fake regression and atomically publish its audit report."""
+    progress = _MutableReportProgress(started_at=datetime.now(timezone.utc))
+    result: FakeStageResult | None = None
+    try:
+        result = await _execute_fake_stage(
+            prepared,
+            scenario=scenario,
+            progress=progress,
+        )
+        progress.enter("reporting")
+        report = build_optimization_report(
+            prepared,
+            result,
+            progress=progress.snapshot(),
+            finished_at=datetime.now(timezone.utc),
+        )
+        publish_report_bundle(
+            report,
+            run_dir=Path(prepared.workspace.run_dir),
+            copy_input_files=prepared.config.artifacts.copy_input_files,
+        )
+        return result
+    except Exception as exc:
+        await _handle_stage_failure(prepared, progress, exc, result)
+        raise
+
+
+async def run_real_stage(
+    prepared: PreparedRun,
+    *,
+    call_agent: CallAgent,
+    optimizer_parameters: OptimizerRuntimeParameters | None = None,
+) -> RealStageResult:
+    """Run real optimization and atomically publish its audit report."""
+    progress = _MutableReportProgress(started_at=datetime.now(timezone.utc))
+    result: RealStageResult | None = None
+    try:
+        result = await _execute_real_stage(
+            prepared,
+            call_agent=call_agent,
+            optimizer_parameters=optimizer_parameters,
+            progress=progress,
+        )
+        progress.enter("reporting")
+        report = build_optimization_report(
+            prepared,
+            result,
+            progress=progress.snapshot(),
+            finished_at=datetime.now(timezone.utc),
+        )
+        publish_report_bundle(
+            report,
+            run_dir=Path(prepared.workspace.run_dir),
+            copy_input_files=prepared.config.artifacts.copy_input_files,
+        )
+        return result
+    except Exception as exc:
+        await _handle_stage_failure(prepared, progress, exc, result)
+        raise

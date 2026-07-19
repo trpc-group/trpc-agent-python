@@ -622,4 +622,6 @@ def test_stage3b_cli_prints_gate_decision_and_rejection_reasons(tmp_path: Path):
     assert "Rejection reasons:" in completed.stdout
     assert "[no_overfitting]" in completed.stdout
     assert "Writeback: SKIPPED (gate_rejected)" in completed.stdout
-    assert "Stage 4 does not write optimization reports" in completed.stdout
+    assert "optimization_report.json" in completed.stdout
+    assert "optimization_report.md" in completed.stdout
+    assert "artifact_index.json" in completed.stdout
