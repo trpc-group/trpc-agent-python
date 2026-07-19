@@ -37,6 +37,13 @@ Severity guidance:
 - `eval/exec/pickle.loads/shell=True`: high
 - `verify=False`: medium to high depending on context
 
+Do not report when:
+
+- the match only appears inside comments or doc-style examples
+- YAML parsing already uses `safe_load` or `SafeLoader`
+- subprocess invocation does not use `shell=True`
+- `verify=False` appears in clearly test-only or mock-only code: lower confidence and route to human review
+
 ### Async Error
 
 Heuristic patterns:
@@ -59,6 +66,11 @@ Routing guidance:
 
 - Resource-lifecycle heuristics are useful but often context-sensitive, so medium-confidence routing is preferred in the first version.
 
+Do not report when:
+
+- the handle is created with `with open(...)`
+- a created handle or client is explicitly closed later in the added code
+
 ### Missing Tests
 
 Diff-level pattern:
@@ -79,11 +91,18 @@ High-confidence patterns:
 - `secret = "..."`
 - `Bearer ...`
 - `AKIA...`
+- `sk-...`
+- `ghp_...`
 - private key headers such as `BEGIN PRIVATE KEY`
 
 Severity guidance:
 
 - Hard-coded credentials are generally high or critical.
+
+Do not report when:
+
+- the value is an obvious placeholder such as `example`, `changeme`, `dummy`, `masked`, or `redacted`
+- the match only appears in comments or explanatory documentation
 
 ### Database Lifecycle
 
@@ -96,6 +115,11 @@ Routing guidance:
 
 - Emit high-confidence findings only when lifecycle handling is clearly absent.
 - Otherwise route to `needs_human_review`.
+
+Do not report when:
+
+- the connection/session is visibly closed later in the added code
+- transaction handling visibly includes both commit and rollback paths
 
 ## Finding Contract
 
@@ -116,9 +140,18 @@ Each finding should include at least:
 - Do not emit duplicate findings for the same category, file, and line
 - Route low-confidence items into warnings or human-review buckets
 - Redact secrets before persistence and reporting
+- Prefer suppressing obvious placeholders and safe examples over emitting low-value findings
 
 ## First-Pass Confidence Guidance
 
 - `confidence >= 0.8`: final finding
 - `0.4 <= confidence < 0.8`: `needs_human_review`
 - `confidence < 0.4`: warning
+
+## Phase-Two Quality Fixtures
+
+- Positive / safe examples:
+  - `safe_security_patterns.diff`
+  - `managed_lifecycle.diff`
+- Boundary / negative examples:
+  - `placeholder_secrets.diff`
