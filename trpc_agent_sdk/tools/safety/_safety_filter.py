@@ -67,6 +67,10 @@ class ToolSafetyFilter(BaseFilter):
                         events are only emitted via the logger.
         block_on_deny: If True (default), the filter prevents execution when
                        the decision is DENY.
+        block_on_review: If True, also block on NEEDS_HUMAN_REVIEW.
+                         Defaults to False — callers should check
+                         ``rsp.safety_report`` to implement a human-
+                         review gate.
     """
 
     def __init__(
@@ -75,12 +79,14 @@ class ToolSafetyFilter(BaseFilter):
         policy: Optional[SafetyPolicy] = None,
         audit_log_path: Optional[str] = None,
         block_on_deny: bool = True,
+        block_on_review: bool = False,
     ) -> None:
         super().__init__()
         self._policy = policy or get_policy()
         self._scanner = SafetyScanner(self._policy)
         self._audit = AuditLogger(audit_log_path)
         self._block_on_deny = block_on_deny
+        self._block_on_review = block_on_review
 
         # Identify ourselves within the filter chain
         from trpc_agent_sdk.abc import FilterType
@@ -137,9 +143,10 @@ class ToolSafetyFilter(BaseFilter):
                 tool_name,
                 report.summary,
             )
-            # Still allow by default — the caller should check the report.
-            # Set a readable attribute on the result so downstream can decide.
             setattr(rsp, "safety_report", report)
+            if self._block_on_review:
+                rsp.error = ToolSafetyDeniedError(report)
+                rsp.is_continue = False
 
         else:
             logger.debug("ToolSafetyFilter allowed tool '%s'.", tool_name)
@@ -198,7 +205,6 @@ def _extract_script_content(req: Any) -> Optional[str]:
         _collect(getattr(req, "script_content"))
 
     return "\n".join(parts) if parts else None
-    return None
 
 
 def _guess_script_type(req: Any, script: str) -> ScriptType:

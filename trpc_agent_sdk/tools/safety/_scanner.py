@@ -164,8 +164,8 @@ class SafetyScanner:
                 decision=Decision.DENY,
                 risk_level=RiskLevel.CRITICAL if blocklist_hit else RiskLevel.HIGH,
                 findings=oversized_findings,
-                summary=f"{oversized_reason}." +
-                (" Blocklist pattern matched — denied." if blocklist_hit else " Denied for safety."),
+                summary=(f"{oversized_reason}." +
+                         (" Blocklist pattern matched — denied." if blocklist_hit else " Denied for safety.")),
                 scan_duration_ms=round(duration_ms, 2),
                 policy_version=self._policy.content_hash,
                 sanitized=False,
@@ -397,9 +397,10 @@ class SafetyScanner:
                             RiskCategory.PROCESS_AND_SYSTEM,
                             risk,
                             f.evidence,
-                            f"AST: {'privilege escalation' if f.extra.get('risk') == 'privilege' else 'process execution'} via {f.canonical_name}",
-                            "Avoid spawning child processes in agent tools." if f.extra.get("risk") != "privilege" else
-                            "Privilege escalation is not allowed in tool scripts.",
+                            ("AST: privilege escalation via " if f.extra.get("risk") == "privilege" else
+                             "AST: process execution via ") + f.canonical_name,
+                            ("Privilege escalation is not allowed in tool scripts." if f.extra.get("risk")
+                             == "privilege" else "Avoid spawning child processes in agent tools."),
                             f.line_number,
                             f.canonical_name,
                         ))

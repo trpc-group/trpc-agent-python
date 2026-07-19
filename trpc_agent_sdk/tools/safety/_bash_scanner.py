@@ -30,7 +30,6 @@ from dataclasses import field
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Optional
 from typing import Set
 
 # ---------------------------------------------------------------------------
@@ -353,10 +352,10 @@ class BashScanner:
     # ------------------------------------------------------------------
 
     def _check_rm(self, line_no: int, raw_line: str, tokens: List[str], args: List[str]) -> None:
-        """Check for recursive-delete.  Flags both ``rm -rf`` and ``rm -r -f``."""
-        all_tokens = set(tokens)
-        # Parse short flags character-by-character (avoids substring false
-        # positives: "-i" has no "r", "-v" has no "f", etc.).
+        """Check for recursive-delete.  Flags both ``rm -rf`` and ``rm -r -f``.
+
+        Parses short flags character-by-character (avoids substring false
+        positives: "-i" has no "r", "-v" has no "f", etc.)."""
         short_flags: set[str] = set()
         has_long_recursive = False
         has_long_force = False

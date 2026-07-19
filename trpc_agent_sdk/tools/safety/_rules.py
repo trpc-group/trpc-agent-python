@@ -733,7 +733,7 @@ class ResourceAbuseRule:
             r"ProcessPoolExecutor\s*\(.*max_workers\s*=\s*(\d+)",
             r"concurrent\.futures",
             r"multiprocessing\.Pool\s*\(.*processes\s*=\s*(\d+)",
-            r"&[\s\n]*done",
+            r"&[\s]*done",
         ]
         for conc_pat in conc_patterns:
             for line_no, line_text in _find_lines(script, conc_pat, script_type=scan_input.script_type):
