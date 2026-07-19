@@ -26,6 +26,13 @@ try:
 except Exception:  # pylint: disable=broad-except
     FilterResult = None  # type: ignore[assignment]
 
+try:
+    from trpc_agent_sdk.types import Outcome
+    _REAL_OUTCOME_AVAILABLE = True
+except Exception:  # pylint: disable=broad-except
+    Outcome = None  # type: ignore[assignment]
+    _REAL_OUTCOME_AVAILABLE = False
+
 pytestmark = pytest.mark.skipif(
     not _SDK_AVAILABLE or FilterResult is None,
     reason="tRPC-Agent SDK core (abc.FilterResult) not importable",
@@ -95,12 +102,12 @@ class _FakeInnerExecutor:
 
     async def execute_code(self, invocation_context, input_data):
         self.calls.append(input_data)
-
-        class _Ok:
-            output = "ok"
-            outcome = type("O", (), {"name": "OUTCOME_OK"})()
-
-        return _Ok()
+        # Return a real CodeExecutionResult so the test exercises the same
+        # types downstream pipeline code (Part.from_code_execution_result,
+        # _openai_model) will see, instead of a stub that hides attr errors.
+        from trpc_agent_sdk.types import CodeExecutionResult
+        from trpc_agent_sdk.types import Outcome
+        return CodeExecutionResult(outcome=Outcome.OUTCOME_OK, output="ok")
 
 
 def test_safe_code_executor_blocks_dangerous_python(tmp_path: Path):
@@ -113,7 +120,14 @@ def test_safe_code_executor_blocks_dangerous_python(tmp_path: Path):
 
     assert inner.calls == []
     assert "TOOL_SAFETY_DENY" in result.output
-    assert result.outcome.name == "OUTCOME_FAILED"
+    # Real Outcome enum: .value / .name both available. Assert against the
+    # enum member directly so the test fails if a stub object is ever
+    # reintroduced (stubs lack .value and would fail equality).
+    if _REAL_OUTCOME_AVAILABLE:
+        assert result.outcome == Outcome.OUTCOME_FAILED
+        assert result.outcome.value is not None  # stub would crash here
+    else:  # pragma: no cover - fallback when SDK types unavailable
+        assert result.outcome.name == "OUTCOME_FAILED"
 
     audit_path = tmp_path / "audit.jsonl"
     assert audit_path.exists()
@@ -132,7 +146,10 @@ def test_safe_code_executor_allows_safe_python(tmp_path: Path):
 
     assert len(inner.calls) == 1
     assert "ok" in result.output
-    assert result.outcome.name == "OUTCOME_OK"
+    if _REAL_OUTCOME_AVAILABLE:
+        assert result.outcome == Outcome.OUTCOME_OK
+    else:  # pragma: no cover - fallback when SDK types unavailable
+        assert result.outcome.name == "OUTCOME_OK"
 
 
 def test_safety_wrapper_blocks_dangerous_script(tmp_path: Path):

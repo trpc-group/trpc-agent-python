@@ -105,6 +105,12 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         Returns:
             CodeExecutionResult with combined output
         """
+        # Initialize at the top so the variable always has a defined value
+        # regardless of which branch (scanner on/off, report None/not) runs.
+        # Previously it was only assigned inside the `if self._safety_scanner`
+        # branch and the `else`, making later `if _pending_review_warning`
+        # depend on branch ordering — fragile for refactors.
+        _pending_review_warning = None
         if self._safety_scanner is not None:
             from trpc_agent_sdk.safety import Decision
             from trpc_agent_sdk.safety._wrapper import _scan_code_input
@@ -125,14 +131,13 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
                 return create_code_execution_result(stderr=f"{code_label}: {report.rule_ids}")
             # Non-blocking NEEDS_HUMAN_REVIEW: do NOT block execution, but
             # surface the warning so the caller is not silently unaware
-            # (matches _filter._after's merge semantics). We stash the warning
+            # (matches _filter._after's merge semantics). Stash the warning
             # and prepend it to stderr after execution completes below.
-            _pending_review_warning = None
+            # Use logging (not sys.stderr.write) to avoid polluting captured
+            # stderr streams in CI / subprocess stdout/stderr separation.
             if (report is not None and report.decision == Decision.NEEDS_HUMAN_REVIEW and not should_block):
                 _pending_review_warning = (f"TOOL_SAFETY_NEEDS_REVIEW: {list(report.rule_ids)} "
                                            f"(risk={report.risk_level.value})")
-        else:
-            _pending_review_warning = None
 
         output_parts = []
         error_parts = []

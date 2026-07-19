@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import logging
 from typing import Optional
 
 from ._audit import AuditLogger
@@ -19,6 +20,23 @@ from ._types import ScanInput
 from ._types import decision_rank
 from ._types import risk_order
 
+# Use the real CodeExecutionResult / Outcome from trpc_agent_sdk.types so deny
+# results flow through the Agent pipeline (Part.from_code_execution_result,
+# _openai_model._post_process_code_execution_result) without AttributeError on
+# .outcome.value. trpc_agent_sdk.types pulls google.genai.types (always
+# installed with the SDK core), NOT docker, so this stays dep-light.
+try:  # pragma: no cover
+    from trpc_agent_sdk.types import CodeExecutionResult
+    from trpc_agent_sdk.types import Outcome
+    _REAL_RESULT_TYPES_AVAILABLE = True
+except Exception as ex:  # pylint: disable=broad-except
+    CodeExecutionResult = None  # type: ignore[assignment]
+    Outcome = None  # type: ignore[assignment]
+    _REAL_RESULT_TYPES_AVAILABLE = False
+    _RESULT_IMPORT_ERROR = ex
+
+_logger = logging.getLogger("trpc_agent_sdk.safety")
+
 
 def wrap_tool(tool, policy: PolicyConfig, *, audit_path: Optional[str] = None):
     """Return *tool* with a :class:`ToolSafetyFilter` prepended to its filters."""
@@ -27,24 +45,37 @@ def wrap_tool(tool, policy: PolicyConfig, *, audit_path: Optional[str] = None):
     return tool
 
 
-class _Outcome:
-    """Minimal stand-in for trpc_agent_sdk.types.Outcome used in deny results."""
+def _deny_code_result(rule_ids: list[str]):
+    """Build a failed CodeExecutionResult using the real SDK types.
 
-    def __init__(self, name: str):
-        self.name = name
-
-
-class _CodeExecutionResult:
-    """Minimal CodeExecutionResult-compatible object (no code_executors import)."""
-
-    def __init__(self, *, output: str, outcome_name: str):
-        self.output = output
-        self.outcome = _Outcome(outcome_name)
-
-
-def _deny_code_result(rule_ids: list[str]) -> _CodeExecutionResult:
-    """Build a failed code-execution result without importing code_executors."""
+    Falls back to a minimal stand-in only if ``trpc_agent_sdk.types`` cannot be
+    imported (e.g. google-genai missing), which would itself break the whole
+    SDK. The real ``Outcome.OUTCOME_FAILED`` is an enum with ``.value`` and
+    ``.name``, so downstream code (Part.from_code_execution_result,
+    _openai_model) that reads ``.outcome.value`` works correctly.
+    """
     msg = f"Code execution error:\nTOOL_SAFETY_DENY: {rule_ids}\n"
+    if _REAL_RESULT_TYPES_AVAILABLE:
+        return CodeExecutionResult(outcome=Outcome.OUTCOME_FAILED, output=msg)
+    # Last-resort fallback (SDK core itself is broken). Emit a clear error so
+    # the misconfiguration is diagnosable instead of silently producing a
+    # stub object that crashes downstream pipeline code.
+    _logger.error(
+        "trpc_agent_sdk.types import failed; cannot build real "
+        "CodeExecutionResult. Deny result will use a minimal stub. "
+        "Original error: %r",
+        _RESULT_IMPORT_ERROR,
+    )
+
+    class _Outcome:
+        def __init__(self, name: str):
+            self.name = name
+
+    class _CodeExecutionResult:
+        def __init__(self, *, output: str, outcome_name: str):
+            self.output = output
+            self.outcome = _Outcome(outcome_name)
+
     return _CodeExecutionResult(output=msg, outcome_name="OUTCOME_FAILED")
 
 
@@ -63,7 +94,14 @@ def _normalize_block_language(raw_lang: str | None, code: str) -> str:
 
 
 def _scan_code_input(scanner: SafetyScanner, input_data):
-    """Scan code / code_blocks with per-block language; return worst report."""
+    """Scan code / code_blocks with per-block language; return worst report.
+
+    ``code_blocks`` elements may be either objects (with ``.code`` /
+    ``.language`` attributes, e.g. ``CodeBlock``) or dicts (with ``code`` /
+    ``language`` keys, as produced by some tool adapters). Both forms are
+    supported so the scanner does not silently skip dict blocks (which would
+    leave real code unscanned).
+    """
     # Use shared ranking from _types so this aggregation logic cannot drift
     # from the executor's copy. Decision severity: DENY > NEEDS_HUMAN_REVIEW >
     # ALLOW. A MEDIUM bash block must outweigh a safe ALLOW python block.
@@ -71,12 +109,22 @@ def _scan_code_input(scanner: SafetyScanner, input_data):
     top_code = getattr(input_data, "code", None) or ""
     if not blocks and top_code:
         top_lang = getattr(input_data, "language", None) or ""
-        blocks = [type("B", (), {"code": top_code, "language": top_lang})()]
+        blocks = [{"code": top_code, "language": top_lang}]
+
+    def _block_code(block) -> str:
+        if isinstance(block, dict):
+            return str(block.get("code", "") or "")
+        return str(getattr(block, "code", None) or "")
+
+    def _block_lang(block) -> str:
+        if isinstance(block, dict):
+            return str(block.get("language", "") or "").strip().lower()
+        return str(getattr(block, "language", None) or "").strip().lower()
 
     worst = None
     for block in blocks:
-        code = getattr(block, "code", None) or ""
-        declared = (getattr(block, "language", None) or "").strip().lower()
+        code = _block_code(block)
+        declared = _block_lang(block)
         # Mislabeled bash-as-python must still hit bash rules via content check.
         if declared in ("sh", "shell", "bash"):
             lang = "bash"

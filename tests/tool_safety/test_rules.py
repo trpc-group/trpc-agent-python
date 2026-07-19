@@ -264,3 +264,18 @@ def test_dangerous_files_system_dir_boundary_not_substring():
     findings = rule.check(inp, _policy())
     # No system-dir finding should fire for /etcetera.
     assert not any("system" in f.metadata.get("message", "").lower() for f in findings)
+
+
+def test_strict_command_allowlist_empty_list_is_fail_closed():
+    """Regression for CongkeChen review: strict_command_allowlist=True with
+    empty allowed_commands used to skip the whole allow-list check (fail-open),
+    letting rm/chmod through. Now every non-builtin command is flagged HIGH."""
+    from trpc_agent_sdk.safety._rules import ProcessRule
+    # Use ProcessRule's _check_bash path (DangerousFilesRule also runs but
+    # ProcessRule carries the allow-list enforcement).
+    rule = ProcessRule()
+    policy = PolicyConfig(strict_command_allowlist=True, allowed_commands=[])
+    inp = ScanInput(script="rm /tmp/x\n", language="bash")
+    findings = rule.check(inp, policy)
+    allow_list_findings = [f for f in findings if "allow-list" in f.metadata.get("message", "")]
+    assert allow_list_findings, "strict_command_allowlist=True with empty allowed_commands must flag rm (fail-closed)"

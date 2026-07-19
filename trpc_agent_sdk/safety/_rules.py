@@ -153,9 +153,7 @@ def _matches_forbidden(target: str, policy: PolicyConfig) -> bool:
         fb_norm = fb.replace("\\", "/")
         if not fb_norm:
             continue
-        if (tgt_norm == fb_norm
-                or tgt_norm.startswith(fb_norm + "/")
-                or tgt_norm.endswith("/" + fb_norm)
+        if (tgt_norm == fb_norm or tgt_norm.startswith(fb_norm + "/") or tgt_norm.endswith("/" + fb_norm)
                 or ("/" not in tgt_norm and tgt_norm == fb_norm)):
             return True
     return False
@@ -848,9 +846,12 @@ class ProcessRule(SafetyRule):
                 continue
             cmd = tokens[0].split("/")[-1]
 
-            if policy.strict_command_allowlist and policy.allowed_commands:
-                # Skip env assignments; reuse PolicyConfig.is_command_allowed
-                # so Windows basenames (\) stay consistent with policy helpers.
+            if policy.strict_command_allowlist:
+                # Fail-closed: when strict mode is on but allowed_commands is
+                # empty, every non-builtin command is unknown and must be
+                # flagged HIGH. The previous `and policy.allowed_commands`
+                # guard turned strict mode into a no-op for empty allow-lists,
+                # letting rm/chmod slip through.
                 check_cmd = cmd
                 if "=" in check_cmd and len(tokens) > 1:
                     check_cmd = tokens[1].split("/")[-1].split("\\")[-1]

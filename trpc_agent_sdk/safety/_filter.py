@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import contextvars
-import sys
+import logging
 from typing import Any
 from typing import Optional
 
@@ -20,6 +20,8 @@ from ._policy import PolicyConfig
 from ._scanner import SafetyScanner
 from ._types import Decision
 from ._types import ScanInput
+
+_logger = logging.getLogger("trpc_agent_sdk.safety")
 
 _SCRIPT_ARG_KEYS = ("command", "script", "code", "cmd", "bash", "shell_command")
 _LANGUAGE_ARG_KEYS = ("language", "lang")
@@ -130,14 +132,15 @@ class ToolSafetyFilter(BaseFilter):
             # BaseFilter.run's handle() step overwrites result.rsp with the
             # tool's return value.
             #
-            # Belt-and-suspenders: also write to stderr so that if _after is
-            # skipped (handle() raised, earlier filter set is_continue=False,
-            # or the tool returned a non-dict that _after cannot annotate),
-            # the warning is still surfaced to the caller instead of being
-            # silently lost. The audit log already records the decision; this
-            # stderr line is the in-band fallback for human operators.
-            sys.stderr.write(f"TOOL_SAFETY_NEEDS_REVIEW: {list(report.rule_ids)} "
-                             f"(risk={report.risk_level.value})\n")
+            # Belt-and-suspenders: also log via the SDK logger so that if
+            # _after is skipped (handle() raised, earlier filter set
+            # is_continue=False, or the tool returned a non-dict that _after
+            # cannot annotate), the warning is still surfaced to operators
+            # instead of being silently lost. The audit log already records
+            # the decision; this log line is the in-band fallback. Using the
+            # logging module (not sys.stderr.write) avoids polluting captured
+            # stderr streams in CI / subprocess scenarios.
+            _logger.warning("TOOL_SAFETY_NEEDS_REVIEW: %s (risk=%s)", list(report.rule_ids), report.risk_level.value)
             _REVIEW_REPORT.set(report)
 
     async def _after(self, ctx: Any, req: Any, rsp: FilterResult) -> None:
