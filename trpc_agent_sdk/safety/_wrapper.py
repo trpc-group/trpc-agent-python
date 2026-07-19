@@ -63,7 +63,14 @@ def _normalize_block_language(raw_lang: str | None, code: str) -> str:
 
 def _scan_code_input(scanner: SafetyScanner, input_data):
     """Scan code / code_blocks with per-block language; return worst report."""
-    order = {
+    # Decision severity: DENY > NEEDS_HUMAN_REVIEW > ALLOW. A MEDIUM bash block
+    # must outweigh a safe ALLOW python block when aggregating multi-block input.
+    decision_rank = {
+        Decision.ALLOW: 0,
+        Decision.NEEDS_HUMAN_REVIEW: 1,
+        Decision.DENY: 2,
+    }
+    risk_rank = {
         RiskLevel.NONE: 0,
         RiskLevel.LOW: 1,
         RiskLevel.MEDIUM: 2,
@@ -91,11 +98,12 @@ def _scan_code_input(scanner: SafetyScanner, input_data):
         report = scanner.scan(ScanInput(script=code, language=lang, tool_name="code_executor"))
         if worst is None:
             worst = report
-        elif report.decision == Decision.DENY and worst.decision != Decision.DENY:
+            continue
+        # Pick the worse of (worst, report) by (decision_rank, risk_rank).
+        worst_key = (decision_rank.get(worst.decision, 0), risk_rank.get(worst.risk_level, 0))
+        report_key = (decision_rank.get(report.decision, 0), risk_rank.get(report.risk_level, 0))
+        if report_key > worst_key:
             worst = report
-        elif report.decision == worst.decision:
-            if order.get(report.risk_level, 0) > order.get(worst.risk_level, 0):
-                worst = report
     return worst
 
 

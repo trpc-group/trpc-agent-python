@@ -93,3 +93,29 @@ def test_blocked_true_when_block_on_review_and_review_decision():
     report = SafetyScanner(policy).scan(ScanInput(script="sleep 1 &", language="bash"))
     assert report.decision.value == "needs_human_review"
     assert report.blocked is True
+
+
+def test_scan_code_input_multi_block_aggregates_safe_plus_review():
+    """Multi-block aggregation: safe Python + MEDIUM bash must yield NEEDS_HUMAN_REVIEW.
+
+    With block_on_review=True, _scan_code_input must return the worst report
+    (needs_human_review from the bash block, not allow from the safe python
+    block), and _should_block_report must return True.
+    """
+    from trpc_agent_sdk.safety._wrapper import _should_block_report
+    from trpc_agent_sdk.safety import Decision
+
+    policy = PolicyConfig(
+        deny_risk_level=RiskLevel.CRITICAL,
+        review_risk_level=RiskLevel.MEDIUM,
+        block_on_review=True,
+    )
+    scanner = SafetyScanner(policy)
+    inp = _Input(code_blocks=[
+        _Block("x = 1\nprint(x)", language="python"),
+        _Block("sleep 100 &", language="bash"),
+    ])
+    report = _scan_code_input(scanner, inp)
+    assert report is not None
+    assert report.decision == Decision.NEEDS_HUMAN_REVIEW
+    assert _should_block_report(report, block_on_review=True) is True

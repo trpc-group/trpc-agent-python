@@ -90,6 +90,23 @@ def test_filter_block_on_review(tmp_path: Path):
     assert rsp.rsp.get("success") is False
 
 
+def test_filter_block_on_review_pure_medium_returns_needs_review(tmp_path: Path):
+    """block_on_review=True + pure MEDIUM signal must return TOOL_SAFETY_NEEDS_REVIEW.
+
+    'sleep 100 &' is a non-network background process → MEDIUM →
+    NEEDS_HUMAN_REVIEW under the default policy (deny=HIGH, review=MEDIUM).
+    With block_on_review=True the filter must block and emit the review error
+    code (not DENY, since the decision is not DENY).
+    """
+    flt = _make_filter(tmp_path, block_on_review=True)
+    rsp = FilterResult()
+    req = {"command": "sleep 100 &"}
+    asyncio.run(flt._before(None, req, rsp))  # pylint: disable=protected-access
+    assert rsp.is_continue is False
+    assert rsp.rsp["error"] == "TOOL_SAFETY_NEEDS_REVIEW"
+    assert rsp.rsp.get("success") is False
+
+
 def test_filter_extracts_code_blocks(tmp_path: Path):
     flt = _make_filter(tmp_path)
     rsp = FilterResult()
