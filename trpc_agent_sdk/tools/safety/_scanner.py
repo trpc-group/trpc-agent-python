@@ -225,6 +225,24 @@ class SafetyScanner:
         if decision != Decision.DENY:
             decision, bl_findings = self._check_blocklist_override(script, decision, scan_input.script_type)
             all_findings.extend(bl_findings)
+        # Blocklist commands — also force DENY when a forbidden command literal appears
+        if decision != Decision.DENY and self._policy.blocklist_commands:
+            for cmd in self._policy.blocklist_commands:
+                if re.search(re.escape(cmd), script, re.IGNORECASE):
+                    logger.warning("Blocklist command matched: %s → forcing DENY", cmd)
+                    all_findings.append(
+                        SafetyFinding(
+                            rule_id="FILE-001",
+                            category=RiskCategory.DANGEROUS_FILE_OPS,
+                            risk_level=RiskLevel.CRITICAL,
+                            evidence=cmd,
+                            message=f"Blocklisted command detected: {cmd}",
+                            recommendation="Remove the dangerous command from the script.",
+                            line_number=0,
+                            matched_pattern=cmd,
+                        ))
+                    decision = Decision.DENY
+                    break
 
         # Apply allow-pattern override — allow patterns → allow
         # Only upgrades NEEDS_HUMAN_REVIEW; never overrides DENY (blocklist wins).
@@ -857,10 +875,15 @@ _default_scanner: Optional[SafetyScanner] = None
 
 
 def get_scanner() -> SafetyScanner:
-    """Return (and cache) the default SafetyScanner instance."""
+    """Return (and cache) the default SafetyScanner instance.
+
+    The cache is invalidated on policy change so that ``reload_policy()``
+    + ``quick_scan()`` sees the updated rules.
+    """
     global _default_scanner  # pylint: disable=global-statement
-    if _default_scanner is None:
-        _default_scanner = SafetyScanner()
+    current_policy = get_policy()
+    if _default_scanner is None or _default_scanner._policy.content_hash != current_policy.content_hash:
+        _default_scanner = SafetyScanner(policy=current_policy)
     return _default_scanner
 
 

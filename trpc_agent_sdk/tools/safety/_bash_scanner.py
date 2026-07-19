@@ -252,14 +252,14 @@ class BashScanner:
         """
         seg_start = 0
         for i, t in enumerate(tokens):
-            if t in (";", "&&", "||", "|"):
+            if t in (";", "&&", "||", "|", "&"):
                 self._analyse_one_command_with_dynamic_scan(line_no, raw_line, tokens[seg_start:i])
                 seg_start = i + 1
         if seg_start < len(tokens):
             self._analyse_one_command_with_dynamic_scan(line_no, raw_line, tokens[seg_start:])
 
     def _analyse_one_command_with_dynamic_scan(self, line_no: int, raw_line: str, cmd_tokens: List[str]) -> None:
-        """Analyse a command segment AND scan all tokens for eval/exec inside \$(...)."""
+        r"""Analyse a command segment AND scan all tokens for eval/exec inside \$(...)."""
         self._analyse_one_command(line_no, raw_line, cmd_tokens)
         # Scan for dynamic commands that appear anywhere in the token stream
         # (not just as the head command), so that $(eval "rm -rf /") and
