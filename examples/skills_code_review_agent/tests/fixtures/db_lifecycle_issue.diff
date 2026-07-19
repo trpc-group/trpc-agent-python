@@ -1,0 +1,21 @@
+diff --git a/src/db_client.py b/src/db_client.py
+index 1111111..2222222 100644
+--- a/src/db_client.py
++++ b/src/db_client.py
+@@ -3,3 +3,8 @@ def fetch_user(user_id: int):
+     return None
+ 
++def fetch_user(user_id: int):
++    conn = sqlite3.connect("app.db")
++    cursor = conn.cursor()
++    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
++    return cursor.fetchone()
+diff --git a/tests/test_db_client.py b/tests/test_db_client.py
+index 3333333..4444444 100644
+--- a/tests/test_db_client.py
++++ b/tests/test_db_client.py
+@@ -1,2 +1,4 @@
+ def test_fetch_user_smoke():
+     assert True
++
++# Tests changed as well, so this fixture focuses on DB lifecycle only.

@@ -1,0 +1,11 @@
+diff --git a/src/failing_lint_case.py b/src/failing_lint_case.py
+index 1111111..2222222 100644
+--- a/src/failing_lint_case.py
++++ b/src/failing_lint_case.py
+@@ -1,2 +1,6 @@
+ def run():
+     return "ok"
++
++# TODO_FAIL_SANDBOX
++def compute(expr: str):
++    return eval(expr)
