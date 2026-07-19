@@ -773,20 +773,45 @@ def test_command_args_are_scanned():
 
 
 def test_script_too_large_no_crash():
-    """Script exceeding max_script_lines must not crash to_dict()."""
-    from trpc_agent_sdk.tools.safety._policy import SafetyPolicy
-    policy = SafetyPolicy(max_script_lines=2)
+    """Oversized scripts are DENY (not needs_human_review) to prevent bypass.
+
+    An attacker could pad a malicious script with empty lines past
+    max_script_lines to skip all scanning.  We now:
+    1. Always DENY oversized scripts (never pass them through).
+    2. Still run the fast blocklist-pattern pre-check even on oversized
+       scripts, so a padded ``rm -rf /`` is caught as CRITICAL.
+    """
+    import dataclasses
+    from trpc_agent_sdk.tools.safety._policy import SafetyPolicy, get_policy
+
+    # Use the real policy (with blocklist patterns) but with a tiny line limit
+    policy = dataclasses.replace(get_policy(), max_script_lines=2)
     scanner = SafetyScanner(policy=policy)
+
     report = scanner.scan(
         SafetyScanInput(
             script_content="line1\nline2\nline3\nline4\nline5",
             script_type=ScriptType.PYTHON,
             tool_name="test",
         ))
-    # Must not raise
     d = report.to_dict()
-    assert d["decision"] == "needs_human_review"
+    assert d["decision"] == "deny", f"Oversized script must be DENY, got {d['decision']}"
+    assert d["execution_blocked"] is True
     assert any(f["rule_id"] == "GLOBAL-001" for f in d["findings"])
+
+    # Padded dangerous script must also be caught by blocklist pre-check
+    pad = "# comment\n" * 500
+    report2 = scanner.scan(
+        SafetyScanInput(
+            script_content=pad + "rm -rf / --no-preserve-root",
+            script_type=ScriptType.BASH,
+            tool_name="padded_attack",
+        ))
+    d2 = report2.to_dict()
+    assert d2["decision"] == "deny"
+    assert d2["risk_level"] == "critical"
+    assert any(f["rule_id"] == "GLOBAL-002" for f in d2["findings"]), \
+        "Padded attack must trigger GLOBAL-002 blocklist hit"
 
 
 # ------------------------------------------------------------------

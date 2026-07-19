@@ -106,34 +106,61 @@ class SafetyScanner:
 
         # ══════════════════════════════════════════════════════════════
         # EARLY RETURN: script too large → skip expensive scanning
-        # (moved BEFORE rules — was a bug: ran after all rules)
+        # BUT still run the lightweight blocklist-pattern check first.
+        # Without this an attacker can pad a malicious script with empty
+        # lines / comments past max_script_lines and bypass all detection.
         # ══════════════════════════════════════════════════════════════
         if script_lines > self._policy.max_script_lines:
+            # Fast pre-check: scan blocklist patterns against the full text
+            blocklist_hit = None
+            for pattern in self._policy.blocklist_patterns:
+                try:
+                    if re.search(pattern, script, re.IGNORECASE):
+                        blocklist_hit = pattern
+                        break
+                except re.error:
+                    continue
+
+            oversized_findings = [
+                SafetyFinding(
+                    rule_id="GLOBAL-001",
+                    category=RiskCategory.RESOURCE_ABUSE,
+                    risk_level=RiskLevel.MEDIUM,
+                    evidence=f"Script is {script_lines} lines (max {self._policy.max_script_lines})",
+                    message="Script exceeds maximum line count.",
+                    recommendation="Split the script or increase max_script_lines in policy.",
+                    line_number=0,
+                    matched_pattern="",
+                )
+            ]
+
+            if blocklist_hit:
+                oversized_findings.append(
+                    SafetyFinding(
+                        rule_id="GLOBAL-002",
+                        category=RiskCategory.DANGEROUS_FILE_OPS,
+                        risk_level=RiskLevel.CRITICAL,
+                        evidence=f"Blocklist pattern '{blocklist_hit}' matched in oversized script.",
+                        message="Dangerous pattern detected in oversized script — blocking.",
+                        recommendation="Remove the dangerous content.",
+                        line_number=0,
+                        matched_pattern=blocklist_hit,
+                    ))
+
             duration_ms = (time.perf_counter() - t0) * 1000.0
             return SafetyScanReport(
                 tool_name=scan_input.tool_name,
                 script_type=scan_input.script_type,
                 script_size_lines=script_lines,
-                decision=Decision.NEEDS_HUMAN_REVIEW
-                if self._policy.decision_for(RiskLevel.MEDIUM) != Decision.DENY else Decision.DENY,
-                risk_level=RiskLevel.MEDIUM,
-                findings=[
-                    SafetyFinding(
-                        rule_id="GLOBAL-001",
-                        category=RiskCategory.RESOURCE_ABUSE,
-                        risk_level=RiskLevel.MEDIUM,
-                        evidence=f"Script is {script_lines} lines (max {self._policy.max_script_lines})",
-                        message="Script exceeds maximum line count.",
-                        recommendation="Split the script or increase max_script_lines in policy.",
-                        line_number=0,
-                        matched_pattern="",
-                    )
-                ],
-                summary=f"Script is too large: {script_lines} lines (max {self._policy.max_script_lines}).",
+                decision=Decision.DENY if blocklist_hit else Decision.DENY,
+                risk_level=RiskLevel.CRITICAL if blocklist_hit else RiskLevel.HIGH,
+                findings=oversized_findings,
+                summary=f"Script is too large: {script_lines} lines (max {self._policy.max_script_lines})."
+                + (" Blocklist pattern matched — denied." if blocklist_hit else " Denied for safety."),
                 scan_duration_ms=round(duration_ms, 2),
                 policy_version=self._policy.content_hash,
                 sanitized=False,
-                execution_blocked=False,
+                execution_blocked=True,
             )
 
         all_findings: list[SafetyFinding] = []
