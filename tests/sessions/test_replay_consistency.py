@@ -70,7 +70,7 @@ class _MockRedisStorage:
         if method == "set":
             self._strings[args[0]] = args[1]
             result = True
-        if method == "get":
+        elif method == "get":
             return self._strings.get(args[0])
         elif method == "keys":
             return self._keys(args[0])
@@ -85,10 +85,16 @@ class _MockRedisStorage:
             result = len(self._lists[args[0]])
         elif method == "type":
             key = args[0]
-            return "string" if key in self._strings else "hash" if key in self._hashes else "list"
+            if key in self._strings:
+                return "string"
+            if key in self._hashes:
+                return "hash"
+            if key in self._lists:
+                return "list"
+            return "none"
         elif method == "lrange":
             return list(self._lists.get(args[0], []))
-        elif method != "set":
+        else:
             raise ValueError(f"Unsupported mock Redis command: {method}")
         await self.expire(_session, command.expire)
         return result
@@ -606,6 +612,19 @@ class TestReplayCases:
             diffs = _diff(source, injected, set())
             assert expected_path in {diff["path"] for diff in diffs if not diff["allowed"]}, case["id"]
 
+    @pytest.mark.parametrize("case_id", ["07_summary_create_update", "08_summary_truncation"])
+    @pytest.mark.xfail(
+        strict=True,
+        reason="Known InMemory session aliasing after update_session duplicates post-summary events",
+    )
+    async def test_summary_replay_matches_default_backends(self, case_id, monkeypatch):
+        monkeypatch.delenv("REPLAY_LIGHTWEIGHT", raising=False)
+        monkeypatch.delenv("REPLAY_SQL_URL", raising=False)
+        monkeypatch.delenv("REPLAY_REDIS_URL", raising=False)
+        case = next(case for case in _load_cases() if case["id"] == case_id)
+        result = await _compare_case(case)
+        assert result["status"] == "match"
+
     async def test_equivalent_snapshots_have_no_false_positives(self, monkeypatch):
         monkeypatch.delenv("REPLAY_LIGHTWEIGHT", raising=False)
         monkeypatch.delenv("REPLAY_SQL_URL", raising=False)
@@ -628,6 +647,24 @@ class TestReplayCases:
 
 
 class TestReplayComparison:
+
+    async def test_mock_redis_type_matches_stored_value_type(self):
+        storage = _MockRedisStorage()
+        await storage.execute_command(None, RedisCommand(method="set", args=("string:key", "value")))
+        await storage.execute_command(None, RedisCommand(method="hset", args=("hash:key", "field", "value")))
+        await storage.execute_command(None, RedisCommand(method="rpush", args=("list:key", "value")))
+
+        results = {
+            key: await storage.execute_command(None, RedisCommand(method="type", args=(key, )))
+            for key in ["string:key", "hash:key", "list:key", "missing:key"]
+        }
+
+        assert results == {
+            "string:key": "string",
+            "hash:key": "hash",
+            "list:key": "list",
+            "missing:key": "none",
+        }
 
     async def test_mock_redis_query_returns_string_and_hash_values(self):
         storage = _MockRedisStorage()
