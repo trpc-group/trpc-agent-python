@@ -252,7 +252,6 @@ _SENSITIVE_IMPORTS: Dict[str, str] = {
     "importlib": "dynamic",
 }
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Python AST Scanner
 # ═══════════════════════════════════════════════════════════════════════════
@@ -553,7 +552,7 @@ class PythonScanner:
             # Reading HOME/USER/PATH is normal and should not trigger alerts.
             if isinstance(node.value, ast.Subscript):
                 canonical = self._resolve_canonical(node.value.value)
-                if canonical in ("os.environ",):
+                if canonical in ("os.environ", ):
                     key = self._get_subscript_key(node.value)
                     if key and _is_sensitive_env_key(key):
                         self._tainted[var_name] = f"os.environ:{key}"
@@ -600,8 +599,7 @@ class PythonScanner:
             if node.target.id in self._tainted:
                 pass  # already tainted
 
-    def _check_output_taint(self, node: ast.Call, canonical: str, line_no: int,
-                            evidence: str) -> None:
+    def _check_output_taint(self, node: ast.Call, canonical: str, line_no: int, evidence: str) -> None:
         """Check if a tainted variable is being printed/logged."""
         if len(node.args) < 1:
             return
@@ -654,12 +652,15 @@ class PythonScanner:
                 ))
 
     def _handle_for(self, node: ast.For) -> None:
-        """Detect range(very_large) patterns."""
+        """Detect range(very_large) patterns in 1-/2-/3-arg forms."""
         line_no = node.lineno or 0
         if isinstance(node.iter, ast.Call):
             canonical = self._resolve_canonical(node.iter.func)
-            if canonical == "range" and len(node.iter.args) == 1:
-                val = self._get_arg_value(node.iter, 0)
+            if canonical == "range" and 1 <= len(node.iter.args) <= 3:
+                # The stop-value argument index: arg 0 for range(stop),
+                # arg 1 for range(start, stop) or range(start, stop, step).
+                stop_idx = 0 if len(node.iter.args) == 1 else 1
+                val = self._get_arg_value(node.iter, stop_idx)
                 if isinstance(val, int) and val > 10_000_000:
                     self._findings.append(
                         PythonScanFinding(
@@ -667,7 +668,10 @@ class PythonScanner:
                             canonical_name="large_range",
                             line_number=line_no,
                             evidence=self._get_line(line_no),
-                            extra={"range_value": val},
+                            extra={
+                                "range_value": val,
+                                "arg_count": len(node.iter.args)
+                            },
                         ))
 
     def _handle_with(self, node: ast.With) -> None:
@@ -858,9 +862,7 @@ def has_python_call(findings: List[PythonScanFinding], canonical_prefix: str) ->
 
 def get_python_urls(findings: List[PythonScanFinding]) -> List[Tuple[str, str, int]]:
     """Return (url, domain, line_number) tuples for all URL findings."""
-    return [(f.extra.get("url", ""), f.extra.get("domain", ""), f.line_number)
-            for f in findings
-            if f.kind == "url"]
+    return [(f.extra.get("url", ""), f.extra.get("domain", ""), f.line_number) for f in findings if f.kind == "url"]
 
 
 def get_python_file_reads(findings: List[PythonScanFinding]) -> List[PythonScanFinding]:
@@ -900,8 +902,7 @@ def get_python_sleep(findings: List[PythonScanFinding]) -> List[PythonScanFindin
 
 def get_python_concurrency(findings: List[PythonScanFinding]) -> List[PythonScanFinding]:
     """Return all concurrency/fork findings."""
-    return [f for f in findings if f.kind == "fork" or
-            (f.kind == "call" and f.extra.get("risk") == "concurrency")]
+    return [f for f in findings if f.kind == "fork" or (f.kind == "call" and f.extra.get("risk") == "concurrency")]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -926,8 +927,7 @@ def _is_credential_path(path: str) -> bool:
 _SECRET_LOOKALIKE_RE = re.compile(
     r"(?:sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{20,}|AKIA[0-9A-Z]{16}|"
     r"eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}|"
-    r"xox[baprs]-[a-zA-Z0-9-]+|AIza[0-9A-Za-z\-_]{35})",
-)
+    r"xox[baprs]-[a-zA-Z0-9-]+|AIza[0-9A-Za-z\-_]{35})", )
 
 
 def _looks_like_secret(value: str) -> bool:

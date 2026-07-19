@@ -2347,3 +2347,82 @@ def test_set_safety_span_attributes_get_current_span_exception(monkeypatch):
 
     # Should not raise
     _telemetry.set_safety_span_attributes(report)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests for code-review fixes
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def test_env_blocklist_no_value_leak_in_evidence():
+    """ENV-001 evidence must NOT contain the raw environment variable value."""
+    from trpc_agent_sdk.tools.safety._policy import SafetyPolicy
+    policy = SafetyPolicy(blocklist_env_vars=["AZURE_CLIENT_SECRET", "MY_SECRET_KEY"])
+    scanner = SafetyScanner(policy=policy)
+    report = scanner.scan(
+        SafetyScanInput(
+            script_content="echo hello",
+            script_type=ScriptType.BASH,
+            tool_name="env_leak_test",
+            environment_variables={
+                "AZURE_CLIENT_SECRET": "super-secret-real-value-12345",
+                "MY_SECRET_KEY": "another-secret-value-67890",
+            },
+        ))
+    env_findings = [f for f in report.findings if f.rule_id == "ENV-001"]
+    assert len(env_findings) >= 2, f"Expected ≥2 ENV-001 findings, got {len(env_findings)}"
+    for f in env_findings:
+        assert "super-secret-real-value-12345" not in f.evidence, \
+            f"Evidence leaked raw value: {f.evidence}"
+        assert "another-secret-value-67890" not in f.evidence, \
+            f"Evidence leaked raw value: {f.evidence}"
+        assert "***REDACTED***" in f.evidence, \
+            f"Evidence should contain REDACTED: {f.evidence}"
+
+
+def test_env_blocklist_multiple_not_collapsed():
+    """Multiple blocklist env vars must each produce an independent ENV-001 finding."""
+    from trpc_agent_sdk.tools.safety._policy import SafetyPolicy
+    policy = SafetyPolicy(blocklist_env_vars=[
+        "AWS_SECRET_ACCESS_KEY",
+        "GITHUB_TOKEN",
+        "DOCKER_PASSWORD",
+        "AZURE_CLIENT_ID",
+    ])
+    scanner = SafetyScanner(policy=policy)
+    report = scanner.scan(
+        SafetyScanInput(
+            script_content="echo hello",
+            script_type=ScriptType.BASH,
+            tool_name="env_collapse_test",
+            environment_variables={
+                "AWS_SECRET_ACCESS_KEY": "val1",
+                "GITHUB_TOKEN": "val2",
+                "DOCKER_PASSWORD": "val3",
+                "AZURE_CLIENT_ID": "val4",
+            },
+        ))
+    env_findings = [f for f in report.findings if f.rule_id == "ENV-001"]
+    assert len(env_findings) == 4, \
+        f"Expected 4 independent ENV-001 findings, got {len(env_findings)}. " \
+        f"matched_patterns: {[f.matched_pattern for f in env_findings]}"
+
+
+def test_allow_patterns_never_overrides_blocklist_deny():
+    """allow_patterns must NOT override DENY even when pattern matches the script."""
+    from trpc_agent_sdk.tools.safety._policy import SafetyPolicy
+    # Script matches BOTH a blocklist pattern AND an allow pattern
+    policy = SafetyPolicy(
+        blocklist_patterns=[r"rm\s+-rf\s+/tmp/x"],
+        allow_patterns=[r"rm\s+-rf\s+/tmp/x"],
+    )
+    scanner = SafetyScanner(policy=policy)
+    report = scanner.scan(
+        SafetyScanInput(
+            script_content="rm -rf /tmp/x",
+            script_type=ScriptType.BASH,
+            tool_name="blocklist_wins_test",
+        ))
+    # Blocklist must win — allow_patterns only upgrades NEEDS_HUMAN_REVIEW
+    assert report.decision == Decision.DENY, \
+        f"blocklist must win over allow_patterns, got {report.decision}"

@@ -193,7 +193,7 @@ class SafetyScanner:
                             rule_id="ENV-001",
                             category=RiskCategory.SENSITIVE_INFO_LEAK,
                             risk_level=RiskLevel.HIGH,
-                            evidence=f"env: {blocked_var}={scan_input.environment_variables[blocked_var][:50]}",
+                            evidence=f"env: {blocked_var}=***REDACTED***",
                             message=f"Blocklisted environment variable set: {blocked_var}",
                             recommendation="Do not pass sensitive environment variables to tools.",
                             line_number=0,
@@ -873,10 +873,18 @@ def quick_scan(
 
 
 def _deduplicate_findings(findings: List[SafetyFinding]) -> List[SafetyFinding]:
-    """Remove duplicates: keep only the highest-risk finding per (rule_id, line_number)."""
-    seen: dict[tuple[str, int], SafetyFinding] = {}
+    """Remove duplicates: keep only the highest-risk finding per (rule_id, line_number).
+
+    For line_number==0 findings (e.g. ENV-001 for blocklisted env vars), the
+    ``matched_pattern`` is included in the key so that multiple distinct
+    hits are not collapsed into a single record.
+    """
+    seen: dict[tuple[str, int, str], SafetyFinding] = {}
     for f in findings:
-        key = (f.rule_id, f.line_number)
+        # Include matched_pattern for line-0 findings to avoid collapsing
+        # distinct hits (e.g. multiple blocklisted environment variables).
+        discriminator = f.matched_pattern if f.line_number == 0 else ""
+        key = (f.rule_id, f.line_number, discriminator)
         if key not in seen or f.risk_level > seen[key].risk_level:
             seen[key] = f
     return list(seen.values())

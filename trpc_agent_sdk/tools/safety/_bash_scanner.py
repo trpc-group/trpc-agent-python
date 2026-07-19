@@ -386,7 +386,9 @@ class BashScanner:
         # Look for > or >> patterns
         for i, t in enumerate(tokens):
             if t in (">", ">>", ">" + ">") and i + 1 < len(tokens):
-                target = tokens[i + 1]
+                # Strip surrounding quotes so that "/etc/passwd" in
+                # test expressions ([[ … ]]) is treated consistently.
+                target = tokens[i + 1].strip("'\"")
                 if _is_sensitive_path(target) or target.startswith("/dev/"):
                     self._findings.append(
                         BashScanFinding(
@@ -400,7 +402,7 @@ class BashScanner:
             # Also handle inline redirect: 2>/dev/null, >/etc/passwd
             if ">" in t and len(t) > 1:
                 parts = t.split(">", 1)
-                target = parts[1].strip()
+                target = parts[1].strip().strip("'\"")
                 if target and (_is_sensitive_path(target) or target.startswith("/dev/sd")):
                     self._findings.append(
                         BashScanFinding(

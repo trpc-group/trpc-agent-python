@@ -31,9 +31,9 @@ from ._types import SafetyScanReport
 
 _AUDIT_LOGGER = logging.getLogger("trpc_agent_sdk.tools.safety.audit")
 
-# Per-path locks for thread/process-safe concurrent writes.
-# Each JSONL file gets its own lock so different audit files can be written
-# concurrently without contention.
+# Per-path locks for thread-safe concurrent writes (threading.Lock is NOT
+# process-safe; multi-process deployments should use a dedicated audit daemon
+# or file-locking via fcntl/msvcrt).
 _FILE_LOCKS: dict[str, threading.Lock] = {}
 _FILE_LOCKS_LOCK = threading.Lock()
 
