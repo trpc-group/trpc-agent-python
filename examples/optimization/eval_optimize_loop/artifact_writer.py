@@ -44,6 +44,7 @@ _APPROVED_SENSITIVE_VALUES = {
 }
 _AT_FDCWD = -100
 _RENAME_NOREPLACE = 1
+_RENAME_EXCL = 0x4
 _RENAMEAT2_UNAVAILABLE = {
     errno.ENOSYS,
     errno.EINVAL,
@@ -177,52 +178,82 @@ def _validate_optimizer_config_for_copy(path: Path) -> None:
     _validate_sensitive_config_values(payload)
 
 
-def _target_exists(path: Path) -> bool:
-    return path.exists() or path.is_symlink()
-
-
 def _rename_directory_no_replace(source: Path, target: Path) -> None:
     """Atomically publish a directory without replacing an existing target.
 
-    Linux uses renameat2 with RENAME_NOREPLACE. Platforms without that primitive
-    use a controlled fallback that rechecks the target immediately before rename.
+    Each supported platform uses an atomic no-replace primitive. Platforms
+    without that primitive fail closed rather than risking a replacement race.
     """
     if sys.platform.startswith("linux"):
         try:
             libc = ctypes.CDLL(None, use_errno=True)
             renameat2 = libc.renameat2
         except (AttributeError, OSError):
-            renameat2 = None
-        if renameat2 is not None:
-            renameat2.argtypes = [
-                ctypes.c_int,
-                ctypes.c_char_p,
-                ctypes.c_int,
-                ctypes.c_char_p,
-                ctypes.c_uint,
-            ]
-            renameat2.restype = ctypes.c_int
-            ctypes.set_errno(0)
-            result = renameat2(
-                _AT_FDCWD,
-                os.fsencode(source),
-                _AT_FDCWD,
-                os.fsencode(target),
-                _RENAME_NOREPLACE,
+            raise ArtifactWriteError(
+                "atomic no-replace unavailable: Linux renameat2 is unavailable"
             )
-            if result == 0:
-                return
-            error_number = ctypes.get_errno()
-            if error_number == errno.EEXIST:
-                raise ArtifactWriteError(
-                    f"report directory already exists: {target}"
-                )
-            if error_number not in _RENAMEAT2_UNAVAILABLE:
-                raise OSError(error_number, os.strerror(error_number), target)
+        renameat2.argtypes = [
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        ]
+        renameat2.restype = ctypes.c_int
+        ctypes.set_errno(0)
+        result = renameat2(
+            _AT_FDCWD,
+            os.fsencode(source),
+            _AT_FDCWD,
+            os.fsencode(target),
+            _RENAME_NOREPLACE,
+        )
+        if result == 0:
+            return
+        error_number = ctypes.get_errno()
+        if error_number == errno.EEXIST:
+            raise ArtifactWriteError(f"report directory already exists: {target}")
+        if error_number in _RENAMEAT2_UNAVAILABLE:
+            raise ArtifactWriteError(
+                "atomic no-replace unavailable: Linux renameat2 does not support "
+                f"RENAME_NOREPLACE ({os.strerror(error_number)})"
+            )
+        raise OSError(error_number, os.strerror(error_number), target)
 
-    if _target_exists(target):
-        raise ArtifactWriteError(f"report directory already exists: {target}")
-    source.rename(target)
+    if sys.platform.startswith("win"):
+        try:
+            os.rename(source, target)
+        except FileExistsError as exc:
+            raise ArtifactWriteError(f"report directory already exists: {target}") from exc
+        return
+
+    if sys.platform == "darwin":
+        try:
+            libc = ctypes.CDLL(None, use_errno=True)
+            renamex_np = libc.renamex_np
+        except (AttributeError, OSError):
+            raise ArtifactWriteError(
+                "atomic no-replace unavailable: Darwin renamex_np is unavailable"
+            )
+        renamex_np.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+        renamex_np.restype = ctypes.c_int
+        ctypes.set_errno(0)
+        result = renamex_np(os.fsencode(source), os.fsencode(target), _RENAME_EXCL)
+        if result == 0:
+            return
+        error_number = ctypes.get_errno()
+        if error_number == errno.EEXIST:
+            raise ArtifactWriteError(f"report directory already exists: {target}")
+        if error_number in _RENAMEAT2_UNAVAILABLE:
+            raise ArtifactWriteError(
+                "atomic no-replace unavailable: Darwin renamex_np does not support "
+                f"RENAME_EXCL ({os.strerror(error_number)})"
+            )
+        raise OSError(error_number, os.strerror(error_number), target)
+
+    raise ArtifactWriteError(
+        f"atomic no-replace unavailable: unsupported platform {sys.platform}"
+    )
 
 
 def _published_relative_path(root: Path, path: Path) -> str:

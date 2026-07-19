@@ -233,6 +233,26 @@ async def test_publish_does_not_replace_report_directory_created_during_staging(
     assert list(run_dir.glob(".report.tmp-*")) == []
 
 
+def test_publish_fails_closed_when_atomic_no_replace_is_unsupported(
+    tmp_path, monkeypatch
+):
+    source = tmp_path / "staging"
+    target = tmp_path / "report"
+    source.mkdir()
+
+    def unexpected_rename(self, destination):
+        raise AssertionError("普通 Path.rename 不得作为 no-replace 回退")
+
+    monkeypatch.setattr(artifact_writer.sys, "platform", "freebsd")
+    monkeypatch.setattr(Path, "rename", unexpected_rename)
+
+    with pytest.raises(ArtifactWriteError, match="atomic no-replace unavailable"):
+        artifact_writer._rename_directory_no_replace(source, target)
+
+    assert source.is_dir()
+    assert not target.exists()
+
+
 @pytest.mark.parametrize("target_inside_run", [False, True])
 def test_discovery_rejects_any_file_symlink(tmp_path, target_inside_run):
     run_dir = tmp_path / "run"
