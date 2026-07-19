@@ -858,8 +858,9 @@ class ProcessRule(SafetyRule):
             # would otherwise bypass the CRITICAL privilege rule because the
             # line-leading token is `FOO=bar` / `echo`, not `sudo`. The network
             # side already scans all tokens; privilege must too.
-            privilege_hits = [t.split("/")[-1].split("\\")[-1] for t in tokens
-                              if t.split("/")[-1].split("\\")[-1] in _PRIVILEGE_CMDS]
+            privilege_hits = [
+                t.split("/")[-1].split("\\")[-1] for t in tokens if t.split("/")[-1].split("\\")[-1] in _PRIVILEGE_CMDS
+            ]
 
             if policy.strict_command_allowlist:
                 # Fail-closed: when strict mode is on but allowed_commands is

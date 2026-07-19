@@ -144,9 +144,8 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             # records the decision.
             if (report is not None and report.decision == Decision.NEEDS_HUMAN_REVIEW and not should_block):
                 import logging
-                logging.getLogger("trpc_agent_sdk.safety").warning(
-                    "TOOL_SAFETY_NEEDS_REVIEW: %s (risk=%s)",
-                    list(report.rule_ids), report.risk_level.value)
+                logging.getLogger("trpc_agent_sdk.safety").warning("TOOL_SAFETY_NEEDS_REVIEW: %s (risk=%s)",
+                                                                   list(report.rule_ids), report.risk_level.value)
 
         output_parts = []
         error_parts = []
