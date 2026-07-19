@@ -52,7 +52,9 @@ class AuditLogger:
         intercepted: bool,
     ) -> dict[str, Any]:
         return {
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime()),
+            # Use UTC with explicit 'Z' suffix so audit timestamps are
+            # comparable across containers/CI regardless of process timezone.
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "tool_name": report.tool_name,
             "decision": report.decision.value,
             "risk_level": report.risk_level.value,

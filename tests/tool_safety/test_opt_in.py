@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
+from typing_extensions import override
 
 from trpc_agent_sdk.safety import PolicyConfig
 from trpc_agent_sdk.safety import RiskLevel
@@ -191,3 +193,106 @@ def test_unsafe_local_code_executor_review_label_differs_from_deny():
     result = asyncio.run(ex.execute_code(None, CodeExecutionInput(code="sleep 100 &")))
     assert "TOOL_SAFETY_NEEDS_REVIEW" in result.output
     assert "TOOL_SAFETY_DENY" not in result.output
+
+
+# ---------------------------------------------------------------------------
+# BashTool enable_safety_guard integration: real filter chain via run_async.
+# A stub _run_async_impl records calls so we can assert the filter actually
+# blocked (impl never runs) or allowed (impl runs) without executing commands.
+# ---------------------------------------------------------------------------
+
+
+def _make_stub_bash_tool(tmp_path: Path, *, block_on_review: bool = False):
+    """Build a BashTool subclass whose _run_async_impl records calls and returns a dict."""
+    from trpc_agent_sdk.tools.file_tools._bash_tool import BashTool
+
+    class _StubBash(BashTool):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.calls = []
+
+        @override
+        async def _run_async_impl(self, *, tool_context, args):
+            self.calls.append(args.get("command", ""))
+            return {
+                "success": True,
+                "stdout": "stub-output",
+                "stderr": "",
+                "return_code": 0,
+                "command": args.get("command", ""),
+            }
+
+    return _StubBash(
+        cwd=str(tmp_path),
+        enable_safety_guard=True,
+        safety_audit_path=str(tmp_path / "audit.jsonl"),
+        safety_block_on_review=block_on_review,
+    )
+
+
+def _make_mock_tool_context():
+    """Minimal InvocationContext mock for BaseTool.run_async filter chain."""
+    from trpc_agent_sdk.context import InvocationContext
+
+    ctx = MagicMock(spec=InvocationContext)
+    ctx.agent_context = MagicMock()
+    ctx.agent = MagicMock()
+    ctx.agent.before_tool_callback = None
+    ctx.agent.after_tool_callback = None
+    return ctx
+
+
+async def _run_bash_tool(tool, command):
+    """Drive BashTool.run_async via asyncio.run (env lacks pytest-asyncio)."""
+    ctx = _make_mock_tool_context()
+    return await tool.run_async(tool_context=ctx, args={"command": command})
+
+
+def test_bash_tool_safety_guard_blocks_deny(tmp_path: Path):
+    """DENY command must be blocked by the real filter chain: the stub impl
+    must NOT run, and the result must carry error=TOOL_SAFETY_DENY."""
+    try:
+        from trpc_agent_sdk.tools.file_tools._bash_tool import BashTool  # noqa: F401
+    except Exception as ex:  # pylint: disable=broad-except
+        pytest.skip(f"BashTool not importable: {ex}")
+
+    tool = _make_stub_bash_tool(tmp_path)
+    result = asyncio.run(_run_bash_tool(tool, "rm -rf /tmp/never"))
+    assert isinstance(result, dict)
+    assert result.get("success") is False
+    assert result.get("error") == "TOOL_SAFETY_DENY"
+    assert tool.calls == []  # impl must not run when DENY
+
+
+def test_bash_tool_safety_guard_allows_safe(tmp_path: Path):
+    """ALLOW command must reach the stub impl and return its dict unchanged."""
+    try:
+        from trpc_agent_sdk.tools.file_tools._bash_tool import BashTool  # noqa: F401
+    except Exception as ex:  # pylint: disable=broad-except
+        pytest.skip(f"BashTool not importable: {ex}")
+
+    tool = _make_stub_bash_tool(tmp_path)
+    result = asyncio.run(_run_bash_tool(tool, "echo hello"))
+    assert isinstance(result, dict)
+    assert result.get("stdout") == "stub-output"
+    assert tool.calls == ["echo hello"]
+
+
+def test_bash_tool_safety_guard_review_warning_merged(tmp_path: Path):
+    """Non-blocking NEEDS_HUMAN_REVIEW must run the impl AND merge the
+    safety_warning fields into the returned dict via _after."""
+    try:
+        from trpc_agent_sdk.tools.file_tools._bash_tool import BashTool  # noqa: F401
+    except Exception as ex:  # pylint: disable=broad-except
+        pytest.skip(f"BashTool not importable: {ex}")
+
+    # block_on_review=False (default): review does not block, warning is merged.
+    tool = _make_stub_bash_tool(tmp_path, block_on_review=False)
+    # 'sleep 100 &' ends with '&' (not '&&') and sleep is not a net command →
+    # MEDIUM → NEEDS_HUMAN_REVIEW under the default policy.
+    result = asyncio.run(_run_bash_tool(tool, "sleep 100 &"))
+    assert isinstance(result, dict)
+    assert result.get("stdout") == "stub-output"  # impl ran
+    assert result.get("safety_warning") == "TOOL_SAFETY_NEEDS_REVIEW"
+    assert result.get("safety_risk_level") == "medium"
+    assert "R005_resource_abuse" in result.get("safety_rule_ids", [])

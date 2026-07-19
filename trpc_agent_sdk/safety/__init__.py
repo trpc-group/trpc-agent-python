@@ -43,13 +43,17 @@ from ._types import SafetyReport
 from ._types import ScanInput
 from ._types import max_risk_level
 
-# Integration layers may fail when optional SDK deps are missing.
+# Integration layers may fail when optional SDK deps are missing. Record the
+# original ImportError so callers can diagnose the cause instead of getting a
+# silent None + later TypeError when they try to use the symbol.
 _SDK_AVAILABLE = False
+_IMPORT_ERRORS: dict[str, BaseException] = {}
 try:  # pragma: no cover
     from ._filter import ToolSafetyFilter
     _SDK_AVAILABLE = True
-except Exception:  # pylint: disable=broad-except
+except Exception as ex:  # pylint: disable=broad-except
     ToolSafetyFilter = None  # type: ignore[assignment]
+    _IMPORT_ERRORS["ToolSafetyFilter"] = ex
 
 try:  # pragma: no cover
     from ._wrapper import SafeCodeExecutor
@@ -59,7 +63,7 @@ try:  # pragma: no cover
     from ._wrapper import safe_code_executor
     from ._wrapper import safety_wrapper
     from ._wrapper import wrap_tool
-except Exception:  # pylint: disable=broad-except
+except Exception as ex:  # pylint: disable=broad-except
     SafeCodeExecutor = None  # type: ignore[assignment]
     SafetyDeniedError = None  # type: ignore[assignment]
     SafetyGuardedCodeExecutor = None  # type: ignore[assignment]
@@ -67,6 +71,30 @@ except Exception:  # pylint: disable=broad-except
     safe_code_executor = None  # type: ignore[assignment]
     safety_wrapper = None  # type: ignore[assignment]
     wrap_tool = None  # type: ignore[assignment]
+    for _name in (
+        "SafeCodeExecutor",
+        "SafetyDeniedError",
+        "SafetyGuardedCodeExecutor",
+        "SafetyReviewedSkillRunner",
+        "safe_code_executor",
+        "safety_wrapper",
+        "wrap_tool",
+    ):
+        _IMPORT_ERRORS[_name] = ex
+
+
+def import_error_for(name: str) -> BaseException | None:
+    """Return the recorded ImportError for *name*, or None if it loaded fine.
+
+    Callers that want a clearer message than ``TypeError: None is not callable``
+    can do::
+
+        from trpc_agent_sdk import safety
+        if safety.ToolSafetyFilter is None:
+            raise safety.import_error_for("ToolSafetyFilter")
+    """
+    return _IMPORT_ERRORS.get(name)
+
 
 __all__ = [
     "AuditLogger",
@@ -94,5 +122,6 @@ __all__ = [
     "safety_wrapper",
     "SafetyDeniedError",
     "SafetyReviewedSkillRunner",
+    "import_error_for",
     "_SDK_AVAILABLE",
 ]

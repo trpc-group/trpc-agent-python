@@ -107,70 +107,34 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         """
         if self._safety_scanner is not None:
             from trpc_agent_sdk.safety import Decision
-            from trpc_agent_sdk.safety import ScanInput
+            from trpc_agent_sdk.safety._wrapper import _scan_code_input
+            from trpc_agent_sdk.safety._wrapper import _should_block_report
 
-            # Always scan via content-aware language normalization so a mislabeled
-            # language="python" bash payload still hits bash rules.
-            from trpc_agent_sdk.safety._ast_utils import normalize_language
-            from trpc_agent_sdk.safety import RiskLevel
-
-            _ORDER = {
-                RiskLevel.NONE: 0,
-                RiskLevel.LOW: 1,
-                RiskLevel.MEDIUM: 2,
-                RiskLevel.HIGH: 3,
-                RiskLevel.CRITICAL: 4,
-            }
-            # Decision severity: DENY > NEEDS_HUMAN_REVIEW > ALLOW. A MEDIUM bash
-            # block must outweigh a safe ALLOW python block when aggregating
-            # multi-block input (matches _wrapper._scan_code_input).
-            _DECISION_RANK = {
-                Decision.ALLOW: 0,
-                Decision.NEEDS_HUMAN_REVIEW: 1,
-                Decision.DENY: 2,
-            }
-            code_blocks = list(input_data.code_blocks or [])
-            if not code_blocks and input_data.code:
-                # Prefer content inference over hardcoding python.
-                inferred = normalize_language(ScanInput(script=input_data.code, language=""))
-                code_blocks = [CodeBlock(code=input_data.code, language=inferred)]
-
-            worst = None
-            for block in code_blocks:
-                code = block.code or ""
-                declared = (getattr(block, "language", None) or "").strip().lower()
-                if declared in ("sh", "shell", "bash"):
-                    lang = "bash"
-                elif declared in ("python", ) or "py" in declared:
-                    # Still re-check content: mislabeled bash as python must not bypass.
-                    inferred = normalize_language(ScanInput(script=code, language=""))
-                    lang = "bash" if inferred == "bash" else "python"
-                else:
-                    lang = normalize_language(ScanInput(script=code, language=""))
-                report = self._safety_scanner.scan(ScanInput(script=code, language=lang, tool_name="code_executor"))
-                if worst is None:
-                    worst = report
-                    continue
-                # Pick the worse of (worst, report) by (decision_rank, risk_rank)
-                # so NEEDS_HUMAN_REVIEW outweighs ALLOW even when risks differ.
-                worst_key = (_DECISION_RANK.get(worst.decision, 0), _ORDER.get(worst.risk_level, 0))
-                report_key = (_DECISION_RANK.get(report.decision, 0), _ORDER.get(report.risk_level, 0))
-                if report_key > worst_key:
-                    worst = report
-
-            report = worst
-            should_block = False
-            if report is not None:
-                should_block = report.decision == Decision.DENY or (report.decision == Decision.NEEDS_HUMAN_REVIEW
-                                                                    and getattr(self, "_safety_block_on_review", False))
-                if self._safety_audit is not None:
-                    self._safety_audit.log(report, intercepted=should_block)
+            # Reuse the canonical aggregation logic from _wrapper instead of
+            # maintaining a (previously buggy) inline copy. This ensures
+            # NEEDS_HUMAN_REVIEW outweighs ALLOW in multi-block input.
+            report = _scan_code_input(self._safety_scanner, input_data)
+            should_block = _should_block_report(report, getattr(self, "_safety_block_on_review", False))
+            if report is not None and self._safety_audit is not None:
+                self._safety_audit.log(report, intercepted=should_block)
             if should_block and report is not None:
                 # Distinguish DENY vs NEEDS_HUMAN_REVIEW in stderr so audits and
                 # logs don't mislabel a review-block as a deny (matches
                 # ToolSafetyFilter's error_code selection).
                 code_label = ("TOOL_SAFETY_DENY" if report.decision == Decision.DENY else "TOOL_SAFETY_NEEDS_REVIEW")
                 return create_code_execution_result(stderr=f"{code_label}: {report.rule_ids}")
+            # Non-blocking NEEDS_HUMAN_REVIEW: do NOT block execution, but
+            # surface the warning so the caller is not silently unaware
+            # (matches _filter._after's merge semantics). We stash the warning
+            # and prepend it to stderr after execution completes below.
+            _pending_review_warning = None
+            if (report is not None and report.decision == Decision.NEEDS_HUMAN_REVIEW and not should_block):
+                _pending_review_warning = (
+                    f"TOOL_SAFETY_NEEDS_REVIEW: {list(report.rule_ids)} "
+                    f"(risk={report.risk_level.value})"
+                )
+        else:
+            _pending_review_warning = None
 
         output_parts = []
         error_parts = []
@@ -195,6 +159,8 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             if should_cleanup:
                 shutil.rmtree(work_dir, ignore_errors=True)
 
+        if _pending_review_warning:
+            error_parts.append(_pending_review_warning)
         return create_code_execution_result(stdout="\n".join(output_parts) if output_parts else "",
                                             stderr="\n".join(error_parts) if error_parts else "")
 

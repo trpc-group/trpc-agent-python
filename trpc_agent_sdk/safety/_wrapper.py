@@ -15,8 +15,9 @@ from ._filter import ToolSafetyFilter
 from ._policy import PolicyConfig
 from ._scanner import SafetyScanner
 from ._types import Decision
-from ._types import RiskLevel
 from ._types import ScanInput
+from ._types import decision_rank
+from ._types import risk_order
 
 
 def wrap_tool(tool, policy: PolicyConfig, *, audit_path: Optional[str] = None):
@@ -63,20 +64,9 @@ def _normalize_block_language(raw_lang: str | None, code: str) -> str:
 
 def _scan_code_input(scanner: SafetyScanner, input_data):
     """Scan code / code_blocks with per-block language; return worst report."""
-    # Decision severity: DENY > NEEDS_HUMAN_REVIEW > ALLOW. A MEDIUM bash block
-    # must outweigh a safe ALLOW python block when aggregating multi-block input.
-    decision_rank = {
-        Decision.ALLOW: 0,
-        Decision.NEEDS_HUMAN_REVIEW: 1,
-        Decision.DENY: 2,
-    }
-    risk_rank = {
-        RiskLevel.NONE: 0,
-        RiskLevel.LOW: 1,
-        RiskLevel.MEDIUM: 2,
-        RiskLevel.HIGH: 3,
-        RiskLevel.CRITICAL: 4,
-    }
+    # Use shared ranking from _types so this aggregation logic cannot drift
+    # from the executor's copy. Decision severity: DENY > NEEDS_HUMAN_REVIEW >
+    # ALLOW. A MEDIUM bash block must outweigh a safe ALLOW python block.
     blocks = list(getattr(input_data, "code_blocks", None) or [])
     top_code = getattr(input_data, "code", None) or ""
     if not blocks and top_code:
@@ -99,9 +89,9 @@ def _scan_code_input(scanner: SafetyScanner, input_data):
         if worst is None:
             worst = report
             continue
-        # Pick the worse of (worst, report) by (decision_rank, risk_rank).
-        worst_key = (decision_rank.get(worst.decision, 0), risk_rank.get(worst.risk_level, 0))
-        report_key = (decision_rank.get(report.decision, 0), risk_rank.get(report.risk_level, 0))
+        # Pick the worse of (worst, report) by (decision_rank, risk_order).
+        worst_key = (decision_rank(worst.decision), risk_order(worst.risk_level))
+        report_key = (decision_rank(report.decision), risk_order(report.risk_level))
         if report_key > worst_key:
             worst = report
     return worst

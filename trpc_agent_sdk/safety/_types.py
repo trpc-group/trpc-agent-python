@@ -114,6 +114,12 @@ _RISK_ORDER = {
     RiskLevel.CRITICAL: 4,
 }
 
+_DECISION_ORDER = {
+    Decision.ALLOW: 0,
+    Decision.NEEDS_HUMAN_REVIEW: 1,
+    Decision.DENY: 2,
+}
+
 
 def max_risk_level(levels: list[RiskLevel]) -> RiskLevel:
     """Return the highest severity among *levels*; NONE when empty."""
@@ -125,3 +131,12 @@ def max_risk_level(levels: list[RiskLevel]) -> RiskLevel:
 def risk_order(level: RiskLevel) -> int:
     """Numeric rank for a risk level."""
     return _RISK_ORDER[level]
+
+
+def decision_rank(decision: Decision) -> int:
+    """Numeric rank for a decision (ALLOW < NEEDS_HUMAN_REVIEW < DENY).
+
+    Used by multi-block aggregation so that a NEEDS_HUMAN_REVIEW block
+    outweighs an ALLOW block instead of being silently masked.
+    """
+    return _DECISION_ORDER[decision]

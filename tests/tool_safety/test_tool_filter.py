@@ -113,3 +113,57 @@ def test_filter_extracts_code_blocks(tmp_path: Path):
     req = {"code_blocks": [{"code": "import os\nos.system('rm -rf /')"}]}
     asyncio.run(flt._before(None, req, rsp))  # pylint: disable=protected-access
     assert rsp.is_continue is False
+
+
+def test_filter_sleep_at_threshold_is_allowed(tmp_path: Path):
+    """sleep N where N == max_timeout_seconds must NOT be flagged.
+
+    The recommendation is "keep sleeps below N seconds", so the boundary
+    N itself must be allowed (strictly greater-than, not >=). Both Python
+    and bash forms of sleep(300) with the default 300s budget must ALLOW.
+    """
+    flt = _make_filter(tmp_path)
+    # Python form: sleep(300)
+    rsp_py = FilterResult()
+    asyncio.run(flt._before(None, {"code": "import time\ntime.sleep(300)"}, rsp_py))  # pylint: disable=protected-access
+    assert rsp_py.is_continue is True
+    # Bash form: sleep 300
+    rsp_sh = FilterResult()
+    asyncio.run(flt._before(None, {"command": "sleep 300"}, rsp_sh))  # pylint: disable=protected-access
+    assert rsp_sh.is_continue is True
+
+
+def test_filter_contextvar_does_not_leak_across_calls(tmp_path: Path):
+    """Regression: if a previous _before stashed a non-blocking review report
+    and _after was skipped (e.g. handle errored or earlier filter set
+    is_continue=False), the stash must NOT leak into the next call's _after.
+
+    We simulate the leak scenario directly: stash a report, then run _before
+    on a safe ALLOW command. _before must reset the stash at entry so the
+    subsequent _after does not inject a stale safety_warning.
+
+    Note: ContextVar.set inside a coroutine only affects that coroutine's
+    context copy, so both the stash setup and the assertion must run inside
+    the same asyncio.run to observe the leak.
+    """
+    from trpc_agent_sdk.safety._filter import _REVIEW_REPORT
+    from trpc_agent_sdk.safety import SafetyScanner
+    from trpc_agent_sdk.safety import ScanInput
+
+    async def _scenario():
+        # Prime the ContextVar with a stale report as if a prior _after was
+        # skipped in this same async context.
+        stale_report = SafetyScanner(PolicyConfig()).scan(
+            ScanInput(script="sleep 100 &", language="bash"))
+        assert stale_report.decision.value == "needs_human_review"
+        _REVIEW_REPORT.set(stale_report)
+
+        # Now scan a safe ALLOW command. _before must clear the stash at entry.
+        flt = _make_filter(tmp_path)
+        rsp = FilterResult()
+        await flt._before(None, {"command": "echo hello"}, rsp)  # pylint: disable=protected-access
+        assert rsp.is_continue is True
+        # The stash must be None after _before (no new review was stashed for ALLOW).
+        assert _REVIEW_REPORT.get() is None
+
+    asyncio.run(_scenario())

@@ -649,22 +649,28 @@ def _host_from_string(s: str) -> str | None:
 
 
 def _extract_host_from_bash(line: str, cmd: str) -> str | None:
-    url_match = re.search(r"https?://([^\s'\"|>;]+)", line)
+    # Strip trailing backgrounding '&' so tokens like 'host&' / '4444&'
+    # don't confuse host extraction for nc/telnet lines.
+    stripped = line.rstrip()
+    if stripped.endswith("&") and not stripped.endswith("&&"):
+        stripped = stripped[:-1].rstrip()
+    url_match = re.search(r"https?://([^\s'\"|>;]+)", stripped)
     if url_match:
         host = url_match.group(1).split("/")[0].split(":")[0]
         return host.lower() if host else None
-    tokens = line.split()
+    tokens = stripped.split()
     for tok in tokens:
         if "://" in tok:
             return _host_from_string(tok)
-    at_match = re.search(r"@([^\s:]+)", line)
+    at_match = re.search(r"@([^\s:]+)", stripped)
     if at_match:
         return at_match.group(1).lower()
     if cmd in {"nc", "netcat", "telnet"} and len(tokens) >= 2:
         # skip flags
         for tok in tokens[1:]:
             if not tok.startswith("-"):
-                return tok.lower()
+                # token may still carry a trailing '&' on misformatted lines.
+                return tok.rstrip("&").lower()
     return None
 
 
@@ -1099,7 +1105,7 @@ class ResourceAbuseRule(SafetyRule):
                 if "sleep" in fl.split(".")[-1]:
                     arg = node.args[0] if node.args else None
                     secs = _const_int(arg)
-                    if secs is not None and secs >= policy.max_timeout_seconds:
+                    if secs is not None and secs > policy.max_timeout_seconds:
                         findings.append(
                             self._finding(
                                 f"sleep({secs})",
@@ -1141,7 +1147,7 @@ class ResourceAbuseRule(SafetyRule):
                         message="Fork bomb detected",
                     ))
             m = _LONG_SLEEP_BASH.search(line)
-            if m and int(m.group(1)) >= policy.max_timeout_seconds:
+            if m and int(m.group(1)) > policy.max_timeout_seconds:
                 findings.append(
                     self._finding(
                         line,

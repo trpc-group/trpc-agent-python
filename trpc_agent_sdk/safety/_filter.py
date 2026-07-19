@@ -74,6 +74,10 @@ class ToolSafetyFilter(BaseFilter):
 
     async def _before(self, ctx: Any, req: Any, rsp: FilterResult) -> None:
         """Scan the tool args; block execution when decision is DENY."""
+        # Defensive cleanup: if a previous _after was skipped (e.g. handle()
+        # raised, or an earlier filter set is_continue=False), the stash from
+        # that call would leak into this one. Always reset before scanning.
+        _REVIEW_REPORT.set(None)
         args = req if isinstance(req, dict) else {}
         script = _extract_script(args)
         if script is None or not script.strip():
@@ -136,14 +140,18 @@ class ToolSafetyFilter(BaseFilter):
         after the tool has run, so the caller actually sees them.
         """
         report = _REVIEW_REPORT.get()
+        # Always clear the stash so it does not leak to the next call in this
+        # context (e.g. if _before set it but handle() then errored and
+        # BaseFilter.run skipped _after on a later invocation).
+        _REVIEW_REPORT.set(None)
         if report is None:
             return
-        # Clear the stash so it does not leak to the next call in this context.
-        _REVIEW_REPORT.set(None)
+        # Only attach warning fields when the tool returned a dict; wrapping a
+        # non-dict (string/None/list) into {"result": ...} would silently
+        # change the return type and break downstream callers that depend on
+        # the original schema.
         if not isinstance(rsp.rsp, dict):
-            # Wrap non-dict results so we can attach warning fields without
-            # losing the original payload.
-            rsp.rsp = {"result": rsp.rsp}
+            return
         rsp.rsp["safety_warning"] = "TOOL_SAFETY_NEEDS_REVIEW"
         rsp.rsp["safety_risk_level"] = report.risk_level.value
         rsp.rsp["safety_rule_ids"] = list(report.rule_ids)

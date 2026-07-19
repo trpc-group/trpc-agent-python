@@ -166,5 +166,11 @@ def _parse_risk_level(value: Any, default: RiskLevel) -> RiskLevel:
         return value
     try:
         return RiskLevel(str(value).lower())
-    except ValueError:
-        return default
+    except ValueError as ex:
+        # Fail fast on typos like "superhigh": silently falling back to the
+        # default would let users believe a stricter policy is active when it
+        # is not. List valid values so the error is actionable.
+        valid = [r.value for r in RiskLevel]
+        raise ValueError(
+            f"invalid risk level {value!r}; expected one of {valid}"
+        ) from ex
