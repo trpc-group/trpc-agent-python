@@ -103,14 +103,23 @@ class SafetyScanner:
                 script = script + "\n" + args_text
 
         script_lines = script.count("\n") + (1 if script else 0)
+        script_bytes = len(script.encode("utf-8"))
 
         # ══════════════════════════════════════════════════════════════
-        # EARLY RETURN: script too large → skip expensive scanning
-        # BUT still run the lightweight blocklist-pattern check first.
-        # Without this an attacker can pad a malicious script with empty
-        # lines / comments past max_script_lines and bypass all detection.
+        # EARLY RETURN: script too large (lines OR bytes) → skip
+        # expensive scanning.  Runs a lightweight blocklist-pattern
+        # pre-check first so that an attacker cannot pad a malicious
+        # script past the limit and bypass all detection.
         # ══════════════════════════════════════════════════════════════
+        oversized = script_lines > self._policy.max_script_lines
+        oversized_reason = ""
         if script_lines > self._policy.max_script_lines:
+            oversized_reason = (f"Script is {script_lines} lines (max {self._policy.max_script_lines})")
+        elif script_bytes > self._policy.max_script_bytes:
+            oversized = True
+            oversized_reason = (f"Script is {script_bytes} bytes (max {self._policy.max_script_bytes})")
+
+        if oversized:
             # Fast pre-check: scan blocklist patterns against the full text
             blocklist_hit = None
             for pattern in self._policy.blocklist_patterns:
@@ -126,9 +135,9 @@ class SafetyScanner:
                     rule_id="GLOBAL-001",
                     category=RiskCategory.RESOURCE_ABUSE,
                     risk_level=RiskLevel.MEDIUM,
-                    evidence=f"Script is {script_lines} lines (max {self._policy.max_script_lines})",
-                    message="Script exceeds maximum line count.",
-                    recommendation="Split the script or increase max_script_lines in policy.",
+                    evidence=oversized_reason,
+                    message="Script exceeds maximum size limit.",
+                    recommendation="Split the script or increase the limit in policy.",
                     line_number=0,
                     matched_pattern="",
                 )
@@ -152,10 +161,10 @@ class SafetyScanner:
                 tool_name=scan_input.tool_name,
                 script_type=scan_input.script_type,
                 script_size_lines=script_lines,
-                decision=Decision.DENY if blocklist_hit else Decision.DENY,
+                decision=Decision.DENY,
                 risk_level=RiskLevel.CRITICAL if blocklist_hit else RiskLevel.HIGH,
                 findings=oversized_findings,
-                summary=f"Script is too large: {script_lines} lines (max {self._policy.max_script_lines})." +
+                summary=f"{oversized_reason}." +
                 (" Blocklist pattern matched — denied." if blocklist_hit else " Denied for safety."),
                 scan_duration_ms=round(duration_ms, 2),
                 policy_version=self._policy.content_hash,
@@ -214,7 +223,7 @@ class SafetyScanner:
 
         # Apply blocklist override — blocklist patterns always → deny
         if decision != Decision.DENY:
-            decision = self._check_blocklist_override(script, decision)
+            decision = self._check_blocklist_override(script, decision, scan_input.script_type)
 
         # Apply allow-pattern override — allow patterns → allow
         # Only upgrades NEEDS_HUMAN_REVIEW; never overrides DENY (blocklist wins).
@@ -745,12 +754,17 @@ class SafetyScanner:
             return ScriptType.BASH
         return ScriptType.UNKNOWN
 
-    def _check_blocklist_override(self, script: str, current_decision: Decision) -> Decision:
+    def _check_blocklist_override(self,
+                                  script: str,
+                                  current_decision: Decision,
+                                  script_type: ScriptType = ScriptType.UNKNOWN) -> Decision:
         """If any blocklist pattern matches, escalate to DENY.
 
         Per-line matching is used so that patterns appearing inside
         ``echo`` / ``printf`` string literals do not trigger false
-        positives.
+        positives.  Python string-literal stripping is only applied for
+        Python scripts — applying it to Bash would turn ``cat
+        '/etc/shadow'`` into a false negative.
         """
         for pattern in self._policy.blocklist_patterns:
             try:
@@ -762,9 +776,13 @@ class SafetyScanner:
                 stripped = line.lstrip()
                 if stripped.startswith("#"):
                     continue
-                # Strip Python string-literal content so that patterns
-                # like ``rm -rf /`` inside ``r'...'`` don't match.
-                search_line = _strip_python_comment_line(line)
+                # Strip Python string-literal content only for Python
+                # scripts so that Bash single-quoted paths like
+                # cat '/etc/shadow' are not masked.
+                if script_type in (ScriptType.PYTHON, ScriptType.UNKNOWN):
+                    search_line = _strip_python_comment_line(line)
+                else:
+                    search_line = line
                 if pat.search(search_line):
                     # Skip if the match is inside an echo/printf string literal
                     if _is_in_echo_string(line, pattern):
@@ -824,7 +842,7 @@ class SafetyScanner:
                 f.evidence = re.sub(pat, repl, f.evidence, flags=re.IGNORECASE)
             # Truncate very long evidence to prevent data leakage
             if len(f.evidence) > 320:
-                f.evidence = f.evidence[:300] + f"...<truncated:{len(f.evidence) - 320}>"
+                f.evidence = f.evidence[:300] + f"...<truncated:{len(f.evidence) - 300}>"
         return findings
 
 

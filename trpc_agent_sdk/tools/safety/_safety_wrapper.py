@@ -31,11 +31,14 @@ Usage as a context manager::
 from __future__ import annotations
 
 import functools
+import logging
 from contextlib import asynccontextmanager
 from typing import Any
 from typing import AsyncIterator
 from typing import Callable
 from typing import Optional
+
+_logger = logging.getLogger("trpc_agent_sdk.tools.safety.wrapper")
 
 from ._audit import AuditLogger
 from ._policy import SafetyPolicy
@@ -217,7 +220,7 @@ def safety_wrapper(
 
         @functools.wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-            script = kwargs.get(script_arg_name)
+            script: Optional[str] = kwargs.get(script_arg_name)
             if script is None:
                 # Try to find it in positional args (e.g. tool_context, args)
                 for arg in args:
@@ -226,11 +229,18 @@ def safety_wrapper(
                         break
             if script and isinstance(script, str):
                 wrapper_inst.check(script)
+            elif script is not None and not isinstance(script, str):
+                _logger.warning("safety_wrapper: '%s' value is not a string (type=%s) — scan skipped.", script_arg_name,
+                                type(script).__name__)
+            else:
+                _logger.warning(
+                    "safety_wrapper: could not find '%s' in kwargs or positional dict args "
+                    "for %s — scan skipped.", script_arg_name, func.__name__)
             return await func(*args, **kwargs)
 
         @functools.wraps(func)
         def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-            script = kwargs.get(script_arg_name)
+            script: Optional[str] = kwargs.get(script_arg_name)
             if script is None:
                 for arg in args:
                     if isinstance(arg, dict) and script_arg_name in arg:
@@ -238,6 +248,13 @@ def safety_wrapper(
                         break
             if script and isinstance(script, str):
                 wrapper_inst.check(script)
+            elif script is not None and not isinstance(script, str):
+                _logger.warning("safety_wrapper: '%s' value is not a string (type=%s) — scan skipped.", script_arg_name,
+                                type(script).__name__)
+            else:
+                _logger.warning(
+                    "safety_wrapper: could not find '%s' in kwargs or positional dict args "
+                    "for %s — scan skipped.", script_arg_name, func.__name__)
             return func(*args, **kwargs)
 
         import asyncio

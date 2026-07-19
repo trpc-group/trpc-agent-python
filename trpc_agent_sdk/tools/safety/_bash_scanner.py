@@ -328,8 +328,25 @@ class BashScanner:
                                 },
                             ))
                         break
-            elif cmd_lower in _FILE_WRITE_COMMANDS and cmd_lower == "dd":
+            elif cmd_lower == "dd":
                 self._check_dd(line_no, raw_line, args)
+            elif cmd_lower == "tee":
+                # tee writes to files; check for sensitive paths in args
+                for pa in args:
+                    if pa and not pa.startswith("-") and (_is_sensitive_path(pa) or pa.startswith("/dev/sd")):
+                        self._findings.append(
+                            BashScanFinding(
+                                kind="command",
+                                command="tee",
+                                args=args_str,
+                                line_number=line_no,
+                                evidence=raw_line.strip()[:300],
+                                extra={
+                                    "risk": "sensitive_file_write",
+                                    "path": pa
+                                },
+                            ))
+                        break
 
     # ------------------------------------------------------------------
     # Specific checks
@@ -338,17 +355,25 @@ class BashScanner:
     def _check_rm(self, line_no: int, raw_line: str, tokens: List[str], args: List[str]) -> None:
         """Check for recursive-delete.  Flags both ``rm -rf`` and ``rm -r -f``."""
         all_tokens = set(tokens)
-        # Handles combined flags: -rf, -fr, -r, -R, --recursive
-        has_r = any(("r" in t.replace("-", "").lower() and not t.startswith("--")) or t in ("-r", "-R", "--recursive")
-                    for t in tokens if t.startswith("-"))
-        # Handles combined flags: -rf, -fr, -f, --force
-        has_f = any(("f" in t.replace("-", "").lower() and not t.startswith("--")) or t in ("-f", "--force")
-                    for t in tokens if t.startswith("-"))
+        # Parse short flags character-by-character (avoids substring false
+        # positives: "-i" has no "r", "-v" has no "f", etc.).
+        short_flags: set[str] = set()
+        has_long_recursive = False
+        has_long_force = False
+        for t in tokens:
+            if t.startswith("--"):
+                if t == "--recursive":
+                    has_long_recursive = True
+                if t == "--force":
+                    has_long_force = True
+            elif t.startswith("-") and not t.startswith("--"):
+                for ch in t.lstrip("-"):
+                    short_flags.add(ch.lower())
 
-        # Check recursive via long option
-        has_recursive = "--recursive" in all_tokens
+        has_r = "r" in short_flags or has_long_recursive
+        has_f = "f" in short_flags or has_long_force
 
-        if (has_r or has_recursive) and has_f:
+        if has_r and has_f:
             target = args[-1] if args else "?"
             self._findings.append(
                 BashScanFinding(
@@ -363,7 +388,7 @@ class BashScanner:
                         "force": True
                     },
                 ))
-        elif has_r or has_recursive:
+        elif has_r:
             target = args[-1] if args else "?"
             if target and (target.startswith("/") or _is_sensitive_path(target)):
                 self._findings.append(
