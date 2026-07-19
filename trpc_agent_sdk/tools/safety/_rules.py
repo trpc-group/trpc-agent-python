@@ -852,45 +852,46 @@ class SensitiveInfoLeakRule:
 
 
 def _is_in_echo_string(line: str, pattern: str) -> bool:
-    """Return True if *pattern* matches are ALL inside echo/printf string literals.
+    """Return True if *pattern* matches are ALL inside harmless echo/printf string literals.
 
-    In Bash, ``echo 'rm -rf /'`` is harmless.  But ``echo "rm -rf /"; rm -rf /``
-    is dangerous — the first ``rm`` is harmless but the second is real.  This
-    helper only suppresses a finding when the pattern appears **nowhere** outside
-    echo/printf quoted strings on the line.
+    In Bash, single-quoted strings are literal (``echo 'rm -rf /'`` is harmless).
+    Double-quoted strings allow ``$(...)`` and backtick command substitution,
+    so ``echo "$(rm -rf /)"`` actually executes — we must NOT suppress patterns
+    inside double quotes when command substitution is present.
     """
     stripped = line.strip()
-    # Only applies to echo / printf commands
     if not (stripped.startswith("echo ") or stripped.startswith("echo\t") or stripped.startswith("printf ")
             or stripped.startswith("printf\t") or stripped.startswith("/bin/echo ")
             or stripped.startswith("/usr/bin/echo ")):
         return False
-    # Check if the pattern matches inside any quoted string
     try:
         pat = re.compile(pattern, re.IGNORECASE)
     except re.error:
         return False
 
-    in_quotes = False
+    # Single-quoted strings are always literal in bash → safe to suppress
+    in_safe_quotes = False
     for m in re.finditer(r"'[^']*'", stripped):
         if pat.search(m.group(0)):
-            in_quotes = True
+            in_safe_quotes = True
             break
-    if not in_quotes:
-        for m in re.finditer(r'"[^"]*"', stripped):
-            if pat.search(m.group(0)):
-                in_quotes = True
-                break
-    if not in_quotes:
-        return False  # pattern not in any quoted string — normal danger report
 
-    # Pattern found inside quotes.  Now check whether it ALSO appears
-    # outside quotes (e.g. after ; / &&).  If so, it is a real danger.
+    # Double-quoted strings: only safe if they contain NO command substitution
+    for m in re.finditer(r'"[^"]*"', stripped):
+        if pat.search(m.group(0)):
+            dq_content = m.group(0)
+            if re.search(r'\$\(|`', dq_content):
+                return False  # $(...) or backticks execute — real danger
+            in_safe_quotes = True
+            break
+
+    if not in_safe_quotes:
+        return False
+    # Pattern inside safe quotes — check if appears outside too
     outside = re.sub(r"'[^']*'", " ", stripped)
     outside = re.sub(r'"[^"]*"', " ", outside)
     if pat.search(outside):
-        return False  # match outside quotes → real danger
-
+        return False
     return True
 
 

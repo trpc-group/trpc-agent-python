@@ -1014,10 +1014,12 @@ def _strip_python_comment_line(line: str) -> str:
 
 
 def _is_in_echo_string(line: str, pattern: str) -> bool:
-    """Return True if *pattern* matches are ALL inside echo/printf string literals.
+    """Return True if *pattern* matches are ALL inside harmless echo/printf string literals.
 
-    In Bash, ``echo 'rm -rf /'`` is harmless.  But ``echo "rm -rf /"; rm -rf /``
-    is dangerous — the first match is harmless but the second is real.
+    In Bash, single-quoted strings are literal (``echo 'rm -rf /'`` is harmless).
+    Double-quoted strings allow ``$(...)`` and backtick command substitution,
+    so ``echo "$(rm -rf /)"`` actually executes ``rm -rf /`` — we must NOT
+    suppress patterns inside double quotes when command substitution is present.
     """
     stripped = line.strip()
     if not (stripped.startswith("echo ") or stripped.startswith("echo\t") or stripped.startswith("printf ")
@@ -1028,19 +1030,28 @@ def _is_in_echo_string(line: str, pattern: str) -> bool:
         pat = re.compile(pattern, re.IGNORECASE)
     except re.error:
         return False
-    in_quotes = False
+
+    # Check single-quoted strings (always literal in bash → safe to suppress)
+    in_safe_quotes = False
     for m in re.finditer(r"'[^']*'", stripped):
         if pat.search(m.group(0)):
-            in_quotes = True
+            in_safe_quotes = True
             break
-    if not in_quotes:
-        for m in re.finditer(r'"[^"]*"', stripped):
-            if pat.search(m.group(0)):
-                in_quotes = True
-                break
-    if not in_quotes:
+
+    # Check double-quoted strings — only safe if they contain NO command substitution
+    for m in re.finditer(r'"[^"]*"', stripped):
+        if pat.search(m.group(0)):
+            dq_content = m.group(0)
+            # If the double-quoted string contains $(...) or backticks,
+            # the pattern actually executes — do not suppress.
+            if re.search(r'\$\(|`', dq_content):
+                return False
+            in_safe_quotes = True
+            break
+
+    if not in_safe_quotes:
         return False
-    # Pattern found inside quotes — also check if it appears outside.
+    # Pattern is inside safe quotes — also check if it appears outside.
     outside = re.sub(r"'[^']*'", " ", stripped)
     outside = re.sub(r'"[^"]*"', " ", outside)
     if pat.search(outside):
