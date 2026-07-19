@@ -26,7 +26,8 @@ execution, SQLite persistence, and dual-format reports.
 ## Directory Map
 
 - `agent/`: orchestration, config, and runtime helpers
-- `skills/code-review/`: formal skill package and deterministic scripts
+- repository `skills/code-review/`: canonical formal skill package and deterministic scripts
+- example-local `examples/skills_code_review_agent/skills/code-review/`: teaching copy kept in sync for the example
 - `src/`: parser, rules, filter policy, storage, report, telemetry, redaction
 - `tests/`: fixtures and automated tests
 - `DEVELOPMENT_PLAN.md`: phased implementation plan
@@ -124,16 +125,22 @@ Key method:
 
 ## Formal Skill Package
 
-The reusable skill lives under:
+The canonical reusable skill lives under:
 
-- [SKILL.md](file:///c:/Users/32349/trpc-agent-python-fork/examples/skills_code_review_agent/skills/code-review/SKILL.md)
-- [USAGE.md](file:///c:/Users/32349/trpc-agent-python-fork/examples/skills_code_review_agent/skills/code-review/USAGE.md)
-- [RULES.md](file:///c:/Users/32349/trpc-agent-python-fork/examples/skills_code_review_agent/skills/code-review/RULES.md)
-- [SCRIPT_CONTRACTS.md](file:///c:/Users/32349/trpc-agent-python-fork/examples/skills_code_review_agent/skills/code-review/SCRIPT_CONTRACTS.md)
+- [SKILL.md](file:///c:/Users/32349/trpc-agent-python-fork/skills/code-review/SKILL.md)
+- [USAGE.md](file:///c:/Users/32349/trpc-agent-python-fork/skills/code-review/USAGE.md)
+- [RULES.md](file:///c:/Users/32349/trpc-agent-python-fork/skills/code-review/RULES.md)
+- [SCRIPT_CONTRACTS.md](file:///c:/Users/32349/trpc-agent-python-fork/skills/code-review/SCRIPT_CONTRACTS.md)
 
-The agent currently formalizes the skill package, its scripts, and its
-`SkillToolSet` entrypoints. The main pipeline still owns orchestration,
-governance, persistence, and final reporting.
+The example now resolves the repository-level `skills/code-review/` directory
+first for repository indexing, skill-script planning, and container skill mounts.
+The example-local copy remains as a fallback so the sample stays readable and
+self-contained.
+
+The agent formalizes the skill package, its scripts, and its `SkillToolSet`
+entrypoints. The main pipeline still owns orchestration, governance,
+persistence, and final reporting so Filter, Storage, and Telemetry stay fully
+auditable inside the example.
 
 ## Test Coverage
 

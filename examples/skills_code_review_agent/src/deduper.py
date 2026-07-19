@@ -29,7 +29,7 @@ def dedupe_and_classify_findings(findings: list[ReviewFinding]) -> list[ReviewFi
             finding.category.value,
             finding.file,
             finding.line,
-            _normalize_evidence(finding.evidence),
+            finding.title.strip().lower(),
         )
         existing = deduped.get(key)
         if existing is None or _should_replace(existing, finding):

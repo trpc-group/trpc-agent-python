@@ -26,6 +26,20 @@ _SECRET_PATTERNS: list[tuple[re.Pattern[str], str, str, ReviewSeverity, float]] 
         0.98,
     ),
     (
+        re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9]{12,}\b"),
+        "OpenAI-style API key detected",
+        "Do not commit model API keys; load them from a secure environment or secret manager.",
+        ReviewSeverity.CRITICAL,
+        0.99,
+    ),
+    (
+        re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"),
+        "GitHub token detected",
+        "Revoke the token and load GitHub credentials from a secure runtime secret store.",
+        ReviewSeverity.CRITICAL,
+        0.99,
+    ),
+    (
         re.compile(r"AKIA[0-9A-Z]{16}"),
         "AWS access key detected",
         "Remove the credential from code and load it from a secure secret manager.",
@@ -65,6 +79,24 @@ _CODE_FILE_EXTENSIONS = {
     ".hpp",
 }
 
+_SECRET_PLACEHOLDERS = (
+    "example",
+    "dummy",
+    "changeme",
+    "replace-me",
+    "replace_me",
+    "test-token",
+    "test_key",
+    "test-key",
+    "fake",
+    "sample",
+    "placeholder",
+    "masked",
+    "redacted",
+    "<secret>",
+    "<redacted>",
+)
+
 
 def run_rule_engine(parsed_diff: ParsedDiff) -> list[ReviewFinding]:
     """Run deterministic review rules on a parsed diff."""
@@ -89,6 +121,9 @@ def _check_security_rules(changed_file: ChangedFile) -> list[ReviewFinding]:
     for hunk, index, line in _iter_added_lines(changed_file):
         text = line.text.strip()
         context = _line_context(hunk, index)
+
+        if _looks_like_comment(text):
+            continue
 
         if re.search(r"\beval\s*\(", text):
             findings.append(
@@ -134,7 +169,12 @@ def _check_security_rules(changed_file: ChangedFile) -> list[ReviewFinding]:
                     confidence=0.96,
                 )
             )
-        if "yaml.load(" in text and "safe_load" not in text and "SafeLoader" not in context:
+        if (
+            "yaml.load(" in text
+            and "safe_load" not in text
+            and "SafeLoader" not in context
+            and "Loader=yaml.SafeLoader" not in context
+        ):
             findings.append(
                 _make_finding(
                     category=ReviewCategory.SECURITY,
@@ -148,26 +188,30 @@ def _check_security_rules(changed_file: ChangedFile) -> list[ReviewFinding]:
                 )
             )
         if "verify=False" in text:
+            confidence = 0.88
+            severity = ReviewSeverity.MEDIUM
+            recommendation = (
+                "Keep certificate verification enabled or document a controlled test-only exception."
+            )
+            if _looks_like_test_or_mock_context(changed_file.display_path, context):
+                confidence = 0.58
+                recommendation = (
+                    "If this is test-only code, isolate the exception clearly; otherwise keep TLS "
+                    "verification enabled."
+                )
             findings.append(
                 _make_finding(
                     category=ReviewCategory.SECURITY,
-                    severity=ReviewSeverity.MEDIUM,
+                    severity=severity,
                     changed_file=changed_file,
                     line=line,
                     title="TLS certificate verification is disabled",
                     evidence=context,
-                    recommendation="Keep certificate verification enabled or document a controlled test-only exception.",
-                    confidence=0.88,
+                    recommendation=recommendation,
+                    confidence=confidence,
                 )
             )
-        if (
-            ("shell=True" in text or "subprocess." in text)
-            and "shell=True" in context
-            and re.search(
-                r"\bsubprocess\.(?:run|Popen|call|check_call|check_output)\s*\(",
-                context,
-            )
-        ):
+        if _is_subprocess_shell_risk(text=text, context=context):
             findings.append(
                 _make_finding(
                     category=ReviewCategory.SECURITY,
@@ -190,8 +234,10 @@ def _check_secret_rules(changed_file: ChangedFile) -> list[ReviewFinding]:
     findings: list[ReviewFinding] = []
     for hunk, index, line in _iter_added_lines(changed_file):
         context = _line_context(hunk, index)
+        if _looks_like_comment(line.text.strip()):
+            continue
         for pattern, title, recommendation, severity, confidence in _SECRET_PATTERNS:
-            if pattern.search(line.text):
+            if pattern.search(line.text) and not _looks_like_secret_placeholder(line.text):
                 findings.append(
                     _make_finding(
                         category=ReviewCategory.SECRET,
@@ -215,6 +261,9 @@ def _check_async_rules(changed_file: ChangedFile) -> list[ReviewFinding]:
         text = line.text.strip()
         context = _line_context(hunk, index)
 
+        if _looks_like_comment(text):
+            continue
+
         if re.match(r"asyncio\.create_task\s*\(", text):
             findings.append(
                 _make_finding(
@@ -233,7 +282,7 @@ def _check_async_rules(changed_file: ChangedFile) -> list[ReviewFinding]:
 
         if text.startswith("except Exception"):
             next_line = _next_meaningful_new_line(hunk.lines, index)
-            if next_line is not None and next_line.text.strip() == "pass":
+            if next_line is not None and next_line.text.strip() in {"pass", "return None", "return"}:
                 findings.append(
                     _make_finding(
                         category=ReviewCategory.ASYNC,
@@ -242,8 +291,10 @@ def _check_async_rules(changed_file: ChangedFile) -> list[ReviewFinding]:
                         line=line,
                         title="Broad exception is swallowed silently",
                         evidence=_line_context(hunk, index, radius=2),
-                        recommendation="Handle expected exception types explicitly and surface unexpected failures.",
-                        confidence=0.68,
+                        recommendation=(
+                            "Handle expected exception types explicitly and log or re-raise unexpected failures."
+                        ),
+                        confidence=0.71,
                     )
                 )
 
@@ -254,11 +305,18 @@ def _check_resource_leak_rules(changed_file: ChangedFile) -> list[ReviewFinding]
     """Detect likely resource lifecycle issues outside database-specific patterns."""
 
     findings: list[ReviewFinding] = []
+    added_text = _all_added_text(changed_file)
     for hunk, index, line in _iter_added_lines(changed_file):
         text = line.text.strip()
         context = _line_context(hunk, index)
 
+        if _looks_like_comment(text):
+            continue
+
         if "open(" in text and not text.startswith("with open("):
+            handle_name = _extract_assigned_name(text, "open(")
+            if handle_name and _variable_is_closed_later(handle_name, added_text):
+                continue
             findings.append(
                 _make_finding(
                     category=ReviewCategory.RESOURCE_LEAK,
@@ -273,6 +331,9 @@ def _check_resource_leak_rules(changed_file: ChangedFile) -> list[ReviewFinding]
             )
 
         if _contains_resource_constructor(text) and not text.startswith(("with ", "async with ")):
+            resource_name = _extract_assignment_target(text)
+            if resource_name and _variable_is_closed_later(resource_name, added_text):
+                continue
             findings.append(
                 _make_finding(
                     category=ReviewCategory.RESOURCE_LEAK,
@@ -304,7 +365,16 @@ def _check_db_lifecycle_rules(changed_file: ChangedFile) -> list[ReviewFinding]:
         text = line.text.strip()
         context = _line_context(hunk, index)
 
+        if _looks_like_comment(text):
+            continue
+
         if _contains_db_connect(text) and not text.startswith("with "):
+            connection_name = _extract_assignment_target(text)
+            connection_is_closed = bool(
+                connection_name and _variable_is_closed_later(connection_name, file_added_text)
+            )
+            if connection_is_closed:
+                continue
             confidence = 0.74 if has_close else 0.86
             findings.append(
                 _make_finding(
@@ -322,6 +392,14 @@ def _check_db_lifecycle_rules(changed_file: ChangedFile) -> list[ReviewFinding]:
             )
 
         if _contains_transaction_start(text) and not (has_commit and has_rollback):
+            confidence = 0.67
+            recommendation = "Ensure transactions are committed on success and rolled back on failure."
+            if has_commit and not has_rollback:
+                confidence = 0.58
+                recommendation = (
+                    "A commit path exists, but rollback handling is not visible; add rollback or context-managed "
+                    "transaction handling."
+                )
             findings.append(
                 _make_finding(
                     category=ReviewCategory.DB_LIFECYCLE,
@@ -330,8 +408,8 @@ def _check_db_lifecycle_rules(changed_file: ChangedFile) -> list[ReviewFinding]:
                     line=line,
                     title="Transaction handling appears incomplete",
                     evidence=context,
-                    recommendation="Ensure transactions are committed on success and rolled back on failure.",
-                    confidence=0.67,
+                    recommendation=recommendation,
+                    confidence=confidence,
                 )
             )
 
@@ -425,6 +503,72 @@ def _contains_transaction_start(text: str) -> bool:
     """Return whether a line appears to begin a transaction."""
 
     return any(token in text for token in (".begin(", "BEGIN", "transaction("))
+
+
+def _looks_like_comment(text: str) -> bool:
+    """Return whether a line is a comment or doc-style example."""
+
+    stripped = text.strip()
+    return stripped.startswith(("#", "//", "/*", "*", '"""', "'''"))
+
+
+def _looks_like_test_or_mock_context(path: str, context: str) -> bool:
+    """Return whether a security smell appears in test-only or mock-like code."""
+
+    normalized_path = path.replace("\\", "/").lower()
+    lowered_context = context.lower()
+    return _is_test_path(normalized_path) or any(
+        token in lowered_context
+        for token in ("localhost", "127.0.0.1", "example.com", "mock", "fixture", "test")
+    )
+
+
+def _is_subprocess_shell_risk(*, text: str, context: str) -> bool:
+    """Return whether a subprocess call is combined with shell=True in the local context."""
+
+    if "shell=True" not in text and "subprocess." not in text:
+        return False
+    if "shell=True" not in context:
+        return False
+    return bool(
+        re.search(
+            r"\bsubprocess\.(?:run|Popen|call|check_call|check_output)\s*\(",
+            context,
+        )
+    )
+
+
+def _looks_like_secret_placeholder(text: str) -> bool:
+    """Return whether a matched secret line uses explicit placeholder values."""
+
+    lowered = text.lower()
+    return any(token in lowered for token in _SECRET_PLACEHOLDERS)
+
+
+def _extract_assignment_target(text: str) -> str | None:
+    """Extract a simple assignment target from a source line."""
+
+    match = re.match(r"([A-Za-z_][A-Za-z0-9_]*)\s*=", text)
+    if match is None:
+        return None
+    return match.group(1)
+
+
+def _extract_assigned_name(text: str, marker: str) -> str | None:
+    """Extract a variable name for lines like `name = something(marker...)`."""
+
+    if marker not in text:
+        return None
+    return _extract_assignment_target(text)
+
+
+def _variable_is_closed_later(variable_name: str, added_text: str) -> bool:
+    """Return whether the variable appears to be closed later in added code."""
+
+    return bool(
+        re.search(rf"\b{re.escape(variable_name)}\s*\.close\s*\(", added_text)
+        or re.search(rf"\bclose\s*\(\s*{re.escape(variable_name)}\s*\)", added_text)
+    )
 
 
 def _all_added_text(changed_file: ChangedFile) -> str:

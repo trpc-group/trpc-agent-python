@@ -9,13 +9,23 @@ from examples.skills_code_review_agent.agent.agent import run_review_task
 from examples.skills_code_review_agent.agent.config import ReviewAgentConfig
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
+PUBLIC_FIXTURES = [
+    "clean.diff",
+    "security_issue.diff",
+    "async_resource_leak.diff",
+    "db_lifecycle_issue.diff",
+    "missing_tests.diff",
+    "duplicate_finding.diff",
+    "sandbox_failure.diff",
+    "secret_redaction.diff",
+]
 
 
 def test_all_public_fixtures_generate_reports(tmp_path: Path) -> None:
     """All public fixtures should complete and generate report artifacts."""
 
-    fixture_paths = sorted(FIXTURES_DIR.glob("*.diff"))
-    assert len(fixture_paths) == 8
+    fixture_paths = [FIXTURES_DIR / name for name in PUBLIC_FIXTURES]
+    assert all(path.exists() for path in fixture_paths)
 
     for fixture_path in fixture_paths:
         out_dir = tmp_path / fixture_path.stem

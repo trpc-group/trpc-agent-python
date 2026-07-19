@@ -1,4 +1,4 @@
-﻿# Fixture Index
+# Fixture Index
 
 The final implementation should add at least these runnable fixtures:
 
@@ -10,3 +10,9 @@ The final implementation should add at least these runnable fixtures:
 - `duplicate_finding.diff`
 - `sandbox_failure.diff`
 - `secret_redaction.diff`
+
+Additional phase-two quality fixtures:
+
+- `safe_security_patterns.diff`
+- `managed_lifecycle.diff`
+- `placeholder_secrets.diff`

@@ -246,6 +246,41 @@ def test_rule_engine_detects_missing_tests_as_human_review_item() -> None:
     assert findings[0].disposition == FindingDisposition.NEEDS_HUMAN_REVIEW
 
 
+def test_rule_engine_ignores_safe_security_patterns_and_comments() -> None:
+    """Safe loader usage and commented examples should not raise security findings."""
+
+    parsed = parse_unified_diff(
+        (FIXTURES_DIR / "safe_security_patterns.diff").read_text(encoding="utf-8")
+    )
+    findings = dedupe_and_classify_findings(run_rule_engine(parsed))
+
+    assert not any(item.category == ReviewCategory.SECURITY for item in findings)
+
+
+def test_rule_engine_ignores_placeholder_secret_values() -> None:
+    """Example credentials should not be treated as real leaked secrets."""
+
+    parsed = parse_unified_diff(
+        (FIXTURES_DIR / "placeholder_secrets.diff").read_text(encoding="utf-8")
+    )
+    findings = dedupe_and_classify_findings(run_rule_engine(parsed))
+
+    assert not any(item.category == ReviewCategory.SECRET for item in findings)
+
+
+def test_rule_engine_ignores_managed_resource_and_db_lifecycle() -> None:
+    """Visible close/commit/rollback handling should suppress lifecycle findings."""
+
+    parsed = parse_unified_diff(
+        (FIXTURES_DIR / "managed_lifecycle.diff").read_text(encoding="utf-8")
+    )
+    findings = dedupe_and_classify_findings(run_rule_engine(parsed))
+
+    categories = {item.category for item in findings}
+    assert ReviewCategory.RESOURCE_LEAK not in categories
+    assert ReviewCategory.DB_LIFECYCLE not in categories
+
+
 def test_deduper_collapses_duplicate_matches_on_same_line() -> None:
     """Duplicate rule hits for the same issue should collapse into one record."""
 
@@ -276,6 +311,38 @@ def test_deduper_collapses_duplicate_matches_on_same_line() -> None:
 
     assert len(findings) == 1
     assert findings[0].fingerprint is not None
+
+
+def test_deduper_collapses_same_title_even_if_evidence_differs() -> None:
+    """Same issue title on the same line should dedupe even with different evidence slices."""
+
+    duplicate_one = ReviewFinding(
+        severity=ReviewSeverity.MEDIUM,
+        category=ReviewCategory.DB_LIFECYCLE,
+        file="src/db.py",
+        line=12,
+        title="Database connection is created without clear lifecycle management",
+        evidence='+conn = sqlite3.connect("app.db")',
+        recommendation="Use a context manager.",
+        confidence=0.86,
+        source=FindingSource.RULE_ENGINE,
+    )
+    duplicate_two = ReviewFinding(
+        severity=ReviewSeverity.HIGH,
+        category=ReviewCategory.DB_LIFECYCLE,
+        file="src/db.py",
+        line=12,
+        title="Database connection is created without clear lifecycle management",
+        evidence='+conn = sqlite3.connect("app.db")\n+return conn.execute("select 1")',
+        recommendation="Use a context manager.",
+        confidence=0.74,
+        source=FindingSource.RULE_ENGINE,
+    )
+
+    findings = dedupe_and_classify_findings([duplicate_one, duplicate_two])
+
+    assert len(findings) == 1
+    assert findings[0].severity == ReviewSeverity.MEDIUM
 
 
 def test_run_review_task_with_security_fixture_returns_failure() -> None:
