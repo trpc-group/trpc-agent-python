@@ -1333,16 +1333,20 @@ def test_scanner_detect_type_shebang_python():
 
 
 def test_scanner_check_blocklist_override():
-    """_check_blocklist_override must escalate to DENY on match."""
+    """_check_blocklist_override must escalate to DENY on match and emit a finding."""
     from trpc_agent_sdk.tools.safety._policy import SafetyPolicy
     policy = SafetyPolicy(blocklist_patterns=[r"dangerous_pattern_\d+"], )
     scanner = SafetyScanner(policy=policy)
-    result = scanner._check_blocklist_override("run dangerous_pattern_42 here", Decision.ALLOW)
+    result, findings = scanner._check_blocklist_override("run dangerous_pattern_42 here", Decision.ALLOW)
     assert result == Decision.DENY
+    assert len(findings) == 1
+    assert findings[0].rule_id == "FILE-001"
+    assert "dangerous_pattern_\\d+" == findings[0].matched_pattern
 
-    # When no pattern matches, return original decision
-    result2 = scanner._check_blocklist_override("safe content here", Decision.ALLOW)
+    # When no pattern matches, return original decision with empty findings
+    result2, findings2 = scanner._check_blocklist_override("safe content here", Decision.ALLOW)
     assert result2 == Decision.ALLOW
+    assert findings2 == []
 
 
 def test_scanner_check_allow_patterns():
@@ -2062,8 +2066,9 @@ def test_scanner_blocklist_override_no_match():
     from trpc_agent_sdk.tools.safety._policy import SafetyPolicy
     policy = SafetyPolicy(blocklist_patterns=[r"specific_danger_\d+"])
     scanner = SafetyScanner(policy=policy)
-    result = scanner._check_blocklist_override("safe content", Decision.NEEDS_HUMAN_REVIEW)
+    result, findings = scanner._check_blocklist_override("safe content", Decision.NEEDS_HUMAN_REVIEW)
     assert result == Decision.NEEDS_HUMAN_REVIEW
+    assert findings == []
 
 
 def test_scanner_allow_patterns_no_match():
@@ -2091,10 +2096,10 @@ def test_scanner_blocklist_override_invalid_regex():
     policy = SafetyPolicy(blocklist_patterns=[r"[invalid(regex", r"real_pattern_\d+"])
     scanner = SafetyScanner(policy=policy)
     # Should not raise
-    result = scanner._check_blocklist_override("real_pattern_42 here", Decision.NEEDS_HUMAN_REVIEW)
+    result, _ = scanner._check_blocklist_override("real_pattern_42 here", Decision.NEEDS_HUMAN_REVIEW)
     assert result == Decision.DENY
     # When match fails on real pattern too
-    result2 = scanner._check_blocklist_override("nothing", Decision.NEEDS_HUMAN_REVIEW)
+    result2, _ = scanner._check_blocklist_override("nothing", Decision.NEEDS_HUMAN_REVIEW)
     assert result2 == Decision.NEEDS_HUMAN_REVIEW
 
 

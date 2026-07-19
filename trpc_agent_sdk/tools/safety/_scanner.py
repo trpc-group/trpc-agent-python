@@ -223,11 +223,15 @@ class SafetyScanner:
 
         # Apply blocklist override — blocklist patterns always → deny
         if decision != Decision.DENY:
-            decision = self._check_blocklist_override(script, decision, scan_input.script_type)
+            decision, bl_findings = self._check_blocklist_override(script, decision, scan_input.script_type)
+            all_findings.extend(bl_findings)
 
         # Apply allow-pattern override — allow patterns → allow
         # Only upgrades NEEDS_HUMAN_REVIEW; never overrides DENY (blocklist wins).
-        if decision == Decision.NEEDS_HUMAN_REVIEW and self._check_allow_patterns(script):
+        # Also refuses to upgrade when any CRITICAL finding exists, regardless
+        # of how the policy maps CRITICAL → decision.
+        has_critical = any(f.risk_level == RiskLevel.CRITICAL for f in all_findings)
+        if (decision == Decision.NEEDS_HUMAN_REVIEW and not has_critical and self._check_allow_patterns(script)):
             decision = Decision.ALLOW
 
         # ══════════════════════════════════════════════════════════════
@@ -758,40 +762,37 @@ class SafetyScanner:
     def _check_blocklist_override(self,
                                   script: str,
                                   current_decision: Decision,
-                                  script_type: ScriptType = ScriptType.UNKNOWN) -> Decision:
-        """If any blocklist pattern matches, escalate to DENY.
-
-        Per-line matching is used so that patterns appearing inside
-        ``echo`` / ``printf`` string literals do not trigger false
-        positives.  Python string-literal stripping is only applied for
-        Python scripts — applying it to Bash would turn ``cat
-        '/etc/shadow'`` into a false negative.
-        """
+                                  script_type: ScriptType = ScriptType.UNKNOWN) -> tuple[Decision, list[SafetyFinding]]:
+        """If any blocklist pattern matches, escalate to DENY and emit a finding."""
         for pattern in self._policy.blocklist_patterns:
             try:
                 pat = re.compile(pattern, re.IGNORECASE)
             except re.error:
                 continue
-            for line in script.splitlines():
-                # Skip comment lines (both Python # and Bash #)
+            for line_idx, line in enumerate(script.splitlines()):
                 stripped = line.lstrip()
                 if stripped.startswith("#"):
                     continue
-                # Strip Python string-literal content ONLY for Python
-                # scripts.  For Bash (or UNKNOWN, which may be Bash),
-                # keep the raw line so that patterns inside eval "...",
-                # bash -c '...', and similar quoting are still matched.
                 if script_type == ScriptType.PYTHON:
                     search_line = _strip_python_comment_line(line)
                 else:
                     search_line = line
                 if pat.search(search_line):
-                    # Skip if the match is inside an echo/printf string literal
                     if _is_in_echo_string(line, pattern):
                         continue
                     logger.warning("Blocklist pattern matched: %s → forcing DENY", pattern)
-                    return Decision.DENY
-        return current_decision
+                    finding = SafetyFinding(
+                        rule_id="FILE-001",
+                        category=RiskCategory.DANGEROUS_FILE_OPS,
+                        risk_level=RiskLevel.CRITICAL,
+                        evidence=line.strip()[:300],
+                        message=f"Blocklist pattern matched: {pattern}",
+                        recommendation="Remove the dangerous content from the script.",
+                        line_number=line_idx + 1,
+                        matched_pattern=pattern,
+                    )
+                    return Decision.DENY, [finding]
+        return current_decision, []
 
     def _check_allow_patterns(self, script: str) -> bool:
         """Check if any allow-pattern matches the script."""

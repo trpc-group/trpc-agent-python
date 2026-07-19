@@ -321,8 +321,13 @@ class PythonScanner:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    name = alias.asname or alias.name.split(".")[0]
-                    self._aliases[name] = alias.name
+                    # Key and value both use only the top-level module name
+                    # so that ``import os.path`` maps to ``os``, not
+                    # ``os.path`` — otherwise ``os.system("id")`` resolves
+                    # to the non-existent ``os.path.system`` and is missed.
+                    top = alias.name.split(".")[0]
+                    name = alias.asname or top
+                    self._aliases[name] = top
             elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""
                 for alias in node.names:
@@ -366,9 +371,13 @@ class PythonScanner:
         line_no = node.lineno or 0
         evidence = self._get_line(node.lineno)
 
-        if not canonical or canonical == "":
-            # Try to resolve getattr / __import__ patterns
-            self._check_dynamic_call(node, line_no, evidence)
+        # Always run dynamic-call detection for patterns like
+        # __import__("os").system("id") or importlib.import_module(...).method(...)
+        # where the canonical name resolves to a non-empty dotted path
+        # but the root is a dynamic-import primitive.
+        self._check_dynamic_call(node, line_no, evidence)
+
+        if not canonical:
             return
 
         # --- Dangerous file operations ---
@@ -507,12 +516,11 @@ class PythonScanner:
     # ------------------------------------------------------------------
 
     def _check_dynamic_call(self, node: ast.Call, line_no: int, evidence: str) -> None:
-        """Detect getattr(obj, name)() or __import__(name).func() patterns."""
+        """Detect getattr(obj,name)(), __import__(x).func(), importlib.import_module(x).func()."""
         func = node.func
         if isinstance(func, ast.Call):
             inner = self._resolve_canonical(func.func)
             if inner == "getattr":
-                # getattr(some_obj, "system")("id")
                 attr = self._get_arg_string(func, 1)
                 self._findings.append(
                     PythonScanFinding(
@@ -526,6 +534,18 @@ class PythonScanner:
                     PythonScanFinding(
                         kind="eval_exec",
                         canonical_name=inner,
+                        line_number=line_no,
+                        evidence=evidence,
+                    ))
+        elif isinstance(func, ast.Attribute):
+            # __import__("os").system("id") — the receiver is a dynamic
+            # import call whose result was then attribute-accessed
+            receiver = self._resolve_canonical(func.value)
+            if receiver in ("__import__", "importlib.import_module", "getattr"):
+                self._findings.append(
+                    PythonScanFinding(
+                        kind="eval_exec",
+                        canonical_name=f"{receiver}->{func.attr}",
                         line_number=line_no,
                         evidence=evidence,
                     ))
