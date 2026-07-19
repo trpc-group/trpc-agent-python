@@ -218,3 +218,25 @@ def test_safety_wrapper_positional_and_block_on_review():
         assert False, "expected SafetyDeniedError for review under block_on_review"
     except SafetyDeniedError:
         pass
+
+
+def test_safety_wrapper_raise_on_deny_false_blocks_without_raise():
+    """raise_on_deny=False must still prevent function execution on DENY."""
+    from trpc_agent_sdk.safety import safety_wrapper
+
+    executed = []
+
+    @safety_wrapper(script_arg="script", policy=PolicyConfig(), raise_on_deny=False)
+    def run(script: str):
+        executed.append(script)
+        return "ran"
+
+    result = run(script="rm -rf /")
+    assert executed == []
+    assert result["success"] is False
+    assert result["error"] == "TOOL_SAFETY_DENY"
+
+    # Safe script still runs.
+    result2 = run(script="echo hi")
+    assert executed == ["echo hi"]
+    assert result2 == "ran"

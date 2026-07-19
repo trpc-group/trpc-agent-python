@@ -68,8 +68,18 @@ class BashTool(BaseTool):
         block_on_review: bool,
     ) -> None:
         """Attach ToolSafetyFilter when enable_safety_guard is True."""
+        from trpc_agent_sdk import safety as safety_pkg
         from trpc_agent_sdk.safety import PolicyConfig
         from trpc_agent_sdk.safety import ToolSafetyFilter
+
+        # When optional filter deps fail to import, ToolSafetyFilter is None and
+        # import_error_for holds the original ImportError. Raise that instead of
+        # a confusing TypeError: NoneType is not callable at construction time.
+        if ToolSafetyFilter is None:
+            err = safety_pkg.import_error_for("ToolSafetyFilter")
+            if err is not None:
+                raise err
+            raise ImportError("ToolSafetyFilter is unavailable")
 
         if policy_path:
             policy = PolicyConfig.from_yaml(policy_path)

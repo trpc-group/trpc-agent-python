@@ -452,3 +452,28 @@ def test_dependency_executable_context_still_flagged():
         _policy(),
     )
     assert os_findings
+
+
+def test_dangerous_files_pathlib_write_system_dir():
+    """Path('/usr/bin/x').write_text must DENY (system-dir write, not just
+    sensitive-name path construction)."""
+    rule = DangerousFilesRule()
+    for script in (
+            "from pathlib import Path\nPath('/usr/bin/evil').write_text('x')\n",
+            "from pathlib import Path\nPath('/usr/bin/evil').write_bytes(b'x')\n",
+            "from pathlib import Path\nPath('/usr/local').rmdir()\n",
+    ):
+        findings = rule.check(ScanInput(script=script, language="python"), _policy())
+        assert any("R001" in f.rule_id for f in findings), f"missed: {script!r}"
+
+
+def test_dangerous_files_open_dynamic_mode_system_dir():
+    """open('/usr/bin/x', mode_var) must be treated as write (fail-closed)."""
+    rule = DangerousFilesRule()
+    for script in (
+            "mode='w'\nopen('/usr/bin/x', mode)\n",
+            "mode=mode_var\nopen('/usr/bin/x', mode)\n",
+            "open('/usr/bin/x', mode='a')\n",
+    ):
+        findings = rule.check(ScanInput(script=script, language="python"), _policy())
+        assert any("R001" in f.rule_id for f in findings), f"missed: {script!r}"

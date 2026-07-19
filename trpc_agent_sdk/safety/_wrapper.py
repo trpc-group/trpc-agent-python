@@ -74,6 +74,8 @@ def _deny_code_result(rule_ids: list[str], *, label: str = "TOOL_SAFETY_DENY"):
 
         def __init__(self, name: str):
             self.name = name
+            # Match real Outcome enum contract (downstream reads .value).
+            self.value = name
 
     class _CodeExecutionResult:
 
@@ -251,6 +253,15 @@ def safety_wrapper(
     scanned for simple callables. A positional dict containing *script_arg*
     is also accepted. Variadic ``*args`` callables without a named parameter
     still require a keyword.
+
+    Blocking semantics match ToolSafetyFilter / SafetyGuardedCodeExecutor:
+
+    - ``should_block`` (DENY, or NEEDS_HUMAN_REVIEW with block_on_review) always
+      prevents the wrapped function from running and records
+      ``intercepted=True`` in the audit log.
+    - ``raise_on_deny`` only controls whether a :class:`SafetyDeniedError` is
+      raised (True) or a deny dict is returned (False). It must **not** allow
+      the wrapped function to run when the decision is block.
     """
     import inspect
 
@@ -279,28 +290,43 @@ def safety_wrapper(
         return None
 
     def _guard(func, args, kwargs):
+        """Return (blocked, report_or_none). blocked=True means do not call func."""
         script = _extract_script(func, args, kwargs)
         if not script or not isinstance(script, str):
-            return
+            return False, None
         report = _scanner.scan(ScanInput(script=script, tool_name=tool_name))
-        # Honor block_on_review (policy or explicit) so decorator semantics
-        # match ToolSafetyFilter / SafetyGuardedCodeExecutor.
         should_block = _should_block_report(report, _block_review)
-        intercepted = should_block and raise_on_deny
-        _audit.log(report, intercepted=intercepted)
-        if intercepted:
-            raise SafetyDeniedError(report)
+        # Audit reflects real interception (should_block), not whether we raise.
+        _audit.log(report, intercepted=should_block)
+        if should_block:
+            if raise_on_deny:
+                raise SafetyDeniedError(report)
+            return True, report
+        return False, report
+
+    def _deny_payload(report):
+        return {
+            "success": False,
+            "error": ("TOOL_SAFETY_DENY" if report.decision == Decision.DENY else "TOOL_SAFETY_NEEDS_REVIEW"),
+            "decision": report.decision.value,
+            "risk_level": report.risk_level.value,
+            "rule_ids": list(report.rule_ids),
+        }
 
     def decorator(func):
 
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
-            _guard(func, args, kwargs)
+            blocked, report = _guard(func, args, kwargs)
+            if blocked:
+                return _deny_payload(report)
             return await func(*args, **kwargs)
 
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs):
-            _guard(func, args, kwargs)
+            blocked, report = _guard(func, args, kwargs)
+            if blocked:
+                return _deny_payload(report)
             return func(*args, **kwargs)
 
         return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper

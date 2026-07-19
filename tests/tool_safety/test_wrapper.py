@@ -265,13 +265,16 @@ def test_skill_runner_block_review_overrides_policy_records_intercepted(tmp_path
     assert rec["intercepted"] is True
 
 
-def test_safety_wrapper_raise_on_deny_false_records_intercepted_false(tmp_path: Path):
-    """When raise_on_deny=False, a DENY hit must not be recorded as intercepted.
+def test_safety_wrapper_raise_on_deny_false_still_blocks_and_audits(tmp_path: Path):
+    """raise_on_deny=False must still intercept DENY (not run the function).
 
-    Regression for CongkeChen's review: intercepted=report.blocked used
-    policy.block_on_review, so a DENY with raise_on_deny=False was falsely
-    recorded as intercepted=True. The actual interception is raise_on_deny.
+    CongkeChen review: intercepted = should_block and raise_on_deny made
+    raise_on_deny=False silently execute DENY scripts and audit
+    intercepted=False. Correct semantics:
+    - should_block always intercepts (function not called, audit True)
+    - raise_on_deny only controls raise vs return deny dict
     """
+    executed = []
 
     @safety_wrapper(
         tool_name="denied_tool",
@@ -280,14 +283,18 @@ def test_safety_wrapper_raise_on_deny_false_records_intercepted_false(tmp_path: 
         raise_on_deny=False,
     )
     async def run_tool(*, script):
+        executed.append(script)
         return "ran"
 
     result = asyncio.run(run_tool(script="rm -rf /"))
 
-    assert result == "ran"
+    assert executed == [], "DENY must not run the wrapped function"
+    assert isinstance(result, dict)
+    assert result.get("success") is False
+    assert result.get("error") == "TOOL_SAFETY_DENY"
 
     audit_path = tmp_path / "audit.jsonl"
     assert audit_path.exists()
     rec = json.loads(audit_path.read_text(encoding="utf-8").strip().splitlines()[-1])
     assert rec["decision"] == "deny"
-    assert rec["intercepted"] is False
+    assert rec["intercepted"] is True

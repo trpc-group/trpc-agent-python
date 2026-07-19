@@ -238,10 +238,13 @@ class DangerousFilesRule(SafetyRule):
                     "os.unlink",
                     "pathlib.path.unlink",
                     "pathlib.Path.unlink",
-            } or lname.endswith(".unlink") or lname.endswith(".rmtree"):
+            } or lname.endswith(".unlink") or lname.endswith(".rmtree") or lname.endswith(".rmdir"):
                 arg = node.args[0] if node.args else None
-                target = get_string_literal(arg) or path_expr_text(arg) if arg else "<dynamic>"
-                target = target or "<dynamic>"
+                if arg is not None:
+                    target = get_string_literal(arg) or path_expr_text(arg) or "<dynamic>"
+                else:
+                    # Path(...).unlink() / Path(...).rmdir() — path is the receiver.
+                    target = _path_target_from_attr(node, aliases, path_vars) or "<dynamic>"
                 if "rmtree" in lname or _is_recursive_delete(name, node):
                     findings.append(
                         self._finding(
@@ -269,17 +272,20 @@ class DangerousFilesRule(SafetyRule):
                     var = node.args[0].id
                     if var in path_vars:
                         target = path_vars[var]
+                # Non-constant mode is treated as potentially writable (fail-closed)
+                # so open("/usr/bin/x", mode_var) cannot bypass system-dir writes.
                 if _is_write_open(node):
                     if _matches_sensitive(target) or _matches_forbidden(target, policy) or _matches_system_dir(target):
                         findings.append(
                             self._finding(
-                                f"open({target!r}, 'w')",
+                                f"open({target!r}, write)",
                                 node.lineno,
                                 "Do not write to system or credential paths.",
                                 message=f"Write to sensitive path {target!r}",
                             ))
                 else:
-                    if _matches_sensitive(target) or _matches_forbidden(target, policy):
+                    if (_matches_sensitive(target) or _matches_forbidden(target, policy)
+                            or _matches_system_dir(target)):
                         findings.append(
                             self._finding(
                                 f"{name}({target!r})",
@@ -290,8 +296,8 @@ class DangerousFilesRule(SafetyRule):
 
             # pathlib Path.read_text / read_bytes with sensitive target
             if lname.endswith(".read_text") or lname.endswith(".read_bytes"):
-                target = _path_from_attr_call(node, aliases)
-                if _matches_sensitive(target) or _matches_forbidden(target, policy):
+                target = _path_target_from_attr(node, aliases, path_vars)
+                if (_matches_sensitive(target) or _matches_forbidden(target, policy) or _matches_system_dir(target)):
                     findings.append(
                         self._finding(
                             f"{name}(...)",
@@ -299,6 +305,29 @@ class DangerousFilesRule(SafetyRule):
                             "Do not read credential/secret files in tool scripts.",
                             message=f"Read sensitive file via pathlib {target!r}",
                         ))
+
+            # pathlib write / mkdir / touch / rename on sensitive, forbidden, or system
+            # paths. Missing write_* left Path("/usr/bin/x").write_text(...) as
+            # ALLOW (fail-open) because only path-construction of sensitive names
+            # was covered, not system-dir writes.
+            if (lname.endswith(".write_text") or lname.endswith(".write_bytes") or lname.endswith(".mkdir")
+                    or lname.endswith(".touch") or lname.endswith(".replace") or lname.endswith(".rename")
+                    or lname.endswith(".chmod")):
+                target = _path_target_from_attr(node, aliases, path_vars)
+                if target and (_matches_sensitive(target) or _matches_forbidden(target, policy)
+                               or _matches_system_dir(target)):
+                    if lname.endswith(".write_text") or lname.endswith(".write_bytes"):
+                        msg = f"Write to sensitive path via pathlib {target!r}"
+                        rec = "Do not write to system or credential paths."
+                    else:
+                        msg = f"Mutate sensitive path via pathlib {name}({target!r})"
+                        rec = "Do not mutate system or credential paths via pathlib."
+                    findings.append(self._finding(
+                        f"{name}(...)",
+                        node.lineno,
+                        rec,
+                        message=msg,
+                    ))
 
             # Path(...).joinpath(...).read_text pattern: also inspect path construction
             if "pathlib" in lname or lname.endswith("path") or lname.endswith("joinpath") or lname in {
@@ -391,16 +420,30 @@ def _is_recursive_delete(name: str, node: ast.Call) -> bool:
 
 
 def _is_write_open(node: ast.Call) -> bool:
+    """True when open() may write.
+
+    Constant modes containing w/a/x/+ are writes. A present but non-constant
+    mode (Name/Call/…) is treated as write (fail-closed) so
+    ``open("/usr/bin/x", mode_var)`` cannot bypass system-dir checks.
+    Missing mode defaults to read-only.
+    """
     mode_val = None
+    mode_dynamic = False
     for kw in node.keywords:
         if kw.arg == "mode":
             if isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
                 mode_val = kw.value.value
+            else:
+                mode_dynamic = True
             break
-    if mode_val is None and len(node.args) >= 2:
+    if mode_val is None and not mode_dynamic and len(node.args) >= 2:
         arg = node.args[1]
         if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
             mode_val = arg.value
+        else:
+            mode_dynamic = True
+    if mode_dynamic:
+        return True
     if not mode_val:
         return False
     return any(m in mode_val for m in ("w", "a", "x", "+"))
@@ -422,6 +465,21 @@ def _path_from_attr_call(node: ast.Call, aliases: dict[str, str]) -> str:
     if isinstance(func, ast.Attribute):
         return path_expr_text(func.value)
     return ""
+
+
+def _path_target_from_attr(
+    node: ast.Call,
+    aliases: dict[str, str],
+    path_vars: dict[str, str],
+) -> str:
+    """Path string for Path(...).method() / p.method() calls."""
+    target = _path_from_attr_call(node, aliases)
+    func = node.func
+    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+        var = func.value.id
+        if var in path_vars:
+            target = path_vars[var] or target
+    return target or ""
 
 
 def _collect_sensitive_path_vars(
