@@ -151,3 +151,43 @@ def test_unsafe_local_code_executor_safety_fields():
     assert ex._safety_scanner is not None
     result = asyncio.run(ex.execute_code(None, CodeExecutionInput(code="import os\nos.system('id')")))
     assert "TOOL_SAFETY_DENY" in result.output
+
+
+def test_unsafe_local_code_executor_multi_block_aggregates_review():
+    """Regression for AI Code Review critical: multi-block [safe_python, bash
+    'sleep 100 &'] must NOT keep worst=ALLOW. With block_on_review=True the
+    executor must block and emit TOOL_SAFETY_NEEDS_REVIEW."""
+    try:
+        from trpc_agent_sdk.code_executors.local._unsafe_local_code_executor import (
+            UnsafeLocalCodeExecutor, )
+        from trpc_agent_sdk.code_executors import CodeExecutionInput
+        from trpc_agent_sdk.code_executors import CodeBlock
+    except Exception as ex:  # pylint: disable=broad-except
+        pytest.skip(f"code executor not importable: {ex}")
+
+    ex = UnsafeLocalCodeExecutor(enable_safety_guard=True, safety_block_on_review=True)
+    inp = CodeExecutionInput(code_blocks=[
+        CodeBlock(language="python", code="x = 1\nprint(x)"),
+        CodeBlock(language="bash", code="sleep 100 &"),
+    ])
+    result = asyncio.run(ex.execute_code(None, inp))
+    # MUST be blocked (not run) and labeled as NEEDS_REVIEW, not DENY.
+    assert "TOOL_SAFETY_NEEDS_REVIEW" in result.output
+    assert "TOOL_SAFETY_DENY" not in result.output
+
+
+def test_unsafe_local_code_executor_review_label_differs_from_deny():
+    """When block_on_review=True and decision is NEEDS_HUMAN_REVIEW, stderr
+    must say TOOL_SAFETY_NEEDS_REVIEW, not TOOL_SAFETY_DENY (consistency with
+    ToolSafetyFilter). Single-block 'sleep 100 &' triggers MEDIUM/review."""
+    try:
+        from trpc_agent_sdk.code_executors.local._unsafe_local_code_executor import (
+            UnsafeLocalCodeExecutor, )
+        from trpc_agent_sdk.code_executors import CodeExecutionInput
+    except Exception as ex:  # pylint: disable=broad-except
+        pytest.skip(f"code executor not importable: {ex}")
+
+    ex = UnsafeLocalCodeExecutor(enable_safety_guard=True, safety_block_on_review=True)
+    result = asyncio.run(ex.execute_code(None, CodeExecutionInput(code="sleep 100 &")))
+    assert "TOOL_SAFETY_NEEDS_REVIEW" in result.output
+    assert "TOOL_SAFETY_DENY" not in result.output

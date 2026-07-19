@@ -121,6 +121,14 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
                 RiskLevel.HIGH: 3,
                 RiskLevel.CRITICAL: 4,
             }
+            # Decision severity: DENY > NEEDS_HUMAN_REVIEW > ALLOW. A MEDIUM bash
+            # block must outweigh a safe ALLOW python block when aggregating
+            # multi-block input (matches _wrapper._scan_code_input).
+            _DECISION_RANK = {
+                Decision.ALLOW: 0,
+                Decision.NEEDS_HUMAN_REVIEW: 1,
+                Decision.DENY: 2,
+            }
             code_blocks = list(input_data.code_blocks or [])
             if not code_blocks and input_data.code:
                 # Prefer content inference over hardcoding python.
@@ -142,11 +150,13 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
                 report = self._safety_scanner.scan(ScanInput(script=code, language=lang, tool_name="code_executor"))
                 if worst is None:
                     worst = report
-                elif report.decision == Decision.DENY and worst.decision != Decision.DENY:
+                    continue
+                # Pick the worse of (worst, report) by (decision_rank, risk_rank)
+                # so NEEDS_HUMAN_REVIEW outweighs ALLOW even when risks differ.
+                worst_key = (_DECISION_RANK.get(worst.decision, 0), _ORDER.get(worst.risk_level, 0))
+                report_key = (_DECISION_RANK.get(report.decision, 0), _ORDER.get(report.risk_level, 0))
+                if report_key > worst_key:
                     worst = report
-                elif report.decision == worst.decision:
-                    if _ORDER.get(report.risk_level, 0) > _ORDER.get(worst.risk_level, 0):
-                        worst = report
 
             report = worst
             should_block = False
@@ -156,7 +166,11 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
                 if self._safety_audit is not None:
                     self._safety_audit.log(report, intercepted=should_block)
             if should_block and report is not None:
-                return create_code_execution_result(stderr=f"TOOL_SAFETY_DENY: {report.rule_ids}")
+                # Distinguish DENY vs NEEDS_HUMAN_REVIEW in stderr so audits and
+                # logs don't mislabel a review-block as a deny (matches
+                # ToolSafetyFilter's error_code selection).
+                code_label = ("TOOL_SAFETY_DENY" if report.decision == Decision.DENY else "TOOL_SAFETY_NEEDS_REVIEW")
+                return create_code_execution_result(stderr=f"{code_label}: {report.rule_ids}")
 
         output_parts = []
         error_parts = []

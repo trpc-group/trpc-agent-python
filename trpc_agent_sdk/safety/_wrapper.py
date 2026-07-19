@@ -198,7 +198,17 @@ def safety_wrapper(
     audit_path=None,
     raise_on_deny=True,
 ):
-    """Decorator: scan the *script_arg* of a function before it runs."""
+    """Decorator: scan the *script_arg* of a function before it runs.
+
+    .. note::
+        Only keyword arguments are scanned. Positional arguments are not
+        mapped to *script_arg* (doing so reliably would require inspecting
+        the wrapped function's signature, which is brittle for *args/**kwargs
+        variadic callables). Callers MUST pass the script as a keyword
+        argument, e.g. ``run(script="rm -rf /")`` rather than
+        ``run("rm -rf /")``. A positional argument that is itself a dict
+        containing *script_arg* is also accepted as a legacy convenience.
+    """
     if policy is None:
         policy = PolicyConfig()
     _scanner = SafetyScanner(policy=policy)
