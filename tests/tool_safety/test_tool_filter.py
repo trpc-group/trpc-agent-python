@@ -153,8 +153,7 @@ def test_filter_contextvar_does_not_leak_across_calls(tmp_path: Path):
     async def _scenario():
         # Prime the ContextVar with a stale report as if a prior _after was
         # skipped in this same async context.
-        stale_report = SafetyScanner(PolicyConfig()).scan(
-            ScanInput(script="sleep 100 &", language="bash"))
+        stale_report = SafetyScanner(PolicyConfig()).scan(ScanInput(script="sleep 100 &", language="bash"))
         assert stale_report.decision.value == "needs_human_review"
         _REVIEW_REPORT.set(stale_report)
 

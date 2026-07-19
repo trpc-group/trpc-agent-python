@@ -171,6 +171,4 @@ def _parse_risk_level(value: Any, default: RiskLevel) -> RiskLevel:
         # default would let users believe a stricter policy is active when it
         # is not. List valid values so the error is actionable.
         valid = [r.value for r in RiskLevel]
-        raise ValueError(
-            f"invalid risk level {value!r}; expected one of {valid}"
-        ) from ex
+        raise ValueError(f"invalid risk level {value!r}; expected one of {valid}") from ex
