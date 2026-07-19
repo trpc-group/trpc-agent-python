@@ -203,3 +203,64 @@ def test_secret_env_access():
 def test_secret_redacts_evidence():
     from trpc_agent_sdk.safety._rules import redact
     assert redact("sk-abcdefghijklmnopqrstuvwxyz").endswith("***")
+
+
+def test_dangerous_files_python_remove_sensitive_path():
+    """Regression for CongkeChen review: os.remove('/etc/passwd') must trigger
+    R001 even without recursive delete. Previously only rmtree/unlink-with-r
+    were flagged, so single-file delete of sensitive paths was silently
+    allowed while the bash equivalent (rm /etc/passwd) was caught."""
+    rule = DangerousFilesRule()
+    inp = ScanInput(script="import os\nos.remove('/etc/passwd')\n", language="python")
+    findings = rule.check(inp, _policy())
+    assert findings and findings[0].rule_id == "R001_dangerous_files"
+
+
+def test_dangerous_files_python_unlink_ssh_key():
+    """os.unlink('~/.ssh/id_rsa') must trigger R001 (single-file sensitive delete)."""
+    rule = DangerousFilesRule()
+    inp = ScanInput(script="import os\nos.unlink('/home/u/.ssh/id_rsa')\n", language="python")
+    findings = rule.check(inp, _policy())
+    assert findings and findings[0].rule_id == "R001_dangerous_files"
+
+
+def test_resource_dd_not_false_positive_on_adduser():
+    """Regression for CongkeChen review: \\bdd\\b matched any 'dd' substring,
+    so 'adduser', 'findd', 'xdd' were false-positive HIGH/DENY. The regex now
+    requires dd as a command token (after start/space/;/&&/||)."""
+    rule = ResourceAbuseRule()
+    inp = ScanInput(script="adduser bob\nfind / -name xdd\n", language="bash")
+    findings = rule.check(inp, _policy())
+    # No dd finding should fire for adduser/findd/xdd.
+    assert not any("dd can write" in f.metadata.get("message", "") for f in findings)
+
+
+def test_resource_dd_real_command_still_caught():
+    """Real 'dd if=/dev/zero of=/tmp/big bs=1M count=100' must still be caught."""
+    rule = ResourceAbuseRule()
+    inp = ScanInput(script="dd if=/dev/zero of=/tmp/big bs=1M count=100\n", language="bash")
+    findings = rule.check(inp, _policy())
+    assert any("dd can write" in f.metadata.get("message", "") for f in findings)
+
+
+def test_dangerous_files_forbidden_path_boundary_not_substring():
+    """Regression for CongkeChen review: _matches_forbidden used substring
+    matching, so '.env' matched 'my.envrc'. Now uses path-boundary matching."""
+    rule = DangerousFilesRule()
+    policy = PolicyConfig(forbidden_paths=[".env"])
+    # 'my.envrc' must NOT match forbidden path '.env' (no path boundary before .env).
+    inp = ScanInput(script="open('my.envrc')\n", language="python")
+    findings = rule.check(inp, policy)
+    # No forbidden-path finding should fire for my.envrc.
+    assert not any("forbidden" in f.metadata.get("message", "").lower() for f in findings)
+
+
+def test_dangerous_files_system_dir_boundary_not_substring():
+    """Regression for CongkeChen review: _matches_system_dir used substring
+    matching, so '/etc' matched '/etcetera'. Now uses path-boundary matching."""
+    rule = DangerousFilesRule()
+    # '/etcetera/foo' must NOT match system dir '/etc' (no path boundary after /etc).
+    inp = ScanInput(script="open('/etcetera/foo')\n", language="python")
+    findings = rule.check(inp, _policy())
+    # No system-dir finding should fire for /etcetera.
+    assert not any("system" in f.metadata.get("message", "").lower() for f in findings)

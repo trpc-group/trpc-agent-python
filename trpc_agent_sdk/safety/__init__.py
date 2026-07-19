@@ -47,6 +47,7 @@ from ._types import max_risk_level
 # original ImportError so callers can diagnose the cause instead of getting a
 # silent None + later TypeError when they try to use the symbol.
 _SDK_AVAILABLE = False
+_WRAPPER_AVAILABLE = False
 _IMPORT_ERRORS: dict[str, BaseException] = {}
 try:  # pragma: no cover
     from ._filter import ToolSafetyFilter
@@ -63,6 +64,7 @@ try:  # pragma: no cover
     from ._wrapper import safe_code_executor
     from ._wrapper import safety_wrapper
     from ._wrapper import wrap_tool
+    _WRAPPER_AVAILABLE = True
 except Exception as ex:  # pylint: disable=broad-except
     SafeCodeExecutor = None  # type: ignore[assignment]
     SafetyDeniedError = None  # type: ignore[assignment]
@@ -124,4 +126,5 @@ __all__ = [
     "SafetyReviewedSkillRunner",
     "import_error_for",
     "_SDK_AVAILABLE",
+    "_WRAPPER_AVAILABLE",
 ]

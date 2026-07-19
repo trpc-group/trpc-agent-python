@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import contextvars
+import sys
 from typing import Any
 from typing import Optional
 
@@ -128,6 +129,15 @@ class ToolSafetyFilter(BaseFilter):
             # tool's actual result. Setting rsp.rsp here is useless because
             # BaseFilter.run's handle() step overwrites result.rsp with the
             # tool's return value.
+            #
+            # Belt-and-suspenders: also write to stderr so that if _after is
+            # skipped (handle() raised, earlier filter set is_continue=False,
+            # or the tool returned a non-dict that _after cannot annotate),
+            # the warning is still surfaced to the caller instead of being
+            # silently lost. The audit log already records the decision; this
+            # stderr line is the in-band fallback for human operators.
+            sys.stderr.write(f"TOOL_SAFETY_NEEDS_REVIEW: {list(report.rule_ids)} "
+                             f"(risk={report.risk_level.value})\n")
             _REVIEW_REPORT.set(report)
 
     async def _after(self, ctx: Any, req: Any, rsp: FilterResult) -> None:

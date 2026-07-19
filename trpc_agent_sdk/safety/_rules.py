@@ -129,13 +129,36 @@ def _matches_sensitive(target: str) -> bool:
 def _matches_system_dir(target: str) -> bool:
     if not target:
         return False
-    return any(sd in target for sd in _SYSTEM_DIRS)
+    # Use path-boundary matching so '/etc' matches '/etc/passwd' but NOT
+    # '/etcetera/foo'. We treat '/', '\\', start-of-string, and end-of-string
+    # as valid path boundaries around each system dir prefix.
+    for sd in _SYSTEM_DIRS:
+        # Normalize backslashes to forward slashes for uniform matching.
+        sd_norm = sd.replace("\\", "/")
+        tgt_norm = target.replace("\\", "/")
+        if tgt_norm == sd_norm or tgt_norm.startswith(sd_norm + "/"):
+            return True
+    return False
 
 
 def _matches_forbidden(target: str, policy: PolicyConfig) -> bool:
     if not target:
         return False
-    return any(fb in target for fb in policy.forbidden_paths)
+    # Path-boundary match so '.env' matches '/app/.env' but NOT 'my.envrc'.
+    # We accept the forbidden path appearing at start-of-string or after a
+    # path separator; a trailing separator or end-of-string is NOT required
+    # so that '.env' matches '.env.production' too (common convention).
+    tgt_norm = target.replace("\\", "/")
+    for fb in policy.forbidden_paths:
+        fb_norm = fb.replace("\\", "/")
+        if not fb_norm:
+            continue
+        if (tgt_norm == fb_norm
+                or tgt_norm.startswith(fb_norm + "/")
+                or tgt_norm.endswith("/" + fb_norm)
+                or ("/" not in tgt_norm and tgt_norm == fb_norm)):
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +211,18 @@ class DangerousFilesRule(SafetyRule):
                             node.lineno,
                             "Avoid recursive deletion; restrict to known workspace paths.",
                             message=f"Recursive/forced delete via {name}({target!r})",
+                        ))
+                elif (_matches_sensitive(target) or _matches_forbidden(target, policy) or _matches_system_dir(target)):
+                    # Single-file delete of a sensitive/forbidden/system path
+                    # (e.g. os.remove("/etc/passwd"), os.unlink("~/.ssh/id_rsa"))
+                    # is just as dangerous as recursive delete; flag it so the
+                    # Python side matches the bash rm /etc/passwd coverage.
+                    findings.append(
+                        self._finding(
+                            f"{name}({target})",
+                            node.lineno,
+                            f"Avoid deleting sensitive/forbidden path: {target}",
+                            message=f"Single-file delete of sensitive path via {name}({target!r})",
                         ))
 
             if lname in {"open", "builtins.open"} or lname.endswith(".open"):
@@ -902,8 +937,9 @@ class ProcessRule(SafetyRule):
                         level=RiskLevel.CRITICAL,
                         message="Use of eval in bash",
                     ))
-            if _DECODE_EXEC_BASH.search(line) or re.search(r"\|\s*(sh|bash|zsh)\b", line) and re.search(
-                    r"base64|xxd|openssl", line, re.IGNORECASE):
+            pipe_to_shell = re.search(r"\|\s*(?:sh|bash|zsh)\b", line)
+            decoder = re.search(r"base64|xxd|openssl", line, re.IGNORECASE)
+            if _DECODE_EXEC_BASH.search(line) or (pipe_to_shell and decoder):
                 findings.append(
                     self._finding(
                         line,
@@ -1055,7 +1091,7 @@ _FORK_BOMB = re.compile(
     re.IGNORECASE,
 )
 _LONG_SLEEP_BASH = re.compile(r"\bsleep\s+(\d+)", re.IGNORECASE)
-_DD_WRITE = re.compile(r"\bdd\b", re.IGNORECASE)
+_DD_WRITE = re.compile(r"(?:^|\s|;|&&|\|\|)\s*dd\b", re.IGNORECASE)
 _BIG_WRITE = re.compile(r"(head|tail|yes|/dev/zero|/dev/urandom)", re.IGNORECASE)
 _HIGH_CONCURRENCY = {
     "concurrent.futures.threadpoolexecutor",

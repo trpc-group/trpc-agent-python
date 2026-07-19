@@ -76,17 +76,21 @@ def test_filter_dynamic_network_is_denied_by_default(tmp_path: Path):
     assert rsp.rsp["error"] == "TOOL_SAFETY_DENY"
 
 
-def test_filter_block_on_review(tmp_path: Path):
+def test_filter_block_on_review_deny_still_blocks(tmp_path: Path):
+    """When block_on_review=True, DENY (HIGH) findings must still block.
+
+    This is a sanity check that block_on_review does not weaken DENY handling.
+    The pure-MEDIUM review-block path is covered by
+    test_filter_block_on_review_pure_medium_returns_needs_review.
+    """
     flt = _make_filter(tmp_path, block_on_review=True)
     rsp = FilterResult()
-    # Medium-only finding that is not HIGH: still exercise block_on_review via
-    # a policy that treats medium as review-only when block_on_review is True.
-    # curl $URL is HIGH/deny under default policy; use empty script path via code
-    # that only triggers review is hard — assert deny still blocks.
+    # curl $URL is HIGH/deny under default policy; block_on_review must NOT
+    # downgrade a DENY to a non-blocking review.
     req = {"command": "curl $URL"}
     asyncio.run(flt._before(None, req, rsp))  # pylint: disable=protected-access
     assert rsp.is_continue is False
-    assert rsp.rsp["error"] in ("TOOL_SAFETY_DENY", "TOOL_SAFETY_NEEDS_REVIEW")
+    assert rsp.rsp["error"] == "TOOL_SAFETY_DENY"
     assert rsp.rsp.get("success") is False
 
 
