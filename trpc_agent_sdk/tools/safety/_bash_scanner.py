@@ -745,7 +745,7 @@ _SENSITIVE_PATHS_RE = re.compile(
     r"(?:/etc/(?:shadow|passwd|sudoers|hosts)|"
     r"~?/\.ssh|~?/\.gnupg|~?/\.aws|~?/\.gcloud|~?/\.azure|"
     r"\.env|\.pem|id_rsa|id_ed25519|id_ecdsa|"
-    r"/proc/(?:self|\\d+)/(?:mem|cmdline|environ)|"
+    r"/proc/(?:self|\d+)/(?:mem|cmdline|environ)|"
     r"/var/run/docker\.sock)",
     re.IGNORECASE,
 )

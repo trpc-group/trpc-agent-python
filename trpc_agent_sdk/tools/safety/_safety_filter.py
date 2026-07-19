@@ -160,33 +160,44 @@ class ToolSafetyDeniedError(RuntimeError):
 
 
 def _extract_script_content(req: Any) -> Optional[str]:
-    """Heuristically extract script-like content from a tool request."""
+    """Heuristically extract script-like content from a tool request.
+
+    All recognised script-bearing fields are collected and joined so that
+    a request carrying both ``code`` (benign) and ``command`` (dangerous)
+    does not bypass detection by hiding behind the first hit.
+    """
     if isinstance(req, str):
         return req
+    parts: list[str] = []
+    seen: set[str] = set()
+
+    def _collect(val: Any) -> None:
+        if isinstance(val, str) and val.strip():
+            stripped = val.strip()
+            if stripped not in seen:
+                parts.append(stripped)
+                seen.add(stripped)
+
     if isinstance(req, dict):
-        # Common field names used to pass code / commands
         for key in ("code", "script", "command", "cmd", "shell", "source", "content", "text", "input"):
-            val = req.get(key)
-            if isinstance(val, str) and val.strip():
-                return val
-        # Check for MCP tool arguments
+            _collect(req.get(key))
         args = req.get("args", {})
         if isinstance(args, dict):
             for key in ("code", "script", "command", "cmd", "shell"):
-                val = args.get(key)
-                if isinstance(val, str) and val.strip():
-                    return val
-        # Check for keyword arguments
+                _collect(args.get(key))
         kwargs = req.get("kwargs")
         if isinstance(kwargs, dict) and kwargs:
-            return _extract_script_content(kwargs)
-    # Try to get 'args' attribute from an object
+            sub = _extract_script_content(kwargs)
+            if sub:
+                _collect(sub)
     if hasattr(req, "args") and isinstance(getattr(req, "args"), dict):
-        return _extract_script_content(getattr(req, "args"))
+        sub = _extract_script_content(getattr(req, "args"))
+        if sub:
+            _collect(sub)
     if hasattr(req, "script_content"):
-        val = getattr(req, "script_content")
-        if isinstance(val, str):
-            return val
+        _collect(getattr(req, "script_content"))
+
+    return "\n".join(parts) if parts else None
     return None
 
 

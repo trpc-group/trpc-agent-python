@@ -145,9 +145,7 @@ def _strip_python_comment_line(line: str) -> str:
             continue
 
         # Triple-quote detection (simplified — checks for ''' or \"\"\")
-        if (not in_single and not in_double
-                and i + 2 < n and ch in ("'", '"')
-                and line[i:i + 3] == ch * 3):
+        if (not in_single and not in_double and i + 2 < n and ch in ("'", '"') and line[i:i + 3] == ch * 3):
             marker = ch * 3
             result.append(marker)
             i += 3
@@ -537,7 +535,8 @@ class ProcessAndSystemRule:
 
                     # FIXED: Check whitelist_commands — was dead code before
                     # Whitelisted commands get downgraded to INFO or skipped
-                    if policy.is_command_whitelisted(cmd_key) and cmd_key not in ("|", "$(", "`", "&>", "nohup", "disown"):
+                    if policy.is_command_whitelisted(cmd_key) and cmd_key not in ("|", "$(", "`", "&>", "nohup",
+                                                                                  "disown"):
                         # Explicitly whitelisted → informational only
                         findings.append(
                             _build_finding(
@@ -860,9 +859,9 @@ def _is_in_echo_string(line: str, pattern: str) -> bool:
     """
     stripped = line.strip()
     # Only applies to echo / printf commands
-    if not (stripped.startswith("echo ") or stripped.startswith("echo\t")
-            or stripped.startswith("printf ") or stripped.startswith("printf\t")
-            or stripped.startswith("/bin/echo ") or stripped.startswith("/usr/bin/echo ")):
+    if not (stripped.startswith("echo ") or stripped.startswith("echo\t") or stripped.startswith("printf ")
+            or stripped.startswith("printf\t") or stripped.startswith("/bin/echo ")
+            or stripped.startswith("/usr/bin/echo ")):
         return False
     # Check if the pattern *matches* inside single or double quotes
     try:
@@ -900,7 +899,7 @@ def _path_boundary_pattern(path: str) -> str:
     escaped = re.escape(path)
     # If the path starts with a dot (like .env), require a path boundary before it
     if path.startswith("."):
-        return r"(?:^|[\\s/'\"`;|&(])" + escaped + r"(?:$|[\\s/'\"`;|&)])"
+        return r"(?:^|[\s/'\"`;|&(])" + escaped + r"(?:$|[\s/'\"`;|&)])"
     else:
         return escaped.replace(r"\*", ".*")
 

@@ -913,7 +913,7 @@ _CRED_PATH_RE = re.compile(
     r"(?:\.ssh|\.gnupg|\.aws|\.gcloud|\.azure|\.pem|\.key|id_rsa|id_ed25519|id_ecdsa|"
     r"credentials|secrets|\.env|config\.json|"
     r"/etc/(?:shadow|passwd|sudoers|hosts)|"
-    r"/proc/(?:self|\\d+)/(?:mem|cmdline|environ)|"
+    r"/proc/(?:self|\d+)/(?:mem|cmdline|environ)|"
     r"/var/run/docker\.sock)",
     re.IGNORECASE,
 )
