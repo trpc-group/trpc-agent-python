@@ -93,6 +93,10 @@ _SENSITIVE_PATH_PATTERNS = [
 _DELETE_PATTERNS = [
     re.compile(r"\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f?|-[a-zA-Z]*f[a-zA-Z]*r?)\b", re.IGNORECASE),
     re.compile(r"\brm\s+-rf\b", re.IGNORECASE),
+    # GNU long options: catch rm with --recursive or --force anywhere in its args.
+    # Matches "rm --recursive /", "rm --force --recursive /", "rm -r --force /", etc.
+    re.compile(r"\brm\s+(?:-[a-zA-Z]+|--[a-z]+)\s+.*--(?:recursive|force)\b", re.IGNORECASE),
+    re.compile(r"\brm\s+--(?:recursive|force)\b", re.IGNORECASE),
     re.compile(r"\brmdir\s+/s\b", re.IGNORECASE),
     re.compile(r"\bdel\s+/[sq]\b", re.IGNORECASE),
     re.compile(r"\bfind\b.*(-delete|-exec\s+rm\b)", re.IGNORECASE),

@@ -36,6 +36,26 @@ def test_dangerous_files_bash_rm_rf():
     assert any("R001" in f.rule_id for f in findings)
 
 
+def test_dangerous_files_bash_rm_gnu_long_options():
+    """Regression for CongkeChen review: rm --recursive / --force must not bypass R001.
+
+    GNU rm supports --recursive/--force long options. The original _DELETE_PATTERNS
+    only matched short options (-rf), so 'rm --recursive --force /' was missed.
+    """
+    rule = DangerousFilesRule()
+    for cmd in (
+        "rm --recursive /",
+        "rm --force /",
+        "rm --recursive --force /",
+        "rm --force --recursive /",
+        "rm --recursive -f /",
+        "rm -r --force /",
+        "rm --recursive=yes /",
+    ):
+        findings = rule.check(ScanInput(script=cmd, language="bash"), _policy())
+        assert any("R001" in f.rule_id for f in findings), f"failed to flag: {cmd!r}"
+
+
 def test_dangerous_files_read_ssh_key():
     rule = DangerousFilesRule()
     inp = ScanInput(script="open('/home/u/.ssh/id_rsa')", language="python")
