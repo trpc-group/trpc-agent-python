@@ -221,7 +221,7 @@ pytest tests/tool_safety/ -v
 
 | issue 验收标准 | 结果 |
 |---|---|
-| 1. 样本可扫描并输出结构化报告 | ✅ 20 条样本 + manifest |
+| 1. 样本可扫描并输出结构化报告 | ✅ 40 条样本 + manifest（含 issue 要求的 12 类场景） |
 | 2. 高危检出率 ≥90%，误报率 ≤10% | ✅ |
 | 3. 读密钥/危险删除/非白名单外连 100% | ✅ |
 | 4. 500 行脚本 ≤1s | ✅ |
@@ -257,7 +257,7 @@ pytest tests/tool_safety/ -v
 
 - 扫描**不会**阻止 tool 继续执行（`is_continue=True`）
 - 完整结果仍写入 **审计 JSONL** 与 **OpenTelemetry** `tool.safety.*`
-- Filter 链路上的 warning 字段可能被后续 tool 返回值覆盖，**调用方不应依赖返回 dict 中的 warning**
+- `ToolSafetyFilter._after` 会通过 `ContextVar` 把 warning 合并进 tool 实际返回值（`safety_warning` / `safety_risk_level` / `safety_rule_ids`），不会被 `BaseFilter.run` 的 handle 步骤覆盖；`BashTool` / `CodeExecutor` wrapper 因不经过 `BaseFilter` 链路，直接在拦截前写入返回值
 - 若要求 review 也必须拦截，请设置 `block_on_review=True`（Filter / BashTool / CodeExecutor 均支持）
 
 ---
