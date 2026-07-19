@@ -1,0 +1,256 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
+"""Policy configuration for the Tool Script Safety Guard.
+
+The policy is a plain YAML file (see ``tool_safety_policy.yaml``) that
+controls whitelisted domains, allowed commands, forbidden paths, resource
+limits and per-rule overrides.  Changing the YAML is enough to change
+behaviour — no code changes required.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from dataclasses import field
+from typing import Any
+from typing import Optional
+from typing import Union
+
+import yaml
+
+from ._models import Decision
+from ._models import RiskLevel
+
+
+@dataclass
+class RuleOverride:
+    """Per-rule configuration override loaded from the policy file.
+
+    Attributes:
+        enabled: Whether the rule is active. Defaults to True.
+        risk_level: Optional override for the rule's default risk level.
+        decision: Optional override for the rule's default decision.
+    """
+
+    enabled: bool = True
+    risk_level: Optional[RiskLevel] = None
+    decision: Optional[Decision] = None
+
+
+@dataclass
+class SafetyPolicy:
+    """Configurable safety policy.
+
+    All fields can be set from a YAML file via :meth:`from_yaml` or built
+    programmatically via :meth:`default`.
+    """
+
+    # Network egress control
+    allowed_domains: list[str] = field(default_factory=lambda: [
+        "localhost",
+        "127.0.0.1",
+        "pypi.org",
+        "files.pythonhosted.org",
+    ])
+    """Whitelisted domains for outbound network calls."""
+
+    # Bash command control
+    allowed_commands: list[str] = field(default_factory=lambda: [
+        "ls", "pwd", "cat", "grep", "find", "head", "tail", "wc",
+        "echo", "python", "python3", "pip", "git", "mkdir", "cp", "mv",
+    ])
+    """Whitelisted bash commands (used by the allowlist rule)."""
+
+    # Forbidden file paths / patterns
+    forbidden_paths: list[str] = field(default_factory=lambda: [
+        "~/.ssh",
+        "~/.aws",
+        "~/.gnupg",
+        ".env",
+        ".env.local",
+        ".env.production",
+        "id_rsa",
+        "id_ed25519",
+        "credentials",
+        "credentials.json",
+        "/etc/shadow",
+        "/etc/passwd",
+    ])
+    """Paths that scripts must never read, write or delete."""
+
+    # System directories that must never be recursively deleted
+    protected_system_dirs: list[str] = field(default_factory=lambda: [
+        "/", "/etc", "/usr", "/bin", "/sbin", "/var", "/boot",
+        "/sys", "/proc", "/dev", "/root", "/home",
+        "C:\\", "C:\\Windows", "C:\\Program Files",
+    ])
+
+    # Resource limits
+    max_timeout_seconds: int = 300
+    """Maximum allowed execution timeout."""
+
+    max_output_size_mb: int = 50
+    """Maximum allowed command output size in megabytes."""
+
+    max_script_lines: int = 5000
+    """Hard limit on scanned script length (lines)."""
+
+    # Secret detection patterns (regex strings)
+    secret_patterns: list[str] = field(default_factory=lambda: [
+        # api_key = 'value' or api_key='value' or api_key=value
+        r"(?i)(api[_-]?key)\s*[=:]\s*['\"]?[A-Za-z0-9_\-]{16,}['\"]?",
+        r"(?i)(secret[_-]?key)\s*[=:]\s*['\"]?[A-Za-z0-9_\-]{16,}['\"]?",
+        r"(?i)(access[_-]?token)\s*[=:]\s*['\"]?[A-Za-z0-9_\-\.]{16,}['\"]?",
+        r"(?i)(password|passwd)\s*[=:]\s*['\"]?[^\s'\"]{6,}['\"]?",
+        r"-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----",
+        r"(?i)(aws_secret_access_key)\s*[=:]\s*['\"]?[A-Za-z0-9/+=]{40}['\"]?",
+        # GitHub / OpenAI tokens with known prefixes
+        r"ghp_[A-Za-z0-9]{36}",
+        r"sk-[A-Za-z0-9]{20,}",
+    ])
+    """Regex patterns that indicate a hardcoded secret."""
+
+    # Per-rule overrides: rule_id -> RuleOverride
+    rule_overrides: dict[str, RuleOverride] = field(default_factory=dict)
+
+    # Whether to redact sensitive values in evidence snippets
+    redact_secrets_in_evidence: bool = True
+
+    # When set, scripts above this many lines are flagged for review
+    large_script_threshold: int = 1000
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SafetyPolicy":
+        """Build a policy from a plain dictionary (parsed YAML)."""
+        # Start from defaults so unspecified keys keep their default value.
+        policy = cls()
+        if "allowed_domains" in data:
+            policy.allowed_domains = list(data["allowed_domains"])
+        if "allowed_commands" in data:
+            policy.allowed_commands = list(data["allowed_commands"])
+        if "forbidden_paths" in data:
+            policy.forbidden_paths = list(data["forbidden_paths"])
+        if "protected_system_dirs" in data:
+            policy.protected_system_dirs = list(data["protected_system_dirs"])
+        if "max_timeout_seconds" in data:
+            policy.max_timeout_seconds = int(data["max_timeout_seconds"])
+        if "max_output_size_mb" in data:
+            policy.max_output_size_mb = int(data["max_output_size_mb"])
+        if "max_script_lines" in data:
+            policy.max_script_lines = int(data["max_script_lines"])
+        if "secret_patterns" in data:
+            policy.secret_patterns = list(data["secret_patterns"])
+        if "redact_secrets_in_evidence" in data:
+            policy.redact_secrets_in_evidence = bool(data["redact_secrets_in_evidence"])
+        if "large_script_threshold" in data:
+            policy.large_script_threshold = int(data["large_script_threshold"])
+
+        # Parse per-rule overrides
+        rules_data = data.get("rules", {})
+        if isinstance(rules_data, dict):
+            for rule_id, cfg in rules_data.items():
+                if not isinstance(cfg, dict):
+                    continue
+                override = RuleOverride(
+                    enabled=cfg.get("enabled", True),
+                )
+                if "risk_level" in cfg:
+                    try:
+                        override.risk_level = RiskLevel(cfg["risk_level"])
+                    except ValueError:
+                        pass
+                if "decision" in cfg:
+                    try:
+                        override.decision = Decision(cfg["decision"])
+                    except ValueError:
+                        pass
+                policy.rule_overrides[rule_id] = override
+        return policy
+
+    @classmethod
+    def from_yaml(cls, path: Union[str, os.PathLike]) -> "SafetyPolicy":
+        """Load a policy from a YAML file.
+
+        Args:
+            path: Path to the YAML policy file.
+
+        Returns:
+            A configured :class:`SafetyPolicy`.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
+            yaml.YAMLError: If the file is not valid YAML.
+        """
+        with open(path, "r", encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+        if not isinstance(data, dict):
+            raise ValueError(f"Policy file {path} must contain a YAML mapping at the top level")
+        return cls.from_dict(data)
+
+    @classmethod
+    def default(cls) -> "SafetyPolicy":
+        """Return a policy with sensible built-in defaults."""
+        return cls()
+
+    def is_domain_allowed(self, domain: str) -> bool:
+        """Check whether *domain* is in the whitelist.
+
+        Sub-domain matching is supported: if ``example.com`` is whitelisted,
+        ``api.example.com`` is also allowed.
+        """
+        domain = domain.lower().strip()
+        for allowed in self.allowed_domains:
+            allowed = allowed.lower().strip()
+            if domain == allowed or domain.endswith("." + allowed):
+                return True
+        return False
+
+    def is_path_forbidden(self, path: str) -> bool:
+        """Check whether *path* matches a forbidden path pattern."""
+        path_lower = path.lower()
+        for forbidden in self.forbidden_paths:
+            forbidden_lower = forbidden.lower()
+            # Expand ~ for home-directory checks
+            expanded = os.path.expanduser(forbidden_lower)
+            if expanded.lower() in path_lower or forbidden_lower in path_lower:
+                return True
+        return False
+
+    def is_system_dir(self, path: str) -> bool:
+        """Check whether *path* is a protected system directory."""
+        path_norm = os.path.normpath(path).lower()
+        for sys_dir in self.protected_system_dirs:
+            if os.path.normpath(sys_dir).lower() == path_norm:
+                return True
+        return False
+
+    def get_rule_override(self, rule_id: str) -> RuleOverride:
+        """Return the override for *rule_id*, or a default (enabled) override."""
+        return self.rule_overrides.get(rule_id, RuleOverride())
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise the policy back to a plain dict (for debugging)."""
+        return {
+            "allowed_domains": list(self.allowed_domains),
+            "allowed_commands": list(self.allowed_commands),
+            "forbidden_paths": list(self.forbidden_paths),
+            "protected_system_dirs": list(self.protected_system_dirs),
+            "max_timeout_seconds": self.max_timeout_seconds,
+            "max_output_size_mb": self.max_output_size_mb,
+            "max_script_lines": self.max_script_lines,
+            "secret_patterns": list(self.secret_patterns),
+            "redact_secrets_in_evidence": self.redact_secrets_in_evidence,
+            "large_script_threshold": self.large_script_threshold,
+            "rules": {
+                rid: {
+                    "enabled": ov.enabled,
+                    "risk_level": ov.risk_level.value if ov.risk_level else None,
+                    "decision": ov.decision.value if ov.decision else None,
+                }
+                for rid, ov in self.rule_overrides.items()
+            },
+        }

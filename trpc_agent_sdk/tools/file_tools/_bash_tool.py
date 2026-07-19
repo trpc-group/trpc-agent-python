@@ -17,6 +17,7 @@ from typing import Any
 from typing import Optional
 
 from trpc_agent_sdk.context import InvocationContext
+from trpc_agent_sdk.filter import BaseFilter
 from trpc_agent_sdk.tools import BaseTool
 from trpc_agent_sdk.types import FunctionDeclaration
 from trpc_agent_sdk.types import Schema
@@ -29,12 +30,14 @@ class BashTool(BaseTool):
     # Whitelist of commands allowed outside working directory
     ALLOWED_COMMANDS_OUTSIDE_WORKDIR = ["ls", "pwd", "cat", "grep", "find", "head", "tail", "wc", "echo"]
 
-    def __init__(self, cwd: Optional[str] = None, whitelist_commands: Optional[list[str]] = None):
+    def __init__(self, cwd: Optional[str] = None, whitelist_commands: Optional[list[str]] = None,
+                 filters: Optional[list[BaseFilter]] = None):
         super().__init__(
             name="Bash",
             description=("Execute bash command in shell. Returns stdout, stderr, return_code. "
                          "Supports timeout (default 300s) and security restrictions "
                          "(whitelist for commands outside working directory)."),
+            filters=filters,
         )
         self.cwd = cwd or os.getcwd()
         self.whitelist_commands = whitelist_commands

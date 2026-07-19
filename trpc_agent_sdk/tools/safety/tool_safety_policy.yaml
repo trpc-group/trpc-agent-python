@@ -1,0 +1,132 @@
+# Tool Script Safety Guard — Policy Configuration
+# ==================================================
+#
+# This file controls the behaviour of the Tool Script Safety Guard.
+# Changing values here takes effect immediately — no code changes required.
+#
+# See docs/tool_safety_guard.md for the full reference.
+
+# ---------------------------------------------------------------------------
+# Network egress control
+# ---------------------------------------------------------------------------
+# Domains that scripts are allowed to contact.  Sub-domain matching is
+# supported: listing "pypi.org" also allows "files.pythonhosted.org.pypi.org".
+allowed_domains:
+  - localhost
+  - 127.0.0.1
+  - 0.0.0.0
+  - pypi.org
+  - files.pythonhosted.org
+  - api.github.com
+  - raw.githubusercontent.com
+
+# ---------------------------------------------------------------------------
+# Bash command control
+# ---------------------------------------------------------------------------
+# Commands allowed outside the working directory.  When a script only uses
+# commands from this list, it gets a lower risk score.
+allowed_commands:
+  - ls
+  - pwd
+  - cat
+  - grep
+  - find
+  - head
+  - tail
+  - wc
+  - echo
+  - python
+  - python3
+  - pip
+  - git
+  - mkdir
+  - cp
+  - mv
+  - touch
+  - sort
+  - uniq
+
+# ---------------------------------------------------------------------------
+# Forbidden file paths / patterns
+# ---------------------------------------------------------------------------
+# Paths that scripts must never read, write or delete.  Both literal and
+# substring matching are used (case-insensitive).
+forbidden_paths:
+  - "~/.ssh"
+  - "~/.aws"
+  - "~/.gnupg"
+  - "~/.config/gcloud"
+  - ".env"
+  - ".env.local"
+  - ".env.production"
+  - ".env.staging"
+  - "id_rsa"
+  - "id_ed25519"
+  - "id_ecdsa"
+  - "credentials"
+  - "credentials.json"
+  - "serviceaccount.json"
+  - "/etc/shadow"
+  - "/etc/passwd"
+  - "/etc/sudoers"
+
+# System directories that must never be recursively deleted.
+protected_system_dirs:
+  - "/"
+  - "/etc"
+  - "/usr"
+  - "/bin"
+  - "/sbin"
+  - "/var"
+  - "/boot"
+  - "/sys"
+  - "/proc"
+  - "/dev"
+  - "/root"
+  - "/home"
+  - "C:\\"
+  - "C:\\Windows"
+  - "C:\\Program Files"
+
+# ---------------------------------------------------------------------------
+# Resource limits
+# ---------------------------------------------------------------------------
+max_timeout_seconds: 300        # Maximum allowed execution timeout
+max_output_size_mb: 50          # Maximum allowed command output size
+max_script_lines: 5000          # Hard limit on scanned script length
+large_script_threshold: 1000    # Scripts above this many lines get flagged for review
+
+# ---------------------------------------------------------------------------
+# Secret detection
+# ---------------------------------------------------------------------------
+# Regex patterns that indicate a hardcoded secret.  These are matched
+# against all string literals in Python and all echo/cat/redirect output
+# in Bash.
+secret_patterns:
+  - '(?i)(api[_-]?key)\s*[=:]\s*[''"]?[A-Za-z0-9_\-]{16,}[''"]?'
+  - '(?i)(secret[_-]?key)\s*[=:]\s*[''"]?[A-Za-z0-9_\-]{16,}[''"]?'
+  - '(?i)(access[_-]?token)\s*[=:]\s*[''"]?[A-Za-z0-9_\-\.]{16,}[''"]?'
+  - '(?i)(password|passwd)\s*[=:]\s*[''"]?[^\s''"]{6,}[''"]?'
+  - '-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----'
+  - '(?i)(aws_secret_access_key)\s*[=:]\s*[''"]?[A-Za-z0-9/+=]{40}[''"]?'
+  - 'ghp_[A-Za-z0-9]{36}'           # GitHub personal access token
+  - 'sk-[A-Za-z0-9]{20,}'            # OpenAI API key
+
+# Whether to redact sensitive values in evidence snippets (recommended).
+redact_secrets_in_evidence: true
+
+# ---------------------------------------------------------------------------
+# Per-rule overrides
+# ---------------------------------------------------------------------------
+# Enable/disable individual rules or override their default risk level and
+# decision.  Rule IDs are listed in docs/tool_safety_guard.md.
+#
+# Example:
+#   rules:
+#     PY-NETWORK-EGRESS:
+#       enabled: true
+#       risk_level: low          # none | low | medium | high | critical
+#       decision: allow          # allow | deny | needs_human_review
+#     BASH-SHELL-INJECTION:
+#       enabled: false
+rules: {}

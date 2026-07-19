@@ -1,0 +1,440 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
+"""Bash command safety scanner.
+
+Bash is far harder to parse correctly than Python (shell quoting,
+variable expansion, here-docs, command substitution …).  This scanner
+uses a pragmatic combination of **line-level regex** and **command
+tokenisation** via :mod:`shlex` to catch the high-signal patterns
+required by the issue.
+
+Known limitation: obfuscated commands (base64 decode | sh, variable
+indirection, aliases) can bypass these checks.  The README documents
+this and explains why the guard *complements* rather than *replaces*
+sandbox isolation.
+"""
+
+from __future__ import annotations
+
+import re
+import shlex
+from typing import Optional
+from urllib.parse import urlparse
+
+from ._models import Decision
+from ._models import Finding
+from ._models import RiskCategory
+from ._models import RiskLevel
+from ._models import ScriptType
+from ._rules import Rule
+from ._rules import ScanContext
+from ._rules import global_rule_registry
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _extract_urls(text: str) -> list[str]:
+    """Extract URL strings from *text*."""
+    return re.findall(r'https?://[^\s\'"]+|ftp://[^\s\'"]+', text, re.IGNORECASE)
+
+
+def _extract_domain(url: str) -> str:
+    if not url:
+        return ""
+    if "://" not in url:
+        url = "http://" + url
+    try:
+        return urlparse(url).hostname or ""
+    except Exception:  # pylint: disable=broad-except
+        return ""
+
+
+def _redact(text: str) -> str:
+    """Mask potential secrets in evidence text."""
+    if len(text) <= 12:
+        return text[:2] + "***"
+    return text[:6] + "..." + text[-4:]
+
+
+# ===========================================================================
+# Bash rules
+# ===========================================================================
+
+class BashDangerousFileOpsRule(Rule):
+    """Detect dangerous file operations in bash commands."""
+
+    rule_id = "BASH-DANGEROUS-FILE-OPS"
+    description = "Dangerous file operation: recursive delete, system directory, or credential file access"
+    category = RiskCategory.DANGEROUS_FILE_OPS
+    default_risk_level = RiskLevel.CRITICAL
+    default_decision = Decision.DENY
+    applies_to = (ScriptType.BASH,)
+
+    # Patterns that are almost always destructive.
+    _RM_RF_SYSTEM = re.compile(
+        r"\brm\s+(?:-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\s+"
+        r"(?P<target>/+\s*$|/+\*|~/?\s*$|~/?\*|\$HOME/?\*|\$HOME/?\s*$|"
+        r"/etc|/usr|/bin|/sbin|/var|/boot|/sys|/proc|/dev|/root|/home|"
+        r"C:\\Windows|C:\\)",
+        re.IGNORECASE,
+    )
+
+    def check(self, ctx: ScanContext) -> list[Finding]:
+        findings: list[Finding] = []
+        lines = ctx.cached_lines if ctx.cached_lines is not None else ctx.script.splitlines()
+        for idx, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            # rm -rf on system dirs / home
+            match = self._RM_RF_SYSTEM.search(stripped)
+            if match:
+                findings.append(self._make_finding(
+                    stripped[:200],
+                    idx,
+                    "Recursive deletion of system directories or home is "
+                    "forbidden; restrict rm to scoped project paths.",
+                ))
+                continue
+
+            # Accessing credential files
+            for forbidden in ctx.policy.forbidden_paths:
+                expanded = forbidden.replace("~", "")
+                if expanded and expanded in stripped:
+                    # Only flag reads of credential files (cat, less, head, cp, etc.)
+                    if re.search(r"\b(cat|less|more|head|tail|cp|mv|scp|rsync|"
+                                 r"base64|xargs|awk|sed|grep)\b", stripped):
+                        findings.append(self._make_finding(
+                            stripped[:200],
+                            idx,
+                            f"Access to credential file/path '{forbidden}' is forbidden.",
+                        ))
+                        break
+
+            # dd to a block device
+            if re.search(r"\bdd\b.*\bof=/dev/", stripped):
+                findings.append(self._make_finding(
+                    stripped[:200],
+                    idx,
+                    "Writing to a block device with dd can destroy disk data.",
+                ))
+        return findings
+
+
+class BashNetworkEgressRule(Rule):
+    """Detect outbound network calls to non-whitelisted domains."""
+
+    rule_id = "BASH-NETWORK-EGRESS"
+    description = "Outbound network call (curl/wget/nc) to a non-whitelisted domain"
+    category = RiskCategory.NETWORK_EGRESS
+    default_risk_level = RiskLevel.MEDIUM
+    default_decision = Decision.NEEDS_HUMAN_REVIEW
+    applies_to = (ScriptType.BASH,)
+
+    _NET_CMDS = re.compile(
+        r"\b(curl|wget|nc|netcat|socat|telnet|ssh|scp|rsync)\b", re.IGNORECASE
+    )
+
+    def check(self, ctx: ScanContext) -> list[Finding]:
+        findings: list[Finding] = []
+        lines = ctx.cached_lines if ctx.cached_lines is not None else ctx.script.splitlines()
+        for idx, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if not self._NET_CMDS.search(stripped):
+                continue
+
+            urls = _extract_urls(stripped)
+            if not urls:
+                # Network command without an explicit URL — flag for review.
+                findings.append(self._make_finding(
+                    stripped[:200],
+                    idx,
+                    "Network command with a non-literal target cannot be "
+                    "verified against the whitelist; requires human review.",
+                    risk_level=RiskLevel.LOW,
+                ))
+                continue
+
+            for url in urls:
+                domain = _extract_domain(url)
+                if domain and not ctx.policy.is_domain_allowed(domain):
+                    findings.append(self._make_finding(
+                        stripped[:200],
+                        idx,
+                        f"Domain '{domain}' is not in the whitelist. "
+                        "Add it to allowed_domains in the policy file.",
+                        risk_level=RiskLevel.HIGH,
+                        decision=Decision.DENY,
+                    ))
+        return findings
+
+
+class BashProcessSystemRule(Rule):
+    """Detect privilege escalation, shell injection and background processes."""
+
+    rule_id = "BASH-PROCESS-SYSTEM"
+    description = "Privilege escalation, shell injection, or background process detected"
+    category = RiskCategory.PROCESS_SYSTEM
+    default_risk_level = RiskLevel.HIGH
+    default_decision = Decision.DENY
+    applies_to = (ScriptType.BASH,)
+
+    _SUDO = re.compile(r"\b(sudo|su\s+-|su\s+root|pkexec|doas)\b", re.IGNORECASE)
+    _BACKGROUND = re.compile(r"(?<!&)&\s*$|(?<!&)&&\s*$")  # trailing & (not &&)
+    _EVAL = re.compile(r"\b(eval|exec|source|\.)\s+", re.IGNORECASE)
+    _PIPE_TO_SH = re.compile(r"\|\s*(sh|bash|zsh|python\d*|perl|ruby)\b", re.IGNORECASE)
+
+    def check(self, ctx: ScanContext) -> list[Finding]:
+        findings: list[Finding] = []
+        lines = ctx.cached_lines if ctx.cached_lines is not None else ctx.script.splitlines()
+        for idx, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            if self._SUDO.search(stripped):
+                findings.append(self._make_finding(
+                    stripped[:200],
+                    idx,
+                    "Privilege escalation (sudo/su) is forbidden in "
+                    "agent-generated scripts.",
+                    risk_level=RiskLevel.CRITICAL,
+                ))
+                continue
+
+            if self._PIPE_TO_SH.search(stripped):
+                findings.append(self._make_finding(
+                    stripped[:200],
+                    idx,
+                    "Piping output into a shell interpreter is a classic "
+                    "shell-injection vector and is forbidden.",
+                    risk_level=RiskLevel.CRITICAL,
+                ))
+                continue
+
+            if self._EVAL.search(stripped):
+                findings.append(self._make_finding(
+                    stripped[:200],
+                    idx,
+                    "eval/exec/source can execute arbitrary dynamically-built "
+                    "commands; avoid in agent scripts.",
+                ))
+                continue
+
+            # Trailing single & (background) — distinguish from &&
+            if re.search(r"[^&]&\s*$", stripped):
+                findings.append(self._make_finding(
+                    stripped[:200],
+                    idx,
+                    "Background process (&) may outlive the tool call and "
+                    "leak resources; use explicit process management.",
+                    risk_level=RiskLevel.LOW,
+                    decision=Decision.NEEDS_HUMAN_REVIEW,
+                ))
+        return findings
+
+
+class BashDependencyInstallRule(Rule):
+    """Detect package installation commands."""
+
+    rule_id = "BASH-DEPENDENCY-INSTALL"
+    description = "Package installation command (pip/npm/apt install) detected"
+    category = RiskCategory.DEPENDENCY_INSTALL
+    default_risk_level = RiskLevel.HIGH
+    default_decision = Decision.DENY
+    applies_to = (ScriptType.BASH,)
+
+    _INSTALL = re.compile(
+        r"\b(pip3?\s+install|python\d*\s+-m\s+pip\s+install|npm\s+(install|i)\s|"
+        r"yarn\s+add|apt(-get)?\s+install|brew\s+install|conda\s+install|"
+        r"pip3?\s+uninstall|npm\s+uninstall)\b",
+        re.IGNORECASE,
+    )
+
+    def check(self, ctx: ScanContext) -> list[Finding]:
+        findings: list[Finding] = []
+        lines = ctx.cached_lines if ctx.cached_lines is not None else ctx.script.splitlines()
+        for idx, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if self._INSTALL.search(stripped):
+                findings.append(self._make_finding(
+                    stripped[:200],
+                    idx,
+                    "Dependency installation at runtime changes the execution "
+                    "environment; declare dependencies in the project manifest.",
+                ))
+        return findings
+
+
+class BashResourceAbuseRule(Rule):
+    """Detect fork bombs, infinite loops and excessive resource usage."""
+
+    rule_id = "BASH-RESOURCE-ABUSE"
+    description = "Resource-abuse pattern: fork bomb, infinite loop, or excessive sleep"
+    category = RiskCategory.RESOURCE_ABUSE
+    default_risk_level = RiskLevel.HIGH
+    default_decision = Decision.DENY
+    applies_to = (ScriptType.BASH,)
+
+    # Classic fork bomb:  :(){ :|:& };:
+    _FORK_BOMB = re.compile(r":\s*\(\s*\)\s*\{.*:.*:.*&.*\}\s*;\s*:", re.IGNORECASE)
+    _WHILE_TRUE = re.compile(r"\bwhile\s+(true|1|\:)\s*;\s*do\b", re.IGNORECASE)
+    _YES = re.compile(r"\byes\b\s+(?!-)\S")
+    _SLEEP = re.compile(r"\bsleep\s+(\d+)\b", re.IGNORECASE)
+
+    def check(self, ctx: ScanContext) -> list[Finding]:
+        findings: list[Finding] = []
+        lines = ctx.cached_lines if ctx.cached_lines is not None else ctx.script.splitlines()
+        for idx, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            if self._FORK_BOMB.search(stripped):
+                findings.append(self._make_finding(
+                    stripped[:200],
+                    idx,
+                    "Fork bomb detected; this will exhaust process slots.",
+                    risk_level=RiskLevel.CRITICAL,
+                ))
+                continue
+
+            if self._WHILE_TRUE.search(stripped):
+                # Check if the loop body contains a break
+                # (simple heuristic: look at subsequent lines until 'done')
+                has_break = False
+                for j in range(idx, min(idx + 20, len(lines))):
+                    if re.search(r"\bbreak\b", lines[j]):
+                        has_break = True
+                        break
+                    if re.search(r"\bdone\b", lines[j]):
+                        break
+                if not has_break:
+                    findings.append(self._make_finding(
+                        stripped[:200],
+                        idx,
+                        "Infinite loop without break will consume CPU; "
+                        "add a termination condition.",
+                    ))
+
+            if self._YES.search(stripped):
+                findings.append(self._make_finding(
+                    stripped[:200],
+                    idx,
+                    "'yes' command outputs indefinitely and can fill disk/memory.",
+                    risk_level=RiskLevel.LOW,
+                    decision=Decision.NEEDS_HUMAN_REVIEW,
+                ))
+
+            sleep_match = self._SLEEP.search(stripped)
+            if sleep_match:
+                seconds = int(sleep_match.group(1))
+                if seconds > 3600:
+                    findings.append(self._make_finding(
+                        stripped[:200],
+                        idx,
+                        f"sleep {seconds} blocks for over an hour; "
+                        "use a shorter timeout with retry logic.",
+                        risk_level=RiskLevel.LOW,
+                        decision=Decision.NEEDS_HUMAN_REVIEW,
+                    ))
+        return findings
+
+
+class BashSecretLeakRule(Rule):
+    """Detect hardcoded secrets in echo/redirect/output commands."""
+
+    rule_id = "BASH-SECRET-LEAK"
+    description = "Hardcoded secret (API key, token, password) in command output"
+    category = RiskCategory.SECRET_LEAK
+    default_risk_level = RiskLevel.CRITICAL
+    default_decision = Decision.DENY
+    applies_to = (ScriptType.BASH,)
+
+    _OUTPUT_CMDS = re.compile(
+        r"\b(echo|printf|cat|tee|curl|wget)\b", re.IGNORECASE
+    )
+
+    def check(self, ctx: ScanContext) -> list[Finding]:
+        findings: list[Finding] = []
+        compiled = ctx.compiled_secrets
+        if compiled is None:
+            compiled = [re.compile(p) for p in ctx.policy.secret_patterns]
+        lines = ctx.cached_lines if ctx.cached_lines is not None else ctx.script.splitlines()
+        for idx, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if not self._OUTPUT_CMDS.search(stripped):
+                continue
+            for pattern in compiled:
+                if pattern.search(stripped):
+                    findings.append(self._make_finding(
+                        _redact(stripped[:200]),
+                        idx,
+                        "Hardcoded secret detected in command output; "
+                        "load secrets from environment variables instead.",
+                    ))
+                    break
+        return findings
+
+
+class BashShellInjectionRule(Rule):
+    """Detect common shell-injection patterns: backticks, $(), chained &&."""
+
+    rule_id = "BASH-SHELL-INJECTION"
+    description = "Shell-injection pattern: command substitution or unsanitised chaining"
+    category = RiskCategory.PROCESS_SYSTEM
+    default_risk_level = RiskLevel.MEDIUM
+    default_decision = Decision.NEEDS_HUMAN_REVIEW
+    applies_to = (ScriptType.BASH,)
+
+    _CMD_SUBST = re.compile(r"\$\(.+\)|`.+`")
+
+    def check(self, ctx: ScanContext) -> list[Finding]:
+        findings: list[Finding] = []
+        lines = ctx.cached_lines if ctx.cached_lines is not None else ctx.script.splitlines()
+        for idx, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if self._CMD_SUBST.search(stripped):
+                findings.append(self._make_finding(
+                    stripped[:200],
+                    idx,
+                    "Command substitution ($(...) or backticks) can execute "
+                    "arbitrary code built from untrusted input; sanitise inputs.",
+                ))
+        return findings
+
+
+# ---------------------------------------------------------------------------
+# Register all built-in Bash rules
+# ---------------------------------------------------------------------------
+
+def _register_bash_rules() -> None:
+    """Register the built-in Bash rules with the global registry."""
+    for rule_cls in (
+        BashDangerousFileOpsRule,
+        BashNetworkEgressRule,
+        BashProcessSystemRule,
+        BashDependencyInstallRule,
+        BashResourceAbuseRule,
+        BashSecretLeakRule,
+        BashShellInjectionRule,
+    ):
+        instance = rule_cls()
+        global_rule_registry.register(instance)
+
+
+_register_bash_rules()
