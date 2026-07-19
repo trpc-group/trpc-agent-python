@@ -24,13 +24,15 @@ _MISSING_COST_REASON = (
 _MISSING_TOKEN_REASON = (
     "Reflection LM calls were observed but optimizer token usage was not reported."
 )
+_INVALID_TOKEN_REASON = "Optimizer token usage was malformed or inconsistent."
 _REDACTED = "[REDACTED]"
 _SENSITIVE_ENV_NAMES = ("TRPC_AGENT_API_KEY", "TRPC_AGENT_BASE_URL")
 _SENSITIVE_KEY_VALUE = re.compile(
-    r"(?P<prefix>[\"']?(?:api_?key|base_?url|authorization)[\"']?\s*[:=]\s*)"
+    r"(?P<prefix>[\"']?(?:api[_-]?key|base[_-]?url|authorization)[\"']?\s*[:=]\s*)"
     r"(?P<value>[\"'][^\"']*[\"']|(?:(?:bearer|basic|token)\s+)?[^\s,;}\]]+)",
     re.IGNORECASE,
 )
+_HTTP_URL = re.compile(r"https?://[^\s,;}\]<>\"']+", re.IGNORECASE)
 _BEARER_VALUE = re.compile(
     r"\bbearer(?:\s+|\s*[:=]\s*)[\"']?[^\s,;}\]\"']+[\"']?",
     re.IGNORECASE,
@@ -60,7 +62,19 @@ def _redact_error_message(error: Exception) -> str:
         lambda match: f"{match.group('prefix')}{_REDACTED}",
         message,
     )
-    return _BEARER_VALUE.sub(f"Bearer {_REDACTED}", message)
+    message = _BEARER_VALUE.sub(f"Bearer {_REDACTED}", message)
+    return _HTTP_URL.sub(_REDACTED, message)
+
+
+def _is_complete_token_usage(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    required = ("prompt", "completion", "total")
+    if not all(key in value for key in required):
+        return False
+    if not all(type(value[key]) is int and value[key] >= 0 for key in required):
+        return False
+    return value["total"] == value["prompt"] + value["completion"]
 
 
 def _optimizer_resources(result: PipelineStageResult) -> OptimizerResourceObservation:
@@ -76,8 +90,12 @@ def _optimizer_resources(result: PipelineStageResult) -> OptimizerResourceObserv
     native = result.optimize_result
     reflection_calls = native.total_reflection_lm_calls
     cost_missing = reflection_calls > 0 and native.total_llm_cost <= 0
-    token_usage = dict(native.total_token_usage)
-    tokens_missing = reflection_calls > 0 and token_usage.get("total", 0) <= 0
+    token_usage = native.total_token_usage
+    token_usage_valid = _is_complete_token_usage(token_usage)
+    tokens_missing = (
+        not token_usage_valid
+        or (reflection_calls > 0 and token_usage["total"] <= 0)
+    )
     return OptimizerResourceObservation(
         scope_note=_OPTIMIZER_SCOPE,
         total_rounds=OptimizerResourceValue[int](
@@ -96,7 +114,11 @@ def _optimizer_resources(result: PipelineStageResult) -> OptimizerResourceObserv
             status="unavailable" if tokens_missing else "available",
             value=None if tokens_missing else token_usage,
             unit="tokens",
-            reason=_MISSING_TOKEN_REASON if tokens_missing else None,
+            reason=(
+                _INVALID_TOKEN_REASON
+                if tokens_missing and not token_usage_valid
+                else _MISSING_TOKEN_REASON if tokens_missing else None
+            ),
         ),
         duration_seconds=OptimizerResourceValue[float](
             status="available", value=native.duration_seconds, unit="seconds",
