@@ -12,6 +12,11 @@ tRPC-Agent 的 Tool、MCP Tool、Skill 和 CodeExecutor 在执行 Python 或 Bas
 
 ## 快速开始
 
+> **注意**：以下命令需在项目根目录下运行。如果你当前在 `examples/tool_safety/` 目录下，请先回到根目录：
+> ```bash
+> cd ../..
+> ```
+
 ### 1. 命令行 — 扫描文件
 
 ```bash
