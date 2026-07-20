@@ -2,7 +2,7 @@
 
 本方案将自动代码评审拆为“主流程编排 + 可复用 Skill + 受控执行 + 结构化落库”四层。主流程由 `agent/agent.py` 负责，统一接收 diff、repo path 或 fixture，完成输入归一化、diff 解析、规则执行、Filter 决策、skill 脚本调度、报告生成和 SQLite 持久化。`skills/code-review/` 则承载正式的 `code-review` Skill，包括 `SKILL.md`、规则文档、使用文档、脚本契约与三个确定性脚本，用于承接可复用的评审知识与脚本执行面。
 
-沙箱隔离策略采用“默认受控脚本执行 + 本地 fallback + 容器接口预留”的实现方式。当前示例通过统一的脚本执行层提供 timeout、输出截断、失败记录和 Filter 前置治理，确保高风险脚本、禁止路径、默认网络访问和超预算输入不能直接进入执行链路。对脚本失败或超时，系统不会整体崩溃，而是转换为可追踪的 `sandbox_runs` 记录和结构化 finding。
+沙箱隔离策略采用“显式本地开发回退 + 容器/远端接口预留”的实现方式。当前示例只有 `local` 会实际执行脚本，`container`、`cube`、`e2b` 等 runtime 在未接入真实隔离执行器前，都会先被 Filter 标记为 `needs_human_review`，避免把宿主机执行误报成生产安全沙箱。统一脚本执行层仍然提供 timeout、输出截断、失败记录和 Filter 前置治理，确保高风险脚本、禁止路径、默认网络访问和超预算输入不能直接进入执行链路。对脚本失败或超时，系统不会整体崩溃，而是转换为可追踪的 `sandbox_runs` 记录和结构化 finding。
 
 数据库 schema 采用最小可查询设计，包含 `review_tasks`、`review_inputs`、`filter_decisions`、`sandbox_runs`、`findings` 和 `review_reports` 六张表，支持按 `task_id` 查询完整审查链路。报告输出同时生成 JSON 与 Markdown，两者都包含 findings 摘要、人工复核项、Filter 摘要、sandbox 摘要和监控指标。监控字段聚合总耗时、severity/category 分布、拦截次数和 sandbox 次数，便于回放和评测。
 

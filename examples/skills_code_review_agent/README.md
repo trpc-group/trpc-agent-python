@@ -2,7 +2,7 @@
 
 This example implements a structured code-review agent prototype on top of
 tRPC-Agent-Python. It combines deterministic rule detection, a formal
-`code-review` skill package, filter-based governance, sandboxed script
+`code-review` skill package, filter-based governance, development-local script
 execution, SQLite persistence, and dual-format reports.
 
 ## What This Example Covers
@@ -17,7 +17,7 @@ execution, SQLite persistence, and dual-format reports.
   - database lifecycle issues
 - Finding dedupe and confidence-based routing
 - Filter decisions before sandbox execution
-- Sandboxed skill-script execution with timeout and output truncation
+- Development-local skill-script execution with timeout and output truncation
 - Secret redaction before reporting and persistence
 - SQLite storage for tasks, inputs, findings, sandbox runs, filter decisions, and reports
 - `review_report.json` and `review_report.md` output generation
@@ -43,7 +43,7 @@ CLI / input
   -> deterministic rule engine
   -> dedupe and confidence routing
   -> filter decisions
-  -> sandboxed skill scripts
+  -> governed skill scripts
   -> redaction
   -> JSON/Markdown reports
   -> SQLite persistence
@@ -58,6 +58,7 @@ python examples/skills_code_review_agent/run_agent.py ^
   --fixture examples/skills_code_review_agent/tests/fixtures/security_issue.diff ^
   --output-dir examples/skills_code_review_agent/sample_outputs ^
   --db-path examples/skills_code_review_agent/sample_outputs/review.db ^
+  --runtime local ^
   --dry-run ^
   --fake-model
 ```
@@ -69,6 +70,7 @@ python examples/skills_code_review_agent/run_agent.py ^
   --diff-file path/to/change.diff ^
   --output-dir examples/skills_code_review_agent/sample_outputs ^
   --db-path examples/skills_code_review_agent/sample_outputs/review.db ^
+  --runtime local ^
   --dry-run ^
   --fake-model
 ```
@@ -80,9 +82,15 @@ python examples/skills_code_review_agent/run_agent.py ^
   --repo-path path/to/repo ^
   --output-dir examples/skills_code_review_agent/sample_outputs ^
   --db-path examples/skills_code_review_agent/sample_outputs/review.db ^
+  --runtime local ^
   --dry-run ^
   --fake-model
 ```
+
+`local` is the only runtime that currently executes scripts in this example,
+and it should be treated as a development fallback. Requests for `container`,
+`cube`, or `e2b` are recorded by Filter as `needs_human_review` until a real
+isolated executor is wired in.
 
 ## Outputs
 
@@ -115,9 +123,7 @@ The repository layer persists these tables:
 - `findings`
 - `review_reports`
 
-You can fetch a full task bundle with:
-
-- [ReviewRepository](file:///c:/Users/32349/trpc-agent-python-fork/examples/skills_code_review_agent/src/storage/repository.py)
+You can fetch a full task bundle with `src/storage/repository.py`.
 
 Key method:
 
@@ -127,13 +133,13 @@ Key method:
 
 The canonical reusable skill lives under:
 
-- [SKILL.md](file:///c:/Users/32349/trpc-agent-python-fork/skills/code-review/SKILL.md)
-- [USAGE.md](file:///c:/Users/32349/trpc-agent-python-fork/skills/code-review/USAGE.md)
-- [RULES.md](file:///c:/Users/32349/trpc-agent-python-fork/skills/code-review/RULES.md)
-- [SCRIPT_CONTRACTS.md](file:///c:/Users/32349/trpc-agent-python-fork/skills/code-review/SCRIPT_CONTRACTS.md)
+- `skills/code-review/SKILL.md`
+- `skills/code-review/USAGE.md`
+- `skills/code-review/RULES.md`
+- `skills/code-review/SCRIPT_CONTRACTS.md`
 
 The example now resolves the repository-level `skills/code-review/` directory
-first for repository indexing, skill-script planning, and container skill mounts.
+first for repository indexing, skill-script planning, and future isolated runtime mounts.
 The example-local copy remains as a fallback so the sample stays readable and
 self-contained.
 
@@ -169,7 +175,7 @@ Phase 6 quality-gate evidence:
 
 ## Related Docs
 
-- [DEVELOPMENT_PLAN.md](file:///c:/Users/32349/trpc-agent-python-fork/examples/skills_code_review_agent/DEVELOPMENT_PLAN.md)
-- [DESIGN_NOTE.md](file:///c:/Users/32349/trpc-agent-python-fork/examples/skills_code_review_agent/DESIGN_NOTE.md)
-- [ACCEPTANCE_CHECKLIST.md](file:///c:/Users/32349/trpc-agent-python-fork/examples/skills_code_review_agent/ACCEPTANCE_CHECKLIST.md)
-- [PR_READINESS.md](file:///c:/Users/32349/trpc-agent-python-fork/examples/skills_code_review_agent/PR_READINESS.md)
+- `DEVELOPMENT_PLAN.md`
+- `DESIGN_NOTE.md`
+- `ACCEPTANCE_CHECKLIST.md`
+- `PR_READINESS.md`

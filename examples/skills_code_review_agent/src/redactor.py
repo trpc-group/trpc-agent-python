@@ -26,7 +26,7 @@ _REDACTION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         "[REDACTED_AWS_KEY]",
     ),
     (
-        re.compile(r"sk-[A-Za-z0-9]{8,}"),
+        re.compile(r"sk-[A-Za-z0-9-]{8,}"),
         "[REDACTED_OPENAI_KEY]",
     ),
     (

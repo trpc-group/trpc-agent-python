@@ -138,6 +138,7 @@ def test_sandbox_failure_is_recorded_without_crashing_task(tmp_path: Path) -> No
         fixture_path=str(FIXTURES_DIR / "sandbox_failure.diff"),
         output_dir=tmp_path / "outputs",
         db_path=tmp_path / "review.db",
+        runtime="local",
         dry_run=True,
         fake_model=True,
     )
@@ -148,3 +149,32 @@ def test_sandbox_failure_is_recorded_without_crashing_task(tmp_path: Path) -> No
     assert any(run.status.value == "failed" for run in task.sandbox_runs)
     assert any(finding.category.value == "sandbox" for finding in task.findings)
     assert report.monitoring_summary["sandbox_run_count"] >= 1
+
+
+def test_non_local_runtime_is_blocked_until_isolated_executor_exists(tmp_path: Path) -> None:
+    """Container runtime should not fall through to host subprocess execution."""
+
+    config = ReviewAgentConfig(
+        fixture_path=str(FIXTURES_DIR / "clean.diff"),
+        output_dir=tmp_path / "outputs",
+        db_path=tmp_path / "review.db",
+        runtime="container",
+        dry_run=True,
+        fake_model=True,
+    )
+
+    task, report = run_review_task(config)
+
+    assert task.status.value == "completed"
+    assert task.filter_decisions
+    assert all(
+        decision.decision.value == "needs_human_review"
+        for decision in task.filter_decisions
+    )
+    assert task.sandbox_runs
+    assert all(run.status.value == "blocked" for run in task.sandbox_runs)
+    assert any(
+        finding.source.value == "filter"
+        and finding.category.value == "sandbox"
+        for finding in report.needs_human_review
+    )

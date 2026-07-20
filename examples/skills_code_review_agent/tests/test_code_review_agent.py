@@ -156,6 +156,7 @@ def test_run_review_task_surfaces_missing_tests_for_code_only_change(tmp_path: P
         diff_file=str(diff_path),
         output_dir=tmp_path / "outputs",
         db_path=tmp_path / "review.db",
+        runtime="local",
         dry_run=True,
         fake_model=True,
     )
@@ -361,3 +362,29 @@ def test_run_review_task_with_security_fixture_returns_failure() -> None:
     assert task.status == ReviewStatus.COMPLETED
     assert report.conclusion == ReviewConclusion.FAIL
     assert any(item.category == ReviewCategory.SECURITY for item in report.findings)
+
+
+def test_local_runtime_promotes_linter_stdout_into_findings(tmp_path: Path) -> None:
+    """Local fallback execution should convert linter stdout warnings into findings."""
+
+    config = ReviewAgentConfig(
+        fixture_path=str(FIXTURES_DIR / "security_issue.diff"),
+        output_dir=tmp_path / "outputs",
+        db_path=tmp_path / "review.db",
+        runtime="local",
+        dry_run=True,
+        fake_model=True,
+    )
+
+    task, report = run_review_task(config)
+
+    assert any(run.status.value == "succeeded" for run in task.sandbox_runs)
+    assert any(
+        finding.source == FindingSource.SKILL_SCRIPT
+        and finding.title == "Use of eval introduces code execution risk"
+        for finding in task.findings
+    )
+    assert any(
+        finding.source == FindingSource.SKILL_SCRIPT
+        for finding in report.findings
+    )

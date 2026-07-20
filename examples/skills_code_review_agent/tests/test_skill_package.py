@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 
 from examples.skills_code_review_agent.agent.tools import build_skill_run_payload
@@ -30,7 +31,9 @@ def test_skill_markdown_contains_expected_workflow_sections() -> None:
 def test_build_skill_run_payload_points_to_skill_workspace_outputs(tmp_path: Path) -> None:
     """Payload builder should produce a stable `skill_run` contract."""
 
-    diff_file = tmp_path / "sample.diff"
+    diff_dir = tmp_path / "space dir"
+    diff_dir.mkdir()
+    diff_file = diff_dir / "sample.diff"
     diff_file.write_text("diff --git a/a.py b/a.py\n", encoding="utf-8")
 
     payload = build_skill_run_payload(
@@ -41,6 +44,7 @@ def test_build_skill_run_payload_points_to_skill_workspace_outputs(tmp_path: Pat
     assert payload["skill"] == "code-review"
     assert payload["cwd"] == "$SKILLS_DIR/code-review"
     assert "python scripts/run_linters.py --diff-file" in payload["command"]
+    assert shlex.quote(str(diff_file)) in payload["command"]
     assert payload["output_files"] == ["out/run_linters.json"]
 
 
