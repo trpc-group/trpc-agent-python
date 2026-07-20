@@ -38,34 +38,35 @@ from trpc_agent_sdk.tools.safety._facts import (
 from trpc_agent_sdk.tools.safety._models import ScriptLanguage
 from trpc_agent_sdk.tools.safety._rules import _LanguageScannerRule, SafetyRule
 
-
 # --------------------------------------------------------------------------- #
 # Constants
 # --------------------------------------------------------------------------- #
 
-_NETWORK_COMMANDS = {"curl", "wget", "nc", "ncat", "ssh", "scp", "sftp",
-                     "telnet", "ftp", "ncat"}
-_FILE_READ_COMMANDS = {"cat", "head", "tail", "less", "more", "view",
-                       "grep", "egrep", "fgrep", "rg", "ack", "sed", "awk",
-                       "xxd", "od", "cut", "sort"}
+_NETWORK_COMMANDS = {"curl", "wget", "nc", "ncat", "ssh", "scp", "sftp", "telnet", "ftp", "ncat"}
+# Commands where the first non-option arg is always the remote target.
+# Used to apply a fail-closed dynamic NetworkFact when parsing fails.
+_SSH_FAMILY_COMMANDS = {"ssh", "scp", "sftp", "telnet", "ftp"}
+_FILE_READ_COMMANDS = {
+    "cat", "head", "tail", "less", "more", "view", "grep", "egrep", "fgrep", "rg", "ack", "sed", "awk", "xxd", "od",
+    "cut", "sort"
+}
 _FILE_WRITE_COMMANDS = {"tee", "dd", "install", "cp", "mv"}
 _PRIVILEGE_COMMANDS = {"sudo", "su", "doas", "pkexec", "super"}
 _PACKAGE_MANAGERS = {
-    "pip": ("install",),
-    "pip3": ("install",),
+    "pip": ("install", ),
+    "pip3": ("install", ),
     "npm": ("install", "i", "add"),
     "yarn": ("add", "install"),
     "pnpm": ("add", "install"),
-    "apt": ("install",),
-    "apt-get": ("install",),
-    "apk": ("add",),
-    "yum": ("install",),
-    "dnf": ("install",),
-    "brew": ("install",),
+    "apt": ("install", ),
+    "apt-get": ("install", ),
+    "apk": ("add", ),
+    "yum": ("install", ),
+    "dnf": ("install", ),
+    "brew": ("install", ),
     "conda": ("install", "create"),
 }
-_INTERPRETERS = {"python", "python3", "python2", "bash", "sh", "zsh",
-                 "perl", "ruby", "node"}
+_INTERPRETERS = {"python", "python3", "python2", "bash", "sh", "zsh", "perl", "ruby", "node"}
 
 _SEPARATORS = ("&&", "||", "|", ";", "\n")
 _REDIRECTION_RE = re.compile(r"(?:>>|>|<|<<|<<<|<>|&>|\d?>|\d<)\s*(\S+)")
@@ -74,22 +75,20 @@ _FORK_BOMB_RE = re.compile(
     re.MULTILINE,
 )
 _URL_RE = re.compile(r"\bhttps?://([^/\s:]+)", re.IGNORECASE)
-_WHILE_TRUE_RE = re.compile(r"\bwhile\s+(?:true|:|\[\s*\[\s*1\s*\]\s*\]\s*)",
-                            re.IGNORECASE)
+_WHILE_TRUE_RE = re.compile(r"\bwhile\s+(?:true|:|\[\s*\[\s*1\s*\]\s*\]\s*)", re.IGNORECASE)
 _FOR_INF_RE = re.compile(r"\bfor\s*\(\(\s*;;\s*\)\)", re.IGNORECASE)
 _SLEEP_RE = re.compile(r"\bsleep\s+([0-9]+[smhd]?)", re.IGNORECASE)
 _BG_COUNT_RE = re.compile(r"&")
-
 
 # --------------------------------------------------------------------------- #
 # Tokenizer
 # --------------------------------------------------------------------------- #
 
+
 class _Token:
     __slots__ = ("text", "line", "col", "was_quoted")
 
-    def __init__(self, text: str, *, line: int, col: int,
-                 was_quoted: bool = False) -> None:
+    def __init__(self, text: str, *, line: int, col: int, was_quoted: bool = False) -> None:
         self.text = text
         self.line = line
         self.col = col
@@ -112,8 +111,7 @@ class _BashLexer:
         self.line = 1
         self.col = 1
 
-    def tokenize(self) -> tuple[list[tuple[str, int, int, list[_Token]]],
-                                 list[ParseErrorFact]]:
+    def tokenize(self) -> tuple[list[tuple[str, int, int, list[_Token]]], list[ParseErrorFact]]:
         """Return (commands, errors).
 
         Each command is a tuple of ``(separator_preceding, line, col,
@@ -141,8 +139,7 @@ class _BashLexer:
             if ch == "\n":
                 self._advance()
                 if current:
-                    commands.append((current_op, current_line, current_col,
-                                     current))
+                    commands.append((current_op, current_line, current_col, current))
                     current = []
                 current_op = "\n"
                 current_line = self.line
@@ -156,8 +153,7 @@ class _BashLexer:
             for sep in ("&&", "||", "|", ";", "&"):
                 if self.source.startswith(sep, self.position):
                     if current:
-                        commands.append((current_op, current_line,
-                                         current_col, current))
+                        commands.append((current_op, current_line, current_col, current))
                         current = []
                     for _ in sep:
                         self._advance()
@@ -176,8 +172,7 @@ class _BashLexer:
                 if err:
                     errors.append(err)
                 if token_text:
-                    current.append(_Token(token_text, line=self.line,
-                                          col=self.col, was_quoted=quoted))
+                    current.append(_Token(token_text, line=self.line, col=self.col, was_quoted=quoted))
                 continue
         if current:
             commands.append((current_op, current_line, current_col, current))
@@ -274,7 +269,9 @@ class _BashLexer:
 # Scanner
 # --------------------------------------------------------------------------- #
 
+
 class _BashScanner:
+
     def __init__(self, source: str) -> None:
         self.source = source
         self.lexer = _BashLexer(source)
@@ -299,46 +296,47 @@ class _BashScanner:
         commands, errors = self.lexer.tokenize()
         # Fork-bomb detection runs over the whole source.
         for match in _FORK_BOMB_RE.finditer(self.source):
-            self.fork_bombs.append(ForkBombFact(
-                snippet=match.group(0),
-                loc=Loc(line=_line_of(self.source, match.start()),
-                        column=_col_of(self.source, match.start())),
-                pattern="classic_bomb",
-            ))
+            self.fork_bombs.append(
+                ForkBombFact(
+                    snippet=match.group(0),
+                    loc=Loc(line=_line_of(self.source, match.start()), column=_col_of(self.source, match.start())),
+                    pattern="classic_bomb",
+                ))
         for match in _WHILE_TRUE_RE.finditer(self.source):
-            self.unbounded_loops.append(UnboundedLoopFact(
-                snippet=match.group(0),
-                loc=Loc(line=_line_of(self.source, match.start()),
-                        column=_col_of(self.source, match.start())),
-                kind="while-true",
-            ))
+            self.unbounded_loops.append(
+                UnboundedLoopFact(
+                    snippet=match.group(0),
+                    loc=Loc(line=_line_of(self.source, match.start()), column=_col_of(self.source, match.start())),
+                    kind="while-true",
+                ))
         for match in _FOR_INF_RE.finditer(self.source):
-            self.unbounded_loops.append(UnboundedLoopFact(
-                snippet=match.group(0),
-                loc=Loc(line=_line_of(self.source, match.start()),
-                        column=_col_of(self.source, match.start())),
-                kind="for-infinite",
-            ))
+            self.unbounded_loops.append(
+                UnboundedLoopFact(
+                    snippet=match.group(0),
+                    loc=Loc(line=_line_of(self.source, match.start()), column=_col_of(self.source, match.start())),
+                    kind="for-infinite",
+                ))
         for match in _SLEEP_RE.finditer(self.source):
             raw = match.group(1)
             duration = _parse_sleep(raw)
-            self.long_sleeps.append(LongSleepFact(
-                snippet=match.group(0),
-                loc=Loc(line=_line_of(self.source, match.start()),
-                        column=_col_of(self.source, match.start())),
-                duration_seconds=duration,
-                raw=raw,
-            ))
+            self.long_sleeps.append(
+                LongSleepFact(
+                    snippet=match.group(0),
+                    loc=Loc(line=_line_of(self.source, match.start()), column=_col_of(self.source, match.start())),
+                    duration_seconds=duration,
+                    raw=raw,
+                ))
         # Background count
         bg_count = self.source.count("&") - self.source.count("&&")
         # Heuristic: many & in script -> high concurrency
         if bg_count >= 8:
-            self.concurrency.append(ConcurrencyFact(
-                snippet=f"<{bg_count} background jobs>",
-                loc=Loc(),
-                count=bg_count,
-                raw="background-jobs",
-            ))
+            self.concurrency.append(
+                ConcurrencyFact(
+                    snippet=f"<{bg_count} background jobs>",
+                    loc=Loc(),
+                    count=bg_count,
+                    raw="background-jobs",
+                ))
 
         for op, line, col, tokens in commands:
             if op in ("&&", "||", "|", "&"):
@@ -373,8 +371,7 @@ class _BashScanner:
 
     # ----- per-command ----- #
 
-    def _handle_command(self, preceding_op: str, line: int, col: int,
-                        tokens: list[_Token]) -> None:
+    def _handle_command(self, preceding_op: str, line: int, col: int, tokens: list[_Token]) -> None:
         executable = tokens[0].text
         argv = [t.text for t in tokens[1:]]
         snippet = self._segment_for(line, col)
@@ -395,7 +392,9 @@ class _BashScanner:
         # Privilege
         if exec_lower in _PRIVILEGE_COMMANDS:
             self.privilege_commands.append(PrivilegeFact(
-                snippet=snippet, loc=loc, command=exec_lower,
+                snippet=snippet,
+                loc=loc,
+                command=exec_lower,
             ))
             if tokens[1:]:
                 executable = tokens[1].text
@@ -405,28 +404,40 @@ class _BashScanner:
         # rm with -rf/-fr
         if exec_lower == "rm":
             self._handle_rm(argv, snippet, loc)
-            self.process_calls.append(ProcessFact(
-                snippet=snippet, loc=loc, command=executable,
-                shell=None, has_operators=False,
-            ))
+            self.process_calls.append(
+                ProcessFact(
+                    snippet=snippet,
+                    loc=loc,
+                    command=executable,
+                    shell=None,
+                    has_operators=False,
+                ))
             return
 
         # curl/wget/nc/ssh
         if exec_lower in _NETWORK_COMMANDS:
             self._handle_network(argv, exec_lower, snippet, loc)
-            self.process_calls.append(ProcessFact(
-                snippet=snippet, loc=loc, command=executable,
-                shell=None, has_operators=preceding_op in ("|", "&", "&&", "||"),
-            ))
+            self.process_calls.append(
+                ProcessFact(
+                    snippet=snippet,
+                    loc=loc,
+                    command=executable,
+                    shell=None,
+                    has_operators=preceding_op in ("|", "&", "&&", "||"),
+                ))
             return
 
         # File reads
         if exec_lower in _FILE_READ_COMMANDS:
             self._handle_file_read(argv, exec_lower, snippet, loc)
-            self.process_calls.append(ProcessFact(
-                snippet=snippet, loc=loc, command=executable,
-                shell=None, has_operators=preceding_op in ("|", "&", "&&", "||"),
-            ))
+            self.process_calls.append(
+                ProcessFact(
+                    snippet=snippet,
+                    loc=loc,
+                    command=executable,
+                    shell=None,
+                    has_operators=preceding_op in ("|", "&", "&&", "||"),
+                ))
             return
 
         # File writes
@@ -437,14 +448,21 @@ class _BashScanner:
         if exec_lower in _PACKAGE_MANAGERS:
             install_sub = _PACKAGE_MANAGERS[exec_lower]
             if argv and argv[0] in install_sub:
-                self.dependency_installs.append(DependencyInstallFact(
-                    snippet=snippet, loc=loc, manager=exec_lower,
-                    command=" ".join([executable] + argv),
+                self.dependency_installs.append(
+                    DependencyInstallFact(
+                        snippet=snippet,
+                        loc=loc,
+                        manager=exec_lower,
+                        command=" ".join([executable] + argv),
+                    ))
+            self.process_calls.append(
+                ProcessFact(
+                    snippet=snippet,
+                    loc=loc,
+                    command=executable,
+                    shell=None,
+                    has_operators=preceding_op in ("|", "&", "&&", "||"),
                 ))
-            self.process_calls.append(ProcessFact(
-                snippet=snippet, loc=loc, command=executable,
-                shell=None, has_operators=preceding_op in ("|", "&", "&&", "||"),
-            ))
             return
 
         # These constructs make a second program or command stream execute
@@ -452,53 +470,64 @@ class _BashScanner:
         # outer command is safe merely because its executable is allowlisted.
         if exec_lower in {"source", "."}:
             self.dynamic_execs.append(DynamicExecFact(
-                snippet=snippet, loc=loc, kind="source-file",
+                snippet=snippet,
+                loc=loc,
+                kind="source-file",
             ))
             return
         if exec_lower == "xargs":
             self.dynamic_execs.append(DynamicExecFact(
-                snippet=snippet, loc=loc, kind="xargs-command-stream",
+                snippet=snippet,
+                loc=loc,
+                kind="xargs-command-stream",
             ))
             return
-        if exec_lower == "find" and any(
-                arg in {"-exec", "-execdir", "-ok", "-okdir"}
-                for arg in argv):
+        if exec_lower == "find" and any(arg in {"-exec", "-execdir", "-ok", "-okdir"} for arg in argv):
             self.dynamic_execs.append(DynamicExecFact(
-                snippet=snippet, loc=loc, kind="find-exec",
+                snippet=snippet,
+                loc=loc,
+                kind="find-exec",
             ))
             return
 
         # eval / bash -c / sh -c
         if exec_lower == "eval":
             self.dynamic_execs.append(DynamicExecFact(
-                snippet=snippet, loc=loc, kind="eval",
+                snippet=snippet,
+                loc=loc,
+                kind="eval",
             ))
             return
         if exec_lower in ("bash", "sh", "zsh") and argv and argv[0] == "-c":
             self.dynamic_execs.append(DynamicExecFact(
-                snippet=snippet, loc=loc, kind=f"{exec_lower}-c",
+                snippet=snippet,
+                loc=loc,
+                kind=f"{exec_lower}-c",
             ))
             if len(argv) > 1:
-                self.shell_operators.append(ShellOperatorFact(
-                    snippet=argv[1][:40],
-                    loc=loc,
-                    operator=f"{exec_lower} -c",
-                ))
+                self.shell_operators.append(
+                    ShellOperatorFact(
+                        snippet=argv[1][:40],
+                        loc=loc,
+                        operator=f"{exec_lower} -c",
+                    ))
             return
         if _is_python_pip_install(exec_lower, argv):
-            self.dependency_installs.append(DependencyInstallFact(
-                snippet=snippet,
-                loc=loc,
-                manager=argv[1],
-                command=" ".join([executable] + argv),
-            ))
-            self.process_calls.append(ProcessFact(
-                snippet=snippet,
-                loc=loc,
-                command=executable,
-                shell=None,
-                has_operators=preceding_op in ("|", "&", "&&", "||"),
-            ))
+            self.dependency_installs.append(
+                DependencyInstallFact(
+                    snippet=snippet,
+                    loc=loc,
+                    manager=argv[1],
+                    command=" ".join([executable] + argv),
+                ))
+            self.process_calls.append(
+                ProcessFact(
+                    snippet=snippet,
+                    loc=loc,
+                    command=executable,
+                    shell=None,
+                    has_operators=preceding_op in ("|", "&", "&&", "||"),
+                ))
             return
         if exec_lower in _INTERPRETERS and _interpreter_runs_payload(argv):
             self.dynamic_execs.append(DynamicExecFact(
@@ -513,8 +542,10 @@ class _BashScanner:
             raw = argv[0] if argv else ""
             duration = _parse_sleep(raw)
             self.long_sleeps.append(LongSleepFact(
-                snippet=snippet, loc=loc,
-                duration_seconds=duration, raw=raw,
+                snippet=snippet,
+                loc=loc,
+                duration_seconds=duration,
+                raw=raw,
             ))
             return
 
@@ -522,111 +553,172 @@ class _BashScanner:
         if exec_lower in {"dd", "fallocate", "truncate"}:
             size = _extract_dd_size(argv)
             target = _extract_dd_target(argv)
-            self.large_writes.append(LargeWriteFact(
-                snippet=snippet, loc=loc, size=size,
-                target=target, raw=executable,
-            ))
-            self.process_calls.append(ProcessFact(
-                snippet=snippet, loc=loc, command=executable,
-                shell=None, has_operators=preceding_op in ("|", "&", "&&", "||"),
-            ))
+            self.large_writes.append(
+                LargeWriteFact(
+                    snippet=snippet,
+                    loc=loc,
+                    size=size,
+                    target=target,
+                    raw=executable,
+                ))
+            self.process_calls.append(
+                ProcessFact(
+                    snippet=snippet,
+                    loc=loc,
+                    command=executable,
+                    shell=None,
+                    has_operators=preceding_op in ("|", "&", "&&", "||"),
+                ))
             return
 
         # echo / printf with secret env reference
         if exec_lower in {"echo", "printf"}:
             for arg in argv:
                 if _looks_like_secret_ref(arg):
-                    self.secret_flows.append(SecretFlowFact(
-                        snippet=snippet, loc=loc,
-                        source=arg, sink=exec_lower,
-                        sink_kind="output",
-                    ))
-            self.process_calls.append(ProcessFact(
-                snippet=snippet, loc=loc, command=executable,
-                shell=None, has_operators=preceding_op in ("|", "&", "&&", "||"),
-            ))
+                    self.secret_flows.append(
+                        SecretFlowFact(
+                            snippet=snippet,
+                            loc=loc,
+                            source=arg,
+                            sink=exec_lower,
+                            sink_kind="output",
+                        ))
+            self.process_calls.append(
+                ProcessFact(
+                    snippet=snippet,
+                    loc=loc,
+                    command=executable,
+                    shell=None,
+                    has_operators=preceding_op in ("|", "&", "&&", "||"),
+                ))
             return
 
         # Generic process call
-        self.process_calls.append(ProcessFact(
-            snippet=snippet, loc=loc, command=executable,
-            shell=None, has_operators=preceding_op in ("|", "&", "&&", "||"),
-        ))
+        self.process_calls.append(
+            ProcessFact(
+                snippet=snippet,
+                loc=loc,
+                command=executable,
+                shell=None,
+                has_operators=preceding_op in ("|", "&", "&&", "||"),
+            ))
 
         # Check for URL in any argument (catch-all for http(s)://)
         for arg in argv:
             for match in _URL_RE.finditer(arg):
                 host = match.group(1)
-                self.network_calls.append(NetworkFact(
-                    snippet=snippet, loc=loc,
-                    target=host, library=exec_lower,
-                    dynamic=False,
-                ))
+                self.network_calls.append(
+                    NetworkFact(
+                        snippet=snippet,
+                        loc=loc,
+                        target=host,
+                        library=exec_lower,
+                        dynamic=False,
+                    ))
 
-        # Check for redirects in raw tokens (>> target, > target)
-        for token in tokens:
-            if token.text in (">", ">>") or token.text.startswith(">"):
-                continue
         # Inspect source line for redirection targets
         for match in _REDIRECTION_RE.finditer(self._source_line(line)):
             target = match.group(1).strip()
             if target and not target.startswith("&"):
-                self.file_writes.append(FileWriteFact(
-                    snippet=snippet, loc=loc, target=target, mode="w",
-                    explicit=True,
-                ))
+                self.file_writes.append(
+                    FileWriteFact(
+                        snippet=snippet,
+                        loc=loc,
+                        target=target,
+                        mode="w",
+                        explicit=True,
+                    ))
 
     def _handle_rm(self, argv: list[str], snippet: str, loc: Loc) -> None:
         recursive = False
         explicit_target = ""
         for arg in argv:
-            if arg in ("-r", "-R", "--recursive", "-rf", "-fr", "-Rf",
-                       "-rF", "-rfv", "-frv"):
+            if arg in ("-r", "-R", "--recursive", "-rf", "-fr", "-Rf", "-rF", "-rfv", "-frv"):
                 recursive = True
                 continue
             if arg.startswith("-"):
                 continue
             explicit_target = arg
-        self.file_deletes.append(FileDeleteFact(
-            snippet=snippet, loc=loc,
-            target=explicit_target or "<unknown>",
-            recursive=recursive,
-            explicit=bool(explicit_target),
-        ))
+        self.file_deletes.append(
+            FileDeleteFact(
+                snippet=snippet,
+                loc=loc,
+                target=explicit_target or "<unknown>",
+                recursive=recursive,
+                explicit=bool(explicit_target),
+            ))
 
-    def _handle_network(self, argv: list[str], command: str,
-                        snippet: str, loc: Loc) -> None:
-        for arg in argv:
+    def _handle_network(self, argv: list[str], command: str, snippet: str, loc: Loc) -> None:
+        # scp/rsync-style commands put the remote target LAST (after any
+        # local file args). Iterate in reverse so user@host wins over a
+        # local filename that happens to match the plain-host regex.
+        if command in {"scp", "rsync"}:
+            iteration = list(reversed(argv))
+        else:
+            iteration = list(argv)
+        for arg in iteration:
             if arg.startswith("-"):
                 continue
             match = _URL_RE.match(arg) if "://" in arg else None
             if match:
                 host = match.group(1)
-                self.network_calls.append(NetworkFact(
-                    snippet=snippet, loc=loc,
-                    target=host, library=command,
-                    dynamic=False,
-                ))
+                self.network_calls.append(
+                    NetworkFact(
+                        snippet=snippet,
+                        loc=loc,
+                        target=host,
+                        library=command,
+                        dynamic=False,
+                    ))
+                return
+            # ssh/scp/sftp user@host[:path] form
+            user_host = _extract_user_at_host(arg)
+            if user_host:
+                self.network_calls.append(
+                    NetworkFact(
+                        snippet=snippet,
+                        loc=loc,
+                        target=user_host,
+                        library=command,
+                        dynamic=False,
+                    ))
                 return
             # Plain hostname argument (curl example.com)
             if _looks_like_host(arg):
-                self.network_calls.append(NetworkFact(
-                    snippet=snippet, loc=loc,
-                    target=arg.lower(), library=command,
-                    dynamic=False,
-                ))
+                self.network_calls.append(
+                    NetworkFact(
+                        snippet=snippet,
+                        loc=loc,
+                        target=arg.lower(),
+                        library=command,
+                        dynamic=False,
+                    ))
                 return
             # Dynamic
             if arg.startswith("$") or "$(" in arg or "`" in arg:
-                self.network_calls.append(NetworkFact(
-                    snippet=snippet, loc=loc,
-                    target="", library=command,
-                    dynamic=True,
-                ))
+                self.network_calls.append(
+                    NetworkFact(
+                        snippet=snippet,
+                        loc=loc,
+                        target="",
+                        library=command,
+                        dynamic=True,
+                    ))
                 return
+        # Fail-closed for ssh family: if we walked every non-option arg
+        # without recognizing a target, emit a dynamic NetworkFact so
+        # NET002_DYNAMIC_TARGET surfaces for review instead of silently
+        # allowing a bypass.
+        if command in _SSH_FAMILY_COMMANDS and not self.network_calls:
+            self.network_calls.append(NetworkFact(
+                snippet=snippet,
+                loc=loc,
+                target="",
+                library=command,
+                dynamic=True,
+            ))
 
-    def _handle_file_read(self, argv: list[str], command: str,
-                          snippet: str, loc: Loc) -> None:
+    def _handle_file_read(self, argv: list[str], command: str, snippet: str, loc: Loc) -> None:
         for arg in argv:
             if arg.startswith("-"):
                 continue
@@ -643,12 +735,14 @@ class _BashScanner:
                 kind = "dotenv"
             if kind != "regular":
                 self.file_reads.append(FileReadFact(
-                    snippet=snippet, loc=loc,
-                    target=arg, kind=kind, explicit=True,
+                    snippet=snippet,
+                    loc=loc,
+                    target=arg,
+                    kind=kind,
+                    explicit=True,
                 ))
 
-    def _handle_file_write(self, argv: list[str], command: str,
-                           snippet: str, loc: Loc) -> None:
+    def _handle_file_write(self, argv: list[str], command: str, snippet: str, loc: Loc) -> None:
         # tee / dd / cp / mv / install
         targets: list[str] = []
         if command == "tee":
@@ -665,8 +759,11 @@ class _BashScanner:
                 targets.append(target)
         for target in targets:
             self.file_writes.append(FileWriteFact(
-                snippet=snippet, loc=loc,
-                target=target, mode="w", explicit=True,
+                snippet=snippet,
+                loc=loc,
+                target=target,
+                mode="w",
+                explicit=True,
             ))
 
     def _segment_for(self, line: int, col: int) -> str:
@@ -685,6 +782,7 @@ class _BashScanner:
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
+
 
 def _line_of(source: str, offset: int) -> int:
     return source.count("\n", 0, offset) + 1
@@ -731,9 +829,6 @@ def _interpreter_runs_payload(argv: list[str]) -> bool:
 
 
 def _extract_dd_size(argv: list[str]) -> int | None:
-    for arg in argv:
-        if arg.startswith("bs=") or arg.startswith("count="):
-            continue
     # bs=SIZE count=N
     bs: int | None = None
     count: int | None = None
@@ -754,9 +849,17 @@ def _parse_dd_size_value(text: str) -> int | None:
     text = text.strip()
     if text.isdigit():
         return int(text)
-    mult = {"c": 1, "w": 2, "b": 512, "kB": 1000, "K": 1024,
-            "MB": 1000 * 1000, "M": 1024 * 1024,
-            "GB": 10**9, "G": 1024 * 1024 * 1024}
+    mult = {
+        "c": 1,
+        "w": 2,
+        "b": 512,
+        "kB": 1000,
+        "K": 1024,
+        "MB": 1000 * 1000,
+        "M": 1024 * 1024,
+        "GB": 10**9,
+        "G": 1024 * 1024 * 1024
+    }
     for suffix, value in mult.items():
         if text.endswith(suffix):
             head = text[:-len(suffix)]
@@ -788,15 +891,34 @@ def _looks_like_host(text: str) -> bool:
     return bool(re.match(r"^[A-Za-z0-9_.-]+(?:\.[A-Za-z0-9_.-]+)+$", text))
 
 
+def _extract_user_at_host(text: str) -> str | None:
+    """Extract a host from ssh-style ``user@host[:path]`` arguments.
+
+    Returns the lowercased host when the part after ``@`` looks like a
+    valid host, otherwise ``None``. This closes a bypass where
+    ``ssh user@evil.example.com`` produced no NetworkFact because the
+    ``@`` character fails the plain host regex.
+    """
+
+    if not text or "@" not in text:
+        return None
+    _, _, after_at = text.partition("@")
+    # scp/sftp forms append :port or :path after the host.
+    candidate = after_at.split(":", 1)[0]
+    if _looks_like_host(candidate):
+        return candidate.lower()
+    return None
+
+
 def _looks_like_secret_ref(text: str) -> bool:
     return bool(re.search(r"\$\{?[A-Za-z_][A-Za-z0-9_]*"
-                          r"(KEY|TOKEN|PASSWORD|SECRET|CREDENTIAL)",
-                          text, re.IGNORECASE))
+                          r"(KEY|TOKEN|PASSWORD|SECRET|CREDENTIAL)", text, re.IGNORECASE))
 
 
 # --------------------------------------------------------------------------- #
 # Rule
 # --------------------------------------------------------------------------- #
+
 
 class BashScannerRule(_LanguageScannerRule, SafetyRule):
     """Rule that runs the Bash scanner once and evaluates the catalog."""

