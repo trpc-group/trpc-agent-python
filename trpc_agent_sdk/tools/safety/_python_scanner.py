@@ -483,10 +483,6 @@ class PythonScanner:
                 receiver = self._resolve_canonical(node.func.value) if isinstance(node.func, ast.Attribute) else ""
                 if canonical == "compile" and receiver in ("re", "regex"):
                     pass  # re.compile(pattern) — safe, pattern compilation only
-                # getattr(x, y, default) as plain expression (NOT immediately
-                # called) is safe property access.
-                elif (canonical == "getattr" and len(node.args) >= 3 and not isinstance(node.func, ast.Call)):
-                    pass
                 else:
                     self._findings.append(
                         PythonScanFinding(kind="eval_exec",
@@ -559,6 +555,15 @@ class PythonScanner:
                         line_number=line_no,
                         evidence=evidence,
                     ))
+        elif isinstance(func, ast.Subscript):
+            # __builtins__["exec"](code) / globals()["__builtins__"]["eval"](x)
+            container = self._resolve_canonical(func.value)
+            if container in ("__builtins__", "globals", "vars", "locals"):
+                self._findings.append(
+                    PythonScanFinding(kind="eval_exec",
+                                      canonical_name=f"{container}[...]",
+                                      line_number=line_no,
+                                      evidence=evidence))
         elif isinstance(func, ast.Attribute):
             # __import__("os").system("id") — the receiver is a dynamic
             # import call whose result was then attribute-accessed

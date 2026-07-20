@@ -252,9 +252,14 @@ def _extract_list_field(req: Any, *keys: str) -> Optional[list[str]]:
     """Extract a list-typed field from the request by trying multiple key names."""
     if isinstance(req, dict):
         for k in keys:
-            val = req.get(k) or req.get("args", {}).get(k)
+            val = req.get(k)
             if isinstance(val, list):
                 return val
+            args = req.get("args")
+            if isinstance(args, dict):
+                val = args.get(k)
+                if isinstance(val, list):
+                    return val
     if hasattr(req, "args"):
         args = getattr(req, "args")
         if isinstance(args, dict):
@@ -266,20 +271,30 @@ def _extract_list_field(req: Any, *keys: str) -> Optional[list[str]]:
 
 
 def _extract_str_field(req: Any, *keys: str) -> Optional[str]:
-    """Extract a string-typed field from the request by trying multiple key names."""
+    """Extract a string-typed field, safe against args-as-list."""
     if isinstance(req, dict):
         for k in keys:
-            val = req.get(k) or req.get("args", {}).get(k)
+            val = req.get(k)
             if isinstance(val, str):
                 return val
+            args = req.get("args")
+            if isinstance(args, dict):
+                val = args.get(k)
+                if isinstance(val, str):
+                    return val
     return None
 
 
 def _extract_dict_field(req: Any, *keys: str) -> Optional[dict[str, str]]:
-    """Extract a dict-typed field from the request by trying multiple key names."""
+    """Extract a dict-typed field, safe against args-as-list."""
     if isinstance(req, dict):
         for k in keys:
-            val = req.get(k) or req.get("args", {}).get(k)
+            val = req.get(k)
             if isinstance(val, dict):
                 return val
+            args = req.get("args")
+            if isinstance(args, dict):
+                val = args.get(k)
+                if isinstance(val, dict):
+                    return val
     return None

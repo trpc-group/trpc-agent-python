@@ -314,7 +314,8 @@ class BashScanner:
             return  # pure assignment/prefix, no real command
         cmd = cmd_tokens[idx]
         args = cmd_tokens[idx + 1:]
-        cmd_lower = cmd.lower()
+        # Normalise: /bin/rm, /usr/bin/rm → rm
+        cmd_lower = cmd.lower().rsplit("/", 1)[-1]
         args_str = " ".join(args)
         evidence = " ".join(cmd_tokens)[:300]
 
