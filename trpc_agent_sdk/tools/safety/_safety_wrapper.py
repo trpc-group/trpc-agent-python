@@ -223,6 +223,16 @@ def safety_wrapper(
             raise_on_deny=raise_on_deny,
         )
 
+        def _extract_extra_fields(call_args: tuple, call_kwargs: dict) -> tuple:
+            """Extract extra scan fields from args/kwargs."""
+            for arg in call_args:
+                if isinstance(arg, dict):
+                    return (arg.get("command_args") or arg.get("cmd_args"), arg.get("environment_variables")
+                            or arg.get("env_vars"), arg.get("working_directory") or arg.get("cwd"))
+            return (call_kwargs.get("command_args")
+                    or call_kwargs.get("cmd_args"), call_kwargs.get("environment_variables")
+                    or call_kwargs.get("env_vars"), call_kwargs.get("working_directory") or call_kwargs.get("cwd"))
+
         @functools.wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             script: Optional[str] = kwargs.get(script_arg_name)
@@ -232,7 +242,11 @@ def safety_wrapper(
                         script = arg[script_arg_name]
                         break
             if script and isinstance(script, str):
-                wrapper_inst.check(script)
+                cmd_args, env_vars, work_dir = _extract_extra_fields(args, kwargs)
+                wrapper_inst.check(script,
+                                   command_args=cmd_args,
+                                   environment_variables=env_vars,
+                                   working_directory=work_dir)
             elif require_script:
                 raise RuntimeError(f"safety_wrapper: '{script_arg_name}' not found in kwargs or positional "
                                    f"dict args for {func.__name__}.  Check the decorator configuration "
@@ -255,7 +269,11 @@ def safety_wrapper(
                         script = arg[script_arg_name]
                         break
             if script and isinstance(script, str):
-                wrapper_inst.check(script)
+                cmd_args, env_vars, work_dir = _extract_extra_fields(args, kwargs)
+                wrapper_inst.check(script,
+                                   command_args=cmd_args,
+                                   environment_variables=env_vars,
+                                   working_directory=work_dir)
             elif require_script:
                 raise RuntimeError(f"safety_wrapper: '{script_arg_name}' not found in kwargs or positional "
                                    f"dict args for {func.__name__}.  Check the decorator configuration "

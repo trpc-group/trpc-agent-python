@@ -281,9 +281,9 @@ class SafetyScanner:
         else:
             denied = sum(1 for f in all_findings if f.risk_level in (RiskLevel.CRITICAL, RiskLevel.HIGH))
             total = len(all_findings)
+            auto_suffix = " [auto_allowed by allow_patterns]" if allow_upgraded else ""
             summary = (f"Scan of '{scan_input.tool_name or 'unnamed tool'}' found {total} issue(s) "
-                       f"({denied} high/critical). Decision: {decision.value}." +
-                       (" [auto_allowed by allow_patterns]" if allow_upgraded else ""))
+                       f"({denied} high/critical). Decision: {decision.value}.{auto_suffix}")
 
         return SafetyScanReport(
             tool_name=scan_input.tool_name,

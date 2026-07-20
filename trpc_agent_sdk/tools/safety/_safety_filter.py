@@ -113,10 +113,17 @@ class ToolSafetyFilter(BaseFilter):
         script_type = _guess_script_type(req, script_content)
         tool_name = _extract_tool_name(req)
 
+        cmd_args = _extract_list_field(req, "command_args", "cmd_args")
+        env_vars = _extract_dict_field(req, "environment_variables", "env_vars")
+        work_dir = _extract_str_field(req, "working_directory", "cwd")
+
         scan_input = SafetyScanInput(
             script_content=script_content,
             script_type=script_type,
             tool_name=tool_name,
+            command_args=cmd_args,
+            environment_variables=env_vars,
+            working_directory=work_dir,
         )
 
         report = self._scanner.scan(scan_input)
@@ -239,3 +246,40 @@ def _extract_tool_name(req: Any) -> str:
     if hasattr(req, "name"):
         return str(getattr(req, "name", "unknown"))
     return "unknown"
+
+
+def _extract_list_field(req: Any, *keys: str) -> Optional[list[str]]:
+    """Extract a list-typed field from the request by trying multiple key names."""
+    if isinstance(req, dict):
+        for k in keys:
+            val = req.get(k) or req.get("args", {}).get(k)
+            if isinstance(val, list):
+                return val
+    if hasattr(req, "args"):
+        args = getattr(req, "args")
+        if isinstance(args, dict):
+            for k in keys:
+                val = args.get(k)
+                if isinstance(val, list):
+                    return val
+    return None
+
+
+def _extract_str_field(req: Any, *keys: str) -> Optional[str]:
+    """Extract a string-typed field from the request by trying multiple key names."""
+    if isinstance(req, dict):
+        for k in keys:
+            val = req.get(k) or req.get("args", {}).get(k)
+            if isinstance(val, str):
+                return val
+    return None
+
+
+def _extract_dict_field(req: Any, *keys: str) -> Optional[dict[str, str]]:
+    """Extract a dict-typed field from the request by trying multiple key names."""
+    if isinstance(req, dict):
+        for k in keys:
+            val = req.get(k) or req.get("args", {}).get(k)
+            if isinstance(val, dict):
+                return val
+    return None
