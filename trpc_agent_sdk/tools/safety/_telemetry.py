@@ -171,8 +171,6 @@ def build_audit_event(
 ):
     """Build a :class:`SafetyAuditEvent` from a report."""
 
-    from trpc_agent_sdk.tools.safety._models import SafetyAuditEvent
-
     return SafetyAuditEvent(
         event_id=report.report_id,
         timestamp=timestamp,

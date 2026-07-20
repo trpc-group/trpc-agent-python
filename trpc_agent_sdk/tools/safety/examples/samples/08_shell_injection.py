@@ -10,7 +10,9 @@ import subprocess
 
 def run_untrusted(user_input: str) -> int:
     return subprocess.run(
-        f"ls {user_input}", shell=True, check=False,
+        f"ls {user_input}",
+        shell=True,
+        check=False,
     ).returncode
 
 

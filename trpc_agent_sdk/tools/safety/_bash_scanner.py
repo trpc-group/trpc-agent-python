@@ -13,7 +13,6 @@ uncertainty is visible rather than silently treated as safe.
 from __future__ import annotations
 
 import re
-from typing import Iterator
 
 from trpc_agent_sdk.tools.safety._facts import (
     ConcurrencyFact,

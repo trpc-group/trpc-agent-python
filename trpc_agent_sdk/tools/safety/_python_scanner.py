@@ -11,10 +11,7 @@ of a false claim of safety.
 from __future__ import annotations
 
 import ast
-import os
-from typing import Any, Iterator
 
-from trpc_agent_sdk.tools.safety._exceptions import SafetyScannerError
 from trpc_agent_sdk.tools.safety._facts import (
     ConcurrencyFact,
     DependencyInstallFact,
@@ -37,7 +34,6 @@ from trpc_agent_sdk.tools.safety._facts import (
 )
 from trpc_agent_sdk.tools.safety._models import ScriptLanguage
 from trpc_agent_sdk.tools.safety._rules import _LanguageScannerRule, SafetyRule
-from trpc_agent_sdk.tools.safety._policy import is_sensitive_env_key
 from trpc_agent_sdk.tools.safety._redaction import contains_secret_literal
 
 # Networks libs and the attribute used to extract a host arg.
@@ -404,10 +400,6 @@ class _PythonScanner:
         if isinstance(node.func, ast.Attribute) \
                 and isinstance(node.func.value, ast.Call):
             target = _const_str(_first_arg(node.func.value)) or ""
-        size = None
-        if node.args:
-            data_arg = node.args[0] if node.args else None
-            size = self._static_size(data_arg)
         if not target:
             explicit = False
             target = "<dynamic>"
@@ -836,11 +828,10 @@ class _PythonScanner:
         if sink_kind is None and isinstance(node.func, ast.Attribute):
             method = node.func.attr
             if method in {"info", "debug", "warning", "warn", "error", "critical", "exception", "log"}:
-                if isinstance(node.func.value, ast.Name) \
-                        and node.func.value.id.lower() in {"log", "logger",
-                                                              "logging"}:
-                    sink_kind = "output"
-                    sink_name = f"log.{method}"
+                if isinstance(node.func.value, ast.Name):
+                    if node.func.value.id.lower() in {"log", "logger", "logging"}:
+                        sink_kind = "output"
+                        sink_name = f"log.{method}"
         if sink_kind is None:
             return
         if not self._tainted_flows_into_call(node):

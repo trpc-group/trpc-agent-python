@@ -7,12 +7,9 @@ run for every request regardless of language.
 
 from __future__ import annotations
 
-import os
 from typing import Iterable
 
-from trpc_agent_sdk.tools.safety._facts import Loc
 from trpc_agent_sdk.tools.safety._models import (
-    Evidence,
     RiskCategory,
     RiskLevel,
     SafetyDecision,

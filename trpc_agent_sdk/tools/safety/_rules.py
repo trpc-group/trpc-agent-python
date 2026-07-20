@@ -12,29 +12,13 @@ are applied at finding construction time so the catalog stays declarative.
 from __future__ import annotations
 
 import ipaddress
-from typing import Iterable, Protocol, Sequence, runtime_checkable
+from typing import Iterable, Protocol, runtime_checkable
 
 from trpc_agent_sdk.tools.safety._facts import (
     ConcurrencyFact,
-    DependencyInstallFact,
-    DynamicExecFact,
-    FileDeleteFact,
-    FileReadFact,
-    FileWriteFact,
-    ForkBombFact,
-    LargeWriteFact,
-    LongSleepFact,
-    NetworkFact,
-    ParseErrorFact,
-    PrivilegeFact,
-    ProcessFact,
     ScriptFacts,
-    SecretFlowFact,
-    ShellOperatorFact,
-    UnboundedLoopFact,
 )
 from trpc_agent_sdk.tools.safety._models import (
-    Evidence,
     RiskCategory,
     RiskLevel,
     SafetyDecision,

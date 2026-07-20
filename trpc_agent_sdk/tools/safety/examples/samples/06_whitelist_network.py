@@ -10,7 +10,8 @@ import requests
 
 def fetch_user(handle: str) -> dict:
     response = requests.get(
-        f"https://api.github.com/users/{handle}", timeout=5,
+        f"https://api.github.com/users/{handle}",
+        timeout=5,
     )
     response.raise_for_status()
     return response.json()

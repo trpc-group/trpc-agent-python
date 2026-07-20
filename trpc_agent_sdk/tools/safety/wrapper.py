@@ -19,12 +19,11 @@ Design
 
 from __future__ import annotations
 
-import asyncio
 import inspect
 from typing import Any, Callable, Generic, Mapping, TypeVar
 
 from trpc_agent_sdk.tools.safety._audit import AuditSink, InMemoryAuditSink, NullAuditSink
-from trpc_agent_sdk.tools.safety._filter import BlockedExecutionError, ToolScriptSafetyFilter
+from trpc_agent_sdk.tools.safety._filter import ToolScriptSafetyFilter
 from trpc_agent_sdk.tools.safety._guard import ToolSafetyGuard
 from trpc_agent_sdk.tools.safety._models import (
     SafetyReport,
@@ -99,7 +98,7 @@ class SafetyWrappedCallable(Generic[T]):
             _ = report  # caller can inspect via last_report
 
     async def call_async(self, *args: Any, **kwargs: Any) -> T:
-        report = await self._enforce_async(args, kwargs)
+        await self._enforce_async(args, kwargs)
         result = self.delegate(*args, **kwargs)
         if inspect.isawaitable(result):
             return await result
