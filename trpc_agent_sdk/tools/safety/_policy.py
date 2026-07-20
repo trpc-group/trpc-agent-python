@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import threading
 from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
@@ -228,18 +229,22 @@ class PolicyLoader:
 # ---------------------------------------------------------------------------
 
 _default_policy: Optional[SafetyPolicy] = None
+_policy_lock = threading.Lock()
 
 
 def get_policy(policy_path: Optional[str] = None) -> SafetyPolicy:
-    """Return the cached policy or load it from disk on first call."""
+    """Return the cached policy or load it from disk on first call (thread-safe)."""
     global _default_policy  # pylint: disable=global-statement
     if _default_policy is None:
-        _default_policy = PolicyLoader(policy_path).load()
+        with _policy_lock:
+            if _default_policy is None:
+                _default_policy = PolicyLoader(policy_path).load()
     return _default_policy
 
 
 def reload_policy(policy_path: Optional[str] = None) -> SafetyPolicy:
-    """Force-reload the policy from disk."""
+    """Force-reload the policy from disk (thread-safe)."""
     global _default_policy  # pylint: disable=global-statement
-    _default_policy = PolicyLoader(policy_path).load()
+    with _policy_lock:
+        _default_policy = PolicyLoader(policy_path).load()
     return _default_policy

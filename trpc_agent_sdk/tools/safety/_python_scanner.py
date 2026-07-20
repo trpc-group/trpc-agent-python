@@ -483,10 +483,10 @@ class PythonScanner:
                 receiver = self._resolve_canonical(node.func.value) if isinstance(node.func, ast.Attribute) else ""
                 if canonical == "compile" and receiver in ("re", "regex"):
                     pass  # re.compile(pattern) — safe, pattern compilation only
-                # getattr with 3+ args (including default) is safe property access
-                elif canonical == "getattr" and (len(node.args) >= 3 or
-                                                 (isinstance(node.func, ast.Call) and len(node.func.args) >= 3)):
-                    pass  # getattr(obj, attr, default) / getattr(...)() — safe
+                # getattr(x, y, default) as plain expression (NOT immediately
+                # called) is safe property access.
+                elif (canonical == "getattr" and len(node.args) >= 3 and not isinstance(node.func, ast.Call)):
+                    pass
                 else:
                     self._findings.append(
                         PythonScanFinding(kind="eval_exec",
@@ -537,7 +537,9 @@ class PythonScanner:
         if isinstance(func, ast.Call):
             inner = self._resolve_canonical(func.func)
             if inner == "getattr":
-                # getattr(obj, attr, default) with 3 args is safe property access
+                # getattr(obj, attr, default) with 3 args and NOT immediately
+                # called: safe property access (e.g. x = getattr(cfg, "key", 42)).
+                # Called form getattr(os,"system")(...) is caught by _handle_call.
                 if len(func.args) >= 3:
                     pass
                 else:
