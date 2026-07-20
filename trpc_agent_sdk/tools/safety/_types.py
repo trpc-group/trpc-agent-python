@@ -29,7 +29,6 @@ from enum import IntEnum
 from enum import unique
 from typing import Optional
 
-
 # ── Enumerations ──────────────────────────────────────────────────────────
 
 
@@ -202,26 +201,31 @@ class SafetyReport:
     def to_dict(self) -> dict:
         """Convert the report to a JSON-serializable dictionary."""
         return {
-            "decision": self.decision.name,
-            "risk_level": self.risk_level.name,
-            "matches": [
-                {
-                    "rule_id": m.rule_id,
-                    "risk_category": m.risk_category.name,
-                    "risk_level": m.risk_level.name,
-                    "evidence": m.evidence,
-                    "line_number": m.line_number,
-                    "recommendation": m.recommendation,
-                    "masked": m.masked,
-                }
-                for m in self.matches
-            ],
-            "tool_name": self.tool_name,
-            "script_type": self.script_type.name,
-            "script_summary": self.script_summary,
-            "scan_duration_ms": self.scan_duration_ms,
-            "timestamp": self.timestamp,
-            "policy_version": self.policy_version,
+            "decision":
+            self.decision.name,
+            "risk_level":
+            self.risk_level.name,
+            "matches": [{
+                "rule_id": m.rule_id,
+                "risk_category": m.risk_category.name,
+                "risk_level": m.risk_level.name,
+                "evidence": m.evidence,
+                "line_number": m.line_number,
+                "recommendation": m.recommendation,
+                "masked": m.masked,
+            } for m in self.matches],
+            "tool_name":
+            self.tool_name,
+            "script_type":
+            self.script_type.name,
+            "script_summary":
+            self.script_summary,
+            "scan_duration_ms":
+            self.scan_duration_ms,
+            "timestamp":
+            self.timestamp,
+            "policy_version":
+            self.policy_version,
         }
 
 

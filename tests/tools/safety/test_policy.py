@@ -15,7 +15,6 @@ from trpc_agent_sdk.tools.safety._policy import SafetyPolicy
 from trpc_agent_sdk.tools.safety._types import RiskLevel
 from trpc_agent_sdk.tools.safety._types import SafetyDecision
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
 
@@ -23,9 +22,11 @@ from trpc_agent_sdk.tools.safety._types import SafetyDecision
 def policy() -> SafetyPolicy:
     """Load the default policy file for testing."""
     policy_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
-            os.path.abspath(__file__))))),
-        "trpc_agent_sdk", "tools", "safety", "tool_safety_policy.yaml",
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
+        "trpc_agent_sdk",
+        "tools",
+        "safety",
+        "tool_safety_policy.yaml",
     )
     return SafetyPolicy.from_file(policy_path)
 

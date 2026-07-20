@@ -79,14 +79,22 @@ class AuditLogger:
         if report.is_blocked:
             logger.warning(
                 "Safety audit: tool=%s decision=%s risk=%s rules=%s duration=%.1fms blocked=%s",
-                event.tool_name, event.decision, event.risk_level,
-                event.rule_id, event.scan_duration_ms, event.blocked,
+                event.tool_name,
+                event.decision,
+                event.risk_level,
+                event.rule_id,
+                event.scan_duration_ms,
+                event.blocked,
             )
         else:
             logger.info(
                 "Safety audit: tool=%s decision=%s risk=%s rules=%s duration=%.1fms blocked=%s",
-                event.tool_name, event.decision, event.risk_level,
-                event.rule_id, event.scan_duration_ms, event.blocked,
+                event.tool_name,
+                event.decision,
+                event.risk_level,
+                event.rule_id,
+                event.scan_duration_ms,
+                event.blocked,
             )
 
         return event
@@ -140,7 +148,11 @@ class AuditLogger:
 
         logger.info(
             "Safety audit: tool=%s decision=%s risk=%s rules=%s blocked=%s",
-            tool_name, decision, risk_level, rule_id, blocked,
+            tool_name,
+            decision,
+            risk_level,
+            rule_id,
+            blocked,
         )
 
         return event

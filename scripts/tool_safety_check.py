@@ -24,7 +24,7 @@ from trpc_agent_sdk.tools.safety._types import ScanInput, ScriptType
 def detect_script_type(path: str) -> ScriptType:
     """Detect script type from file extension."""
     ext = os.path.splitext(path)[1].lower()
-    if ext in (".py",):
+    if ext in (".py", ):
         return ScriptType.PYTHON
     if ext in (".sh", ".bash", ".zsh", ".ksh"):
         return ScriptType.BASH
@@ -32,21 +32,17 @@ def detect_script_type(path: str) -> ScriptType:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Tool Script Safety Check — scan scripts for security risks",
-    )
+    parser = argparse.ArgumentParser(description="Tool Script Safety Check — scan scripts for security risks", )
     parser.add_argument("path", nargs="?", help="Path to script file")
-    parser.add_argument("--type", "-t", choices=["auto", "bash", "python"],
-                        default="auto", help="Script type (default: auto-detect)")
-    parser.add_argument("--stdin", action="store_true",
-                        help="Read script from stdin")
-    parser.add_argument("--json", action="store_true",
-                        help="Output as JSON")
-    parser.add_argument("--policy", "-p",
-                        default="tool_safety_policy.yaml",
-                        help="Path to policy file")
-    parser.add_argument("--version", "-v", action="store_true",
-                        help="Show version")
+    parser.add_argument("--type",
+                        "-t",
+                        choices=["auto", "bash", "python"],
+                        default="auto",
+                        help="Script type (default: auto-detect)")
+    parser.add_argument("--stdin", action="store_true", help="Read script from stdin")
+    parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument("--policy", "-p", default="tool_safety_policy.yaml", help="Path to policy file")
+    parser.add_argument("--version", "-v", action="store_true", help="Show version")
 
     args = parser.parse_args()
 

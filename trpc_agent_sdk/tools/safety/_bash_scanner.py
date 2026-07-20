@@ -32,10 +32,8 @@ class BashScanner:
     """
 
     # ── Domain extraction patterns ──
-    _DOMAIN_RE = re.compile(
-        r"(?:https?://|ftp://)?([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
-        r"(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+(?::\d+)?)"
-    )
+    _DOMAIN_RE = re.compile(r"(?:https?://|ftp://)?([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
+                            r"(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+(?::\d+)?)")
 
     # ── Sensitive data patterns (for leak detection) ──
     _SENSITIVE_PATTERNS: list[tuple[str, str]] = [
@@ -109,15 +107,16 @@ class BashScanner:
                 if re.search(pattern, line, re.IGNORECASE):
                     # Determine risk category from rule name
                     category = self._rule_name_to_category(rule_name)
-                    matches.append(RuleMatch(
-                        rule_id=self._rule_name_to_id(rule_name),
-                        risk_category=category,
-                        risk_level=rule_cfg.risk_level,
-                        evidence=line[:200],
-                        line_number=line_no,
-                        recommendation=self._get_recommendation(category),
-                        masked=False,
-                    ))
+                    matches.append(
+                        RuleMatch(
+                            rule_id=self._rule_name_to_id(rule_name),
+                            risk_category=category,
+                            risk_level=rule_cfg.risk_level,
+                            evidence=line[:200],
+                            line_number=line_no,
+                            recommendation=self._get_recommendation(category),
+                            masked=False,
+                        ))
                     break  # One match per rule per line
 
             # Check domain whitelist for network egress rules
@@ -160,7 +159,7 @@ class BashScanner:
                     evidence=f"Non-whitelisted domain: {domain}",
                     line_number=0,
                     recommendation="Remove or replace with a whitelisted domain, "
-                                   "or add the domain to allowed_domains in the policy",
+                    "or add the domain to allowed_domains in the policy",
                     masked=False,
                 )
         return None
@@ -189,7 +188,7 @@ class BashScanner:
                     evidence=f"Potential sensitive data leak: {name}",
                     line_number=line_no,
                     recommendation="Avoid writing secrets to files, logs, or network requests. "
-                                   "Use environment variables or a secrets manager instead.",
+                    "Use environment variables or a secrets manager instead.",
                     masked=True,
                 )
         return None
@@ -229,16 +228,13 @@ class BashScanner:
         """Get a default recommendation for a risk category."""
         recommendations = {
             RiskCategory.DANGEROUS_FILE_OPERATION:
-                "Remove or replace this file operation. Avoid destructive commands like rm -rf.",
+            "Remove or replace this file operation. Avoid destructive commands like rm -rf.",
             RiskCategory.NETWORK_EGRESS:
-                "Remove network requests to non-whitelisted domains, or add the domain to the policy.",
-            RiskCategory.PROCESS_EXECUTION:
-                "Avoid executing system commands directly. Use safe APIs instead.",
+            "Remove network requests to non-whitelisted domains, or add the domain to the policy.",
+            RiskCategory.PROCESS_EXECUTION: "Avoid executing system commands directly. Use safe APIs instead.",
             RiskCategory.DEPENDENCY_INSTALLATION:
-                "Do not install packages during execution. Pre-install all dependencies.",
-            RiskCategory.RESOURCE_ABUSE:
-                "Avoid infinite loops, long sleeps, and resource-exhaustive patterns.",
-            RiskCategory.SENSITIVE_INFO_LEAK:
-                "Do not write secrets to files, logs, or network requests.",
+            "Do not install packages during execution. Pre-install all dependencies.",
+            RiskCategory.RESOURCE_ABUSE: "Avoid infinite loops, long sleeps, and resource-exhaustive patterns.",
+            RiskCategory.SENSITIVE_INFO_LEAK: "Do not write secrets to files, logs, or network requests.",
         }
         return recommendations.get(category, "Review this line for potential security risks.")

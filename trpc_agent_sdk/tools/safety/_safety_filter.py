@@ -39,7 +39,6 @@ from ._types import SafetyReport
 from ._types import ScanInput
 from ._types import ScriptType
 
-
 _DEFAULT_POLICY_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "tool_safety_policy.yaml",
@@ -253,9 +252,7 @@ class SafetyBlockedError(Exception):
         self.tool_name = tool_name
         self.report = report
         rule_ids = ",".join(m.rule_id for m in report.matches)
-        super().__init__(
-            f"Tool '{tool_name}' execution blocked by safety filter: "
-            f"decision={report.decision.name}, "
-            f"risk={report.risk_level.name}, "
-            f"rules=[{rule_ids}]"
-        )
+        super().__init__(f"Tool '{tool_name}' execution blocked by safety filter: "
+                         f"decision={report.decision.name}, "
+                         f"risk={report.risk_level.name}, "
+                         f"rules=[{rule_ids}]")

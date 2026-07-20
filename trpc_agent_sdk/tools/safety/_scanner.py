@@ -226,8 +226,19 @@ class SafetyScanner:
         # Python-specific patterns
         python_patterns = ["import ", "from ", "class ", "def ", "if __name__", "print("]
         bash_patterns = [
-            "#!/", "echo ", "export ", "source ", "function ", "alias ",
-            "if [", "while ", "for ", "do ", "done", "fi", "elif",
+            "#!/",
+            "echo ",
+            "export ",
+            "source ",
+            "function ",
+            "alias ",
+            "if [",
+            "while ",
+            "for ",
+            "do ",
+            "done",
+            "fi",
+            "elif",
         ]
 
         py_score = sum(1 for p in python_patterns if p in content)

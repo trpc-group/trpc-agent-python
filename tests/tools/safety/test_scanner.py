@@ -26,7 +26,6 @@ from trpc_agent_sdk.tools.safety._types import SafetyReport
 from trpc_agent_sdk.tools.safety._types import ScanInput
 from trpc_agent_sdk.tools.safety._types import ScriptType
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
 
@@ -34,9 +33,11 @@ from trpc_agent_sdk.tools.safety._types import ScriptType
 def policy() -> SafetyPolicy:
     """Load the default policy file."""
     policy_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
-            os.path.abspath(__file__))))),
-        "trpc_agent_sdk", "tools", "safety", "tool_safety_policy.yaml",
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
+        "trpc_agent_sdk",
+        "tools",
+        "safety",
+        "tool_safety_policy.yaml",
     )
     return SafetyPolicy.from_file(policy_path)
 
@@ -63,8 +64,7 @@ class TestPhase1DataModel:
         """SafetyReport properties should work correctly."""
         from trpc_agent_sdk.tools.safety._types import RuleMatch
 
-        r = RuleMatch("R001", RiskCategory.DANGEROUS_FILE_OPERATION,
-                       RiskLevel.CRITICAL, "rm -rf /", 1, "Remove")
+        r = RuleMatch("R001", RiskCategory.DANGEROUS_FILE_OPERATION, RiskLevel.CRITICAL, "rm -rf /", 1, "Remove")
         report = SafetyReport(SafetyDecision.DENY, RiskLevel.CRITICAL, [r])
         assert report.is_blocked is True
         assert report.is_allowed is False
@@ -75,10 +75,11 @@ class TestPhase1DataModel:
         """SafetyReport.to_dict() should produce correct JSON structure."""
         from trpc_agent_sdk.tools.safety._types import RuleMatch
 
-        r = RuleMatch("R001", RiskCategory.DANGEROUS_FILE_OPERATION,
-                       RiskLevel.CRITICAL, "rm -rf /", 1, "Remove")
-        report = SafetyReport(SafetyDecision.DENY, RiskLevel.CRITICAL, [r],
-                              tool_name="Bash", script_type=ScriptType.BASH)
+        r = RuleMatch("R001", RiskCategory.DANGEROUS_FILE_OPERATION, RiskLevel.CRITICAL, "rm -rf /", 1, "Remove")
+        report = SafetyReport(SafetyDecision.DENY,
+                              RiskLevel.CRITICAL, [r],
+                              tool_name="Bash",
+                              script_type=ScriptType.BASH)
         d = report.to_dict()
         assert d["decision"] == "DENY"
         assert d["risk_level"] == "CRITICAL"
@@ -92,8 +93,7 @@ class TestPhase1DataModel:
         """AuditEvent should produce 6 OTel attributes."""
         from trpc_agent_sdk.tools.safety._types import AuditEvent
 
-        event = AuditEvent("Bash", "DENY", "CRITICAL", "R001", 1.23,
-                           False, True, "2026-07-20T00:00:00")
+        event = AuditEvent("Bash", "DENY", "CRITICAL", "R001", 1.23, False, True, "2026-07-20T00:00:00")
         otel = event.to_otel_attributes()
         assert len(otel) == 6
         assert otel["tool.safety.decision"] == "DENY"
@@ -154,7 +154,7 @@ class TestBashScanner:
         """cat /etc/passwd | grep root should be detected."""
         report = scanner.scan(ScanInput("cat /etc/passwd | grep root", ScriptType.BASH))
         # Should detect sensitive file read
-        sensitive = [m for m in report.matches if m.rule_id in ("R002",)]
+        sensitive = [m for m in report.matches if m.rule_id in ("R002", )]
         assert len(sensitive) > 0 or report.decision == SafetyDecision.DENY
 
     def test_fork_bomb_detected(self, scanner: SafetyScanner):
@@ -283,8 +283,12 @@ class TestAuditLogger:
         """AuditLogger.log_decision should create a valid event."""
         logger = AuditLogger()
         event = logger.log_decision(
-            tool_name="Bash", decision="DENY", risk_level="CRITICAL",
-            rule_id="R001", scan_duration_ms=1.23, blocked=True,
+            tool_name="Bash",
+            decision="DENY",
+            risk_level="CRITICAL",
+            rule_id="R001",
+            scan_duration_ms=1.23,
+            blocked=True,
         )
         assert event.tool_name == "Bash"
         assert event.decision == "DENY"
@@ -293,8 +297,7 @@ class TestAuditLogger:
     def test_audit_event_to_dict(self):
         """AuditEvent.to_dict() should produce correct structure."""
         from trpc_agent_sdk.tools.safety._types import AuditEvent
-        event = AuditEvent("Bash", "DENY", "CRITICAL", "R001", 1.23,
-                           False, True, "2026-07-20T00:00:00")
+        event = AuditEvent("Bash", "DENY", "CRITICAL", "R001", 1.23, False, True, "2026-07-20T00:00:00")
         d = event.to_dict()
         assert d["tool_name"] == "Bash"
         assert d["decision"] == "DENY"
@@ -304,12 +307,14 @@ class TestAuditLogger:
     def test_audit_event_otel_attributes(self):
         """AuditEvent should produce OTel-compatible attributes."""
         from trpc_agent_sdk.tools.safety._types import AuditEvent
-        event = AuditEvent("Bash", "DENY", "CRITICAL", "R001", 1.23,
-                           False, True, "2026-07-20T00:00:00")
+        event = AuditEvent("Bash", "DENY", "CRITICAL", "R001", 1.23, False, True, "2026-07-20T00:00:00")
         otel = event.to_otel_attributes()
         expected_keys = {
-            "tool.safety.decision", "tool.safety.risk_level",
-            "tool.safety.rule_id", "tool.safety.blocked",
-            "tool.safety.masked", "tool.safety.duration_ms",
+            "tool.safety.decision",
+            "tool.safety.risk_level",
+            "tool.safety.rule_id",
+            "tool.safety.blocked",
+            "tool.safety.masked",
+            "tool.safety.duration_ms",
         }
         assert set(otel.keys()) == expected_keys

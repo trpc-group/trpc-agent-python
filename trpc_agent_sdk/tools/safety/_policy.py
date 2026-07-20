@@ -31,7 +31,6 @@ from trpc_agent_sdk.log import logger
 from ._types import RiskLevel
 from ._types import SafetyDecision
 
-
 # ── Policy Data Classes ───────────────────────────────────────────────────
 
 
@@ -128,9 +127,7 @@ class SafetyPolicy:
         if global_settings:
             policy.max_timeout_seconds = int(global_settings.get("max_timeout_seconds", 300))
             policy.max_output_size_bytes = int(global_settings.get("max_output_size_bytes", 10 * 1024 * 1024))
-            policy.default_decision = _parse_decision(
-                global_settings.get("default_decision", "needs_human_review")
-            )
+            policy.default_decision = _parse_decision(global_settings.get("default_decision", "needs_human_review"))
 
         # ── Whitelists ──
         policy.allowed_domains = raw.get("allowed_domains", [])

@@ -27,7 +27,6 @@ from trpc_agent_sdk.tools.safety._types import SafetyReport
 from trpc_agent_sdk.tools.safety._types import RiskLevel
 from trpc_agent_sdk.tools.safety._wrapper import SafetyWrapper
 
-
 # ── SafetyFilter Tests ────────────────────────────────────────────────────
 
 
@@ -123,7 +122,10 @@ class TestSafetyFilter:
         import asyncio
         asyncio.run(safety_filter._before(
             ctx=None,
-            req={"name": "test", "not_a_command": "value"},
+            req={
+                "name": "test",
+                "not_a_command": "value"
+            },
             rsp=rsp,
         ))
         assert rsp.is_continue is True
@@ -133,8 +135,7 @@ class TestSafetyFilter:
         from trpc_agent_sdk.tools.safety._types import RuleMatch
         from trpc_agent_sdk.tools.safety._types import RiskCategory
 
-        r = RuleMatch("R001", RiskCategory.DANGEROUS_FILE_OPERATION,
-                       RiskLevel.CRITICAL, "rm -rf /", 1, "Remove")
+        r = RuleMatch("R001", RiskCategory.DANGEROUS_FILE_OPERATION, RiskLevel.CRITICAL, "rm -rf /", 1, "Remove")
         report = SafetyReport(SafetyDecision.DENY, RiskLevel.CRITICAL, [r])
         err = SafetyBlockedError("Bash", report)
         assert "Bash" in str(err)

@@ -42,11 +42,27 @@ class _DangerVisitor(ast.NodeVisitor):
 
         # R004: Process execution
         if func_name in (
-            "os.system", "os.popen", "subprocess.run", "subprocess.Popen",
-            "subprocess.call", "subprocess.check_call", "subprocess.check_output",
-            "pty.spawn", "os.execl", "os.execle", "os.execlp", "os.execv",
-            "os.execve", "os.execvp", "os.fork", "os.spawnl", "os.spawnle",
-            "os.spawnlp", "os.spawnv", "os.spawnve", "os.spawnvp",
+                "os.system",
+                "os.popen",
+                "subprocess.run",
+                "subprocess.Popen",
+                "subprocess.call",
+                "subprocess.check_call",
+                "subprocess.check_output",
+                "pty.spawn",
+                "os.execl",
+                "os.execle",
+                "os.execlp",
+                "os.execv",
+                "os.execve",
+                "os.execvp",
+                "os.fork",
+                "os.spawnl",
+                "os.spawnle",
+                "os.spawnlp",
+                "os.spawnv",
+                "os.spawnve",
+                "os.spawnvp",
         ):
             if self._is_rule_enabled("process_execution"):
                 self._add_match("R004", RiskCategory.PROCESS_EXECUTION, func_name, node)
@@ -57,53 +73,61 @@ class _DangerVisitor(ast.NodeVisitor):
                 self._add_match("R001", RiskCategory.DANGEROUS_FILE_OPERATION, func_name, node)
 
         # R001: os.system/subprocess with dangerous args
-        if func_name in ("os.system", "subprocess.run", "subprocess.Popen",
-                         "subprocess.call", "subprocess.check_call"):
+        if func_name in ("os.system", "subprocess.run", "subprocess.Popen", "subprocess.call", "subprocess.check_call"):
             dangerous_args = self._check_dangerous_args(node)
             for arg in dangerous_args:
                 if self._is_rule_enabled("dangerous_file_operations"):
-                    self._add_match("R001", RiskCategory.DANGEROUS_FILE_OPERATION,
-                                    f"{func_name}({arg})", node)
+                    self._add_match("R001", RiskCategory.DANGEROUS_FILE_OPERATION, f"{func_name}({arg})", node)
 
         # R002: Sensitive file reads
-        if func_name in ("open", "pathlib.Path", "pathlib.Path.read_text",
-                         "pathlib.Path.read_bytes", "io.open", "builtins.open"):
+        if func_name in ("open", "pathlib.Path", "pathlib.Path.read_text", "pathlib.Path.read_bytes", "io.open",
+                         "builtins.open"):
             path_arg = self._get_string_arg(node, 0)
             if path_arg and self._is_path_sensitive(path_arg):
                 if self._is_rule_enabled("sensitive_file_read"):
-                    self._add_match("R002", RiskCategory.DANGEROUS_FILE_OPERATION,
-                                    f"Read sensitive file: {path_arg}", node)
+                    self._add_match("R002", RiskCategory.DANGEROUS_FILE_OPERATION, f"Read sensitive file: {path_arg}",
+                                    node)
 
         # R003: Network egress
         if func_name in (
-            "requests.get", "requests.post", "requests.put", "requests.delete",
-            "requests.patch", "requests.request", "urllib.request.urlopen",
-            "urllib.request.Request", "urllib.urlopen",
-            "aiohttp.ClientSession.get", "aiohttp.ClientSession.post",
-            "aiohttp.ClientSession.request", "httpx.get", "httpx.post",
-            "httpx.put", "httpx.delete", "httpx.request", "aiohttp.ClientSession",
+                "requests.get",
+                "requests.post",
+                "requests.put",
+                "requests.delete",
+                "requests.patch",
+                "requests.request",
+                "urllib.request.urlopen",
+                "urllib.request.Request",
+                "urllib.urlopen",
+                "aiohttp.ClientSession.get",
+                "aiohttp.ClientSession.post",
+                "aiohttp.ClientSession.request",
+                "httpx.get",
+                "httpx.post",
+                "httpx.put",
+                "httpx.delete",
+                "httpx.request",
+                "aiohttp.ClientSession",
         ):
             url_arg = self._get_string_arg(node, 0)
             if url_arg and not self._is_domain_allowed_in_url(url_arg):
                 if self._is_rule_enabled("network_egress"):
-                    self._add_match("R003", RiskCategory.NETWORK_EGRESS,
-                                    f"Network request to: {url_arg}", node)
+                    self._add_match("R003", RiskCategory.NETWORK_EGRESS, f"Network request to: {url_arg}", node)
 
         if func_name in ("socket.connect", "socket.create_connection", "socket.socket.connect"):
             if self._is_rule_enabled("network_egress"):
                 self._add_match("R003", RiskCategory.NETWORK_EGRESS, "socket connection", node)
 
         # R005: Dependency installation
-        if func_name in ("subprocess.run", "subprocess.Popen", "subprocess.call",
-                         "subprocess.check_call", "os.system", "os.popen"):
+        if func_name in ("subprocess.run", "subprocess.Popen", "subprocess.call", "subprocess.check_call", "os.system",
+                         "os.popen"):
             cmd = self._get_command_arg(node)
             if cmd and self._is_install_command(cmd):
                 if self._is_rule_enabled("dependency_installation"):
-                    self._add_match("R005", RiskCategory.DEPENDENCY_INSTALLATION,
-                                    f"Install command: {cmd}", node)
+                    self._add_match("R005", RiskCategory.DEPENDENCY_INSTALLATION, f"Install command: {cmd}", node)
 
         # R006: Resource abuse
-        if func_name in ("os.fork",):
+        if func_name in ("os.fork", ):
             if self._is_rule_enabled("resource_abuse"):
                 self._add_match("R006", RiskCategory.RESOURCE_ABUSE, func_name, node)
 
@@ -111,8 +135,7 @@ class _DangerVisitor(ast.NodeVisitor):
             sleep_time = self._get_numeric_arg(node, 0)
             if sleep_time is not None and sleep_time >= 3600:
                 if self._is_rule_enabled("resource_abuse"):
-                    self._add_match("R006", RiskCategory.RESOURCE_ABUSE,
-                                    f"Long sleep: {sleep_time}s", node)
+                    self._add_match("R006", RiskCategory.RESOURCE_ABUSE, f"Long sleep: {sleep_time}s", node)
 
         self.generic_visit(node)
 
@@ -122,8 +145,7 @@ class _DangerVisitor(ast.NodeVisitor):
         """Visit a while loop - check for infinite loops."""
         if isinstance(node.test, ast.Constant) and node.test.value is True:
             if self._is_rule_enabled("resource_abuse"):
-                self._add_match("R006", RiskCategory.RESOURCE_ABUSE,
-                                "while True: (potential infinite loop)", node)
+                self._add_match("R006", RiskCategory.RESOURCE_ABUSE, "while True: (potential infinite loop)", node)
         self.generic_visit(node)
 
     def visit_For(self, node: ast.For) -> None:
@@ -135,8 +157,7 @@ class _DangerVisitor(ast.NodeVisitor):
                     arg = call.args[0]
                     if isinstance(arg, ast.Constant) and isinstance(arg.value, int) and arg.value > 1000000:
                         if self._is_rule_enabled("resource_abuse"):
-                            self._add_match("R006", RiskCategory.RESOURCE_ABUSE,
-                                            f"Large range({arg.value})", node)
+                            self._add_match("R006", RiskCategory.RESOURCE_ABUSE, f"Large range({arg.value})", node)
         self.generic_visit(node)
 
     def visit_Assign(self, node: ast.Assign) -> None:
@@ -147,8 +168,11 @@ class _DangerVisitor(ast.NodeVisitor):
                 targets = [self._get_target_name(t) for t in node.targets if t]
                 target_str = ", ".join(t for t in targets if t)
                 if target_str:
-                    self._add_match("R007", RiskCategory.SENSITIVE_INFO_LEAK,
-                                    f"Sensitive value assigned to: {target_str}", node, masked=True)
+                    self._add_match("R007",
+                                    RiskCategory.SENSITIVE_INFO_LEAK,
+                                    f"Sensitive value assigned to: {target_str}",
+                                    node,
+                                    masked=True)
         self.generic_visit(node)
 
     # ── Helpers ──────────────────────────────────────────────────────
@@ -234,9 +258,15 @@ class _DangerVisitor(ast.NodeVisitor):
     @staticmethod
     def _is_install_command(cmd: str) -> bool:
         install_patterns = [
-            r"pip\s+install", r"pip3\s+install", r"npm\s+install",
-            r"npm\s+ci", r"apt\s+install", r"apt-get\s+install",
-            r"brew\s+install", r"gem\s+install", r"cargo\s+install",
+            r"pip\s+install",
+            r"pip3\s+install",
+            r"npm\s+install",
+            r"npm\s+ci",
+            r"apt\s+install",
+            r"apt-get\s+install",
+            r"brew\s+install",
+            r"gem\s+install",
+            r"cargo\s+install",
         ]
         return any(re.search(p, cmd, re.IGNORECASE) for p in install_patterns)
 
@@ -256,9 +286,12 @@ class _DangerVisitor(ast.NodeVisitor):
     @staticmethod
     def _is_sensitive_value(value: str) -> bool:
         sensitive_patterns = [
-            r"sk-[A-Za-z0-9]{20,}", r"sk-ant-[A-Za-z0-9]{20,}",
-            r"ghp_[A-Za-z0-9]{36,}", r"gho_[A-Za-z0-9]{36,}",
-            r"xox[baprs]-[A-Za-z0-9-]{10,}", r"AKIA[A-Z0-9]{16}",
+            r"sk-[A-Za-z0-9]{20,}",
+            r"sk-ant-[A-Za-z0-9]{20,}",
+            r"ghp_[A-Za-z0-9]{36,}",
+            r"gho_[A-Za-z0-9]{36,}",
+            r"xox[baprs]-[A-Za-z0-9-]{10,}",
+            r"AKIA[A-Z0-9]{16}",
             r"-----BEGIN\s+(RSA|EC|DSA|OPENSSH)\s+PRIVATE\s+KEY-----",
         ]
         return any(re.match(p, value) for p in sensitive_patterns)
@@ -267,24 +300,35 @@ class _DangerVisitor(ast.NodeVisitor):
         rule = self._policy.rules.get(rule_name)
         return rule.enabled if rule else False
 
-    def _add_match(self, rule_id: str, category: RiskCategory, evidence: str,
-                   node: ast.AST, masked: bool = False) -> None:
+    def _add_match(self,
+                   rule_id: str,
+                   category: RiskCategory,
+                   evidence: str,
+                   node: ast.AST,
+                   masked: bool = False) -> None:
         line_no = getattr(node, "lineno", 0)
         for existing in self.matches:
             if existing.rule_id == rule_id and existing.line_number == line_no:
                 return
-        self.matches.append(RuleMatch(
-            rule_id=rule_id, risk_category=category,
-            risk_level=self._get_rule_risk_level(rule_id),
-            evidence=evidence[:200], line_number=line_no,
-            recommendation=self._get_recommendation(rule_id), masked=masked,
-        ))
+        self.matches.append(
+            RuleMatch(
+                rule_id=rule_id,
+                risk_category=category,
+                risk_level=self._get_rule_risk_level(rule_id),
+                evidence=evidence[:200],
+                line_number=line_no,
+                recommendation=self._get_recommendation(rule_id),
+                masked=masked,
+            ))
 
     def _get_rule_risk_level(self, rule_id: str) -> RiskLevel:
         rule_name_map = {
-            "R001": "dangerous_file_operations", "R002": "sensitive_file_read",
-            "R003": "network_egress", "R004": "process_execution",
-            "R005": "dependency_installation", "R006": "resource_abuse",
+            "R001": "dangerous_file_operations",
+            "R002": "sensitive_file_read",
+            "R003": "network_egress",
+            "R004": "process_execution",
+            "R005": "dependency_installation",
+            "R006": "resource_abuse",
             "R007": "sensitive_info_leak",
         }
         rule_name = rule_name_map.get(rule_id, "")

@@ -44,7 +44,6 @@ from ._types import ScanInput
 from ._types import ScriptType
 from ._types import SafetyDecision
 
-
 _DEFAULT_POLICY_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "tool_safety_policy.yaml",
@@ -144,12 +143,10 @@ class SafetyWrapper:
         # Check if blocked
         if report.is_blocked:
             rule_ids = ",".join(m.rule_id for m in report.matches)
-            msg = (
-                f"Tool '{tool_name}' execution blocked: "
-                f"decision={report.decision.name}, "
-                f"risk={report.risk_level.name}, "
-                f"rules=[{rule_ids}]"
-            )
+            msg = (f"Tool '{tool_name}' execution blocked: "
+                   f"decision={report.decision.name}, "
+                   f"risk={report.risk_level.name}, "
+                   f"rules=[{rule_ids}]")
             logger.warning("SafetyWrapper: %s", msg)
             return {
                 "blocked": True,
