@@ -53,28 +53,27 @@ def create_default_agent() -> LlmAgent:
         description="Coding assistant with spawn_subagent in zero-config mode.",
         model=_create_model(),
         instruction=INSTRUCTION,
-        tools=[ReadTool(), GlobTool(), GrepTool(),
-               SpawnSubAgentTool(
-                   # Stream the sub-agent's execution to the parent consumer.
-                   agent_config=SubAgentConfig(forward_events=True),
-               )],
+        tools=[
+            ReadTool(),
+            GlobTool(),
+            GrepTool(),
+            SpawnSubAgentTool(
+                # Stream the sub-agent's execution to the parent consumer.
+                agent_config=SubAgentConfig(forward_events=True), )
+        ],
     )
 
 
 _SECURITY_AUDITOR = SubAgentArchetype(
     name="security-auditor",
-    description=(
-        "Specialized security auditor for code vulnerability analysis. "
-        "Use this for ANY security-related task: code audits, secret "
-        "detection, auth review. Checks for OWASP Top 10 risks, CWE "
-        "patterns, rates severity, and produces structured reports."
-    ),
-    instruction=(
-        "You are a security auditor. Review the relevant code for security "
-        "issues: injection risks, hardcoded secrets, unsafe API usage, "
-        "missing authentication/authorization checks. Report findings "
-        "concisely with severity (low/medium/high/critical). Do NOT modify files."
-    ),
+    description=("Specialized security auditor for code vulnerability analysis. "
+                 "Use this for ANY security-related task: code audits, secret "
+                 "detection, auth review. Checks for OWASP Top 10 risks, CWE "
+                 "patterns, rates severity, and produces structured reports."),
+    instruction=("You are a security auditor. Review the relevant code for security "
+                 "issues: injection risks, hardcoded secrets, unsafe API usage, "
+                 "missing authentication/authorization checks. Report findings "
+                 "concisely with severity (low/medium/high/critical). Do NOT modify files."),
     tools=(ReadTool, GlobTool, GrepTool),
 )
 
@@ -92,7 +91,9 @@ def create_code_agent() -> LlmAgent:
         model=_create_model(),
         instruction=INSTRUCTION,
         tools=[
-            ReadTool(), GlobTool(), GrepTool(),
+            ReadTool(),
+            GlobTool(),
+            GrepTool(),
             SpawnSubAgentTool(
                 agents=[_SECURITY_AUDITOR, EXPLORE_AGENT, PLAN_AGENT],
                 # Stream the sub-agent's execution to the parent consumer.
@@ -117,9 +118,12 @@ def create_md_agent() -> LlmAgent:
         model=_create_model(),
         instruction=INSTRUCTION,
         tools=[
-            ReadTool(), GlobTool(), GrepTool(),
+            ReadTool(),
+            GlobTool(),
+            GrepTool(),
             SpawnSubAgentTool(
-                agents=[EXPLORE_AGENT, PLAN_AGENT], agent_paths=[_AGENTS_PATH],
+                agents=[EXPLORE_AGENT, PLAN_AGENT],
+                agent_paths=[_AGENTS_PATH],
                 # Stream the sub-agent's execution to the parent consumer.
                 agent_config=SubAgentConfig(forward_events=True),
             ),

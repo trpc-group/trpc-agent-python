@@ -5,6 +5,8 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Tests for the Tool Script Safety Guard.
 
+# flake8: noqa: F541,F841,F401,E401
+
 Covers at minimum the 12 required test scenarios:
 1.  Safe Python script
 2.  Dangerous delete (rm -rf)
@@ -1529,7 +1531,7 @@ def test_process_privilege_escalation_bash_sudo():
         if f.category == RiskCategory.PROCESS_AND_SYSTEM and f.risk_level == RiskLevel.CRITICAL
     ]
     assert len(proc_findings) > 0, \
-        f"sudo should trigger CRITICAL PROC finding, got {[(f.rule_id, f.risk_level.value, f.evidence[:50]) for f in report.findings if f.category == RiskCategory.PROCESS_AND_SYSTEM]}"
+        f"sudo should trigger CRITICAL PROC finding, got {[(f.rule_id, f.risk_level.value, f.evidence[:50]) for f in report.findings if f.category == RiskCategory.PROCESS_AND_SYSTEM]}"  # noqa: E501
 
 
 def test_process_medium_risk_for_pipe():
@@ -1550,7 +1552,7 @@ def test_process_medium_risk_for_pipe():
     assert len(proc_findings) > 0, "Pipe should still trigger a PROC finding (INFO level)"
     # Verify it's INFO, not MEDIUM — whitelisted commands → safe pipe
     assert all(f.risk_level == RiskLevel.INFO for f in proc_findings), \
-        f"Pipe between whitelisted commands should be INFO, got {[(f.rule_id, f.risk_level.value) for f in proc_findings]}"
+        f"Pipe between whitelisted commands should be INFO, got {[(f.rule_id, f.risk_level.value) for f in proc_findings]}"  # noqa: E501
 
     # A pipe with a non-whitelisted command should still be MEDIUM
     report2 = scanner.scan(

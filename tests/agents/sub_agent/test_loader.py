@@ -18,10 +18,10 @@ from trpc_agent_sdk.agents.sub_agent._loader import load_archetypes_from_dir
 from trpc_agent_sdk.agents.sub_agent._loader import _split_frontmatter
 from trpc_agent_sdk.agents.sub_agent._loader import _WHITELIST_NAMES
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write(tmp_path: Path, filename: str, content: str) -> Path:
     p = tmp_path / filename
@@ -32,6 +32,7 @@ def _write(tmp_path: Path, filename: str, content: str) -> Path:
 # ---------------------------------------------------------------------------
 # _split_frontmatter
 # ---------------------------------------------------------------------------
+
 
 def test_split_frontmatter_empty_text():
     fm, body = _split_frontmatter("")
@@ -62,8 +63,10 @@ def test_split_frontmatter_normal():
 # load_archetype_from_file — happy path
 # ---------------------------------------------------------------------------
 
+
 def test_minimal_md(tmp_path):
-    p = _write(tmp_path, "researcher.md", """\
+    p = _write(
+        tmp_path, "researcher.md", """\
         ---
         name: researcher
         description: Use for research tasks.
@@ -81,7 +84,8 @@ def test_minimal_md(tmp_path):
 
 
 def test_explicit_tools(tmp_path):
-    p = _write(tmp_path, "reader.md", """\
+    p = _write(
+        tmp_path, "reader.md", """\
         ---
         name: reader
         description: Only reads files.
@@ -98,7 +102,8 @@ def test_explicit_tools(tmp_path):
 
 
 def test_instruction_multiline(tmp_path):
-    p = _write(tmp_path, "multi.md", """\
+    p = _write(
+        tmp_path, "multi.md", """\
         ---
         name: multi
         description: Multi-line instruction test.
@@ -116,6 +121,7 @@ def test_instruction_multiline(tmp_path):
 # ---------------------------------------------------------------------------
 # load_archetype_from_file — error cases
 # ---------------------------------------------------------------------------
+
 
 def test_file_read_oserror_raises(tmp_path):
     """Passing a directory path triggers IsADirectoryError (OSError subclass)."""
@@ -164,7 +170,8 @@ def test_empty_body_raises(tmp_path):
 
 
 def test_unknown_tool_raises(tmp_path):
-    p = _write(tmp_path, "bad.md", """\
+    p = _write(
+        tmp_path, "bad.md", """\
         ---
         name: unknown-tool
         description: Something.
@@ -179,7 +186,8 @@ def test_unknown_tool_raises(tmp_path):
 
 
 def test_tools_not_list_raises(tmp_path):
-    p = _write(tmp_path, "bad.md", """\
+    p = _write(
+        tmp_path, "bad.md", """\
         ---
         name: bad-tools
         description: Something.
@@ -192,7 +200,8 @@ def test_tools_not_list_raises(tmp_path):
 
 
 def test_tool_entry_not_string_raises(tmp_path):
-    p = _write(tmp_path, "bad.md", """\
+    p = _write(
+        tmp_path, "bad.md", """\
         ---
         name: bad-tools
         description: Something.
@@ -214,7 +223,8 @@ def test_invalid_yaml_raises(tmp_path):
 
 
 def test_invalid_name_raises(tmp_path):
-    p = _write(tmp_path, "bad.md", """\
+    p = _write(
+        tmp_path, "bad.md", """\
         ---
         name: "123-invalid"
         description: Something.
@@ -228,6 +238,7 @@ def test_invalid_name_raises(tmp_path):
 # ---------------------------------------------------------------------------
 # load_archetypes_from_dir
 # ---------------------------------------------------------------------------
+
 
 def test_load_dir_empty(tmp_path):
     result = load_archetypes_from_dir(tmp_path)
@@ -296,8 +307,10 @@ def test_load_dir_ignores_non_md(tmp_path):
 # SpawnSubAgentTool integration
 # ---------------------------------------------------------------------------
 
+
 def test_archetype_tool_agent_paths(tmp_path):
-    _write(tmp_path, "custom.md", """\
+    _write(
+        tmp_path, "custom.md", """\
         ---
         name: custom
         description: Custom agent.
@@ -337,6 +350,7 @@ def test_archetype_tool_agent_paths_duplicate_raises(tmp_path):
 # Whitelist completeness smoke-test
 # ---------------------------------------------------------------------------
 
+
 def test_whitelist_names_all_importable():
     from trpc_agent_sdk.agents.sub_agent._loader import _tool_whitelist
     wl = _tool_whitelist()
@@ -350,7 +364,8 @@ def test_whitelist_names_all_importable():
 
 def test_tool_mapping_resolves_custom_tool(tmp_path):
     from trpc_agent_sdk.tools import ReadTool
-    p = _write(tmp_path, "custom.md", """\
+    p = _write(
+        tmp_path, "custom.md", """\
         ---
         name: custom
         description: Custom tool test.
@@ -368,7 +383,8 @@ def test_tool_mapping_resolves_custom_tool(tmp_path):
 
 def test_tool_mapping_overrides_builtin(tmp_path):
     from trpc_agent_sdk.tools import GrepTool
-    p = _write(tmp_path, "custom.md", """\
+    p = _write(
+        tmp_path, "custom.md", """\
         ---
         name: custom
         description: Override Read.
@@ -383,7 +399,8 @@ def test_tool_mapping_overrides_builtin(tmp_path):
 
 
 def test_tool_mapping_unknown_still_errors(tmp_path):
-    p = _write(tmp_path, "bad.md", """\
+    p = _write(
+        tmp_path, "bad.md", """\
         ---
         name: bad
         description: Unknown tool.
@@ -423,7 +440,8 @@ def test_frontmatter_scalar_raises(tmp_path):
 
 def test_tool_mapping_error_message_includes_custom(tmp_path):
     """Error message should include custom tool names from tool_mapping."""
-    p = _write(tmp_path, "bad.md", """\
+    p = _write(
+        tmp_path, "bad.md", """\
         ---
         name: bad
         description: Unknown tool.

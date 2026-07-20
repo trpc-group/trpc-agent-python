@@ -14,8 +14,6 @@ def get_model_config() -> tuple[str, str, str]:
     url = os.getenv("TRPC_AGENT_BASE_URL", "")
     model_name = os.getenv("TRPC_AGENT_MODEL_NAME", "")
     if not api_key or not url or not model_name:
-        raise ValueError(
-            "TRPC_AGENT_API_KEY, TRPC_AGENT_BASE_URL, and TRPC_AGENT_MODEL_NAME "
-            "must be set in environment variables"
-        )
+        raise ValueError("TRPC_AGENT_API_KEY, TRPC_AGENT_BASE_URL, and TRPC_AGENT_MODEL_NAME "
+                         "must be set in environment variables")
     return api_key, url, model_name

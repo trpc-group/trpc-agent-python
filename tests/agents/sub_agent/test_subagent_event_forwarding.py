@@ -36,6 +36,7 @@ from trpc_agent_sdk.types import Part
 
 
 class MockLLMModel(LLMModel):
+
     @classmethod
     def supported_models(cls) -> List[str]:
         return [r"test-dynamic-.*"]
@@ -208,6 +209,7 @@ def _make_model_event(text: str, *, partial: bool = False) -> MagicMock:
 
 
 def _mock_streaming_runner(event_stream: list) -> MagicMock:
+
     async def _fake_run_async(*args, **kwargs):
         for event in event_stream:
             yield event
@@ -233,11 +235,13 @@ async def test_streaming_yields_projections_then_result() -> None:
     mock_runner_instance = _mock_streaming_runner(events)
 
     with patch("trpc_agent_sdk.runners.Runner", MagicMock(return_value=mock_runner_instance)):
-        yielded = [v async for v in run_subagent_streaming(
-            parent_ctx=parent_ctx,
-            archetype=GENERAL_PURPOSE_AGENT,
-            prompt="Do something.",
-        )]
+        yielded = [
+            v async for v in run_subagent_streaming(
+                parent_ctx=parent_ctx,
+                archetype=GENERAL_PURPOSE_AGENT,
+                prompt="Do something.",
+            )
+        ]
 
     # 2 projection dicts (one per event) + 1 final string result.
     assert len(yielded) == 3
@@ -253,11 +257,13 @@ async def test_streaming_build_error_yields_error_dict_only() -> None:
     parent_ctx.agent.model = None  # force resolve_model to raise
     parent_ctx.agent.tools = []
 
-    yielded = [v async for v in run_subagent_streaming(
-        parent_ctx=parent_ctx,
-        archetype=GENERAL_PURPOSE_AGENT,
-        prompt="Do something.",
-    )]
+    yielded = [
+        v async for v in run_subagent_streaming(
+            parent_ctx=parent_ctx,
+            archetype=GENERAL_PURPOSE_AGENT,
+            prompt="Do something.",
+        )
+    ]
 
     assert len(yielded) == 1
     assert yielded[0]["status"] == "error"
@@ -271,11 +277,13 @@ async def test_streaming_cancelled_final_value() -> None:
     mock_runner_instance.run_async = MagicMock(side_effect=RunCancelledException())
 
     with patch("trpc_agent_sdk.runners.Runner", MagicMock(return_value=mock_runner_instance)):
-        yielded = [v async for v in run_subagent_streaming(
-            parent_ctx=parent_ctx,
-            archetype=GENERAL_PURPOSE_AGENT,
-            prompt="Do something.",
-        )]
+        yielded = [
+            v async for v in run_subagent_streaming(
+                parent_ctx=parent_ctx,
+                archetype=GENERAL_PURPOSE_AGENT,
+                prompt="Do something.",
+            )
+        ]
 
     assert yielded[-1] == "[sub-agent cancelled]"
     mock_runner_instance.close.assert_called_once()
@@ -289,12 +297,14 @@ async def test_streaming_max_turns_note_in_final() -> None:
     mock_runner_instance = _mock_streaming_runner(events)
 
     with patch("trpc_agent_sdk.runners.Runner", MagicMock(return_value=mock_runner_instance)):
-        yielded = [v async for v in run_subagent_streaming(
-            parent_ctx=parent_ctx,
-            archetype=GENERAL_PURPOSE_AGENT,
-            prompt="Do something.",
-            agent_config=SubAgentConfig(max_turns=1),
-        )]
+        yielded = [
+            v async for v in run_subagent_streaming(
+                parent_ctx=parent_ctx,
+                archetype=GENERAL_PURPOSE_AGENT,
+                prompt="Do something.",
+                agent_config=SubAgentConfig(max_turns=1),
+            )
+        ]
 
     assert "[sub-agent stopped: max turns reached]" in yielded[-1]
     mock_runner_instance.close.assert_called_once()

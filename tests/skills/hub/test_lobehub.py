@@ -21,16 +21,23 @@ import pytest
 
 from trpc_agent_sdk.skills.hub import LobeHubSource
 
-
 _INDEX = {
     "agents": [
         {
             "identifier": "writer-bot",
-            "meta": {"title": "Writer Bot", "description": "Helps you write.", "tags": ["writing"]},
+            "meta": {
+                "title": "Writer Bot",
+                "description": "Helps you write.",
+                "tags": ["writing"]
+            },
         },
         {
             "identifier": "coder-bot",
-            "meta": {"title": "Coder Bot", "description": "Helps you code.", "tags": ["coding"]},
+            "meta": {
+                "title": "Coder Bot",
+                "description": "Helps you code.",
+                "tags": ["coding"]
+            },
         },
     ]
 }
@@ -96,8 +103,14 @@ class TestFetch:
         source = LobeHubSource()
         agent_data = {
             "identifier": "writer-bot",
-            "meta": {"title": "Writer Bot", "description": "Helps you write.", "tags": ["writing"]},
-            "config": {"systemRole": "You are a writing assistant."},
+            "meta": {
+                "title": "Writer Bot",
+                "description": "Helps you write.",
+                "tags": ["writing"]
+            },
+            "config": {
+                "systemRole": "You are a writing assistant."
+            },
         }
         with patch.object(source, "_fetch_agent", return_value=agent_data):
             bundle = source.fetch("lobehub/writer-bot")
@@ -119,8 +132,14 @@ class TestConvertToSkillMd:
     def test_includes_frontmatter_and_body(self):
         agent_data = {
             "identifier": "writer-bot",
-            "meta": {"title": "Writer Bot", "description": "Helps you write.", "tags": ["writing", "assistant"]},
-            "config": {"systemRole": "Be helpful."},
+            "meta": {
+                "title": "Writer Bot",
+                "description": "Helps you write.",
+                "tags": ["writing", "assistant"]
+            },
+            "config": {
+                "systemRole": "Be helpful."
+            },
         }
         md = LobeHubSource._convert_to_skill_md(agent_data)
         assert md.startswith("---\n")

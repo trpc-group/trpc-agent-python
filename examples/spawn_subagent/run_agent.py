@@ -36,6 +36,7 @@ SAMPLE_REPO = os.path.join(EXAMPLE_DIR, "sample_repo")
 if EXAMPLE_DIR not in sys.path:
     sys.path.insert(0, EXAMPLE_DIR)
 
+
 def _truncate(text: str, max_len: int = 200) -> str:
     """Truncate long tool output for display."""
     if not isinstance(text, str):
@@ -99,8 +100,10 @@ _QUERIES = {
         "accept a 'user_id' parameter, and report which files they are in "
         "and what they do.",
     ],
-    "code": _SHARED_AGENT_QUERIES,
-    "md": _SHARED_AGENT_QUERIES,
+    "code":
+    _SHARED_AGENT_QUERIES,
+    "md":
+    _SHARED_AGENT_QUERIES,
 }
 
 
@@ -139,9 +142,9 @@ async def run_demo(mode: str):
         user_content = Content(parts=[Part.from_text(text=query)])
         print("\U0001F916 Assistant: ", end="", flush=True)
         async for event in runner.run_async(
-            user_id=user_id,
-            session_id=current_session_id,
-            new_message=user_content,
+                user_id=user_id,
+                session_id=current_session_id,
+                new_message=user_content,
         ):
             # Forwarded sub-agent execution events (SubAgentConfig
             # forward_events=True). These are partial progress events carrying
@@ -165,7 +168,9 @@ async def run_demo(mode: str):
                         if part.thought:
                             continue
                         if part.function_call:
-                            print(f"\n\n\U0001F527 [Invoke Tool:: {part.function_call.name}{(_truncate(part.function_call.args))}]\n")
+                            tool_info = f"[Invoke Tool:: {part.function_call.name}"
+                            tool_info += f"{(_truncate(part.function_call.args))}]"
+                            print(f"\n\n\U0001F527 {tool_info}\n")
                         elif part.function_response:
                             print(f"\n\U0001F4CA [Tool Result: {_truncate(part.function_response.response)}]\n")
 
@@ -176,10 +181,10 @@ async def run_demo(mode: str):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SpawnSubAgentTool demo")
-    parser.add_argument(
-        "--mode", choices=["default", "code", "md"], default="default",
-        help="Which agent configuration to run (default: default)"
-    )
+    parser.add_argument("--mode",
+                        choices=["default", "code", "md"],
+                        default="default",
+                        help="Which agent configuration to run (default: default)")
     args = parser.parse_args()
 
     os.chdir(SAMPLE_REPO)

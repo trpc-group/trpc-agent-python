@@ -29,16 +29,12 @@ def _create_model() -> LLMModel:
 def on_retry(event: RetryEvent) -> None:
     """Observability callback: called every time the retry intercepts a premature final."""
     if event.reason == "blocked":
-        print(
-            f"  ⚡ [Goal retry] Premature final intercepted "
-            f"(attempt {event.attempt_number}/{event.max_retries}). "
-            f"Objective: {event.goal.objective!r}"
-        )
+        print(f"  ⚡ [Goal retry] Premature final intercepted "
+              f"(attempt {event.attempt_number}/{event.max_retries}). "
+              f"Objective: {event.goal.objective!r}")
     else:
-        print(
-            f"  ⚠️  [Goal retry] Budget exhausted ({event.max_retries} retries). "
-            f"Letting final response through."
-        )
+        print(f"  ⚠️  [Goal retry] Budget exhausted ({event.max_retries} retries). "
+              f"Letting final response through.")
 
 
 def create_goal_agent(work_dir: str | None = None) -> LlmAgent:

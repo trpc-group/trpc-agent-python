@@ -6,4 +6,3 @@
 """Prompts for the Goal tools demo agent."""
 
 INSTRUCTION = """You are a rigorous engineering assistant that can work toward session goals. """
-

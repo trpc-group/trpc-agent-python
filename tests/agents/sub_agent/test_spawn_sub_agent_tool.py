@@ -27,7 +27,7 @@ def _custom_archetype(name: str = "custom") -> SubAgentArchetype:
         name=name,
         description=f"a custom archetype {name}",
         instruction="be helpful",
-        tools=(ReadTool,),
+        tools=(ReadTool, ),
     )
 
 
@@ -63,18 +63,14 @@ def test_general_purpose_can_be_added_explicitly() -> None:
 
 def test_agent_paths_appended(tmp_path) -> None:
     md = tmp_path / "explorer.md"
-    md.write_text(
-        "---\nname: explorer\ndescription: An explorer agent.\n---\n\nExplore."
-    )
+    md.write_text("---\nname: explorer\ndescription: An explorer agent.\n---\n\nExplore.")
     t = SpawnSubAgentTool(agent_paths=[tmp_path])
     assert t.registry.names() == ["default", "explorer"]
 
 
 def test_agent_paths_collision_raises(tmp_path) -> None:
     md = tmp_path / "clash.md"
-    md.write_text(
-        "---\nname: default\ndescription: Collides with built-in.\n---\n\nClash."
-    )
+    md.write_text("---\nname: default\ndescription: Collides with built-in.\n---\n\nClash.")
     with pytest.raises(ValueError, match="collides"):
         SpawnSubAgentTool(agent_paths=[tmp_path])
 
@@ -91,9 +87,7 @@ def test_with_default_false_with_agents(tmp_path) -> None:
 
 def test_with_default_false_with_agent_paths(tmp_path) -> None:
     md = tmp_path / "explorer.md"
-    md.write_text(
-        "---\nname: explorer\ndescription: An explorer agent.\n---\n\nExplore."
-    )
+    md.write_text("---\nname: explorer\ndescription: An explorer agent.\n---\n\nExplore.")
     t = SpawnSubAgentTool(agent_paths=[tmp_path], with_default=False)
     assert t.registry.names() == ["explorer"]
 
@@ -126,7 +120,11 @@ async def test_unknown_subagent_type_returns_error_when_no_default() -> None:
     ctx = _make_tool_context()
     result = await t._run_async_impl(
         tool_context=ctx,
-        args={"subagent_type": "nope", "prompt": "hi", "description": "x"},
+        args={
+            "subagent_type": "nope",
+            "prompt": "hi",
+            "description": "x"
+        },
     )
     assert result["status"] == "error"
     assert "unknown subagent_type" in result["message"]
@@ -138,16 +136,16 @@ async def test_missing_subagent_type_falls_back_to_default() -> None:
     ctx = _make_tool_context()
     result = await t._run_async_impl(
         tool_context=ctx,
-        args={"prompt": "hi", "description": "x"},
+        args={
+            "prompt": "hi",
+            "description": "x"
+        },
     )
     # Falls back to default, tries to run sub-agent.
     # Since ctx is a mock, it will raise an error from run_subagent,
     # but it should NOT be the "unknown subagent_type" error.
-    assert not (
-        isinstance(result, dict)
-        and result.get("status") == "error"
-        and "unknown subagent_type" in str(result.get("message"))
-    )
+    assert not (isinstance(result, dict) and result.get("status") == "error"
+                and "unknown subagent_type" in str(result.get("message")))
 
 
 @pytest.mark.asyncio
@@ -156,7 +154,11 @@ async def test_empty_prompt_returns_error() -> None:
     ctx = _make_tool_context()
     result = await t._run_async_impl(
         tool_context=ctx,
-        args={"subagent_type": "default", "prompt": "   ", "description": "x"},
+        args={
+            "subagent_type": "default",
+            "prompt": "   ",
+            "description": "x"
+        },
     )
     assert result["status"] == "error"
     assert "non-empty" in result["message"]
@@ -187,21 +189,17 @@ def test_description_shows_all_for_none_tools() -> None:
 def test_tool_mapping_custom_tool_in_md(tmp_path) -> None:
     """MD-defined archetype with a custom tool resolved via tool_mapping."""
     md = tmp_path / "custom.md"
-    md.write_text(
-        "---\nname: custom\ndescription: Custom tool.\ntools:\n  - MyTool\n---\n\nBe helpful."
-    )
+    md.write_text("---\nname: custom\ndescription: Custom tool.\ntools:\n  - MyTool\n---\n\nBe helpful.")
     t = SpawnSubAgentTool(agent_paths=[tmp_path], tool_mapping={"MyTool": ReadTool})
     archetype = t.registry.get("custom")
     assert archetype is not None
-    assert archetype.tools == (ReadTool,)
+    assert archetype.tools == (ReadTool, )
 
 
 def test_tool_mapping_unknown_in_md_still_errors(tmp_path) -> None:
     """Unknown tool name raises ValueError even with unrelated tool_mapping."""
     md = tmp_path / "bad.md"
-    md.write_text(
-        "---\nname: bad\ndescription: Bad.\ntools:\n  - NotReal\n---\n\nBody."
-    )
+    md.write_text("---\nname: bad\ndescription: Bad.\ntools:\n  - NotReal\n---\n\nBody.")
     with pytest.raises(ValueError, match="unknown tool"):
         SpawnSubAgentTool(agent_paths=[tmp_path], tool_mapping={"MyTool": ReadTool})
 
@@ -209,9 +207,7 @@ def test_tool_mapping_unknown_in_md_still_errors(tmp_path) -> None:
 def test_md_archetype_no_tools_inherits(tmp_path) -> None:
     """MD-defined archetype without tools: should get tools=None."""
     md = tmp_path / "explorer.md"
-    md.write_text(
-        "---\nname: explorer\ndescription: No tools specified.\n---\n\nExplore stuff."
-    )
+    md.write_text("---\nname: explorer\ndescription: No tools specified.\n---\n\nExplore stuff.")
     t = SpawnSubAgentTool(agent_paths=[tmp_path])
     archetype = t.registry.get("explorer")
     assert archetype is not None
@@ -264,7 +260,11 @@ async def test_skip_summarization_sets_event_action() -> None:
 
     await t._run_async_impl(
         tool_context=ctx,
-        args={"subagent_type": "nope", "prompt": "hi", "description": "x"},
+        args={
+            "subagent_type": "nope",
+            "prompt": "hi",
+            "description": "x"
+        },
     )
     assert ctx.event_actions.skip_summarization is True
 
@@ -287,10 +287,16 @@ async def test_run_streaming_unknown_type_no_default_yields_error() -> None:
     """run_streaming surfaces the resolve error as its only value."""
     t = SpawnSubAgentTool(with_default=False, agent_config=SubAgentConfig(forward_events=True))
     ctx = _make_tool_context()
-    yielded = [v async for v in t.run_streaming(
-        tool_context=ctx,
-        args={"subagent_type": "nope", "prompt": "hi", "description": "x"},
-    )]
+    yielded = [
+        v async for v in t.run_streaming(
+            tool_context=ctx,
+            args={
+                "subagent_type": "nope",
+                "prompt": "hi",
+                "description": "x"
+            },
+        )
+    ]
     assert len(yielded) == 1
     assert yielded[0]["status"] == "error"
 
@@ -308,15 +314,29 @@ async def test_run_streaming_forwards_projections_then_result() -> None:
         yield "final result"
 
     with patch(
-        "trpc_agent_sdk.agents.sub_agent._spawn_sub_agent_tool.run_subagent_streaming",
-        _fake_stream,
+            "trpc_agent_sdk.agents.sub_agent._spawn_sub_agent_tool.run_subagent_streaming",
+            _fake_stream,
     ):
-        yielded = [v async for v in t.run_streaming(
-            tool_context=ctx,
-            args={"subagent_type": "default", "prompt": "do it", "description": "x"},
-        )]
+        yielded = [
+            v async for v in t.run_streaming(
+                tool_context=ctx,
+                args={
+                    "subagent_type": "default",
+                    "prompt": "do it",
+                    "description": "x"
+                },
+            )
+        ]
 
     assert yielded == [
-        {"author": "subagent_default", "partial": True, "content": {"parts": [{"text": "step 1"}]}},
+        {
+            "author": "subagent_default",
+            "partial": True,
+            "content": {
+                "parts": [{
+                    "text": "step 1"
+                }]
+            }
+        },
         "final result",
     ]

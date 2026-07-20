@@ -47,10 +47,10 @@ load_dotenv()
 APP_NAME = "goal_agent_demo"
 USER_ID = "demo_user"
 
-
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
 
 def _summarise_tool_response(name: str, resp: object) -> str:
     if not isinstance(resp, dict):
@@ -97,14 +97,14 @@ async def _run_turn(
     # Tool calls/responses arrive as non-partial events and are printed immediately.
     # Model text may arrive as streaming partial chunks; we fall back to partial
     # collection so pure-text responses are always visible.
-    streaming_text: list[str] = []   # accumulated from partial text chunks
-    final_text: list[str] = []       # text from the last non-partial event
+    streaming_text: list[str] = []  # accumulated from partial text chunks
+    final_text: list[str] = []  # text from the last non-partial event
 
     user_content = Content(parts=[Part.from_text(text=query)])
     async for event in runner.run_async(
-        user_id=USER_ID,
-        session_id=session_id,
-        new_message=user_content,
+            user_id=USER_ID,
+            session_id=session_id,
+            new_message=user_content,
     ):
         if not event.content or not event.content.parts:
             continue
@@ -213,17 +213,13 @@ CASE2_OBJECTIVE = (
     # 目标与 prompt 差异化，观察模型是否能够正确理解目标并执行任务
     "在当前目录创建 notes/ 目录，其中包含两个文件：\n"
     "  - summary.txt：用三句话描述 Python 异步编程的核心概念\n"
-    "  - example.py：一个可运行的 asyncio 示例（包含 main 协程和 asyncio.run 调用）"
-)
+    "  - example.py：一个可运行的 asyncio 示例（包含 main 协程和 asyncio.run 调用）")
 
-CASE2_TURNS = [
-    (
-        "执行任务（用户设置目标）",
-        # 宿主已通过 start_goal() 设置了目标，消息里不提及任何 goal 工具。
-        "请在当前目录创建 notes/ 目录，在其中写文件：\n"
-        "summary.txt：用三句话描述 Python 异步编程的核心概念\n"
-    )
-]
+CASE2_TURNS = [(
+    "执行任务（用户设置目标）",
+    # 宿主已通过 start_goal() 设置了目标，消息里不提及任何 goal 工具。
+    "请在当前目录创建 notes/ 目录，在其中写文件：\n"
+    "summary.txt：用三句话描述 Python 异步编程的核心概念\n")]
 
 
 async def case2_user_sets_goal(work_dir: str) -> None:
@@ -270,10 +266,8 @@ async def case2_user_sets_goal(work_dir: str) -> None:
     print(f"🎯 Goal pre-injected by host:")
     print(f"   objective: {goal.objective!r}")
     print(f"   status:    {goal.status.value}")
-    print(
-        "\n📌 Note: goal is active from the first token.\n"
-        "   The agent does NOT call create_goal.\n"
-    )
+    print("\n📌 Note: goal is active from the first token.\n"
+          "   The agent does NOT call create_goal.\n")
 
     for label, query in CASE2_TURNS:
         await _run_turn(runner, session_id=session_id, label=label, query=query, agent_name=agent.name)
@@ -284,6 +278,7 @@ async def case2_user_sets_goal(work_dir: str) -> None:
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 async def main() -> None:
     work_dir = os.getcwd()

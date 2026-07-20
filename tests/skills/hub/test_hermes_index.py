@@ -24,7 +24,6 @@ from trpc_agent_sdk.skills.hub import GitHubAuth
 from trpc_agent_sdk.skills.hub import SkillBundle
 from trpc_agent_sdk.skills.hub._hermes_index import HermesIndexSource
 
-
 _INDEX = {
     "skills": [
         {
@@ -69,9 +68,7 @@ class TestIsAvailable:
 
     def test_index_is_loaded_only_once(self):
         source = HermesIndexSource(GitHubAuth())
-        with patch(
-            "trpc_agent_sdk.skills.hub._hermes_index._load_hermes_index", return_value=_INDEX
-        ) as load_mock:
+        with patch("trpc_agent_sdk.skills.hub._hermes_index._load_hermes_index", return_value=_INDEX) as load_mock:
             assert source.is_available is True
             assert source.is_available is True
         load_mock.assert_called_once()
@@ -131,14 +128,12 @@ class TestFetch:
     def test_uses_resolved_github_id_when_present(self):
         source = HermesIndexSource(GitHubAuth())
         index = {
-            "skills": [
-                {
-                    "identifier": "owner/repo/skills/plan",
-                    "name": "plan",
-                    "resolved_github_id": "owner/repo/actual/path/plan",
-                    "source": "github",
-                }
-            ]
+            "skills": [{
+                "identifier": "owner/repo/skills/plan",
+                "name": "plan",
+                "resolved_github_id": "owner/repo/actual/path/plan",
+                "source": "github",
+            }]
         }
         bundle = SkillBundle(name="plan", files={"SKILL.md": "body"}, source="github", identifier="resolved")
         fake_github = MagicMock()
@@ -155,15 +150,13 @@ class TestFetch:
     def test_falls_back_to_repo_and_path(self):
         source = HermesIndexSource(GitHubAuth())
         index = {
-            "skills": [
-                {
-                    "identifier": "owner/repo/skills/plan",
-                    "name": "plan",
-                    "repo": "owner/repo",
-                    "path": "skills/plan",
-                    "source": "github",
-                }
-            ]
+            "skills": [{
+                "identifier": "owner/repo/skills/plan",
+                "name": "plan",
+                "repo": "owner/repo",
+                "path": "skills/plan",
+                "source": "github",
+            }]
         }
         bundle = SkillBundle(name="plan", files={"SKILL.md": "body"}, source="github", identifier="x")
         fake_github = MagicMock()

@@ -103,7 +103,10 @@ class TestWriteBundleFiles:
             skills_path=tmp_path,
             category="hub",
             name="plan",
-            files={"SKILL.md": "body", "assets/logo.png": b"\x89PNG"},
+            files={
+                "SKILL.md": "body",
+                "assets/logo.png": b"\x89PNG"
+            },
         )
 
         target = tmp_path / "hub" / "plan"
@@ -266,9 +269,8 @@ class TestCreateDefaultSkillRepositoryRemoteSkills:
         assert repository.path("plan") == str(install_root / "hub" / "plan")
 
     def test_install_path_defaults_to_system_temp_dir(self):
-        config = SkillSpecsConfig(
-            specs=[SkillSpec(source=FakeSource(bundle=_bundle()), identifier="id", name="plan")],
-        )
+        config = SkillSpecsConfig(specs=[SkillSpec(source=FakeSource(bundle=_bundle()), identifier="id",
+                                                   name="plan")], )
 
         assert config.install_path == str(Path(tempfile.gettempdir()) / "trpc_agent_skills")
 
