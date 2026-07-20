@@ -923,19 +923,26 @@ def _path_boundary_pattern(path: str) -> str:
 
 
 def _extract_url(text: str) -> Optional[str]:
-    """Naive domain extractor from a line of text — used for whitelist checks."""
-    # Match http(s)://domain or domain-like patterns after curl/wget
-    m = re.search(r"https?://([^\s/\"':]+)", text)
+    """Extract a domain name from *text* for whitelist checks.
+
+    Strips user:pass@ prefixes so that localhost:8080@evil.com is correctly
+    identified as evil.com rather than localhost.
+    """
+    m = re.search(r"https?://([^\s/\"']+)", text)
     if m:
-        return m.group(1)
-    # Also try bare domain patterns like 'api.example.com'
-    # Must have at least one dot separating valid TLD-like segments
+        host = m.group(1)
+        if "@" in host:
+            host = host.rsplit("@", 1)[-1]
+        if ":" in host:
+            host = host.rsplit(":", 1)[0]
+        return host
     m = re.search(r"(?:^|\s)((?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})", text)
     if m:
         candidate = m.group(0).strip()
-        # Filter out obvious false positives: Python method calls, variable names, etc.
         if "(" in candidate or candidate.startswith("."):
             return None
+        if "@" in candidate:
+            candidate = candidate.rsplit("@", 1)[-1]
         return candidate
     return None
 

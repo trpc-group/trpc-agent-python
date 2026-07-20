@@ -91,9 +91,10 @@ class SafetyScanner:
         """
         t0 = time.perf_counter()
 
-        # Auto-detect script type if unknown
-        if scan_input.script_type == ScriptType.UNKNOWN:
-            scan_input.script_type = self._detect_type(scan_input.script_content)
+        # Auto-detect script type if unknown (local copy — don't mutate the input)
+        effective_script_type = scan_input.script_type
+        if effective_script_type == ScriptType.UNKNOWN:
+            effective_script_type = self._detect_type(scan_input.script_content)
 
         # Build effective scan content: script + command-line args (if any)
         script = scan_input.script_content
@@ -160,7 +161,7 @@ class SafetyScanner:
             blocklist_detail = (" Blocklist pattern matched — denied." if blocklist_hit else " Denied for safety.")
             return SafetyScanReport(
                 tool_name=scan_input.tool_name,
-                script_type=scan_input.script_type,
+                script_type=effective_script_type,
                 script_size_lines=script_lines,
                 decision=Decision.DENY,
                 risk_level=RiskLevel.CRITICAL if blocklist_hit else RiskLevel.HIGH,
@@ -177,10 +178,10 @@ class SafetyScanner:
         # ══════════════════════════════════════════════════════════════
         # LAYER 1 & 2: AST-based Python + shlex-based Bash scanning
         # ══════════════════════════════════════════════════════════════
-        if scan_input.script_type in (ScriptType.PYTHON, ScriptType.UNKNOWN):
+        if effective_script_type in (ScriptType.PYTHON, ScriptType.UNKNOWN):
             all_findings.extend(self._scan_python_ast(script, scan_input))
 
-        if scan_input.script_type in (ScriptType.BASH, ScriptType.UNKNOWN):
+        if effective_script_type in (ScriptType.BASH, ScriptType.UNKNOWN):
             all_findings.extend(self._scan_bash_tokens(script, scan_input))
 
         # ══════════════════════════════════════════════════════════════
@@ -223,7 +224,7 @@ class SafetyScanner:
 
         # Apply blocklist override — blocklist patterns always → deny
         if decision != Decision.DENY:
-            decision, bl_findings = self._check_blocklist_override(script, decision, scan_input.script_type)
+            decision, bl_findings = self._check_blocklist_override(script, decision, effective_script_type)
             all_findings.extend(bl_findings)
         # Blocklist commands — also force DENY when a forbidden command literal appears
         if decision != Decision.DENY and self._policy.blocklist_commands:
@@ -287,7 +288,7 @@ class SafetyScanner:
 
         return SafetyScanReport(
             tool_name=scan_input.tool_name,
-            script_type=scan_input.script_type,
+            script_type=effective_script_type,
             script_size_lines=script_lines,
             decision=decision,
             risk_level=max_risk,
@@ -976,15 +977,29 @@ def _deduplicate_findings(findings: List[SafetyFinding]) -> List[SafetyFinding]:
 
 
 def _extract_url(text: str) -> Optional[str]:
-    """Naive domain extractor from a line of text — used for whitelist checks."""
-    m = re.search(r"https?://([^\s/\"':]+)", text)
+    """Extract a domain name from *text* for whitelist checks.
+
+    Strips user:pass@ prefixes so that ``localhost:8080@evil.com`` is
+    correctly identified as *evil.com* rather than being mistaken for a
+    whitelisted localhost.
+    """
+    # Match the full authority portion including :port and @userinfo,
+    # then strip userinfo and port to get the bare hostname.
+    m = re.search(r"https?://([^\s/\"']+)", text)
     if m:
-        return m.group(1)
+        host = m.group(1)
+        if "@" in host:
+            host = host.rsplit("@", 1)[-1]
+        if ":" in host:
+            host = host.rsplit(":", 1)[0]
+        return host
     m = re.search(r"(?:^|\s)((?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})", text)
     if m:
         candidate = m.group(0).strip()
         if "(" in candidate or candidate.startswith("."):
             return None
+        if "@" in candidate:
+            candidate = candidate.rsplit("@", 1)[-1]
         return candidate
     return None
 
