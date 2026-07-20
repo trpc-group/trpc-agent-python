@@ -1,5 +1,5 @@
 {
-  "task_id": "9118ea7d-760d-4cf8-a383-7d14f298197e",
+  "task_id": "f684c95b-c5a8-41cb-a55e-1eeec9233837",
   "conclusion": "fail",
   "findings": [
     {
@@ -61,13 +61,13 @@
         "python",
         "skills/code-review/scripts/parse_diff.py",
         "--diff-file",
-        "examples/skills_code_review_agent/sample_outputs/skill_inputs/9118ea7d-760d-4cf8-a383-7d14f298197e.diff"
+        "work/inputs/review.diff"
       ],
       "status": "succeeded",
       "runtime": "local",
-      "duration_ms": 188,
+      "duration_ms": 3404,
       "exit_code": 0,
-      "stdout": "{\n  \"diff_file\": \"examples/skills_code_review_agent/sample_outputs/skill_inputs/9118ea7d-760d-4cf8-a383-7d14f298197e.diff\",\n  \"line_count\": 22,\n  \"file_count\": 2,\n  \"has_security_keywords\": true\n}\n",
+      "stdout": "{\n  \"diff_file\": \"review.diff\",\n  \"line_count\": 22,\n  \"file_count\": 2,\n  \"has_security_keywords\": true\n}\n",
       "stderr": "",
       "timed_out": false,
       "output_truncated": false,
@@ -79,13 +79,13 @@
         "python",
         "skills/code-review/scripts/run_linters.py",
         "--diff-file",
-        "examples/skills_code_review_agent/sample_outputs/skill_inputs/9118ea7d-760d-4cf8-a383-7d14f298197e.diff"
+        "work/inputs/review.diff"
       ],
       "status": "succeeded",
       "runtime": "local",
-      "duration_ms": 182,
+      "duration_ms": 3139,
       "exit_code": 0,
-      "stdout": "{\n  \"diff_file\": \"examples/skills_code_review_agent/sample_outputs/skill_inputs/9118ea7d-760d-4cf8-a383-7d14f298197e.diff\",\n  \"warning_count\": 2,\n  \"warnings\": [\n    \"Security-sensitive call detected: eval\",\n    \"Shell execution enabled in subprocess call\"\n  ]\n}\n",
+      "stdout": "{\n  \"diff_file\": \"review.diff\",\n  \"warning_count\": 2,\n  \"warnings\": [\n    \"Security-sensitive call detected: eval\",\n    \"Shell execution enabled in subprocess call\"\n  ]\n}\n",
       "stderr": "",
       "timed_out": false,
       "output_truncated": false,
@@ -97,13 +97,13 @@
         "python",
         "skills/code-review/scripts/run_tests.py",
         "--diff-file",
-        "examples/skills_code_review_agent/sample_outputs/skill_inputs/9118ea7d-760d-4cf8-a383-7d14f298197e.diff"
+        "work/inputs/review.diff"
       ],
       "status": "succeeded",
       "runtime": "local",
-      "duration_ms": 218,
+      "duration_ms": 4462,
       "exit_code": 0,
-      "stdout": "{\n  \"diff_file\": \"examples/skills_code_review_agent/sample_outputs/skill_inputs/9118ea7d-760d-4cf8-a383-7d14f298197e.diff\",\n  \"changed_test_files\": [\n    \"tests/test_calculator.py\"\n  ],\n  \"test_update_present\": true\n}\n",
+      "stdout": "{\n  \"diff_file\": \"review.diff\",\n  \"changed_test_files\": [\n    \"tests/test_calculator.py\"\n  ],\n  \"test_update_present\": true\n}\n",
       "stderr": "",
       "timed_out": false,
       "output_truncated": false,
@@ -115,7 +115,7 @@
     "high": 2
   },
   "monitoring_summary": {
-    "total_duration_ms": 604,
+    "total_duration_ms": 11032,
     "changed_files_count": 2,
     "added_lines_count": 6,
     "deleted_lines_count": 1,

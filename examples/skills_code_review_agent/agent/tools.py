@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import shlex
-import subprocess
 import sys
 from pathlib import Path
 from time import perf_counter
 from typing import Any
+from uuid import uuid4
 
 from trpc_agent_sdk.code_executors import BaseWorkspaceRuntime
 from trpc_agent_sdk.code_executors import DEFAULT_SKILLS_CONTAINER
+from trpc_agent_sdk.code_executors import WorkspacePutFileInfo
+from trpc_agent_sdk.code_executors import WorkspaceRunProgramSpec
+from trpc_agent_sdk.code_executors import WorkspaceStageOptions
 from trpc_agent_sdk.code_executors import create_container_workspace_runtime
 from trpc_agent_sdk.code_executors import create_local_workspace_runtime
 from trpc_agent_sdk.skills import BaseSkillRepository
@@ -26,7 +30,8 @@ from ..src.review_types import SandboxRunRecord, SandboxRunStatus
 SKILL_NAME = "code-review"
 SCRIPT_TIMEOUT_SECONDS = 20
 OUTPUT_LIMIT_CHARS = 4000
-HOST_EXECUTION_RUNTIME = "local"
+WORKSPACE_SKILL_DIR = f"skills/{SKILL_NAME}"
+WORKSPACE_DIFF_PATH = "work/inputs/review.diff"
 
 
 def create_skill_tool_set(
@@ -58,15 +63,16 @@ def build_skill_script_plan(
     """Build the list of planned skill-script executions for the review."""
 
     scripts_dir = resolve_code_review_skill_dir(project_root=project_root) / "scripts"
+    _ = diff_file
     return [
         SkillScriptInvocation(
             name="parse_diff",
             script_path=scripts_dir / "parse_diff.py",
             command=[
-                sys.executable,
-                str(scripts_dir / "parse_diff.py"),
+                "python",
+                f"{WORKSPACE_SKILL_DIR}/scripts/parse_diff.py",
                 "--diff-file",
-                str(diff_file),
+                WORKSPACE_DIFF_PATH,
             ],
             target="skill:code-review/scripts/parse_diff.py",
         ),
@@ -74,10 +80,10 @@ def build_skill_script_plan(
             name="run_linters",
             script_path=scripts_dir / "run_linters.py",
             command=[
-                sys.executable,
-                str(scripts_dir / "run_linters.py"),
+                "python",
+                f"{WORKSPACE_SKILL_DIR}/scripts/run_linters.py",
                 "--diff-file",
-                str(diff_file),
+                WORKSPACE_DIFF_PATH,
             ],
             target="skill:code-review/scripts/run_linters.py",
         ),
@@ -85,10 +91,10 @@ def build_skill_script_plan(
             name="run_tests",
             script_path=scripts_dir / "run_tests.py",
             command=[
-                sys.executable,
-                str(scripts_dir / "run_tests.py"),
+                "python",
+                f"{WORKSPACE_SKILL_DIR}/scripts/run_tests.py",
                 "--diff-file",
-                str(diff_file),
+                WORKSPACE_DIFF_PATH,
             ],
             target="skill:code-review/scripts/run_tests.py",
         ),
@@ -119,25 +125,23 @@ def execute_skill_script(
     invocation: SkillScriptInvocation,
     *,
     runtime: str,
+    diff_text: str,
+    project_root: Path | None = None,
     timeout_seconds: int = SCRIPT_TIMEOUT_SECONDS,
     output_limit_chars: int = OUTPUT_LIMIT_CHARS,
 ) -> SandboxRunRecord:
-    """Execute a skill script in a controlled subprocess."""
-
-    if runtime != HOST_EXECUTION_RUNTIME:
-        raise RuntimeError(
-            f"Runtime `{runtime}` is not backed by a real isolated executor in this example."
-        )
+    """Execute a skill script through the configured workspace runtime."""
 
     started = perf_counter()
     try:
-        completed = subprocess.run(
-            invocation.command,
-            capture_output=True,
-            check=False,
-            text=True,
-            encoding="utf-8",
-            timeout=timeout_seconds,
+        completed = asyncio.run(
+            _run_skill_script_in_workspace(
+                invocation,
+                runtime=runtime,
+                diff_text=diff_text,
+                project_root=project_root,
+                timeout_seconds=timeout_seconds,
+            )
         )
         stdout, stdout_truncated = _truncate_output(
             _normalize_process_output(completed.stdout),
@@ -147,9 +151,9 @@ def execute_skill_script(
             _normalize_process_output(completed.stderr),
             output_limit_chars,
         )
-        status = (
+        status = SandboxRunStatus.TIMED_OUT if completed.timed_out else (
             SandboxRunStatus.SUCCEEDED
-            if completed.returncode == 0
+            if completed.exit_code == 0
             else SandboxRunStatus.FAILED
         )
         return SandboxRunRecord(
@@ -158,33 +162,26 @@ def execute_skill_script(
             status=status,
             runtime=runtime,
             duration_ms=int((perf_counter() - started) * 1000),
-            exit_code=completed.returncode,
+            exit_code=completed.exit_code,
             stdout=_sanitize_output_text(stdout),
             stderr=_sanitize_output_text(stderr),
-            timed_out=False,
+            timed_out=completed.timed_out,
             output_truncated=stdout_truncated or stderr_truncated,
             blocked_by_filter=False,
         )
-    except subprocess.TimeoutExpired as exc:
-        stdout, stdout_truncated = _truncate_output(
-            _normalize_process_output(exc.stdout),
-            output_limit_chars,
-        )
-        stderr, stderr_truncated = _truncate_output(
-            _normalize_process_output(exc.stderr),
-            output_limit_chars,
-        )
+    except Exception as exc:  # pylint: disable=broad-except
+        stderr, stderr_truncated = _truncate_output(str(exc), output_limit_chars)
         return SandboxRunRecord(
             name=invocation.name,
             command=[_sanitize_display_value(part) for part in invocation.command],
-            status=SandboxRunStatus.TIMED_OUT,
+            status=SandboxRunStatus.FAILED,
             runtime=runtime,
             duration_ms=int((perf_counter() - started) * 1000),
             exit_code=None,
-            stdout=_sanitize_output_text(stdout),
+            stdout="",
             stderr=_sanitize_output_text(stderr),
-            timed_out=True,
-            output_truncated=stdout_truncated or stderr_truncated,
+            timed_out=False,
+            output_truncated=stderr_truncated,
             blocked_by_filter=False,
         )
 
@@ -230,6 +227,53 @@ def _normalize_process_output(text: object) -> str:
     if isinstance(text, str):
         return text
     return str(text)
+
+
+async def _run_skill_script_in_workspace(
+    invocation: SkillScriptInvocation,
+    *,
+    runtime: str,
+    diff_text: str,
+    project_root: Path | None,
+    timeout_seconds: int,
+) -> Any:
+    """Stage skill inputs into a workspace and execute the script via runtime APIs."""
+
+    workspace_runtime = _create_workspace_runtime(workspace_runtime_type=runtime)
+    manager = workspace_runtime.manager()
+    fs = workspace_runtime.fs()
+    runner = workspace_runtime.runner()
+    exec_id = f"code_review_{invocation.name}_{uuid4().hex}"
+    workspace = await manager.create_workspace(exec_id)
+
+    try:
+        skill_dir = resolve_code_review_skill_dir(project_root=project_root)
+        await fs.stage_directory(
+            workspace,
+            str(skill_dir),
+            WORKSPACE_SKILL_DIR,
+            WorkspaceStageOptions(read_only=True, allow_mount=True, mode="copy"),
+        )
+        await fs.put_files(
+            workspace,
+            [
+                WorkspacePutFileInfo(
+                    path=WORKSPACE_DIFF_PATH,
+                    content=diff_text.encode("utf-8"),
+                    mode=0o644,
+                )
+            ],
+        )
+        return await runner.run_program(
+            workspace,
+            WorkspaceRunProgramSpec(
+                cmd=invocation.command[0],
+                args=invocation.command[1:],
+                timeout=timeout_seconds,
+            ),
+        )
+    finally:
+        await manager.cleanup(exec_id)
 
 
 def _sanitize_output_text(text: str) -> str:

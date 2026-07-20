@@ -70,6 +70,9 @@ def test_build_skill_script_plan_uses_repository_root_skill_scripts(tmp_path: Pa
     assert len(plan) == 3
     assert all(invocation.script_path.is_file() for invocation in plan)
     assert all(SKILL_DIR.resolve() in invocation.script_path.resolve().parents for invocation in plan)
+    assert all(invocation.command[0] == "python" for invocation in plan)
+    assert all(invocation.command[1].startswith("skills/code-review/scripts/") for invocation in plan)
+    assert all(invocation.command[-1] == "work/inputs/review.diff" for invocation in plan)
 
 
 def test_skill_repository_indexes_root_code_review_skill() -> None:

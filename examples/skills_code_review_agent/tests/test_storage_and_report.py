@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+from unittest.mock import Mock
 
 from examples.skills_code_review_agent.agent.agent import run_review_task
 from examples.skills_code_review_agent.agent.config import ReviewAgentConfig
+from examples.skills_code_review_agent.agent import tools as agent_tools
 from examples.skills_code_review_agent.src.storage.repository import ReviewRepository
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -21,6 +25,7 @@ def test_run_review_task_writes_report_files_and_database(tmp_path: Path) -> Non
         fixture_path=str(FIXTURES_DIR / "security_issue.diff"),
         output_dir=output_dir,
         db_path=db_path,
+        runtime="local",
         dry_run=True,
         fake_model=True,
     )
@@ -57,6 +62,7 @@ def test_run_review_task_persists_human_review_state(tmp_path: Path) -> None:
         fixture_path=str(FIXTURES_DIR / "missing_tests.diff"),
         output_dir=tmp_path / "outputs",
         db_path=tmp_path / "review.db",
+        runtime="local",
         dry_run=True,
         fake_model=True,
     )
@@ -77,6 +83,7 @@ def test_secret_values_are_redacted_in_reports_and_database(tmp_path: Path) -> N
         fixture_path=str(FIXTURES_DIR / "secret_redaction.diff"),
         output_dir=tmp_path / "outputs",
         db_path=tmp_path / "review.db",
+        runtime="local",
         dry_run=True,
         fake_model=True,
     )
@@ -119,6 +126,7 @@ def test_filter_denies_forbidden_paths_and_skips_sandbox(tmp_path: Path) -> None
         diff_file=str(diff_path),
         output_dir=tmp_path / "outputs",
         db_path=tmp_path / "review.db",
+        runtime="local",
         dry_run=True,
         fake_model=True,
     )
@@ -151,11 +159,38 @@ def test_sandbox_failure_is_recorded_without_crashing_task(tmp_path: Path) -> No
     assert report.monitoring_summary["sandbox_run_count"] >= 1
 
 
-def test_non_local_runtime_is_blocked_until_isolated_executor_exists(tmp_path: Path) -> None:
-    """Container runtime should not fall through to host subprocess execution."""
+def test_container_runtime_executes_via_workspace_runtime(monkeypatch, tmp_path: Path) -> None:
+    """Container runtime should execute through the workspace runtime abstraction."""
+
+    manager = Mock()
+    manager.create_workspace = AsyncMock(
+        return_value=SimpleNamespace(id="ws-1", path="/workspace/ws-1")
+    )
+    manager.cleanup = AsyncMock()
+
+    fs = Mock()
+    fs.stage_directory = AsyncMock()
+    fs.put_files = AsyncMock()
+
+    runner = Mock()
+    runner.run_program = AsyncMock(
+        return_value=SimpleNamespace(
+            stdout='{"warning_count": 1, "warnings": ["Security-sensitive call detected: eval"]}\n',
+            stderr="",
+            exit_code=0,
+            timed_out=False,
+        )
+    )
+
+    runtime = Mock()
+    runtime.manager.return_value = manager
+    runtime.fs.return_value = fs
+    runtime.runner.return_value = runner
+
+    monkeypatch.setattr(agent_tools, "_create_workspace_runtime", lambda **_: runtime)
 
     config = ReviewAgentConfig(
-        fixture_path=str(FIXTURES_DIR / "clean.diff"),
+        fixture_path=str(FIXTURES_DIR / "security_issue.diff"),
         output_dir=tmp_path / "outputs",
         db_path=tmp_path / "review.db",
         runtime="container",
@@ -167,14 +202,15 @@ def test_non_local_runtime_is_blocked_until_isolated_executor_exists(tmp_path: P
 
     assert task.status.value == "completed"
     assert task.filter_decisions
-    assert all(
-        decision.decision.value == "needs_human_review"
-        for decision in task.filter_decisions
-    )
+    assert all(decision.decision.value == "allow" for decision in task.filter_decisions)
     assert task.sandbox_runs
-    assert all(run.status.value == "blocked" for run in task.sandbox_runs)
+    assert all(run.status.value == "succeeded" for run in task.sandbox_runs)
     assert any(
-        finding.source.value == "filter"
-        and finding.category.value == "sandbox"
-        for finding in report.needs_human_review
+        finding.source.value == "skill_script"
+        and finding.title == "Use of eval introduces code execution risk"
+        for finding in report.findings
     )
+    fs.stage_directory.assert_awaited()
+    fs.put_files.assert_awaited()
+    runner.run_program.assert_awaited()
+    manager.cleanup.assert_awaited()

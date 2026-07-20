@@ -34,6 +34,7 @@ def test_all_public_fixtures_generate_reports(tmp_path: Path) -> None:
             fixture_path=str(fixture_path),
             output_dir=out_dir,
             db_path=db_path,
+            runtime="local",
             dry_run=True,
             fake_model=True,
         )

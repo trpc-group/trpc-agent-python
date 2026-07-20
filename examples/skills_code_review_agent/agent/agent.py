@@ -92,7 +92,12 @@ def run_review_task(config: ReviewAgentConfig) -> tuple[ReviewTask, ReviewReport
     ):
         task.add_filter_decision(decision)
         if decision.decision.value == "allow":
-            sandbox_run = execute_skill_script(invocation, runtime=config.runtime)
+            sandbox_run = execute_skill_script(
+                invocation,
+                runtime=config.runtime,
+                diff_text=task.review_input.diff_text,
+                project_root=Path(__file__).resolve().parents[3],
+            )
             task.add_sandbox_run(sandbox_run)
             all_findings.extend(_sandbox_run_findings(task, sandbox_run))
             all_findings.extend(_sandbox_output_findings(task, sandbox_run))

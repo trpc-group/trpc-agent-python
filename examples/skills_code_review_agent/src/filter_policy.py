@@ -10,7 +10,6 @@ from .review_types import FilterDecisionRecord, FilterDecisionType, ParsedDiff
 _FORBIDDEN_PATH_PARTS = (".git/", ".env", "secrets/", "id_rsa", ".pem")
 _NETWORK_TOKENS = ("http://", "https://", "curl", "wget", "Invoke-WebRequest", "requests.get(")
 _DANGEROUS_TOKENS = ("rm -rf", "del /f", "format ", "shutdown ", "mkfs")
-_HOST_EXECUTION_RUNTIME = "local"
 
 
 @dataclass(slots=True, frozen=True)
@@ -76,19 +75,6 @@ def evaluate_invocations(
                 reason="Diff size exceeds sandbox budget and requires manual approval.",
                 requires_human_review=True,
             )
-        elif runtime != _HOST_EXECUTION_RUNTIME:
-            decision = FilterDecisionRecord(
-                decision=FilterDecisionType.NEEDS_HUMAN_REVIEW,
-                target=invocation.target,
-                reason_code="runtime_not_isolated",
-                reason=(
-                    f"Runtime `{runtime}` is requested, but this example does not yet "
-                    "back it with a real isolated executor. Block host execution until "
-                    "container or remote sandbox support is implemented."
-                ),
-                requires_human_review=True,
-            )
-
         paired.append((invocation, decision))
     return paired
 

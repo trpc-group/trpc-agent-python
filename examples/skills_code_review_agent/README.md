@@ -87,10 +87,10 @@ python examples/skills_code_review_agent/run_agent.py ^
   --fake-model
 ```
 
-`local` is the only runtime that currently executes scripts in this example,
-and it should be treated as a development fallback. Requests for `container`,
-`cube`, or `e2b` are recorded by Filter as `needs_human_review` until a real
-isolated executor is wired in.
+`local` and `container` now share the same workspace-runtime execution path.
+Use `local` for development fallback and `container` when Docker-backed
+isolation is available. Additional remote runtimes such as `cube` and `e2b`
+still require future wiring in this example.
 
 ## Outputs
 
@@ -171,7 +171,7 @@ Phase 6 quality-gate evidence:
 
 - full suite passes locally
 - all 8 public fixtures generate both report artifacts
-- a measured security fixture dry-run completes in about `9.87s`
+- a measured local dry-run remains within the acceptance time budget
 
 ## Related Docs
 

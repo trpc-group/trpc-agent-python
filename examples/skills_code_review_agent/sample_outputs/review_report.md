@@ -1,6 +1,6 @@
 # Review Report
 
-- Task ID: `9118ea7d-760d-4cf8-a383-7d14f298197e`
+- Task ID: `f684c95b-c5a8-41cb-a55e-1eeec9233837`
 - Final Verdict: `fail`
 
 ## Summary
@@ -36,9 +36,9 @@ Loaded review input, parsed diff, completed deterministic rule review, and proce
 
 ## Sandbox Summary
 
-- `parse_diff` status=`succeeded` duration=188ms exit_code=0
-- `run_linters` status=`succeeded` duration=182ms exit_code=0
-- `run_tests` status=`succeeded` duration=218ms exit_code=0
+- `parse_diff` status=`succeeded` duration=3404ms exit_code=0
+- `run_linters` status=`succeeded` duration=3139ms exit_code=0
+- `run_tests` status=`succeeded` duration=4462ms exit_code=0
 
 ## Monitoring
 
@@ -52,7 +52,7 @@ Loaded review input, parsed diff, completed deterministic rule review, and proce
 - `needs_human_review_count`: 0
 - `sandbox_run_count`: 3
 - `severity_distribution`: {'high': 2}
-- `total_duration_ms`: 604
+- `total_duration_ms`: 11032
 - `warning_count`: 0
 
 ## Actionable Recommendations

@@ -353,6 +353,7 @@ def test_run_review_task_with_security_fixture_returns_failure() -> None:
         fixture_path=str(FIXTURES_DIR / "security_issue.diff"),
         output_dir=FIXTURES_DIR.parent / "outputs",
         db_path=FIXTURES_DIR.parent / "review.db",
+        runtime="local",
         dry_run=True,
         fake_model=True,
     )
