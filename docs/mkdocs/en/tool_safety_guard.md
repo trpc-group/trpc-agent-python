@@ -350,7 +350,7 @@ execution resumes.
 ## Test plan
 
 ```bash
-python -m pytest tests/tool_safety/ -v
+python -m pytest tests/tools/safety/ -v
 ```
 
 Coverage:
@@ -396,7 +396,7 @@ tool/
     wrapper.py                  # SafetyWrappedCallable, SafetyCheckedExecutor
 scripts/
   tool_safety_check.py          # CLI
-tests/tool_safety/              # safety guard tests
+tests/tools/safety/             # unit and acceptance tests
 trpc_agent_sdk/tools/safety/examples/
   tool_safety_policy.yaml       # sample policy
   samples/                      # 14 public samples + manifest

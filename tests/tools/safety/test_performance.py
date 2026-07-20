@@ -22,18 +22,22 @@ def _make_large_script(lines: int = 500) -> str:
     return "\n".join(body)
 
 
-def test_scan_500_lines_under_one_second(strict_policy_dict):
-    guard = ToolSafetyGuard(load_safety_policy_dict(strict_policy_dict))
+def test_scan_500_lines_under_one_second(policy_dict):
+    guard = ToolSafetyGuard(load_safety_policy_dict(policy_dict))
     script = _make_large_script(500)
     # Warm up so import / regex compile cost does not skew the result.
     guard.scan(SafetyScanRequest(
-        tool_name="t", language=ScriptLanguage.PYTHON, script=script,
+        tool_name="t",
+        language=ScriptLanguage.PYTHON,
+        script=script,
     ))
     samples = []
     for _ in range(5):
         start = time.perf_counter()
         report = guard.scan(SafetyScanRequest(
-            tool_name="t", language=ScriptLanguage.PYTHON, script=script,
+            tool_name="t",
+            language=ScriptLanguage.PYTHON,
+            script=script,
         ))
         samples.append(time.perf_counter() - start)
     p95 = sorted(samples)[int(len(samples) * 0.95) - 1] \
@@ -42,19 +46,23 @@ def test_scan_500_lines_under_one_second(strict_policy_dict):
     assert p95 < 1.0, f"p95={p95:.3f}s exceeds 1.0s budget"
 
 
-def test_scan_bash_500_lines_under_one_second(strict_policy_dict):
-    guard = ToolSafetyGuard(load_safety_policy_dict(strict_policy_dict))
+def test_scan_bash_500_lines_under_one_second(policy_dict):
+    guard = ToolSafetyGuard(load_safety_policy_dict(policy_dict))
     lines = ["# comment"] * 495 + ["rm -rf /tmp/x"]
     script = "\n".join(lines)
     # Warm up.
     guard.scan(SafetyScanRequest(
-        tool_name="t", language=ScriptLanguage.BASH, script=script,
+        tool_name="t",
+        language=ScriptLanguage.BASH,
+        script=script,
     ))
     samples = []
     for _ in range(5):
         start = time.perf_counter()
         guard.scan(SafetyScanRequest(
-            tool_name="t", language=ScriptLanguage.BASH, script=script,
+            tool_name="t",
+            language=ScriptLanguage.BASH,
+            script=script,
         ))
         samples.append(time.perf_counter() - start)
     p95 = sorted(samples)[int(len(samples) * 0.95) - 1] \

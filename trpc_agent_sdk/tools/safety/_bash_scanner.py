@@ -481,13 +481,27 @@ class _BashScanner:
                 kind="xargs-command-stream",
             ))
             return
-        if exec_lower == "find" and any(arg in {"-exec", "-execdir", "-ok", "-okdir"} for arg in argv):
-            self.dynamic_execs.append(DynamicExecFact(
-                snippet=snippet,
-                loc=loc,
-                kind="find-exec",
-            ))
-            return
+        if exec_lower == "find":
+            has_delete = any(arg.lower() == "-delete" for arg in argv)
+            if has_delete:
+                target = next((arg for arg in argv if not arg.startswith("-")), "<unknown>")
+                self.file_deletes.append(
+                    FileDeleteFact(
+                        snippet=snippet,
+                        loc=loc,
+                        target=target,
+                        recursive=True,
+                        explicit=target != "<unknown>",
+                    ))
+            if any(arg in {"-exec", "-execdir", "-ok", "-okdir"} for arg in argv):
+                self.dynamic_execs.append(DynamicExecFact(
+                    snippet=snippet,
+                    loc=loc,
+                    kind="find-exec",
+                ))
+                return
+            if has_delete:
+                return
 
         # eval / bash -c / sh -c
         if exec_lower == "eval":

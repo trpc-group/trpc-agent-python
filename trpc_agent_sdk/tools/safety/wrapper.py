@@ -90,12 +90,8 @@ class SafetyWrappedCallable(Generic[T]):
         self._filter = filter or ToolScriptSafetyFilter(guard, audit_sink=_default_audit_sink(guard.policy))
 
     def __call__(self, *args: Any, **kwargs: Any) -> T:
-        report = self._enforce(args, kwargs)
-        # Set sanitized trace args for downstream telemetry consumers.
-        try:
-            return self.delegate(*args, **kwargs)
-        finally:
-            _ = report  # caller can inspect via last_report
+        self._enforce(args, kwargs)
+        return self.delegate(*args, **kwargs)
 
     async def call_async(self, *args: Any, **kwargs: Any) -> T:
         await self._enforce_async(args, kwargs)

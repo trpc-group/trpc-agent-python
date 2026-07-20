@@ -352,6 +352,13 @@ class TestDynamicExec:
         assert facts.dynamic_execs
         assert facts.dynamic_execs[0].kind == "find-exec"
 
+    def test_find_delete(self):
+        facts = _scan("find / -delete")
+        assert facts.file_deletes
+        finding = facts.file_deletes[0]
+        assert finding.target == "/"
+        assert finding.recursive is True
+
     def test_interpreter_payload(self):
         facts = _scan("python script.py")
         assert facts.dynamic_execs

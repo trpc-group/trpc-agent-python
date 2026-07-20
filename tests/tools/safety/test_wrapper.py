@@ -27,7 +27,14 @@ from trpc_agent_sdk.tools.safety.wrapper import (
 
 
 def _policy(**overrides):
-    return load_safety_policy_dict({"version": "1", **overrides})
+    return load_safety_policy_dict({
+        "version": "1",
+        "audit": {
+            "enabled": False,
+            "required": False,
+        },
+        **overrides,
+    })
 
 
 def _guard(**overrides) -> ToolSafetyGuard:
