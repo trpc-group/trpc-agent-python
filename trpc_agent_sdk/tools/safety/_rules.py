@@ -707,11 +707,12 @@ class ResourceAbuseRule:
                         matched_pattern=heavy_pat,
                     ))
 
-        # 5d. Long sleeps
+        # 5d. Long sleeps (now parses s/m/h/d units like the bash scanner)
         threshold = cfg.get("long_sleep_threshold_seconds", 60)
-        sleep_pattern = r"sleep\s+(\d+)"
+        sleep_pattern = r"sleep\s+(\d+)([smhd]?)"
+        _SLEEP_MULT = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
         for m in re.finditer(sleep_pattern, script, re.IGNORECASE):
-            duration = int(m.group(1))
+            duration = int(m.group(1)) * _SLEEP_MULT.get(m.group(2).lower(), 1)
             if duration > threshold:
                 line_no = script[:m.start()].count("\n") + 1
                 findings.append(

@@ -457,7 +457,7 @@ class BashScanner:
             "/dev/console",
         })
         for i, t in enumerate(tokens):
-            if t in (">", ">>", ">" + ">") and i + 1 < len(tokens):
+            if t == ">" and i + 1 < len(tokens):
                 target = tokens[i + 1].strip("'\"")
                 if target in _SAFE_DEVS:
                     continue

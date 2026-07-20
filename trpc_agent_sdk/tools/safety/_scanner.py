@@ -226,23 +226,38 @@ class SafetyScanner:
         if decision != Decision.DENY:
             decision, bl_findings = self._check_blocklist_override(script, decision, effective_script_type)
             all_findings.extend(bl_findings)
-        # Blocklist commands — also force DENY when a forbidden command literal appears
+        # Blocklist commands — also force DENY when a forbidden command literal appears.
+        # Uses line-by-line matching with comment/string stripping so that harmless
+        # mentions in comments or echo/printf strings do not cause false positives.
         if decision != Decision.DENY and self._policy.blocklist_commands:
             for cmd in self._policy.blocklist_commands:
-                if re.search(re.escape(cmd), script, re.IGNORECASE):
-                    logger.warning("Blocklist command matched: %s → forcing DENY", cmd)
-                    all_findings.append(
-                        SafetyFinding(
-                            rule_id="FILE-001",
-                            category=RiskCategory.DANGEROUS_FILE_OPS,
-                            risk_level=RiskLevel.CRITICAL,
-                            evidence=cmd,
-                            message=f"Blocklisted command detected: {cmd}",
-                            recommendation="Remove the dangerous command from the script.",
-                            line_number=0,
-                            matched_pattern=cmd,
-                        ))
-                    decision = Decision.DENY
+                escaped = re.escape(cmd)
+                for line in script.splitlines():
+                    stripped = line.lstrip()
+                    if stripped.startswith("#"):
+                        continue
+                    if effective_script_type == ScriptType.PYTHON:
+                        search_line = _strip_python_comment_line(line)
+                    else:
+                        search_line = line
+                    if re.search(escaped, search_line, re.IGNORECASE):
+                        if _is_in_echo_string(line, escaped):
+                            continue
+                        logger.warning("Blocklist command matched: %s → forcing DENY", cmd)
+                        all_findings.append(
+                            SafetyFinding(
+                                rule_id="FILE-001",
+                                category=RiskCategory.DANGEROUS_FILE_OPS,
+                                risk_level=RiskLevel.CRITICAL,
+                                evidence=cmd,
+                                message=f"Blocklisted command detected: {cmd}",
+                                recommendation="Remove the dangerous command from the script.",
+                                line_number=0,
+                                matched_pattern=cmd,
+                            ))
+                        decision = Decision.DENY
+                        break
+                if decision == Decision.DENY:
                     break
 
         # Apply allow-pattern override — allow patterns → allow
