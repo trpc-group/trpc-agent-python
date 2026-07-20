@@ -31,19 +31,27 @@ from ._types import SafetyScanReport
 
 _AUDIT_LOGGER = logging.getLogger("trpc_agent_sdk.tools.safety.audit")
 
-# Per-path locks for thread-safe concurrent writes (threading.Lock is NOT
-# process-safe; multi-process deployments should use a dedicated audit daemon
-# or file-locking via fcntl/msvcrt).
+# Per-path locks for thread-safe AND process-safe concurrent writes via
+# fcntl.flock.  On platforms without fcntl (Windows), falls back to
+# threading.Lock which is only thread-safe.
 _FILE_LOCKS: dict[str, threading.Lock] = {}
 _FILE_LOCKS_LOCK = threading.Lock()
+_MAX_FILE_LOCKS = 128
 
 
 def _get_file_lock(path: str) -> threading.Lock:
-    """Return (and cache) a threading.Lock for the given JSONL path."""
+    """Return (and cache) a threading.Lock for the given JSONL path.
+
+    The cache is capped at *_MAX_FILE_LOCKS* entries to prevent unbounded
+    growth when paths contain dynamic segments.
+    """
+    real = os.path.realpath(path)
     with _FILE_LOCKS_LOCK:
-        if path not in _FILE_LOCKS:
-            _FILE_LOCKS[path] = threading.Lock()
-        return _FILE_LOCKS[path]
+        if real not in _FILE_LOCKS:
+            if len(_FILE_LOCKS) >= _MAX_FILE_LOCKS:
+                _FILE_LOCKS.pop(next(iter(_FILE_LOCKS)))
+            _FILE_LOCKS[real] = threading.Lock()
+        return _FILE_LOCKS[real]
 
 
 class AuditLogger:
@@ -83,14 +91,21 @@ class AuditLogger:
         event = self._build_event(report)
         line = json.dumps(event.to_dict(), ensure_ascii=False, default=str)
 
-        # File output — thread-safe via per-path lock
+        # File output — thread-safe + process-safe via fcntl.flock
         if self._output_path:
             lock = _get_file_lock(str(self._output_path))
             with lock:
                 try:
                     with open(self._output_path, "a", encoding="utf-8") as fh:
+                        # Acquire an OS-level advisory lock for cross-process safety
+                        try:
+                            import fcntl
+                            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+                        except (ImportError, OSError):
+                            pass  # fcntl not available (e.g. Windows) — thread-lock only
                         fh.write(line + "\n")
                         fh.flush()
+                        os.fsync(fh.fileno())
                 except OSError as exc:
                     _AUDIT_LOGGER.error("Failed to write audit event: %s", exc)
 
@@ -107,23 +122,39 @@ class AuditLogger:
     def read_events(self, limit: int = 100) -> list[dict]:
         """Read the most recent audit events from the JSONL file.
 
+        Reads from the tail of the file to avoid loading the entire file
+        into memory.  Falls back to a full scan for very small files.
+
         Args:
             limit: Maximum number of events to return (most recent first).
 
         Returns:
-            List of event dicts.
+            List of event dicts, newest first.
         """
         if not self._output_path or not os.path.exists(self._output_path):
             return []
+        path = self._output_path
+        fsize = os.path.getsize(path)
+        if fsize == 0:
+            return []
         events: list[dict] = []
-        with open(self._output_path, "r", encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if line:
-                    try:
-                        events.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        continue
+        # Estimated bytes per line: average ~200, read 2× to be safe
+        read_size = min(fsize, max(limit * 400, 8192))
+        try:
+            with open(path, "rb") as fh:
+                if fsize > read_size:
+                    fh.seek(fsize - read_size)
+                    # Skip partial first line (may be truncated)
+                    fh.readline()
+                for line in fh:
+                    line = line.decode("utf-8", errors="replace").strip()
+                    if line:
+                        try:
+                            events.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            continue
+        except OSError:
+            return []
         return events[-limit:][::-1]
 
     # ------------------------------------------------------------------

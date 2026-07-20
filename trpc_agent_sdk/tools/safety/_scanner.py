@@ -121,7 +121,7 @@ class SafetyScanner:
             oversized_reason = (f"Script is {script_bytes} bytes (max {self._policy.max_script_bytes})")
 
         if oversized:
-            # Fast pre-check: scan blocklist patterns against the full text
+            # Fast pre-check: scan blocklist patterns AND commands
             blocklist_hit = None
             for pattern in self._policy.blocklist_patterns:
                 try:
@@ -130,6 +130,11 @@ class SafetyScanner:
                         break
                 except re.error:
                     continue
+            if not blocklist_hit:
+                for cmd in self._policy.blocklist_commands:
+                    if re.search(re.escape(cmd), script, re.IGNORECASE):
+                        blocklist_hit = cmd
+                        break
 
             oversized_findings = [
                 SafetyFinding(
