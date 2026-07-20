@@ -973,10 +973,15 @@ def _is_sensitive_env_key(key: str) -> bool:
 
 
 def _extract_domain_from_url(url: Optional[str]) -> Optional[str]:
-    """Extract domain from a URL string."""
+    """Extract bare hostname from a URL, stripping userinfo and port."""
     if not url:
         return None
-    m = re.search(r"https?://([^\s/\"':]+)", url)
+    m = re.search(r"https?://([^\s/\"']+)", url)
     if m:
-        return m.group(1)
+        host = m.group(1)
+        if "@" in host:
+            host = host.rsplit("@", 1)[-1]
+        if ":" in host:
+            host = host.rsplit(":", 1)[0]
+        return host
     return None

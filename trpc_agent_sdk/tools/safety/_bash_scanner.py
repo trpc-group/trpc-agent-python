@@ -438,13 +438,29 @@ class BashScanner:
                     ))
 
     def _check_redirects(self, line_no: int, raw_line: str, tokens: List[str]) -> None:
-        """Detect write redirects to sensitive paths."""
-        # Look for > or >> patterns
+        """Detect write redirects to sensitive paths.
+
+        Excludes harmless device files like ``/dev/null`` and ``/dev/zero``
+        so that ``grep foo /etc/hosts 2>/dev/null`` is not falsely blocked.
+        """
+        _SAFE_DEVS = frozenset({
+            "/dev/null",
+            "/dev/zero",
+            "/dev/random",
+            "/dev/urandom",
+            "/dev/stdin",
+            "/dev/stdout",
+            "/dev/stderr",
+            "/dev/fd",
+            "/dev/tty",
+            "/dev/pts",
+            "/dev/console",
+        })
         for i, t in enumerate(tokens):
             if t in (">", ">>", ">" + ">") and i + 1 < len(tokens):
-                # Strip surrounding quotes so that "/etc/passwd" in
-                # test expressions ([[ … ]]) is treated consistently.
                 target = tokens[i + 1].strip("'\"")
+                if target in _SAFE_DEVS:
+                    continue
                 if _is_sensitive_path(target) or target.startswith("/dev/"):
                     self._findings.append(
                         BashScanFinding(
@@ -459,6 +475,8 @@ class BashScanner:
             if ">" in t and len(t) > 1:
                 parts = t.split(">", 1)
                 target = parts[1].strip().strip("'\"")
+                if target in _SAFE_DEVS:
+                    continue
                 if target and (_is_sensitive_path(target) or target.startswith("/dev/sd")):
                     self._findings.append(
                         BashScanFinding(
