@@ -36,20 +36,18 @@ _AUDIT_LOGGER = logging.getLogger("trpc_agent_sdk.tools.safety.audit")
 # threading.Lock which is only thread-safe.
 _FILE_LOCKS: dict[str, threading.Lock] = {}
 _FILE_LOCKS_LOCK = threading.Lock()
-_MAX_FILE_LOCKS = 128
 
 
 def _get_file_lock(path: str) -> threading.Lock:
     """Return (and cache) a threading.Lock for the given JSONL path.
 
-    The cache is capped at *_MAX_FILE_LOCKS* entries to prevent unbounded
-    growth when paths contain dynamic segments.
+    Paths are normalised via ``os.path.realpath`` so that symlinks and
+    relative paths map to the same lock.  The cache grows with each unique
+    path; in practice audit paths are bounded (one per deployment).
     """
     real = os.path.realpath(path)
     with _FILE_LOCKS_LOCK:
         if real not in _FILE_LOCKS:
-            if len(_FILE_LOCKS) >= _MAX_FILE_LOCKS:
-                _FILE_LOCKS.pop(next(iter(_FILE_LOCKS)))
             _FILE_LOCKS[real] = threading.Lock()
         return _FILE_LOCKS[real]
 

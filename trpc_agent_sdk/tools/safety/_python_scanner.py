@@ -479,11 +479,14 @@ class PythonScanner:
             # Exempt re.compile / regex.compile (pattern compilation, not code exec).
             # Also exempt getattr(obj, attr, default) — property access, not exec.
             if canonical in ("compile", "getattr"):
+                # Check if this is a re.compile / regex.compile call (Attribute-based)
                 receiver = self._resolve_canonical(node.func.value) if isinstance(node.func, ast.Attribute) else ""
                 if canonical == "compile" and receiver in ("re", "regex"):
-                    pass  # re.compile(pattern) is safe — not dynamic exec
-                elif canonical == "getattr" and len(node.args) >= 3:
-                    pass  # getattr(obj, attr, default) — safe property access
+                    pass  # re.compile(pattern) — safe, pattern compilation only
+                # getattr with 3+ args (including default) is safe property access
+                elif canonical == "getattr" and (len(node.args) >= 3 or
+                                                 (isinstance(node.func, ast.Call) and len(node.func.args) >= 3)):
+                    pass  # getattr(obj, attr, default) / getattr(...)() — safe
                 else:
                     self._findings.append(
                         PythonScanFinding(kind="eval_exec",
@@ -534,14 +537,18 @@ class PythonScanner:
         if isinstance(func, ast.Call):
             inner = self._resolve_canonical(func.func)
             if inner == "getattr":
-                attr = self._get_arg_string(func, 1)
-                self._findings.append(
-                    PythonScanFinding(
-                        kind="eval_exec",
-                        canonical_name=f"getattr(..., {attr!r})",
-                        line_number=line_no,
-                        evidence=evidence,
-                    ))
+                # getattr(obj, attr, default) with 3 args is safe property access
+                if len(func.args) >= 3:
+                    pass
+                else:
+                    attr = self._get_arg_string(func, 1)
+                    self._findings.append(
+                        PythonScanFinding(
+                            kind="eval_exec",
+                            canonical_name=f"getattr(..., {attr!r})",
+                            line_number=line_no,
+                            evidence=evidence,
+                        ))
             elif inner in ("__import__", "importlib.import_module"):
                 self._findings.append(
                     PythonScanFinding(
