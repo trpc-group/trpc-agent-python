@@ -249,8 +249,17 @@ class SafetyScanner:
         # Also refuses to upgrade when any CRITICAL finding exists, regardless
         # of how the policy maps CRITICAL → decision.
         has_critical = any(f.risk_level == RiskLevel.CRITICAL for f in all_findings)
+        allow_upgraded = False
         if (decision == Decision.NEEDS_HUMAN_REVIEW and not has_critical and self._check_allow_patterns(script)):
+            logger.info("allow_patterns upgraded NEEDS_HUMAN_REVIEW → ALLOW for '%s'", scan_input.tool_name)
             decision = Decision.ALLOW
+            allow_upgraded = True
+
+        # ══════════════════════════════════════════════════════════════
+        # Recompute max_risk after blocklist findings may have been appended
+        # ══════════════════════════════════════════════════════════════
+        if all_findings:
+            max_risk = max(f.risk_level for f in all_findings)
 
         # ══════════════════════════════════════════════════════════════
         # Multi-layer evidence redaction (improved from single-layer)
@@ -273,7 +282,8 @@ class SafetyScanner:
             denied = sum(1 for f in all_findings if f.risk_level in (RiskLevel.CRITICAL, RiskLevel.HIGH))
             total = len(all_findings)
             summary = (f"Scan of '{scan_input.tool_name or 'unnamed tool'}' found {total} issue(s) "
-                       f"({denied} high/critical). Decision: {decision.value}.")
+                       f"({denied} high/critical). Decision: {decision.value}." +
+                       (" [auto_allowed by allow_patterns]" if allow_upgraded else ""))
 
         return SafetyScanReport(
             tool_name=scan_input.tool_name,
@@ -674,6 +684,37 @@ class SafetyScanner:
                             "Do not read sensitive system files. Use dedicated APIs or environment variables.",
                             f.line_number,
                             path,
+                        ))
+
+            # Redirect to sensitive paths (e.g. > /etc/passwd, 2>/dev/sda)
+            for f in bash_findings:
+                if f.kind == "redirect":
+                    target = f.extra.get("target", "?")
+                    findings.append(
+                        self._make_finding(
+                            "BASH-FILE-003",
+                            RiskCategory.DANGEROUS_FILE_OPS,
+                            RiskLevel.CRITICAL,
+                            f.evidence,
+                            f"Bash: redirect to sensitive path '{target}'",
+                            "Do not redirect output to sensitive system files.",
+                            f.line_number,
+                            target,
+                        ))
+
+            # Background execution
+            for f in bash_findings:
+                if f.kind == "background":
+                    findings.append(
+                        self._make_finding(
+                            "BASH-PROC-004",
+                            RiskCategory.PROCESS_AND_SYSTEM,
+                            RiskLevel.MEDIUM,
+                            f.evidence,
+                            "Bash: background execution operator &",
+                            "Background execution in tool scripts may indicate persistence or resource abuse.",
+                            f.line_number,
+                            "&",
                         ))
 
         except ImportError:
