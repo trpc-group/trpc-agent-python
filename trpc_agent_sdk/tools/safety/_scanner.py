@@ -280,7 +280,6 @@ class SafetyScanner:
         # Only upgrades NEEDS_HUMAN_REVIEW; never overrides DENY (blocklist wins).
         # Also refuses to upgrade when any CRITICAL finding exists, regardless
         # of how the policy maps CRITICAL → decision.
-        has_critical = any(f.risk_level == RiskLevel.CRITICAL for f in all_findings)
         has_high_or_critical = any(f.risk_level in (RiskLevel.HIGH, RiskLevel.CRITICAL) for f in all_findings)
         allow_upgraded = False
         # Only upgrade MEDIUM or lower (NEEDS_HUMAN_REVIEW) — never upgrade HIGH/CRITICAL

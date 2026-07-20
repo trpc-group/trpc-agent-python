@@ -476,13 +476,26 @@ class PythonScanner:
 
         # --- Eval / exec / dynamic execution ---
         if canonical in _DYNAMIC_EXEC_CALLS:
-            self._findings.append(
-                PythonScanFinding(
-                    kind="eval_exec",
-                    canonical_name=canonical,
-                    line_number=line_no,
-                    evidence=evidence,
-                ))
+            # Exempt re.compile / regex.compile (pattern compilation, not code exec).
+            # Also exempt getattr(obj, attr, default) — property access, not exec.
+            if canonical in ("compile", "getattr"):
+                receiver = self._resolve_canonical(node.func.value) if isinstance(node.func, ast.Attribute) else ""
+                if canonical == "compile" and receiver in ("re", "regex"):
+                    pass  # re.compile(pattern) is safe — not dynamic exec
+                elif canonical == "getattr" and len(node.args) >= 3:
+                    pass  # getattr(obj, attr, default) — safe property access
+                else:
+                    self._findings.append(
+                        PythonScanFinding(kind="eval_exec",
+                                          canonical_name=canonical,
+                                          line_number=line_no,
+                                          evidence=evidence))
+            else:
+                self._findings.append(
+                    PythonScanFinding(kind="eval_exec",
+                                      canonical_name=canonical,
+                                      line_number=line_no,
+                                      evidence=evidence))
 
         # --- Concurrent / fork ---
         if canonical in _CONCURRENCY_CALLS:
