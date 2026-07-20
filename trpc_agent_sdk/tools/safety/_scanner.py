@@ -198,6 +198,17 @@ class SafetyScanner:
                 all_findings.extend(findings)
             except Exception:  # pylint: disable=broad-except
                 logger.error("Safety rule raised an exception; skipping: %s", str(getattr(rule, "__class__", rule)))
+                all_findings.append(
+                    SafetyFinding(
+                        rule_id="GLOBAL-003",
+                        category=RiskCategory.RESOURCE_ABUSE,
+                        risk_level=RiskLevel.MEDIUM,
+                        evidence="A safety rule crashed during scanning.",
+                        message=f"Rule {getattr(rule, '__class__', rule)} failed — scan may be incomplete.",
+                        recommendation="Review the script manually; automated analysis was partial.",
+                        line_number=0,
+                        matched_pattern="",
+                    ))
 
         # Check environment variables against blocklist
         if scan_input.environment_variables:
@@ -270,8 +281,12 @@ class SafetyScanner:
         # Also refuses to upgrade when any CRITICAL finding exists, regardless
         # of how the policy maps CRITICAL → decision.
         has_critical = any(f.risk_level == RiskLevel.CRITICAL for f in all_findings)
+        has_high_or_critical = any(f.risk_level in (RiskLevel.HIGH, RiskLevel.CRITICAL) for f in all_findings)
         allow_upgraded = False
-        if (decision == Decision.NEEDS_HUMAN_REVIEW and not has_critical and self._check_allow_patterns(script)):
+        # Only upgrade MEDIUM or lower (NEEDS_HUMAN_REVIEW) — never upgrade HIGH/CRITICAL
+        # even if the policy maps them to NEEDS_HUMAN_REVIEW.
+        if (decision == Decision.NEEDS_HUMAN_REVIEW and not has_high_or_critical
+                and self._check_allow_patterns(script)):
             logger.info("allow_patterns upgraded NEEDS_HUMAN_REVIEW → ALLOW for '%s'", scan_input.tool_name)
             decision = Decision.ALLOW
             allow_upgraded = True
@@ -321,8 +336,9 @@ class SafetyScanner:
         )
 
     def reload_policy(self) -> None:
-        """Reload the policy from disk (useful for hot-reload)."""
+        """Reload the policy and rules from disk (useful for hot-reload)."""
         self._policy = reload_policy()
+        self._rules = get_all_rules()
 
     # ------------------------------------------------------------------
     # Layer 1: AST-based Python scanning

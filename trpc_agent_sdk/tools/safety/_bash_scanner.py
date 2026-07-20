@@ -276,9 +276,22 @@ class BashScanner:
         if not cmd_tokens:
             return
         # Skip prefixes that don't change the real command:
-        #   VAR=val, export VAR=val, declare/readonly/local/typeset, command/builtin
+        #   VAR=val, export, env, nohup, timeout, nice, xargs, find, sudo variants
         idx = 0
-        _PREFIX_CMDS = frozenset({"export", "declare", "local", "readonly", "typeset", "command", "builtin"})
+        _PREFIX_CMDS = frozenset({
+            "export",
+            "declare",
+            "local",
+            "readonly",
+            "typeset",
+            "command",
+            "builtin",
+            "env",
+            "nohup",
+            "timeout",
+            "nice",
+            "xargs",
+        })
         while idx < len(cmd_tokens):
             t = cmd_tokens[idx]
             if re.match(r"[A-Za-z_]\w*=", t) or re.match(r"[A-Za-z_]\w*\[\w*\]=", t):

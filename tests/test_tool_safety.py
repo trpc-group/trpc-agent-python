@@ -1262,7 +1262,9 @@ def test_scanner_rule_exception_handled():
                 tool_name="rule_exc_test",
             ))
         # Should still complete despite the broken rule
-        assert report.decision == Decision.ALLOW
+        # Now produces GLOBAL-003 sentinel → MEDIUM → NEEDS_HUMAN_REVIEW
+        assert report.decision in (Decision.ALLOW, Decision.NEEDS_HUMAN_REVIEW)
+        assert any(f.rule_id == "GLOBAL-003" for f in report.findings)
     finally:
         # Clean up: remove the bad rule from registry
         from trpc_agent_sdk.tools.safety._rules import _EXTRA_RULES

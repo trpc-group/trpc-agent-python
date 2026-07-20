@@ -561,11 +561,26 @@ class PythonScanner:
             if not var_name:
                 continue
 
-            # Check if RHS is an import
+            # Check if RHS is an import / class instantiation
             if isinstance(node.value, ast.Call):
                 canonical = self._resolve_canonical(node.value.func)
                 if canonical in _NETWORK_CALLS:
                     self._class_instances[var_name] = canonical
+                if canonical in _DYNAMIC_EXEC_CALLS or canonical in _PROCESS_CALLS:
+                    # e = eval; e("code") / s = os.system; s("id")
+                    self._aliases[var_name] = canonical
+
+            # Propagate bare-name assignments: e = eval; m = __import__
+            if isinstance(node.value, ast.Name):
+                src_canonical = self._resolve_canonical(node.value)
+                if src_canonical in _DYNAMIC_EXEC_CALLS or src_canonical in _PROCESS_CALLS:
+                    self._aliases[var_name] = src_canonical
+
+            # Propagate __import__ / importlib result
+            if isinstance(node.value, ast.Call):
+                inner = self._resolve_canonical(node.value.func)
+                if inner in ("__import__", "importlib.import_module"):
+                    self._aliases[var_name] = "__import__"
 
             # Check if RHS is from os.environ / os.getenv → taint
             # Only taint when the env key looks sensitive (KEY/TOKEN/SECRET/...)
@@ -720,7 +735,12 @@ class PythonScanner:
             ``getattr(x, 'y')`` → ``"getattr"``
         """
         if isinstance(node, ast.Name):
-            # Direct name lookup — consult alias table first
+            # Direct name lookup — consult class_instances first (so that
+            # s.get("http://evil.com") where s = requests.Session() resolves
+            # to "requests.Session.get"), then alias table, then bare name.
+            cls = self._class_instances.get(node.id)
+            if cls:
+                return cls
             return self._aliases.get(node.id, node.id)
 
         if isinstance(node, ast.Attribute):

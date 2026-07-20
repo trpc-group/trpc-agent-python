@@ -897,10 +897,15 @@ def _is_in_echo_string(line: str, pattern: str) -> bool:
 
 
 def _all_commands_whitelisted(line: str, policy: SafetyPolicy) -> bool:
-    """Return True if every command in a piped bash line is whitelisted."""
+    """Return True if every command in a line is whitelisted.
+
+    Splits on ``|``, ``;``, ``&&``, ``||``, and ``&`` so that commands
+    after non-pipe separators are also checked.
+    """
+    import re as _re
     cmds = []
-    for part in line.split("|"):
-        part = part.strip()
+    for part in _re.split(r"[|;&]", line):
+        part = part.strip().lstrip("&|")
         if part:
             first_word = part.split()[0] if part.split() else ""
             if first_word and not first_word.startswith("-"):
