@@ -39,7 +39,7 @@ async def _build_fake_report_for_root(root: Path, run_id: str):
     execution_progress = pipeline_module._MutableReportProgress(
         started_at=datetime(2026, 7, 18, tzinfo=timezone.utc)
     )
-    result = await pipeline_module._execute_fake_stage(
+    result = await pipeline_module._execute_offline_stage(
         prepared,
         scenario="improve",
         progress=execution_progress,

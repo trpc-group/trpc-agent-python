@@ -18,9 +18,9 @@ from examples.optimization.eval_optimize_loop.case_diff import compare_evaluatio
 from examples.optimization.eval_optimize_loop.evaluation_adapter import EvaluationAnalysisError
 from examples.optimization.eval_optimize_loop.evaluation_adapter import standardize_snapshot
 from examples.optimization.eval_optimize_loop.pipeline import prepare_run
-from examples.optimization.eval_optimize_loop.pipeline import run_fake_stage
-from examples.optimization.eval_optimize_loop.schemas import FakeEvaluationSnapshot
-from examples.optimization.eval_optimize_loop.schemas import FakeStageResult
+from examples.optimization.eval_optimize_loop.pipeline import run_offline_stage
+from examples.optimization.eval_optimize_loop.schemas import EvaluationSnapshot
+from examples.optimization.eval_optimize_loop.schemas import OfflineStageResult
 from trpc_agent_sdk.evaluation import EvalCaseResult
 from trpc_agent_sdk.evaluation import EvalMetricResult
 from trpc_agent_sdk.evaluation import EvalMetricResultDetails
@@ -107,8 +107,8 @@ def _case_run(
     )
 
 
-def _snapshot(*runs: EvalCaseResult) -> FakeEvaluationSnapshot:
-    return FakeEvaluationSnapshot(
+def _snapshot(*runs: EvalCaseResult) -> EvaluationSnapshot:
+    return EvaluationSnapshot(
         phase="baseline",
         split="train",
         eval_set_id="train-set",
@@ -510,7 +510,7 @@ async def test_stage3a_scenario_analysis_matrix(
     root = _copy_example(tmp_path, scenario)
     prepared = prepare_run(root / "pipeline.json", run_id=f"stage3a_{scenario}")
 
-    result = await run_fake_stage(prepared, scenario=scenario)  # type: ignore[arg-type]
+    result = await run_offline_stage(prepared, scenario=scenario)  # type: ignore[arg-type]
 
     analysis = result.analysis
     assert analysis.train_diff.newly_passed_count == train_newly_passed
@@ -529,7 +529,7 @@ async def test_stage3a_scenario_analysis_matrix(
         assert refund.candidate_attribution is not None
         assert refund.candidate_attribution.primary_category == "routing_error"
 
-    restored = FakeStageResult.model_validate_json(result.model_dump_json())
+    restored = OfflineStageResult.model_validate_json(result.model_dump_json())
     assert restored.analysis == analysis
 
 
@@ -544,4 +544,4 @@ async def test_stage3a_does_not_hide_unexpected_value_errors(tmp_path: Path, mon
     monkeypatch.setattr(pipeline_module, "build_evaluation_analysis", fail_analysis)
 
     with pytest.raises(ValueError, match="injected programming error"):
-        await run_fake_stage(prepared, scenario="improve")
+        await run_offline_stage(prepared, scenario="improve")

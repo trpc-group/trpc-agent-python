@@ -16,18 +16,29 @@ from pathlib import Path
 
 import pytest
 
-from examples.optimization.eval_optimize_loop.fake import DeterministicFakeAgent
+from examples.optimization.eval_optimize_loop.business_agent import BusinessAgent
+from examples.optimization.eval_optimize_loop.fake import DeterministicFakeModel
 from examples.optimization.eval_optimize_loop.fake import DeterministicFakeCandidateProvider
-from examples.optimization.eval_optimize_loop.pipeline import FakeStageExecutionError
+from examples.optimization.eval_optimize_loop.pipeline import PipelineStageExecutionError
 from examples.optimization.eval_optimize_loop.pipeline import prepare_run
-from examples.optimization.eval_optimize_loop.pipeline import run_fake_stage
-from examples.optimization.eval_optimize_loop.schemas import FakeStageResult
+from examples.optimization.eval_optimize_loop.pipeline import run_offline_stage
+from examples.optimization.eval_optimize_loop.schemas import OfflineStageResult
 from trpc_agent_sdk.evaluation import EvalStatus
 from trpc_agent_sdk.evaluation import TargetPrompt
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _EXAMPLE = _REPO_ROOT / "examples" / "optimization" / "eval_optimize_loop"
+
+
+def _offline_agent(target: TargetPrompt) -> BusinessAgent:
+    return BusinessAgent(
+        target,
+        DeterministicFakeModel,
+        agent_name="stage2_offline_agent",
+        app_name="stage2_offline_test",
+        user_id="stage2-test",
+    )
 
 
 def _copy_example(tmp_path: Path, name: str = "eval_optimize_loop") -> Path:
@@ -101,7 +112,7 @@ def test_overfit_candidate_contains_rules_not_eval_ids_or_full_examples():
 @pytest.mark.asyncio
 async def test_fake_agent_rereads_prompt_and_is_deterministic(tmp_path: Path):
     target = _target_for_prompt(tmp_path / "system.md", "baseline")
-    agent = DeterministicFakeAgent(target)
+    agent = _offline_agent(target)
     email_query = "How can I update my email address?"
     order_query = "Check the status of order A100."
 
@@ -125,7 +136,7 @@ async def test_fake_agent_rereads_prompt_and_is_deterministic(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_fake_agent_unknown_query_has_stable_fallback(tmp_path: Path):
     target = _target_for_prompt(tmp_path / "system.md", "baseline")
-    agent = DeterministicFakeAgent(target)
+    agent = _offline_agent(target)
     expected = (
         '{"route":"general_support","message":'
         '"Please provide more details so I can route your request."}'
@@ -156,7 +167,7 @@ async def test_fake_stage_scenario_matrix(
     baseline_source = source.read_text(encoding="utf-8")
     prepared = prepare_run(root / "pipeline.json", run_id=f"stage2_{scenario}")
 
-    result = await run_fake_stage(prepared, scenario=scenario)  # type: ignore[arg-type]
+    result = await run_offline_stage(prepared, scenario=scenario)  # type: ignore[arg-type]
 
     assert result.baseline_train.passed_case_count == 1
     assert result.baseline_validation.passed_case_count == 1
@@ -174,7 +185,7 @@ async def test_fake_stage_scenario_matrix(
     if scenario == "improve":
         assert result.candidate_train.failed_summary is None
         assert result.candidate_validation.failed_summary is None
-        restored = FakeStageResult.model_validate_json(result.model_dump_json())
+        restored = OfflineStageResult.model_validate_json(result.model_dump_json())
         assert restored.candidate.candidate_id == result.candidate.candidate_id
     elif scenario == "overfit":
         baseline_refund = result.baseline_validation.eval_results_by_eval_id["val_refund_route"][0]
@@ -192,7 +203,7 @@ async def test_fake_stage_keeps_all_configured_runs(tmp_path: Path):
     _write_json(optimizer_path, optimizer)
     prepared = prepare_run(root / "pipeline.json", run_id="two_runs")
 
-    result = await run_fake_stage(prepared, scenario="improve")
+    result = await run_offline_stage(prepared, scenario="improve")
 
     for snapshot in (
         result.baseline_train,
@@ -204,21 +215,8 @@ async def test_fake_stage_keeps_all_configured_runs(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_fake_stage_rejects_unimplemented_fake_judge(tmp_path: Path):
-    root = _copy_example(tmp_path)
-    config_path = root / "pipeline.json"
-    config = _read_json(config_path)
-    config["execution"]["use_fake_judge"] = True
-    _write_json(config_path, config)
-    prepared = prepare_run(config_path, run_id="fake_judge")
-
-    with pytest.raises(FakeStageExecutionError, match="use_fake_judge=true"):
-        await run_fake_stage(prepared)
-
-
-@pytest.mark.parametrize("mode", ["real", "trace"])
-@pytest.mark.asyncio
-async def test_fake_stage_rejects_non_fake_execution_modes(tmp_path: Path, mode: str):
+async def test_offline_stage_rejects_real_execution_mode(tmp_path: Path):
+    mode = "real"
     root = _copy_example(tmp_path, mode)
     config_path = root / "pipeline.json"
     config = _read_json(config_path)
@@ -227,10 +225,10 @@ async def test_fake_stage_rejects_non_fake_execution_modes(tmp_path: Path, mode:
     prepared = prepare_run(config_path, run_id=f"mode_{mode}")
 
     with pytest.raises(
-        FakeStageExecutionError,
-        match=rf"requires execution.mode='fake', got '{mode}'",
+        PipelineStageExecutionError,
+        match=rf"requires execution.mode='offline', got '{mode}'",
     ):
-        await run_fake_stage(prepared)
+        await run_offline_stage(prepared)
 
 
 @pytest.mark.parametrize(
@@ -254,10 +252,10 @@ async def test_fake_stage_rejects_evalset_changes_after_prepare_run(
     _write_json(evalset_path, evalset)
 
     with pytest.raises(
-        FakeStageExecutionError,
+        PipelineStageExecutionError,
         match=rf"{expected_label} changed after prepare_run",
     ):
-        await run_fake_stage(prepared)
+        await run_offline_stage(prepared)
 
 
 @pytest.mark.asyncio
@@ -272,8 +270,8 @@ async def test_fake_stage_wraps_baseline_evaluator_errors(tmp_path: Path, monkey
         "examples.optimization.eval_optimize_loop.pipeline.AgentEvaluator.evaluate_eval_set",
         fail_evaluation,
     )
-    with pytest.raises(FakeStageExecutionError, match="baseline train evaluation failed"):
-        await run_fake_stage(prepared)
+    with pytest.raises(PipelineStageExecutionError, match="baseline train evaluation failed"):
+        await run_offline_stage(prepared)
     assert await prepared.working_target.read_all() == {
         snapshot.field_name: snapshot.content for snapshot in prepared.input_snapshot.prompt_snapshots
     }
@@ -299,8 +297,8 @@ async def test_candidate_evaluation_error_retains_working_candidate(tmp_path: Pa
         return await original(*args, **kwargs)
 
     monkeypatch.setattr(pipeline_module.AgentEvaluator, "evaluate_eval_set", fail_candidate_train)
-    with pytest.raises(FakeStageExecutionError, match="candidate train evaluation failed"):
-        await run_fake_stage(prepared, scenario="improve")
+    with pytest.raises(PipelineStageExecutionError, match="candidate train evaluation failed"):
+        await run_offline_stage(prepared, scenario="improve")
 
     working = await prepared.working_target.read_all()
     assert "deterministic-fake-candidate:start" in working["system_prompt"]

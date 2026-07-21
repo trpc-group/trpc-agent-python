@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 from dataclasses import dataclass
@@ -29,6 +30,7 @@ from trpc_agent_sdk.evaluation import TargetPrompt
 from trpc_agent_sdk.evaluation import load_optimize_config
 
 from .analysis import build_evaluation_analysis
+from .business_agent import BusinessAgent
 from .artifact_writer import discover_run_artifacts
 from .artifact_writer import publish_report_bundle
 from .artifact_writer import write_failure_report
@@ -39,7 +41,7 @@ from .candidate_provider import FakeCandidateProviderAdapter
 from .config import PipelineConfig
 from .config import load_pipeline_config
 from .evaluation_adapter import EvaluationAnalysisError
-from .fake import DeterministicFakeAgent
+from .fake import DeterministicFakeModel
 from .gate import evaluate_gate
 from .gate import GateEvaluationError
 from .prompt_workspace import PromptWorkspaceError
@@ -49,16 +51,22 @@ from .prompt_workspace import validate_prompt_sources
 from .report_builder import build_failure_report
 from .report_builder import build_optimization_report
 from .schemas import InputSnapshot
-from .schemas import FakeCandidateScenario
-from .schemas import FakeEvaluationSnapshot
-from .schemas import FakeStageResult
+from .schemas import CandidateScenario
+from .schemas import EvaluationSnapshot
+from .schemas import OfflineStageResult
 from .schemas import ObservableValue
 from .schemas import OptimizerRuntimeParameters
 from .schemas import ResourceMeasurements
 from .schemas import RealStageResult
 from .schemas import ReportPhase
 from .schemas import ReportProgress
+from .schemas import TraceCandidateProposal
+from .schemas import TraceInputSnapshot
+from .schemas import TracePromptSnapshot
+from .schemas import TraceScenarioInputSnapshot
+from .schemas import TraceStageResult
 from .schemas import WorkspaceSnapshot
+from .schemas import WritebackResult
 from .writeback import perform_writeback
 
 
@@ -71,7 +79,7 @@ class PipelineExecutionError(RuntimeError):
 
 
 # Compatibility for callers and tests written before the real-mode stage.
-FakeStageExecutionError = PipelineExecutionError
+PipelineStageExecutionError = PipelineExecutionError
 
 
 @dataclass(frozen=True)
@@ -142,7 +150,7 @@ async def _record_failure(
 
 async def _rollback_written_source(
     prepared: PreparedRun,
-    result: FakeStageResult | RealStageResult,
+    result: OfflineStageResult | RealStageResult | TraceStageResult,
 ) -> None:
     """Restore the prepared source Prompt if success reporting cannot publish."""
     if result.writeback.status != "written":
@@ -172,7 +180,7 @@ async def _handle_stage_failure(
     prepared: PreparedRun,
     progress: _MutableReportProgress,
     error: Exception,
-    result: FakeStageResult | RealStageResult | None,
+    result: OfflineStageResult | RealStageResult | TraceStageResult | None,
 ) -> None:
     failure_error: Exception = error
     if progress.current_phase == "reporting" and result is not None:
@@ -204,6 +212,18 @@ def _load_evalset(path: Path, label: str) -> EvalSet:
         raise PipelinePreparationError(f"{label} is not UTF-8: {path}") from exc
     except Exception as exc:
         raise PipelinePreparationError(f"{label} is not a valid EvalSet: {path}: {exc}") from exc
+
+
+def _validate_trace_evalset(eval_set: EvalSet, label: str) -> None:
+    invalid = [
+        case.eval_id
+        for case in eval_set.eval_cases
+        if case.eval_mode != "trace" or not case.actual_conversation
+    ]
+    if invalid:
+        raise PipelinePreparationError(
+            f"{label} requires eval_mode='trace' and actual_conversation: {invalid}"
+        )
 
 
 def _validate_eval_case_ids(train: EvalSet, validation: EvalSet, config: PipelineConfig) -> None:
@@ -263,9 +283,9 @@ def _verify_prepared_file(path: Path, *, label: str, expected_sha256: str) -> No
     try:
         actual_sha256 = _file_sha256(path)
     except OSError as exc:
-        raise FakeStageExecutionError(f"failed to reload prepared {label}: {path}: {exc}") from exc
+        raise PipelineStageExecutionError(f"failed to reload prepared {label}: {path}: {exc}") from exc
     if actual_sha256 != expected_sha256:
-        raise FakeStageExecutionError(
+        raise PipelineStageExecutionError(
             f"{label} changed after prepare_run: {path}; "
             f"expected sha256 {expected_sha256}, got {actual_sha256}"
         )
@@ -281,11 +301,11 @@ def _reload_prepared_evalset(
     try:
         payload = path.read_bytes()
     except OSError as exc:
-        raise FakeStageExecutionError(f"failed to reload prepared {label}: {path}: {exc}") from exc
+        raise PipelineStageExecutionError(f"failed to reload prepared {label}: {path}: {exc}") from exc
 
     actual_sha256 = sha256(payload).hexdigest()
     if actual_sha256 != expected_sha256:
-        raise FakeStageExecutionError(
+        raise PipelineStageExecutionError(
             f"{label} changed after prepare_run: {path}; "
             f"expected sha256 {expected_sha256}, got {actual_sha256}"
         )
@@ -293,7 +313,73 @@ def _reload_prepared_evalset(
     try:
         return EvalSet.model_validate_json(payload)
     except Exception as exc:
-        raise FakeStageExecutionError(f"prepared {label} is no longer a valid EvalSet: {path}: {exc}") from exc
+        raise PipelineStageExecutionError(f"prepared {label} is no longer a valid EvalSet: {path}: {exc}") from exc
+
+
+def _prepare_trace_inputs(
+    example_root: Path,
+    config: PipelineConfig,
+    baseline_train: EvalSet,
+    baseline_validation: EvalSet,
+) -> TraceInputSnapshot | None:
+    if config.execution.mode != "trace":
+        return None
+    _validate_trace_evalset(baseline_train, "baseline train trace")
+    _validate_trace_evalset(baseline_validation, "baseline validation trace")
+    assert config.trace_inputs is not None
+    train_ids = {case.eval_id for case in baseline_train.eval_cases}
+    validation_ids = {case.eval_id for case in baseline_validation.eval_cases}
+    scenarios: dict[str, TraceScenarioInputSnapshot] = {}
+    for scenario, inputs in config.trace_inputs.candidates.items():
+        train_path = resolve_inside_example_root(
+            example_root, inputs.train_evalset, f"trace {scenario} train"
+        )
+        validation_path = resolve_inside_example_root(
+            example_root,
+            inputs.validation_evalset,
+            f"trace {scenario} validation",
+        )
+        train = _load_evalset(train_path, f"trace {scenario} train")
+        validation = _load_evalset(
+            validation_path, f"trace {scenario} validation"
+        )
+        _validate_trace_evalset(train, f"trace {scenario} train")
+        _validate_trace_evalset(validation, f"trace {scenario} validation")
+        if {case.eval_id for case in train.eval_cases} != train_ids:
+            raise PipelinePreparationError(
+                f"trace {scenario} train eval IDs must match baseline"
+            )
+        if {case.eval_id for case in validation.eval_cases} != validation_ids:
+            raise PipelinePreparationError(
+                f"trace {scenario} validation eval IDs must match baseline"
+            )
+        prompt_snapshots: list[TracePromptSnapshot] = []
+        for prompt in inputs.prompts:
+            path = resolve_inside_example_root(
+                example_root, prompt.path, f"trace {scenario} prompt"
+            )
+            try:
+                content = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeError) as exc:
+                raise PipelinePreparationError(
+                    f"trace {scenario} prompt is invalid: {path}: {exc}"
+                ) from exc
+            prompt_snapshots.append(
+                TracePromptSnapshot(
+                    field_name=prompt.name,
+                    path=str(path),
+                    content=content,
+                    sha256=_file_sha256(path),
+                )
+            )
+        scenarios[scenario] = TraceScenarioInputSnapshot(
+            train_evalset_path=str(train_path),
+            train_evalset_sha256=_file_sha256(train_path),
+            validation_evalset_path=str(validation_path),
+            validation_evalset_sha256=_file_sha256(validation_path),
+            prompt_snapshots=prompt_snapshots,
+        )
+    return TraceInputSnapshot(scenarios=scenarios)
 
 
 def prepare_run(pipeline_config_path: str | Path, *, run_id: str | None = None) -> PreparedRun:
@@ -312,6 +398,9 @@ def prepare_run(pipeline_config_path: str | Path, *, run_id: str | None = None) 
     train_evalset = _load_evalset(train_path, "train_evalset")
     validation_evalset = _load_evalset(validation_path, "validation_evalset")
     _validate_eval_case_ids(train_evalset, validation_evalset, config)
+    trace_inputs = _prepare_trace_inputs(
+        example_root, config, train_evalset, validation_evalset
+    )
 
     try:
         optimizer_config = load_optimize_config(str(optimizer_path))
@@ -366,6 +455,7 @@ def prepare_run(pipeline_config_path: str | Path, *, run_id: str | None = None) 
             validation_evalset_sha256=_file_sha256(validation_path),
             prompt_snapshots=prompt_snapshots,
             seed=config.run.seed,
+            trace_inputs=trace_inputs,
         )
         prepared = PreparedRun(
             config=config,
@@ -410,7 +500,7 @@ def _validate_results(
     expected_ids = {case.eval_id for case in eval_set.eval_cases}
     actual_ids = set(eval_results_by_eval_id)
     if actual_ids != expected_ids:
-        raise FakeStageExecutionError(
+        raise PipelineStageExecutionError(
             f"{phase} {split} evaluation returned case ids {sorted(actual_ids)}; "
             f"expected {sorted(expected_ids)}"
         )
@@ -420,7 +510,7 @@ def _validate_results(
         if len(results) != num_runs
     }
     if wrong_run_counts:
-        raise FakeStageExecutionError(
+        raise PipelineStageExecutionError(
             f"{phase} {split} evaluation returned unexpected run counts: {wrong_run_counts}; "
             f"expected {num_runs}"
         )
@@ -430,10 +520,10 @@ async def _evaluate_split(
     *,
     prepared: PreparedRun,
     eval_set: EvalSet,
-    call_agent: CallAgent,
+    call_agent: CallAgent | None,
     phase: Literal["baseline", "candidate"],
     split: Literal["train", "validation"],
-) -> FakeEvaluationSnapshot:
+) -> EvaluationSnapshot:
     num_runs = prepared.optimizer_config.evaluate.num_runs
     try:
         failed_summary, details_lines, result_lines, eval_results_by_eval_id = (
@@ -448,7 +538,7 @@ async def _evaluate_split(
             )
         )
     except Exception as exc:
-        raise FakeStageExecutionError(f"{phase} {split} evaluation failed: {exc}") from exc
+        raise PipelineStageExecutionError(f"{phase} {split} evaluation failed: {exc}") from exc
 
     _validate_results(
         eval_set=eval_set,
@@ -458,7 +548,7 @@ async def _evaluate_split(
         split=split,
     )
     passed_cases, total_cases, average_score = _summarize_results(eval_results_by_eval_id)
-    return FakeEvaluationSnapshot(
+    return EvaluationSnapshot(
         phase=phase,
         split=split,
         eval_set_id=eval_set.eval_set_id,
@@ -484,37 +574,33 @@ async def _restore_working_baseline(
             await prepared.working_target.write_all(baseline_prompts)
         restored = await prepared.working_target.read_all()
     except Exception as exc:
-        raise FakeStageExecutionError(f"failed to restore optimizer working prompts: {exc}") from exc
+        raise PipelineStageExecutionError(f"failed to restore optimizer working prompts: {exc}") from exc
     if restored != baseline_prompts:
-        raise FakeStageExecutionError("optimizer working prompts did not match baseline after restoration")
+        raise PipelineStageExecutionError("optimizer working prompts did not match baseline after restoration")
     return was_modified
 
 
-async def _execute_fake_stage(
+async def _execute_offline_stage(
     prepared: PreparedRun,
     *,
-    scenario: FakeCandidateScenario | None = None,
+    scenario: CandidateScenario | None = None,
     progress: _MutableReportProgress,
-) -> FakeStageResult:
-    """Run four deterministic evaluations without a model, judge, or optimizer.
+) -> OfflineStageResult:
+    """Run four evaluations through SDK LlmAgent and a deterministic model.
 
     Source prompts are never written. Once generated, the candidate remains in
     the isolated working target on success or candidate-evaluation failure so
     the run can be inspected later.
     """
     progress.enter("baseline_train")
-    if prepared.config.execution.mode != "fake":
-        raise FakeStageExecutionError(
-            f"run_fake_stage requires execution.mode='fake', got {prepared.config.execution.mode!r}"
-        )
-    if prepared.config.execution.use_fake_judge:
-        raise FakeStageExecutionError(
-            "execution.use_fake_judge=true is not supported in stage two; "
-            "the example uses deterministic final-response matching"
+    if prepared.config.execution.mode != "offline":
+        raise PipelineStageExecutionError(
+            "run_offline_stage requires execution.mode='offline', got "
+            f"{prepared.config.execution.mode!r}"
         )
 
     started_at = perf_counter()
-    selected_scenario = scenario or prepared.config.execution.fake_candidate_scenario
+    selected_scenario = scenario or prepared.config.execution.candidate_scenario
     train_evalset = _reload_prepared_evalset(
         Path(prepared.input_snapshot.train_evalset_path),
         label="train_evalset",
@@ -529,14 +615,20 @@ async def _execute_fake_stage(
     try:
         baseline_prompts = await prepared.working_target.read_all()
     except Exception as exc:
-        raise FakeStageExecutionError(f"failed to read prepared working prompts: {exc}") from exc
+        raise PipelineStageExecutionError(f"failed to read prepared working prompts: {exc}") from exc
     expected_baseline = {
         snapshot.field_name: snapshot.content for snapshot in prepared.input_snapshot.prompt_snapshots
     }
     if baseline_prompts != expected_baseline:
-        raise FakeStageExecutionError("working prompts no longer match the prepared baseline snapshot")
+        raise PipelineStageExecutionError("working prompts no longer match the prepared baseline snapshot")
 
-    agent = DeterministicFakeAgent(prepared.working_target)
+    agent = BusinessAgent(
+        prepared.working_target,
+        DeterministicFakeModel,
+        agent_name="eval_optimize_offline_agent",
+        app_name="eval_optimize_offline",
+        user_id="offline-evaluation",
+    )
     progress.enter("baseline_train")
     baseline_train = await _evaluate_split(
         prepared=prepared,
@@ -568,15 +660,15 @@ async def _execute_fake_stage(
         generated = await FakeCandidateProviderAdapter(selected_scenario).propose(request)
         candidate = generated.proposal
     except Exception as exc:
-        raise FakeStageExecutionError(f"fake candidate generation failed: {exc}") from exc
+        raise PipelineStageExecutionError(f"fake candidate generation failed: {exc}") from exc
 
     try:
         await prepared.working_target.write_all(candidate.prompts)
         written_prompts = await prepared.working_target.read_all()
     except Exception as exc:
-        raise FakeStageExecutionError(f"candidate prompt write failed: {exc}") from exc
+        raise PipelineStageExecutionError(f"candidate prompt write failed: {exc}") from exc
     if written_prompts != candidate.prompts:
-        raise FakeStageExecutionError("candidate prompt readback did not match the generated proposal")
+        raise PipelineStageExecutionError("candidate prompt readback did not match the generated proposal")
 
     progress.enter("candidate_train")
     candidate_train = await _evaluate_split(
@@ -606,17 +698,17 @@ async def _execute_fake_stage(
             severe_case_score_drop=prepared.config.gate.severe_case_score_drop,
         )
     except EvaluationAnalysisError as exc:
-        raise FakeStageExecutionError(f"stage 3a analysis failed: {exc}") from exc
+        raise PipelineStageExecutionError(f"stage 3a analysis failed: {exc}") from exc
     measurements = ResourceMeasurements(
         cost_usd=ObservableValue(
             status="unavailable",
             unit="USD",
-            reason="Fake mode does not report monetary cost.",
+            reason="Offline deterministic model does not report monetary cost.",
         ),
         total_tokens=ObservableValue(
             status="unavailable",
             unit="tokens",
-            reason="Fake mode does not report token usage.",
+            reason="Offline deterministic model does not report token usage.",
         ),
         duration_seconds=ObservableValue(
             status="available",
@@ -633,7 +725,7 @@ async def _execute_fake_stage(
             measurements,
         )
     except GateEvaluationError as exc:
-        raise FakeStageExecutionError(f"stage 3b gate failed: {exc}") from exc
+        raise PipelineStageExecutionError(f"stage 3b gate failed: {exc}") from exc
     progress.enter("writeback")
     writeback = await perform_writeback(
         decision=gate_decision,
@@ -642,7 +734,7 @@ async def _execute_fake_stage(
         source_target=prepared.source_target,
         candidate=candidate,
     )
-    return FakeStageResult(
+    return OfflineStageResult(
         scenario=selected_scenario,
         candidate=candidate,
         baseline_train=baseline_train,
@@ -666,12 +758,9 @@ async def _execute_real_stage(
     """Generate a real optimizer candidate and run the full guarded regression."""
     progress.enter("baseline_train")
     if prepared.config.execution.mode != "real":
-        raise FakeStageExecutionError(
+        raise PipelineStageExecutionError(
             f"run_real_stage requires execution.mode='real', got {prepared.config.execution.mode!r}"
         )
-    if prepared.config.execution.use_fake_judge:
-        raise FakeStageExecutionError("execution.use_fake_judge=true is not supported in real mode")
-
     started_at = perf_counter()
     _verify_prepared_file(
         Path(prepared.input_snapshot.optimizer_config_path),
@@ -691,12 +780,12 @@ async def _execute_real_stage(
     try:
         baseline_prompts = await prepared.working_target.read_all()
     except Exception as exc:
-        raise FakeStageExecutionError(f"failed to read prepared working prompts: {exc}") from exc
+        raise PipelineStageExecutionError(f"failed to read prepared working prompts: {exc}") from exc
     expected_baseline = {
         snapshot.field_name: snapshot.content for snapshot in prepared.input_snapshot.prompt_snapshots
     }
     if baseline_prompts != expected_baseline:
-        raise FakeStageExecutionError("working prompts no longer match the prepared baseline snapshot")
+        raise PipelineStageExecutionError("working prompts no longer match the prepared baseline snapshot")
 
     progress.enter("baseline_train")
     baseline_train = await _evaluate_split(
@@ -732,19 +821,19 @@ async def _execute_real_stage(
         generated = await AgentOptimizerCandidateProvider(call_agent).propose(request)
     except CandidateProviderError as exc:
         await _restore_working_baseline(prepared, baseline_prompts)
-        raise FakeStageExecutionError(f"real candidate generation failed: {exc}") from exc
+        raise PipelineStageExecutionError(f"real candidate generation failed: {exc}") from exc
 
     if await _restore_working_baseline(prepared, baseline_prompts):
-        raise FakeStageExecutionError("optimizer did not restore working prompts after update_source=False")
+        raise PipelineStageExecutionError("optimizer did not restore working prompts after update_source=False")
 
     candidate = generated.proposal
     try:
         await prepared.working_target.write_all(candidate.prompts)
         written_prompts = await prepared.working_target.read_all()
     except Exception as exc:
-        raise FakeStageExecutionError(f"candidate prompt write failed: {exc}") from exc
+        raise PipelineStageExecutionError(f"candidate prompt write failed: {exc}") from exc
     if written_prompts != candidate.prompts:
-        raise FakeStageExecutionError("candidate prompt readback did not match the generated proposal")
+        raise PipelineStageExecutionError("candidate prompt readback did not match the generated proposal")
 
     progress.enter("candidate_train")
     candidate_train = await _evaluate_split(
@@ -774,7 +863,7 @@ async def _execute_real_stage(
             severe_case_score_drop=prepared.config.gate.severe_case_score_drop,
         )
     except EvaluationAnalysisError as exc:
-        raise FakeStageExecutionError(f"stage 3a analysis failed: {exc}") from exc
+        raise PipelineStageExecutionError(f"stage 3a analysis failed: {exc}") from exc
     measurements = ResourceMeasurements(
         cost_usd=ObservableValue(
             status="unavailable",
@@ -801,7 +890,7 @@ async def _execute_real_stage(
             measurements,
         )
     except GateEvaluationError as exc:
-        raise FakeStageExecutionError(f"stage 3b gate failed: {exc}") from exc
+        raise PipelineStageExecutionError(f"stage 3b gate failed: {exc}") from exc
 
     progress.enter("writeback")
     writeback = await perform_writeback(
@@ -827,16 +916,16 @@ async def _execute_real_stage(
     )
 
 
-async def run_fake_stage(
+async def run_offline_stage(
     prepared: PreparedRun,
     *,
-    scenario: FakeCandidateScenario | None = None,
-) -> FakeStageResult:
-    """Run fake regression and atomically publish its audit report."""
+    scenario: CandidateScenario | None = None,
+) -> OfflineStageResult:
+    """Run offline SDK-Agent regression and publish its audit report."""
     progress = _MutableReportProgress(started_at=datetime.now(timezone.utc))
-    result: FakeStageResult | None = None
+    result: OfflineStageResult | None = None
     try:
-        result = await _execute_fake_stage(
+        result = await _execute_offline_stage(
             prepared,
             scenario=scenario,
             progress=progress,
@@ -846,6 +935,162 @@ async def run_fake_stage(
             prepared,
             result,
             progress=progress.snapshot(),
+            finished_at=datetime.now(timezone.utc),
+        )
+        publish_report_bundle(
+            report,
+            run_dir=Path(prepared.workspace.run_dir),
+            copy_input_files=prepared.config.artifacts.copy_input_files,
+        )
+        return result
+    except Exception as exc:
+        await _handle_stage_failure(prepared, progress, exc, result)
+        raise
+
+
+async def _execute_trace_stage(
+    prepared: PreparedRun,
+    *,
+    scenario: CandidateScenario | None,
+    progress: _MutableReportProgress,
+) -> TraceStageResult:
+    if prepared.config.execution.mode != "trace":
+        raise PipelineExecutionError(
+            "run_trace_stage requires execution.mode='trace', got "
+            f"{prepared.config.execution.mode!r}"
+        )
+    trace_inputs = prepared.input_snapshot.trace_inputs
+    if trace_inputs is None:
+        raise PipelineExecutionError("prepared trace inputs are missing")
+    selected = scenario or prepared.config.execution.candidate_scenario
+    candidate_inputs = trace_inputs.scenarios[selected]
+    started_at = perf_counter()
+
+    baseline_train_set = _reload_prepared_evalset(
+        Path(prepared.input_snapshot.train_evalset_path),
+        label="baseline train trace",
+        expected_sha256=prepared.input_snapshot.train_evalset_sha256,
+    )
+    baseline_validation_set = _reload_prepared_evalset(
+        Path(prepared.input_snapshot.validation_evalset_path),
+        label="baseline validation trace",
+        expected_sha256=prepared.input_snapshot.validation_evalset_sha256,
+    )
+    candidate_train_set = _reload_prepared_evalset(
+        Path(candidate_inputs.train_evalset_path),
+        label=f"candidate {selected} train trace",
+        expected_sha256=candidate_inputs.train_evalset_sha256,
+    )
+    candidate_validation_set = _reload_prepared_evalset(
+        Path(candidate_inputs.validation_evalset_path),
+        label=f"candidate {selected} validation trace",
+        expected_sha256=candidate_inputs.validation_evalset_sha256,
+    )
+
+    progress.enter("baseline_train")
+    baseline_train = await _evaluate_split(
+        prepared=prepared, eval_set=baseline_train_set, call_agent=None,
+        phase="baseline", split="train",
+    )
+    progress.enter("baseline_validation")
+    baseline_validation = await _evaluate_split(
+        prepared=prepared, eval_set=baseline_validation_set, call_agent=None,
+        phase="baseline", split="validation",
+    )
+    progress.enter("candidate_generation")
+    prompts = {
+        snapshot.field_name: snapshot.content
+        for snapshot in candidate_inputs.prompt_snapshots
+    }
+    baseline_prompts = {
+        snapshot.field_name: snapshot.content
+        for snapshot in prepared.input_snapshot.prompt_snapshots
+    }
+    canonical = json.dumps(
+        prompts, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    candidate_hash = sha256(canonical.encode("utf-8")).hexdigest()
+    parent_canonical = json.dumps(
+        baseline_prompts,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    parent_hash = sha256(parent_canonical.encode("utf-8")).hexdigest()
+    candidate = TraceCandidateProposal(
+        scenario=selected,
+        prompts=prompts,
+        changed_fields=[
+            name for name in baseline_prompts if baseline_prompts[name] != prompts[name]
+        ],
+        rationale="Replay the selected pre-recorded candidate trace.",
+        parent_prompt_sha256=parent_hash,
+        candidate_prompt_sha256=candidate_hash,
+        candidate_id=f"trace-{selected}-{candidate_hash[:12]}",
+        source_trace_sha256={
+            "train": candidate_inputs.train_evalset_sha256,
+            "validation": candidate_inputs.validation_evalset_sha256,
+        },
+    )
+    progress.enter("candidate_train")
+    candidate_train = await _evaluate_split(
+        prepared=prepared, eval_set=candidate_train_set, call_agent=None,
+        phase="candidate", split="train",
+    )
+    progress.enter("candidate_validation")
+    candidate_validation = await _evaluate_split(
+        prepared=prepared, eval_set=candidate_validation_set, call_agent=None,
+        phase="candidate", split="validation",
+    )
+    progress.enter("analysis")
+    analysis = build_evaluation_analysis(
+        baseline_train=baseline_train,
+        baseline_validation=baseline_validation,
+        candidate_train=candidate_train,
+        candidate_validation=candidate_validation,
+        hard_case_ids=set(prepared.config.case_labels.hard_case_ids),
+        critical_case_ids=set(prepared.config.case_labels.critical_case_ids),
+        severe_case_score_drop=prepared.config.gate.severe_case_score_drop,
+    )
+    measurements = ResourceMeasurements(
+        cost_usd=ObservableValue(status="unavailable", unit="USD", reason="Trace replay does not call a model."),
+        total_tokens=ObservableValue(status="unavailable", unit="tokens", reason="Trace replay does not call a model."),
+        duration_seconds=ObservableValue(status="available", value=perf_counter() - started_at, unit="seconds"),
+    )
+    progress.enter("gate")
+    gate_decision = evaluate_gate(
+        analysis, prepared.config.gate, prepared.config.budget, measurements
+    )
+    progress.enter("writeback")
+    writeback = WritebackResult(
+        status="skipped", reason="trace_replay", attempted=False
+    )
+    return TraceStageResult(
+        scenario=selected, candidate=candidate,
+        baseline_train=baseline_train,
+        baseline_validation=baseline_validation,
+        candidate_train=candidate_train,
+        candidate_validation=candidate_validation,
+        analysis=analysis, measurements=measurements,
+        gate_decision=gate_decision, writeback=writeback,
+    )
+
+
+async def run_trace_stage(
+    prepared: PreparedRun,
+    *,
+    scenario: CandidateScenario | None = None,
+) -> TraceStageResult:
+    """回放四个 Trace EvalSet，并发布分析与 Gate 报告。"""
+    progress = _MutableReportProgress(started_at=datetime.now(timezone.utc))
+    result: TraceStageResult | None = None
+    try:
+        result = await _execute_trace_stage(
+            prepared, scenario=scenario, progress=progress
+        )
+        progress.enter("reporting")
+        report = build_optimization_report(
+            prepared, result, progress=progress.snapshot(),
             finished_at=datetime.now(timezone.utc),
         )
         publish_report_bundle(

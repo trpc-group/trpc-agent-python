@@ -20,11 +20,11 @@ from examples.optimization.eval_optimize_loop.case_diff import compare_evaluatio
 from examples.optimization.eval_optimize_loop.config import BudgetConfig
 from examples.optimization.eval_optimize_loop.config import GateConfig
 from examples.optimization.eval_optimize_loop.pipeline import prepare_run
-from examples.optimization.eval_optimize_loop.pipeline import FakeStageExecutionError
-from examples.optimization.eval_optimize_loop.pipeline import run_fake_stage
+from examples.optimization.eval_optimize_loop.pipeline import PipelineStageExecutionError
+from examples.optimization.eval_optimize_loop.pipeline import run_offline_stage
 from examples.optimization.eval_optimize_loop.schemas import CaseEvaluation
 from examples.optimization.eval_optimize_loop.schemas import EvaluationAnalysis
-from examples.optimization.eval_optimize_loop.schemas import FakeStageResult
+from examples.optimization.eval_optimize_loop.schemas import OfflineStageResult
 from examples.optimization.eval_optimize_loop.schemas import MetricOutcome
 from examples.optimization.eval_optimize_loop.schemas import ObservableValue
 from examples.optimization.eval_optimize_loop.schemas import ResourceMeasurements
@@ -506,7 +506,7 @@ async def test_fake_stage_returns_measurements_and_accepts_improving_candidate(t
     baseline_source = source.read_text(encoding="utf-8")
     prepared = prepare_run(root / "pipeline.json", run_id="stage3b_improve")
 
-    result = await run_fake_stage(prepared, scenario="improve")
+    result = await run_offline_stage(prepared, scenario="improve")
 
     assert result.gate_decision.decision == "accept"
     assert result.gate_decision.rejection_reasons == []
@@ -555,7 +555,7 @@ async def test_stage3b_scenario_gate_matrix(
     baseline_source = source.read_text(encoding="utf-8")
     prepared = prepare_run(root / "pipeline.json", run_id=f"stage3b_{scenario}")
 
-    result = await run_fake_stage(prepared, scenario=scenario)  # type: ignore[arg-type]
+    result = await run_offline_stage(prepared, scenario=scenario)  # type: ignore[arg-type]
 
     assert result.gate_decision.decision == expected_decision
     assert [
@@ -564,7 +564,7 @@ async def test_stage3b_scenario_gate_matrix(
         if rule.outcome == "reject"
     ] == expected_reject_rules
     assert source.read_text(encoding="utf-8") == baseline_source
-    assert FakeStageResult.model_validate_json(result.model_dump_json()) == result
+    assert OfflineStageResult.model_validate_json(result.model_dump_json()) == result
 
 
 @pytest.mark.asyncio
@@ -579,8 +579,8 @@ async def test_fake_stage_wraps_gate_structure_errors_only(tmp_path: Path, monke
 
     monkeypatch.setattr(pipeline_module, "evaluate_gate", fail_gate)
 
-    with pytest.raises(FakeStageExecutionError, match="stage 3b gate failed"):
-        await run_fake_stage(prepared, scenario="improve")
+    with pytest.raises(PipelineStageExecutionError, match="stage 3b gate failed"):
+        await run_offline_stage(prepared, scenario="improve")
 
 
 @pytest.mark.asyncio
@@ -594,7 +594,7 @@ async def test_fake_stage_does_not_hide_unexpected_gate_value_errors(tmp_path: P
     monkeypatch.setattr(pipeline_module, "evaluate_gate", fail_gate)
 
     with pytest.raises(ValueError, match="injected programming error"):
-        await run_fake_stage(prepared, scenario="improve")
+        await run_offline_stage(prepared, scenario="improve")
 
 
 def test_stage3b_cli_prints_gate_decision_and_rejection_reasons(tmp_path: Path):

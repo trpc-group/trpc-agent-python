@@ -29,7 +29,7 @@ from trpc_agent_sdk.evaluation import EvalCaseResult
 from trpc_agent_sdk.evaluation import OptimizeResult
 
 
-FakeCandidateScenario = Literal["improve", "no_improvement", "overfit"]
+CandidateScenario = Literal["improve", "no_improvement", "overfit"]
 EvaluationStatus = Literal["passed", "failed", "not_evaluated"]
 FailureCategory = Literal[
     "evaluation_error",
@@ -74,6 +74,7 @@ WritebackReason = Literal[
     "write_error",
     "readback_mismatch",
     "written",
+    "trace_replay",
 ]
 
 
@@ -123,6 +124,27 @@ class PromptSnapshot(EvalBaseModel):
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class TracePromptSnapshot(EvalBaseModel):
+    """Trace 候选随附的只读 Prompt 快照。"""
+
+    field_name: str
+    path: str
+    content: str
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class TraceScenarioInputSnapshot(EvalBaseModel):
+    train_evalset_path: str
+    train_evalset_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    validation_evalset_path: str
+    validation_evalset_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    prompt_snapshots: list[TracePromptSnapshot]
+
+
+class TraceInputSnapshot(EvalBaseModel):
+    scenarios: dict[CandidateScenario, TraceScenarioInputSnapshot]
+
+
 class InputSnapshot(EvalBaseModel):
     """Immutable file identities captured before a pipeline run starts."""
 
@@ -136,6 +158,7 @@ class InputSnapshot(EvalBaseModel):
     validation_evalset_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     prompt_snapshots: list[PromptSnapshot]
     seed: int
+    trace_inputs: Optional[TraceInputSnapshot] = None
 
 
 class WorkspaceSnapshot(EvalBaseModel):
@@ -150,7 +173,7 @@ class WorkspaceSnapshot(EvalBaseModel):
 class CandidateProposal(EvalBaseModel):
     """Common, serializable identity and prompt payload for any provider."""
 
-    provider: Literal["fake", "agent_optimizer"]
+    provider: Literal["fake", "agent_optimizer", "trace"]
     prompts: dict[str, str]
     changed_fields: list[str]
     rationale: str
@@ -163,7 +186,7 @@ class FakeCandidateProposal(CandidateProposal):
     """One deterministic prompt proposal produced without a real optimizer."""
 
     provider: Literal["fake"] = "fake"
-    scenario: FakeCandidateScenario
+    scenario: CandidateScenario
     seed: int
     candidate_id: str = Field(pattern=r"^fake-(improve|no_improvement|overfit)-[0-9a-f]{12}$")
 
@@ -181,8 +204,17 @@ class OptimizerCandidateProposal(CandidateProposal):
     candidate_id: str = Field(pattern=r"^optimizer-[0-9a-f]{12}$")
 
 
-class FakeEvaluationSnapshot(EvalBaseModel):
-    """Complete SDK outputs from one fake-agent dataset evaluation."""
+class TraceCandidateProposal(CandidateProposal):
+    """由预录制轨迹和 Prompt 快照标识的候选版本。"""
+
+    provider: Literal["trace"] = "trace"
+    scenario: CandidateScenario
+    source_trace_sha256: dict[Literal["train", "validation"], str]
+    candidate_id: str = Field(pattern=r"^trace-(improve|no_improvement|overfit)-[0-9a-f]{12}$")
+
+
+class EvaluationSnapshot(EvalBaseModel):
+    """Complete SDK outputs from one evaluation split."""
 
     phase: Literal["baseline", "candidate"]
     split: Literal["train", "validation"]
@@ -398,20 +430,20 @@ class WritebackResult(EvalBaseModel):
 class PipelineStageResult(EvalBaseModel):
     """Evaluation, analysis, Gate, and writeback fields shared by all modes."""
 
-    baseline_train: FakeEvaluationSnapshot
-    baseline_validation: FakeEvaluationSnapshot
-    candidate_train: FakeEvaluationSnapshot
-    candidate_validation: FakeEvaluationSnapshot
+    baseline_train: EvaluationSnapshot
+    baseline_validation: EvaluationSnapshot
+    candidate_train: EvaluationSnapshot
+    candidate_validation: EvaluationSnapshot
     analysis: EvaluationAnalysis
     measurements: ResourceMeasurements
     gate_decision: GateDecision
     writeback: WritebackResult
 
 
-class FakeStageResult(PipelineStageResult):
-    """Full deterministic fake-mode pipeline result."""
+class OfflineStageResult(PipelineStageResult):
+    """Full deterministic offline-mode pipeline result."""
 
-    scenario: FakeCandidateScenario
+    scenario: CandidateScenario
     candidate: FakeCandidateProposal
 
 
@@ -420,6 +452,13 @@ class RealStageResult(PipelineStageResult):
 
     candidate: OptimizerCandidateProposal
     optimize_result: OptimizeResult
+
+
+class TraceStageResult(PipelineStageResult):
+    """完整的 Trace 回放、分析与 Gate 结果。"""
+
+    scenario: CandidateScenario
+    candidate: TraceCandidateProposal
 
 ReportPhase = Literal[
     "baseline_train", "baseline_validation", "candidate_generation", "candidate_train",
@@ -512,16 +551,16 @@ class OptimizationReport(EvalBaseModel):
     schema_version: Literal[1] = 1
     status: Literal["completed"] = "completed"
     run_id: str
-    execution_mode: Literal["fake", "real"]
+    execution_mode: Literal["offline", "real", "trace"]
     seed: int
     started_at: datetime
     finished_at: datetime
     input_snapshot: InputSnapshot
-    candidate: Union[FakeCandidateProposal, OptimizerCandidateProposal]
-    baseline_train: FakeEvaluationSnapshot
-    baseline_validation: FakeEvaluationSnapshot
-    candidate_train: FakeEvaluationSnapshot
-    candidate_validation: FakeEvaluationSnapshot
+    candidate: Union[FakeCandidateProposal, OptimizerCandidateProposal, TraceCandidateProposal]
+    baseline_train: EvaluationSnapshot
+    baseline_validation: EvaluationSnapshot
+    candidate_train: EvaluationSnapshot
+    candidate_validation: EvaluationSnapshot
     analysis: EvaluationAnalysis
     pipeline_resources: ResourceMeasurements
     optimizer_resources: OptimizerResourceObservation
@@ -532,7 +571,7 @@ class FailureReport(EvalBaseModel):
     schema_version: Literal[1] = 1
     status: Literal["failed"] = "failed"
     run_id: str
-    execution_mode: Literal["fake", "real"]
+    execution_mode: Literal["offline", "real", "trace"]
     failed_phase: ReportPhase
     exception_type: str
     error_message: str

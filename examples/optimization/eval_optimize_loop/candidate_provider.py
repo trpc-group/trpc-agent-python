@@ -21,7 +21,7 @@ from trpc_agent_sdk.evaluation import TargetPrompt
 
 from .fake.candidate_provider import DeterministicFakeCandidateProvider
 from .schemas import CandidateProposal
-from .schemas import FakeCandidateScenario
+from .schemas import CandidateScenario
 from .schemas import OptimizerCandidateProposal
 from .schemas import OptimizerRuntimeParameters
 
@@ -75,7 +75,7 @@ class CandidateProvider(Protocol):
 class FakeCandidateProviderAdapter:
     """Lift the pure synchronous fake provider into the common async boundary."""
 
-    def __init__(self, scenario: FakeCandidateScenario) -> None:
+    def __init__(self, scenario: CandidateScenario) -> None:
         self._scenario = scenario
 
     async def propose(self, request: CandidateRequest) -> CandidateGeneration:

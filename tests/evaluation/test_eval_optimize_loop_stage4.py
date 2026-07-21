@@ -21,20 +21,32 @@ from examples.optimization.eval_optimize_loop.candidate_provider import AgentOpt
 from examples.optimization.eval_optimize_loop.candidate_provider import CandidateProviderError
 from examples.optimization.eval_optimize_loop.candidate_provider import CandidateRequest
 from examples.optimization.eval_optimize_loop.config import WritebackConfig
-from examples.optimization.eval_optimize_loop.fake import DeterministicFakeAgent
+from examples.optimization.eval_optimize_loop.business_agent import BusinessAgent
+from examples.optimization.eval_optimize_loop.fake import DeterministicFakeModel
 from examples.optimization.eval_optimize_loop.fake import DeterministicFakeCandidateProvider
 from examples.optimization.eval_optimize_loop.pipeline import prepare_run
-from examples.optimization.eval_optimize_loop.pipeline import FakeStageExecutionError
-from examples.optimization.eval_optimize_loop.pipeline import run_fake_stage
+from examples.optimization.eval_optimize_loop.pipeline import PipelineStageExecutionError
+from examples.optimization.eval_optimize_loop.pipeline import run_offline_stage
 from examples.optimization.eval_optimize_loop.pipeline import run_real_stage
 from examples.optimization.eval_optimize_loop.schemas import GateDecision
 from examples.optimization.eval_optimize_loop.schemas import RealStageResult
 from examples.optimization.eval_optimize_loop.writeback import perform_writeback
 from trpc_agent_sdk.evaluation import OptimizeResult
+from trpc_agent_sdk.evaluation import TargetPrompt
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _EXAMPLE = _REPO_ROOT / "examples" / "optimization" / "eval_optimize_loop"
+
+
+def _offline_agent(target: TargetPrompt) -> BusinessAgent:
+    return BusinessAgent(
+        target,
+        DeterministicFakeModel,
+        agent_name="stage4_offline_agent",
+        app_name="stage4_offline_test",
+        user_id="stage4-test",
+    )
 
 
 def _copy_example(tmp_path: Path, name: str = "eval_optimize_loop") -> Path:
@@ -174,7 +186,7 @@ async def test_real_stage_runs_full_regression_and_skips_disabled_writeback(
         "examples.optimization.eval_optimize_loop.candidate_provider.AgentOptimizer.optimize",
         fake_optimize,
     )
-    agent = DeterministicFakeAgent(prepared.working_target)
+    agent = _offline_agent(prepared.working_target)
 
     result = await run_real_stage(prepared, call_agent=agent.call_agent)
 
@@ -210,7 +222,7 @@ async def test_real_stage_writes_accepted_candidate_after_hash_check(
 
     result = await run_real_stage(
         prepared,
-        call_agent=DeterministicFakeAgent(prepared.working_target).call_agent,
+        call_agent=_offline_agent(prepared.working_target).call_agent,
     )
 
     assert result.gate_decision.decision == "accept"
@@ -242,7 +254,7 @@ async def test_real_stage_blocks_writeback_when_source_drifted(
 
     result = await run_real_stage(
         prepared,
-        call_agent=DeterministicFakeAgent(prepared.working_target).call_agent,
+        call_agent=_offline_agent(prepared.working_target).call_agent,
     )
 
     assert result.gate_decision.decision == "accept"
@@ -275,7 +287,7 @@ async def test_real_stage_returns_failed_writeback_after_verified_rollback(
 
     result = await run_real_stage(
         prepared,
-        call_agent=DeterministicFakeAgent(prepared.working_target).call_agent,
+        call_agent=_offline_agent(prepared.working_target).call_agent,
     )
 
     assert result.writeback.status == "failed"
@@ -294,7 +306,7 @@ async def test_fake_stage_uses_the_same_guarded_writeback_path(tmp_path: Path):
     path.write_text(json.dumps(payload), encoding="utf-8")
     prepared = prepare_run(root / "pipeline.json", run_id="stage4_fake_write")
 
-    result = await run_fake_stage(prepared, scenario="improve")
+    result = await run_offline_stage(prepared, scenario="improve")
 
     assert result.gate_decision.decision == "accept"
     assert result.writeback.status == "written"
@@ -311,7 +323,7 @@ async def test_fake_stage_never_writes_a_gate_rejected_candidate(tmp_path: Path)
     prepared = prepare_run(root / "pipeline.json", run_id="stage4_fake_reject")
     source_before = await prepared.source_target.read_all()
 
-    result = await run_fake_stage(prepared, scenario="no_improvement")
+    result = await run_offline_stage(prepared, scenario="no_improvement")
 
     assert result.gate_decision.decision == "reject"
     assert result.writeback.status == "skipped"
@@ -346,7 +358,7 @@ async def test_real_candidate_provider_rejects_failed_optimizer_result(
     )
 
     with pytest.raises(CandidateProviderError, match="returned FAILED"):
-        await AgentOptimizerCandidateProvider(DeterministicFakeAgent(prepared.working_target).call_agent).propose(
+        await AgentOptimizerCandidateProvider(_offline_agent(prepared.working_target).call_agent).propose(
             request
         )
 
@@ -376,10 +388,10 @@ async def test_real_stage_rejects_optimizer_config_drift_before_optimization(
         should_not_optimize,
     )
 
-    with pytest.raises(FakeStageExecutionError, match="optimizer_config changed"):
+    with pytest.raises(PipelineStageExecutionError, match="optimizer_config changed"):
         await run_real_stage(
             prepared,
-            call_agent=DeterministicFakeAgent(prepared.working_target).call_agent,
+            call_agent=_offline_agent(prepared.working_target).call_agent,
         )
     assert called is False
 
@@ -449,10 +461,10 @@ async def test_real_stage_restores_working_prompt_after_optimizer_exception(
         mutating_failure,
     )
 
-    with pytest.raises(FakeStageExecutionError, match="real candidate generation failed"):
+    with pytest.raises(PipelineStageExecutionError, match="real candidate generation failed"):
         await run_real_stage(
             prepared,
-            call_agent=DeterministicFakeAgent(prepared.working_target).call_agent,
+            call_agent=_offline_agent(prepared.working_target).call_agent,
         )
 
     assert await prepared.working_target.read_all() == baseline
@@ -482,7 +494,7 @@ async def test_real_candidate_provider_can_discard_native_artifacts_after_extrac
     )
 
     generated = await AgentOptimizerCandidateProvider(
-        DeterministicFakeAgent(prepared.working_target).call_agent
+        _offline_agent(prepared.working_target).call_agent
     ).propose(request)
 
     assert generated.optimize_result is not None
@@ -582,5 +594,5 @@ async def test_real_candidate_provider_wraps_artifact_cleanup_failure(
 
     with pytest.raises(CandidateProviderError, match="discard optimizer artifacts"):
         await AgentOptimizerCandidateProvider(
-            DeterministicFakeAgent(prepared.working_target).call_agent
+            _offline_agent(prepared.working_target).call_agent
         ).propose(request)

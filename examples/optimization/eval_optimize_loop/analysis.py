@@ -11,7 +11,7 @@ from .attribution import attribute_evaluation
 from .case_diff import compare_evaluations
 from .evaluation_adapter import standardize_snapshot
 from .schemas import EvaluationAnalysis
-from .schemas import FakeEvaluationSnapshot
+from .schemas import EvaluationSnapshot
 from .schemas import ObservableValue
 from .schemas import OverfitStatus
 
@@ -39,10 +39,10 @@ def _overfit_status(
 
 def build_evaluation_analysis(
     *,
-    baseline_train: FakeEvaluationSnapshot,
-    baseline_validation: FakeEvaluationSnapshot,
-    candidate_train: FakeEvaluationSnapshot,
-    candidate_validation: FakeEvaluationSnapshot,
+    baseline_train: EvaluationSnapshot,
+    baseline_validation: EvaluationSnapshot,
+    candidate_train: EvaluationSnapshot,
+    candidate_validation: EvaluationSnapshot,
     hard_case_ids: set[str],
     critical_case_ids: set[str],
     severe_case_score_drop: float,

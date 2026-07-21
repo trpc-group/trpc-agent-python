@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from examples.optimization.eval_optimize_loop.pipeline import prepare_run, run_fake_stage
+from examples.optimization.eval_optimize_loop.pipeline import prepare_run, run_offline_stage
 from examples.optimization.eval_optimize_loop.report_builder import (
     build_failure_report, build_optimization_report, render_optimization_markdown,
 )
@@ -49,11 +49,11 @@ async def test_fake_report_is_serializable_and_marks_optimizer_resources_not_app
     root = _copy_example(tmp_path)
     prepared = prepare_run(root / "pipeline.json", run_id="report_fake")
     report = build_optimization_report(
-        prepared, await run_fake_stage(prepared, scenario="improve"), progress=_progress(),
+        prepared, await run_offline_stage(prepared, scenario="improve"), progress=_progress(),
         finished_at=datetime(2026, 7, 18, 0, 1, tzinfo=timezone.utc),
     )
     assert report.status == "completed"
-    assert report.execution_mode == "fake"
+    assert report.execution_mode == "offline"
     optimizer_resources = report.optimizer_resources
     for observation in (
         optimizer_resources.total_rounds,
@@ -64,7 +64,9 @@ async def test_fake_report_is_serializable_and_marks_optimizer_resources_not_app
     ):
         assert observation.status == "not_applicable"
         assert observation.value is None
-        assert observation.reason == "Fake mode does not run AgentOptimizer."
+        assert observation.reason == (
+            "Offline mode uses a deterministic candidate provider."
+        )
     assert report.pipeline_resources.total_tokens.status == "unavailable"
     assert OptimizationReport.model_validate_json(report.model_dump_json()) == report
 
@@ -73,7 +75,7 @@ async def test_fake_report_is_serializable_and_marks_optimizer_resources_not_app
 async def test_real_report_includes_optimizer_resource_observations(tmp_path):
     root = _copy_example(tmp_path)
     prepared = prepare_run(root / "pipeline.json", run_id="report_real")
-    fake_result = await run_fake_stage(prepared, scenario="improve")
+    fake_result = await run_offline_stage(prepared, scenario="improve")
     candidate = OptimizerCandidateProposal.model_validate({
         **fake_result.candidate.model_dump(exclude={"scenario", "seed"}), "provider": "agent_optimizer",
         "optimizer_status": "SUCCEEDED", "finish_reason": "completed",
@@ -105,7 +107,7 @@ async def test_real_report_includes_optimizer_resource_observations(tmp_path):
 async def test_real_report_marks_incomplete_cost_and_token_telemetry_unavailable(tmp_path):
     root = _copy_example(tmp_path)
     prepared = prepare_run(root / "pipeline.json", run_id="report_real_incomplete")
-    fake_result = await run_fake_stage(prepared, scenario="improve")
+    fake_result = await run_offline_stage(prepared, scenario="improve")
     candidate = OptimizerCandidateProposal.model_validate({
         **fake_result.candidate.model_dump(exclude={"scenario", "seed"}), "provider": "agent_optimizer",
         "optimizer_status": "SUCCEEDED", "finish_reason": "completed",
@@ -154,13 +156,13 @@ async def test_markdown_includes_accept_and_reject_report_evidence(tmp_path):
     root = _copy_example(tmp_path)
     prepared = prepare_run(root / "pipeline.json", run_id="report_markdown")
     accepted = build_optimization_report(
-        prepared, await run_fake_stage(prepared, scenario="improve"), progress=_progress(),
+        prepared, await run_offline_stage(prepared, scenario="improve"), progress=_progress(),
         finished_at=datetime(2026, 7, 18, 0, 1, tzinfo=timezone.utc),
     )
     rejected_root = _copy_example(tmp_path, "eval_optimize_loop_reject")
     rejected_prepared = prepare_run(rejected_root / "pipeline.json", run_id="report_markdown_reject")
     rejected = build_optimization_report(
-        rejected_prepared, await run_fake_stage(rejected_prepared, scenario="no_improvement"), progress=_progress(),
+        rejected_prepared, await run_offline_stage(rejected_prepared, scenario="no_improvement"), progress=_progress(),
         finished_at=datetime(2026, 7, 18, 0, 1, tzinfo=timezone.utc),
     )
     markdown = render_optimization_markdown(accepted)
@@ -264,7 +266,7 @@ def test_failure_report_redacts_hyphenated_keys_and_bare_urls(tmp_path):
 async def test_real_report_marks_malformed_token_usage_unavailable(tmp_path, token_usage):
     root = _copy_example(tmp_path)
     prepared = prepare_run(root / "pipeline.json", run_id="report_real_bad_tokens")
-    fake_result = await run_fake_stage(prepared, scenario="improve")
+    fake_result = await run_offline_stage(prepared, scenario="improve")
     candidate = OptimizerCandidateProposal.model_validate({
         **fake_result.candidate.model_dump(exclude={"scenario", "seed"}), "provider": "agent_optimizer",
         "optimizer_status": "SUCCEEDED", "finish_reason": "completed",
@@ -292,7 +294,7 @@ async def test_real_report_marks_malformed_token_usage_unavailable(tmp_path, tok
 async def test_real_report_allows_consistent_zero_token_usage_without_reflection_calls(tmp_path):
     root = _copy_example(tmp_path)
     prepared = prepare_run(root / "pipeline.json", run_id="report_real_zero_tokens")
-    fake_result = await run_fake_stage(prepared, scenario="improve")
+    fake_result = await run_offline_stage(prepared, scenario="improve")
     candidate = OptimizerCandidateProposal.model_validate({
         **fake_result.candidate.model_dump(exclude={"scenario", "seed"}), "provider": "agent_optimizer",
         "optimizer_status": "SUCCEEDED", "finish_reason": "completed",

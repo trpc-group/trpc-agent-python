@@ -147,12 +147,18 @@ async def test_real_business_agent_rereads_prompts_and_returns_only_final_non_th
             yield FakeEvent(True, [FakePart("thinking", thought=True), FakePart("answer")])
 
     monkeypatch.setattr("examples.optimization.eval_optimize_loop.real_agent.OpenAIModel", lambda **kwargs: object())
-    monkeypatch.setattr("examples.optimization.eval_optimize_loop.real_agent.LlmAgent", FakeLlmAgent)
     monkeypatch.setattr(
-        "examples.optimization.eval_optimize_loop.real_agent.InMemorySessionService",
+        "examples.optimization.eval_optimize_loop.business_agent.LlmAgent",
+        FakeLlmAgent,
+    )
+    monkeypatch.setattr(
+        "examples.optimization.eval_optimize_loop.business_agent.InMemorySessionService",
         FakeSessionService,
     )
-    monkeypatch.setattr("examples.optimization.eval_optimize_loop.real_agent.Runner", FakeRunner)
+    monkeypatch.setattr(
+        "examples.optimization.eval_optimize_loop.business_agent.Runner",
+        FakeRunner,
+    )
     agent = RealBusinessAgent(
         FakeTarget(),
         BusinessModelConfig(api_key="secret", base_url="https://example.test", model_name="model"),
