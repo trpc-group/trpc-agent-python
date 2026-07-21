@@ -50,7 +50,8 @@ def _not_applicable_optimizer_value(
     )
 
 
-def _redact_error_message(error: Exception) -> str:
+def redact_error_message(error: Exception) -> str:
+    """移除异常文本中的环境凭据、认证字段和连接地址。"""
     message = str(error)
     environment_values = {
         os.environ.get(name, "")
@@ -152,7 +153,7 @@ def build_failure_report(
     return FailureReport(
         run_id=prepared.workspace.run_id, execution_mode=prepared.config.execution.mode,
         failed_phase=progress.current_phase, exception_type=type(error).__name__,
-        error_message=_redact_error_message(error), generated_at=generated_at,
+        error_message=redact_error_message(error), generated_at=generated_at,
         input_snapshot=prepared.input_snapshot,
         source_prompt_hashes=dict(sorted(source_prompt_hashes.items())),
         completed_phases=progress.completed_phases, existing_artifacts=sorted(existing_artifacts),

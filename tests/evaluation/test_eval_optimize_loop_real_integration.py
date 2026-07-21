@@ -335,6 +335,40 @@ def test_real_cli_pipeline_error_exits_one(
     assert "offline failure" in capsys.readouterr().err
 
 
+def test_real_cli_redacts_environment_secrets_from_pipeline_error(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    api_key = "integration-secret-key"
+    base_url = "https://private-gateway.example.test/v1"
+
+    async def fail(*args, **kwargs):
+        raise RuntimeError(
+            f"request failed api_key={api_key} base_url={base_url}"
+        )
+
+    monkeypatch.setenv("TRPC_AGENT_API_KEY", api_key)
+    monkeypatch.setenv("TRPC_AGENT_BASE_URL", base_url)
+    monkeypatch.setenv("TRPC_AGENT_MODEL_NAME", "business-model")
+    monkeypatch.setattr(run_real_integration, "_run", fail)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_real_integration.py",
+            "--run-real",
+            "--optimizer-model-name",
+            "optimizer-model",
+        ],
+    )
+
+    assert run_real_integration.main() == 1
+    error = capsys.readouterr().err
+    assert api_key not in error
+    assert base_url not in error
+    assert "[REDACTED]" in error
+
+
 def test_real_cli_requires_explicit_confirmation_before_creating_workspace(tmp_path: Path):
     root = _copy_example(tmp_path)
     completed = subprocess.run(

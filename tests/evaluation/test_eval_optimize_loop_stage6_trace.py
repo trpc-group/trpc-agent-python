@@ -14,6 +14,7 @@ import pytest
 
 from examples.optimization.eval_optimize_loop import pipeline as pipeline_module
 from examples.optimization.eval_optimize_loop.pipeline import prepare_run
+from examples.optimization.eval_optimize_loop.pipeline import PipelineStageExecutionError
 from examples.optimization.eval_optimize_loop.pipeline import run_trace_stage
 from examples.optimization.eval_optimize_loop.schemas import ArtifactIndex
 from examples.optimization.eval_optimize_loop.schemas import OptimizationReport
@@ -97,3 +98,41 @@ async def test_trace_stage_replays_four_evalsets_without_writeback(
     artifact_ids = {artifact.artifact_id for artifact in index.artifacts}
     assert "input.trace.candidate_train" in artifact_ids
     assert "input.trace.candidate_validation" in artifact_ids
+
+
+@pytest.mark.parametrize(
+    ("target", "error_type", "expected"),
+    [
+        (
+            "build_evaluation_analysis",
+            pipeline_module.EvaluationAnalysisError,
+            "stage 3a analysis failed",
+        ),
+        (
+            "evaluate_gate",
+            pipeline_module.GateEvaluationError,
+            "stage 3b gate failed",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_trace_stage_wraps_analysis_and_gate_errors_with_phase_context(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    target: str,
+    error_type: type[Exception],
+    expected: str,
+):
+    root = _copy_example(tmp_path, f"trace_{target}")
+    prepared = prepare_run(
+        root / "pipeline.trace.json",
+        run_id=f"trace_{target}",
+    )
+
+    def fail(*_args, **_kwargs):
+        raise error_type("injected failure")
+
+    monkeypatch.setattr(pipeline_module, target, fail)
+
+    with pytest.raises(PipelineStageExecutionError, match=expected):
+        await run_trace_stage(prepared, scenario="improve")
