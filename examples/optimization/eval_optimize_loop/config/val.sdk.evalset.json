@@ -1,7 +1,7 @@
-﻿{
+{
   "eval_set_id": "plate_agent_val",
-  "name": "PlateAgent 楠岃瘉闆?- 杞︾墝璇嗗埆",
-  "description": "3 寮犻獙璇佺敤杞︾墝鍥惧儚锛岀敤浜庢瘡杞紭鍖栧悗鐨勫叏閲忚瘎浼板拰 gate 鍐崇瓥",
+  "name": "PlateAgent Validation Set - License Plate Recognition",
+  "description": "3 validation plate images for per-round full evaluation and gate decision",
   "eval_cases": [
     {
       "eval_id": "val_clear_001",
@@ -9,11 +9,19 @@
         {
           "invocation_id": "v1",
           "user_content": {
-            "parts": [{"text": "璇嗗埆杩欏紶杞︾墝: image: plate_005.jpg"}],
+            "parts": [
+              {
+                "text": "Identify plate: image: plate_005.jpg"
+              }
+            ],
             "role": "user"
           },
           "final_response": {
-            "parts": [{"text": "绮54321"}],
+            "parts": [
+              {
+                "text": "B54321"
+              }
+            ],
             "role": "model"
           }
         }
@@ -30,11 +38,19 @@
         {
           "invocation_id": "v2",
           "user_content": {
-            "parts": [{"text": "璇嗗埆杩欏紶杞︾墝: image: plate_015.jpg"}],
+            "parts": [
+              {
+                "text": "Identify plate: image: plate_015.jpg"
+              }
+            ],
             "role": "user"
           },
           "final_response": {
-            "parts": [{"text": "娴橷36X1Z"}],
+            "parts": [
+              {
+                "text": "C36X1Z"
+              }
+            ],
             "role": "model"
           }
         }
@@ -51,11 +67,19 @@
         {
           "invocation_id": "v3",
           "user_content": {
-            "parts": [{"text": "璇嗗埆杩欏紶杞︾墝: image: plate_022.jpg"}],
+            "parts": [
+              {
+                "text": "Identify plate: image: plate_022.jpg"
+              }
+            ],
             "role": "user"
           },
           "final_response": {
-            "parts": [{"text": "绮1XS79"}],
+            "parts": [
+              {
+                "text": "B1XS79"
+              }
+            ],
             "role": "model"
           }
         }

@@ -40,7 +40,7 @@ def _read_critical_case_ids(val_path: Path) -> list[str]:
 
 async def main():
     parser = argparse.ArgumentParser(description="Eval-Optimize Loop Pipeline")
-    parser.add_argument("--mode", default="fake", choices=["fake", "real", "real-agent", "trace"])
+    parser.add_argument("--mode", default="fake", choices=["fake", "real", "real-agent"])
     parser.add_argument("--max-iter", type=int, default=3)
     parser.add_argument("--output", type=str, default=None)
     parser.add_argument("--train", type=str, default=None)

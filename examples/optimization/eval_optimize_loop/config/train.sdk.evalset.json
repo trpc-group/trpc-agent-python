@@ -1,7 +1,7 @@
-﻿{
+{
   "eval_set_id": "plate_agent_train",
-  "name": "PlateAgent 璁粌闆?- 杞︾墝璇嗗埆",
-  "description": "3 寮犱唬琛ㄦ€ц溅鐗屽浘鍍忥紝瑕嗙洊娓呮櫚/鍣０/妯＄硦涓夌鍦烘櫙锛岀敤浜嶨EPA 鍙嶆€濅紭鍖栨椂鐨?mini-batch",
+  "name": "PlateAgent Train Set - License Plate Recognition",
+  "description": "3 representative plate images covering clear/noise/blur scenarios for GEPA reflection mini-batch",
   "eval_cases": [
     {
       "eval_id": "train_clear_001",
@@ -9,53 +9,19 @@
         {
           "invocation_id": "t1",
           "user_content": {
-            "parts": [{"text": "璇嗗埆杩欏紶杞︾墝: image: plate_001.jpg"}],
+            "parts": [
+              {
+                "text": "Identify plate: image: plate_001.jpg"
+              }
+            ],
             "role": "user"
           },
           "final_response": {
-            "parts": [{"text": "浜珹12345"}],
-            "role": "model"
-          }
-        }
-      ],
-      "session_input": {
-        "app_name": "plate_optimizer",
-        "user_id": "trainer",
-        "state": {}
-      }
-    },
-    {
-      "eval_id": "train_noise_002",
-      "conversation": [
-        {
-          "invocation_id": "t2",
-          "user_content": {
-            "parts": [{"text": "璇嗗埆杩欏紶杞︾墝: image: plate_028.jpg"}],
-            "role": "user"
-          },
-          "final_response": {
-            "parts": [{"text": "浜珹12345"}],
-            "role": "model"
-          }
-        }
-      ],
-      "session_input": {
-        "app_name": "plate_optimizer",
-        "user_id": "trainer",
-        "state": {}
-      }
-    },
-    {
-      "eval_id": "train_blur_003",
-      "conversation": [
-        {
-          "invocation_id": "t3",
-          "user_content": {
-            "parts": [{"text": "璇嗗埆杩欏紶杞︾墝: image: plate_012.jpg"}],
-            "role": "user"
-          },
-          "final_response": {
-            "parts": [{"text": "鑻廥8U88"}],
+            "parts": [
+              {
+                "text": "A12345"
+              }
+            ],
             "role": "model"
           }
         }

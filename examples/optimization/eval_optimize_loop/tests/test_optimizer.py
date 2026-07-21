@@ -247,16 +247,16 @@ class TestBasePrompts:
 
     def test_system_prompt_has_key_sections(self):
         sp = BASE_PROMPTS["system_prompt"]
-        assert "????" in sp
-        assert "????" in sp
-        assert "???" in sp
+        assert "Workflow" in sp
+        assert "Output Format" in sp
+        assert "Notes" in sp
 
     def test_skill_prompt_has_key_sections(self):
         sp = BASE_PROMPTS["skill_prompt"]
-        assert "???" in sp
-        assert "??" in sp
-        assert "??" in sp
-        assert "???" in sp
+        assert "Preprocessing Guide" in sp
+        assert "Locate Guide" in sp
+        assert "Segment Guide" in sp
+        assert "Recognize Guide" in sp
 
 
 # ?? ??????? ??????????????????????????????????????

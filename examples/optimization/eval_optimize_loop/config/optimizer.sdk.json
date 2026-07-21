@@ -1,11 +1,11 @@
-﻿{
-  "_description": "AgentOptimizer 閰嶇疆锛圫DK 鏍煎紡锛?- 鍖归厤 trpc_agent_sdk.evaluation.AgentOptimizer",
+{
+  "_description": "AgentOptimizer config (SDK format) - matches trpc_agent_sdk.evaluation.AgentOptimizer",
   "optimization": {
     "algorithm": "gepa",
     "metric": {
       "primary": "contains",
       "primary_config": {
-        "must_contain": ["杞︾墝"]
+        "must_contain": []
       }
     },
     "stop_conditions": {
