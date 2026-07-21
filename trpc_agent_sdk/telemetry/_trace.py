@@ -25,7 +25,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+from collections.abc import Mapping
 from collections.abc import Sequence
 from typing import Any
 from typing import Optional
@@ -77,6 +79,54 @@ def _safe_json_serialize(obj) -> str:
         return json.dumps(obj, ensure_ascii=False, default=lambda o: "<not serializable>")
     except (TypeError, OverflowError):
         return "<not serializable>"
+
+
+def _sanitize_tool_trace_payload(tool: BaseTool, value: Any, *, response: bool = False) -> Any:
+    """Apply optional filter-provided sanitizers before recording tool payloads.
+
+    Safety filters use this hook to prevent the generic tool span from
+    reintroducing script bodies or environment values after their own audit
+    event has been redacted. Existing filters and tools are unaffected.
+    """
+
+    method_name = "sanitize_telemetry_response" if response else "sanitize_telemetry_args"
+    tool_sanitizer = getattr(tool, method_name, None) if callable(getattr(type(tool), method_name, None)) else None
+    if response and tool_sanitizer is None:
+        tool_sanitizer = (getattr(tool, "sanitize_telemetry_args", None) if callable(
+            getattr(type(tool), "sanitize_telemetry_args", None)) else None)
+    filter_sanitizers = []
+    tool_filters = list(getattr(tool, "filters", []))
+    tool_filters.sort(key=lambda tool_filter: not getattr(tool_filter, "run_last_before_handler", False))
+    for tool_filter in tool_filters:
+        sanitizer = getattr(tool_filter, method_name, None)
+        if response and not callable(sanitizer):
+            sanitizer = getattr(tool_filter, "sanitize_telemetry_args", None)
+        filter_sanitizers.append(sanitizer)
+    # Final authorization filters must see the original payload. Running the
+    # tool sanitizer first could flatten a structured script into plain text
+    # that a later safety sanitizer can no longer identify.
+    sanitizers = [*filter_sanitizers, tool_sanitizer]
+    sanitized: Any = value
+    for sanitizer in sanitizers:
+        if not callable(sanitizer):
+            continue
+        try:
+            sanitized = sanitizer(sanitized)
+        except Exception:  # pylint: disable=broad-except
+            return {"redacted": True, "reason": "tool argument sanitizer failed"}
+    return sanitized
+
+
+def _sanitize_tool_trace_args(tool: BaseTool, args: dict[str, Any]) -> Any:
+    """Apply optional tool argument sanitizers."""
+
+    return _sanitize_tool_trace_payload(tool, args)
+
+
+def _sanitize_tool_trace_response(tool: BaseTool, response: Any) -> Any:
+    """Apply optional tool response sanitizers."""
+
+    return _sanitize_tool_trace_payload(tool, response, response=True)
 
 
 def trace_runner(
@@ -303,12 +353,12 @@ def trace_tool_call(
             report_tool_response[k] = v
     span.set_attribute(
         f"{_trpc_agent_span_name}.tool_call_args",
-        _safe_json_serialize(args),
+        _safe_json_serialize(_sanitize_tool_trace_args(tool, args)),
     )
     span.set_attribute(f"{_trpc_agent_span_name}.event_id", function_response_event.id)
     span.set_attribute(
         f"{_trpc_agent_span_name}.tool_response",
-        _safe_json_serialize(report_tool_response),
+        _safe_json_serialize(_sanitize_tool_trace_response(tool, report_tool_response)),
     )
     # Setting empty llm request and response (as UI expect these) while not
     # applicable for tool_response.
@@ -377,6 +427,52 @@ def trace_merged_tool_calls(
         span.set_attribute(f"{_trpc_agent_span_name}.state.end", _safe_json_serialize(state_end))
 
 
+def _trace_tools(llm_request: LlmRequest) -> Mapping[str, Any]:
+    tools = getattr(llm_request, "tools_dict", None)
+    return tools if isinstance(tools, Mapping) else {}
+
+
+def _hash_trace_value(value: Any) -> str:
+    digest = hashlib.sha256(_safe_json_serialize(value).encode("utf-8", errors="replace")).hexdigest()
+    return f"<redacted sha256:{digest}>"
+
+
+def _sanitize_code_payload_for_trace(value: Any, tools: Mapping[str, Any]) -> Any:
+    if isinstance(value, BaseModel):
+        value = value.model_dump(mode="python", exclude_none=True)
+    if not isinstance(value, Mapping):
+        return _hash_trace_value(value)
+    sanitized = {}
+    for key, item in value.items():
+        normalized = str(key).lower().replace("_", "")
+        sanitized[key] = (_hash_trace_value(item)
+                          if normalized in {"code", "output"} else _sanitize_function_calls_for_trace(item, tools))
+    return sanitized
+
+
+def _sanitize_function_calls_for_trace(value: Any, tools: Mapping[str, Any]) -> Any:
+    """Redact function-call arguments using the sanitizer of the named tool."""
+
+    if isinstance(value, BaseModel):
+        value = value.model_dump(mode="python", exclude_none=True)
+    if isinstance(value, Mapping):
+        sanitized = {}
+        for key, item in value.items():
+            normalized = str(key).lower().replace("_", "")
+            sanitized[key] = (_sanitize_code_payload_for_trace(item, tools) if normalized in {
+                "codeexecutionresult", "executablecode"
+            } else _sanitize_function_calls_for_trace(item, tools))
+        name = value.get("name")
+        if isinstance(name, str) and "args" in value and name in tools:
+            sanitized["args"] = _sanitize_tool_trace_args(tools[name], value["args"])
+        if isinstance(name, str) and "response" in value and name in tools:
+            sanitized["response"] = _sanitize_tool_trace_response(tools[name], value["response"])
+        return sanitized
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [_sanitize_function_calls_for_trace(item, tools) for item in value]
+    return value
+
+
 def trace_call_llm(
     invocation_context: InvocationContext,
     event_id: str,
@@ -415,13 +511,21 @@ def trace_call_llm(
     span.set_attribute(f"{_trpc_agent_span_name}.session_id", invocation_context.session.id)
     span.set_attribute(f"{_trpc_agent_span_name}.event_id", event_id)
     # Consider removing once GenAI SDK provides a way to record this info.
+    tools = _trace_tools(llm_request)
+    request_payload = _build_llm_request_for_trace(llm_request)
+    if tools:
+        request_payload = _sanitize_function_calls_for_trace(request_payload, tools)
     span.set_attribute(
         f"{_trpc_agent_span_name}.llm_request",
-        _safe_json_serialize(_build_llm_request_for_trace(llm_request)),
+        _safe_json_serialize(request_payload),
     )
 
     try:
-        llm_response_json = llm_response.model_dump_json(exclude_none=True)
+        if tools:
+            response_payload = llm_response.model_dump(mode="python", exclude_none=True)
+            llm_response_json = _safe_json_serialize(_sanitize_function_calls_for_trace(response_payload, tools))
+        else:
+            llm_response_json = llm_response.model_dump_json(exclude_none=True)
     except Exception:  # pylint: disable=broad-except
         llm_response_json = "<not serializable>"
 
@@ -431,9 +535,11 @@ def trace_call_llm(
     )
 
     if stream_function_calls_raw:
+        stream_function_calls_raw_payload = (_sanitize_function_calls_for_trace(stream_function_calls_raw, tools)
+                                             if tools else stream_function_calls_raw)
         span.set_attribute(
             f"{_trpc_agent_span_name}.stream_function_calls.raw",
-            _safe_json_serialize(stream_function_calls_raw),
+            _safe_json_serialize(stream_function_calls_raw_payload),
         )
         span.set_attribute(
             f"{_trpc_agent_span_name}.stream_function_calls.raw_count",
@@ -441,9 +547,11 @@ def trace_call_llm(
         )
 
     if stream_function_calls_post_planner:
+        stream_function_calls_post_planner_payload = (_sanitize_function_calls_for_trace(
+            stream_function_calls_post_planner, tools) if tools else stream_function_calls_post_planner)
         span.set_attribute(
             f"{_trpc_agent_span_name}.stream_function_calls.post_planner",
-            _safe_json_serialize(stream_function_calls_post_planner),
+            _safe_json_serialize(stream_function_calls_post_planner_payload),
         )
         span.set_attribute(
             f"{_trpc_agent_span_name}.stream_function_calls.post_planner_count",

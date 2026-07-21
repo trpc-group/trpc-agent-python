@@ -1,0 +1,454 @@
+{
+  "decision": "deny",
+  "files_scanned": 12,
+  "generated_at": "2026-07-12T16:16:57.486679+00:00",
+  "policy_version": "1",
+  "reports": [
+    {
+      "path": "examples/tool_safety/samples/01_safe_python.py",
+      "report": {
+        "blocked": false,
+        "decision": "allow",
+        "duration_ms": 0.6008749987813644,
+        "findings": [],
+        "human_review_approved": false,
+        "language": "python",
+        "languages": [
+          "python"
+        ],
+        "policy_version": "1",
+        "redacted": true,
+        "risk_level": "low",
+        "rule_id": null,
+        "rule_ids": [],
+        "scanned_at": "2026-07-12T16:16:57.484279Z",
+        "script_sha256": "b1efc1f8a3d7bd0b92834054b90e6ec4050e1b860517a6a94615c2221ae1dc2a",
+        "tool_name": "public_sample_scan"
+      }
+    },
+    {
+      "path": "examples/tool_safety/samples/02_dangerous_delete.sh",
+      "report": {
+        "blocked": true,
+        "decision": "deny",
+        "duration_ms": 0.2756249959929846,
+        "findings": [
+          {
+            "category": "dangerous_file_operation",
+            "column": null,
+            "decision": "deny",
+            "evidence": "recursive rm command detected",
+            "line_number": 4,
+            "metadata": {},
+            "recommendation": "Delete only explicit workspace files without recursive shell deletion.",
+            "risk_level": "critical",
+            "rule_id": "FILE-DANGEROUS-DELETE"
+          },
+          {
+            "category": "policy_violation",
+            "column": null,
+            "decision": "needs_human_review",
+            "evidence": "command is not in the configured allowlist: rm",
+            "line_number": 4,
+            "metadata": {
+              "command": "rm"
+            },
+            "recommendation": "Add the reviewed executable to allowed_commands or use an allowed command.",
+            "risk_level": "medium",
+            "rule_id": "POLICY-ARGV-COMMAND"
+          }
+        ],
+        "human_review_approved": false,
+        "language": "bash",
+        "languages": [
+          "bash"
+        ],
+        "policy_version": "1",
+        "redacted": true,
+        "risk_level": "critical",
+        "rule_id": "FILE-DANGEROUS-DELETE",
+        "rule_ids": [
+          "FILE-DANGEROUS-DELETE",
+          "POLICY-ARGV-COMMAND"
+        ],
+        "scanned_at": "2026-07-12T16:16:57.484630Z",
+        "script_sha256": "e561b4bbf19161ca31d57774ac207ebeb9063913551bde1d80f0a5cfe2a42478",
+        "tool_name": "public_sample_scan"
+      }
+    },
+    {
+      "path": "examples/tool_safety/samples/03_read_ssh_key.py",
+      "report": {
+        "blocked": true,
+        "decision": "deny",
+        "duration_ms": 0.3285410057287663,
+        "findings": [
+          {
+            "category": "dangerous_file_operation",
+            "column": 14,
+            "decision": "deny",
+            "evidence": "pathlib.Path.read_text targets a policy-denied path",
+            "line_number": 5,
+            "metadata": {},
+            "recommendation": "Use files staged inside the isolated workspace.",
+            "risk_level": "critical",
+            "rule_id": "FILE-DENIED-PATH"
+          },
+          {
+            "category": "sensitive_data_exposure",
+            "column": 0,
+            "decision": "deny",
+            "evidence": "standard output receives sensitive data from: private_key",
+            "line_number": 6,
+            "metadata": {},
+            "recommendation": "Remove the secret from logs, files, outputs, and network payloads.",
+            "risk_level": "critical",
+            "rule_id": "SECRET-EXPOSURE"
+          }
+        ],
+        "human_review_approved": false,
+        "language": "python",
+        "languages": [
+          "python"
+        ],
+        "policy_version": "1",
+        "redacted": true,
+        "risk_level": "critical",
+        "rule_id": "FILE-DENIED-PATH",
+        "rule_ids": [
+          "FILE-DENIED-PATH",
+          "SECRET-EXPOSURE"
+        ],
+        "scanned_at": "2026-07-12T16:16:57.485007Z",
+        "script_sha256": "4cfacd0db5bf443bf11a0b554ab909be6428e63c081351187858413e4f4dc9cf",
+        "tool_name": "public_sample_scan"
+      }
+    },
+    {
+      "path": "examples/tool_safety/samples/04_non_allowlisted_network.py",
+      "report": {
+        "blocked": true,
+        "decision": "deny",
+        "duration_ms": 0.20820800273213536,
+        "findings": [
+          {
+            "category": "network_access",
+            "column": 0,
+            "decision": "deny",
+            "evidence": "network destination hostname is not whitelisted: collector.external.example",
+            "line_number": 5,
+            "metadata": {
+              "hostname": "collector.external.example"
+            },
+            "recommendation": "Add the exact trusted domain to policy or remove the outbound request.",
+            "risk_level": "high",
+            "rule_id": "NET-NON-WHITELISTED"
+          }
+        ],
+        "human_review_approved": false,
+        "language": "python",
+        "languages": [
+          "python"
+        ],
+        "policy_version": "1",
+        "redacted": true,
+        "risk_level": "high",
+        "rule_id": "NET-NON-WHITELISTED",
+        "rule_ids": [
+          "NET-NON-WHITELISTED"
+        ],
+        "scanned_at": "2026-07-12T16:16:57.485260Z",
+        "script_sha256": "33f11abee7dd0655103ed15f3c27677666bb04f797c0c0b7e31be0048dd821b5",
+        "tool_name": "public_sample_scan"
+      }
+    },
+    {
+      "path": "examples/tool_safety/samples/05_allowlisted_network.py",
+      "report": {
+        "blocked": false,
+        "decision": "allow",
+        "duration_ms": 0.19500000053085387,
+        "findings": [],
+        "human_review_approved": false,
+        "language": "python",
+        "languages": [
+          "python"
+        ],
+        "policy_version": "1",
+        "redacted": true,
+        "risk_level": "low",
+        "rule_id": null,
+        "rule_ids": [],
+        "scanned_at": "2026-07-12T16:16:57.485492Z",
+        "script_sha256": "53a3e8a2dced493d5d0118207a338b71e46f3e01a6952a6aa4477df06f87a980",
+        "tool_name": "public_sample_scan"
+      }
+    },
+    {
+      "path": "examples/tool_safety/samples/06_subprocess_call.py",
+      "report": {
+        "blocked": true,
+        "decision": "needs_human_review",
+        "duration_ms": 0.15474999963771552,
+        "findings": [
+          {
+            "category": "process_execution",
+            "column": 0,
+            "decision": "needs_human_review",
+            "evidence": "subprocess.run launches an external process",
+            "line_number": 5,
+            "metadata": {},
+            "recommendation": "Review the executable and pass an argument list with shell=False.",
+            "risk_level": "high",
+            "rule_id": "PROC-SUBPROCESS"
+          }
+        ],
+        "human_review_approved": false,
+        "language": "python",
+        "languages": [
+          "python"
+        ],
+        "policy_version": "1",
+        "redacted": true,
+        "risk_level": "high",
+        "rule_id": "PROC-SUBPROCESS",
+        "rule_ids": [
+          "PROC-SUBPROCESS"
+        ],
+        "scanned_at": "2026-07-12T16:16:57.485684Z",
+        "script_sha256": "415aa546b6024bf3b0e36b4af4b1d88d971eb8e02d756533e9be44f536914984",
+        "tool_name": "public_sample_scan"
+      }
+    },
+    {
+      "path": "examples/tool_safety/samples/07_shell_injection.py",
+      "report": {
+        "blocked": true,
+        "decision": "deny",
+        "duration_ms": 0.20270900131436065,
+        "findings": [
+          {
+            "category": "process_execution",
+            "column": 0,
+            "decision": "needs_human_review",
+            "evidence": "subprocess.run launches an external process",
+            "line_number": 6,
+            "metadata": {},
+            "recommendation": "Review the executable and pass an argument list with shell=False.",
+            "risk_level": "high",
+            "rule_id": "PROC-SUBPROCESS"
+          },
+          {
+            "category": "process_execution",
+            "column": 0,
+            "decision": "deny",
+            "evidence": "subprocess.run executes a command through a shell",
+            "line_number": 6,
+            "metadata": {},
+            "recommendation": "Use shell=False with a fixed executable and argument list.",
+            "risk_level": "critical",
+            "rule_id": "PROC-SHELL-INJECTION"
+          }
+        ],
+        "human_review_approved": false,
+        "language": "python",
+        "languages": [
+          "python"
+        ],
+        "policy_version": "1",
+        "redacted": true,
+        "risk_level": "critical",
+        "rule_id": "PROC-SHELL-INJECTION",
+        "rule_ids": [
+          "PROC-SUBPROCESS",
+          "PROC-SHELL-INJECTION"
+        ],
+        "scanned_at": "2026-07-12T16:16:57.485921Z",
+        "script_sha256": "576e95fadeb1284ea9a27816bf32d944fa0fc2bf58d36139670830e7d8e1b419",
+        "tool_name": "public_sample_scan"
+      }
+    },
+    {
+      "path": "examples/tool_safety/samples/08_dependency_install.sh",
+      "report": {
+        "blocked": true,
+        "decision": "deny",
+        "duration_ms": 0.11441600508987904,
+        "findings": [
+          {
+            "category": "dependency_installation",
+            "column": null,
+            "decision": "deny",
+            "evidence": "dependency installation command detected: python",
+            "line_number": 4,
+            "metadata": {},
+            "recommendation": "Bake reviewed dependencies into the runtime image instead of installing at execution time.",
+            "risk_level": "high",
+            "rule_id": "DEP-INSTALL"
+          }
+        ],
+        "human_review_approved": false,
+        "language": "bash",
+        "languages": [
+          "bash"
+        ],
+        "policy_version": "1",
+        "redacted": true,
+        "risk_level": "high",
+        "rule_id": "DEP-INSTALL",
+        "rule_ids": [
+          "DEP-INSTALL"
+        ],
+        "scanned_at": "2026-07-12T16:16:57.486071Z",
+        "script_sha256": "028b5fb0b3f97323bec90c8648729335cb66fa56eb81a9b662a70cbb4d055309",
+        "tool_name": "public_sample_scan"
+      }
+    },
+    {
+      "path": "examples/tool_safety/samples/09_infinite_loop.py",
+      "report": {
+        "blocked": true,
+        "decision": "deny",
+        "duration_ms": 0.0832090008771047,
+        "findings": [
+          {
+            "category": "resource_abuse",
+            "column": 0,
+            "decision": "deny",
+            "evidence": "unbounded while loop has no reachable syntactic break",
+            "line_number": 3,
+            "metadata": {},
+            "recommendation": "Add a bounded iteration count, cancellation check, or timeout.",
+            "risk_level": "critical",
+            "rule_id": "RES-INFINITE-LOOP"
+          }
+        ],
+        "human_review_approved": false,
+        "language": "python",
+        "languages": [
+          "python"
+        ],
+        "policy_version": "1",
+        "redacted": true,
+        "risk_level": "critical",
+        "rule_id": "RES-INFINITE-LOOP",
+        "rule_ids": [
+          "RES-INFINITE-LOOP"
+        ],
+        "scanned_at": "2026-07-12T16:16:57.486188Z",
+        "script_sha256": "a878581bd711f1d7f73f3678df35ae2d6e79ca1e70b942e0b2bad1a5e7b82a96",
+        "tool_name": "public_sample_scan"
+      }
+    },
+    {
+      "path": "examples/tool_safety/samples/10_sensitive_output.py",
+      "report": {
+        "blocked": true,
+        "decision": "deny",
+        "duration_ms": 0.09045899787452072,
+        "findings": [
+          {
+            "category": "sensitive_data_exposure",
+            "column": 0,
+            "decision": "deny",
+            "evidence": "standard output receives sensitive data from: redacted secret material",
+            "line_number": 3,
+            "metadata": {},
+            "recommendation": "Remove the secret from logs, files, outputs, and network payloads.",
+            "risk_level": "critical",
+            "rule_id": "SECRET-EXPOSURE"
+          }
+        ],
+        "human_review_approved": false,
+        "language": "python",
+        "languages": [
+          "python"
+        ],
+        "policy_version": "1",
+        "redacted": true,
+        "risk_level": "critical",
+        "rule_id": "SECRET-EXPOSURE",
+        "rule_ids": [
+          "SECRET-EXPOSURE"
+        ],
+        "scanned_at": "2026-07-12T16:16:57.486311Z",
+        "script_sha256": "a002bc42f64ba0dbc4950c75076e7635a00fd9f61ead9ab1f723c7b3e64341ac",
+        "tool_name": "public_sample_scan"
+      }
+    },
+    {
+      "path": "examples/tool_safety/samples/11_bash_pipeline.sh",
+      "report": {
+        "blocked": true,
+        "decision": "needs_human_review",
+        "duration_ms": 0.11808300041593611,
+        "findings": [
+          {
+            "category": "process_execution",
+            "column": null,
+            "decision": "needs_human_review",
+            "evidence": "shell pipeline detected",
+            "line_number": 4,
+            "metadata": {},
+            "recommendation": "Review each pipeline stage and avoid passing untrusted data to a shell.",
+            "risk_level": "medium",
+            "rule_id": "PROC-PIPELINE"
+          }
+        ],
+        "human_review_approved": false,
+        "language": "bash",
+        "languages": [
+          "bash"
+        ],
+        "policy_version": "1",
+        "redacted": true,
+        "risk_level": "medium",
+        "rule_id": "PROC-PIPELINE",
+        "rule_ids": [
+          "PROC-PIPELINE"
+        ],
+        "scanned_at": "2026-07-12T16:16:57.486460Z",
+        "script_sha256": "526a9e5468c01bb720b27879fb2a58b3a4934cda91cf0d6de8a3a6e0c4e8730c",
+        "tool_name": "public_sample_scan"
+      }
+    },
+    {
+      "path": "examples/tool_safety/samples/12_human_review.py",
+      "report": {
+        "blocked": true,
+        "decision": "needs_human_review",
+        "duration_ms": 0.1784170017344877,
+        "findings": [
+          {
+            "category": "network_access",
+            "column": 0,
+            "decision": "needs_human_review",
+            "evidence": "network destination cannot be resolved statically",
+            "line_number": 6,
+            "metadata": {},
+            "recommendation": "Use a literal URL whose hostname is policy-whitelisted.",
+            "risk_level": "medium",
+            "rule_id": "NET-DYNAMIC-TARGET"
+          }
+        ],
+        "human_review_approved": false,
+        "language": "python",
+        "languages": [
+          "python"
+        ],
+        "policy_version": "1",
+        "redacted": true,
+        "risk_level": "medium",
+        "rule_id": "NET-DYNAMIC-TARGET",
+        "rule_ids": [
+          "NET-DYNAMIC-TARGET"
+        ],
+        "scanned_at": "2026-07-12T16:16:57.486670Z",
+        "script_sha256": "64cb6a650c3a3ae9a519752127380a7080d2c8b4fa750ada03c65998b7635de9",
+        "tool_name": "public_sample_scan"
+      }
+    }
+  ],
+  "risk_level": "critical",
+  "schema_version": "1.0"
+}

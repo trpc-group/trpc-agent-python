@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from trpc_agent_sdk.context import InvocationContext
+from trpc_agent_sdk.tools._context_var import get_tool_var
 from trpc_agent_sdk.tools._function_tool import FunctionTool
 from trpc_agent_sdk.tools._streaming_progress_tool import StreamingProgressTool
 
@@ -47,6 +48,15 @@ async def regular_async_func(x: int) -> int:
     return x
 
 
+def _tool_context() -> MagicMock:
+    ctx = MagicMock(spec=InvocationContext)
+    ctx.agent = MagicMock()
+    ctx.agent.before_tool_callback = None
+    ctx.agent.after_tool_callback = None
+    ctx.agent_context = None
+    return ctx
+
+
 class TestStreamingProgressToolInit:
 
     def test_init_with_async_generator(self):
@@ -78,24 +88,35 @@ class TestStreamingProgressToolExecution:
     @pytest.mark.asyncio
     async def test_run_streaming_yields_all_values(self):
         tool = StreamingProgressTool(streaming_func)
-        ctx = MagicMock(spec=InvocationContext)
-        ctx.agent = MagicMock()
+        ctx = _tool_context()
 
         out = []
         async for value in tool.run_streaming(tool_context=ctx, args={"query": "hi"}):
             out.append(value)
         assert out == [
-            {"status": "started", "query": "hi"},
-            {"status": "step", "step": 1},
-            {"status": "step", "step": 2},
-            {"status": "done", "query": "hi", "steps": 2},
+            {
+                "status": "started",
+                "query": "hi"
+            },
+            {
+                "status": "step",
+                "step": 1
+            },
+            {
+                "status": "step",
+                "step": 2
+            },
+            {
+                "status": "done",
+                "query": "hi",
+                "steps": 2
+            },
         ]
 
     @pytest.mark.asyncio
     async def test_run_streaming_with_string_payloads(self):
         tool = StreamingProgressTool(streaming_func_str)
-        ctx = MagicMock(spec=InvocationContext)
-        ctx.agent = MagicMock()
+        ctx = _tool_context()
 
         out = []
         async for value in tool.run_streaming(tool_context=ctx, args={}):
@@ -105,8 +126,7 @@ class TestStreamingProgressToolExecution:
     @pytest.mark.asyncio
     async def test_run_streaming_missing_mandatory_arg(self):
         tool = StreamingProgressTool(streaming_func)
-        ctx = MagicMock(spec=InvocationContext)
-        ctx.agent = MagicMock()
+        ctx = _tool_context()
 
         out = []
         async for value in tool.run_streaming(tool_context=ctx, args={}):
@@ -122,11 +142,32 @@ class TestStreamingProgressToolExecution:
         # the synchronous tool path. The only entry point is run_streaming(),
         # which ToolsProcessor.execute_tools_async calls.
         tool = StreamingProgressTool(streaming_func)
-        ctx = MagicMock(spec=InvocationContext)
-        ctx.agent = MagicMock()
+        ctx = _tool_context()
 
         with pytest.raises(RuntimeError, match="does not support direct"):
             await tool._run_async_impl(tool_context=ctx, args={"query": "hi"})
+
+    @pytest.mark.asyncio
+    async def test_closing_stream_closes_generator_and_resets_tool_context(self):
+        generator_closed = False
+
+        async def closeable_stream():
+            nonlocal generator_closed
+            try:
+                yield "first"
+                yield "second"
+            finally:
+                generator_closed = True
+
+        tool = StreamingProgressTool(closeable_stream)
+        stream = tool.run_streaming(tool_context=_tool_context(), args={})
+
+        assert await anext(stream) == "first"
+        assert get_tool_var() is tool
+        await stream.aclose()
+
+        assert generator_closed is True
+        assert get_tool_var() is None
 
 
 class TestStreamingProgressToolDeclaration:

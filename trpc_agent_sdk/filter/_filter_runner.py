@@ -104,15 +104,27 @@ class FilterRunner(ABC):
                 return filter
         raise ValueError(f"Filter {filter_name} not found")
 
+    def _ordered_filters(self, extra_filters: Optional[list[BaseFilter]] = None) -> list[BaseFilter]:
+        """Place final authorization filters closest to the handler."""
+
+        filters = self._filters.copy()
+        final_filters = [
+            tool_filter for tool_filter in filters if getattr(tool_filter, "run_last_before_handler", False)
+        ]
+        if final_filters:
+            filters = [tool_filter for tool_filter in filters if tool_filter not in final_filters]
+        if extra_filters:
+            filters.extend(extra_filters)
+        filters.extend(final_filters)
+        return filters
+
     async def _run_filters(self,
                            ctx: AgentContext,
                            req: Any,
                            handle: AgentFilterHandleType,
                            extra_filters: Optional[list[BaseFilter]] = None) -> Any:
         """Run filters."""
-        filters = self._filters.copy()
-        if extra_filters:
-            filters.extend(extra_filters)
+        filters = self._ordered_filters(extra_filters)
         return await run_filters(ctx, req, filters, handle)
 
     async def _run_stream_filters(self,
@@ -121,8 +133,6 @@ class FilterRunner(ABC):
                                   handle: AgentFilterAsyncGenHandleType,
                                   extra_filters: Optional[list[BaseFilter]] = None) -> Any:
         """Run stream filters."""
-        filters = self._filters.copy()
-        if extra_filters:
-            filters.extend(extra_filters)
+        filters = self._ordered_filters(extra_filters)
         async for event in run_stream_filters(ctx, req, filters, handle):
             yield event

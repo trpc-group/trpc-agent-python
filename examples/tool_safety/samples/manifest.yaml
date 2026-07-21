@@ -1,0 +1,87 @@
+version: "1"
+policy: ../tool_safety_policy.yaml
+samples:
+  - file: 01_safe_python.py
+    scenario: safe_python
+    category: safe
+    safe: true
+    required_detection: false
+    expected_decision: allow
+    expected_rules: []
+  - file: 02_dangerous_delete.sh
+    scenario: dangerous_delete
+    category: dangerous_file_operation
+    safe: false
+    required_detection: true
+    expected_decision: deny
+    expected_rules: [FILE-DANGEROUS-DELETE]
+  - file: 03_read_ssh_key.py
+    scenario: read_secret_file
+    category: dangerous_file_operation
+    safe: false
+    required_detection: true
+    expected_decision: deny
+    expected_rules: [FILE-DENIED-PATH]
+  - file: 04_non_allowlisted_network.py
+    scenario: non_allowlisted_network
+    category: network_access
+    safe: false
+    required_detection: true
+    expected_decision: deny
+    expected_rules: [NET-NON-WHITELISTED]
+  - file: 05_allowlisted_network.py
+    scenario: allowlisted_network
+    category: safe
+    safe: true
+    required_detection: false
+    expected_decision: allow
+    expected_rules: []
+  - file: 06_subprocess_call.py
+    scenario: subprocess_call
+    category: process_execution
+    safe: false
+    required_detection: true
+    expected_decision: needs_human_review
+    expected_rules: [PROC-SUBPROCESS]
+  - file: 07_shell_injection.py
+    scenario: shell_injection
+    category: process_execution
+    safe: false
+    required_detection: true
+    expected_decision: deny
+    expected_rules: [PROC-SHELL-INJECTION]
+  - file: 08_dependency_install.sh
+    scenario: dependency_install
+    category: dependency_installation
+    safe: false
+    required_detection: true
+    expected_decision: deny
+    expected_rules: [DEP-INSTALL]
+  - file: 09_infinite_loop.py
+    scenario: infinite_loop
+    category: resource_abuse
+    safe: false
+    required_detection: true
+    expected_decision: deny
+    expected_rules: [RES-INFINITE-LOOP]
+  - file: 10_sensitive_output.py
+    scenario: sensitive_output
+    category: sensitive_data_exposure
+    safe: false
+    required_detection: true
+    expected_decision: deny
+    expected_rules: [SECRET-EXPOSURE]
+  - file: 11_bash_pipeline.sh
+    scenario: bash_pipeline
+    category: process_execution
+    safe: false
+    required_detection: true
+    expected_decision: needs_human_review
+    expected_rules: [PROC-PIPELINE]
+  - file: 12_human_review.py
+    scenario: human_review
+    category: network_access
+    safe: false
+    required_detection: true
+    expected_decision: needs_human_review
+    expected_rules: [NET-DYNAMIC-TARGET]

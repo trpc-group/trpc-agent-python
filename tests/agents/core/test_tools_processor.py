@@ -8,8 +8,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, AsyncGenerator, List
-from unittest.mock import AsyncMock, Mock, patch
+from typing import List
+from unittest.mock import Mock
 
 import pytest
 import trpc_agent_sdk.skills as _skills_pkg
@@ -24,20 +24,23 @@ if not hasattr(_skills_pkg, "get_skill_processor_parameters"):
 
 from trpc_agent_sdk.agents._base_agent import BaseAgent
 from trpc_agent_sdk.agents.core._tools_processor import ToolsProcessor
-from trpc_agent_sdk.context import InvocationContext, create_agent_context
+from trpc_agent_sdk.context import InvocationContext, create_agent_context, reset_invocation_ctx, set_invocation_ctx
 from trpc_agent_sdk.events import Event, EventActions
 from trpc_agent_sdk.models import LLMModel, LlmRequest, LlmResponse, ModelRegistry
 from trpc_agent_sdk.sessions import InMemorySessionService
-from trpc_agent_sdk.tools import BaseTool, FunctionTool, StreamingProgressTool
+from trpc_agent_sdk.tools import BaseTool, FunctionTool, StreamingProgressTool, get_tool_var
+from trpc_agent_sdk.tools.safety import SafetyDecision, ToolSafetyFilter, ToolSafetyGuard
 from trpc_agent_sdk.types import Content, FunctionCall, Part
 
 
 class _StubAgent(BaseAgent):
+
     async def _run_async_impl(self, ctx):
         yield
 
 
 class MockLLMModel(LLMModel):
+
     @classmethod
     def supported_models(cls) -> List[str]:
         return [r"test-tools-proc-.*"]
@@ -65,9 +68,7 @@ def sample_tool(name: str, value: str) -> dict:
 @pytest.fixture
 def invocation_context():
     service = InMemorySessionService()
-    session = asyncio.run(
-        service.create_session(app_name="test", user_id="u1", session_id="s1")
-    )
+    session = asyncio.run(service.create_session(app_name="test", user_id="u1", session_id="s1"))
     agent = _StubAgent(name="test_agent")
     ctx = InvocationContext(
         session_service=service,
@@ -86,6 +87,7 @@ def invocation_context():
 
 
 class TestToolsProcessorInit:
+
     def test_stores_tools(self):
         tool = FunctionTool(sample_tool)
         proc = ToolsProcessor([tool])
@@ -102,6 +104,7 @@ class TestToolsProcessorInit:
 
 
 class TestFindTool:
+
     def test_finds_matching_tool(self):
         tool = FunctionTool(sample_tool)
         proc = ToolsProcessor([tool])
@@ -131,6 +134,7 @@ class TestFindTool:
 
 
 class TestFindToolPublic:
+
     def test_resolves_and_finds(self, invocation_context):
         tool = FunctionTool(sample_tool)
         proc = ToolsProcessor([tool])
@@ -150,6 +154,7 @@ class TestFindToolPublic:
 
 
 class TestExecuteToolsSequential:
+
     def test_single_tool_call(self, invocation_context):
         tool = FunctionTool(sample_tool)
         proc = ToolsProcessor([tool])
@@ -198,6 +203,7 @@ class TestExecuteToolsSequential:
 
 
 class TestMergeParallelFunctionResponseEvents:
+
     def test_single_event_returns_as_is(self):
         proc = ToolsProcessor([])
         event = Event(
@@ -253,11 +259,10 @@ class TestMergeParallelFunctionResponseEvents:
 
 
 class TestToolsProcessorErrorEvent:
+
     def test_creates_error_with_function_response(self, invocation_context):
         proc = ToolsProcessor([])
-        event = proc._create_error_event(
-            invocation_context, "test_error", "Something failed", "call-1", "my_tool"
-        )
+        event = proc._create_error_event(invocation_context, "test_error", "Something failed", "call-1", "my_tool")
         assert event.error_code == "test_error"
         assert event.error_message == "Something failed"
         assert event.content is not None
@@ -272,7 +277,6 @@ class TestToolsProcessorErrorEvent:
 # ---------------------------------------------------------------------------
 # _update_streaming_tool_names
 # ---------------------------------------------------------------------------
-
 
 # ---------------------------------------------------------------------------
 # execute_tools_async - progress-streaming tool path
@@ -335,6 +339,7 @@ class TestExecuteToolsStreamingProgress:
         assert fr.response == {"status": "done", "url": "https://x", "steps": 2}
 
     def test_streaming_tool_error_yields_error_event(self, invocation_context):
+
         async def boom(query: str):
             yield {"status": "started"}
             raise RuntimeError("kaboom")
@@ -355,6 +360,90 @@ class TestExecuteToolsStreamingProgress:
         # the buffered value when boom() raises), but a tool_execution_error
         # event SHOULD be produced.
         assert any(ev.error_code == "tool_execution_error" for ev in events)
+
+    def test_safety_filter_runs_after_callback_before_generator(self, invocation_context):
+        generator_started = False
+        audit_events = []
+
+        async def streamed_command(command: str):
+            nonlocal generator_started
+            generator_started = True
+            yield {"command": command}
+
+        safety_filter = ToolSafetyFilter(ToolSafetyGuard(audit_sink=audit_events.append))
+        tool = StreamingProgressTool(streamed_command, filters=[safety_filter])
+        proc = ToolsProcessor([tool])
+        tool_call = FunctionCall(
+            id="call-safety",
+            name="streamed_command",
+            args={"command": "echo initially-safe"},
+        )
+
+        def replace_command(_ctx, callback_tool, args, _response):
+            assert callback_tool is tool
+            assert get_tool_var() is tool
+            args["command"] = "rm -rf /"
+
+        object.__setattr__(invocation_context.agent, "before_tool_callback", replace_command)
+
+        async def run():
+            token = set_invocation_ctx(invocation_context)
+            try:
+                return [event async for event in proc.execute_tools_async([tool_call], invocation_context)]
+            finally:
+                reset_invocation_ctx(token)
+
+        try:
+            events = asyncio.run(run())
+        finally:
+            object.__setattr__(invocation_context.agent, "before_tool_callback", None)
+
+        assert generator_started is False
+        assert len(events) == 1
+        function_response = events[0].content.parts[0].function_response
+        assert function_response.response["error"] == "tool_safety_blocked"
+        assert function_response.response["decision"] == SafetyDecision.DENY.value
+        assert len(audit_events) == 1
+        assert audit_events[0].blocked is True
+        assert audit_events[0].tool_name == "streamed_command"
+        assert get_tool_var() is None
+
+    def test_after_callback_replaces_only_final_stream_value(self, invocation_context):
+        final_payload = {"status": "done", "value": "original"}
+        callback_responses = []
+
+        async def streamed_result():
+            yield {"status": "started"}
+            yield final_payload
+
+        tool = StreamingProgressTool(streamed_result)
+        proc = ToolsProcessor([tool])
+        tool_call = FunctionCall(id="call-after", name="streamed_result", args={})
+
+        def replace_result(_ctx, callback_tool, _args, response):
+            assert callback_tool is tool
+            callback_responses.append(response)
+            return {"status": "done", "value": "replaced"}
+
+        object.__setattr__(invocation_context.agent, "after_tool_callback", replace_result)
+
+        async def run():
+            token = set_invocation_ctx(invocation_context)
+            try:
+                return [event async for event in proc.execute_tools_async([tool_call], invocation_context)]
+            finally:
+                reset_invocation_ctx(token)
+
+        try:
+            events = asyncio.run(run())
+        finally:
+            object.__setattr__(invocation_context.agent, "after_tool_callback", None)
+
+        assert callback_responses == [final_payload]
+        assert len(events) == 2
+        assert events[0].custom_metadata["payload"] == {"status": "started"}
+        function_response = events[1].content.parts[0].function_response
+        assert function_response.response == {"status": "done", "value": "replaced"}
 
     def test_streaming_tool_runs_outside_parallel_batch(self, invocation_context):
         # When the agent has parallel_tool_calls=True and the batch mixes a
@@ -392,8 +481,7 @@ class TestExecuteToolsStreamingProgress:
 
             # The streaming call yields partials AND its own final event.
             stream_partials = [
-                ev for ev in events
-                if ev.partial and (ev.custom_metadata or {}).get("tool_call_id") == "c-stream"
+                ev for ev in events if ev.partial and (ev.custom_metadata or {}).get("tool_call_id") == "c-stream"
             ]
             stream_finals = [
                 ev for ev in events if ev.partial is not True and ev.content and any(
@@ -426,6 +514,7 @@ class TestExecuteToolsStreamingProgress:
 
 
 class TestUpdateStreamingToolNames:
+
     def test_no_streaming_tools(self):
         proc = ToolsProcessor([])
         request = LlmRequest()

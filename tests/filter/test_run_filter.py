@@ -7,12 +7,11 @@
 
 from __future__ import annotations
 
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
-from trpc_agent_sdk.abc import FilterResult, FilterType
+from trpc_agent_sdk.abc import FilterResult
 from trpc_agent_sdk.filter._base_filter import BaseFilter
 from trpc_agent_sdk.filter._run_filter import (
     coroutine_handler_adapter,
@@ -21,10 +20,10 @@ from trpc_agent_sdk.filter._run_filter import (
     stream_handler_adapter,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 class RecordingFilter(BaseFilter):
     """Filter that records calls and passes through."""
@@ -65,8 +64,7 @@ class ErrorBeforeFilter(BaseFilter):
         self._name = "error_before"
 
     async def _before(self, ctx, req, rsp):
-        rsp.error = RuntimeError("before_err")
-        rsp.is_continue = False
+        raise RuntimeError("before_err")
 
 
 class StreamModifyingFilter(BaseFilter):
@@ -88,6 +86,7 @@ class StreamModifyingFilter(BaseFilter):
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def mock_ctx():
     return MagicMock()
@@ -97,9 +96,11 @@ def mock_ctx():
 # Tests for stream_handler_adapter
 # ---------------------------------------------------------------------------
 
+
 class TestStreamHandlerAdapter:
 
     async def test_wraps_non_filter_result(self):
+
         async def gen():
             yield "raw_value"
 
@@ -126,6 +127,7 @@ class TestStreamHandlerAdapter:
         assert results[0] is fr
 
     async def test_multiple_events(self):
+
         async def gen():
             yield "a"
             yield FilterResult(rsp="b")
@@ -145,6 +147,7 @@ class TestStreamHandlerAdapter:
 # Tests for coroutine_handler_adapter
 # ---------------------------------------------------------------------------
 
+
 class TestCoroutineHandlerAdapter:
 
     async def test_returns_filter_result_as_is(self):
@@ -157,6 +160,7 @@ class TestCoroutineHandlerAdapter:
         assert result is fr
 
     async def test_wraps_tuple_result(self):
+
         async def handle():
             return "val", RuntimeError("e")
 
@@ -166,6 +170,7 @@ class TestCoroutineHandlerAdapter:
         assert isinstance(result.error, RuntimeError)
 
     async def test_wraps_plain_value(self):
+
         async def handle():
             return "plain"
 
@@ -175,6 +180,7 @@ class TestCoroutineHandlerAdapter:
         assert result.error is None
 
     async def test_wraps_none(self):
+
         async def handle():
             return None
 
@@ -184,6 +190,7 @@ class TestCoroutineHandlerAdapter:
         assert result.error is None
 
     async def test_catches_exception(self):
+
         async def handle():
             raise ValueError("boom")
 
@@ -193,6 +200,7 @@ class TestCoroutineHandlerAdapter:
         assert not result.is_continue
 
     async def test_wraps_tuple_no_error(self):
+
         async def handle():
             return "ok", None
 
@@ -205,9 +213,11 @@ class TestCoroutineHandlerAdapter:
 # Tests for run_filters
 # ---------------------------------------------------------------------------
 
+
 class TestRunFilters:
 
     async def test_no_filters(self, mock_ctx):
+
         async def handle():
             return "direct_result"
 
@@ -240,9 +250,7 @@ class TestRunFilters:
 
         result = await run_filters(mock_ctx, req, [f1, f2], handle)
         assert result == "done"
-        assert req["trace"] == [
-            "before_A", "before_B", "handle", "after_B", "after_A"
-        ]
+        assert req["trace"] == ["before_A", "before_B", "handle", "after_B", "after_A"]
 
     async def test_handle_raises_propagates(self, mock_ctx):
         f = RecordingFilter("r")
@@ -254,6 +262,7 @@ class TestRunFilters:
             await run_filters(mock_ctx, "req", [f], handle)
 
     async def test_filter_returns_tuple_error(self, mock_ctx):
+
         async def handle():
             return "val", RuntimeError("tuple_err")
 
@@ -265,9 +274,11 @@ class TestRunFilters:
 # Tests for run_stream_filters
 # ---------------------------------------------------------------------------
 
+
 class TestRunStreamFilters:
 
     async def test_no_filters(self, mock_ctx):
+
         async def handle():
             yield "a"
             yield "b"
@@ -311,12 +322,11 @@ class TestRunStreamFilters:
             results.append(event)
 
         assert results == ["data"]
-        assert req["trace"] == [
-            "before_A", "before_B", "handle", "after_B", "after_A"
-        ]
+        assert req["trace"] == ["before_A", "before_B", "handle", "after_B", "after_A"]
 
     async def test_yields_rsp_not_filter_result(self, mock_ctx):
         """run_stream_filters should yield event.rsp, not the FilterResult."""
+
         async def handle():
             yield FilterResult(rsp="wrapped", is_continue=True)
 
@@ -327,6 +337,7 @@ class TestRunStreamFilters:
         assert results == ["wrapped"]
 
     async def test_multiple_stream_events(self, mock_ctx):
+
         async def handle():
             yield "e1"
             yield "e2"
@@ -337,3 +348,12 @@ class TestRunStreamFilters:
             results.append(event)
 
         assert results == ["e1", "e2", "e3"]
+
+    async def test_filter_error_is_raised(self, mock_ctx):
+
+        async def handle():
+            yield "should_not_reach"
+
+        with pytest.raises(RuntimeError, match="before_err"):
+            async for _ in run_stream_filters(mock_ctx, "req", [ErrorBeforeFilter()], handle):
+                pass

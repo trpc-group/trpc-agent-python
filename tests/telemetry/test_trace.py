@@ -22,11 +22,10 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from trpc_agent_sdk.telemetry._trace import (
     _build_llm_request_for_trace,
     _safe_json_serialize,
+    _sanitize_tool_trace_args,
     get_trpc_agent_span_name,
     set_trpc_agent_span_name,
     trace_agent,
@@ -48,6 +47,24 @@ def _mock_span():
     span.set_attribute = MagicMock()
     span.set_status = MagicMock()
     return span
+
+
+def test_safety_filter_sanitizes_original_payload_before_tool_sanitizer():
+    from trpc_agent_sdk.tools.safety._filter import ToolSafetyFilter
+
+    class FlatteningTool:
+
+        filters = [ToolSafetyFilter(MagicMock())]
+
+        def sanitize_telemetry_args(self, value):
+            return value["command"]
+
+    script = "print('ordinary proprietary script')"
+
+    sanitized = _sanitize_tool_trace_args(FlatteningTool(), {"command": script})
+
+    assert script not in str(sanitized)
+    assert "redacted sha256" in str(sanitized)
 
 
 def _make_part(text=None, function_call=None, function_response=None, inline_data=None):
@@ -702,6 +719,76 @@ class TestTraceToolCall:
         span.set_attribute.assert_any_call("trpc.python.agent.llm_response", "{}")
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_tool_filter_can_sanitize_trace_arguments(self, mock_get_span):
+        span = _mock_span()
+        mock_get_span.return_value = span
+
+        from trpc_agent_sdk.tools.safety._filter import ToolSafetyFilter
+
+        sanitizer_filter = ToolSafetyFilter(MagicMock())
+        tool = MagicMock(name="tool")
+        tool.name = "t"
+        tool.description = "d"
+        tool.filters = [sanitizer_filter]
+
+        func_resp = _make_function_response()
+        event = _make_event(content=_make_content(parts=[_make_part(function_response=func_resp)]))
+        trace_tool_call(tool=tool, args={"command": "echo $API_KEY"}, function_response_event=event)
+
+        tool_args_call = next(call for call in span.set_attribute.call_args_list
+                              if call.args[0] == "trpc.python.agent.tool_call_args")
+        assert "echo $API_KEY" not in tool_args_call.args[1]
+        assert "redacted sha256" in tool_args_call.args[1]
+
+        response_call = next(call for call in span.set_attribute.call_args_list
+                             if call.args[0] == "trpc.python.agent.tool_response")
+        assert "data" not in response_call.args[1]
+        assert "redacted sha256" in response_call.args[1]
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_safety_filter_hashes_complete_tool_response(self, mock_get_span):
+        span = _mock_span()
+        mock_get_span.return_value = span
+
+        from trpc_agent_sdk.tools.safety._filter import ToolSafetyFilter
+
+        tool = MagicMock(name="tool")
+        tool.name = "t"
+        tool.description = "d"
+        tool.filters = [ToolSafetyFilter(MagicMock())]
+        response = {"output_files": [{"content": "ordinary-secret-content"}]}
+        function_response = _make_function_response(response=response)
+        event = _make_event(content=_make_content(parts=[_make_part(function_response=function_response)]))
+
+        trace_tool_call(tool=tool, args={}, function_response_event=event)
+
+        response_call = next(call for call in span.set_attribute.call_args_list
+                             if call.args[0] == "trpc.python.agent.tool_response")
+        assert "ordinary-secret-content" not in response_call.args[1]
+        assert "redacted sha256" in response_call.args[1]
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_tool_argument_sanitizer_fails_closed(self, mock_get_span):
+        span = _mock_span()
+        mock_get_span.return_value = span
+
+        sanitizer_filter = MagicMock()
+        sanitizer_filter.sanitize_telemetry_args.side_effect = RuntimeError("bad sanitizer")
+        tool = MagicMock(name="tool")
+        tool.name = "t"
+        tool.description = "d"
+        tool.filters = [sanitizer_filter]
+
+        func_resp = _make_function_response()
+        event = _make_event(content=_make_content(parts=[_make_part(function_response=func_resp)]))
+        trace_tool_call(tool=tool, args={"token": "do-not-log"}, function_response_event=event)
+
+        tool_args_call = next(call for call in span.set_attribute.call_args_list
+                              if call.args[0] == "trpc.python.agent.tool_call_args")
+        assert "do-not-log" not in tool_args_call.args[1]
+        assert "sanitizer failed" in tool_args_call.args[1]
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_with_state(self, mock_get_span):
         span = _mock_span()
         mock_get_span.return_value = span
@@ -845,6 +932,69 @@ class TestTraceCallLlm:
         resp.model_dump_json = MagicMock(return_value='{"content": "response"}')
         resp.usage_metadata = usage
         return resp
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_safety_tool_function_calls_are_redacted_in_llm_spans(self, mock_get_span):
+        from trpc_agent_sdk.models import LlmRequest
+        from trpc_agent_sdk.models import LlmResponse
+        from trpc_agent_sdk.tools.safety._filter import ToolSafetyFilter
+        from trpc_agent_sdk.types import Content
+        from trpc_agent_sdk.types import FunctionCall
+        from trpc_agent_sdk.types import GenerateContentConfig
+        from trpc_agent_sdk.types import Part
+
+        span = _mock_span()
+        mock_get_span.return_value = span
+        script = "print('ordinary proprietary script')"
+        response_secret = "ordinary proprietary tool response"
+        function_call = FunctionCall(name="shell", args={"command": script})
+        content = Content(
+            role="model",
+            parts=[
+                Part(function_call=function_call),
+                Part(function_response={
+                    "name": "shell",
+                    "response": {
+                        "stdout": response_secret
+                    },
+                }),
+                Part(executable_code={
+                    "language": "PYTHON",
+                    "code": script,
+                }),
+            ],
+        )
+        tool = MagicMock(name="shell_tool")
+        tool.filters = [ToolSafetyFilter(MagicMock())]
+        request = LlmRequest(
+            model="test-model",
+            config=GenerateContentConfig(),
+            contents=[content],
+            tools_dict={"shell": tool},
+        )
+        response = LlmResponse(content=content)
+        stream_calls = [{"name": "shell", "args": {"command": script}}]
+
+        trace_call_llm(
+            _make_invocation_context(),
+            event_id="e-1",
+            llm_request=request,
+            llm_response=response,
+            stream_function_calls_raw=stream_calls,
+            stream_function_calls_post_planner=stream_calls,
+        )
+
+        attributes = {call.args[0]: call.args[1] for call in span.set_attribute.call_args_list}
+        for key in (
+                "trpc.python.agent.llm_request",
+                "trpc.python.agent.llm_response",
+                "trpc.python.agent.stream_function_calls.raw",
+                "trpc.python.agent.stream_function_calls.post_planner",
+        ):
+            assert script not in attributes[key]
+            assert "redacted sha256" in attributes[key]
+        assert response_secret not in attributes["trpc.python.agent.llm_request"]
+        assert response_secret not in attributes["trpc.python.agent.llm_response"]
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_basic_llm_trace(self, mock_get_span):
@@ -1135,7 +1285,7 @@ class TestBuildLlmRequestForTrace:
             mock_content_instance.model_dump = MagicMock(return_value={"role": "user", "parts": [{"text": "t"}]})
             MockContent.return_value = mock_content_instance
 
-            result = _build_llm_request_for_trace(req)
+            _build_llm_request_for_trace(req)
 
         MockContent.assert_called_once()
         call_kwargs = MockContent.call_args

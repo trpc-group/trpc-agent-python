@@ -1,0 +1,41 @@
+version: "1"
+fail_closed: true
+block_on_review: true
+allowed_domains:
+  - api.example.com
+allowed_commands:
+  - cat
+  - echo
+  - git
+  - grep
+  - head
+  - ls
+  - printf
+  - pwd
+  - python
+  - python3
+  - tail
+  - wc
+denied_paths:
+  - ~/.ssh
+  - ~/.aws/credentials
+  - ~/.config/gcloud
+  - "**/.env"
+  - "**/.env.*"
+  - "**/*credentials*"
+  - "**/*id_rsa*"
+  - "**/*id_ed25519*"
+  - /boot
+  - /etc
+  - /proc
+  - /root
+  - /sys
+max_timeout_seconds: 120
+max_output_bytes: 1048576
+max_script_bytes: 1048576
+long_sleep_seconds: 30
+max_concurrency: 16
+rule_actions:
+  PROC-SUBPROCESS: needs_human_review
+  PROC-PIPELINE: needs_human_review
+  NET-DYNAMIC-TARGET: needs_human_review
