@@ -329,8 +329,8 @@ class FakeOptimizer:
     def _make_candidate_id(prompt_text: str, iteration: int) -> str:
         """???? ID????? + ????"""
         content_hash = hashlib.sha256(prompt_text.encode()).hexdigest()[:12]
-        ts = int(time.time() * 1000)
-        return f"cand_{iteration}_{content_hash}_{ts}"
+        # deterministic: removed time.time() for reproducibility
+        return f"cand_{iteration}_{content_hash}"
 
 
 # ============================================================================

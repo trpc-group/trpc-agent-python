@@ -182,7 +182,7 @@ class TestFakeOptimizer:
         result = opt.optimize(fake_attr_report)
         for c in result.candidates:
             assert c.candidate_id.startswith("cand_"), f"bad id: {c.candidate_id}"
-            assert len(c.candidate_id) > 20
+            assert len(c.candidate_id) >= 18, f"id too short: {c.candidate_id}"  # format: cand_X_hash12
 
     def test_attribution_summary_present(self, fake_attr_report):
         opt = FakeOptimizer()

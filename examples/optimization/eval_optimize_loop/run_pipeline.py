@@ -37,7 +37,7 @@ def _read_critical_case_ids(val_path: Path) -> list[str]:
     except Exception as e:
         import sys as _sys
         print(f"Warning: cannot read critical case ids from {val_path}: {e}", file=_sys.stderr)
-        return ["val_001"]  # fallback
+        return []  # empty: skip critical-case gate rather than guess wrong id
 
 
 async def main():
@@ -192,9 +192,12 @@ async def main():
             print("Done. 6 phases completed.")
 
     finally:
-        # release lock
+        # release lock — only if we still own it (avoid removing another process's lock)
         try:
-            _os.remove(LOCK_FILE)
+            with open(LOCK_FILE, "r") as lf:
+                lock_pid = int(lf.read().strip().split()[0])
+            if lock_pid == my_pid:
+                _os.remove(LOCK_FILE)
         except Exception:
             pass
 

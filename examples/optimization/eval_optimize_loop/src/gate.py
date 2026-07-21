@@ -224,7 +224,7 @@ class AcceptanceGate:
         return GateCheck(
             name="overfit_detection",
             passed=not is_overfit,
-            description="训练集提升 + 验证集退化 → 拒绝",
+            description="训练集提升 + 验证集退化 → 拒绝 (fake mode: simulated)",
             detail=(
                 f"train: {train_avg_base:.3f}→{train_avg_cand:.3f} "
                 f"({'improved' if train_improved else 'not improved'}), "

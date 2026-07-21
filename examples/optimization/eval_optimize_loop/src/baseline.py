@@ -69,6 +69,7 @@ class BaselineCaseResult:
             "cost": self.cost,
             "latency_ms": round(self.latency_ms, 1),
             "conditions": self.conditions,
+            "trajectory": self.trajectory,
         }
 
 
@@ -328,6 +329,7 @@ class BaselineRunner:
             from agent.session_manager import create_session_service, create_memory_service
             from eval.evaluator import PlateEvaluator
         except ImportError as e:
+            sys.path.pop(0)  # restore path before raising (fix: round-5 review)
             raise ImportError(
                 f"Cannot import PlateAgent modules from {plate_agent_root}. "
                 f"Ensure trpc_agent_sdk is installed. Error: {e}"
