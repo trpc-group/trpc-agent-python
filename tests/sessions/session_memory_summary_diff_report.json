@@ -1,0 +1,454 @@
+{
+  "metadata": {
+    "generated_at": "2026-07-21T14:16:42Z",
+    "mode": "lightweight",
+    "backends_tested": [
+      "InMemory",
+      "SQL"
+    ],
+    "total_cases": 11,
+    "passed_cases": 11,
+    "failed_cases": 0,
+    "duration_seconds": 0.26,
+    "diff_entry_fields": [
+      "path",
+      "session_id",
+      "event_index",
+      "summary_id",
+      "value_in_a",
+      "value_in_b",
+      "reason"
+    ]
+  },
+  "results": [
+    {
+      "case_name": "single_turn_text",
+      "passed": true,
+      "backend_pairs": [
+        {
+          "a": "expected",
+          "b": "InMemory",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 4,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "expected",
+          "b": "SQL",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 4,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "InMemory",
+          "b": "SQL",
+          "dimension": "cross_backend",
+          "differences": [],
+          "summary": {
+            "total_checks": 74,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        }
+      ]
+    },
+    {
+      "case_name": "multi_turn_text",
+      "passed": true,
+      "backend_pairs": [
+        {
+          "a": "expected",
+          "b": "InMemory",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 7,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "expected",
+          "b": "SQL",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 7,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "InMemory",
+          "b": "SQL",
+          "dimension": "cross_backend",
+          "differences": [],
+          "summary": {
+            "total_checks": 170,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        }
+      ]
+    },
+    {
+      "case_name": "tool_call_response",
+      "passed": true,
+      "backend_pairs": [
+        {
+          "a": "expected",
+          "b": "InMemory",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 3,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "expected",
+          "b": "SQL",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 3,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "InMemory",
+          "b": "SQL",
+          "dimension": "cross_backend",
+          "differences": [],
+          "summary": {
+            "total_checks": 132,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        }
+      ]
+    },
+    {
+      "case_name": "state_basic_update",
+      "passed": true,
+      "backend_pairs": [
+        {
+          "a": "expected",
+          "b": "InMemory",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 3,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "expected",
+          "b": "SQL",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 3,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "InMemory",
+          "b": "SQL",
+          "dimension": "cross_backend",
+          "differences": [],
+          "summary": {
+            "total_checks": 86,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        }
+      ]
+    },
+    {
+      "case_name": "state_three_tier",
+      "passed": true,
+      "backend_pairs": [
+        {
+          "a": "expected",
+          "b": "InMemory",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 4,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "expected",
+          "b": "SQL",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 4,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "InMemory",
+          "b": "SQL",
+          "dimension": "cross_backend",
+          "differences": [],
+          "summary": {
+            "total_checks": 62,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        }
+      ]
+    },
+    {
+      "case_name": "memory_store_search",
+      "passed": true,
+      "backend_pairs": [
+        {
+          "a": "expected",
+          "b": "InMemory",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 2,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "expected",
+          "b": "SQL",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 2,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "InMemory",
+          "b": "SQL",
+          "dimension": "cross_backend",
+          "differences": [],
+          "summary": {
+            "total_checks": 157,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        }
+      ]
+    },
+    {
+      "case_name": "memory_multi_session",
+      "passed": true,
+      "backend_pairs": [
+        {
+          "a": "expected",
+          "b": "InMemory",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 1,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "expected",
+          "b": "SQL",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 1,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "InMemory",
+          "b": "SQL",
+          "dimension": "cross_backend",
+          "differences": [],
+          "summary": {
+            "total_checks": 56,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        }
+      ]
+    },
+    {
+      "case_name": "summary_generation",
+      "passed": true,
+      "backend_pairs": [
+        {
+          "a": "expected",
+          "b": "InMemory",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 13,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "expected",
+          "b": "SQL",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 13,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "InMemory",
+          "b": "SQL",
+          "dimension": "cross_backend",
+          "differences": [],
+          "summary": {
+            "total_checks": 408,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        }
+      ]
+    },
+    {
+      "case_name": "summary_truncation",
+      "passed": true,
+      "backend_pairs": [
+        {
+          "a": "expected",
+          "b": "InMemory",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 10,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "expected",
+          "b": "SQL",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 10,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "InMemory",
+          "b": "SQL",
+          "dimension": "cross_backend",
+          "differences": [],
+          "summary": {
+            "total_checks": 543,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        }
+      ]
+    },
+    {
+      "case_name": "summary_update_and_ownership",
+      "passed": true,
+      "backend_pairs": [
+        {
+          "a": "expected",
+          "b": "InMemory",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 14,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "expected",
+          "b": "SQL",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 14,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "InMemory",
+          "b": "SQL",
+          "dimension": "cross_backend",
+          "differences": [],
+          "summary": {
+            "total_checks": 687,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        }
+      ]
+    },
+    {
+      "case_name": "error_recovery",
+      "passed": true,
+      "backend_pairs": [
+        {
+          "a": "expected",
+          "b": "InMemory",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 3,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "expected",
+          "b": "SQL",
+          "dimension": "contract",
+          "differences": [],
+          "summary": {
+            "total_checks": 3,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        },
+        {
+          "a": "InMemory",
+          "b": "SQL",
+          "dimension": "cross_backend",
+          "differences": [],
+          "summary": {
+            "total_checks": 85,
+            "mismatches": 0,
+            "allowed_diffs": 0
+          }
+        }
+      ]
+    }
+  ]
+}
