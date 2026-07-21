@@ -199,6 +199,52 @@ def test_standardize_snapshot_treats_failed_metric_without_score_as_not_evaluate
     assert case.runs[0].metrics[0].status == "not_evaluated"
 
 
+@pytest.mark.asyncio
+async def test_evaluation_snapshot_uses_standardized_pass_count(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    root = _copy_example(tmp_path, "standardized_snapshot_summary")
+    prepared = prepare_run(root / "pipeline.json", run_id="standardized_snapshot_summary")
+    eval_set = pipeline_module._reload_prepared_evalset(
+        Path(prepared.input_snapshot.train_evalset_path),
+        label="train_evalset",
+        expected_sha256=prepared.input_snapshot.train_evalset_sha256,
+    )
+    results: dict[str, list[EvalCaseResult]] = {}
+    for index, case in enumerate(eval_set.eval_cases):
+        score = None if index == 0 else 1.0
+        run = _case_run(
+            run_id=1,
+            status=EvalStatus.PASSED,
+            score=score,
+        ).model_copy(
+            update={"eval_set_id": eval_set.eval_set_id, "eval_id": case.eval_id}
+        )
+        results[case.eval_id] = [run]
+
+    async def fake_evaluate_eval_set(*args, **kwargs):
+        return None, [], [], results
+
+    monkeypatch.setattr(
+        pipeline_module.AgentEvaluator,
+        "evaluate_eval_set",
+        fake_evaluate_eval_set,
+    )
+
+    snapshot = await pipeline_module._evaluate_split(
+        prepared=prepared,
+        eval_set=eval_set,
+        call_agent=None,
+        phase="baseline",
+        split="train",
+    )
+    standardized = standardize_snapshot(snapshot)
+
+    assert snapshot.passed_case_count == len(eval_set.eval_cases) - 1
+    assert snapshot.passed_case_count == standardized.passed_case_count
+
+
 def test_standardize_snapshot_rejects_duplicate_run_ids_and_metric_threshold_drift():
     duplicate_runs = _snapshot(
         _case_run(run_id=1, status=EvalStatus.PASSED, score=1.0),

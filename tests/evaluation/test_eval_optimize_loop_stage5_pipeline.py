@@ -119,6 +119,18 @@ async def test_real_stage_reports_optimizer_native_artifacts(
 ) -> None:
     root = _copy_example(tmp_path)
     _set_real_mode(root)
+    pipeline_path = root / "pipeline.json"
+    pipeline_payload = json.loads(pipeline_path.read_text(encoding="utf-8"))
+    pipeline_payload["artifacts"]["copy_input_files"] = False
+    pipeline_path.write_text(json.dumps(pipeline_payload), encoding="utf-8")
+    optimizer_path = root / "optimizer.json"
+    optimizer_payload = json.loads(optimizer_path.read_text(encoding="utf-8"))
+    optimizer_payload["optimize"]["algorithm"]["reflection_lm"]["extra_fields"] = {
+        "authorization": "Bearer stage5-authorization-secret",
+        "token": "stage5-provider-token",
+        "client_secret": "stage5-client-secret",
+    }
+    optimizer_path.write_text(json.dumps(optimizer_payload), encoding="utf-8")
     prepared = prepare_run(root / "pipeline.json", run_id="stage5_real")
     baseline = await prepared.working_target.read_all()
     best = DeterministicFakeCandidateProvider().propose(
@@ -167,6 +179,15 @@ async def test_real_stage_reports_optimizer_native_artifacts(
         "optimizer/result.json",
         "optimizer/rounds/round_001.json",
     }
+    runtime_text = (
+        Path(prepared.workspace.run_dir) / "optimizer.runtime.json"
+    ).read_text(encoding="utf-8")
+    for secret in (
+        "stage5-authorization-secret",
+        "stage5-provider-token",
+        "stage5-client-secret",
+    ):
+        assert secret not in runtime_text
     assert report.candidate == result.candidate
     assert report.optimizer_resources.total_rounds.status == "available"
     assert report.optimizer_resources.reflection_lm_calls.status == "available"

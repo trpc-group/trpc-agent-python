@@ -244,6 +244,24 @@ async def test_publish_rejects_literal_url_hidden_under_provider_specific_key(
 
 
 @pytest.mark.asyncio
+async def test_publish_rejects_plaintext_secret_in_optimizer_runtime_artifact(tmp_path):
+    prepared, report = await _build_fake_report(tmp_path, "artifact_runtime_secret")
+    run_dir = Path(prepared.workspace.run_dir)
+    runtime_path = run_dir / "optimizer.runtime.json"
+    secret = "runtime-authorization-secret"
+    runtime_path.write_text(
+        json.dumps({"reflection_lm": {"authorization": secret}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ArtifactWriteError, match="sensitive optimizer config"):
+        publish_report_bundle(report, run_dir=run_dir, copy_input_files=True)
+
+    assert not (run_dir / "report").exists()
+    assert list(run_dir.glob(".report.tmp-*")) == []
+
+
+@pytest.mark.asyncio
 async def test_publish_rejects_existing_report_directory(tmp_path):
     prepared, report = await _build_fake_report(tmp_path, "artifact_existing")
     report_dir = Path(prepared.workspace.run_dir) / "report"

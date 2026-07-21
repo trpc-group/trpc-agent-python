@@ -24,6 +24,7 @@ from .schemas import CandidateProposal
 from .schemas import CandidateScenario
 from .schemas import OptimizerCandidateProposal
 from .schemas import OptimizerRuntimeParameters
+from .sensitive_config import replace_persisted_sensitive_values
 
 
 class CandidateProviderError(RuntimeError):
@@ -96,26 +97,7 @@ class AgentOptimizerCandidateProvider:
     @staticmethod
     def _replace_persisted_connection_values(value: object) -> object:
         """递归将可能被 SDK 复制到产物的连接值替换为环境占位符。"""
-        if isinstance(value, list):
-            return [
-                AgentOptimizerCandidateProvider._replace_persisted_connection_values(item)
-                for item in value
-            ]
-        if not isinstance(value, dict):
-            return value
-        placeholders = {
-            "api_key": "${TRPC_AGENT_API_KEY}",
-            "apiKey": "${TRPC_AGENT_API_KEY}",
-            "base_url": "${TRPC_AGENT_BASE_URL}",
-            "baseUrl": "${TRPC_AGENT_BASE_URL}",
-        }
-        return {
-            key: placeholders.get(
-                key,
-                AgentOptimizerCandidateProvider._replace_persisted_connection_values(item),
-            )
-            for key, item in value.items()
-        }
+        return replace_persisted_sensitive_values(value)
 
     @staticmethod
     def _prepare_runtime_config(request: CandidateRequest) -> Path:
