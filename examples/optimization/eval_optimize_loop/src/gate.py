@@ -178,12 +178,13 @@ class AcceptanceGate:
             if cid in baseline and cid in candidate
             and candidate[cid] < baseline[cid]
         ]
-        passed = len(regressed) == 0
+        missing = [cid for cid in critical_ids if cid not in candidate]
+        passed = len(regressed) == 0 and len(missing) == 0
         return GateCheck(
             name="critical_case_no_regress",
             passed=passed,
-            description="关键 case 不退步",
-            detail=f"regressed: {regressed}" if regressed else "all critical cases stable",
+            description="关键 case 不退步且不丢失",
+            detail=f"regressed: {regressed}; missing: {missing}" if (regressed or missing) else "all critical cases stable",
         )
 
     def _check_cost(

@@ -96,24 +96,39 @@ async def main():
         return True
 
     my_pid = _os.getpid()
-    try:
-        with open(LOCK_FILE, "r", encoding="utf-8") as lf:
-            old_pid = int(lf.read().strip().split()[0])
-        if _pid_alive(old_pid):
-            print("another pipeline instance is running, aborting", file=sys.stderr)
-            sys.exit(75)
-        if not args.quiet:
-            print(f"Cleaning stale lock from dead PID {old_pid}", file=sys.stderr)
-    except (FileNotFoundError, ValueError):
-        pass
 
-    # atomic write: temp file + os.replace to avoid partial writes on crash
-    tmp_file = LOCK_FILE + ".tmp"
-    with open(tmp_file, "w", encoding="utf-8") as lf:
-        lf.write(f"{my_pid} {started_at}")
-        lf.flush()
-        _os.fsync(lf.fileno())
-    _os.replace(tmp_file, LOCK_FILE)
+    # Atomic acquire: O_CREAT|O_EXCL fails if file exists (cross-platform)
+    acquired = False
+    try:
+        fd = _os.open(LOCK_FILE, _os.O_CREAT | _os.O_EXCL | _os.O_WRONLY, 0o644)
+        with _os.fdopen(fd, "w", encoding="utf-8") as lf:
+            lf.write(f"{my_pid} {started_at}")
+            lf.flush()
+            _os.fsync(lf.fileno())
+        acquired = True
+    except FileExistsError:
+        # Lock exists -- check if owner is alive
+        try:
+            with open(LOCK_FILE, "r", encoding="utf-8") as lf:
+                old_pid = int(lf.read().strip().split()[0])
+            if _pid_alive(old_pid):
+                print("another pipeline instance is running, aborting", file=sys.stderr)
+                sys.exit(75)
+            if not args.quiet:
+                print(f"Cleaning stale lock from dead PID {old_pid}", file=sys.stderr)
+            _os.remove(LOCK_FILE)
+            fd = _os.open(LOCK_FILE, _os.O_CREAT | _os.O_EXCL | _os.O_WRONLY, 0o644)
+            with _os.fdopen(fd, "w", encoding="utf-8") as lf:
+                lf.write(f"{my_pid} {started_at}")
+                lf.flush()
+                _os.fsync(lf.fileno())
+            acquired = True
+        except (FileNotFoundError, ValueError):
+            pass
+
+    if not acquired:
+        print("cannot acquire pipeline lock, aborting", file=sys.stderr)
+        sys.exit(75)
 
     # ---- try/finally: ensure lock release even on exception ----
     try:

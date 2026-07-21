@@ -69,7 +69,7 @@ class FakeJudge:
         recognition = self._char_match_score(ground_truth, predicted)
         # 黑名单和回复质量随识别质量缩放（模拟真实场景）
         blacklist = max(0.1, recognition * 0.9)
-        response = max(0.2, recognition * 1.05)
+        response = min(1.0, max(0.2, recognition * 1.05))
 
         score = JudgeScore(
             recognition_quality=recognition,

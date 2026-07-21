@@ -57,7 +57,7 @@ class Auditor:
 
     def build_trail(self, pipeline_name, mode, random_seed, optimization, baseline_val, validation=None, gate_decision=None, started_at=""):
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + f"_{random_seed}"
+        run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f") + f"_{random_seed}"
         entries = []
         for cand in optimization.candidates:
             entry = AuditEntry(
