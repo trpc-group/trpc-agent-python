@@ -107,9 +107,9 @@ class AcceptanceGate:
                 baseline_scores, candidate_scores
             ))
 
-        # 决策
+        # decision: reject when no checks ran (all rules disabled/missing data)
         if self.strategy == "all_must_pass":
-            accepted = all(c.passed for c in checks)
+            accepted = len(checks) > 0 and all(c.passed for c in checks)
         elif self.strategy == "majority":
             # Strict majority: more than half must pass. Ties (exactly half) = reject.
             accepted = sum(1 for c in checks if c.passed) > len(checks) / 2

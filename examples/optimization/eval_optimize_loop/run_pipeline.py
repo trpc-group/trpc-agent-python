@@ -43,7 +43,7 @@ def _read_critical_case_ids(val_path: Path) -> list[str]:
 async def main():
     parser = argparse.ArgumentParser(description="Eval-Optimize Loop Pipeline")
     parser.add_argument("--mode", default="fake", choices=["fake", "real", "real-agent"])
-    parser.add_argument("--max-iter", type=int, default=3)
+    parser.add_argument("--max-iter", type=int, default=None)
     parser.add_argument("--output", type=str, default=None)
     parser.add_argument("--train", type=str, default=None)
     parser.add_argument("--val", type=str, default=None)
@@ -97,7 +97,7 @@ async def main():
 
     my_pid = _os.getpid()
     try:
-        with open(LOCK_FILE, "r") as lf:
+        with open(LOCK_FILE, "r", encoding="utf-8") as lf:
             old_pid = int(lf.read().strip().split()[0])
         if _pid_alive(old_pid):
             print("another pipeline instance is running, aborting", file=sys.stderr)
@@ -107,8 +107,13 @@ async def main():
     except (FileNotFoundError, ValueError):
         pass
 
-    with open(LOCK_FILE, "w") as lf:
+    # atomic write: temp file + os.replace to avoid partial writes on crash
+    tmp_file = LOCK_FILE + ".tmp"
+    with open(tmp_file, "w", encoding="utf-8") as lf:
         lf.write(f"{my_pid} {started_at}")
+        lf.flush()
+        _os.fsync(lf.fileno())
+    _os.replace(tmp_file, LOCK_FILE)
 
     # ---- try/finally: ensure lock release even on exception ----
     try:
@@ -135,7 +140,7 @@ async def main():
         # Phase 3: Optimization
         if not args.quiet: print("[3/6] Optimization...")
         pipeline_cfg = config.get("pipeline", {})
-        if args.max_iter != 3:  # user explicitly set --max-iter
+        if args.max_iter is not None:  # user explicitly set --max-iter
             pipeline_cfg = dict(pipeline_cfg, max_iterations=args.max_iter)
         opt_runner = OptimizationRunner(mode=run_mode, config=pipeline_cfg)
         opt_result = opt_runner.run(attr)
@@ -208,7 +213,7 @@ async def main():
     finally:
         # release lock — only if we still own it (avoid removing another process's lock)
         try:
-            with open(LOCK_FILE, "r") as lf:
+            with open(LOCK_FILE, "r", encoding="utf-8") as lf:
                 lock_pid = int(lf.read().strip().split()[0])
             if lock_pid == my_pid:
                 _os.remove(LOCK_FILE)

@@ -212,13 +212,11 @@ class TestAttributionClassificationLogic:
             trajectory={"nodes": ["recognize","knowledge_search(miss)","format_output"], "human_review_triggered": False},
         )
         result = default_runner._attribute_case(case, "train")
-        assert result.category in ("knowledge_recall_insufficient", "final_answer_mismatch")
-        # knowledge_recall_insufficient is priority 5, final_answer_mismatch is 1
-        # But final_answer_mismatch only fires when !correct — here correct=True
-        # So should be knowledge_recall_insufficient
-        if result.category != "knowledge_recall_insufficient":
-            # May fall through if failure_reason triggers final_answer_mismatch keyword
-            pass
+        # correct=True so Rule 4 (char_match fallback) does not fire.
+        # Trajectory "knowledge_search(miss)" + judge_blacklist=0.3 both point
+        # to knowledge_recall_insufficient. Assert exact category.
+        assert result.category == "knowledge_recall_insufficient", (
+            f"expected knowledge_recall_insufficient, got {result.category}")
 
     def test_multiple_evidence_sources(self, default_runner):
         """多条证据同时命中 → 选最高优先级"""

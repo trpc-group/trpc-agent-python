@@ -50,7 +50,7 @@ CANDIDATE_PREDICTIONS = {
     "llm_rubric_fail":               {"val_001":"粤B55321","val_002":"苏D1S579","val_003":"浙C3691Z"},
     "format_invalid":                {"val_001":"粤B-54321","val_002":"苏D13579-ERR","val_003":"null"},
 }
-REGRESSION_PREDICTIONS = {"val_001":"粤B5432Z","val_002":"粤B1XS79","val_003":"浙X36X1Z"}
+REGRESSION_PREDICTIONS = {"val_001":"粤B5432Z","val_002":"苏D1XXXX","val_003":"浙XXXXX"}
 
 class ValidationRunner:
     def __init__(self, mode="fake", **kwargs):
