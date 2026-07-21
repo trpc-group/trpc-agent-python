@@ -77,6 +77,8 @@ tRPC-Agent-Python provides an end-to-end foundation for agent building, orchestr
 
 ### Installation
 
+#### Install with pip
+
 ```bash
 pip install trpc-agent-py
 ```
@@ -85,6 +87,33 @@ Install optional capabilities as needed:
 
 ```bash
 pip install "trpc-agent-py[a2a,ag-ui,knowledge,agent-claude,mem0,mempalace,langfuse]"
+```
+
+#### Install with uv
+
+[uv](https://docs.astral.sh/uv/) provides fast, reproducible installs:
+
+```bash
+uv venv --python-preference only-system   # use the local Python
+uv sync                                   # production install (core only)
+uv sync --extra dev                       # core + dev tooling
+uv sync --extra a2a --extra knowledge     # add optional extras
+
+
+# Run commands inside the environment without activating it for evaluation
+uv run python -c "from trpc_agent_sdk.version import __version__; print(__version__)"
+```
+
+This project also provides a script for one-shot setup on macOS：
+```bash
+# One-shot setup
+bash build_mac_uv.sh
+```
+
+Install optional capabilities as needed:
+
+```bash
+EXTRAS="a2a knowledge" bash build_mac_uv.sh
 ```
 
 ### Develop Weather Agent

@@ -44,7 +44,7 @@ flowchart TD
 
 ### 1) Environment Preparation
 
-- Python `>=3.10` (recommended `3.12`)
+- Python `>=3.11` (recommended `3.12`; requires `nanobot-ai`)
 - Use a virtual environment (`uv` or `venv`)
 
 ```bash
