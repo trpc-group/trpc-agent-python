@@ -1043,24 +1043,37 @@ async def _execute_trace_stage(
         phase="candidate", split="validation",
     )
     progress.enter("analysis")
-    analysis = build_evaluation_analysis(
-        baseline_train=baseline_train,
-        baseline_validation=baseline_validation,
-        candidate_train=candidate_train,
-        candidate_validation=candidate_validation,
-        hard_case_ids=set(prepared.config.case_labels.hard_case_ids),
-        critical_case_ids=set(prepared.config.case_labels.critical_case_ids),
-        severe_case_score_drop=prepared.config.gate.severe_case_score_drop,
-    )
+    try:
+        analysis = build_evaluation_analysis(
+            baseline_train=baseline_train,
+            baseline_validation=baseline_validation,
+            candidate_train=candidate_train,
+            candidate_validation=candidate_validation,
+            hard_case_ids=set(prepared.config.case_labels.hard_case_ids),
+            critical_case_ids=set(prepared.config.case_labels.critical_case_ids),
+            severe_case_score_drop=prepared.config.gate.severe_case_score_drop,
+        )
+    except EvaluationAnalysisError as exc:
+        raise PipelineStageExecutionError(
+            f"stage 3a analysis failed: {exc}"
+        ) from exc
     measurements = ResourceMeasurements(
         cost_usd=ObservableValue(status="unavailable", unit="USD", reason="Trace replay does not call a model."),
         total_tokens=ObservableValue(status="unavailable", unit="tokens", reason="Trace replay does not call a model."),
         duration_seconds=ObservableValue(status="available", value=perf_counter() - started_at, unit="seconds"),
     )
     progress.enter("gate")
-    gate_decision = evaluate_gate(
-        analysis, prepared.config.gate, prepared.config.budget, measurements
-    )
+    try:
+        gate_decision = evaluate_gate(
+            analysis,
+            prepared.config.gate,
+            prepared.config.budget,
+            measurements,
+        )
+    except GateEvaluationError as exc:
+        raise PipelineStageExecutionError(
+            f"stage 3b gate failed: {exc}"
+        ) from exc
     progress.enter("writeback")
     writeback = WritebackResult(
         status="skipped", reason="trace_replay", attempted=False
