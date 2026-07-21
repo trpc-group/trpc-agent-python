@@ -1,0 +1,500 @@
+{
+  "phase": "baseline",
+  "split": "validation",
+  "eval_set_id": "eval_optimize_loop_validation",
+  "failed_summary": {
+    "agentName": "call-agent",
+    "evalSetId": "eval_optimize_loop_validation",
+    "overallStatus": "failed",
+    "runs": 1,
+    "evalCases": [
+      {
+        "evalCaseId": "val_knowledge_recall",
+        "overallStatus": "failed",
+        "metricResults": [
+          {
+            "metricName": "final_response_avg_score",
+            "score": 0.0,
+            "threshold": 1.0,
+            "evalStatus": "failed"
+          }
+        ]
+      },
+      {
+        "evalCaseId": "val_paraphrase",
+        "overallStatus": "failed",
+        "metricResults": [
+          {
+            "metricName": "final_response_avg_score",
+            "score": 0.0,
+            "threshold": 1.0,
+            "evalStatus": "failed"
+          }
+        ]
+      },
+      {
+        "evalCaseId": "val_refund_route",
+        "overallStatus": "passed",
+        "metricResults": [
+          {
+            "metricName": "final_response_avg_score",
+            "score": 1.0,
+            "threshold": 1.0,
+            "evalStatus": "passed"
+          }
+        ]
+      }
+    ]
+  },
+  "details_lines": [],
+  "result_lines": [
+    "Eval Set      : eval_optimize_loop_validation",
+    "Overall Status: failed",
+    "Case val_knowledge_recall -> failed",
+    "  Metric final_response_avg_score: score 0.0 (threshold 1.0) => failed",
+    "",
+    "Case val_paraphrase -> failed",
+    "  Metric final_response_avg_score: score 0.0 (threshold 1.0) => failed",
+    "",
+    "Case val_refund_route -> passed",
+    "  Metric final_response_avg_score: score 1.0 (threshold 1.0) => passed",
+    ""
+  ],
+  "eval_results_by_eval_id": {
+    "val_knowledge_recall": [
+      {
+        "eval_set_id": "eval_optimize_loop_validation",
+        "eval_id": "val_knowledge_recall",
+        "run_id": 1,
+        "final_eval_status": 2,
+        "error_message": null,
+        "overall_eval_metric_results": [
+          {
+            "metric_name": "final_response_avg_score",
+            "threshold": 1.0,
+            "criterion": {
+              "final_response": {
+                "text": {
+                  "match": "exact",
+                  "case_insensitive": false
+                }
+              }
+            },
+            "score": 0.0,
+            "eval_status": 2,
+            "details": null
+          }
+        ],
+        "eval_metric_result_per_invocation": [
+          {
+            "actual_invocation": {
+              "invocation_id": "val-2",
+              "user_content": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "How long does standard shipping usually take?",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "user"
+              },
+              "final_response": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": null
+              },
+              "intermediate_data": null,
+              "creation_timestamp": 1784619414.0093913
+            },
+            "expected_invocation": {
+              "invocation_id": "val-2",
+              "user_content": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "How long does standard shipping usually take?",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "user"
+              },
+              "final_response": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "{\"route\":\"shipping_policy\",\"message\":\"Standard shipping normally takes 3-5 business days.\"}",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "model"
+              },
+              "intermediate_data": null,
+              "creation_timestamp": 0.0
+            },
+            "eval_metric_results": [
+              {
+                "metric_name": "final_response_avg_score",
+                "threshold": 1.0,
+                "criterion": {
+                  "final_response": {
+                    "text": {
+                      "match": "exact",
+                      "case_insensitive": false
+                    }
+                  }
+                },
+                "score": 0.0,
+                "eval_status": 2,
+                "details": null
+              }
+            ]
+          }
+        ],
+        "session_id": "___remote_eval___session___45c563f4-d805-4a5c-82c4-77f2237e4d20",
+        "user_id": null,
+        "session_details": null
+      }
+    ],
+    "val_refund_route": [
+      {
+        "eval_set_id": "eval_optimize_loop_validation",
+        "eval_id": "val_refund_route",
+        "run_id": 1,
+        "final_eval_status": 1,
+        "error_message": null,
+        "overall_eval_metric_results": [
+          {
+            "metric_name": "final_response_avg_score",
+            "threshold": 1.0,
+            "criterion": {
+              "final_response": {
+                "text": {
+                  "match": "exact",
+                  "case_insensitive": false
+                }
+              }
+            },
+            "score": 1.0,
+            "eval_status": 1,
+            "details": null
+          }
+        ],
+        "eval_metric_result_per_invocation": [
+          {
+            "actual_invocation": {
+              "invocation_id": "val-3",
+              "user_content": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "I was charged twice and need the duplicate payment refunded.",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "user"
+              },
+              "final_response": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "{\"route\":\"billing_refund\",\"message\":\"I will route this duplicate charge for refund review.\"}",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": null
+              },
+              "intermediate_data": null,
+              "creation_timestamp": 1784619414.0046532
+            },
+            "expected_invocation": {
+              "invocation_id": "val-3",
+              "user_content": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "I was charged twice and need the duplicate payment refunded.",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "user"
+              },
+              "final_response": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "{\"route\":\"billing_refund\",\"message\":\"I will route this duplicate charge for refund review.\"}",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "model"
+              },
+              "intermediate_data": null,
+              "creation_timestamp": 0.0
+            },
+            "eval_metric_results": [
+              {
+                "metric_name": "final_response_avg_score",
+                "threshold": 1.0,
+                "criterion": {
+                  "final_response": {
+                    "text": {
+                      "match": "exact",
+                      "case_insensitive": false
+                    }
+                  }
+                },
+                "score": 1.0,
+                "eval_status": 1,
+                "details": null
+              }
+            ]
+          }
+        ],
+        "session_id": "___remote_eval___session___5a98aee1-19fd-4665-9259-1b1fe3aaf23f",
+        "user_id": null,
+        "session_details": null
+      }
+    ],
+    "val_paraphrase": [
+      {
+        "eval_set_id": "eval_optimize_loop_validation",
+        "eval_id": "val_paraphrase",
+        "run_id": 1,
+        "final_eval_status": 2,
+        "error_message": null,
+        "overall_eval_metric_results": [
+          {
+            "metric_name": "final_response_avg_score",
+            "threshold": 1.0,
+            "criterion": {
+              "final_response": {
+                "text": {
+                  "match": "exact",
+                  "case_insensitive": false
+                }
+              }
+            },
+            "score": 0.0,
+            "eval_status": 2,
+            "details": null
+          }
+        ],
+        "eval_metric_result_per_invocation": [
+          {
+            "actual_invocation": {
+              "invocation_id": "val-1",
+              "user_content": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "Where do I change the address tied to my account?",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "user"
+              },
+              "final_response": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": null
+              },
+              "intermediate_data": null,
+              "creation_timestamp": 1784619414.006062
+            },
+            "expected_invocation": {
+              "invocation_id": "val-1",
+              "user_content": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "Where do I change the address tied to my account?",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "user"
+              },
+              "final_response": {
+                "parts": [
+                  {
+                    "media_resolution": null,
+                    "code_execution_result": null,
+                    "executable_code": null,
+                    "file_data": null,
+                    "function_call": null,
+                    "function_response": null,
+                    "inline_data": null,
+                    "text": "{\"route\":\"account\",\"message\":\"Open profile settings to update your address.\"}",
+                    "thought": null,
+                    "thought_signature": null,
+                    "video_metadata": null,
+                    "tool_call": null,
+                    "tool_response": null,
+                    "part_metadata": null
+                  }
+                ],
+                "role": "model"
+              },
+              "intermediate_data": null,
+              "creation_timestamp": 0.0
+            },
+            "eval_metric_results": [
+              {
+                "metric_name": "final_response_avg_score",
+                "threshold": 1.0,
+                "criterion": {
+                  "final_response": {
+                    "text": {
+                      "match": "exact",
+                      "case_insensitive": false
+                    }
+                  }
+                },
+                "score": 0.0,
+                "eval_status": 2,
+                "details": null
+              }
+            ]
+          }
+        ],
+        "session_id": "___remote_eval___session___3ac5ca32-1910-4b66-b165-9134276d069c",
+        "user_id": null,
+        "session_details": null
+      }
+    ]
+  },
+  "passed_case_count": 1,
+  "total_case_count": 3,
+  "average_score": 0.3333333333333333
+}

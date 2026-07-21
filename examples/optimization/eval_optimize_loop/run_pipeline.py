@@ -18,12 +18,14 @@ if __package__ in (None, ""):
     if str(_REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(_REPO_ROOT))
     from examples.optimization.eval_optimize_loop.pipeline import prepare_run
-    from examples.optimization.eval_optimize_loop.pipeline import run_fake_stage
+    from examples.optimization.eval_optimize_loop.pipeline import run_offline_stage
+    from examples.optimization.eval_optimize_loop.pipeline import run_trace_stage
     from examples.optimization.eval_optimize_loop.config import load_pipeline_config
 else:
     from .config import load_pipeline_config
     from .pipeline import prepare_run
-    from .pipeline import run_fake_stage
+    from .pipeline import run_offline_stage
+    from .pipeline import run_trace_stage
 
 
 def _format_snapshot(label: str, snapshot: object) -> str:
@@ -44,7 +46,7 @@ def main() -> None:
     parser.add_argument(
         "--scenario",
         choices=("improve", "no_improvement", "overfit"),
-        help="Override execution.fake_candidate_scenario for this run.",
+        help="Override execution.candidate_scenario for this run.",
     )
     args = parser.parse_args()
 
@@ -54,11 +56,14 @@ def main() -> None:
             "real mode requires an injected business agent; use the Python API "
             "run_real_stage(prepared, call_agent=...)"
         )
-    if config.execution.mode != "fake":
-        parser.error("this CLI currently supports execution.mode='fake' only")
 
     prepared = prepare_run(args.config, run_id=args.run_id)
-    result = asyncio.run(run_fake_stage(prepared, scenario=args.scenario))
+    if config.execution.mode == "offline":
+        result = asyncio.run(run_offline_stage(prepared, scenario=args.scenario))
+    elif config.execution.mode == "trace":
+        result = asyncio.run(run_trace_stage(prepared, scenario=args.scenario))
+    else:
+        parser.error(f"unsupported execution mode: {config.execution.mode}")
     print(f"Completed deterministic pipeline stage: {prepared.workspace.run_dir}")
     print(f"Candidate: {result.candidate.candidate_id} ({result.scenario})")
     print(_format_snapshot("Baseline train", result.baseline_train))

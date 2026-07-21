@@ -12,11 +12,11 @@ from hashlib import sha256
 from typing import Mapping
 
 from ..schemas import FakeCandidateProposal
-from ..schemas import FakeCandidateScenario
-from .agent import RULE_PREFIX
+from ..schemas import CandidateScenario
+from .model import RULE_PREFIX
 
 
-_SCENARIO_BLOCKS: dict[FakeCandidateScenario, tuple[str, str]] = {
+_SCENARIO_BLOCKS: dict[CandidateScenario, tuple[str, str]] = {
     "improve": (
         "Generalize routing across account synonyms, order lookup, shipping policy, and refunds.",
         "\n".join(
@@ -80,7 +80,7 @@ class DeterministicFakeCandidateProvider:
         self,
         current_prompts: Mapping[str, str],
         *,
-        scenario: FakeCandidateScenario,
+        scenario: CandidateScenario,
         seed: int,
     ) -> FakeCandidateProposal:
         if self._target_field not in current_prompts:

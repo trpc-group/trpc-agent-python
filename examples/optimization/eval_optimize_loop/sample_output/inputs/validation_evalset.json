@@ -1,0 +1,40 @@
+{
+  "eval_set_id": "eval_optimize_loop_validation",
+  "name": "Evaluation optimization loop - validation",
+  "description": "Three deterministic validation cases for generalization, recall, and critical routing.",
+  "eval_cases": [
+    {
+      "eval_id": "val_paraphrase",
+      "conversation": [
+        {
+          "invocation_id": "val-1",
+          "user_content": {"parts": [{"text": "Where do I change the address tied to my account?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"route\":\"account\",\"message\":\"Open profile settings to update your address.\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "demo", "state": {}}
+    },
+    {
+      "eval_id": "val_knowledge_recall",
+      "conversation": [
+        {
+          "invocation_id": "val-2",
+          "user_content": {"parts": [{"text": "How long does standard shipping usually take?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"route\":\"shipping_policy\",\"message\":\"Standard shipping normally takes 3-5 business days.\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "demo", "state": {}}
+    },
+    {
+      "eval_id": "val_refund_route",
+      "conversation": [
+        {
+          "invocation_id": "val-3",
+          "user_content": {"parts": [{"text": "I was charged twice and need the duplicate payment refunded."}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"route\":\"billing_refund\",\"message\":\"I will route this duplicate charge for refund review.\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "demo", "state": {}}
+    }
+  ]
+}

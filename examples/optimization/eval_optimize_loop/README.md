@@ -1,4 +1,12 @@
-# Evaluation + Optimization Loop — Stage 5
+# Evaluation + Optimization Loop — Stage 6
+
+## 三种运行模式
+
+- `offline`：使用真实 SDK `LlmAgent` 和 `Runner`，Agent 内部注入 `DeterministicFakeModel`，候选由确定性 Candidate Provider 生成。无需 API Key。
+- `trace`：使用 SDK 原生 `eval_mode="trace"` 回放 baseline/candidate 的 train 与 validation 轨迹，不运行 Agent、Model 或 Candidate Provider。即使 Gate 接受，也不会写回源 Prompt。
+- `real`：业务 Agent 和反思优化模型均使用真实模型，由显式入口 `run_real_integration.py --run-real` 启用。
+
+Fake Model 是 `offline` 模式中的模型实现，不是独立运行模式；Fake Candidate Provider 只替代候选生成，不替代业务 Agent。精确匹配等硬规则由 `optimizer.json` 的确定性 metric 执行。需要语义判断时，应显式配置带 rubric 的 LLM Judge，而不是使用布尔 Fake Judge 开关。详细边界见 [DESIGN.md](DESIGN.md)。
 
 This example provides an auditable evaluation and prompt-optimization loop.
 Stages 1–3 prepare an isolated prompt workspace, run baseline and candidate
@@ -8,17 +16,25 @@ common Candidate Provider boundary, an `AgentOptimizer` adapter, and guarded
 source-prompt writeback. Stage 5 publishes a complete JSON/Markdown report and
 artifact index, or preserves a standalone failure report when a run fails.
 
-The deterministic fake mode still runs without a model, API key, judge, or
-optimizer. Its built-in scenarios produce ACCEPT for `improve` and REJECT for
+The deterministic offline mode runs through the SDK Agent without an API key,
+judge, or real optimizer. Its built-in scenarios produce ACCEPT for `improve` and REJECT for
 both `no_improvement` and `overfit`:
 
 ```bash
 python examples/optimization/eval_optimize_loop/run_pipeline.py \
-  --run-id local_stage5 \
+  --run-id local_stage6 \
   --scenario improve
 ```
 
-The offline CLI remains self-contained and supports fake mode only. For an
+The same CLI also supports trace replay:
+
+```bash
+python examples/optimization/eval_optimize_loop/run_pipeline.py \
+  --config examples/optimization/eval_optimize_loop/pipeline.trace.json \
+  --scenario overfit
+```
+
+For an
 explicit real integration smoke run, configure the OpenAI-compatible business
 model connection in the environment:
 
@@ -128,7 +144,7 @@ usage remain `unavailable` because business-agent calls may not expose complete
 telemetry. In real mode, optimizer rounds, reflection calls, duration, cost, and
 token usage are reported independently from the native optimizer result; an
 unreliable or incomplete field stays `unavailable` instead of being treated as
-zero. In fake mode, optimizer-only fields are `not_applicable`.
+zero. In offline mode, optimizer-only fields are `not_applicable`.
 
 Run the Stage 1–5 tests with:
 

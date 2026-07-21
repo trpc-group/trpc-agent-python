@@ -30,11 +30,29 @@ _RUN_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_-]*$"
 
 
 class ExecutionConfig(EvalBaseModel):
-    """How a later phase obtains an optimization candidate."""
+    """Pipeline execution mode and deterministic candidate scenario."""
 
-    mode: Literal["fake", "real", "trace"] = "fake"
-    fake_candidate_scenario: Literal["improve", "no_improvement", "overfit"] = "improve"
-    use_fake_judge: bool = False
+    mode: Literal["offline", "real", "trace"] = "offline"
+    candidate_scenario: Literal["improve", "no_improvement", "overfit"] = "improve"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_removed_execution_options(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        if value.get("mode") == "fake":
+            raise ValueError("execution.mode='fake' was renamed to 'offline'")
+        if "use_fake_judge" in value:
+            raise ValueError(
+                "execution.use_fake_judge was removed; configure evaluation "
+                "metrics or rubric explicitly in optimizer.json"
+            )
+        if "fake_candidate_scenario" in value:
+            raise ValueError(
+                "execution.fake_candidate_scenario was renamed to "
+                "execution.candidate_scenario"
+            )
+        return value
 
 
 class InputPathsConfig(EvalBaseModel):
@@ -70,6 +88,37 @@ class PromptFieldConfig(EvalBaseModel):
         if path.is_absolute():
             raise ValueError("prompt path must be relative to pipeline.json")
         return value
+
+
+class TraceCandidateInputsConfig(EvalBaseModel):
+    """一个 Trace 候选版本的评测集和 Prompt 快照路径。"""
+
+    train_evalset: str
+    validation_evalset: str
+    prompts: list[PromptFieldConfig] = Field(min_length=1)
+
+    @field_validator("train_evalset", "validation_evalset")
+    @classmethod
+    def _require_relative_trace_path(cls, value: str) -> str:
+        if not value.strip() or Path(value).is_absolute():
+            raise ValueError("trace evalset path must be a non-empty relative path")
+        return value
+
+
+class TraceInputsConfig(EvalBaseModel):
+    """三个确定性候选场景的 Trace 输入。"""
+
+    candidates: dict[
+        Literal["improve", "no_improvement", "overfit"],
+        TraceCandidateInputsConfig,
+    ]
+
+    @model_validator(mode="after")
+    def _require_all_scenarios(self) -> "TraceInputsConfig":
+        required = {"improve", "no_improvement", "overfit"}
+        if set(self.candidates) != required:
+            raise ValueError("trace_inputs must define improve, no_improvement, and overfit")
+        return self
 
 
 class RunConfig(EvalBaseModel):
@@ -186,12 +235,31 @@ class PipelineConfig(EvalBaseModel):
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
     artifacts: ArtifactConfig = Field(default_factory=ArtifactConfig)
     writeback: WritebackConfig = Field(default_factory=WritebackConfig)
+    trace_inputs: Optional[TraceInputsConfig] = None
 
     @model_validator(mode="after")
     def _require_unique_prompt_names(self) -> "PipelineConfig":
         names = [prompt.name for prompt in self.prompts]
         if len(names) != len(set(names)):
             raise ValueError("prompts must not contain duplicate field names")
+        if self.execution.mode == "trace":
+            if self.trace_inputs is None:
+                raise ValueError("trace mode requires trace_inputs")
+            if self.writeback.enabled:
+                raise ValueError("trace mode does not allow source Prompt writeback")
+            expected = set(names)
+            for scenario, inputs in self.trace_inputs.candidates.items():
+                candidate_names = [prompt.name for prompt in inputs.prompts]
+                if len(candidate_names) != len(set(candidate_names)):
+                    raise ValueError(
+                        f"trace candidate {scenario} has duplicate prompt names"
+                    )
+                if set(candidate_names) != expected:
+                    raise ValueError(
+                        f"trace candidate {scenario} prompt fields must match baseline"
+                    )
+        elif self.trace_inputs is not None:
+            raise ValueError("trace_inputs is only allowed in trace mode")
         return self
 
 

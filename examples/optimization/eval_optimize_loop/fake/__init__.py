@@ -5,7 +5,12 @@
 # tRPC-Agent-Python is licensed under the Apache License, Version 2.0.
 """Deterministic offline components for the eval/optimization loop."""
 
-from .agent import DeterministicFakeAgent
 from .candidate_provider import DeterministicFakeCandidateProvider
+from .model import DeterministicFakeModel
+from .model import deterministic_response
 
-__all__ = ["DeterministicFakeAgent", "DeterministicFakeCandidateProvider"]
+__all__ = [
+    "DeterministicFakeCandidateProvider",
+    "DeterministicFakeModel",
+    "deterministic_response",
+]

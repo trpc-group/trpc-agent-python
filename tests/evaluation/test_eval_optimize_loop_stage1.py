@@ -67,7 +67,7 @@ def test_pipeline_config_loads_complete_example_and_camel_case(tmp_path: Path):
     root = _copy_example(tmp_path)
     config = load_pipeline_config(root / "pipeline.json")
     assert config.config_version == 1
-    assert config.execution.mode == "fake"
+    assert config.execution.mode == "offline"
     assert config.prompts[0].name == "system_prompt"
     assert config.gate.required_metrics == ["final_response_avg_score"]
 
@@ -79,6 +79,26 @@ def test_pipeline_config_loads_complete_example_and_camel_case(tmp_path: Path):
     camel_path.write_text(json.dumps(payload), encoding="utf-8")
     camel_config = load_pipeline_config(camel_path)
     assert camel_config.case_labels.hard_case_ids == ["val_knowledge_recall"]
+
+
+def test_pipeline_config_rejects_legacy_fake_mode_with_migration_message(
+    tmp_path: Path,
+):
+    root = _copy_example(tmp_path)
+    payload = _read_config(root)
+    payload["execution"]["mode"] = "fake"
+
+    with pytest.raises(ValidationError, match="renamed to 'offline'"):
+        PipelineConfig.model_validate(payload)
+
+
+def test_pipeline_config_rejects_removed_fake_judge_option(tmp_path: Path):
+    root = _copy_example(tmp_path)
+    payload = _read_config(root)
+    payload["execution"]["use_fake_judge"] = True
+
+    with pytest.raises(ValidationError, match="evaluation metrics or rubric"):
+        PipelineConfig.model_validate(payload)
 
 
 @pytest.mark.parametrize(

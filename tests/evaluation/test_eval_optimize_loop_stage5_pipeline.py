@@ -19,21 +19,33 @@ import pytest
 
 from examples.optimization.eval_optimize_loop import pipeline as pipeline_module
 from examples.optimization.eval_optimize_loop import run_real_integration
-from examples.optimization.eval_optimize_loop.fake import DeterministicFakeAgent
+from examples.optimization.eval_optimize_loop.business_agent import BusinessAgent
+from examples.optimization.eval_optimize_loop.fake import DeterministicFakeModel
 from examples.optimization.eval_optimize_loop.fake import DeterministicFakeCandidateProvider
 from examples.optimization.eval_optimize_loop.pipeline import PipelineExecutionError
 from examples.optimization.eval_optimize_loop.pipeline import prepare_run
-from examples.optimization.eval_optimize_loop.pipeline import run_fake_stage
+from examples.optimization.eval_optimize_loop.pipeline import run_offline_stage
 from examples.optimization.eval_optimize_loop.pipeline import run_real_stage
 from examples.optimization.eval_optimize_loop.schemas import ArtifactIndex
 from examples.optimization.eval_optimize_loop.schemas import FailureReport
 from examples.optimization.eval_optimize_loop.schemas import OptimizationReport
 from examples.optimization.eval_optimize_loop.schemas import OptimizerRuntimeParameters
 from trpc_agent_sdk.evaluation import OptimizeResult
+from trpc_agent_sdk.evaluation import TargetPrompt
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _EXAMPLE = _REPO_ROOT / "examples" / "optimization" / "eval_optimize_loop"
+
+
+def _offline_agent(target: TargetPrompt) -> BusinessAgent:
+    return BusinessAgent(
+        target,
+        DeterministicFakeModel,
+        agent_name="stage5_offline_agent",
+        app_name="stage5_offline_test",
+        user_id="stage5-test",
+    )
 
 
 def _copy_example(tmp_path: Path, name: str = "eval_optimize_loop") -> Path:
@@ -87,7 +99,7 @@ async def test_fake_stage_publishes_complete_report_bundle(
     root = _copy_example(tmp_path)
     prepared = prepare_run(root / "pipeline.json", run_id=f"stage5_{scenario}")
 
-    result = await run_fake_stage(prepared, scenario=scenario)
+    result = await run_offline_stage(prepared, scenario=scenario)
 
     run_dir = Path(prepared.workspace.run_dir)
     report_dir = run_dir / "report"
@@ -131,7 +143,7 @@ async def test_real_stage_reports_optimizer_native_artifacts(
 
     result = await run_real_stage(
         prepared,
-        call_agent=DeterministicFakeAgent(prepared.working_target).call_agent,
+        call_agent=_offline_agent(prepared.working_target).call_agent,
         optimizer_parameters=OptimizerRuntimeParameters(
             model_name="stage5-reflection-model",
             max_candidate_proposals=1,
@@ -209,7 +221,7 @@ async def test_fake_stage_writes_phase_specific_failure_report(
     _install_stage_failure(monkeypatch, target)
 
     with pytest.raises(Exception, match="simulated stage failure"):
-        await run_fake_stage(prepared, scenario="improve")
+        await run_offline_stage(prepared, scenario="improve")
 
     run_dir = Path(prepared.workspace.run_dir)
     failure = FailureReport.model_validate_json(
@@ -248,7 +260,7 @@ async def test_failure_report_error_preserves_original_exception_as_cause(
     )
 
     with pytest.raises(PipelineExecutionError) as raised:
-        await run_fake_stage(prepared, scenario="improve")
+        await run_offline_stage(prepared, scenario="improve")
 
     assert "simulated stage failure" in str(raised.value)
     assert "failed to write failure report" in str(raised.value)
@@ -275,7 +287,7 @@ async def test_reporting_failure_rolls_back_successful_source_writeback(
     monkeypatch.setattr(pipeline_module, "publish_report_bundle", fail_report)
 
     with pytest.raises(RuntimeError, match="simulated reporting failure"):
-        await run_fake_stage(prepared, scenario="improve")
+        await run_offline_stage(prepared, scenario="improve")
 
     assert await prepared.source_target.read_all() == source_before
     failure = FailureReport.model_validate_json(
@@ -308,7 +320,7 @@ async def test_reporting_and_writeback_rollback_failure_are_both_exposed(
     monkeypatch.setattr(pipeline_module, "_rollback_written_source", fail_rollback)
 
     with pytest.raises(PipelineExecutionError) as raised:
-        await run_fake_stage(prepared, scenario="improve")
+        await run_offline_stage(prepared, scenario="improve")
 
     assert "simulated reporting failure" in str(raised.value)
     assert "simulated source rollback failure" in str(raised.value)
@@ -380,7 +392,7 @@ async def test_all_fake_scenarios_duration_is_under_three_minutes_with_reports(
         root = _copy_example(tmp_path, name=f"eval_optimize_loop_{scenario}")
         prepared = prepare_run(root / "pipeline.json", run_id=f"stage5_{scenario}")
 
-        await run_fake_stage(prepared, scenario=scenario)
+        await run_offline_stage(prepared, scenario=scenario)
 
         report_dir = Path(prepared.workspace.run_dir) / "report"
         assert (report_dir / "optimization_report.json").is_file()

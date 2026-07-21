@@ -2,8 +2,7 @@
   "config_version": 1,
   "execution": {
     "mode": "real",
-    "fake_candidate_scenario": "improve",
-    "use_fake_judge": false
+    "candidate_scenario": "improve"
   },
   "inputs": {
     "train_evalset": "data/train.evalset.json",
