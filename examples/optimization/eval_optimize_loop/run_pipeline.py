@@ -1,10 +1,10 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Eval-Optimize Loop CLI entry point.
 
 Usage:
     python run_pipeline.py                    # fake mode (fast smoke test)
-    python run_pipeline.py --mode real        # real mode (needs PlateAgent)
     python run_pipeline.py --max-iter 3       # max optimization iterations
+    python run_pipeline.py --quiet            # minimal output
 """
 
 import argparse, asyncio, json, os as _os, sys, time
@@ -49,6 +49,12 @@ async def main():
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
 
+    # Gate unimplemented modes at CLI to prevent cryptic NotImplementedError (AI review round 3)
+    if args.mode in ("real", "real-agent"):
+        print("Error: --mode real / real-agent is not yet implemented.", file=sys.stderr)
+        print("Use --mode fake for the working 6-phase smoke-test pipeline.", file=sys.stderr)
+        sys.exit(1)
+
     config = load_config()
     train_path = Path(args.train) if args.train else BASE_DIR / "config" / "train.evalset.json"
     val_path = Path(args.val) if args.val else BASE_DIR / "config" / "val.evalset.json"
@@ -72,8 +78,7 @@ async def main():
 
         # Phase 1: Baseline
         if not args.quiet: print("[1/6] Baseline...")
-        br = BaselineRunner(mode=run_mode if run_mode in ("real",) else "fake",
-                           plate_agent_root=str(BASE_DIR.parent.parent.parent / "plate-agent"))
+        br = BaselineRunner(mode="fake")
         baseline = await br.run(train_path, val_path)
         train_bl, val_bl = baseline["train"], baseline["val"]
         if not args.quiet:
@@ -89,31 +94,13 @@ async def main():
 
         # Phase 3: Optimization
         if not args.quiet: print("[3/6] Optimization...")
-        use_real_agent = run_mode == "real-agent"
-        if use_real_agent:
-            sdk_train = BASE_DIR / "config" / "train.sdk.evalset.json"
-            sdk_val = BASE_DIR / "config" / "val.sdk.evalset.json"
-            sdk_opt = BASE_DIR / "config" / "optimizer.sdk.json"
-            prompt_dir = BASE_DIR / "config" / "prompts"
-            from src.call_agent import echo_call_agent
-            opt_runner = OptimizationRunner(
-                mode="real",
-                config=config.get("pipeline", {}),
-                call_agent=echo_call_agent,
-                train_dataset=str(sdk_train),
-                validation_dataset=str(sdk_val),
-                sdk_config_path=str(sdk_opt),
-                prompt_dir=str(prompt_dir),
-                output_dir=str(output_dir / "optimizer"),
-            )
-        else:
-            opt_runner = OptimizationRunner(mode="fake", config=config.get("pipeline", {}))
+        opt_runner = OptimizationRunner(mode="fake", config=config.get("pipeline", {}))
         opt_result = opt_runner.run(attr)
         if not args.quiet: print(f"  candidates: {opt_result.total_iterations}")
 
         # Phase 4: Validation
         if not args.quiet: print("[4/6] Validation...")
-        vr = ValidationRunner(mode=run_mode if run_mode in ("real",) else "fake")
+        vr = ValidationRunner(mode="fake")
         val_result = vr.run(val_bl, opt_result)
         if not args.quiet: print(f"  delta: {val_result.summary.avg_score_delta:+.3f}")
 
@@ -121,15 +108,11 @@ async def main():
         if not args.quiet: print("[5/6] Gate...")
         gate = AcceptanceGate(config.get("gate", {}))
 
-        # fix: overfit detection — run candidate on train set for real delta
-        if run_mode == "real":
-            candidate_train = await br.run_split(train_path, "train_candidate")
-            candidate_train_scores = candidate_train.score_map
-        else:
-            # fake mode: derive candidate train scores from baseline + simulated delta
-            candidate_train_scores = {
-                cid: min(1.0, score + 0.05) for cid, score in train_bl.score_map.items()
-            }
+        # overfit detection: simulate candidate train scores with +0.05 delta
+        # (real-mode candidate_train would need optimized-agent re-eval; real mode is not yet implemented)
+        candidate_train_scores = {
+            cid: min(1.0, score + 0.05) for cid, score in train_bl.score_map.items()
+        }
 
         critical_case_ids = _read_critical_case_ids(val_path)
 
