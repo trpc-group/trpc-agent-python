@@ -18,6 +18,8 @@ This module provides:
 from __future__ import annotations
 
 import json
+import logging
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -215,15 +217,17 @@ class DiffEngine:
         summary_idx_b = self._find_summary_anchor(events_b)
 
         if summary_idx_a >= 0 and summary_idx_b >= 0:
-            # Both sides have summary anchors — align at the anchor and compare
-            # events from there onwards.
-            post_summary_len = min(len(events_a) - summary_idx_a, len(events_b) - summary_idx_b)
+            # Both sides have summary anchors — align at the later anchor
+            # to avoid comparing retained events (pre-anchor) against new
+            # events (post-anchor), which produces misleading diffs.
+            anchor_at = max(summary_idx_a, summary_idx_b)
+            post_summary_len = min(len(events_a) - anchor_at, len(events_b) - anchor_at)
             for i in range(post_summary_len):
                 self._compare_event_dicts(
-                    summary_idx_a + i,
+                    anchor_at + i,
                     session_id,
-                    events_a[summary_idx_a + i],
-                    events_b[summary_idx_b + i],
+                    events_a[anchor_at + i],
+                    events_b[anchor_at + i],
                     report,
                 )
             return
@@ -707,7 +711,12 @@ class ReplayHarness:
         result: RawResult,
     ) -> None:
         kw = step.kwargs
-        session_id = kw.get("session_id") or (result.session.id if result.session else None)
+        # Prefer self._sessions (always current) over result.session (potentially stale)
+        session_id = kw.get("session_id")
+        if session_id is None and result.label in self._sessions:
+            session_id = self._sessions[result.label].id
+        if session_id is None and result.session:
+            session_id = result.session.id
         if session_id is None:
             # Derive from the stored session key
             for label, s in self._sessions.items():
@@ -844,7 +853,7 @@ class ReplayHarness:
         if session is None or not session.events:
             return
         removed = session.events.pop()
-        logger = __import__("logging").getLogger(__name__)
+        logger = logging.getLogger(__name__)
         logger.info("inject_skip_append removed event author=%s on %s", removed.author, result.label)
         await svc.update_session(session)
 
@@ -1060,8 +1069,12 @@ async def test_replay_summary_truncation(case_name: str, full_backend_pair_with_
 
     # Report should reflect expected divergences
     report.passed = len(report.inconsistencies) == 0
+    assert report.passed, (
+        f"{case_name}: expected cross-backend consistency but found inconsistencies:\n"
+        f"{report.summary()}"
+    )
     assert report.case_name == case_name
-    logger = __import__("logging").getLogger(__name__)
+    logger = logging.getLogger(__name__)
     logger.info(
         "case_07 summary: %s (allowed diffs: %d)",
         report.summary(),
@@ -1135,11 +1148,12 @@ async def test_replay_all_cases_load_and_validate(case_name: str) -> None:
 async def test_generate_aggregated_diff_report(
     full_backend_pair,
     full_backend_pair_with_summary,
+    tmp_path,
 ) -> None:
-    """Generate the full ``session_memory_summary_diff_report.json``.
+    """Generate the aggregated diff report and verify key fields.
 
     Runs all 10 replay cases against both backends and aggregates the
-    per-case DiffReport into a single JSON file written to the repo root.
+    per-case DiffReport into a single JSON file written to tmp_path.
     Summary-involved cases use ``full_backend_pair_with_summary``; others
     use ``full_backend_pair``.
     """
@@ -1164,7 +1178,7 @@ async def test_generate_aggregated_diff_report(
         all_reports.append(report.to_dict())
 
     output = {
-        "generated_at": __import__("time").time(),
+        "generated_at": time.time(),
         "total_cases": len(all_reports),
         "cases_passed": sum(1 for r in all_reports if r["passed"]),
         "backends": {
@@ -1174,10 +1188,22 @@ async def test_generate_aggregated_diff_report(
         "reports": all_reports,
     }
 
-    output_path_agg = Path(__file__).parent / "session_memory_summary_diff_report.json"
-    with open(output_path_agg, "w", encoding="utf-8") as f:
-        json.dump(output, f, indent=2, ensure_ascii=False)
+    # Write to tmp_path instead of repo source directory
+    output_path = tmp_path / "session_memory_summary_diff_report.json"
+    output_path.write_text(json.dumps(output, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    # Print path for convenience
-    print(f"\nAggregated diff report written to: {output_path_agg}")
+    # ── Assertions ──
+    assert output["total_cases"] == len(_ALL_CASES), (
+        f"Expected {len(_ALL_CASES)} cases, got {output['total_cases']}"
+    )
+    # Normal cases (1-6) should pass
+    for r in all_reports:
+        case_name = r.get("case_name", "unknown")
+        if case_name in _NORMAL_CASES:
+            assert r["passed"], (
+                f"Normal case {case_name} should pass but got inconsistencies: "
+                f"{[d['message'] for d in r.get('inconsistencies', [])]}"
+            )
+
+    print(f"\nAggregated diff report written to: {output_path}")
     print(f"Total cases: {output['total_cases']}, Passed: {output['cases_passed']}")

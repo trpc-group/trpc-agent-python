@@ -139,7 +139,7 @@ async def make_inmemory_service(
         Initialized InMemorySessionService instance.
     """
     if session_config is None:
-        session_config = _DEFAULT_SESSION_CONFIG
+        session_config = _DEFAULT_SESSION_CONFIG.model_copy(deep=True)
     return InMemorySessionService(
         summarizer_manager=summarizer_manager,
         session_config=session_config,
@@ -160,7 +160,7 @@ async def make_sqlite_service(
         Initialized SqlSessionService instance.
     """
     if session_config is None:
-        session_config = _DEFAULT_SESSION_CONFIG
+        session_config = _DEFAULT_SESSION_CONFIG.model_copy(deep=True)
     # Default to store historical events for persistent backends (aligns with
     # the production SqlSessionService default behaviour).
     session_config.store_historical_events = True

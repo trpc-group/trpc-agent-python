@@ -61,7 +61,7 @@ The exact boundary between summary text and retained events is allowed to differ
 | Mode | Backend A | Backend B | Trigger |
 |------|-----------|-----------|---------|
 | Lightweight (default) | InMemorySessionService | SqlSessionService(SQLite) | Always |
-| SQL integration | InMemorySessionService | SqlSessionService(MySQL) | TEST_MYSQL_URL |
-| Redis integration | InMemorySessionService | RedisSessionService | TEST_REDIS_URL |
+| SQL integration | InMemorySessionService | SqlSessionService(MySQL) | TEST_MYSQL_URL (planned, not yet implemented) |
+| Redis integration | InMemorySessionService | RedisSessionService | TEST_REDIS_URL (planned, not yet implemented) |
 
 All three backends conform to the `SessionServiceABC` interface; adding a new backend only requires implementing that interface.
