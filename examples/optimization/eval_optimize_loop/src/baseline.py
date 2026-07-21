@@ -1,4 +1,4 @@
-"""Phase 1: Baseline 评测引擎。
+﻿"""Phase 1: Baseline 评测引擎。
 
 对训练集和验证集进行 baseline 评测，记录每条的 metric 分、pass/fail、
 失败原因和关键轨迹，作为后续优化流水线的基准线。
@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
+import hashlib
 from pathlib import Path
 from typing import Optional
 
@@ -331,7 +332,7 @@ class BaselineRunner:
         gt_items = []
         for case in cases_data:
             gt_items.append({
-                "id": hash(case["case_id"]) % 10000,
+                "id": int(hashlib.sha256(case["case_id"].encode()).hexdigest()[:8], 16) % 10000 + 1,
                 "image": f"eval/dataset/test_plates/{case['image']}",
                 "plate_number": case["ground_truth"],
                 "conditions": case.get("conditions", {}),
@@ -351,9 +352,12 @@ class BaselineRunner:
         report = await evaluator.run(verbose=False)
 
         # 转换为 BaselineCaseResult 列表
+        # fix: use path-based mapping instead of image_id positional lookup
+        image_to_case = {c.get("image", ""): c["case_id"] for c in cases_data}
         case_results: list[BaselineCaseResult] = []
         for r in report.details:
-            case_id = cases_data[r.image_id - 1]["case_id"] if r.image_id <= len(cases_data) else f"case_{r.image_id}"
+            image_key = Path(r.image_path).name if r.image_path else ""
+            case_id = image_to_case.get(image_key, image_to_case.get(r.image_path, f"case_{getattr(r, 'image_id', '?')}" ))
             case_result = BaselineCaseResult(
                 case_id=case_id,
                 image=r.image_path,
