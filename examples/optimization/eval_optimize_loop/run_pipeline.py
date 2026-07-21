@@ -34,7 +34,9 @@ def _read_critical_case_ids(val_path: Path) -> list[str]:
         with open(val_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         return [c["case_id"] for c in data.get("cases", []) if c.get("critical", False)]
-    except Exception:
+    except Exception as e:
+        import sys as _sys
+        print(f"Warning: cannot read critical case ids from {val_path}: {e}", file=_sys.stderr)
         return ["val_001"]  # fallback
 
 
@@ -62,15 +64,42 @@ async def main():
     started_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     run_mode = args.mode
 
-    # ---- concurrent lock (mkdir atomic) ----
-    LOCK_DIR = _os.path.join(str(BASE_DIR), "output", ".pipeline.lock")
-    try:
-        _os.makedirs(LOCK_DIR, exist_ok=False)
-    except FileExistsError:
-        print("another pipeline instance is running, aborting", file=sys.stderr)
-        sys.exit(75)
+    # ---- PID-based lock (survives SIGKILL better than mkdir) ----
+    LOCK_FILE = _os.path.join(str(BASE_DIR), "output", ".pipeline.lock")
+    _os.makedirs(_os.path.dirname(LOCK_FILE), exist_ok=True)
 
-    # ---- try/finally: ensure lock release even on exception (fix: Critical) ----
+    def _pid_alive(pid):
+        try:
+            _os.kill(pid, 0)
+            return True
+        except (OSError, ProcessLookupError):
+            pass
+        try:
+            import ctypes
+            h = ctypes.windll.kernel32.OpenProcess(0x0400, False, pid)
+            if h:
+                ctypes.windll.kernel32.CloseHandle(h)
+                return True
+            return False
+        except Exception:
+            return True
+
+    my_pid = _os.getpid()
+    try:
+        with open(LOCK_FILE, "r") as lf:
+            old_pid = int(lf.read().strip().split()[0])
+        if _pid_alive(old_pid):
+            print("another pipeline instance is running, aborting", file=sys.stderr)
+            sys.exit(75)
+        if not args.quiet:
+            print(f"Cleaning stale lock from dead PID {old_pid}", file=sys.stderr)
+    except (FileNotFoundError, ValueError):
+        pass
+
+    with open(LOCK_FILE, "w") as lf:
+        lf.write(f"{my_pid} {started_at}")
+
+    # ---- try/finally: ensure lock release even on exception ----
     try:
         if not args.quiet:
             print(f"Eval-Optimize Loop | mode={run_mode} seed={args.seed}")
@@ -78,7 +107,7 @@ async def main():
 
         # Phase 1: Baseline
         if not args.quiet: print("[1/6] Baseline...")
-        br = BaselineRunner(mode="fake")
+        br = BaselineRunner(mode=run_mode)
         baseline = await br.run(train_path, val_path)
         train_bl, val_bl = baseline["train"], baseline["val"]
         if not args.quiet:
@@ -94,13 +123,13 @@ async def main():
 
         # Phase 3: Optimization
         if not args.quiet: print("[3/6] Optimization...")
-        opt_runner = OptimizationRunner(mode="fake", config=config.get("pipeline", {}))
+        opt_runner = OptimizationRunner(mode=run_mode, config=config.get("pipeline", {}))
         opt_result = opt_runner.run(attr)
         if not args.quiet: print(f"  candidates: {opt_result.total_iterations}")
 
         # Phase 4: Validation
         if not args.quiet: print("[4/6] Validation...")
-        vr = ValidationRunner(mode="fake")
+        vr = ValidationRunner(mode=run_mode)
         val_result = vr.run(val_bl, opt_result)
         if not args.quiet: print(f"  delta: {val_result.summary.avg_score_delta:+.3f}")
 
@@ -108,8 +137,11 @@ async def main():
         if not args.quiet: print("[5/6] Gate...")
         gate = AcceptanceGate(config.get("gate", {}))
 
+        # FAKE MODE NOTICE: candidate_train_scores, candidate_cost, and baseline_cost
+        # are simulated placeholder values. Gate decisions in fake mode are for
+        # pipeline demo purposes only and do not reflect real optimization outcomes.
+        # Real mode would re-evaluate with the optimized agent on the training set.
         # overfit detection: simulate candidate train scores with +0.05 delta
-        # (real-mode candidate_train would need optimized-agent re-eval; real mode is not yet implemented)
         candidate_train_scores = {
             cid: min(1.0, score + 0.05) for cid, score in train_bl.score_map.items()
         }
@@ -160,9 +192,9 @@ async def main():
             print("Done. 6 phases completed.")
 
     finally:
-        # release lock — always runs, even on exception
+        # release lock
         try:
-            _os.rmdir(LOCK_DIR)
+            _os.remove(LOCK_FILE)
         except Exception:
             pass
 

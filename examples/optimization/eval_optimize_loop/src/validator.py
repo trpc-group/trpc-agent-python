@@ -1,4 +1,4 @@
-﻿"""Phase 4: 候选验证引擎。"""
+"""Phase 4: 候选验证引擎。"""
 from __future__ import annotations
 from pathlib import Path
 import json
@@ -40,19 +40,24 @@ class ValidationResult:
     def to_dict(self):
         return {"candidate_id":self.candidate_id,"delta_cases":[d.to_dict() for d in self.delta_cases],"summary":self.summary.to_dict(),"optimization_target":self.optimization_target}
 
+# Each category has distinguishable predictions so validator differentiates
+# optimization strategies per failure type (fix: round-4 review)
 CANDIDATE_PREDICTIONS = {
-    "final_answer_mismatch": {"val_001":"粤B54321","val_002":"苏D13579","val_003":"浙C36912"},
+    "final_answer_mismatch":        {"val_001":"粤B54321","val_002":"苏D13579","val_003":"浙C36912"},
     "knowledge_recall_insufficient": {"val_001":"粤B54321","val_002":"苏D13579","val_003":"浙C3691Z"},
-    "tool_call_error": {"val_001":"粤B54321","val_002":"苏D13579","val_003":"浙C36912"},
-    "param_error": {"val_001":"粤B54321","val_002":"苏D13579","val_003":"浙C36912"},
-    "llm_rubric_fail": {"val_001":"粤B54321","val_002":"苏D13579","val_003":"浙C36912"},
-    "format_invalid": {"val_001":"粤B54321","val_002":"苏D13579","val_003":"浙C36912"},
+    "tool_call_error":               {"val_001":"粤XXXXX","val_002":"苏D1?79","val_003":"浙C3691X"},
+    "param_error":                   {"val_001":"粤B5?321","val_002":"苏D13XXX","val_003":"浙C36111"},
+    "llm_rubric_fail":               {"val_001":"粤B55321","val_002":"苏D1S579","val_003":"浙C3691Z"},
+    "format_invalid":                {"val_001":"粤B-54321","val_002":"苏D13579-ERR","val_003":"null"},
 }
 REGRESSION_PREDICTIONS = {"val_001":"粤B5432Z","val_002":"粤B1XS79","val_003":"浙X36X1Z"}
 
 class ValidationRunner:
     def __init__(self, mode="fake", **kwargs):
         if mode not in ("fake","real"): raise ValueError(f"Unknown mode: {mode}")
+        if mode == "real":
+            import warnings
+            warnings.warn("ValidationRunner real mode is not yet implemented. Use fake mode.", FutureWarning, stacklevel=2)
         self.mode = mode; self.kwargs = kwargs
         if mode == "fake": self._judge = FakeJudge()
 

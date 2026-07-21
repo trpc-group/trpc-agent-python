@@ -1,4 +1,4 @@
-﻿"""PlateAgent call_agent adapter for AgentOptimizer.
+"""PlateAgent call_agent adapter for AgentOptimizer.
 
 Provides echo_call_agent (fast validation) and create_plate_call_agent
 (real OCR pipeline) as async (query: str) -> str callables.
@@ -6,10 +6,13 @@ Provides echo_call_agent (fast validation) and create_plate_call_agent
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 async def echo_call_agent(query: str) -> str:
@@ -87,7 +90,8 @@ def create_plate_call_agent(
                         continue
                     if part.text:
                         final_text += part.text
-        except Exception:
+        except Exception as e:
+            logger.exception("runner.run_async failed, attempting session.state fallback")
             try:
                 session = await session_service.get_session(
                     app_name="plate_optimizer",

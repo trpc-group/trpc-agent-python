@@ -29,6 +29,7 @@ class AttributionCase:
     char_match_rate: float = 0.0
     judge_scores: dict = field(default_factory=dict)
     trajectory_signals: dict = field(default_factory=dict)
+    conditions: dict = field(default_factory=dict)  # from BaselineCaseResult.conditions
 
     def to_dict(self) -> dict:
         return {
@@ -38,6 +39,7 @@ class AttributionCase:
             "ground_truth": self.ground_truth, "predicted": self.predicted,
             "score": round(self.score, 4), "char_match_rate": round(self.char_match_rate, 3),
             "judge_scores": self.judge_scores, "trajectory_signals": self.trajectory_signals,
+            "conditions": self.conditions,
         }
 
 
@@ -234,6 +236,7 @@ class AttributionRunner:
             ground_truth=case.ground_truth, predicted=case.predicted,
             score=case.score, char_match_rate=char_rate,
             judge_scores=judge_summary, trajectory_signals=traj_signals,
+            conditions=case.conditions,
         )
 
     def _build_clusters(
@@ -262,21 +265,18 @@ class AttributionRunner:
             if c.count > 0:
                 c.avg_score /= c.count
                 c.avg_confidence /= c.count
-            conds = [a.case_id for a in attributions if a.category == c.category]
-            if conds:
-                c.dominant_condition = self._guess_dominant_condition(conds)
+            cluster_attrs = [a for a in attributions if a.category == c.category]
+            if cluster_attrs:
+                c.dominant_condition = self._guess_dominant_condition(cluster_attrs)
         return [c for c in clusters.values() if c.count > 0]
 
     @staticmethod
-    def _guess_dominant_condition(case_ids: list[str]) -> str:
-        cond_map = {
-            "train_001": "clear", "train_002": "noise", "train_003": "blur",
-            "val_001": "clear", "val_002": "noise", "val_003": "blur",
-        }
+    def _guess_dominant_condition(attributions: list) -> str:
+        """Derive dominant condition from real case conditions (not hardcoded map)."""
         counts: dict[str, int] = {}
-        for cid in case_ids:
-            cond = cond_map.get(cid, "unknown")
-            counts[cond] = counts.get(cond, 0) + 1
+        for attr in attributions:
+            cond_type = attr.conditions.get("type", "unknown") if attr.conditions else "unknown"
+            counts[cond_type] = counts.get(cond_type, 0) + 1
         return max(counts, key=counts.get) if counts else "unknown"
 
 

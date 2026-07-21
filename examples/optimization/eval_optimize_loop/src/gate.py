@@ -1,4 +1,4 @@
-﻿"""Phase 5: 接受策略 Gate。
+"""Phase 5: 接受策略 Gate。
 
 根据 optimizer.json 中的 gate 配置，对候选 prompt 的验证结果进行
 多条件判断，输出接受/拒绝决策。
@@ -111,6 +111,7 @@ class AcceptanceGate:
         if self.strategy == "all_must_pass":
             accepted = all(c.passed for c in checks)
         elif self.strategy == "majority":
+            # Strict majority: more than half must pass. Ties (exactly half) = reject.
             accepted = sum(1 for c in checks if c.passed) > len(checks) / 2
         else:
             accepted = all(c.passed for c in checks)

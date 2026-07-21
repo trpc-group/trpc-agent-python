@@ -351,6 +351,9 @@ class OptimizationRunner:
     def __init__(self, mode: str = "fake", config: Optional[dict] = None, **kwargs):
         if mode not in ("fake", "real"):
             raise ValueError(f"Unknown mode: {mode}. Must be 'fake' or 'real'.")
+        if mode == "real":
+            import warnings
+            warnings.warn("OptimizationRunner real mode is not yet implemented. Use fake mode.", FutureWarning, stacklevel=2)
         self.mode = mode
         self.config = config or {}
         self.kwargs = kwargs

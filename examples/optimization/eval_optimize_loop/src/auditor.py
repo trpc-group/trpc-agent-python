@@ -1,4 +1,4 @@
-﻿"""Phase 6: 审计落盘引擎。"""
+"""Phase 6: 审计落盘引擎。"""
 from __future__ import annotations
 import json, time
 from dataclasses import dataclass, field, asdict
@@ -21,7 +21,7 @@ class AuditEntry:
     gate_accepted: bool = False; gate_reason: str = ""
     gate_checks: list = field(default_factory=list)
     cost_baseline: float = 0.0; cost_candidate: float = 0.0
-    latency_ms: float = 0.0; random_seed: int = 42
+    latency_ms: float = 0.0; random_seed: int = 42  # fake mode: baseline latency placeholder
     def to_dict(self): return asdict(self)
 
 @dataclass
@@ -62,9 +62,37 @@ class Auditor:
         run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + f"_{random_seed}"
         entries = []
         for cand in optimization.candidates:
-            entry = AuditEntry(timestamp=now, iteration=cand.iteration, candidate_id=cand.candidate_id, prompt_type=cand.target_prompt_type, failure_category=cand.failure_category, prompt_before=cand.prompt_before, prompt_after=cand.prompt_after, change_log=cand.change_log, baseline_scores=baseline_val.score_map if baseline_val else {}, candidate_scores=validation.score_map if validation else {}, gate_accepted=gate_decision.get("accepted",False) if gate_decision else False, gate_reason=gate_decision.get("reason","") if gate_decision else "", gate_checks=gate_decision.get("checks",[]) if gate_decision else [], cost_baseline=baseline_val.summary.avg_cost*baseline_val.summary.total if baseline_val else 0.0, cost_candidate=validation.summary.total_cost_candidate if validation else 0.0, latency_ms=baseline_val.summary.avg_latency_ms if baseline_val else 0.0, random_seed=random_seed)
+            entry = AuditEntry(
+                timestamp=now,
+                iteration=cand.iteration,
+                candidate_id=cand.candidate_id,
+                prompt_type=cand.target_prompt_type,
+                failure_category=cand.failure_category,
+                prompt_before=cand.prompt_before,
+                prompt_after=cand.prompt_after,
+                change_log=cand.change_log,
+                baseline_scores=baseline_val.score_map if baseline_val else {},
+                candidate_scores=validation.score_map if validation else {},
+                gate_accepted=gate_decision.get("accepted", False) if gate_decision else False,
+                gate_reason=gate_decision.get("reason", "") if gate_decision else "",
+                gate_checks=gate_decision.get("checks", []) if gate_decision else [],
+                cost_baseline=baseline_val.summary.avg_cost * baseline_val.summary.total if baseline_val else 0.0,
+                cost_candidate=validation.summary.total_cost_candidate if validation else 0.0,
+                latency_ms=baseline_val.summary.avg_latency_ms if baseline_val else 0.0,
+                random_seed=random_seed,
+            )
             entries.append(entry)
-        return AuditTrail(pipeline_name=pipeline_name, run_id=run_id, started_at=started_at or now, completed_at=now, mode=mode, random_seed=random_seed, entries=entries, total_cost=sum(e.cost_candidate for e in entries), total_latency_ms=baseline_val.summary.avg_latency_ms if baseline_val else 0.0)
+        return AuditTrail(
+            pipeline_name=pipeline_name,
+            run_id=run_id,
+            started_at=started_at or now,
+            completed_at=now,
+            mode=mode,
+            random_seed=random_seed,
+            entries=entries,
+            total_cost=sum(e.cost_candidate for e in entries),
+            total_latency_ms=baseline_val.summary.avg_latency_ms if baseline_val else 0.0,
+        )
 
     @staticmethod
     def _generate_md(audit_trail, baseline, attribution, optimization, validation, gate_decision):

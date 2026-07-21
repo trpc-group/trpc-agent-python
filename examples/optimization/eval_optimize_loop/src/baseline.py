@@ -1,4 +1,4 @@
-﻿"""Phase 1: Baseline 评测引擎。
+"""Phase 1: Baseline 评测引擎。
 
 对训练集和验证集进行 baseline 评测，记录每条的 metric 分、pass/fail、
 失败原因和关键轨迹，作为后续优化流水线的基准线。
@@ -170,6 +170,9 @@ class BaselineRunner:
         """
         if mode not in ("fake", "real"):
             raise ValueError(f"Unknown mode: {mode}. Must be 'fake' or 'real'.")
+        if mode == "real":
+            import warnings
+            warnings.warn("BaselineRunner real mode is not fully implemented. Use fake mode for working pipeline.", FutureWarning, stacklevel=2)
         self.mode = mode
         self.kwargs = kwargs
 
@@ -306,9 +309,11 @@ class BaselineRunner:
         cases_data: list[dict],
         dataset_name: str,
     ) -> BaselineResult:
-        """Real 模式：对接 PlateAgent 的 PlateEvaluator。
+        """Real mode: interface with PlateAgent PlateEvaluator.
 
-        当前为占位实现 — 需 plate-agent 项目环境 + trpc_agent_sdk 依赖。
+        PLACEHOLDER: requires plate-agent project environment + trpc_agent_sdk.
+        The image_id hashing below is unstable and would need real dataset-id
+        mapping for production use. Only reachable via direct API, not CLI.
         """
         plate_agent_root = self.kwargs.get("plate_agent_root")
         if not plate_agent_root:
