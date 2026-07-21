@@ -24,7 +24,6 @@ from trpc_agent_sdk.evaluation import AgentEvaluator
 from trpc_agent_sdk.evaluation import CallAgent
 from trpc_agent_sdk.evaluation import EvalCaseResult
 from trpc_agent_sdk.evaluation import EvalSet
-from trpc_agent_sdk.evaluation import EvalStatus
 from trpc_agent_sdk.evaluation import OptimizeConfigFile
 from trpc_agent_sdk.evaluation import TargetPrompt
 from trpc_agent_sdk.evaluation import load_optimize_config
@@ -41,6 +40,7 @@ from .candidate_provider import FakeCandidateProviderAdapter
 from .config import PipelineConfig
 from .config import load_pipeline_config
 from .evaluation_adapter import EvaluationAnalysisError
+from .evaluation_adapter import standardize_snapshot
 from .fake import DeterministicFakeModel
 from .gate import evaluate_gate
 from .gate import GateEvaluationError
@@ -473,22 +473,6 @@ def prepare_run(pipeline_config_path: str | Path, *, run_id: str | None = None) 
         raise
 
 
-def _summarize_results(
-    eval_results_by_eval_id: dict[str, list[EvalCaseResult]],
-) -> tuple[int, int, float | None]:
-    passed_cases = 0
-    scores: list[float] = []
-    for runs in eval_results_by_eval_id.values():
-        if runs and all(getattr(run, "final_eval_status", None) == EvalStatus.PASSED for run in runs):
-            passed_cases += 1
-        for run in runs:
-            for metric in getattr(run, "overall_eval_metric_results", []):
-                if metric.score is not None:
-                    scores.append(float(metric.score))
-    average_score = sum(scores) / len(scores) if scores else None
-    return passed_cases, len(eval_results_by_eval_id), average_score
-
-
 def _validate_results(
     *,
     eval_set: EvalSet,
@@ -547,8 +531,7 @@ async def _evaluate_split(
         phase=phase,
         split=split,
     )
-    passed_cases, total_cases, average_score = _summarize_results(eval_results_by_eval_id)
-    return EvaluationSnapshot(
+    snapshot = EvaluationSnapshot(
         phase=phase,
         split=split,
         eval_set_id=eval_set.eval_set_id,
@@ -556,9 +539,26 @@ async def _evaluate_split(
         details_lines=details_lines,
         result_lines=result_lines,
         eval_results_by_eval_id=eval_results_by_eval_id,
-        passed_case_count=passed_cases,
-        total_case_count=total_cases,
-        average_score=average_score,
+        passed_case_count=0,
+        total_case_count=len(eval_results_by_eval_id),
+        average_score=None,
+    )
+    try:
+        standardized = standardize_snapshot(snapshot)
+    except EvaluationAnalysisError as exc:
+        raise PipelineStageExecutionError(
+            f"{phase} {split} evaluation result standardization failed: {exc}"
+        ) from exc
+    return snapshot.model_copy(
+        update={
+            "passed_case_count": standardized.passed_case_count,
+            "total_case_count": len(standardized.cases),
+            "average_score": (
+                standardized.average_score.value
+                if standardized.average_score.status == "available"
+                else None
+            ),
+        }
     )
 
 
@@ -567,14 +567,34 @@ async def _restore_working_baseline(
     baseline_prompts: dict[str, str],
 ) -> bool:
     """Restore optimizer leftovers and prove the isolated baseline is present."""
+    initial_read_error: Exception | None = None
+    was_modified = True
     try:
         current = await prepared.working_target.read_all()
+    except Exception as exc:
+        initial_read_error = exc
+    else:
         was_modified = current != baseline_prompts
-        if was_modified:
+
+    if was_modified:
+        try:
             await prepared.working_target.write_all(baseline_prompts)
+        except Exception as exc:
+            if initial_read_error is not None:
+                raise PipelineStageExecutionError(
+                    "failed to restore optimizer working prompts after initial "
+                    f"read failed ({initial_read_error}): {exc}"
+                ) from exc
+            raise PipelineStageExecutionError(
+                f"failed to restore optimizer working prompts: {exc}"
+            ) from exc
+
+    try:
         restored = await prepared.working_target.read_all()
     except Exception as exc:
-        raise PipelineStageExecutionError(f"failed to restore optimizer working prompts: {exc}") from exc
+        raise PipelineStageExecutionError(
+            f"failed to verify restored optimizer working prompts: {exc}"
+        ) from exc
     if restored != baseline_prompts:
         raise PipelineStageExecutionError("optimizer working prompts did not match baseline after restoration")
     return was_modified
@@ -592,7 +612,6 @@ async def _execute_offline_stage(
     the isolated working target on success or candidate-evaluation failure so
     the run can be inspected later.
     """
-    progress.enter("baseline_train")
     if prepared.config.execution.mode != "offline":
         raise PipelineStageExecutionError(
             "run_offline_stage requires execution.mode='offline', got "
@@ -756,7 +775,6 @@ async def _execute_real_stage(
     progress: _MutableReportProgress,
 ) -> RealStageResult:
     """Generate a real optimizer candidate and run the full guarded regression."""
-    progress.enter("baseline_train")
     if prepared.config.execution.mode != "real":
         raise PipelineStageExecutionError(
             f"run_real_stage requires execution.mode='real', got {prepared.config.execution.mode!r}"
