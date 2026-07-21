@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Eval-Optimize Loop CLI entry point.
 
 Usage:
@@ -30,7 +30,7 @@ def load_config():
 
 async def main():
     parser = argparse.ArgumentParser(description="Eval-Optimize Loop Pipeline")
-    parser.add_argument("--mode", default="fake", choices=["fake", "real", "trace"])
+    parser.add_argument("--mode", default="fake", choices=["fake", "real", "real-agent", "trace"])
     parser.add_argument("--max-iter", type=int, default=3)
     parser.add_argument("--output", type=str, default=None)
     parser.add_argument("--train", type=str, default=None)
@@ -44,6 +44,17 @@ async def main():
     val_path = Path(args.val) if args.val else BASE_DIR / "config" / "val.evalset.json"
     output_dir = Path(args.output) if args.output else BASE_DIR / "output"
     started_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+    # ---- 并发锁：防止多个 pipeline 实例同时写入 ----
+    import os as _os
+    LOCK_DIR = _os.path.join(str(BASE_DIR), "output", ".pipeline.lock")
+    try:
+        _os.makedirs(LOCK_DIR, exist_ok=False)
+    except FileExistsError:
+        print("另一个 pipeline 实例正在运行，停止本次任务", file=sys.stderr)
+        sys.exit(75)
+    # ---------------------------------------------------
 
     if not args.quiet:
         print(f"Eval-Optimize Loop | mode={args.mode} seed={args.seed}")
@@ -124,6 +135,14 @@ async def main():
         print(f"  reports: {report_dir}")
         print("Done. 6 phases completed.")
 
+
+
+
+    # 释放并发锁
+    try:
+        _os.rmdir(LOCK_DIR)
+    except Exception:
+        pass
 
 if __name__ == "__main__":
     asyncio.run(main())
