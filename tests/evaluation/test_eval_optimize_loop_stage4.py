@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from examples.optimization.eval_optimize_loop import candidate_provider as candidate_provider_module
+from examples.optimization.eval_optimize_loop import pipeline as pipeline_module
 from examples.optimization.eval_optimize_loop import writeback as writeback_module
 from examples.optimization.eval_optimize_loop.candidate_provider import AgentOptimizerCandidateProvider
 from examples.optimization.eval_optimize_loop.candidate_provider import CandidateProviderError
@@ -469,6 +470,41 @@ async def test_real_stage_restores_working_prompt_after_optimizer_exception(
 
     assert await prepared.working_target.read_all() == baseline
     assert await prepared.source_target.read_all() == source_before
+
+
+@pytest.mark.asyncio
+async def test_restore_working_baseline_falls_back_when_initial_read_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    root = _copy_example(tmp_path, "restore_after_read_failure")
+    prepared = prepare_run(root / "pipeline.json", run_id="stage4_restore_read_failure")
+    baseline = await prepared.working_target.read_all()
+    changed = {
+        name: f"{content}\nleft by optimizer"
+        for name, content in baseline.items()
+    }
+    await prepared.working_target.write_all(changed)
+    original_read_all = prepared.working_target.read_all
+    read_count = 0
+
+    async def fail_initial_read():
+        nonlocal read_count
+        read_count += 1
+        if read_count == 1:
+            raise OSError("simulated transient read failure")
+        return await original_read_all()
+
+    monkeypatch.setattr(prepared.working_target, "read_all", fail_initial_read)
+
+    was_modified = await pipeline_module._restore_working_baseline(
+        prepared,
+        baseline,
+    )
+
+    assert was_modified is True
+    assert read_count == 2
+    assert await original_read_all() == baseline
 
 
 @pytest.mark.asyncio

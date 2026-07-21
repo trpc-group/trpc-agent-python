@@ -214,6 +214,11 @@ async def test_provider_writes_runtime_config_without_persisting_secrets(
     template["evaluate"]["credential_probe"] = {
         "api_key": "judge-secret",
         "base_url": "https://judge.example.test",
+        "authorization": "Bearer judge-authorization-secret",
+        "access_token": "judge-access-token-secret",
+        "client_secret": "judge-client-secret",
+        "password": "judge-password-secret",
+        "provider_endpoint_url": "https://judge-alt.example.test/v1",
     }
     request.optimizer_config_path.write_text(json.dumps(template), encoding="utf-8")
 
@@ -236,11 +241,25 @@ async def test_provider_writes_runtime_config_without_persisting_secrets(
     assert runtime["evaluate"]["credential_probe"] == {
         "api_key": "${TRPC_AGENT_API_KEY}",
         "base_url": "${TRPC_AGENT_BASE_URL}",
+        "authorization": "${TRPC_AGENT_API_KEY}",
+        "access_token": "${TRPC_AGENT_API_KEY}",
+        "client_secret": "${TRPC_AGENT_API_KEY}",
+        "password": "${TRPC_AGENT_API_KEY}",
+        "provider_endpoint_url": "${TRPC_AGENT_BASE_URL}",
     }
-    runtime_text = runtime_path.read_text(encoding="utf-8")
-    snapshot_text = (request.output_dir / "config.snapshot.json").read_text(encoding="utf-8")
-    assert "judge-secret" not in runtime_text
-    assert "judge-secret" not in snapshot_text
+    persisted_texts = [
+        runtime_path.read_text(encoding="utf-8"),
+        (request.output_dir / "config.snapshot.json").read_text(encoding="utf-8"),
+    ]
+    for secret in (
+        "judge-secret",
+        "judge-authorization-secret",
+        "judge-access-token-secret",
+        "judge-client-secret",
+        "judge-password-secret",
+        "https://judge-alt.example.test/v1",
+    ):
+        assert all(secret not in text for text in persisted_texts)
     assert original_config != request.optimizer_config_path.read_text(encoding="utf-8")
 
 

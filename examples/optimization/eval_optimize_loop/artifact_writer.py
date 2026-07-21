@@ -24,6 +24,8 @@ from .report_builder import render_optimization_markdown
 from .schemas import ArtifactIndex, ArtifactReference, FailureReport
 from .schemas import OptimizationReport, ReportPhase
 from .schemas import TraceCandidateProposal
+from .sensitive_config import SensitiveConfigError
+from .sensitive_config import validate_persisted_sensitive_values
 
 
 ArtifactType: TypeAlias = Literal[
@@ -36,46 +38,6 @@ ArtifactType: TypeAlias = Literal[
 ]
 
 _INPUT_COPY_DISABLED = "artifacts.copy_input_files=false"
-_SENSITIVE_CONFIG_KEYS = {
-    "accesstoken",
-    "apikey",
-    "auth",
-    "authorization",
-    "authtoken",
-    "baseurl",
-    "bearertoken",
-    "clientsecret",
-    "credential",
-    "credentials",
-    "password",
-    "passwd",
-    "privatekey",
-    "secret",
-    "secretkey",
-    "token",
-    "xapikey",
-}
-_SENSITIVE_CONFIG_KEY_SUFFIXES = {
-    "accesstoken",
-    "apikey",
-    "authtoken",
-    "baseurl",
-    "bearertoken",
-    "clientsecret",
-    "credential",
-    "credentials",
-    "endpointurl",
-    "password",
-    "passwd",
-    "privatekey",
-    "secretkey",
-}
-_APPROVED_SENSITIVE_VALUES = {
-    "",
-    "${TRPC_AGENT_API_KEY}",
-    "${TRPC_AGENT_BASE_URL}",
-    "fake-not-used-in-offline-mode",
-}
 _AT_FDCWD = -100
 _RENAME_NOREPLACE = 1
 _RENAME_EXCL = 0x4
@@ -179,44 +141,6 @@ def _json_text(model: BaseModel) -> str:
     return model.model_dump_json(by_alias=False, indent=2) + "\n"
 
 
-def _normalized_sensitive_key(key: str) -> str:
-    return key.replace("_", "").replace("-", "").casefold()
-
-
-def _is_sensitive_config_key(key: str) -> bool:
-    normalized = _normalized_sensitive_key(key)
-    return normalized in _SENSITIVE_CONFIG_KEYS or any(
-        normalized.endswith(suffix)
-        for suffix in _SENSITIVE_CONFIG_KEY_SUFFIXES
-    )
-
-
-def _validate_sensitive_config_values(value: object, *, path: str = "$") -> None:
-    if isinstance(value, str):
-        if value.strip().casefold().startswith(("http://", "https://")):
-            raise ArtifactWriteError(
-                "sensitive optimizer config value is not an approved "
-                f"placeholder: {path}"
-            )
-        return
-    if isinstance(value, list):
-        for index, item in enumerate(value):
-            _validate_sensitive_config_values(item, path=f"{path}[{index}]")
-        return
-    if not isinstance(value, dict):
-        return
-    for key, item in value.items():
-        item_path = f"{path}.{key}"
-        if _is_sensitive_config_key(key):
-            if not isinstance(item, str) or item not in _APPROVED_SENSITIVE_VALUES:
-                raise ArtifactWriteError(
-                    "sensitive optimizer config value is not an approved "
-                    f"placeholder: {item_path}"
-                )
-        else:
-            _validate_sensitive_config_values(item, path=item_path)
-
-
 def _validate_optimizer_config_for_copy(path: Path) -> None:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -224,7 +148,10 @@ def _validate_optimizer_config_for_copy(path: Path) -> None:
         raise ArtifactWriteError(
             f"failed to parse optimizer config snapshot: {path}: {exc}"
         ) from exc
-    _validate_sensitive_config_values(payload)
+    try:
+        validate_persisted_sensitive_values(payload)
+    except SensitiveConfigError as exc:
+        raise ArtifactWriteError(str(exc)) from exc
 
 
 def _rename_directory_no_replace(source: Path, target: Path) -> None:
@@ -621,6 +548,8 @@ def publish_report_bundle(
 
         for relative in native_paths:
             native_path = root / relative
+            if native_path.name == "optimizer.runtime.json":
+                _validate_optimizer_config_for_copy(native_path)
             references.append(
                 _available_reference(
                     root,
