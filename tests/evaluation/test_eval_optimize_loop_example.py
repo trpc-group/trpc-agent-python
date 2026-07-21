@@ -487,6 +487,41 @@ async def test_report_includes_paired_bootstrap_uncertainty_and_pareto_selection
 
 
 @pytest.mark.asyncio
+async def test_unknown_latency_is_not_treated_as_zero_for_pareto_or_markdown(tmp_path: Path, ) -> None:
+    EvalOptimizePipeline, PipelineSpec = _load_public_interface()
+    report = await EvalOptimizePipeline(
+        PipelineSpec.from_file(
+            _EXAMPLE_DIR / "pipeline.json",
+            output_dir=tmp_path / "unknown-latency",
+        )).run()
+
+    from eval_optimize_loop.loop.analysis import RegressionAnalyzer
+    from eval_optimize_loop.loop.reporting import render_markdown
+
+    robust = next(item for item in report.candidates if item.candidate_id == "robust")
+    unknown_latency = robust.model_copy(deep=True)
+    measured_latency = robust.model_copy(deep=True)
+    unknown_latency.candidate_id = "unknown-latency"
+    measured_latency.candidate_id = "measured-latency"
+    unknown_latency.audit.resources.p95_latency_ms = None
+    measured_latency.audit.resources.p95_latency_ms = 8.0
+
+    RegressionAnalyzer(seed=91, bootstrap_samples=100,
+                       confidence_level=0.95).mark_pareto([unknown_latency, measured_latency])
+    assert unknown_latency.pareto_optimal is False
+    assert measured_latency.pareto_optimal is True
+
+    report_for_rendering = report.model_copy(deep=True)
+    rendered_robust = next(item for item in report_for_rendering.candidates if item.candidate_id == "robust")
+    rendered_robust.audit.resources.p95_latency_ms = None
+    markdown = render_markdown(report_for_rendering)
+    resource_section = markdown.split("### Candidate evaluation resources", maxsplit=1)[1]
+    resource_row = next(line for line in resource_section.splitlines() if line.startswith("| `robust` |"))
+    assert "| unavailable |" in resource_row
+    assert "0.0 ms" not in resource_row
+
+
+@pytest.mark.asyncio
 async def test_data_quality_fails_closed_on_cross_split_near_duplicate(tmp_path: Path, ) -> None:
     EvalOptimizePipeline, PipelineSpec = _load_public_interface()
     train_payload = json.loads((_EXAMPLE_DIR / "data/train.evalset.json").read_text(encoding="utf-8"))

@@ -145,8 +145,9 @@ def render_markdown(report: OptimizationReport) -> str:
     for item in report.candidates:
         usage = item.audit.resources
         cost = "unavailable" if usage.cost_usd is None else f"${usage.cost_usd:.4f}"
+        latency = "unavailable" if usage.p95_latency_ms is None else f"{usage.p95_latency_ms:.1f} ms"
         lines.append(f"| `{item.candidate_id}` | {usage.metric_calls} | {usage.judge_calls} | "
-                     f"{usage.total_tokens} | {usage.p95_latency_ms or 0.0:.1f} ms | "
+                     f"{usage.total_tokens} | {latency} | "
                      f"{usage.duration_seconds:.3f} s | {cost} | `{usage.cost_measurement}` |")
     lines.append("")
     return "\n".join(lines)

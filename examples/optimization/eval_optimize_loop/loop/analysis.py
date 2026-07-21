@@ -491,6 +491,11 @@ class RegressionAnalyzer:
         return unique
 
     @staticmethod
+    def _pareto_latency_ms(resources: ResourceUsage) -> float:
+        """Return a dominance-safe latency value for Pareto comparisons."""
+        return math.inf if resources.p95_latency_ms is None else resources.p95_latency_ms
+
+    @staticmethod
     def mark_pareto(candidates: list[CandidateEvaluation]) -> None:
         """Mark gate-eligible candidates not dominated on quality, tokens, and latency."""
         eligible = [candidate for candidate in candidates if candidate.gate.accepted]
@@ -498,20 +503,20 @@ class RegressionAnalyzer:
             if not candidate.gate.accepted:
                 candidate.pareto_optimal = False
                 continue
+            candidate_latency = RegressionAnalyzer._pareto_latency_ms(candidate.audit.resources)
             dominated = False
             for other in eligible:
                 if other is candidate:
                     continue
+                other_latency = RegressionAnalyzer._pareto_latency_ms(other.audit.resources)
                 no_worse = (other.validation.pass_rate >= candidate.validation.pass_rate
                             and other.validation.average_score >= candidate.validation.average_score
                             and other.audit.resources.total_tokens <= candidate.audit.resources.total_tokens
-                            and (other.audit.resources.p95_latency_ms
-                                 or 0.0) <= (candidate.audit.resources.p95_latency_ms or 0.0))
+                            and other_latency <= candidate_latency)
                 strictly_better = (other.validation.pass_rate > candidate.validation.pass_rate
                                    or other.validation.average_score > candidate.validation.average_score
                                    or other.audit.resources.total_tokens < candidate.audit.resources.total_tokens
-                                   or (other.audit.resources.p95_latency_ms
-                                       or 0.0) < (candidate.audit.resources.p95_latency_ms or 0.0))
+                                   or other_latency < candidate_latency)
                 if no_worse and strictly_better:
                     dominated = True
                     break
