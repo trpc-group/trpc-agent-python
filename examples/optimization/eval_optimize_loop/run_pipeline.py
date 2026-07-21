@@ -64,25 +64,36 @@ async def main():
     started_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     run_mode = args.mode
 
-    # ---- PID-based lock (survives SIGKILL better than mkdir) ----
-    LOCK_FILE = _os.path.join(str(BASE_DIR), "output", ".pipeline.lock")
-    _os.makedirs(_os.path.dirname(LOCK_FILE), exist_ok=True)
+    # ---- PID-based lock in output directory ----
+    LOCK_FILE = _os.path.join(str(output_dir), ".pipeline.lock")
+    _os.makedirs(str(output_dir), exist_ok=True)
 
     def _pid_alive(pid):
+        """Check if a process is running. Cross-platform: signal 0 on Unix,
+        OpenProcess on Windows. Returns False for dead/invalid PIDs."""
+        # Unix: os.kill(pid, 0) raises if process doesn't exist
         try:
             _os.kill(pid, 0)
-            return True
-        except (OSError, ProcessLookupError):
-            pass
-        try:
-            import ctypes
-            h = ctypes.windll.kernel32.OpenProcess(0x0400, False, pid)
-            if h:
-                ctypes.windll.kernel32.CloseHandle(h)
-                return True
+        except ProcessLookupError:
             return False
-        except Exception:
-            return True
+        except PermissionError:
+            return True  # exists but we can't signal it
+        except OSError:
+            pass  # fall through to platform check
+
+        # Windows: use kernel32.OpenProcess
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                h = ctypes.windll.kernel32.OpenProcess(0x0400, False, pid)
+                if h:
+                    ctypes.windll.kernel32.CloseHandle(h)
+                    return True
+                return False
+            except Exception:
+                return True
+        # On Unix, if os.kill(pid, 0) succeeded above, process exists
+        return True
 
     my_pid = _os.getpid()
     try:
@@ -123,7 +134,10 @@ async def main():
 
         # Phase 3: Optimization
         if not args.quiet: print("[3/6] Optimization...")
-        opt_runner = OptimizationRunner(mode=run_mode, config=config.get("pipeline", {}))
+        pipeline_cfg = config.get("pipeline", {})
+        if args.max_iter != 3:  # user explicitly set --max-iter
+            pipeline_cfg = dict(pipeline_cfg, max_iterations=args.max_iter)
+        opt_runner = OptimizationRunner(mode=run_mode, config=pipeline_cfg)
         opt_result = opt_runner.run(attr)
         if not args.quiet: print(f"  candidates: {opt_result.total_iterations}")
 

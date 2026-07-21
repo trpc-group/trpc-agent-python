@@ -29,9 +29,9 @@ class AuditTrail:
     pipeline_name: str; run_id: str; started_at: str
     completed_at: str = ""; mode: str = "fake"; random_seed: int = 42
     entries: list = field(default_factory=list)
-    total_cost: float = 0.0; total_latency_ms: float = 0.0
+    total_cost: float = 0.0; avg_latency_ms: float = 0.0  # per-entry average (renamed from total_latency_ms)
     def to_dict(self):
-        return {"pipeline_name":self.pipeline_name,"run_id":self.run_id,"started_at":self.started_at,"completed_at":self.completed_at,"mode":self.mode,"random_seed":self.random_seed,"entries":[e.to_dict() for e in self.entries],"total_cost":self.total_cost,"total_latency_ms":self.total_latency_ms}
+        return {"pipeline_name":self.pipeline_name,"run_id":self.run_id,"started_at":self.started_at,"completed_at":self.completed_at,"mode":self.mode,"random_seed":self.random_seed,"entries":[e.to_dict() for e in self.entries],"total_cost":self.total_cost,"avg_latency_ms":self.avg_latency_ms}
 
 class Auditor:
     def __init__(self, output_dir="output"):
@@ -91,7 +91,7 @@ class Auditor:
             random_seed=random_seed,
             entries=entries,
             total_cost=sum(e.cost_candidate for e in entries),
-            total_latency_ms=baseline_val.summary.avg_latency_ms if baseline_val else 0.0,
+            avg_latency_ms=baseline_val.summary.avg_latency_ms if baseline_val else 0.0,
         )
 
     @staticmethod

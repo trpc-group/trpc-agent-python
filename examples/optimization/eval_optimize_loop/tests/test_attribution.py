@@ -186,7 +186,9 @@ class TestAttributionClassificationLogic:
         # param_error has higher priority (3 vs 1) — wait, final_answer_mismatch is priority 1 (highest)
         # So: final_answer_mismatch wins over param_error because priority 1 < 3
         # This is correct — mismatched answer takes precedence
-        assert result.category in ("final_answer_mismatch", "param_error")
+        # Rule 4 (char_match fallback) sets final_answer_mismatch (priority 1),
+        # which beats param_error (priority 3) from trajectory signals
+        assert result.category == "final_answer_mismatch", f"expected final_answer_mismatch (priority 1 beats param_error priority 3), got {result.category}"
 
     def test_llm_rubric_fail_from_judge(self, default_runner):
         """judge_recognition < 0.6 → llm_rubric_fail"""
