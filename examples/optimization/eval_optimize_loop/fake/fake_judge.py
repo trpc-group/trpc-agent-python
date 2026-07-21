@@ -37,6 +37,10 @@ class JudgeResult:
     failure_reason: str = ""
 
 
+# Shared threshold: gate _check_no_new_hard_fail and attribution judge checks
+# use the same value as FakeJudge.passed threshold.
+PASS_THRESHOLD = 0.6
+
 class FakeJudge:
     """基于规则的假 Judge。
 

@@ -7,7 +7,7 @@ Usage:
     python run_pipeline.py --quiet            # minimal output
 """
 
-import argparse, asyncio, json, os as _os, sys, time
+import argparse, asyncio, json, os as _os, sys
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -35,7 +35,6 @@ def _read_critical_case_ids(val_path: Path) -> list[str]:
             data = json.load(f)
         return [c["case_id"] for c in data.get("cases", []) if c.get("critical", False)]
     except Exception as e:
-        import sys as _sys
         print(f"Warning: cannot read critical case ids from {val_path}: {e}", file=_sys.stderr)
         return []  # empty: skip critical-case gate rather than guess wrong id
 

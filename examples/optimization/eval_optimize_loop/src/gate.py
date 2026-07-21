@@ -8,6 +8,8 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+from fake.fake_judge import PASS_THRESHOLD
+
 
 
 @dataclass
@@ -149,8 +151,8 @@ class AcceptanceGate:
         candidate: dict[str, float],
     ) -> GateCheck:
         max_new = self.rules["no_new_hard_fail"].get("max_new_fails", 0)
-        base_fails = sum(1 for s in baseline.values() if s < 0.6)
-        cand_fails = sum(1 for s in candidate.values() if s < 0.6)
+        base_fails = sum(1 for s in baseline.values() if s < PASS_THRESHOLD)
+        cand_fails = sum(1 for s in candidate.values() if s < PASS_THRESHOLD)
         new_fails = max(0, cand_fails - base_fails)
         passed = new_fails <= max_new
         return GateCheck(

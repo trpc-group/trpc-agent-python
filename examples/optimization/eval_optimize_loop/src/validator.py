@@ -68,6 +68,9 @@ class ValidationRunner:
         return self._run_real(val_baseline, candidate)
 
     def _run_fake(self, val_baseline, candidate, simulate_regression=False):
+        if candidate.failure_category not in CANDIDATE_PREDICTIONS:
+            import warnings
+            warnings.warn(f"Unknown failure_category '{candidate.failure_category}', falling back to final_answer_mismatch")
         pred_map = REGRESSION_PREDICTIONS if simulate_regression else CANDIDATE_PREDICTIONS.get(
             candidate.failure_category, CANDIDATE_PREDICTIONS["final_answer_mismatch"])
         deltas = []
