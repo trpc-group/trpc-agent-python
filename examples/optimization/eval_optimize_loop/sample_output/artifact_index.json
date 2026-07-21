@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "run_id": "stage6_sample",
+  "generated_at": "2026-07-21T07:36:54.029902Z",
+  "artifacts": [
+    {
+      "artifact_id": "report.optimization_json",
+      "artifact_type": "report",
+      "relative_path": "optimization_report.json",
+      "required": true,
+      "produced_by": "reporting",
+      "status": "available",
+      "size_bytes": 128820,
+      "sha256": "451fc8b7a32552f52075dd7fbb6bf4b4014d0477d351c172e2ef21785a323ab0",
+      "unavailable_reason": null
+    },
+    {
+      "artifact_id": "report.optimization_markdown",
+      "artifact_type": "report",
+      "relative_path": "optimization_report.md",
+      "required": true,
+      "produced_by": "reporting",
+      "status": "available",
+      "size_bytes": 1335,
+      "sha256": "ee44b5e042e554bce89662d9d85c64ca861984ce2e69e0e32d5e5ddb7a26570e",
+      "unavailable_reason": null
+    },
+    {
+      "artifact_id": "evaluation.baseline_train",
+      "artifact_type": "evaluation",
+      "relative_path": "evaluations/baseline_train.json",
+      "required": true,
+      "produced_by": "baseline_train",
+      "status": "available",
+      "size_bytes": 17082,
+      "sha256": "e3763b13c8e2909185c91b61b93266757a3fdabe67ee78be134d171fb12d2601",
+      "unavailable_reason": null
+    },
+    {
+      "artifact_id": "evaluation.baseline_validation",
+      "artifact_type": "evaluation",
+      "relative_path": "evaluations/baseline_validation.json",
+      "required": true,
+      "produced_by": "baseline_validation",
+      "status": "available",
+      "size_bytes": 17257,
+      "sha256": "9032bf067f4e0dc129bc63bdd862ab740cb9552960a72145b5b8d24c3b5ca2b3",
+      "unavailable_reason": null
+    },
+    {
+      "artifact_id": "evaluation.candidate_train",
+      "artifact_type": "evaluation",
+      "relative_path": "evaluations/candidate_train.json",
+      "required": true,
+      "produced_by": "candidate_train",
+      "status": "available",
+      "size_bytes": 15950,
+      "sha256": "606d512943a332fcc159fbfa9c35c8cf0d51c4c545ff74067fc1ad7ed3201608",
+      "unavailable_reason": null
+    },
+    {
+      "artifact_id": "evaluation.candidate_validation",
+      "artifact_type": "evaluation",
+      "relative_path": "evaluations/candidate_validation.json",
+      "required": true,
+      "produced_by": "candidate_validation",
+      "status": "available",
+      "size_bytes": 16165,
+      "sha256": "9a8bef5b2d7beedcd9535ab0844af47a91ce9dd3e8031801c375c17308a8bd06",
+      "unavailable_reason": null
+    },
+    {
+      "artifact_id": "prompt.baseline.system_prompt",
+      "artifact_type": "prompt",
+      "relative_path": "prompts/baseline/000-system_prompt.md",
+      "required": true,
+      "produced_by": "baseline_train",
+      "status": "available",
+      "size_bytes": 205,
+      "sha256": "ded1ce1a1b01fa5f42e8a98ff81c8f816452f77b1ec510ce4b951769420e9871",
+      "unavailable_reason": null
+    },
+    {
+      "artifact_id": "prompt.candidate.system_prompt",
+      "artifact_type": "prompt",
+      "relative_path": "prompts/candidate/000-system_prompt.md",
+      "required": true,
+      "produced_by": "candidate_generation",
+      "status": "available",
+      "size_bytes": 588,
+      "sha256": "70613f68877e0d15f123648ee80513dc8ded4ecbc685fad1f040bd901267252c",
+      "unavailable_reason": null
+    },
+    {
+      "artifact_id": "input.pipeline_config",
+      "artifact_type": "input",
+      "relative_path": "inputs/pipeline_config.json",
+      "required": true,
+      "produced_by": "baseline_train",
+      "status": "available",
+      "size_bytes": 1210,
+      "sha256": "6bc16344d7a0691fd2aec05ae29a19fcd1507c81f7eaf5e50535c27a07775fcb",
+      "unavailable_reason": null
+    },
+    {
+      "artifact_id": "input.optimizer_config",
+      "artifact_type": "input",
+      "relative_path": "inputs/optimizer_config.json",
+      "required": true,
+      "produced_by": "candidate_generation",
+      "status": "available",
+      "size_bytes": 772,
+      "sha256": "5f936b9abd6fbd0cfb8e72c5ee8783c3001791434f5881a2196ac3ce65145c49",
+      "unavailable_reason": null
+    },
+    {
+      "artifact_id": "input.train_evalset",
+      "artifact_type": "input",
+      "relative_path": "inputs/train_evalset.json",
+      "required": true,
+      "produced_by": "baseline_train",
+      "status": "available",
+      "size_bytes": 1672,
+      "sha256": "d2849889340afd9b624583d75caccc96c1657281c90a8a3373b60563e332b8a9",
+      "unavailable_reason": null
+    },
+    {
+      "artifact_id": "input.validation_evalset",
+      "artifact_type": "input",
+      "relative_path": "inputs/validation_evalset.json",
+      "required": true,
+      "produced_by": "baseline_validation",
+      "status": "available",
+      "size_bytes": 1784,
+      "sha256": "719cf1c6c95dd2d1e164e3383bc0c28ba9405fc438b6b4f2d34195db51028341",
+      "unavailable_reason": null
+    }
+  ]
+}

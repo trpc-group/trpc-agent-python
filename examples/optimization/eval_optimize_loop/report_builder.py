@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from .schemas import FailureReport, OptimizerResourceObservation, OptimizerResourceValue
 from .schemas import OptimizationReport
-from .schemas import PipelineStageResult, RealStageResult, ReportProgress
+from .schemas import PipelineStageResult, RealStageResult, ReportProgress, TraceStageResult
 
 if TYPE_CHECKING:
     from .pipeline import PreparedRun
@@ -17,7 +17,8 @@ if TYPE_CHECKING:
 _OPTIMIZER_SCOPE = (
     "Optimizer-only observation; excludes complete business Agent evaluation usage."
 )
-_FAKE_OPTIMIZER_REASON = "Fake mode does not run AgentOptimizer."
+_OFFLINE_OPTIMIZER_REASON = "Offline mode uses a deterministic candidate provider."
+_TRACE_OPTIMIZER_REASON = "Trace replay does not run a candidate provider or AgentOptimizer."
 _MISSING_COST_REASON = (
     "Reflection LM calls were observed but optimizer cost was not reported."
 )
@@ -40,12 +41,12 @@ _BEARER_VALUE = re.compile(
 
 
 def _not_applicable_optimizer_value(
-    unit: str,
+    unit: str, reason: str,
 ) -> OptimizerResourceValue[object]:
     return OptimizerResourceValue[object](
         status="not_applicable",
         unit=unit,
-        reason=_FAKE_OPTIMIZER_REASON,
+        reason=reason,
     )
 
 
@@ -79,13 +80,18 @@ def _is_complete_token_usage(value: object) -> bool:
 
 def _optimizer_resources(result: PipelineStageResult) -> OptimizerResourceObservation:
     if not isinstance(result, RealStageResult):
+        reason = (
+            _TRACE_OPTIMIZER_REASON
+            if isinstance(result, TraceStageResult)
+            else _OFFLINE_OPTIMIZER_REASON
+        )
         return OptimizerResourceObservation(
-            scope_note=_FAKE_OPTIMIZER_REASON,
-            total_rounds=_not_applicable_optimizer_value("rounds"),
-            reflection_lm_calls=_not_applicable_optimizer_value("calls"),
-            cost_usd=_not_applicable_optimizer_value("USD"),
-            token_usage=_not_applicable_optimizer_value("tokens"),
-            duration_seconds=_not_applicable_optimizer_value("seconds"),
+            scope_note=reason,
+            total_rounds=_not_applicable_optimizer_value("rounds", reason),
+            reflection_lm_calls=_not_applicable_optimizer_value("calls", reason),
+            cost_usd=_not_applicable_optimizer_value("USD", reason),
+            token_usage=_not_applicable_optimizer_value("tokens", reason),
+            duration_seconds=_not_applicable_optimizer_value("seconds", reason),
         )
     native = result.optimize_result
     reflection_calls = native.total_reflection_lm_calls

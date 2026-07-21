@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from .report_builder import render_optimization_markdown
 from .schemas import ArtifactIndex, ArtifactReference, FailureReport
 from .schemas import OptimizationReport, ReportPhase
+from .schemas import TraceCandidateProposal
 
 
 ArtifactType: TypeAlias = Literal[
@@ -536,7 +537,7 @@ def publish_report_bundle(
                 )
             )
 
-        input_specs = (
+        input_specs = [
             (
                 "input.pipeline_config",
                 Path(report.input_snapshot.pipeline_config_path),
@@ -565,7 +566,32 @@ def publish_report_bundle(
                 "validation_evalset.json",
                 "baseline_validation",
             ),
-        )
+        ]
+        if (
+            isinstance(report.candidate, TraceCandidateProposal)
+            and report.input_snapshot.trace_inputs is not None
+        ):
+            trace = report.input_snapshot.trace_inputs.scenarios[
+                report.candidate.scenario
+            ]
+            input_specs.extend(
+                [
+                    (
+                        "input.trace.candidate_train",
+                        Path(trace.train_evalset_path),
+                        trace.train_evalset_sha256,
+                        "candidate_train_trace.json",
+                        "candidate_train",
+                    ),
+                    (
+                        "input.trace.candidate_validation",
+                        Path(trace.validation_evalset_path),
+                        trace.validation_evalset_sha256,
+                        "candidate_validation_trace.json",
+                        "candidate_validation",
+                    ),
+                ]
+            )
         for artifact_id, source, expected_hash, destination_name, produced_by in input_specs:
             if copy_input_files:
                 content_validator = (

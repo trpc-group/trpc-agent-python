@@ -1,0 +1,3666 @@
+{
+  "schema_version": 1,
+  "status": "completed",
+  "run_id": "stage6_sample",
+  "execution_mode": "offline",
+  "seed": 42,
+  "started_at": "2026-07-21T07:36:53.995239Z",
+  "finished_at": "2026-07-21T07:36:54.029902Z",
+  "input_snapshot": {
+    "pipeline_config_path": "<example_root>/pipeline.json",
+    "pipeline_config_sha256": "6bc16344d7a0691fd2aec05ae29a19fcd1507c81f7eaf5e50535c27a07775fcb",
+    "optimizer_config_path": "<example_root>/optimizer.json",
+    "optimizer_config_sha256": "5f936b9abd6fbd0cfb8e72c5ee8783c3001791434f5881a2196ac3ce65145c49",
+    "train_evalset_path": "<example_root>/data/train.evalset.json",
+    "train_evalset_sha256": "d2849889340afd9b624583d75caccc96c1657281c90a8a3373b60563e332b8a9",
+    "validation_evalset_path": "<example_root>/data/val.evalset.json",
+    "validation_evalset_sha256": "719cf1c6c95dd2d1e164e3383bc0c28ba9405fc438b6b4f2d34195db51028341",
+    "prompt_snapshots": [
+      {
+        "field_name": "system_prompt",
+        "source_path": "<example_root>/prompts/system.md",
+        "working_path": "<example_root>/runs/stage6_sample/workspace/prompts/01_system_prompt.md",
+        "content": "You are a customer-support routing assistant.\n\nAnswer with a compact JSON object containing `route` and `message`. Use the\navailable account tool for account-specific requests. Never invent account\nfacts.\n",
+        "sha256": "ded1ce1a1b01fa5f42e8a98ff81c8f816452f77b1ec510ce4b951769420e9871"
+      }
+    ],
+    "seed": 42,
+    "trace_inputs": null
+  },
+  "candidate": {
+    "provider": "fake",
+    "prompts": {
+      "system_prompt": "You are a customer-support routing assistant.\n\nAnswer with a compact JSON object containing `route` and `message`. Use the\navailable account tool for account-specific requests. Never invent account\nfacts.\n\n<!-- deterministic-fake-candidate:start -->\nApply general customer-support routing rules across equivalent user phrasings.\n<!-- deterministic-fake-rule account_terms=email,address -->\n<!-- deterministic-fake-rule order_lookup=true -->\n<!-- deterministic-fake-rule shipping_policy=true -->\n<!-- deterministic-fake-rule refund_route=true -->\n<!-- deterministic-fake-candidate:end -->\n"
+    },
+    "changed_fields": [
+      "system_prompt"
+    ],
+    "rationale": "Generalize routing across account synonyms, order lookup, shipping policy, and refunds.",
+    "parent_prompt_sha256": "85420c1a6ffbfc6681d7d4439154e798c02a173b5e336896c4d6046b98c83f3a",
+    "candidate_prompt_sha256": "60cc05b773e8ba70320c6789ccadcdc0b28da43ed1904743580791601cd6d901",
+    "candidate_id": "fake-improve-60cc05b773e8",
+    "scenario": "improve",
+    "seed": 42
+  },
+  "baseline_train": {
+    "phase": "baseline",
+    "split": "train",
+    "eval_set_id": "eval_optimize_loop_train",
+    "failed_summary": {
+      "agentName": "call-agent",
+      "evalSetId": "eval_optimize_loop_train",
+      "overallStatus": "failed",
+      "runs": 1,
+      "evalCases": [
+        {
+          "evalCaseId": "train_output_format",
+          "overallStatus": "passed",
+          "metricResults": [
+            {
+              "metricName": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "evalStatus": "passed"
+            }
+          ]
+        },
+        {
+          "evalCaseId": "train_tool_arguments",
+          "overallStatus": "failed",
+          "metricResults": [
+            {
+              "metricName": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "evalStatus": "failed"
+            }
+          ]
+        },
+        {
+          "evalCaseId": "train_tool_choice",
+          "overallStatus": "failed",
+          "metricResults": [
+            {
+              "metricName": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "evalStatus": "failed"
+            }
+          ]
+        }
+      ]
+    },
+    "details_lines": [],
+    "result_lines": [
+      "Eval Set      : eval_optimize_loop_train",
+      "Overall Status: failed",
+      "Case train_output_format -> passed",
+      "  Metric final_response_avg_score: score 1.0 (threshold 1.0) => passed",
+      "",
+      "Case train_tool_arguments -> failed",
+      "  Metric final_response_avg_score: score 0.0 (threshold 1.0) => failed",
+      "",
+      "Case train_tool_choice -> failed",
+      "  Metric final_response_avg_score: score 0.0 (threshold 1.0) => failed",
+      ""
+    ],
+    "eval_results_by_eval_id": {
+      "train_tool_choice": [
+        {
+          "eval_set_id": "eval_optimize_loop_train",
+          "eval_id": "train_tool_choice",
+          "run_id": 1,
+          "final_eval_status": 2,
+          "error_message": null,
+          "overall_eval_metric_results": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "criterion": {
+                "final_response": {
+                  "text": {
+                    "match": "exact",
+                    "case_insensitive": false
+                  }
+                }
+              },
+              "score": 0.0,
+              "eval_status": 2,
+              "details": null
+            }
+          ],
+          "eval_metric_result_per_invocation": [
+            {
+              "actual_invocation": {
+                "invocation_id": "train-2",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "Check the status of order A100.",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": null
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 1784619414.0021462
+              },
+              "expected_invocation": {
+                "invocation_id": "train-2",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "Check the status of order A100.",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"order_lookup\",\"message\":\"Checking order A100.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "model"
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 0.0
+              },
+              "eval_metric_results": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "criterion": {
+                    "final_response": {
+                      "text": {
+                        "match": "exact",
+                        "case_insensitive": false
+                      }
+                    }
+                  },
+                  "score": 0.0,
+                  "eval_status": 2,
+                  "details": null
+                }
+              ]
+            }
+          ],
+          "session_id": "___remote_eval___session___fe46fce6-d440-432c-ac3d-3a1a03db01f1",
+          "user_id": null,
+          "session_details": null
+        }
+      ],
+      "train_tool_arguments": [
+        {
+          "eval_set_id": "eval_optimize_loop_train",
+          "eval_id": "train_tool_arguments",
+          "run_id": 1,
+          "final_eval_status": 2,
+          "error_message": null,
+          "overall_eval_metric_results": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "criterion": {
+                "final_response": {
+                  "text": {
+                    "match": "exact",
+                    "case_insensitive": false
+                  }
+                }
+              },
+              "score": 0.0,
+              "eval_status": 2,
+              "details": null
+            }
+          ],
+          "eval_metric_result_per_invocation": [
+            {
+              "actual_invocation": {
+                "invocation_id": "train-3",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "Look up order B-204 for customer 17.",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": null
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 1784619413.9986317
+              },
+              "expected_invocation": {
+                "invocation_id": "train-3",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "Look up order B-204 for customer 17.",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"order_lookup\",\"message\":\"Checking order B-204 for customer 17.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "model"
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 0.0
+              },
+              "eval_metric_results": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "criterion": {
+                    "final_response": {
+                      "text": {
+                        "match": "exact",
+                        "case_insensitive": false
+                      }
+                    }
+                  },
+                  "score": 0.0,
+                  "eval_status": 2,
+                  "details": null
+                }
+              ]
+            }
+          ],
+          "session_id": "___remote_eval___session___a6cd661a-f2ca-4f9b-8c5f-e9d875e61f41",
+          "user_id": null,
+          "session_details": null
+        }
+      ],
+      "train_output_format": [
+        {
+          "eval_set_id": "eval_optimize_loop_train",
+          "eval_id": "train_output_format",
+          "run_id": 1,
+          "final_eval_status": 1,
+          "error_message": null,
+          "overall_eval_metric_results": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "criterion": {
+                "final_response": {
+                  "text": {
+                    "match": "exact",
+                    "case_insensitive": false
+                  }
+                }
+              },
+              "score": 1.0,
+              "eval_status": 1,
+              "details": null
+            }
+          ],
+          "eval_metric_result_per_invocation": [
+            {
+              "actual_invocation": {
+                "invocation_id": "train-1",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "How can I update my email address?",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"account\",\"message\":\"Open profile settings to update your email.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": null
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 1784619414.0005472
+              },
+              "expected_invocation": {
+                "invocation_id": "train-1",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "How can I update my email address?",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"account\",\"message\":\"Open profile settings to update your email.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "model"
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 0.0
+              },
+              "eval_metric_results": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "criterion": {
+                    "final_response": {
+                      "text": {
+                        "match": "exact",
+                        "case_insensitive": false
+                      }
+                    }
+                  },
+                  "score": 1.0,
+                  "eval_status": 1,
+                  "details": null
+                }
+              ]
+            }
+          ],
+          "session_id": "___remote_eval___session___168d89d2-fc32-4a89-ae7d-49993d76be8f",
+          "user_id": null,
+          "session_details": null
+        }
+      ]
+    },
+    "passed_case_count": 1,
+    "total_case_count": 3,
+    "average_score": 0.3333333333333333
+  },
+  "baseline_validation": {
+    "phase": "baseline",
+    "split": "validation",
+    "eval_set_id": "eval_optimize_loop_validation",
+    "failed_summary": {
+      "agentName": "call-agent",
+      "evalSetId": "eval_optimize_loop_validation",
+      "overallStatus": "failed",
+      "runs": 1,
+      "evalCases": [
+        {
+          "evalCaseId": "val_knowledge_recall",
+          "overallStatus": "failed",
+          "metricResults": [
+            {
+              "metricName": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "evalStatus": "failed"
+            }
+          ]
+        },
+        {
+          "evalCaseId": "val_paraphrase",
+          "overallStatus": "failed",
+          "metricResults": [
+            {
+              "metricName": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "evalStatus": "failed"
+            }
+          ]
+        },
+        {
+          "evalCaseId": "val_refund_route",
+          "overallStatus": "passed",
+          "metricResults": [
+            {
+              "metricName": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "evalStatus": "passed"
+            }
+          ]
+        }
+      ]
+    },
+    "details_lines": [],
+    "result_lines": [
+      "Eval Set      : eval_optimize_loop_validation",
+      "Overall Status: failed",
+      "Case val_knowledge_recall -> failed",
+      "  Metric final_response_avg_score: score 0.0 (threshold 1.0) => failed",
+      "",
+      "Case val_paraphrase -> failed",
+      "  Metric final_response_avg_score: score 0.0 (threshold 1.0) => failed",
+      "",
+      "Case val_refund_route -> passed",
+      "  Metric final_response_avg_score: score 1.0 (threshold 1.0) => passed",
+      ""
+    ],
+    "eval_results_by_eval_id": {
+      "val_knowledge_recall": [
+        {
+          "eval_set_id": "eval_optimize_loop_validation",
+          "eval_id": "val_knowledge_recall",
+          "run_id": 1,
+          "final_eval_status": 2,
+          "error_message": null,
+          "overall_eval_metric_results": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "criterion": {
+                "final_response": {
+                  "text": {
+                    "match": "exact",
+                    "case_insensitive": false
+                  }
+                }
+              },
+              "score": 0.0,
+              "eval_status": 2,
+              "details": null
+            }
+          ],
+          "eval_metric_result_per_invocation": [
+            {
+              "actual_invocation": {
+                "invocation_id": "val-2",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "How long does standard shipping usually take?",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": null
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 1784619414.0093913
+              },
+              "expected_invocation": {
+                "invocation_id": "val-2",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "How long does standard shipping usually take?",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"shipping_policy\",\"message\":\"Standard shipping normally takes 3-5 business days.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "model"
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 0.0
+              },
+              "eval_metric_results": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "criterion": {
+                    "final_response": {
+                      "text": {
+                        "match": "exact",
+                        "case_insensitive": false
+                      }
+                    }
+                  },
+                  "score": 0.0,
+                  "eval_status": 2,
+                  "details": null
+                }
+              ]
+            }
+          ],
+          "session_id": "___remote_eval___session___45c563f4-d805-4a5c-82c4-77f2237e4d20",
+          "user_id": null,
+          "session_details": null
+        }
+      ],
+      "val_refund_route": [
+        {
+          "eval_set_id": "eval_optimize_loop_validation",
+          "eval_id": "val_refund_route",
+          "run_id": 1,
+          "final_eval_status": 1,
+          "error_message": null,
+          "overall_eval_metric_results": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "criterion": {
+                "final_response": {
+                  "text": {
+                    "match": "exact",
+                    "case_insensitive": false
+                  }
+                }
+              },
+              "score": 1.0,
+              "eval_status": 1,
+              "details": null
+            }
+          ],
+          "eval_metric_result_per_invocation": [
+            {
+              "actual_invocation": {
+                "invocation_id": "val-3",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "I was charged twice and need the duplicate payment refunded.",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"billing_refund\",\"message\":\"I will route this duplicate charge for refund review.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": null
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 1784619414.0046532
+              },
+              "expected_invocation": {
+                "invocation_id": "val-3",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "I was charged twice and need the duplicate payment refunded.",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"billing_refund\",\"message\":\"I will route this duplicate charge for refund review.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "model"
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 0.0
+              },
+              "eval_metric_results": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "criterion": {
+                    "final_response": {
+                      "text": {
+                        "match": "exact",
+                        "case_insensitive": false
+                      }
+                    }
+                  },
+                  "score": 1.0,
+                  "eval_status": 1,
+                  "details": null
+                }
+              ]
+            }
+          ],
+          "session_id": "___remote_eval___session___5a98aee1-19fd-4665-9259-1b1fe3aaf23f",
+          "user_id": null,
+          "session_details": null
+        }
+      ],
+      "val_paraphrase": [
+        {
+          "eval_set_id": "eval_optimize_loop_validation",
+          "eval_id": "val_paraphrase",
+          "run_id": 1,
+          "final_eval_status": 2,
+          "error_message": null,
+          "overall_eval_metric_results": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "criterion": {
+                "final_response": {
+                  "text": {
+                    "match": "exact",
+                    "case_insensitive": false
+                  }
+                }
+              },
+              "score": 0.0,
+              "eval_status": 2,
+              "details": null
+            }
+          ],
+          "eval_metric_result_per_invocation": [
+            {
+              "actual_invocation": {
+                "invocation_id": "val-1",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "Where do I change the address tied to my account?",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": null
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 1784619414.006062
+              },
+              "expected_invocation": {
+                "invocation_id": "val-1",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "Where do I change the address tied to my account?",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"account\",\"message\":\"Open profile settings to update your address.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "model"
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 0.0
+              },
+              "eval_metric_results": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "criterion": {
+                    "final_response": {
+                      "text": {
+                        "match": "exact",
+                        "case_insensitive": false
+                      }
+                    }
+                  },
+                  "score": 0.0,
+                  "eval_status": 2,
+                  "details": null
+                }
+              ]
+            }
+          ],
+          "session_id": "___remote_eval___session___3ac5ca32-1910-4b66-b165-9134276d069c",
+          "user_id": null,
+          "session_details": null
+        }
+      ]
+    },
+    "passed_case_count": 1,
+    "total_case_count": 3,
+    "average_score": 0.3333333333333333
+  },
+  "candidate_train": {
+    "phase": "candidate",
+    "split": "train",
+    "eval_set_id": "eval_optimize_loop_train",
+    "failed_summary": null,
+    "details_lines": [],
+    "result_lines": [
+      "Eval Set      : eval_optimize_loop_train",
+      "Overall Status: passed",
+      "Case train_output_format -> passed",
+      "  Metric final_response_avg_score: score 1.0 (threshold 1.0) => passed",
+      "",
+      "Case train_tool_arguments -> passed",
+      "  Metric final_response_avg_score: score 1.0 (threshold 1.0) => passed",
+      "",
+      "Case train_tool_choice -> passed",
+      "  Metric final_response_avg_score: score 1.0 (threshold 1.0) => passed",
+      ""
+    ],
+    "eval_results_by_eval_id": {
+      "train_tool_choice": [
+        {
+          "eval_set_id": "eval_optimize_loop_train",
+          "eval_id": "train_tool_choice",
+          "run_id": 1,
+          "final_eval_status": 1,
+          "error_message": null,
+          "overall_eval_metric_results": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "criterion": {
+                "final_response": {
+                  "text": {
+                    "match": "exact",
+                    "case_insensitive": false
+                  }
+                }
+              },
+              "score": 1.0,
+              "eval_status": 1,
+              "details": null
+            }
+          ],
+          "eval_metric_result_per_invocation": [
+            {
+              "actual_invocation": {
+                "invocation_id": "train-2",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "Check the status of order A100.",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"order_lookup\",\"message\":\"Checking order A100.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": null
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 1784619414.017015
+              },
+              "expected_invocation": {
+                "invocation_id": "train-2",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "Check the status of order A100.",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"order_lookup\",\"message\":\"Checking order A100.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "model"
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 0.0
+              },
+              "eval_metric_results": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "criterion": {
+                    "final_response": {
+                      "text": {
+                        "match": "exact",
+                        "case_insensitive": false
+                      }
+                    }
+                  },
+                  "score": 1.0,
+                  "eval_status": 1,
+                  "details": null
+                }
+              ]
+            }
+          ],
+          "session_id": "___remote_eval___session___640410c0-cbbc-4cad-aa4a-d4b169b4fac7",
+          "user_id": null,
+          "session_details": null
+        }
+      ],
+      "train_tool_arguments": [
+        {
+          "eval_set_id": "eval_optimize_loop_train",
+          "eval_id": "train_tool_arguments",
+          "run_id": 1,
+          "final_eval_status": 1,
+          "error_message": null,
+          "overall_eval_metric_results": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "criterion": {
+                "final_response": {
+                  "text": {
+                    "match": "exact",
+                    "case_insensitive": false
+                  }
+                }
+              },
+              "score": 1.0,
+              "eval_status": 1,
+              "details": null
+            }
+          ],
+          "eval_metric_result_per_invocation": [
+            {
+              "actual_invocation": {
+                "invocation_id": "train-3",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "Look up order B-204 for customer 17.",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"order_lookup\",\"message\":\"Checking order B-204 for customer 17.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": null
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 1784619414.012829
+              },
+              "expected_invocation": {
+                "invocation_id": "train-3",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "Look up order B-204 for customer 17.",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"order_lookup\",\"message\":\"Checking order B-204 for customer 17.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "model"
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 0.0
+              },
+              "eval_metric_results": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "criterion": {
+                    "final_response": {
+                      "text": {
+                        "match": "exact",
+                        "case_insensitive": false
+                      }
+                    }
+                  },
+                  "score": 1.0,
+                  "eval_status": 1,
+                  "details": null
+                }
+              ]
+            }
+          ],
+          "session_id": "___remote_eval___session___785bd08e-706e-4f83-9c44-ac03997c67c3",
+          "user_id": null,
+          "session_details": null
+        }
+      ],
+      "train_output_format": [
+        {
+          "eval_set_id": "eval_optimize_loop_train",
+          "eval_id": "train_output_format",
+          "run_id": 1,
+          "final_eval_status": 1,
+          "error_message": null,
+          "overall_eval_metric_results": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "criterion": {
+                "final_response": {
+                  "text": {
+                    "match": "exact",
+                    "case_insensitive": false
+                  }
+                }
+              },
+              "score": 1.0,
+              "eval_status": 1,
+              "details": null
+            }
+          ],
+          "eval_metric_result_per_invocation": [
+            {
+              "actual_invocation": {
+                "invocation_id": "train-1",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "How can I update my email address?",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"account\",\"message\":\"Open profile settings to update your email.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": null
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 1784619414.0143127
+              },
+              "expected_invocation": {
+                "invocation_id": "train-1",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "How can I update my email address?",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"account\",\"message\":\"Open profile settings to update your email.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "model"
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 0.0
+              },
+              "eval_metric_results": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "criterion": {
+                    "final_response": {
+                      "text": {
+                        "match": "exact",
+                        "case_insensitive": false
+                      }
+                    }
+                  },
+                  "score": 1.0,
+                  "eval_status": 1,
+                  "details": null
+                }
+              ]
+            }
+          ],
+          "session_id": "___remote_eval___session___4c9ebf1d-9e6f-4488-a64c-ca2a0c01f40a",
+          "user_id": null,
+          "session_details": null
+        }
+      ]
+    },
+    "passed_case_count": 3,
+    "total_case_count": 3,
+    "average_score": 1.0
+  },
+  "candidate_validation": {
+    "phase": "candidate",
+    "split": "validation",
+    "eval_set_id": "eval_optimize_loop_validation",
+    "failed_summary": null,
+    "details_lines": [],
+    "result_lines": [
+      "Eval Set      : eval_optimize_loop_validation",
+      "Overall Status: passed",
+      "Case val_knowledge_recall -> passed",
+      "  Metric final_response_avg_score: score 1.0 (threshold 1.0) => passed",
+      "",
+      "Case val_paraphrase -> passed",
+      "  Metric final_response_avg_score: score 1.0 (threshold 1.0) => passed",
+      "",
+      "Case val_refund_route -> passed",
+      "  Metric final_response_avg_score: score 1.0 (threshold 1.0) => passed",
+      ""
+    ],
+    "eval_results_by_eval_id": {
+      "val_knowledge_recall": [
+        {
+          "eval_set_id": "eval_optimize_loop_validation",
+          "eval_id": "val_knowledge_recall",
+          "run_id": 1,
+          "final_eval_status": 1,
+          "error_message": null,
+          "overall_eval_metric_results": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "criterion": {
+                "final_response": {
+                  "text": {
+                    "match": "exact",
+                    "case_insensitive": false
+                  }
+                }
+              },
+              "score": 1.0,
+              "eval_status": 1,
+              "details": null
+            }
+          ],
+          "eval_metric_result_per_invocation": [
+            {
+              "actual_invocation": {
+                "invocation_id": "val-2",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "How long does standard shipping usually take?",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"shipping_policy\",\"message\":\"Standard shipping normally takes 3-5 business days.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": null
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 1784619414.024159
+              },
+              "expected_invocation": {
+                "invocation_id": "val-2",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "How long does standard shipping usually take?",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"shipping_policy\",\"message\":\"Standard shipping normally takes 3-5 business days.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "model"
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 0.0
+              },
+              "eval_metric_results": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "criterion": {
+                    "final_response": {
+                      "text": {
+                        "match": "exact",
+                        "case_insensitive": false
+                      }
+                    }
+                  },
+                  "score": 1.0,
+                  "eval_status": 1,
+                  "details": null
+                }
+              ]
+            }
+          ],
+          "session_id": "___remote_eval___session___426070b6-19e9-4441-941e-321dcbb6b443",
+          "user_id": null,
+          "session_details": null
+        }
+      ],
+      "val_refund_route": [
+        {
+          "eval_set_id": "eval_optimize_loop_validation",
+          "eval_id": "val_refund_route",
+          "run_id": 1,
+          "final_eval_status": 1,
+          "error_message": null,
+          "overall_eval_metric_results": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "criterion": {
+                "final_response": {
+                  "text": {
+                    "match": "exact",
+                    "case_insensitive": false
+                  }
+                }
+              },
+              "score": 1.0,
+              "eval_status": 1,
+              "details": null
+            }
+          ],
+          "eval_metric_result_per_invocation": [
+            {
+              "actual_invocation": {
+                "invocation_id": "val-3",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "I was charged twice and need the duplicate payment refunded.",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"billing_refund\",\"message\":\"I will route this duplicate charge for refund review.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": null
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 1784619414.0204713
+              },
+              "expected_invocation": {
+                "invocation_id": "val-3",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "I was charged twice and need the duplicate payment refunded.",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"billing_refund\",\"message\":\"I will route this duplicate charge for refund review.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "model"
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 0.0
+              },
+              "eval_metric_results": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "criterion": {
+                    "final_response": {
+                      "text": {
+                        "match": "exact",
+                        "case_insensitive": false
+                      }
+                    }
+                  },
+                  "score": 1.0,
+                  "eval_status": 1,
+                  "details": null
+                }
+              ]
+            }
+          ],
+          "session_id": "___remote_eval___session___3439f8ac-062e-4b85-b8e3-b13ef260efe3",
+          "user_id": null,
+          "session_details": null
+        }
+      ],
+      "val_paraphrase": [
+        {
+          "eval_set_id": "eval_optimize_loop_validation",
+          "eval_id": "val_paraphrase",
+          "run_id": 1,
+          "final_eval_status": 1,
+          "error_message": null,
+          "overall_eval_metric_results": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "criterion": {
+                "final_response": {
+                  "text": {
+                    "match": "exact",
+                    "case_insensitive": false
+                  }
+                }
+              },
+              "score": 1.0,
+              "eval_status": 1,
+              "details": null
+            }
+          ],
+          "eval_metric_result_per_invocation": [
+            {
+              "actual_invocation": {
+                "invocation_id": "val-1",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "Where do I change the address tied to my account?",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"account\",\"message\":\"Open profile settings to update your address.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": null
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 1784619414.0225098
+              },
+              "expected_invocation": {
+                "invocation_id": "val-1",
+                "user_content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "Where do I change the address tied to my account?",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "user"
+                },
+                "final_response": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "{\"route\":\"account\",\"message\":\"Open profile settings to update your address.\"}",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "model"
+                },
+                "intermediate_data": null,
+                "creation_timestamp": 0.0
+              },
+              "eval_metric_results": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "criterion": {
+                    "final_response": {
+                      "text": {
+                        "match": "exact",
+                        "case_insensitive": false
+                      }
+                    }
+                  },
+                  "score": 1.0,
+                  "eval_status": 1,
+                  "details": null
+                }
+              ]
+            }
+          ],
+          "session_id": "___remote_eval___session___bad8b5f6-d2d4-4512-8536-786f53cd2f5a",
+          "user_id": null,
+          "session_details": null
+        }
+      ]
+    },
+    "passed_case_count": 3,
+    "total_case_count": 3,
+    "average_score": 1.0
+  },
+  "analysis": {
+    "baseline_train": {
+      "phase": "baseline",
+      "split": "train",
+      "eval_set_id": "eval_optimize_loop_train",
+      "cases": [
+        {
+          "eval_id": "train_output_format",
+          "status": "passed",
+          "average_score": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "status": "passed",
+              "score": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "reason": null
+            }
+          ],
+          "runs": [
+            {
+              "run_id": 1,
+              "status": "passed",
+              "error_message": null,
+              "metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "status": "passed",
+                  "score": {
+                    "status": "available",
+                    "value": 1.0,
+                    "unit": null,
+                    "reason": null
+                  },
+                  "reason": null
+                }
+              ],
+              "invocations": [
+                {
+                  "invocation_id": "train-1",
+                  "user_text": "How can I update my email address?",
+                  "expected_response": "{\"route\":\"account\",\"message\":\"Open profile settings to update your email.\"}",
+                  "actual_response": "{\"route\":\"account\",\"message\":\"Open profile settings to update your email.\"}",
+                  "expected_tools": [],
+                  "actual_tools": [],
+                  "metrics": [
+                    {
+                      "metric_name": "final_response_avg_score",
+                      "threshold": 1.0,
+                      "status": "passed",
+                      "score": {
+                        "status": "available",
+                        "value": 1.0,
+                        "unit": null,
+                        "reason": null
+                      },
+                      "reason": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "attribution": null
+        },
+        {
+          "eval_id": "train_tool_arguments",
+          "status": "failed",
+          "average_score": {
+            "status": "available",
+            "value": 0.0,
+            "unit": null,
+            "reason": null
+          },
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "status": "failed",
+              "score": {
+                "status": "available",
+                "value": 0.0,
+                "unit": null,
+                "reason": null
+              },
+              "reason": null
+            }
+          ],
+          "runs": [
+            {
+              "run_id": 1,
+              "status": "failed",
+              "error_message": null,
+              "metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "status": "failed",
+                  "score": {
+                    "status": "available",
+                    "value": 0.0,
+                    "unit": null,
+                    "reason": null
+                  },
+                  "reason": null
+                }
+              ],
+              "invocations": [
+                {
+                  "invocation_id": "train-3",
+                  "user_text": "Look up order B-204 for customer 17.",
+                  "expected_response": "{\"route\":\"order_lookup\",\"message\":\"Checking order B-204 for customer 17.\"}",
+                  "actual_response": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}",
+                  "expected_tools": [],
+                  "actual_tools": [],
+                  "metrics": [
+                    {
+                      "metric_name": "final_response_avg_score",
+                      "threshold": 1.0,
+                      "status": "failed",
+                      "score": {
+                        "status": "available",
+                        "value": 0.0,
+                        "unit": null,
+                        "reason": null
+                      },
+                      "reason": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "attribution": {
+            "primary_category": "routing_error",
+            "secondary_categories": [
+              "final_response_mismatch"
+            ],
+            "summary": "Expected route 'order_lookup', got 'general_support'.",
+            "evidence": [
+              {
+                "evidence_type": "response",
+                "message": "Expected route 'order_lookup', got 'general_support'.",
+                "run_id": 1,
+                "invocation_id": "train-3",
+                "metric_name": null,
+                "expected": "order_lookup",
+                "actual": "general_support"
+              },
+              {
+                "evidence_type": "response",
+                "message": "Final response did not satisfy metric 'final_response_avg_score'.",
+                "run_id": 1,
+                "invocation_id": "train-3",
+                "metric_name": "final_response_avg_score",
+                "expected": "{\"route\":\"order_lookup\",\"message\":\"Checking order B-204 for customer 17.\"}",
+                "actual": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}"
+              }
+            ]
+          }
+        },
+        {
+          "eval_id": "train_tool_choice",
+          "status": "failed",
+          "average_score": {
+            "status": "available",
+            "value": 0.0,
+            "unit": null,
+            "reason": null
+          },
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "status": "failed",
+              "score": {
+                "status": "available",
+                "value": 0.0,
+                "unit": null,
+                "reason": null
+              },
+              "reason": null
+            }
+          ],
+          "runs": [
+            {
+              "run_id": 1,
+              "status": "failed",
+              "error_message": null,
+              "metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "status": "failed",
+                  "score": {
+                    "status": "available",
+                    "value": 0.0,
+                    "unit": null,
+                    "reason": null
+                  },
+                  "reason": null
+                }
+              ],
+              "invocations": [
+                {
+                  "invocation_id": "train-2",
+                  "user_text": "Check the status of order A100.",
+                  "expected_response": "{\"route\":\"order_lookup\",\"message\":\"Checking order A100.\"}",
+                  "actual_response": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}",
+                  "expected_tools": [],
+                  "actual_tools": [],
+                  "metrics": [
+                    {
+                      "metric_name": "final_response_avg_score",
+                      "threshold": 1.0,
+                      "status": "failed",
+                      "score": {
+                        "status": "available",
+                        "value": 0.0,
+                        "unit": null,
+                        "reason": null
+                      },
+                      "reason": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "attribution": {
+            "primary_category": "routing_error",
+            "secondary_categories": [
+              "final_response_mismatch"
+            ],
+            "summary": "Expected route 'order_lookup', got 'general_support'.",
+            "evidence": [
+              {
+                "evidence_type": "response",
+                "message": "Expected route 'order_lookup', got 'general_support'.",
+                "run_id": 1,
+                "invocation_id": "train-2",
+                "metric_name": null,
+                "expected": "order_lookup",
+                "actual": "general_support"
+              },
+              {
+                "evidence_type": "response",
+                "message": "Final response did not satisfy metric 'final_response_avg_score'.",
+                "run_id": 1,
+                "invocation_id": "train-2",
+                "metric_name": "final_response_avg_score",
+                "expected": "{\"route\":\"order_lookup\",\"message\":\"Checking order A100.\"}",
+                "actual": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}"
+              }
+            ]
+          }
+        }
+      ],
+      "passed_case_count": 1,
+      "failed_case_count": 2,
+      "not_evaluated_case_count": 0,
+      "average_score": {
+        "status": "available",
+        "value": 0.3333333333333333,
+        "unit": null,
+        "reason": null
+      }
+    },
+    "baseline_validation": {
+      "phase": "baseline",
+      "split": "validation",
+      "eval_set_id": "eval_optimize_loop_validation",
+      "cases": [
+        {
+          "eval_id": "val_knowledge_recall",
+          "status": "failed",
+          "average_score": {
+            "status": "available",
+            "value": 0.0,
+            "unit": null,
+            "reason": null
+          },
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "status": "failed",
+              "score": {
+                "status": "available",
+                "value": 0.0,
+                "unit": null,
+                "reason": null
+              },
+              "reason": null
+            }
+          ],
+          "runs": [
+            {
+              "run_id": 1,
+              "status": "failed",
+              "error_message": null,
+              "metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "status": "failed",
+                  "score": {
+                    "status": "available",
+                    "value": 0.0,
+                    "unit": null,
+                    "reason": null
+                  },
+                  "reason": null
+                }
+              ],
+              "invocations": [
+                {
+                  "invocation_id": "val-2",
+                  "user_text": "How long does standard shipping usually take?",
+                  "expected_response": "{\"route\":\"shipping_policy\",\"message\":\"Standard shipping normally takes 3-5 business days.\"}",
+                  "actual_response": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}",
+                  "expected_tools": [],
+                  "actual_tools": [],
+                  "metrics": [
+                    {
+                      "metric_name": "final_response_avg_score",
+                      "threshold": 1.0,
+                      "status": "failed",
+                      "score": {
+                        "status": "available",
+                        "value": 0.0,
+                        "unit": null,
+                        "reason": null
+                      },
+                      "reason": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "attribution": {
+            "primary_category": "routing_error",
+            "secondary_categories": [
+              "final_response_mismatch"
+            ],
+            "summary": "Expected route 'shipping_policy', got 'general_support'.",
+            "evidence": [
+              {
+                "evidence_type": "response",
+                "message": "Expected route 'shipping_policy', got 'general_support'.",
+                "run_id": 1,
+                "invocation_id": "val-2",
+                "metric_name": null,
+                "expected": "shipping_policy",
+                "actual": "general_support"
+              },
+              {
+                "evidence_type": "response",
+                "message": "Final response did not satisfy metric 'final_response_avg_score'.",
+                "run_id": 1,
+                "invocation_id": "val-2",
+                "metric_name": "final_response_avg_score",
+                "expected": "{\"route\":\"shipping_policy\",\"message\":\"Standard shipping normally takes 3-5 business days.\"}",
+                "actual": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}"
+              }
+            ]
+          }
+        },
+        {
+          "eval_id": "val_paraphrase",
+          "status": "failed",
+          "average_score": {
+            "status": "available",
+            "value": 0.0,
+            "unit": null,
+            "reason": null
+          },
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "status": "failed",
+              "score": {
+                "status": "available",
+                "value": 0.0,
+                "unit": null,
+                "reason": null
+              },
+              "reason": null
+            }
+          ],
+          "runs": [
+            {
+              "run_id": 1,
+              "status": "failed",
+              "error_message": null,
+              "metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "status": "failed",
+                  "score": {
+                    "status": "available",
+                    "value": 0.0,
+                    "unit": null,
+                    "reason": null
+                  },
+                  "reason": null
+                }
+              ],
+              "invocations": [
+                {
+                  "invocation_id": "val-1",
+                  "user_text": "Where do I change the address tied to my account?",
+                  "expected_response": "{\"route\":\"account\",\"message\":\"Open profile settings to update your address.\"}",
+                  "actual_response": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}",
+                  "expected_tools": [],
+                  "actual_tools": [],
+                  "metrics": [
+                    {
+                      "metric_name": "final_response_avg_score",
+                      "threshold": 1.0,
+                      "status": "failed",
+                      "score": {
+                        "status": "available",
+                        "value": 0.0,
+                        "unit": null,
+                        "reason": null
+                      },
+                      "reason": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "attribution": {
+            "primary_category": "routing_error",
+            "secondary_categories": [
+              "final_response_mismatch"
+            ],
+            "summary": "Expected route 'account', got 'general_support'.",
+            "evidence": [
+              {
+                "evidence_type": "response",
+                "message": "Expected route 'account', got 'general_support'.",
+                "run_id": 1,
+                "invocation_id": "val-1",
+                "metric_name": null,
+                "expected": "account",
+                "actual": "general_support"
+              },
+              {
+                "evidence_type": "response",
+                "message": "Final response did not satisfy metric 'final_response_avg_score'.",
+                "run_id": 1,
+                "invocation_id": "val-1",
+                "metric_name": "final_response_avg_score",
+                "expected": "{\"route\":\"account\",\"message\":\"Open profile settings to update your address.\"}",
+                "actual": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}"
+              }
+            ]
+          }
+        },
+        {
+          "eval_id": "val_refund_route",
+          "status": "passed",
+          "average_score": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "status": "passed",
+              "score": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "reason": null
+            }
+          ],
+          "runs": [
+            {
+              "run_id": 1,
+              "status": "passed",
+              "error_message": null,
+              "metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "status": "passed",
+                  "score": {
+                    "status": "available",
+                    "value": 1.0,
+                    "unit": null,
+                    "reason": null
+                  },
+                  "reason": null
+                }
+              ],
+              "invocations": [
+                {
+                  "invocation_id": "val-3",
+                  "user_text": "I was charged twice and need the duplicate payment refunded.",
+                  "expected_response": "{\"route\":\"billing_refund\",\"message\":\"I will route this duplicate charge for refund review.\"}",
+                  "actual_response": "{\"route\":\"billing_refund\",\"message\":\"I will route this duplicate charge for refund review.\"}",
+                  "expected_tools": [],
+                  "actual_tools": [],
+                  "metrics": [
+                    {
+                      "metric_name": "final_response_avg_score",
+                      "threshold": 1.0,
+                      "status": "passed",
+                      "score": {
+                        "status": "available",
+                        "value": 1.0,
+                        "unit": null,
+                        "reason": null
+                      },
+                      "reason": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "attribution": null
+        }
+      ],
+      "passed_case_count": 1,
+      "failed_case_count": 2,
+      "not_evaluated_case_count": 0,
+      "average_score": {
+        "status": "available",
+        "value": 0.3333333333333333,
+        "unit": null,
+        "reason": null
+      }
+    },
+    "candidate_train": {
+      "phase": "candidate",
+      "split": "train",
+      "eval_set_id": "eval_optimize_loop_train",
+      "cases": [
+        {
+          "eval_id": "train_output_format",
+          "status": "passed",
+          "average_score": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "status": "passed",
+              "score": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "reason": null
+            }
+          ],
+          "runs": [
+            {
+              "run_id": 1,
+              "status": "passed",
+              "error_message": null,
+              "metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "status": "passed",
+                  "score": {
+                    "status": "available",
+                    "value": 1.0,
+                    "unit": null,
+                    "reason": null
+                  },
+                  "reason": null
+                }
+              ],
+              "invocations": [
+                {
+                  "invocation_id": "train-1",
+                  "user_text": "How can I update my email address?",
+                  "expected_response": "{\"route\":\"account\",\"message\":\"Open profile settings to update your email.\"}",
+                  "actual_response": "{\"route\":\"account\",\"message\":\"Open profile settings to update your email.\"}",
+                  "expected_tools": [],
+                  "actual_tools": [],
+                  "metrics": [
+                    {
+                      "metric_name": "final_response_avg_score",
+                      "threshold": 1.0,
+                      "status": "passed",
+                      "score": {
+                        "status": "available",
+                        "value": 1.0,
+                        "unit": null,
+                        "reason": null
+                      },
+                      "reason": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "attribution": null
+        },
+        {
+          "eval_id": "train_tool_arguments",
+          "status": "passed",
+          "average_score": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "status": "passed",
+              "score": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "reason": null
+            }
+          ],
+          "runs": [
+            {
+              "run_id": 1,
+              "status": "passed",
+              "error_message": null,
+              "metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "status": "passed",
+                  "score": {
+                    "status": "available",
+                    "value": 1.0,
+                    "unit": null,
+                    "reason": null
+                  },
+                  "reason": null
+                }
+              ],
+              "invocations": [
+                {
+                  "invocation_id": "train-3",
+                  "user_text": "Look up order B-204 for customer 17.",
+                  "expected_response": "{\"route\":\"order_lookup\",\"message\":\"Checking order B-204 for customer 17.\"}",
+                  "actual_response": "{\"route\":\"order_lookup\",\"message\":\"Checking order B-204 for customer 17.\"}",
+                  "expected_tools": [],
+                  "actual_tools": [],
+                  "metrics": [
+                    {
+                      "metric_name": "final_response_avg_score",
+                      "threshold": 1.0,
+                      "status": "passed",
+                      "score": {
+                        "status": "available",
+                        "value": 1.0,
+                        "unit": null,
+                        "reason": null
+                      },
+                      "reason": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "attribution": null
+        },
+        {
+          "eval_id": "train_tool_choice",
+          "status": "passed",
+          "average_score": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "status": "passed",
+              "score": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "reason": null
+            }
+          ],
+          "runs": [
+            {
+              "run_id": 1,
+              "status": "passed",
+              "error_message": null,
+              "metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "status": "passed",
+                  "score": {
+                    "status": "available",
+                    "value": 1.0,
+                    "unit": null,
+                    "reason": null
+                  },
+                  "reason": null
+                }
+              ],
+              "invocations": [
+                {
+                  "invocation_id": "train-2",
+                  "user_text": "Check the status of order A100.",
+                  "expected_response": "{\"route\":\"order_lookup\",\"message\":\"Checking order A100.\"}",
+                  "actual_response": "{\"route\":\"order_lookup\",\"message\":\"Checking order A100.\"}",
+                  "expected_tools": [],
+                  "actual_tools": [],
+                  "metrics": [
+                    {
+                      "metric_name": "final_response_avg_score",
+                      "threshold": 1.0,
+                      "status": "passed",
+                      "score": {
+                        "status": "available",
+                        "value": 1.0,
+                        "unit": null,
+                        "reason": null
+                      },
+                      "reason": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "attribution": null
+        }
+      ],
+      "passed_case_count": 3,
+      "failed_case_count": 0,
+      "not_evaluated_case_count": 0,
+      "average_score": {
+        "status": "available",
+        "value": 1.0,
+        "unit": null,
+        "reason": null
+      }
+    },
+    "candidate_validation": {
+      "phase": "candidate",
+      "split": "validation",
+      "eval_set_id": "eval_optimize_loop_validation",
+      "cases": [
+        {
+          "eval_id": "val_knowledge_recall",
+          "status": "passed",
+          "average_score": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "status": "passed",
+              "score": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "reason": null
+            }
+          ],
+          "runs": [
+            {
+              "run_id": 1,
+              "status": "passed",
+              "error_message": null,
+              "metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "status": "passed",
+                  "score": {
+                    "status": "available",
+                    "value": 1.0,
+                    "unit": null,
+                    "reason": null
+                  },
+                  "reason": null
+                }
+              ],
+              "invocations": [
+                {
+                  "invocation_id": "val-2",
+                  "user_text": "How long does standard shipping usually take?",
+                  "expected_response": "{\"route\":\"shipping_policy\",\"message\":\"Standard shipping normally takes 3-5 business days.\"}",
+                  "actual_response": "{\"route\":\"shipping_policy\",\"message\":\"Standard shipping normally takes 3-5 business days.\"}",
+                  "expected_tools": [],
+                  "actual_tools": [],
+                  "metrics": [
+                    {
+                      "metric_name": "final_response_avg_score",
+                      "threshold": 1.0,
+                      "status": "passed",
+                      "score": {
+                        "status": "available",
+                        "value": 1.0,
+                        "unit": null,
+                        "reason": null
+                      },
+                      "reason": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "attribution": null
+        },
+        {
+          "eval_id": "val_paraphrase",
+          "status": "passed",
+          "average_score": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "status": "passed",
+              "score": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "reason": null
+            }
+          ],
+          "runs": [
+            {
+              "run_id": 1,
+              "status": "passed",
+              "error_message": null,
+              "metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "status": "passed",
+                  "score": {
+                    "status": "available",
+                    "value": 1.0,
+                    "unit": null,
+                    "reason": null
+                  },
+                  "reason": null
+                }
+              ],
+              "invocations": [
+                {
+                  "invocation_id": "val-1",
+                  "user_text": "Where do I change the address tied to my account?",
+                  "expected_response": "{\"route\":\"account\",\"message\":\"Open profile settings to update your address.\"}",
+                  "actual_response": "{\"route\":\"account\",\"message\":\"Open profile settings to update your address.\"}",
+                  "expected_tools": [],
+                  "actual_tools": [],
+                  "metrics": [
+                    {
+                      "metric_name": "final_response_avg_score",
+                      "threshold": 1.0,
+                      "status": "passed",
+                      "score": {
+                        "status": "available",
+                        "value": 1.0,
+                        "unit": null,
+                        "reason": null
+                      },
+                      "reason": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "attribution": null
+        },
+        {
+          "eval_id": "val_refund_route",
+          "status": "passed",
+          "average_score": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "threshold": 1.0,
+              "status": "passed",
+              "score": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "reason": null
+            }
+          ],
+          "runs": [
+            {
+              "run_id": 1,
+              "status": "passed",
+              "error_message": null,
+              "metrics": [
+                {
+                  "metric_name": "final_response_avg_score",
+                  "threshold": 1.0,
+                  "status": "passed",
+                  "score": {
+                    "status": "available",
+                    "value": 1.0,
+                    "unit": null,
+                    "reason": null
+                  },
+                  "reason": null
+                }
+              ],
+              "invocations": [
+                {
+                  "invocation_id": "val-3",
+                  "user_text": "I was charged twice and need the duplicate payment refunded.",
+                  "expected_response": "{\"route\":\"billing_refund\",\"message\":\"I will route this duplicate charge for refund review.\"}",
+                  "actual_response": "{\"route\":\"billing_refund\",\"message\":\"I will route this duplicate charge for refund review.\"}",
+                  "expected_tools": [],
+                  "actual_tools": [],
+                  "metrics": [
+                    {
+                      "metric_name": "final_response_avg_score",
+                      "threshold": 1.0,
+                      "status": "passed",
+                      "score": {
+                        "status": "available",
+                        "value": 1.0,
+                        "unit": null,
+                        "reason": null
+                      },
+                      "reason": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "attribution": null
+        }
+      ],
+      "passed_case_count": 3,
+      "failed_case_count": 0,
+      "not_evaluated_case_count": 0,
+      "average_score": {
+        "status": "available",
+        "value": 1.0,
+        "unit": null,
+        "reason": null
+      }
+    },
+    "train_diff": {
+      "split": "train",
+      "eval_set_id": "eval_optimize_loop_train",
+      "cases": [
+        {
+          "eval_id": "train_output_format",
+          "split": "train",
+          "baseline_status": "passed",
+          "candidate_status": "passed",
+          "baseline_score": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "candidate_score": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "score_delta": {
+            "status": "available",
+            "value": 0.0,
+            "unit": null,
+            "reason": null
+          },
+          "change": "unchanged",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "baseline_status": "passed",
+              "candidate_status": "passed",
+              "baseline_score": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "candidate_score": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "score_delta": {
+                "status": "available",
+                "value": 0.0,
+                "unit": null,
+                "reason": null
+              },
+              "change": "unchanged"
+            }
+          ],
+          "baseline_attribution": null,
+          "candidate_attribution": null,
+          "is_hard": false,
+          "is_critical": false,
+          "severe_regression": false
+        },
+        {
+          "eval_id": "train_tool_arguments",
+          "split": "train",
+          "baseline_status": "failed",
+          "candidate_status": "passed",
+          "baseline_score": {
+            "status": "available",
+            "value": 0.0,
+            "unit": null,
+            "reason": null
+          },
+          "candidate_score": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "score_delta": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "change": "newly_passed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "baseline_status": "failed",
+              "candidate_status": "passed",
+              "baseline_score": {
+                "status": "available",
+                "value": 0.0,
+                "unit": null,
+                "reason": null
+              },
+              "candidate_score": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "score_delta": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "change": "newly_passed"
+            }
+          ],
+          "baseline_attribution": {
+            "primary_category": "routing_error",
+            "secondary_categories": [
+              "final_response_mismatch"
+            ],
+            "summary": "Expected route 'order_lookup', got 'general_support'.",
+            "evidence": [
+              {
+                "evidence_type": "response",
+                "message": "Expected route 'order_lookup', got 'general_support'.",
+                "run_id": 1,
+                "invocation_id": "train-3",
+                "metric_name": null,
+                "expected": "order_lookup",
+                "actual": "general_support"
+              },
+              {
+                "evidence_type": "response",
+                "message": "Final response did not satisfy metric 'final_response_avg_score'.",
+                "run_id": 1,
+                "invocation_id": "train-3",
+                "metric_name": "final_response_avg_score",
+                "expected": "{\"route\":\"order_lookup\",\"message\":\"Checking order B-204 for customer 17.\"}",
+                "actual": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}"
+              }
+            ]
+          },
+          "candidate_attribution": null,
+          "is_hard": false,
+          "is_critical": false,
+          "severe_regression": false
+        },
+        {
+          "eval_id": "train_tool_choice",
+          "split": "train",
+          "baseline_status": "failed",
+          "candidate_status": "passed",
+          "baseline_score": {
+            "status": "available",
+            "value": 0.0,
+            "unit": null,
+            "reason": null
+          },
+          "candidate_score": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "score_delta": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "change": "newly_passed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "baseline_status": "failed",
+              "candidate_status": "passed",
+              "baseline_score": {
+                "status": "available",
+                "value": 0.0,
+                "unit": null,
+                "reason": null
+              },
+              "candidate_score": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "score_delta": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "change": "newly_passed"
+            }
+          ],
+          "baseline_attribution": {
+            "primary_category": "routing_error",
+            "secondary_categories": [
+              "final_response_mismatch"
+            ],
+            "summary": "Expected route 'order_lookup', got 'general_support'.",
+            "evidence": [
+              {
+                "evidence_type": "response",
+                "message": "Expected route 'order_lookup', got 'general_support'.",
+                "run_id": 1,
+                "invocation_id": "train-2",
+                "metric_name": null,
+                "expected": "order_lookup",
+                "actual": "general_support"
+              },
+              {
+                "evidence_type": "response",
+                "message": "Final response did not satisfy metric 'final_response_avg_score'.",
+                "run_id": 1,
+                "invocation_id": "train-2",
+                "metric_name": "final_response_avg_score",
+                "expected": "{\"route\":\"order_lookup\",\"message\":\"Checking order A100.\"}",
+                "actual": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}"
+              }
+            ]
+          },
+          "candidate_attribution": null,
+          "is_hard": false,
+          "is_critical": false,
+          "severe_regression": false
+        }
+      ],
+      "baseline_average_score": {
+        "status": "available",
+        "value": 0.3333333333333333,
+        "unit": null,
+        "reason": null
+      },
+      "candidate_average_score": {
+        "status": "available",
+        "value": 1.0,
+        "unit": null,
+        "reason": null
+      },
+      "score_delta": {
+        "status": "available",
+        "value": 0.6666666666666667,
+        "unit": null,
+        "reason": null
+      },
+      "newly_passed_count": 2,
+      "newly_failed_count": 0,
+      "improved_count": 0,
+      "regressed_count": 0,
+      "unchanged_count": 1,
+      "incomparable_count": 0
+    },
+    "validation_diff": {
+      "split": "validation",
+      "eval_set_id": "eval_optimize_loop_validation",
+      "cases": [
+        {
+          "eval_id": "val_knowledge_recall",
+          "split": "validation",
+          "baseline_status": "failed",
+          "candidate_status": "passed",
+          "baseline_score": {
+            "status": "available",
+            "value": 0.0,
+            "unit": null,
+            "reason": null
+          },
+          "candidate_score": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "score_delta": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "change": "newly_passed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "baseline_status": "failed",
+              "candidate_status": "passed",
+              "baseline_score": {
+                "status": "available",
+                "value": 0.0,
+                "unit": null,
+                "reason": null
+              },
+              "candidate_score": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "score_delta": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "change": "newly_passed"
+            }
+          ],
+          "baseline_attribution": {
+            "primary_category": "routing_error",
+            "secondary_categories": [
+              "final_response_mismatch"
+            ],
+            "summary": "Expected route 'shipping_policy', got 'general_support'.",
+            "evidence": [
+              {
+                "evidence_type": "response",
+                "message": "Expected route 'shipping_policy', got 'general_support'.",
+                "run_id": 1,
+                "invocation_id": "val-2",
+                "metric_name": null,
+                "expected": "shipping_policy",
+                "actual": "general_support"
+              },
+              {
+                "evidence_type": "response",
+                "message": "Final response did not satisfy metric 'final_response_avg_score'.",
+                "run_id": 1,
+                "invocation_id": "val-2",
+                "metric_name": "final_response_avg_score",
+                "expected": "{\"route\":\"shipping_policy\",\"message\":\"Standard shipping normally takes 3-5 business days.\"}",
+                "actual": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}"
+              }
+            ]
+          },
+          "candidate_attribution": null,
+          "is_hard": true,
+          "is_critical": false,
+          "severe_regression": false
+        },
+        {
+          "eval_id": "val_paraphrase",
+          "split": "validation",
+          "baseline_status": "failed",
+          "candidate_status": "passed",
+          "baseline_score": {
+            "status": "available",
+            "value": 0.0,
+            "unit": null,
+            "reason": null
+          },
+          "candidate_score": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "score_delta": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "change": "newly_passed",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "baseline_status": "failed",
+              "candidate_status": "passed",
+              "baseline_score": {
+                "status": "available",
+                "value": 0.0,
+                "unit": null,
+                "reason": null
+              },
+              "candidate_score": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "score_delta": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "change": "newly_passed"
+            }
+          ],
+          "baseline_attribution": {
+            "primary_category": "routing_error",
+            "secondary_categories": [
+              "final_response_mismatch"
+            ],
+            "summary": "Expected route 'account', got 'general_support'.",
+            "evidence": [
+              {
+                "evidence_type": "response",
+                "message": "Expected route 'account', got 'general_support'.",
+                "run_id": 1,
+                "invocation_id": "val-1",
+                "metric_name": null,
+                "expected": "account",
+                "actual": "general_support"
+              },
+              {
+                "evidence_type": "response",
+                "message": "Final response did not satisfy metric 'final_response_avg_score'.",
+                "run_id": 1,
+                "invocation_id": "val-1",
+                "metric_name": "final_response_avg_score",
+                "expected": "{\"route\":\"account\",\"message\":\"Open profile settings to update your address.\"}",
+                "actual": "{\"route\":\"general_support\",\"message\":\"Please provide more details so I can route your request.\"}"
+              }
+            ]
+          },
+          "candidate_attribution": null,
+          "is_hard": false,
+          "is_critical": false,
+          "severe_regression": false
+        },
+        {
+          "eval_id": "val_refund_route",
+          "split": "validation",
+          "baseline_status": "passed",
+          "candidate_status": "passed",
+          "baseline_score": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "candidate_score": {
+            "status": "available",
+            "value": 1.0,
+            "unit": null,
+            "reason": null
+          },
+          "score_delta": {
+            "status": "available",
+            "value": 0.0,
+            "unit": null,
+            "reason": null
+          },
+          "change": "unchanged",
+          "metrics": [
+            {
+              "metric_name": "final_response_avg_score",
+              "baseline_status": "passed",
+              "candidate_status": "passed",
+              "baseline_score": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "candidate_score": {
+                "status": "available",
+                "value": 1.0,
+                "unit": null,
+                "reason": null
+              },
+              "score_delta": {
+                "status": "available",
+                "value": 0.0,
+                "unit": null,
+                "reason": null
+              },
+              "change": "unchanged"
+            }
+          ],
+          "baseline_attribution": null,
+          "candidate_attribution": null,
+          "is_hard": false,
+          "is_critical": true,
+          "severe_regression": false
+        }
+      ],
+      "baseline_average_score": {
+        "status": "available",
+        "value": 0.3333333333333333,
+        "unit": null,
+        "reason": null
+      },
+      "candidate_average_score": {
+        "status": "available",
+        "value": 1.0,
+        "unit": null,
+        "reason": null
+      },
+      "score_delta": {
+        "status": "available",
+        "value": 0.6666666666666667,
+        "unit": null,
+        "reason": null
+      },
+      "newly_passed_count": 2,
+      "newly_failed_count": 0,
+      "improved_count": 0,
+      "regressed_count": 0,
+      "unchanged_count": 1,
+      "incomparable_count": 0
+    },
+    "overfit_status": "not_detected",
+    "overfit_reason": "Train score delta is 0.666667; validation score delta is 0.666667."
+  },
+  "pipeline_resources": {
+    "cost_usd": {
+      "status": "unavailable",
+      "value": null,
+      "unit": "USD",
+      "reason": "Offline deterministic model does not report monetary cost."
+    },
+    "total_tokens": {
+      "status": "unavailable",
+      "value": null,
+      "unit": "tokens",
+      "reason": "Offline deterministic model does not report token usage."
+    },
+    "duration_seconds": {
+      "status": "available",
+      "value": 0.03433158100233413,
+      "unit": "seconds",
+      "reason": null
+    }
+  },
+  "optimizer_resources": {
+    "scope_note": "Offline mode uses a deterministic candidate provider.",
+    "total_rounds": {
+      "status": "not_applicable",
+      "value": null,
+      "unit": "rounds",
+      "reason": "Offline mode uses a deterministic candidate provider."
+    },
+    "reflection_lm_calls": {
+      "status": "not_applicable",
+      "value": null,
+      "unit": "calls",
+      "reason": "Offline mode uses a deterministic candidate provider."
+    },
+    "cost_usd": {
+      "status": "not_applicable",
+      "value": null,
+      "unit": "USD",
+      "reason": "Offline mode uses a deterministic candidate provider."
+    },
+    "token_usage": {
+      "status": "not_applicable",
+      "value": null,
+      "unit": "tokens",
+      "reason": "Offline mode uses a deterministic candidate provider."
+    },
+    "duration_seconds": {
+      "status": "not_applicable",
+      "value": null,
+      "unit": "seconds",
+      "reason": "Offline mode uses a deterministic candidate provider."
+    }
+  },
+  "gate_decision": {
+    "decision": "accept",
+    "rule_results": [
+      {
+        "rule_id": "evaluation_completeness",
+        "outcome": "pass",
+        "message": "All four evaluations contain complete case and metric results.",
+        "case_ids": [],
+        "metric_names": [],
+        "observed": {},
+        "threshold": null
+      },
+      {
+        "rule_id": "minimum_validation_score_delta",
+        "outcome": "pass",
+        "message": "Validation score improvement meets the configured minimum.",
+        "case_ids": [],
+        "metric_names": [],
+        "observed": {
+          "validation_score_delta": {
+            "status": "available",
+            "value": 0.6666666666666667,
+            "unit": null,
+            "reason": null
+          }
+        },
+        "threshold": 0.05
+      },
+      {
+        "rule_id": "validation_pass_rate_non_decrease",
+        "outcome": "pass",
+        "message": "Validation pass rate did not decrease.",
+        "case_ids": [],
+        "metric_names": [],
+        "observed": {
+          "baseline_validation_pass_rate": {
+            "status": "available",
+            "value": 0.3333333333333333,
+            "unit": "ratio",
+            "reason": null
+          },
+          "candidate_validation_pass_rate": {
+            "status": "available",
+            "value": 1.0,
+            "unit": "ratio",
+            "reason": null
+          }
+        },
+        "threshold": null
+      },
+      {
+        "rule_id": "no_new_hard_fail",
+        "outcome": "pass",
+        "message": "No new hard failures were found.",
+        "case_ids": [],
+        "metric_names": [],
+        "observed": {},
+        "threshold": null
+      },
+      {
+        "rule_id": "no_critical_regression",
+        "outcome": "pass",
+        "message": "No critical-case regressions were found.",
+        "case_ids": [],
+        "metric_names": [],
+        "observed": {},
+        "threshold": null
+      },
+      {
+        "rule_id": "no_severe_regression",
+        "outcome": "pass",
+        "message": "No severe case regressions were found.",
+        "case_ids": [],
+        "metric_names": [],
+        "observed": {},
+        "threshold": null
+      },
+      {
+        "rule_id": "required_metrics",
+        "outcome": "pass",
+        "message": "All required candidate metrics are available and passed.",
+        "case_ids": [],
+        "metric_names": [],
+        "observed": {},
+        "threshold": null
+      },
+      {
+        "rule_id": "no_overfitting",
+        "outcome": "pass",
+        "message": "No train-improvement/validation-regression pattern was detected.",
+        "case_ids": [],
+        "metric_names": [],
+        "observed": {},
+        "threshold": null
+      },
+      {
+        "rule_id": "cost_budget",
+        "outcome": "skipped",
+        "message": "cost_usd budget is not configured.",
+        "case_ids": [],
+        "metric_names": [],
+        "observed": {},
+        "threshold": null
+      },
+      {
+        "rule_id": "token_budget",
+        "outcome": "skipped",
+        "message": "total_tokens budget is not configured.",
+        "case_ids": [],
+        "metric_names": [],
+        "observed": {},
+        "threshold": null
+      },
+      {
+        "rule_id": "duration_budget",
+        "outcome": "pass",
+        "message": "duration_seconds is within the configured budget.",
+        "case_ids": [],
+        "metric_names": [],
+        "observed": {
+          "duration_seconds": {
+            "status": "available",
+            "value": 0.03433158100233413,
+            "unit": "seconds",
+            "reason": null
+          }
+        },
+        "threshold": 180.0
+      }
+    ],
+    "rejection_reasons": [],
+    "warnings": []
+  },
+  "writeback": {
+    "status": "skipped",
+    "reason": "disabled",
+    "attempted": false,
+    "changed_fields": [],
+    "source_hashes_before": {},
+    "source_hashes_after": {},
+    "error_message": null
+  }
+}

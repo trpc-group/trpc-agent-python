@@ -20,7 +20,7 @@ from trpc_agent_sdk.evaluation import get_all_tool_calls
 from .schemas import CaseEvaluation
 from .schemas import CaseRunOutcome
 from .schemas import EvaluationStatus
-from .schemas import FakeEvaluationSnapshot
+from .schemas import EvaluationSnapshot
 from .schemas import InvocationEvidence
 from .schemas import MetricOutcome
 from .schemas import ObservableValue
@@ -202,7 +202,7 @@ def _case_evaluation(
     )
 
 
-def standardize_snapshot(snapshot: FakeEvaluationSnapshot) -> StandardizedEvaluation:
+def standardize_snapshot(snapshot: EvaluationSnapshot) -> StandardizedEvaluation:
     """Normalize one complete SDK snapshot without discarding raw evidence."""
     cases = [
         _case_evaluation(
