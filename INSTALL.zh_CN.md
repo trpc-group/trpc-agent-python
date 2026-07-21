@@ -84,6 +84,42 @@ source .venv/bin/activate        # Linux / macOS
 pip install -e .
 ```
 
+### uv 安装
+
+[uv](https://docs.astral.sh/uv/) 会基于仓库中 `pyproject.toml` 管理 Python 工具链、虚拟环境与依赖，实现快速、可复现的安装，本项目提供脚本在 macOS 上一键安装运行：
+
+```bash
+git clone https://github.com/trpc-group/trpc-agent-python.git
+cd trpc-agent-python
+
+# 在 macOS 上安装 uv（参考 https://docs.astral.sh/uv/getting-started/installation/）
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 一键初始化核心依赖
+bash build_mac_uv.sh
+
+# 按需追加可选扩展
+EXTRAS="a2a knowledge" bash build_mac_uv.sh
+```
+
+或者使用手动执行的方式：
+
+```bash
+uv venv --python-preference only-system   # 使用本地已安装的 Python
+uv sync --extra dev                       # 核心依赖 + 开发工具
+uv sync --extra a2a --extra knowledge     # 按需追加可选扩展
+uv sync                                   # 生产安装（仅核心依赖）
+
+# 无需激活环境即可运行命令验证
+uv run python -c "from trpc_agent_sdk.version import __version__; print(__version__)"
+```
+
+如需使用国内镜像加速，可传入 `--default-index`，例如：
+
+```bash
+uv sync --default-index https://mirrors.cloud.tencent.com/pypi/simple
+```
+
 ### 可选依赖对照表
 
 | 扩展名           | 用途                          | 安装命令                                |
