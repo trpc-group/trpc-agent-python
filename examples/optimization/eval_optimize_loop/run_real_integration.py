@@ -25,6 +25,7 @@ if __package__ in (None, ""):
     from examples.optimization.eval_optimize_loop.real_agent import BusinessModelConfig
     from examples.optimization.eval_optimize_loop.real_agent import RealBusinessAgent
     from examples.optimization.eval_optimize_loop.real_agent import load_business_model_config
+    from examples.optimization.eval_optimize_loop.report_builder import redact_error_message
     from examples.optimization.eval_optimize_loop.schemas import OptimizerRuntimeParameters
 else:
     from .config import load_pipeline_config
@@ -33,6 +34,7 @@ else:
     from .real_agent import BusinessModelConfig
     from .real_agent import RealBusinessAgent
     from .real_agent import load_business_model_config
+    from .report_builder import redact_error_message
     from .schemas import OptimizerRuntimeParameters
 
 
@@ -116,7 +118,10 @@ def main() -> int:
     try:
         prepared, result = asyncio.run(_run(args, business_config, parameters))
     except Exception as exc:
-        print(f"Real integration failed: {exc}", file=sys.stderr)
+        print(
+            f"Real integration failed: {redact_error_message(exc)}",
+            file=sys.stderr,
+        )
         return 1
 
     print(f"Completed real-model pipeline: {prepared.workspace.run_dir}")
