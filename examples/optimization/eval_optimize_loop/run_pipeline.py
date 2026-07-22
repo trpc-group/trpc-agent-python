@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Eval-Optimize Loop CLI entry point.
+"""Eval-Optimize Loop CLI entry point r11.
 
 Usage:
     python run_pipeline.py                    # fake mode (fast smoke test)
