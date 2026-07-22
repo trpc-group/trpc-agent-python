@@ -43,7 +43,15 @@ class RedisMemoryService(BaseMemoryService):
     ):
         super().__init__(memory_service_config=memory_service_config, enabled=enabled)
         # Redis needs default TTL configuration
-        self._redis_storage = RedisStorage(is_async=is_async, redis_url=db_url, **kwargs)
+        self._redis_storage = self._create_storage(db_url=db_url, is_async=is_async, **kwargs)
+
+    def _create_storage(self, db_url: str, is_async: bool, **kwargs: Any) -> RedisStorage:
+        """Create the backing storage.
+
+        Subclasses override this factory to preserve memory behavior while
+        selecting a deployment-specific Redis client.
+        """
+        return RedisStorage(is_async=is_async, redis_url=db_url, **kwargs)
 
     @override
     async def store_session(self, session: Session, agent_context: Optional[AgentContext] = None) -> None:
