@@ -229,7 +229,7 @@ class SqlMemoryService(BaseMemoryService):
         async with self._sql_storage.create_db_session() as sql_session:
             filters = [MemStorageEvent.save_key == key]
             order_func = MemStorageEvent.timestamp.desc
-            conditions = SqlCondition(filters=filters, order_func=order_func, limit=limit)
+            conditions = SqlCondition(filters=filters, order_func=order_func, limit=limit or None)
             event_key = SqlKey(key=(key, ), storage_cls=MemStorageEvent)
             storage_events: List[MemStorageEvent] = await self._sql_storage.query(sql_session, event_key, conditions)
             if not storage_events:
