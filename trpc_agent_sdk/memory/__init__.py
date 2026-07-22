@@ -16,6 +16,7 @@ from trpc_agent_sdk.abc import MemoryServiceConfig
 from ._in_memory_memory_service import EventTtl
 from ._in_memory_memory_service import InMemoryMemoryService
 from ._redis_memory_service import RedisMemoryService
+from ._redis_cluster_memory_service import RedisClusterMemoryService
 from ._sql_memory_service import MemStorageData
 from ._sql_memory_service import MemStorageEvent
 from ._sql_memory_service import SqlMemoryService
@@ -28,6 +29,7 @@ __all__ = [
     "EventTtl",
     "InMemoryMemoryService",
     "RedisMemoryService",
+    "RedisClusterMemoryService",
     "MemStorageData",
     "MemStorageEvent",
     "SqlMemoryService",
