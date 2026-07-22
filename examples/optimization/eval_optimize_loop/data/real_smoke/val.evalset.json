@@ -1,0 +1,29 @@
+{
+  "eval_set_id": "eval_optimize_loop_real_smoke_val",
+  "name": "eval_optimize_loop (real smoke) - val",
+  "description": "Smoke 验证集：2 条（可优化成功 + 退化哨兵），用于低配额下验证真实闭环。",
+  "eval_cases": [
+    {
+      "eval_id": "val_cn",
+      "conversation": [
+        {
+          "invocation_id": "sv1",
+          "user_content": {"parts": [{"text": "如何用 Python 读取一个文件？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "回复应使用中文"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_real", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "val_robust",
+      "conversation": [
+        {
+          "invocation_id": "sv2",
+          "user_content": {"parts": [{"text": "你好"}], "role": "user"},
+          "final_response": {"parts": [{"text": "回复应为自然中文问候（非 JSON、非强相关天气）"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_real", "user_id": "validator", "state": {}}
+    }
+  ]
+}

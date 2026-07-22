@@ -1,0 +1,40 @@
+{
+  "evaluate": {
+    "metrics": [
+      {
+        "metric_name": "final_response_avg_score",
+        "threshold": 1.0,
+        "criterion": {
+          "final_response": {
+            "text": {
+              "match": "contains",
+              "case_insensitive": false
+            }
+          }
+        }
+      }
+    ],
+    "num_runs": 1
+  },
+  "optimize": {
+    "algorithm": {"name": "rule_based"},
+    "seed": 42,
+    "budget": {
+      "max_metric_calls": 50,
+      "timeout_seconds": 150
+    },
+    "gate": {
+      "min_val_improvement": 0.01,
+      "no_new_hard_fail": true,
+      "key_cases_no_regression": true,
+      "max_cost_usd": 0.0,
+      "key_cases": ["val_robust"]
+    },
+    "candidates": [
+      "回答天气类问题时必须调用 weather 工具并直接给出天气结论。",
+      "用 JSON 格式回复用户。",
+      "对用户提出的每一个问题都必须先调用 weather 工具。",
+      "请礼貌地回答用户。"
+    ]
+  }
+}
