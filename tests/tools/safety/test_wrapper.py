@@ -319,3 +319,29 @@ async def test_filter_scans_command_args_and_context():
     assert result.is_continue is False
     assert result.rsp["sanitized"] is True
     assert any(finding["rule_id"] == "BASH_RECURSIVE_DELETE" for finding in result.rsp["findings"])
+
+
+@pytest.mark.asyncio
+async def test_filter_attaches_report_to_dict_response_after_execute():
+    safety_filter = ToolSafetyFilter()
+    result = FilterResult(rsp={"stdout": "ok"})
+
+    await safety_filter._before(None, {"command": "echo ok", "tool_name": "shell_tool"}, FilterResult())
+    await safety_filter._after(None, {"command": "echo ok", "tool_name": "shell_tool"}, result)
+
+    assert result.rsp["stdout"] == "ok"
+    assert result.rsp["safety_report"]["decision"] == "allow"
+    assert result.rsp["safety_report"]["tool_name"] == "shell_tool"
+
+
+@pytest.mark.asyncio
+async def test_filter_attaches_report_to_json_object_string_after_execute():
+    safety_filter = ToolSafetyFilter()
+    result = FilterResult(rsp='{"stdout": "ok"}')
+
+    await safety_filter._before(None, {"command": "echo ok", "tool_name": "shell_tool"}, FilterResult())
+    await safety_filter._after(None, {"command": "echo ok", "tool_name": "shell_tool"}, result)
+
+    parsed = json.loads(result.rsp)
+    assert parsed["stdout"] == "ok"
+    assert parsed["safety_report"]["decision"] == "allow"
