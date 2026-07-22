@@ -39,7 +39,7 @@ class Auditor:
         ts_dir = audit_trail.run_id
         audit_path = self.output_dir / "audit" / ts_dir
         audit_path.mkdir(parents=True, exist_ok=True)
-        full = {"audit_trail":audit_trail.to_dict(),"baseline":{k:v.to_dict() if v else {} for k,v in baseline.items()}},"attribution":attribution.to_dict(),"optimization":optimization.to_dict()}
+        full = {"audit_trail":audit_trail.to_dict(),"baseline":{k:v.to_dict() if v is not None else {} for k,v in baseline.items()},"attribution":attribution.to_dict(),"optimization":optimization.to_dict()}
         if validation: full["validation"] = validation.to_dict()
         if gate_decision: full["gate_decision"] = gate_decision
         with open(audit_path/"optimization_report.json","w",encoding="utf-8") as f:

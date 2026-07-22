@@ -297,7 +297,12 @@ class FakeOptimizer:
         prompt_before: str,
         confidence: float,
     ) -> tuple[str, list[str]]:
-        """???????????? prompt ???
+        """Generate an optimized prompt for the fake/demo pipeline.
+
+        FAKE MODE ONLY: appends strategy text wrapped in HTML comments as a
+        structured placeholder.  In a real pipeline the optimization would be
+        performed by an LLM rewriter (AgentOptimizer) that produces a semantic
+        prompt revision, not a comment-appended annotation.
 
         Returns:
             (prompt_after, change_log)
@@ -310,7 +315,9 @@ class FakeOptimizer:
             f"target: {prompt_type} ? {hints.get('target_section', 'general')}",
         ]
 
-        # ????????? prompt ????? LLM ?????
+        # Fake-mode placeholder: appends optimization hints as an HTML comment
+        # block.  Real mode would use AgentOptimizer.optimize() for semantic
+        # prompt rewriting instead of comment-annotation.
         optimization_header = (
             f"\n\n<!-- ???? {self._iteration + 1} -->\n"
             f"## ????????????{category}?\n"

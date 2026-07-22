@@ -5,6 +5,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 from src.baseline import BaselineRunner, BaselineResult, BaselineCaseResult
 from src.attribution import AttributionRunner
 from src.optimizer import FakeOptimizer, OptimizationResult, PromptCandidate
@@ -21,37 +22,28 @@ from src.validator import (
 
 # ?? Fixtures ????????????????????????????????????????????
 
-@pytest.fixture
-def val_baseline():
+@pytest_asyncio.fixture
+async def val_baseline():
     """Fake mode val baseline?"""
-    loop = asyncio.new_event_loop()
-    try:
-        br = BaselineRunner(mode="fake")
-        result = loop.run_until_complete(
-            br.run_split(Path(__file__).parent.parent / "config" / "val.evalset.json", "val")
-        )
-        return result
-    finally:
-        loop.close()
+    br = BaselineRunner(mode="fake")
+    return await br.run_split(
+        Path(__file__).parent.parent / "config" / "val.evalset.json", "val"
+    )
 
 
-@pytest.fixture
-def full_pipeline():
+@pytest_asyncio.fixture
+async def full_pipeline():
     """?? fake pipeline: baseline ? attribution ? optimizer?"""
-    loop = asyncio.new_event_loop()
-    try:
-        base = Path(__file__).parent.parent / "config"
-        br = BaselineRunner(mode="fake")
-        results = loop.run_until_complete(br.run(
-            base / "train.evalset.json", base / "val.evalset.json",
-        ))
-        ar = AttributionRunner()
-        attr = ar.run(results["train"], results["val"])
-        opt = FakeOptimizer()
-        opt_result = opt.optimize(attr)
-        return results["val"], opt_result
-    finally:
-        loop.close()
+    base = Path(__file__).parent.parent / "config"
+    br = BaselineRunner(mode="fake")
+    results = await br.run(
+        base / "train.evalset.json", base / "val.evalset.json",
+    )
+    ar = AttributionRunner()
+    attr = ar.run(results["train"], results["val"])
+    opt = FakeOptimizer()
+    opt_result = opt.optimize(attr)
+    return results["val"], opt_result
 
 
 # ?? ?????? ????????????????????????????????????????

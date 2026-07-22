@@ -5,6 +5,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 from src.baseline import BaselineRunner, BaselineResult, BaselineCaseResult, BaselineSummary
 from src.attribution import AttributionRunner, AttributionReport
 from src.optimizer import (
@@ -20,22 +21,18 @@ from src.optimizer import (
 
 # ?? Fixtures ????????????????????????????????????????????
 
-@pytest.fixture
-def fake_attr_report():
+@pytest_asyncio.fixture
+async def fake_attr_report():
     """? fake baseline + attribution ?????????"""
-    loop = asyncio.new_event_loop()
-    try:
-        br = BaselineRunner(mode="fake")
-        base = Path(__file__).parent.parent / "config"
-        results = loop.run_until_complete(br.run(
-            base / "train.evalset.json",
-            base / "val.evalset.json",
-        ))
-        ar = AttributionRunner()
-        report = ar.run(results["train"], results["val"])
-        return report
-    finally:
-        loop.close()
+    br = BaselineRunner(mode="fake")
+    base = Path(__file__).parent.parent / "config"
+    results = await br.run(
+        base / "train.evalset.json",
+        base / "val.evalset.json",
+    )
+    ar = AttributionRunner()
+    report = ar.run(results["train"], results["val"])
+    return report
 
 
 @pytest.fixture

@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 from src.baseline import BaselineRunner, BaselineResult, BaselineCaseResult, BaselineSummary
 from src.attribution import (
     AttributionRunner,

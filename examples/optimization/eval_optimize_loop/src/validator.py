@@ -72,7 +72,14 @@ class ValidationRunner:
             import warnings
             warnings.warn(f"Unknown failure_category '{candidate.failure_category}', falling back to final_answer_mismatch")
         pred_map = REGRESSION_PREDICTIONS if simulate_regression else CANDIDATE_PREDICTIONS.get(
-            candidate.failure_category, CANDIDATE_PREDICTIONS["final_answer_mismatch"])
+            candidate.failure_category)
+        if pred_map is None:
+            import warnings
+            warnings.warn(
+                f"Unknown failure_category '{candidate.failure_category}' not in CANDIDATE_PREDICTIONS; "
+                f"falling back to final_answer_mismatch"
+            )
+            pred_map = CANDIDATE_PREDICTIONS["final_answer_mismatch"]
         deltas = []
         for bl in val_baseline.cases:
             cp_pred = pred_map.get(bl.case_id, bl.predicted)

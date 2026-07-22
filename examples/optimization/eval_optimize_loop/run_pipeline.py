@@ -90,7 +90,7 @@ async def main():
                     return True
                 return False
             except Exception:
-                return True
+                return False  # cannot verify liveness; treat as dead so stale lock can be cleaned
         # On Unix, if os.kill(pid, 0) succeeded above, process exists
         return True
 

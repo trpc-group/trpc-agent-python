@@ -336,35 +336,43 @@ class BaselineRunner:
             )
 
         # 构建 ground_truth.json 格式（临时文件）
+        # Build ground_truth items with sequential IDs for stable reverse mapping.
+        # Uses enumerate(start=1) instead of SHA256 hash so that the id->case_id
+        # mapping is trivially reversible and immune to hash collisions or
+        # filename-normalisation differences in PlateEvaluator results.
         gt_items = []
-        for case in cases_data:
+        id_to_case: dict[int, str] = {}
+        for i, case in enumerate(cases_data, start=1):
             gt_items.append({
-                "id": int(hashlib.sha256(case["case_id"].encode()).hexdigest()[:8], 16) % 10000 + 1,
+                "id": i,
                 "image": f"eval/dataset/test_plates/{case['image']}",
                 "plate_number": case["ground_truth"],
                 "conditions": case.get("conditions", {}),
             })
+            id_to_case[i] = case["case_id"]
 
         session_service = create_session_service(use_redis=False)
         memory_service = create_memory_service(use_redis=False)
 
         evaluator = PlateEvaluator(
-            gt_path=None,  # 不走文件，手动注入
+            gt_path=None,  # ?????????
             session_service=session_service,
             memory_service=memory_service,
         )
-        # 直接注入 ground_truth 数据
+        # ???? ground_truth ??
         evaluator.ground_truth = gt_items
 
         report = await evaluator.run(verbose=False)
 
-        # 转换为 BaselineCaseResult 列表
-        # fix: use path-based mapping instead of image_id positional lookup
-        image_to_case = {c.get("image", ""): c["case_id"] for c in cases_data}
+        # Convert to BaselineCaseResult list using the stable id->case_id mapping.
+        # Falls back to filename heuristics only when image_id is missing from the map
+        # (should not happen with sequential IDs; kept as defence-in-depth).
         case_results: list[BaselineCaseResult] = []
         for r in report.details:
-            image_key = Path(r.image_path).name if r.image_path else ""
-            case_id = image_to_case.get(image_key, image_to_case.get(r.image_path, f"case_{getattr(r, 'image_id', '?')}" ))
+            case_id = id_to_case.get(r.image_id)
+            if case_id is None:
+                image_key = Path(r.image_path).name if r.image_path else ""
+                case_id = f"case_{r.image_id}"
             case_result = BaselineCaseResult(
                 case_id=case_id,
                 image=r.image_path,
@@ -379,11 +387,12 @@ class BaselineRunner:
                 judge_recognition=r.judge_recognition,
                 judge_blacklist=r.judge_blacklist,
                 judge_response=r.judge_response,
-                cost=0.0,  # real 模式后续通过 token_tracker 采集
+                cost=0.0,  # real ?????? token_tracker ??
                 latency_ms=r.pipeline_time_ms,
                 conditions=r.conditions,
             )
             case_results.append(case_result)
+
 
         summary = self._build_summary(case_results)
         return BaselineResult(
