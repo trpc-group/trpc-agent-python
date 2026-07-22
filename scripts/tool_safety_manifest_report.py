@@ -62,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
             write_audit_event(args.audit_log, report)
 
         payload = report.to_dict()
-        payload["sample"] = str(path.relative_to(REPO_ROOT))
+        payload["sample"] = path.relative_to(REPO_ROOT).as_posix()
         payload["expected_decision"] = sample["expected_decision"]
         payload["required_rule_ids"] = list(sample.get("required_rule_ids", []))
         payload["categories"] = list(sample.get("categories", []))

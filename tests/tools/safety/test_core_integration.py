@@ -48,7 +48,7 @@ async def test_bash_tool_allowed_review_command_reports_not_blocked(tmp_path):
 
     result = await tool._run_async_impl(
         tool_context=Mock(spec=InvocationContext),
-        args={"command": "echo test | cat"},
+        args={"command": "echo test > safety_review.txt"},
     )
 
     assert result["success"] is True

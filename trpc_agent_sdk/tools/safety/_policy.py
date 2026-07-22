@@ -130,14 +130,20 @@ class ToolSafetyPolicy:
             return False
 
         expanded = str(Path(normalized).expanduser())
-        candidates = {normalized, expanded}
+        candidates = {_normalize_path_pattern(normalized), _normalize_path_pattern(expanded)}
         for denied in self.denied_paths:
-            denied_expanded = str(Path(denied).expanduser())
+            denied_normalized = _normalize_path_pattern(denied)
+            denied_expanded = _normalize_path_pattern(str(Path(denied).expanduser()))
             for candidate in candidates:
-                if fnmatch.fnmatch(candidate, denied) or fnmatch.fnmatch(candidate, denied_expanded):
+                if fnmatch.fnmatch(candidate, denied_normalized) or fnmatch.fnmatch(candidate, denied_expanded):
                     return True
                 if candidate == denied_expanded or candidate.startswith(f"{denied_expanded}/"):
                     return True
-                if denied in {".env", "*/.env"} and (candidate == ".env" or candidate.endswith("/.env")):
+                if denied_normalized in {".env", "*/.env"} and (candidate == ".env" or candidate.endswith("/.env")):
                     return True
         return False
+
+
+def _normalize_path_pattern(path_text: str) -> str:
+    """Normalize user/script paths for cross-platform policy matching."""
+    return path_text.replace("\\", "/").rstrip("/")

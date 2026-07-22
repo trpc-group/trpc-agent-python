@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import json
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -14,11 +16,13 @@ from trpc_agent_sdk.abc import FilterResult
 from trpc_agent_sdk.abc import FilterType
 from trpc_agent_sdk.context import AgentContext
 from trpc_agent_sdk.filter import BaseFilter
+from trpc_agent_sdk.tools import get_tool_var
 
 from ._audit import write_audit_event
 from ._scanner import ToolScriptSafetyScanner
 from ._telemetry import record_safety_attributes
 from ._types import Decision
+from ._types import SafetyReport
 from ._types import ToolScriptScanRequest
 
 _SCRIPT_ARG_KEYS = ("script", "code", "command", "cmd", "python_code", "bash_code")
@@ -47,14 +51,19 @@ class ToolSafetyFilter(BaseFilter):
         self.scanner = scanner or ToolScriptSafetyScanner()
         self.audit_log_path = audit_log_path
         self.block_on_review = block_on_review
+        self._current_report: ContextVar[SafetyReport | None] = ContextVar(
+            f"{self._name}_{id(self)}_report",
+            default=None,
+        )
 
     async def _before(self, ctx: AgentContext, req: Any, rsp: FilterResult):
+        self._current_report.set(None)
         if not isinstance(req, dict):
             return None
         script = _extract_script(req)
         if not script:
             return None
-        tool_name = str(req.get("tool_name", "unknown_tool"))
+        tool_name = _extract_tool_name(req)
         request = ToolScriptScanRequest(
             script=script,
             language=_extract_language(req, tool_name),
@@ -76,7 +85,16 @@ class ToolSafetyFilter(BaseFilter):
             rsp.error = PermissionError(report.summary)
             rsp.is_continue = False
         else:
+            self._current_report.set(report)
             rsp.rsp = report.to_dict()
+        return None
+
+    async def _after(self, ctx: AgentContext, req: Any, rsp: FilterResult):
+        report = self._current_report.get()
+        self._current_report.set(None)
+        if report is None or rsp.error:
+            return None
+        rsp.rsp = _attach_safety_report(rsp.rsp, report)
         return None
 
 
@@ -99,6 +117,17 @@ def _extract_script(req: dict[str, Any]) -> str:
         if parts:
             return "\n".join(parts)
     return ""
+
+
+def _extract_tool_name(req: dict[str, Any]) -> str:
+    explicit_name = req.get("tool_name")
+    if isinstance(explicit_name, str) and explicit_name.strip():
+        return explicit_name
+    current_tool = get_tool_var()
+    current_name = getattr(current_tool, "name", "")
+    if isinstance(current_name, str) and current_name.strip():
+        return current_name
+    return "unknown_tool"
 
 
 def _extract_language(req: dict[str, Any], tool_name: str) -> str:
@@ -124,3 +153,23 @@ def _extract_command_args(req: dict[str, Any]) -> list[str]:
         if isinstance(value, list):
             return [str(item) for item in value]
     return []
+
+
+def _attach_safety_report(response: Any, report: SafetyReport) -> Any:
+    report_dict = report.to_dict()
+    if isinstance(response, dict):
+        if "safety_report" not in response:
+            response = dict(response)
+            response["safety_report"] = report_dict
+        return response
+
+    if isinstance(response, str):
+        try:
+            parsed = json.loads(response)
+        except json.JSONDecodeError:
+            return response
+        if isinstance(parsed, dict) and "safety_report" not in parsed:
+            parsed["safety_report"] = report_dict
+            return json.dumps(parsed, ensure_ascii=False)
+
+    return response
