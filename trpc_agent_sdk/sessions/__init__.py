@@ -20,6 +20,7 @@ from ._in_memory_session_service import InMemorySessionService
 from ._in_memory_session_service import SessionWithTTL
 from ._in_memory_session_service import StateWithTTL
 from ._redis_session_service import RedisSessionService
+from ._redis_cluster_session_service import RedisClusterSessionService
 from ._session import Session
 from ._session_summarizer import SessionSummarizer
 from ._session_summarizer import SessionSummary
@@ -57,6 +58,7 @@ __all__ = [
     "SessionWithTTL",
     "StateWithTTL",
     "RedisSessionService",
+    "RedisClusterSessionService",
     "Session",
     "SessionSummarizer",
     "SessionSummary",
