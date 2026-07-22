@@ -393,7 +393,7 @@ def test_real_cli_requires_explicit_confirmation_before_creating_workspace(tmp_p
     completed = subprocess.run(
         [
             sys.executable,
-            str(root / "run_real_integration.py"),
+            str(_EXAMPLE / "run_real_integration.py"),
             "--config",
             str(root / "pipeline.real.json"),
             "--optimizer-model-name",
@@ -424,7 +424,7 @@ def test_real_cli_requires_business_model_environment_before_creating_workspace(
     completed = subprocess.run(
         [
             sys.executable,
-            str(root / "run_real_integration.py"),
+            str(_EXAMPLE / "run_real_integration.py"),
             "--run-real",
             "--config",
             str(root / "pipeline.real.json"),
