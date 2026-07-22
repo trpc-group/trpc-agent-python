@@ -1,0 +1,18 @@
+{
+  "eval_set_id": "eval_optimize_loop_real_smoke_train",
+  "name": "eval_optimize_loop (real smoke) - train",
+  "description": "Smoke 训练集：仅 1 条（可优化成功），用于低配额下验证真实闭环。",
+  "eval_cases": [
+    {
+      "eval_id": "train_cn",
+      "conversation": [
+        {
+          "invocation_id": "st1",
+          "user_content": {"parts": [{"text": "北京有哪些值得一去的博物馆？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "回复应使用中文并以问候语开头"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_real", "user_id": "trainer", "state": {}}
+    }
+  ]
+}
