@@ -35,7 +35,7 @@ def _read_critical_case_ids(val_path: Path) -> list[str]:
             data = json.load(f)
         return [c["case_id"] for c in data.get("cases", []) if c.get("critical", False)]
     except Exception as e:
-        print(f"Warning: cannot read critical case ids from {val_path}: {e}", file=_sys.stderr)
+        print(f"Warning: cannot read critical case ids from {val_path}: {e}", file=sys.stderr)
         return []  # empty: skip critical-case gate rather than guess wrong id
 
 
@@ -122,7 +122,7 @@ async def main():
                 lf.flush()
                 _os.fsync(lf.fileno())
             acquired = True
-        except (FileNotFoundError, ValueError):
+        except (FileNotFoundError, ValueError, FileExistsError):
             pass
 
     if not acquired:
@@ -174,6 +174,12 @@ async def main():
         # are simulated placeholder values. Gate decisions in fake mode are for
         # pipeline demo purposes only and do not reflect real optimization outcomes.
         # Real mode would re-evaluate with the optimized agent on the training set.
+        #
+        # Overfit detection caveat: candidate_train_scores uses a flat +0.05 delta
+        # which makes train_improved always true in fake mode.  This means
+        # overfit_detection degenerates to "reject iff val regresses" and is NOT
+        # a genuine overfit signal.  In real mode, train scores come from actual
+        # re-evaluation with the optimized prompt.
         # overfit detection: simulate candidate train scores with +0.05 delta
         candidate_train_scores = {
             cid: min(1.0, score + 0.05) for cid, score in train_bl.score_map.items()

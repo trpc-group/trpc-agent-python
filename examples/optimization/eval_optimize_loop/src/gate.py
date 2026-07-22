@@ -196,8 +196,15 @@ class AcceptanceGate:
     ) -> GateCheck:
         max_ratio = self.rules["cost_within_budget"].get("max_cost_ratio", 1.2)
         if baseline_cost <= 0:
-            passed = True
-            ratio = 1.0
+            # Fake mode: costs are simulated placeholders (see run_pipeline.py L173-176).
+            # Real mode: cost may be 0 if token_tracker is not connected.
+            # In either case, cost data is absent; skip this gate rather than auto-pass.
+            return GateCheck(
+                name="cost_within_budget",
+                passed=True,
+                description=f"cost budget skipped (baseline_cost={baseline_cost:.4f} <= 0, tracking inactive)",
+                detail="cost data unavailable; gate skipped",
+            )
         else:
             ratio = candidate_cost / baseline_cost
             passed = ratio <= max_ratio
