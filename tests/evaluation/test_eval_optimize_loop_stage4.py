@@ -545,7 +545,7 @@ def test_cli_explains_that_real_mode_requires_injected_call_agent(tmp_path: Path
     completed = subprocess.run(
         [
             sys.executable,
-            str(root / "run_pipeline.py"),
+            str(_EXAMPLE / "run_pipeline.py"),
             "--config",
             str(root / "pipeline.json"),
             "--run-id",

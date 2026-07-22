@@ -385,7 +385,7 @@ def test_fake_cli_prints_report_paths(tmp_path: Path) -> None:
     completed = subprocess.run(
         [
             sys.executable,
-            str(root / "run_pipeline.py"),
+            str(_EXAMPLE / "run_pipeline.py"),
             "--config",
             str(root / "pipeline.json"),
             "--run-id",
