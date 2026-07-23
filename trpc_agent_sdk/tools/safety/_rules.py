@@ -36,9 +36,7 @@ DYNAMIC_SECRET_PATH_RE = re.compile(
     r"(\.env|\.ssh|id_rsa|credentials?|token|secret|password|private[_-]?key)",
     re.IGNORECASE,
 )
-SENSITIVE_ENV_REFERENCE_RE = re.compile(
-    r"\$(?:\{)?([A-Za-z_][A-Za-z0-9_]*(?:\})?)",
-)
+SENSITIVE_ENV_REFERENCE_RE = re.compile(r"\$(?:\{)?([A-Za-z_][A-Za-z0-9_]*(?:\})?)", )
 
 PATH_LITERAL_RE = re.compile(
     r"(?<![A-Za-z0-9_])(?:"
@@ -554,8 +552,7 @@ def scan_text_patterns(script: str, policy: ToolSafetyPolicy, language: str) -> 
                     "Private key material appears in script content.",
                     line=line_no,
                 ))
-        findings.extend(
-            _scan_denied_path_candidates(PATH_LITERAL_RE.findall(line), policy, line, language, line_no))
+        findings.extend(_scan_denied_path_candidates(PATH_LITERAL_RE.findall(line), policy, line, language, line_no))
         for url in _extract_urls(line):
             finding = _network_finding(url, policy, line, line_no)
             if finding:
