@@ -45,6 +45,7 @@ class _FakeClusterClient:
 
 
 class TestRedisClusterStorage:
+
     async def test_query_scans_all_cluster_keys_and_deduplicates(self):
         storage = RedisClusterStorage(redis_url="redis://seed:6379/0", is_async=True)
         client = _FakeClusterClient()
@@ -80,8 +81,7 @@ class TestRedisClusterStorage:
             client_cls.from_url.return_value = client
             await storage.create_redis_engine()
 
-        client_cls.from_url.assert_called_once_with(
-            "redis://seed:6379/0", decode_responses=True, max_connections=20)
+        client_cls.from_url.assert_called_once_with("redis://seed:6379/0", decode_responses=True, max_connections=20)
         assert storage._redis_client is client
 
     async def test_close_releases_cluster_client(self):
