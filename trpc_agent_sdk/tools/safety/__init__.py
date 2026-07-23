@@ -9,6 +9,7 @@ from ._audit import build_audit_event
 from ._audit import write_audit_event
 from ._filter import ToolSafetyFilter
 from ._policy import ToolSafetyPolicy
+from ._scanner import SafetyRule
 from ._scanner import ToolScriptSafetyScanner
 from ._telemetry import record_safety_attributes
 from ._types import AuditEvent
@@ -28,6 +29,7 @@ __all__ = [
     "RiskFinding",
     "RiskLevel",
     "SafetyReport",
+    "SafetyRule",
     "ToolSafetyBlockedError",
     "ToolSafetyFilter",
     "ToolSafetyGuard",

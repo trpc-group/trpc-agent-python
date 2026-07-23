@@ -59,6 +59,8 @@ def test_empty_policy_file_uses_defaults(tmp_path):
 
     assert policy.is_command_allowed("ls")
     assert policy.is_path_denied("~/.ssh/id_rsa")
+    assert policy.is_path_denied("token.txt")
+    assert policy.is_path_denied("credentials.json")
     assert policy.max_output_bytes == 1024 * 1024
 
 
