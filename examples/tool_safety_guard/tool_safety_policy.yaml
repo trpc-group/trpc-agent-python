@@ -1,0 +1,47 @@
+name: example-tool-safety-policy
+version: "1"
+allowed_domains:
+  - api.github.com
+  - example.com
+allowed_commands:
+  - awk
+  - cat
+  - echo
+  - find
+  - git
+  - grep
+  - head
+  - ls
+  - python
+  - python3
+  - pwd
+  - sed
+  - tail
+  - wc
+denied_paths:
+  - ~/.ssh
+  - .env
+  - .aws/credentials
+  - .config/gcloud
+  - /etc/shadow
+  - /etc/sudoers
+  - id_rsa
+  - id_ed25519
+  - credentials
+system_write_paths:
+  - /
+  - /etc
+  - /usr
+  - /var
+  - /root
+max_timeout_seconds: 120
+max_output_bytes: 1000000
+max_sleep_seconds: 60
+max_loop_iterations: 10000
+max_literal_write_bytes: 1000000
+max_parallel_tasks: 32
+deny_risk_level: high
+review_risk_level: medium
+block_on_review: true
+redact_secrets: true
+audit_log_path: examples/tool_safety_guard/tool_safety_audit.jsonl
