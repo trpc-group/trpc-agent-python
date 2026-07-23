@@ -18,6 +18,13 @@ denied_paths:
   - ~/.config/gcloud
   - .env
   - "*/.env"
+  - .token
+  - token.txt
+  - "token.*"
+  - "*_token"
+  - "*_token.*"
+  - credentials
+  - "credentials.*"
   - "*.pem"
   - "*.key"
   - /etc/passwd

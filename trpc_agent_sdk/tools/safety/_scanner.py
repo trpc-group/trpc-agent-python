@@ -10,6 +10,8 @@ from __future__ import annotations
 import time
 import shlex
 import uuid
+from collections.abc import Callable
+from collections.abc import Iterable
 from datetime import datetime
 from datetime import timezone
 from pathlib import Path
@@ -28,12 +30,24 @@ from ._types import ToolScriptScanRequest
 from ._types import aggregate_decision
 from ._types import max_risk_level
 
+SafetyRule = Callable[[ToolScriptScanRequest, ToolSafetyPolicy], Iterable[RiskFinding]]
+
 
 class ToolScriptSafetyScanner:
     """Static pre-execution scanner for Python scripts and Bash commands."""
 
-    def __init__(self, policy: ToolSafetyPolicy | None = None):
+    def __init__(
+        self,
+        policy: ToolSafetyPolicy | None = None,
+        *,
+        custom_rules: list[SafetyRule] | None = None,
+    ):
         self.policy = policy or ToolSafetyPolicy.default()
+        self.custom_rules = list(custom_rules or [])
+
+    def register_rule(self, rule: SafetyRule) -> None:
+        """Register an additional custom rule executed after built-in rules."""
+        self.custom_rules.append(rule)
 
     def scan(self, request: ToolScriptScanRequest) -> SafetyReport:
         started = time.perf_counter()
@@ -50,6 +64,7 @@ class ToolScriptSafetyScanner:
             findings = scan_bash_script(request.script, self.policy)
             findings.extend(scan_python_script(request.script, self.policy))
         findings.extend(self._scan_execution_context(request))
+        findings.extend(self._scan_custom_rules(request))
 
         decision = aggregate_decision(findings)
         risk_level = max_risk_level(findings)
@@ -212,6 +227,24 @@ class ToolScriptSafetyScanner:
                         "max_output_bytes": self.policy.max_output_bytes
                     },
                 ))
+        return findings
+
+    def _scan_custom_rules(self, request: ToolScriptScanRequest) -> list[RiskFinding]:
+        findings: list[RiskFinding] = []
+        for rule in self.custom_rules:
+            try:
+                findings.extend(list(rule(request, self.policy)))
+            except Exception as ex:  # pylint: disable=broad-except
+                findings.append(
+                    _finding(
+                        "CUSTOM_RULE_ERROR",
+                        "unknown",
+                        RiskLevel.MEDIUM,
+                        Decision.NEEDS_HUMAN_REVIEW,
+                        str(ex),
+                        "Fix the custom safety rule or remove it from the scanner registration list.",
+                        "A custom safety rule raised an exception while scanning.",
+                    ))
         return findings
 
     @staticmethod

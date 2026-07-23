@@ -27,8 +27,9 @@ ToolScriptSafetyScanner.scan()
         +--> 语言归一化: python / bash / unknown
         +--> 脱敏检测: script 和 env 中的 key/token/password/private_key
         +--> Python AST 规则: open、Path、subprocess、os.system、requests、socket、eval、while True
-        +--> Bash 规则: rm、curl、wget、管道、重定向、命令替换、依赖安装、sudo、sleep、fork bomb
+        +--> Bash 规则: rm、curl、wget、token 环境变量输出、敏感路径、管道、重定向、命令替换、依赖安装、sudo、sleep、fork bomb
         +--> 执行上下文规则: cwd、timeout、max_output_bytes、command_args
+        +--> 用户注册规则: ToolScriptSafetyScanner.custom_rules / register_rule()
         |
         v
 命中 RiskFinding 列表

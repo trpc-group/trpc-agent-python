@@ -36,6 +36,18 @@ DYNAMIC_SECRET_PATH_RE = re.compile(
     r"(\.env|\.ssh|id_rsa|credentials?|token|secret|password|private[_-]?key)",
     re.IGNORECASE,
 )
+SENSITIVE_ENV_REFERENCE_RE = re.compile(
+    r"\$(?:\{)?([A-Za-z_][A-Za-z0-9_]*(?:\})?)",
+)
+
+PATH_LITERAL_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?:"
+    r"~?/[^\s'\";|]+|"
+    r"\.env(?![A-Za-z0-9_])|"
+    r"[^\s'\";|]+(?:\.pem|\.key|\.token|token\.txt|credentials(?:\.[^\s'\";|]+)?)"
+    r")",
+    re.IGNORECASE,
+)
 
 
 def sanitize_text(text: str, limit: int = 180) -> tuple[str, bool]:
@@ -146,6 +158,76 @@ def _network_finding(url: str, policy: ToolSafetyPolicy, evidence: str, line: in
         line=line,
         metadata={"domain": host},
     )
+
+
+def _sensitive_env_names(text: str) -> list[str]:
+    names: list[str] = []
+    for match in SENSITIVE_ENV_REFERENCE_RE.finditer(text):
+        name = match.group(1).rstrip("}")
+        if SENSITIVE_NAME_RE.search(name):
+            names.append(name)
+    return names
+
+
+def _scan_denied_path_candidates(
+    candidates: list[str],
+    policy: ToolSafetyPolicy,
+    evidence: str,
+    language: str,
+    line_no: int,
+) -> list[RiskFinding]:
+    findings: list[RiskFinding] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        path_candidate = candidate.strip().strip("'\"")
+        if not path_candidate or path_candidate in seen:
+            continue
+        seen.add(path_candidate)
+        if policy.is_path_denied(path_candidate):
+            findings.append(
+                _finding(
+                    "FILE_SECRET_PATH_ACCESS",
+                    "dangerous_file_operation",
+                    RiskLevel.CRITICAL,
+                    Decision.DENY,
+                    evidence,
+                    "Remove direct credential file access or explicitly scope the tool to safe workspace files.",
+                    f"Script references denied path {path_candidate}.",
+                    line=line_no,
+                    metadata={
+                        "path": path_candidate,
+                        "language": language
+                    },
+                ))
+    return findings
+
+
+def _bash_argument_path_candidates(line: str) -> list[str]:
+    try:
+        tokens = shlex.split(line, comments=True)
+    except ValueError:
+        tokens = line.split()
+    if not tokens:
+        return []
+
+    candidates: list[str] = []
+    skip_next = False
+    redirection_tokens = {">", ">>", "<", "2>", "2>>", "&>", "&>>"}
+    for index, token in enumerate(tokens):
+        if skip_next:
+            skip_next = False
+            continue
+        if index == 0 or token in {"|", "&&", "||", ";"}:
+            continue
+        if token in redirection_tokens:
+            skip_next = True
+            continue
+        if token.startswith("-") or token.startswith("$") or "://" in token or "=" in token:
+            continue
+        cleaned = token.rstrip(").,")
+        if cleaned:
+            candidates.append(cleaned)
+    return candidates
 
 
 class PythonSafetyVisitor(ast.NodeVisitor):
@@ -472,23 +554,8 @@ def scan_text_patterns(script: str, policy: ToolSafetyPolicy, language: str) -> 
                     "Private key material appears in script content.",
                     line=line_no,
                 ))
-        for path_candidate in re.findall(r"(~?/[^\s'\";|]+|\.env|[^\s'\";|]+\.pem|[^\s'\";|]+\.key)", line):
-            if policy.is_path_denied(path_candidate):
-                findings.append(
-                    _finding(
-                        "FILE_SECRET_PATH_ACCESS",
-                        "dangerous_file_operation",
-                        RiskLevel.CRITICAL,
-                        Decision.DENY,
-                        line,
-                        "Remove direct credential file access or explicitly scope the tool to safe workspace files.",
-                        f"Script references denied path {path_candidate}.",
-                        line=line_no,
-                        metadata={
-                            "path": path_candidate,
-                            "language": language
-                        },
-                    ))
+        findings.extend(
+            _scan_denied_path_candidates(PATH_LITERAL_RE.findall(line), policy, line, language, line_no))
         for url in _extract_urls(line):
             finding = _network_finding(url, policy, line, line_no)
             if finding:
@@ -519,6 +586,21 @@ def scan_text_patterns(script: str, policy: ToolSafetyPolicy, language: str) -> 
                     "Script may write or transmit sensitive information.",
                     line=line_no,
                 ))
+        if language == "bash":
+            sensitive_envs = _sensitive_env_names(line)
+            if sensitive_envs and re.search(r"\b(echo|printf|cat|curl|wget|tee|logger)\b", line, re.IGNORECASE):
+                findings.append(
+                    _finding(
+                        "SENSITIVE_OUTPUT",
+                        "sensitive_information_leak",
+                        RiskLevel.HIGH,
+                        Decision.DENY,
+                        line,
+                        "Redact secret values before logging, writing files, or making network requests.",
+                        "Script appears to output a sensitive environment variable or credential.",
+                        line=line_no,
+                        metadata={"env_keys": sensitive_envs},
+                    ))
         if re.search(r"\bos\.getenv\(['\"][^'\"]*(token|secret|password|api[_-]?key)[^'\"]*['\"]\)", line,
                      re.IGNORECASE) and re.search(r"\b(requests|curl|post|get|print|logging|logger)\b", line,
                                                   re.IGNORECASE):
@@ -533,6 +615,9 @@ def scan_text_patterns(script: str, policy: ToolSafetyPolicy, language: str) -> 
                     "Script appears to read a sensitive environment variable for output or network use.",
                     line=line_no,
                 ))
+        if language == "bash":
+            findings.extend(
+                _scan_denied_path_candidates(_bash_argument_path_candidates(line), policy, line, language, line_no))
     return findings
 
 
