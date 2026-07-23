@@ -117,6 +117,6 @@ def build_diff_report(
 
 
 def write_report(report: dict[str, Any], path: str) -> None:
-    """把报告写入 JSON 文件(仓库根 session_memory_summary_diff_report.json)。"""
+    """把报告写入 JSON 文件(默认 tests/sessions/session_memory_summary_diff_report.json,路径由调用方传入)。"""
     with open(path, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)

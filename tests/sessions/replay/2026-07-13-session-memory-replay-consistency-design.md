@@ -72,10 +72,13 @@ replay_cases/*.jsonl ──load──▶ ReplayCase
           session_memory_summary_diff_report.json
 ```
 
-### 3.2 目录结构(严守干净 — 只碰 `tests/` + 本文档 + 报告产物)
+### 3.2 目录结构(严守干净 — 全部落在 `tests/sessions/` 下,文档随测试代码同置)
 
 ```
 tests/sessions/replay/
+├── README.md              # 测试运行说明与注意事项
+├── 2026-07-13-session-memory-replay-consistency.md          # 实施计划(随测试同置)
+├── 2026-07-13-session-memory-replay-consistency-design.md   # 设计文档(本文档)
 ├── __init__.py            # 含 150–300 字设计说明(issue 交付物)
 ├── harness.py             # ReplayCase/ReplayBackend/ReplaySnapshot + replay_case()
 ├── normalizer.py          # 占位符归一化(保留字段存在性)
@@ -100,7 +103,7 @@ tests/sessions/test_replay_consistency.py        # 主 E2E
 tests/sessions/test_replay_injections.py         # 快照层 + 端到端注入检出
 tests/sessions/test_allowed_diff_governance.py   # 精确匹配 + 覆盖率上限
 tests/sessions/test_summary_checks.py            # 三类 summary 故障
-session_memory_summary_diff_report.json          # 报告产物(仓库根)
+tests/sessions/session_memory_summary_diff_report.json   # 报告产物(运行时生成)
 ```
 
 ---
@@ -212,7 +215,7 @@ def check_governance(case: ReplayCase, total_fields: int,
 
 ### 4.5 summary_checks.py — SDK 确定性模型 + 三分比较 + 三类专项
 
-**确定性模型**(跑 SDK 真实压缩流程,只换 LLM;覆写点已确认存在 [`_compress_session_to_summary`](../../trpc_agent_sdk/sessions/_session_summarizer.py) L197):
+**确定性模型**(跑 SDK 真实压缩流程,只换 LLM;覆写点已确认存在 [`_compress_session_to_summary`](../../../trpc_agent_sdk/sessions/_session_summarizer.py) L197):
 
 ```python
 class _DeterministicSummarizer(SessionSummarizer):
@@ -360,13 +363,31 @@ Redis/MySQL 不可用时 `pytest.skip`(满足 issue"不要求本地装真 Redis/
 
 ---
 
+## 6.1 正向与负向双向验证(正确场景 + 错误场景均覆盖)
+
+> 回应 review:本框架**同时**验证「正确场景」(各后端一致时应判 match)与「错误场景」(后端真不一致时必须检出),二者共用同一组 10 条标准化 case,形成「不误报 + 不漏报」的双向闭环。
+
+| 方向 | 场景 | 机制 | 期望 | 落点 |
+|---|---|---|---|---|
+| **正向(正确场景)** | 各后端在正常一致性轨迹下应判定一致 | 10 条 case **不注入**,直接 `replay_case` + `compare` | 100% `match`,误报率 `false_positive_rate == 0.0` | `tests/sessions/test_replay_consistency.py`(验收 1/3) |
+| **负向(错误场景)** | 后端真不一致时必须被检出 | 同一组 10 条 case,经 `injectors.py` 程序化注入不一致 | 100% 检出(**0 漏报**) | `tests/sessions/test_replay_injections.py`(验收 2/4) |
+
+**负向(错误场景)注入两层覆盖**:
+
+- **快照层注入**(对齐 10 个公开 PR):`deepcopy` 快照改字段,覆盖 event / state / memory / summary 四类共 8 种 kind —— `event_author` / `event_text` / `extra_event` / `state_value` / `memory_content` / `summary_loss` / `summary_overwrite` / `summary_affiliation`,断言比较器与 `summary_checks` 全部检出(`TestSnapshotInjection::test_all_eight_kinds_detected`),且 10 条 case 各注入一种必须 100% 检出(`test_each_case_detects_injection`)。
+- **端到端后端注入**(本设计创新,填补 10 PR 留白):跑完 case 后**直接改 SQL 行 / Redis key** 再用全新 service 重读,验证 harness 对**真实后端数据漂移**的感知(`TestEndToEndSqlInjection` / `TestEndToEndRedisInjection`)。
+
+**结论**:同一组 10 条 case 既验证「一致时不误报」(FPR),又验证「不一致时不漏报」(检出率),双向均有断言,杜绝「只测绿灯、漏测红灯」。错误场景验证完整清单见 `tests/sessions/test_replay_injections.py`。
+
+---
+
 ## 7. 可行性确认(硬点已验证)
 
 | 硬点 | 验证 | 结论 |
 |---|---|---|
-| SDK 确定性模型覆写点 | `_compress_session_to_summary` 存在于 [`_session_summarizer.py:197`](../../trpc_agent_sdk/sessions/_session_summarizer.py) | ✅ 可覆写 |
-| Redis 端到端注入 key | `session_key`/`app_state_key`/`user_state_key` + `SET`/`HSET`([`_redis_session_service.py:339`](../../trpc_agent_sdk/sessions/_redis_session_service.py)) | ✅ 可定位 |
-| SQL 端到端注入表 | `sessions`/`events`/`app_states`/`user_states` + `from_event/to_event`([`_sql_session_service.py:142`](../../trpc_agent_sdk/sessions/_sql_session_service.py)) | ✅ 可 UPDATE 重读 |
+| SDK 确定性模型覆写点 | `_compress_session_to_summary` 存在于 [`_session_summarizer.py:197`](../../../trpc_agent_sdk/sessions/_session_summarizer.py) | ✅ 可覆写 |
+| Redis 端到端注入 key | `session_key`/`app_state_key`/`user_state_key` + `SET`/`HSET`([`_redis_session_service.py:339`](../../../trpc_agent_sdk/sessions/_redis_session_service.py)) | ✅ 可定位 |
+| SQL 端到端注入表 | `sessions`/`events`/`app_states`/`user_states` + `from_event/to_event`([`_sql_session_service.py:142`](../../../trpc_agent_sdk/sessions/_sql_session_service.py)) | ✅ 可 UPDATE 重读 |
 
 ---
 
@@ -387,9 +408,9 @@ Redis/MySQL 不可用时 `pytest.skip`(满足 issue"不要求本地装真 Redis/
 
 1. `tests/sessions/test_replay_consistency.py` + `tests/sessions/replay/` harness 包
 2. `tests/sessions/replay/replay_cases/*.jsonl`(10 条)
-3. `session_memory_summary_diff_report.json`(根目录,运行时生成)
+3. `tests/sessions/session_memory_summary_diff_report.json`(运行时生成)
 4. 150–300 字设计说明(本文档 §10 + 测试包 `__init__.py` docstring)
-5. 本设计文档
+5. 本设计文档 + 实施计划(均置于 `tests/sessions/replay/`,随测试代码同置)
 
 ---
 
