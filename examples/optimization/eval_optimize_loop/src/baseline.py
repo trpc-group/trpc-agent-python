@@ -363,6 +363,7 @@ class BaselineRunner:
         )
         # ???? ground_truth ??
         evaluator.ground_truth = gt_items  # NOTE: relies on PlateEvaluator internal attr; fragile if field renamed
+        assert evaluator.ground_truth is gt_items, "ground_truth assignment failed: PlateEvaluator may have changed internal API"
 
         report = await evaluator.run(verbose=False)
 

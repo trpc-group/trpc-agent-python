@@ -45,72 +45,72 @@ def create_plate_call_agent(
     sys.path.insert(0, _plate_root)
     try:
         async def _call_agent(query: str) -> str:
-        try:
-            from trpc_agent_sdk.runners import Runner
-            from trpc_agent_sdk.sessions import InMemorySessionService
-            from trpc_agent_sdk.types import Content, Part
-        except ImportError:
-            raise ImportError("plate_call_agent requires trpc_agent_sdk.")
+            try:
+                from trpc_agent_sdk.runners import Runner
+                from trpc_agent_sdk.sessions import InMemorySessionService
+                from trpc_agent_sdk.types import Content, Part
+            except ImportError:
+                raise ImportError("plate_call_agent requires trpc_agent_sdk.")
 
-        try:
-            from agent.graph_agent import recognition_agent
-        except ImportError as e:
-            raise ImportError(
-                f"Cannot import PlateAgent modules from {plate_agent_root}: {e}"
+            try:
+                from agent.graph_agent import recognition_agent
+            except ImportError as e:
+                raise ImportError(
+                    f"Cannot import PlateAgent modules from {plate_agent_root}: {e}"
+                )
+
+            image_path = _resolve_image_path(query, plate_agent_root)
+
+            session_service = InMemorySessionService()
+            runner = Runner(
+                app_name="plate_optimizer",
+                agent=recognition_agent,
+                session_service=session_service,
             )
 
-        image_path = _resolve_image_path(query, plate_agent_root)
-
-        session_service = InMemorySessionService()
-        runner = Runner(
-            app_name="plate_optimizer",
-            agent=recognition_agent,
-            session_service=session_service,
-        )
-
-        session_id = str(uuid.uuid4())
-        await session_service.create_session(
-            app_name="plate_optimizer",
-            user_id="optimizer",
-            session_id=session_id,
-            state={"image_path": image_path} if image_path else {},
-        )
-
-        message = "Identify this license plate image."
-        user_content = Content(parts=[Part.from_text(text=message)])
-
-        final_text = ""
-        try:
-            async for event in runner.run_async(
+            session_id = str(uuid.uuid4())
+            await session_service.create_session(
+                app_name="plate_optimizer",
                 user_id="optimizer",
                 session_id=session_id,
-                new_message=user_content,
-            ):
-                if not event.is_final_response():
-                    continue
-                if not event.content or not event.content.parts:
-                    continue
-                for part in event.content.parts:
-                    if part.thought:
-                        continue
-                    if part.text:
-                        final_text += part.text
-        except Exception as e:
-            logger.exception("runner.run_async failed, attempting session.state fallback")
+                state={"image_path": image_path} if image_path else {},
+            )
+
+            message = "Identify this license plate image."
+            user_content = Content(parts=[Part.from_text(text=message)])
+
+            final_text = ""
             try:
-                session = await session_service.get_session(
-                    app_name="plate_optimizer",
+                async for event in runner.run_async(
                     user_id="optimizer",
                     session_id=session_id,
-                )
-                if session and session.state:
-                    final_text = session.state.get("final_plate", "")
-                    if not final_text:
-                        final_text = str(session.state.get("last_response", ""))
-            except Exception:
-                pass
+                    new_message=user_content,
+                ):
+                    if not event.is_final_response():
+                        continue
+                    if not event.content or not event.content.parts:
+                        continue
+                    for part in event.content.parts:
+                        if part.thought:
+                            continue
+                        if part.text:
+                            final_text += part.text
+            except Exception as e:
+                logger.exception("runner.run_async failed, attempting session.state fallback")
+                try:
+                    session = await session_service.get_session(
+                        app_name="plate_optimizer",
+                        user_id="optimizer",
+                        session_id=session_id,
+                    )
+                    if session and session.state:
+                        final_text = session.state.get("final_plate", "")
+                        if not final_text:
+                            final_text = str(session.state.get("last_response", ""))
+                except Exception:
+                    pass
 
-        return final_text.strip() or "recognition failed"
+            return final_text.strip() or "recognition failed"
 
     finally:
         try:

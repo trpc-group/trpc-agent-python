@@ -20,7 +20,7 @@ from src.optimizer import OptimizationRunner
 from src.validator import ValidationRunner
 from src.auditor import Auditor
 from src.reporter import generate_json_report, generate_markdown_report
-from src.gate import AcceptanceGate
+from src.gate import AcceptanceGate, GateDecision
 
 
 def load_config():
@@ -28,15 +28,20 @@ def load_config():
         return json.load(f)
 
 
-def _read_critical_case_ids(val_path: Path) -> list[str]:
-    """Dynamically read critical case ids from evalset (fixed: was hardcoded)."""
+def _read_critical_case_ids(val_path: Path):
+    """Dynamically read critical case ids from evalset.
+
+    Returns:
+        list[str] on success (may be empty if no critical cases configured).
+        None on read/parse failure — caller should fail-close the gate.
+    """
     try:
         with open(val_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         return [c["case_id"] for c in data.get("cases", []) if c.get("critical", False)]
     except Exception as e:
-        print(f"Warning: cannot read critical case ids from {val_path}: {e}", file=sys.stderr)
-        return []  # empty: skip critical-case gate rather than guess wrong id
+        print(f"ERROR: cannot read critical case ids from {val_path}: {e}", file=sys.stderr)
+        return None  # read failed: gate should reject, not silently skip
 
 
 async def main():
@@ -122,7 +127,7 @@ async def main():
                 print(f"Cleaning stale lock from dead PID {old_pid}", file=sys.stderr)
             # Atomic takeover: write PID to temp file, then os.replace()
             # is atomic (rename) on both POSIX and Windows -- no TOCTOU window.
-            tmp = LOCK_FILE + ".tmp"
+            tmp = f"{LOCK_FILE}.{my_pid}.tmp"  # PID suffix prevents concurrent overwrite
             with open(tmp, "w", encoding="utf-8") as tf:
                 tf.write(f"{my_pid} {started_at}")
                 tf.flush()
@@ -202,6 +207,15 @@ async def main():
         }
 
         critical_case_ids = _read_critical_case_ids(val_path)
+        if critical_case_ids is None:
+            # evalset read failed: reject rather than silently skip critical-case gate
+            if not args.quiet:
+                print("  WARNING: critical case check FAILED (evalset unreadable), rejecting", file=sys.stderr)
+            critical_case_ids = []  # gate will see empty → skip, but we handle below
+            # Mark gate as rejected due to unreadable critical cases
+            _critical_read_failed = True
+        else:
+            _critical_read_failed = False
 
         decision = gate.decide(
             baseline_scores=val_bl.score_map,
@@ -212,12 +226,21 @@ async def main():
             candidate_cost=val_result.summary.total_cost_candidate,
             critical_case_ids=critical_case_ids,
         )
+        if _critical_read_failed:
+            # Override: evalset unreadable → cannot verify critical cases → reject
+            decision = GateDecision(
+                accepted=False,
+                reason="CRITICAL: cannot read evalset for critical case verification",
+                checks=list(decision.checks),
+            )
         gate_dict = {
             "accepted": decision.accepted,
             "reason": decision.reason,
             "checks": [{"name": c.name, "passed": c.passed, "detail": c.detail} for c in decision.checks],
         }
-        if not args.quiet: print(f"  decision: {'ACCEPTED' if decision.accepted else 'REJECTED'}")
+        if not args.quiet:
+            tag = " (FAKE MODE DEMO ONLY)" if args.mode == "fake" else ""
+            print(f"  decision: {'ACCEPTED' if decision.accepted else 'REJECTED'}{tag}")
 
         # Phase 6: Audit
         if not args.quiet: print("[6/6] Audit...")
