@@ -6,15 +6,14 @@
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from pydantic import BaseModel
 
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.tools._function_tool import FunctionTool
+from trpc_agent_sdk.tools._function_tool import ToolArgumentErrorResponse
 
 
 # --- Test functions ---
@@ -158,6 +157,7 @@ class TestFunctionToolRunAsync:
             args={},
         )
         assert isinstance(result, dict)
+        assert isinstance(result, ToolArgumentErrorResponse)
         assert "error" in result
         assert "param1" in result["error"]
 

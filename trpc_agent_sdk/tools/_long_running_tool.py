@@ -7,14 +7,36 @@
 
 from __future__ import annotations
 
-from typing import Callable
-from typing import Optional
+from typing import Callable, Optional
+
 from typing_extensions import override
 
 from trpc_agent_sdk.filter import BaseFilter
+from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.types import FunctionDeclaration
 
 from ._function_tool import FunctionTool
+
+# Framework-level tool execution error codes shared between the tools
+# processor (which emits them) and the long-running tool helper (which
+# checks them).  Keeping the literals in one place prevents silent drift
+# when new codes are added.
+TOOL_ERROR_CODE_NOT_FOUND = "tool_not_found"
+TOOL_ERROR_CODE_ARGUMENT_ERROR = "tool_argument_error"
+TOOL_ERROR_CODE_EXECUTION_ERROR = "tool_execution_error"
+
+FRAMEWORK_TOOL_ERROR_CODES = frozenset(
+    {
+        TOOL_ERROR_CODE_NOT_FOUND,
+        TOOL_ERROR_CODE_ARGUMENT_ERROR,
+        TOOL_ERROR_CODE_EXECUTION_ERROR,
+    }
+)
+
+
+def is_tool_execution_error(event: Event) -> bool:
+    """Return whether the framework, not a tool payload, reported a failure."""
+    return event.error_code in FRAMEWORK_TOOL_ERROR_CODES
 
 
 class LongRunningFunctionTool(FunctionTool):
@@ -34,10 +56,9 @@ class LongRunningFunctionTool(FunctionTool):
         is_long_running: Whether the tool is a long running operation.
     """
 
-    def __init__(self,
-                 func: Callable,
-                 filters_name: Optional[list[str]] = None,
-                 filters: Optional[list[BaseFilter]] = None):
+    def __init__(
+        self, func: Callable, filters_name: Optional[list[str]] = None, filters: Optional[list[BaseFilter]] = None
+    ):
         """Initialize the long running function tool.
 
         Args:
@@ -58,9 +79,11 @@ class LongRunningFunctionTool(FunctionTool):
         """
         declaration = super()._get_declaration()
         if declaration:
-            instruction = ("\n\nNOTE: This is a long-running operation. Do not call this tool"
-                           " again if it has already returned some intermediate or pending"
-                           " status.")
+            instruction = (
+                "\n\nNOTE: This is a long-running operation. Do not call this tool"
+                " again if it has already returned some intermediate or pending"
+                " status."
+            )
             if declaration.description:
                 declaration.description += instruction
             else:

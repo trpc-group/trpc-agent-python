@@ -64,6 +64,12 @@ from ._feed_back_content import AgUiUserFeedBack
 from ._http_req import set_agui_http_req
 from ._session_manager import SessionManager
 
+# Prefix for LangGraph checkpoint state keys stored in Session.state
+# (see trpc_agent_sdk/dsl/graph/_constants.py: STATE_KEY_CHECKPOINTS etc.).
+# Used to detect GraphAgent resume scenarios where the session state must
+# be preserved to avoid overwriting the LangGraph checkpoint.
+_GRAPH_CHECKPOINT_STATE_KEY_PREFIX = "_trpc_graph_checkpoint"
+
 
 class AgUiAgent:
     """Middleware to bridge AG-UI Protocol with TRPC agents.
@@ -1100,13 +1106,22 @@ class AgUiAgent:
                 set_agui_http_req(run_config, http_request)
 
             # Ensure session exists
-            await self._ensure_session_exists(app_name, user_id, input.thread_id, input.state)
+            session = await self._ensure_session_exists(app_name, user_id, input.thread_id, input.state)
 
-            # this will always update the backend states with the frontend states
-            # Recipe Demo Example: if there is a state "salt" in the ingredients state and in frontend user
-            # remove this salt state using UI from the ingredients list then our backend should also update
-            # these state changes as well to sync both the states
-            await self._session_manager.update_session_state(input.thread_id, app_name, user_id, input.state)
+            # A GraphAgent tool result is a continuation token, not a fresh
+            # state snapshot. Its LangGraph checkpoint lives in Session.state;
+            # applying the browser state can replace that checkpoint and make
+            # Command(resume=...) start a new graph from START. Keep the
+            # established state synchronisation for normal turns and for
+            # non-graph agents that intentionally submit a state patch with a
+            # tool result.
+            if not self._is_graph_checkpoint_resume(input, session=session):
+                await self._session_manager.update_session_state(
+                    input.thread_id,
+                    app_name,
+                    user_id,
+                    input.state,
+                )
 
             # Convert messages
             # only use this new_message if there is no tool response from the user
@@ -1284,6 +1299,26 @@ class AgUiAgent:
             # Note: toolset cleanup is handled by garbage collection
             # since toolset is now embedded in the agent's tools
             pass
+
+    def _is_graph_checkpoint_resume(
+        self,
+        input: RunAgentInput,
+        *,
+        session: Any = None,
+    ) -> bool:
+        """Whether this tool result must preserve a GraphAgent checkpoint.
+
+        When *session* is supplied (e.g. from ``_ensure_session_exists``) the
+        check is performed without an extra database round-trip.  Otherwise
+        the method falls back to fetching the session via the session service.
+        """
+        if not self._is_tool_result_submission(input):
+            return False
+        state = getattr(session, "state", None) if session is not None else None
+        return isinstance(state, dict) and any(
+            key.startswith(_GRAPH_CHECKPOINT_STATE_KEY_PREFIX)
+            for key in state
+        )
 
     async def _execute_user_feedback_handler(self, tool_name: str, tool_message: str, thread_id: str, app_name: str,
                                              user_id: str) -> str:

@@ -78,6 +78,15 @@ from .utils import convert_pydantic_args
 from .utils import get_mandatory_args
 
 
+class ToolArgumentErrorResponse(dict):
+    """Private marker for framework-detected argument validation failures.
+
+    It deliberately remains a dictionary so direct ``FunctionTool`` callers
+    keep the established ``{\"error\": ...}`` result contract. The tools
+    processor uses the type to attach an out-of-band Event error code.
+    """
+
+
 class FunctionTool(BaseTool):
     """A tool that wraps a user-defined Python function.
 
@@ -170,7 +179,7 @@ class FunctionTool(BaseTool):
             error_str = f"""Invoking `{self.name}()` failed as the following mandatory input parameters are not present:
 {missing_mandatory_args_str}
 You could retry calling this tool, but it is IMPORTANT for you to provide all the mandatory parameters."""
-            return {'error': error_str}
+            return ToolArgumentErrorResponse(error=error_str)
 
         # Functions are callable objects, but not all callable objects are functions
         # checking coroutine function is not enough. We also need to check whether

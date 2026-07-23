@@ -1490,6 +1490,9 @@ class TestRunTrpcInBackground:
             events.append(queue.get_nowait())
         assert events[-1] is None  # sentinel
         assert len(events) >= 2  # at least one event + None
+        agui_agent._session_manager.update_session_state.assert_awaited_once_with(
+            "thread-1", "test_app", "test_user", {},
+        )
 
     async def test_handles_error_and_puts_error_event(self, agui_agent, mock_agent):
         queue = asyncio.Queue()
@@ -1577,6 +1580,44 @@ class TestRunTrpcInBackground:
         while not queue.empty():
             events.append(queue.get_nowait())
         assert events[-1] is None
+        # Non-graph AG-UI users retain the established state-sync behaviour.
+        agui_agent._session_manager.update_session_state.assert_awaited_once()
+
+    async def test_preserves_graph_checkpoint_on_tool_result_submission(self, agui_agent, mock_agent):
+        from trpc_agent_sdk.events import Event
+        from trpc_agent_sdk import types
+
+        queue = asyncio.Queue()
+        trpc_event = Event(
+            invocation_id="inv-1", author="agent",
+            content=types.Content(role="model", parts=[types.Part(text="done")]),
+            partial=False, timestamp=1000.0,
+        )
+        agui_agent._session_manager.get_or_create_session = AsyncMock(
+            return_value=Mock(state={"_trpc_graph_checkpoints": {"thread-1": {}}}),
+        )
+        agui_agent._session_manager.update_session_state = AsyncMock(return_value=True)
+        agui_agent._session_manager.get_session_state = AsyncMock(return_value={})
+
+        tc = _make_tool_call(tc_id="tc-1", name="search")
+        inp = _make_input(messages=[
+            _make_assistant_message(tool_calls=[tc]),
+            _make_tool_message(content='{"ok": true}', tool_call_id="tc-1"),
+        ])
+        with patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.Runner") as MockRunner:
+            mock_runner = Mock()
+
+            async def mock_run_async(**kwargs):
+                yield trpc_event
+
+            mock_runner.run_async = mock_run_async
+            MockRunner.return_value = mock_runner
+            await agui_agent._run_trpc_in_background(
+                input=inp, agent=mock_agent, user_id="test_user",
+                app_name="test_app", event_queue=queue,
+            )
+
+        agui_agent._session_manager.update_session_state.assert_not_awaited()
 
     async def test_handles_lro_events(self, agui_agent, mock_agent):
         from trpc_agent_sdk.events import LongRunningEvent

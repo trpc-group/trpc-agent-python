@@ -409,5 +409,174 @@ class TestRunAsyncImplErrorPath:
         assert events[0].error_code == "build_error"
 
 
+# ---------------------------------------------------------------------------
+# _run_async_impl — LongRunningFunctionTool integration
+# ---------------------------------------------------------------------------
+
+
+class TestRunAsyncImplLongRunningTool:
+    """Cover the long-running tool path in _run_async_impl (lines 562-620)."""
+
+    def test_yields_long_running_event_on_tool_completion(self, invocation_context):
+        """When LLM calls a LongRunningFunctionTool, a LongRunningEvent is yielded."""
+        from trpc_agent_sdk.events import LongRunningEvent
+        from trpc_agent_sdk.tools import LongRunningFunctionTool
+        from trpc_agent_sdk.types import FunctionCall, FunctionResponse
+
+        async def long_op(status: str) -> dict:
+            """A long-running operation."""
+            return {"status": status, "result": "done"}
+
+        long_tool = LongRunningFunctionTool(long_op)
+        agent = _agent(tools=[long_tool])
+        invocation_context.agent = agent
+
+        fc = FunctionCall(id="call_lr_1", name="long_op", args={"status": "check"})
+        fr = FunctionResponse(id="call_lr_1", name="long_op", response={"status": "done", "result": "ok"})
+        llm_event = Event(
+            invocation_id="inv-1",
+            author="test_agent",
+            content=Content(
+                parts=[Part.from_function_call(name="long_op", args={"status": "check"})],
+                role="model",
+            ),
+        )
+        llm_event.content.parts[0].function_call.id = "call_lr_1"
+
+        tool_event = Event(
+            invocation_id="inv-1",
+            author="test_agent",
+            content=Content(parts=[Part(function_response=fr)], role="user"),
+        )
+
+        async def run():
+            events = []
+            with patch(
+                "trpc_agent_sdk.agents._llm_agent.default_request_processor"
+            ) as mock_rp:
+                mock_rp.build_request = AsyncMock(return_value=None)
+                with patch(
+                    "trpc_agent_sdk.agents._llm_agent.LlmProcessor"
+                ) as mock_lp_cls:
+                    mock_lp = MagicMock()
+
+                    async def fake_call_llm_async(request, ctx=None, stream=True):
+                        for ev in [llm_event]:
+                            yield ev
+
+                    mock_lp.call_llm_async = fake_call_llm_async
+                    mock_lp_cls.return_value = mock_lp
+                    with patch.object(
+                        agent, "_get_extended_tools_processor"
+                    ) as mock_get_tp:
+                        mock_tp = MagicMock()
+                        mock_tp.find_tool = AsyncMock(return_value=long_tool)
+
+                        async def fake_execute_tools_async(tool_calls, context):
+                            for ev in [tool_event]:
+                                yield ev
+
+                        mock_tp.execute_tools_async = fake_execute_tools_async
+                        mock_get_tp.return_value = mock_tp
+                        async for event in agent._run_async_impl(invocation_context):
+                            events.append(event)
+            return events
+
+        events = asyncio.run(run())
+        long_running_events = [e for e in events if isinstance(e, LongRunningEvent)]
+        assert len(long_running_events) == 1
+        lre = long_running_events[0]
+        assert lre.function_call.id == "call_lr_1"
+        assert lre.function_call.name == "long_op"
+        assert lre.function_response.id == "call_lr_1"
+
+    def test_long_running_tool_error_does_not_yield_long_running_event(self, invocation_context):
+        """is_tool_execution_error suppresses LongRunningEvent; tool error is yielded normally."""
+        from trpc_agent_sdk.tools import LongRunningFunctionTool
+        from trpc_agent_sdk.types import FunctionCall, FunctionResponse
+
+        async def long_op(status: str) -> dict:
+            """A long-running operation."""
+            return {"status": status}
+
+        long_tool = LongRunningFunctionTool(long_op)
+        agent = _agent(tools=[long_tool])
+        invocation_context.agent = agent
+
+        fr = FunctionResponse(id="call_err_1", name="long_op", response={"error": "fail"})
+        llm_tool_call_event = Event(
+            invocation_id="inv-1",
+            author="test_agent",
+            content=Content(
+                parts=[Part.from_function_call(name="long_op", args={"status": "check"})],
+                role="model",
+            ),
+        )
+        llm_tool_call_event.content.parts[0].function_call.id = "call_err_1"
+
+        llm_final_event = Event(
+            invocation_id="inv-1",
+            author="test_agent",
+            content=Content(parts=[Part.from_text(text="done")], role="model"),
+        )
+
+        tool_event = Event(
+            invocation_id="inv-1",
+            author="test_agent",
+            error_code="tool_execution_error",
+            error_message="Tool failed",
+            content=Content(parts=[Part(function_response=fr)], role="user"),
+        )
+
+        async def run():
+            events = []
+            with patch(
+                "trpc_agent_sdk.agents._llm_agent.default_request_processor"
+            ) as mock_rp:
+                mock_rp.build_request = AsyncMock(return_value=None)
+                with patch(
+                    "trpc_agent_sdk.agents._llm_agent.LlmProcessor"
+                ) as mock_lp_cls:
+                    mock_lp = MagicMock()
+
+                    call_count = 0
+
+                    async def fake_call_llm_async(request, ctx=None, stream=True):
+                        nonlocal call_count
+                        call_count += 1
+                        if call_count == 1:
+                            for ev in [llm_tool_call_event]:
+                                yield ev
+                        else:
+                            for ev in [llm_final_event]:
+                                yield ev
+
+                    mock_lp.call_llm_async = fake_call_llm_async
+                    mock_lp_cls.return_value = mock_lp
+                    with patch.object(
+                        agent, "_get_extended_tools_processor"
+                    ) as mock_get_tp:
+                        mock_tp = MagicMock()
+                        mock_tp.find_tool = AsyncMock(return_value=long_tool)
+
+                        async def fake_execute_tools_async(tool_calls, context):
+                            for ev in [tool_event]:
+                                yield ev
+
+                        mock_tp.execute_tools_async = fake_execute_tools_async
+                        mock_get_tp.return_value = mock_tp
+                        async for event in agent._run_async_impl(invocation_context):
+                            events.append(event)
+            return events
+
+        events = asyncio.run(run())
+        from trpc_agent_sdk.events import LongRunningEvent
+        long_running_events = [e for e in events if isinstance(e, LongRunningEvent)]
+        assert len(long_running_events) == 0
+        # The regular tool event and final text event are still yielded
+        regular_events = [e for e in events if not isinstance(e, LongRunningEvent)]
+        assert len(regular_events) >= 1
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
