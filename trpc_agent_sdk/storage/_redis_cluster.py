@@ -13,7 +13,6 @@ they visit every primary node instead of issuing a node-local ``KEYS`` command.
 
 from __future__ import annotations
 
-import asyncio
 import inspect
 import json
 from typing import Any
@@ -27,9 +26,7 @@ from trpc_agent_sdk.log import logger
 
 from ._redis import RedisCommand
 from ._redis import RedisCondition
-from ._redis import RedisExpire
 from ._redis import RedisStorage
-
 
 RedisClusterClient = Union[AsyncRedisCluster, SyncRedisCluster]
 
@@ -97,8 +94,7 @@ class RedisClusterStorage(RedisStorage):
         if inspect.isawaitable(ret):
             await ret
 
-    async def query(self, conn: RedisClusterClient, key: str,
-                    conditions: RedisCondition) -> list[tuple[str, Any]]:
+    async def query(self, conn: RedisClusterClient, key: str, conditions: RedisCondition) -> list[tuple[str, Any]]:
         """Query keys across all cluster primaries using cursor-based scanning."""
         keys = await self._scan_keys(conn, key)
         if conditions.limit > 0:
