@@ -37,9 +37,10 @@ def create_plate_call_agent(
     to ensure evaluation isolation.
     """
     import sys
-    sys.path.insert(0, str(Path(plate_agent_root)))
-
-    async def _call_agent(query: str) -> str:
+    _plate_root = str(Path(plate_agent_root))
+    sys.path.insert(0, _plate_root)
+    try:
+        async def _call_agent(query: str) -> str:
         try:
             from trpc_agent_sdk.runners import Runner
             from trpc_agent_sdk.sessions import InMemorySessionService
@@ -107,6 +108,11 @@ def create_plate_call_agent(
 
         return final_text.strip() or "recognition failed"
 
+    finally:
+        try:
+            sys.path.remove(_plate_root)
+        except ValueError:
+            pass
     return _call_agent
 
 

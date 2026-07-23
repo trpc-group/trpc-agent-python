@@ -120,13 +120,22 @@ async def main():
                 sys.exit(75)
             if not args.quiet:
                 print(f"Cleaning stale lock from dead PID {old_pid}", file=sys.stderr)
-            _os.remove(LOCK_FILE)
-            fd = _os.open(LOCK_FILE, _os.O_CREAT | _os.O_EXCL | _os.O_WRONLY, 0o644)
-            with _os.fdopen(fd, "w", encoding="utf-8") as lf:
-                lf.write(f"{my_pid} {started_at}")
-                lf.flush()
-                _os.fsync(lf.fileno())
-            acquired = True
+            # Atomic takeover: write PID to temp file, then os.replace()
+            # is atomic (rename) on both POSIX and Windows -- no TOCTOU window.
+            tmp = LOCK_FILE + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as tf:
+                tf.write(f"{my_pid} {started_at}")
+                tf.flush()
+                _os.fsync(tf.fileno())
+            _os.replace(tmp, LOCK_FILE)
+            # Verify ownership: if another process raced us, the file contains
+            # their PID, not ours.  In that case, back off.
+            with open(LOCK_FILE, "r", encoding="utf-8") as vf:
+                lock_owner = int(vf.read().strip().split()[0])
+            if lock_owner == my_pid:
+                acquired = True
+            # else: someone else replaced the lock between our replace and read;
+            # fall through to acquired=False -> exit(75)
         except (FileNotFoundError, ValueError, FileExistsError):
             pass
 

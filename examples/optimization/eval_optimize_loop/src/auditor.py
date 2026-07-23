@@ -88,7 +88,7 @@ class Auditor:
             mode=mode,
             random_seed=random_seed,
             entries=entries,
-            total_cost=sum(e.cost_candidate for e in entries),
+            total_cost=validation.summary.total_cost_candidate if validation else 0.0,
             avg_latency_ms=baseline_val.summary.avg_latency_ms if baseline_val else 0.0,
         )
 

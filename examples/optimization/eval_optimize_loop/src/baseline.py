@@ -324,20 +324,19 @@ class BaselineRunner:
         import sys
         plate_root_str = str(Path(plate_agent_root))
         sys.path.insert(0, plate_root_str)
-        path_restored = False
         try:
             from agent.session_manager import create_session_service, create_memory_service
             from eval.evaluator import PlateEvaluator
         except ImportError as e:
-            sys.path.remove(plate_root_str)  # restore before raising
-            path_restored = True
             raise ImportError(
                 f"Cannot import PlateAgent modules from {plate_agent_root}. "
                 f"Ensure trpc_agent_sdk is installed. Error: {e}"
             )
         finally:
-            if not path_restored:
-                sys.path.remove(plate_root_str)  # restore on success path too
+            try:
+                sys.path.remove(plate_root_str)
+            except ValueError:
+                pass  # already removed or never inserted
         # 构建 ground_truth.json 格式（临时文件）
         # Build ground_truth items with sequential IDs for stable reverse mapping.
         # Uses enumerate(start=1) instead of SHA256 hash so that the id->case_id
@@ -374,7 +373,9 @@ class BaselineRunner:
         for r in report.details:
             case_id = id_to_case.get(r.image_id)
             if case_id is None:
-                image_key = Path(r.image_path).name if r.image_path else ""
+                # Defence-in-depth: should not happen with sequential IDs.
+                # Use image_id (which IS the sequential id from gt_items) so
+                # the case_id remains traceable rather than generating garbage.
                 case_id = f"case_{r.image_id}"
             case_result = BaselineCaseResult(
                 case_id=case_id,

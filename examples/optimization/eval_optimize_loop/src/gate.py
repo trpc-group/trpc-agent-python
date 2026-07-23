@@ -116,7 +116,7 @@ class AcceptanceGate:
             # Strict majority: more than half must pass. Ties (exactly half) = reject.
             accepted = sum(1 for c in checks if c.passed) > len(checks) / 2
         else:
-            accepted = all(c.passed for c in checks)
+            raise ValueError(f"Unknown gate strategy: {self.strategy!r}. Expected 'all_must_pass' or 'majority'.")
 
         reason = self._build_reason(accepted, checks)
         return GateDecision(
