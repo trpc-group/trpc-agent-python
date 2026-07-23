@@ -293,7 +293,7 @@ class GraphAgent(BaseAgent):
 
         if not function_response_id.startswith(STATE_KEY_LONG_RUNNING_PREFIX):
             return None
-        interrupt_id = function_response_id[len(STATE_KEY_LONG_RUNNING_PREFIX):]
+        interrupt_id = function_response_id.removeprefix(STATE_KEY_LONG_RUNNING_PREFIX)
         if not interrupt_id:
             return None
 
@@ -356,7 +356,7 @@ class GraphAgent(BaseAgent):
         if isinstance(interrupt.value, dict):
             interrupt_response = interrupt.value
         else:
-            interrupt_response = {"desicion": interrupt.value}
+            interrupt_response = {"decision": interrupt.value}
 
         function_response = FunctionResponse(
             id=function_call.id,
@@ -390,7 +390,11 @@ class GraphAgent(BaseAgent):
         function_call_id = f"{STATE_KEY_LONG_RUNNING_PREFIX}{interrupt_id}"
 
         raw_args = interrupt.value
-        if isinstance(raw_args, dict):
+        if isinstance(raw_args, dict) and raw_args.get("_trpc_agent_node_hitl") is True:
+            function_name = str(raw_args.get("toolName") or function_name)
+            visible_args = raw_args.get("arguments")
+            function_args = visible_args if isinstance(visible_args, dict) else {}
+        elif isinstance(raw_args, dict):
             function_args = {str(key): value for key, value in raw_args.items()}
         else:
             function_args = {"value": raw_args}

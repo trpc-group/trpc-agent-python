@@ -27,7 +27,6 @@ from trpc_agent_sdk.server.ag_ui._core._execution_state import ExecutionState
 from trpc_agent_sdk.server.ag_ui._core._feed_back_content import AgUiUserFeedBack
 from trpc_agent_sdk.server.ag_ui._core._session_manager import SessionManager
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -116,6 +115,7 @@ def _make_tool_call(tc_id="tc-1", name="my_tool"):
 
 
 class TestAgUiAgentInit:
+
     def test_init_with_required_params_only(self, mock_agent):
         agent = AgUiAgent(trpc_agent=mock_agent, auto_cleanup=False)
         assert agent._trpc_agent is mock_agent
@@ -173,6 +173,7 @@ class TestAgUiAgentInit:
 
 
 class TestGetAppName:
+
     def test_returns_static_app_name(self, mock_agent):
         agent = AgUiAgent(trpc_agent=mock_agent, app_name="my_app", auto_cleanup=False)
         result = agent.get_app_name(_make_input())
@@ -202,6 +203,7 @@ class TestGetAppName:
 
 
 class TestGetUserId:
+
     def test_returns_static_user_id(self, mock_agent):
         agent = AgUiAgent(trpc_agent=mock_agent, user_id="uid-42", auto_cleanup=False)
         result = agent.get_user_id(_make_input())
@@ -231,6 +233,7 @@ class TestGetUserId:
 
 
 class TestIsToolResultSubmission:
+
     def test_true_when_last_message_is_tool(self, agui_agent):
         inp = _make_input(messages=[_make_user_message(), _make_tool_message()])
         assert agui_agent._is_tool_result_submission(inp) is True
@@ -250,6 +253,7 @@ class TestIsToolResultSubmission:
 
 
 class TestExtractToolResults:
+
     async def test_extracts_most_recent_tool_message(self, agui_agent):
         tool_msg = _make_tool_message(content='{"result": "ok"}', tool_call_id="tc-5")
         inp = _make_input(messages=[_make_user_message(), tool_msg])
@@ -289,6 +293,7 @@ class TestExtractToolResults:
 
 
 class TestConvertLatestMessage:
+
     @patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.convert_message_content_to_parts")
     async def test_converts_user_message(self, mock_convert, agui_agent):
         mock_convert.return_value = [_make_text_part("hello")]
@@ -338,6 +343,7 @@ class TestConvertLatestMessage:
 
 
 class TestExtractLongRunningToolNames:
+
     def test_extracts_from_long_running_function_tool(self, agui_agent):
         lrt = Mock(spec=LongRunningFunctionTool)
         lrt.name = "slow_tool"
@@ -421,6 +427,7 @@ class TestExtractLongRunningToolNames:
 
 
 class TestResolveToolNameFromSession:
+
     @pytest.mark.asyncio
     async def test_resolves_tool_name_from_session_events(self, agui_agent):
         from trpc_agent_sdk import types
@@ -437,12 +444,11 @@ class TestResolveToolNameFromSession:
             content=types.Content(
                 role="model",
                 parts=[
-                    types.Part(
-                        function_call=types.FunctionCall(
-                            id="call_abc",
-                            name="ask_user_question",
-                            args={"question": "Pick one"},
-                        ))
+                    types.Part(function_call=types.FunctionCall(
+                        id="call_abc",
+                        name="ask_user_question",
+                        args={"question": "Pick one"},
+                    ))
                 ],
             ),
         )
@@ -473,12 +479,11 @@ class TestResolveToolNameFromSession:
             content=types.Content(
                 role="model",
                 parts=[
-                    types.Part(
-                        function_call=types.FunctionCall(
-                            id="call_xyz",
-                            name="ask_user_question",
-                            args={"question": "Pick one"},
-                        ))
+                    types.Part(function_call=types.FunctionCall(
+                        id="call_xyz",
+                        name="ask_user_question",
+                        args={"question": "Pick one"},
+                    ))
                 ],
             ),
         )
@@ -517,6 +522,7 @@ class TestResolveToolNameFromSession:
 
 
 class TestDefaultRunConfig:
+
     def test_returns_run_config_with_streaming(self, agui_agent):
         inp = _make_input()
         config = agui_agent._default_run_config(inp)
@@ -531,6 +537,7 @@ class TestDefaultRunConfig:
 
 
 class TestGetSessionMetadata:
+
     def test_returns_from_cache(self, agui_agent):
         agui_agent._session_lookup_cache["sess-1"] = {
             "app_name": "cached_app",
@@ -560,9 +567,7 @@ class TestGetSessionMetadata:
         assert result is None
 
     def test_returns_none_on_exception(self, agui_agent):
-        agui_agent._session_manager._user_sessions = Mock(
-            items=Mock(side_effect=RuntimeError("boom"))
-        )
+        agui_agent._session_manager._user_sessions = Mock(items=Mock(side_effect=RuntimeError("boom")))
         result = agui_agent._get_session_metadata("sess-err")
         assert result is None
 
@@ -573,6 +578,7 @@ class TestGetSessionMetadata:
 
 
 class TestCancelRun:
+
     @patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.cancel")
     async def test_cancels_active_run(self, mock_cancel_module, agui_agent):
         cleanup_event = asyncio.Event()
@@ -653,15 +659,19 @@ class TestCancelRun:
 
 
 class TestExecuteUserFeedbackHandler:
+
     async def test_no_handler_returns_original_message(self, agui_agent):
         agui_agent._user_feedback_handler = None
 
-        result = await agui_agent._execute_user_feedback_handler(
-            tool_name="t", tool_message="original", thread_id="th", app_name="app", user_id="u"
-        )
+        result = await agui_agent._execute_user_feedback_handler(tool_name="t",
+                                                                 tool_message="original",
+                                                                 thread_id="th",
+                                                                 app_name="app",
+                                                                 user_id="u")
         assert result == "original"
 
     async def test_handler_modifies_tool_message(self, mock_agent):
+
         async def handler(feedback: AgUiUserFeedBack):
             feedback.tool_message = "modified"
 
@@ -676,12 +686,15 @@ class TestExecuteUserFeedbackHandler:
         real_session = Session(id="th-1", app_name="test_app", user_id="test_user", save_key="k", state={})
         agent._session_manager._session_service.get_session = AsyncMock(return_value=real_session)
 
-        result = await agent._execute_user_feedback_handler(
-            tool_name="tool_x", tool_message="original", thread_id="th-1", app_name="test_app", user_id="test_user"
-        )
+        result = await agent._execute_user_feedback_handler(tool_name="tool_x",
+                                                            tool_message="original",
+                                                            thread_id="th-1",
+                                                            app_name="test_app",
+                                                            user_id="test_user")
         assert result == "modified"
 
     async def test_handler_marks_session_modified_triggers_update(self, mock_agent):
+
         async def handler(feedback: AgUiUserFeedBack):
             feedback.mark_session_modified()
 
@@ -697,13 +710,16 @@ class TestExecuteUserFeedbackHandler:
         agent._session_manager._session_service.get_session = AsyncMock(return_value=real_session)
         agent._session_manager._session_service.update_session = AsyncMock()
 
-        await agent._execute_user_feedback_handler(
-            tool_name="t", tool_message="msg", thread_id="th-1", app_name="test_app", user_id="test_user"
-        )
+        await agent._execute_user_feedback_handler(tool_name="t",
+                                                   tool_message="msg",
+                                                   thread_id="th-1",
+                                                   app_name="test_app",
+                                                   user_id="test_user")
 
         agent._session_manager._session_service.update_session.assert_awaited_once_with(real_session)
 
     async def test_handler_exception_returns_original_message(self, mock_agent):
+
         async def handler(feedback: AgUiUserFeedBack):
             raise RuntimeError("handler broke")
 
@@ -718,12 +734,15 @@ class TestExecuteUserFeedbackHandler:
         real_session = Session(id="th-1", app_name="test_app", user_id="test_user", save_key="k", state={})
         agent._session_manager._session_service.get_session = AsyncMock(return_value=real_session)
 
-        result = await agent._execute_user_feedback_handler(
-            tool_name="t", tool_message="original", thread_id="th-1", app_name="test_app", user_id="test_user"
-        )
+        result = await agent._execute_user_feedback_handler(tool_name="t",
+                                                            tool_message="original",
+                                                            thread_id="th-1",
+                                                            app_name="test_app",
+                                                            user_id="test_user")
         assert result == "original"
 
     async def test_session_not_found_returns_original_message(self, mock_agent):
+
         async def handler(feedback: AgUiUserFeedBack):
             feedback.tool_message = "should not reach"
 
@@ -737,9 +756,11 @@ class TestExecuteUserFeedbackHandler:
 
         agent._session_manager._session_service.get_session = AsyncMock(return_value=None)
 
-        result = await agent._execute_user_feedback_handler(
-            tool_name="t", tool_message="original", thread_id="th-1", app_name="test_app", user_id="test_user"
-        )
+        result = await agent._execute_user_feedback_handler(tool_name="t",
+                                                            tool_message="original",
+                                                            thread_id="th-1",
+                                                            app_name="test_app",
+                                                            user_id="test_user")
         assert result == "original"
 
 
@@ -749,6 +770,7 @@ class TestExecuteUserFeedbackHandler:
 
 
 class TestCleanupStaleExecutions:
+
     async def test_removes_stale_executions(self, agui_agent):
         stale_exec = AsyncMock(spec=ExecutionState)
         stale_exec.is_stale = Mock(return_value=True)
@@ -795,6 +817,7 @@ class TestCleanupStaleExecutions:
 
 
 class TestClose:
+
     async def test_cancels_all_active_executions(self, agui_agent):
         exec_1 = AsyncMock(spec=ExecutionState)
         exec_1.cancel = AsyncMock()
@@ -834,6 +857,7 @@ class TestClose:
 
 
 class TestEnsureSessionExists:
+
     async def test_creates_session_and_populates_cache(self, agui_agent):
         mock_session = Mock()
         agui_agent._session_manager.get_or_create_session = AsyncMock(return_value=mock_session)
@@ -850,9 +874,7 @@ class TestEnsureSessionExists:
         assert agui_agent._session_lookup_cache["sess-1"] == {"app_name": "app", "user_id": "user"}
 
     async def test_propagates_exception(self, agui_agent):
-        agui_agent._session_manager.get_or_create_session = AsyncMock(
-            side_effect=RuntimeError("db error")
-        )
+        agui_agent._session_manager.get_or_create_session = AsyncMock(side_effect=RuntimeError("db error"))
 
         with pytest.raises(RuntimeError, match="db error"):
             await agui_agent._ensure_session_exists("app", "user", "sess-err", {})
@@ -864,6 +886,7 @@ class TestEnsureSessionExists:
 
 
 class TestCreateRunner:
+
     @patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.Runner")
     def test_creates_runner_with_correct_params(self, mock_runner_cls, agui_agent, mock_agent):
         agui_agent._create_runner(mock_agent, "user-1", "app-1")
@@ -882,6 +905,7 @@ class TestCreateRunner:
 
 
 class TestDefaultAppExtractor:
+
     def test_returns_agent_name(self, mock_agent):
         mock_agent.name = "my_special_agent"
         agent = AgUiAgent(trpc_agent=mock_agent, auto_cleanup=False)
@@ -902,6 +926,7 @@ class TestDefaultAppExtractor:
 
 
 class TestAddPendingToolCallWithContext:
+
     async def test_adds_tool_call_to_pending_list(self, agui_agent):
         agui_agent._session_manager.get_state_value = AsyncMock(return_value=[])
         agui_agent._session_manager.set_state_value = AsyncMock(return_value=True)
@@ -909,8 +934,11 @@ class TestAddPendingToolCallWithContext:
         await agui_agent._add_pending_tool_call_with_context("sess-1", "tc-1", "app", "user")
 
         agui_agent._session_manager.set_state_value.assert_awaited_once_with(
-            session_id="sess-1", app_name="app", user_id="user",
-            key="pending_tool_calls", value=["tc-1"],
+            session_id="sess-1",
+            app_name="app",
+            user_id="user",
+            key="pending_tool_calls",
+            value=["tc-1"],
         )
 
     async def test_does_not_add_duplicate(self, agui_agent):
@@ -934,6 +962,7 @@ class TestAddPendingToolCallWithContext:
 
 
 class TestRemovePendingToolCall:
+
     async def test_removes_tool_call(self, agui_agent):
         agui_agent._session_lookup_cache["sess-1"] = {"app_name": "app", "user_id": "user"}
         agui_agent._session_manager.get_state_value = AsyncMock(return_value=["tc-1", "tc-2"])
@@ -942,8 +971,11 @@ class TestRemovePendingToolCall:
         await agui_agent._remove_pending_tool_call("sess-1", "tc-1")
 
         agui_agent._session_manager.set_state_value.assert_awaited_once_with(
-            session_id="sess-1", app_name="app", user_id="user",
-            key="pending_tool_calls", value=["tc-2"],
+            session_id="sess-1",
+            app_name="app",
+            user_id="user",
+            key="pending_tool_calls",
+            value=["tc-2"],
         )
 
     async def test_no_metadata_found(self, agui_agent):
@@ -975,6 +1007,7 @@ class TestRemovePendingToolCall:
 
 
 class TestHasPendingToolCalls:
+
     async def test_returns_true_when_pending(self, agui_agent):
         agui_agent._session_lookup_cache["sess-1"] = {"app_name": "app", "user_id": "user"}
         agui_agent._session_manager.get_state_value = AsyncMock(return_value=["tc-1"])
@@ -1010,6 +1043,7 @@ class TestHasPendingToolCalls:
 
 
 class TestRun:
+
     async def test_delegates_to_tool_result_submission(self, agui_agent):
         tool_msg = _make_tool_message()
         inp = _make_input(messages=[_make_user_message(), tool_msg])
@@ -1052,6 +1086,7 @@ class TestRun:
 
 
 class TestHandleToolResultSubmission:
+
     async def test_no_tool_results_yields_error(self, agui_agent):
         inp = _make_input(messages=[_make_user_message()])
 
@@ -1111,6 +1146,7 @@ class TestHandleToolResultSubmission:
 
 
 class TestStreamEvents:
+
     async def test_streams_events_until_none(self, agui_agent):
         from ag_ui.core import TextMessageStartEvent
         queue = asyncio.Queue()
@@ -1178,18 +1214,21 @@ class TestStreamEvents:
 
 
 class TestIsHitlTextScenario:
+
     async def test_detects_hitl_pattern(self, agui_agent):
         from trpc_agent_sdk import types
         from trpc_agent_sdk.events import Event
 
         func_call = types.FunctionCall(id="fc-1", name="ask_user", args={})
         second_last = Event(
-            invocation_id="inv-1", author="agent",
+            invocation_id="inv-1",
+            author="agent",
             content=types.Content(role="model", parts=[types.Part(function_call=func_call)]),
         )
         func_resp = types.FunctionResponse(id="fc-1", name="ask_user", response={"text": "hello"})
         last = Event(
-            invocation_id="inv-2", author="user",
+            invocation_id="inv-2",
+            author="user",
             content=types.Content(role="function", parts=[types.Part(function_response=func_resp)]),
         )
 
@@ -1221,12 +1260,14 @@ class TestIsHitlTextScenario:
 
         func_call = types.FunctionCall(id="fc-1", name="ask_user", args={})
         second_last = Event(
-            invocation_id="inv-1", author="agent",
+            invocation_id="inv-1",
+            author="agent",
             content=types.Content(role="model", parts=[types.Part(function_call=func_call)]),
         )
         func_resp = types.FunctionResponse(id="fc-DIFFERENT", name="ask_user", response={"text": "hello"})
         last = Event(
-            invocation_id="inv-2", author="user",
+            invocation_id="inv-2",
+            author="user",
             content=types.Content(role="function", parts=[types.Part(function_response=func_resp)]),
         )
 
@@ -1238,8 +1279,7 @@ class TestIsHitlTextScenario:
         assert result is None
 
     async def test_returns_none_on_exception(self, agui_agent):
-        agui_agent._session_manager._session_service.get_session = AsyncMock(
-            side_effect=RuntimeError("fail"))
+        agui_agent._session_manager._session_service.get_session = AsyncMock(side_effect=RuntimeError("fail"))
         result = await agui_agent._is_hitl_text_scenario("t1", "app", "user")
         assert result is None
 
@@ -1248,12 +1288,14 @@ class TestIsHitlTextScenario:
         from trpc_agent_sdk.events import Event
 
         second_last = Event(
-            invocation_id="inv-1", author="agent",
+            invocation_id="inv-1",
+            author="agent",
             content=types.Content(role="model", parts=[types.Part(text="hello")]),
         )
         func_resp = types.FunctionResponse(id="fc-1", name="ask_user", response={"text": "hi"})
         last = Event(
-            invocation_id="inv-2", author="user",
+            invocation_id="inv-2",
+            author="user",
             content=types.Content(role="function", parts=[types.Part(function_response=func_resp)]),
         )
 
@@ -1271,6 +1313,7 @@ class TestIsHitlTextScenario:
 
 
 class TestStartNewExecution:
+
     async def test_emits_run_started_and_run_finished(self, agui_agent):
         from ag_ui.core import RunStartedEvent, RunFinishedEvent
 
@@ -1310,6 +1353,7 @@ class TestStartNewExecution:
         assert any(isinstance(e, RunErrorEvent) for e in events)
 
     async def test_cleans_up_execution_on_completion(self, agui_agent):
+
         async def fake_bg_execution(input, http_request=None):
             queue = asyncio.Queue()
             await queue.put(None)
@@ -1338,6 +1382,7 @@ class TestStartNewExecution:
 
 
 class TestStartBackgroundExecution:
+
     async def test_returns_execution_state(self, agui_agent):
         from ag_ui.core import SystemMessage as AGUISystemMessage
 
@@ -1357,7 +1402,7 @@ class TestStartBackgroundExecution:
             mock_runner.run_async = empty_run
             MockRunner.return_value = mock_runner
             with patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.convert_message_content_to_parts",
-                        return_value=[_make_text_part("hello")]):
+                       return_value=[_make_text_part("hello")]):
                 exec_state = await agui_agent._start_background_execution(inp)
 
         assert isinstance(exec_state, ExecutionState)
@@ -1394,7 +1439,7 @@ class TestStartBackgroundExecution:
             mock_runner.run_async = empty_run
             MockRunner.return_value = mock_runner
             with patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.convert_message_content_to_parts",
-                        return_value=[_make_text_part("hello")]):
+                       return_value=[_make_text_part("hello")]):
                 exec_state = await agui_agent._start_background_execution(inp)
 
         # model_copy should have been called with tools update
@@ -1432,7 +1477,7 @@ class TestStartBackgroundExecution:
             mock_runner.run_async = empty_run
             MockRunner.return_value = mock_runner
             with patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.convert_message_content_to_parts",
-                        return_value=[_make_text_part("hello")]):
+                       return_value=[_make_text_part("hello")]):
                 # Patch isinstance to detect our mock as SystemMessage
                 with patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.SystemMessage", type(sys_msg)):
                     exec_state = await agui_agent._start_background_execution(inp)
@@ -1450,6 +1495,7 @@ class TestStartBackgroundExecution:
 
 
 class TestRunTrpcInBackground:
+
     async def test_runs_agent_and_puts_events_in_queue(self, agui_agent, mock_agent):
         from trpc_agent_sdk.events import Event
         from trpc_agent_sdk import types
@@ -1478,10 +1524,13 @@ class TestRunTrpcInBackground:
             mock_runner.run_async = mock_run_async
             MockRunner.return_value = mock_runner
             with patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.convert_message_content_to_parts",
-                        return_value=[_make_text_part("hello")]):
+                       return_value=[_make_text_part("hello")]):
                 await agui_agent._run_trpc_in_background(
-                    input=inp, agent=mock_agent, user_id="test_user",
-                    app_name="test_app", event_queue=queue,
+                    input=inp,
+                    agent=mock_agent,
+                    user_id="test_user",
+                    app_name="test_app",
+                    event_queue=queue,
                 )
 
         # Should have put events + None sentinel
@@ -1490,12 +1539,17 @@ class TestRunTrpcInBackground:
             events.append(queue.get_nowait())
         assert events[-1] is None  # sentinel
         assert len(events) >= 2  # at least one event + None
+        agui_agent._session_manager.update_session_state.assert_awaited_once_with(
+            "thread-1",
+            "test_app",
+            "test_user",
+            {},
+        )
 
     async def test_handles_error_and_puts_error_event(self, agui_agent, mock_agent):
         queue = asyncio.Queue()
 
-        agui_agent._session_manager.get_or_create_session = AsyncMock(
-            side_effect=RuntimeError("session error"))
+        agui_agent._session_manager.get_or_create_session = AsyncMock(side_effect=RuntimeError("session error"))
         agui_agent._session_manager.update_session_state = AsyncMock()
 
         inp = _make_input(messages=[_make_user_message("hello")])
@@ -1503,10 +1557,13 @@ class TestRunTrpcInBackground:
         with patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.Runner") as MockRunner:
             MockRunner.return_value = Mock()
             with patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.convert_message_content_to_parts",
-                        return_value=[_make_text_part("hello")]):
+                       return_value=[_make_text_part("hello")]):
                 await agui_agent._run_trpc_in_background(
-                    input=inp, agent=mock_agent, user_id="test_user",
-                    app_name="test_app", event_queue=queue,
+                    input=inp,
+                    agent=mock_agent,
+                    user_id="test_user",
+                    app_name="test_app",
+                    event_queue=queue,
                 )
 
         events = []
@@ -1528,8 +1585,11 @@ class TestRunTrpcInBackground:
         with patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.Runner") as MockRunner:
             MockRunner.return_value = Mock()
             await agui_agent._run_trpc_in_background(
-                input=inp, agent=mock_agent, user_id="test_user",
-                app_name="test_app", event_queue=queue,
+                input=inp,
+                agent=mock_agent,
+                user_id="test_user",
+                app_name="test_app",
+                event_queue=queue,
             )
 
         events = []
@@ -1546,9 +1606,11 @@ class TestRunTrpcInBackground:
 
         queue = asyncio.Queue()
         trpc_event = Event(
-            invocation_id="inv-1", author="agent",
+            invocation_id="inv-1",
+            author="agent",
             content=types.Content(role="model", parts=[types.Part(text="done")]),
-            partial=False, timestamp=1000.0,
+            partial=False,
+            timestamp=1000.0,
         )
 
         agui_agent._session_manager.get_or_create_session = AsyncMock(return_value=Mock())
@@ -1569,16 +1631,107 @@ class TestRunTrpcInBackground:
             mock_runner.run_async = mock_run_async
             MockRunner.return_value = mock_runner
             await agui_agent._run_trpc_in_background(
-                input=inp, agent=mock_agent, user_id="test_user",
-                app_name="test_app", event_queue=queue,
+                input=inp,
+                agent=mock_agent,
+                user_id="test_user",
+                app_name="test_app",
+                event_queue=queue,
             )
 
         events = []
         while not queue.empty():
             events.append(queue.get_nowait())
         assert events[-1] is None
+        # Non-graph AG-UI users retain the established state-sync behaviour.
+        agui_agent._session_manager.update_session_state.assert_awaited_once()
 
-    async def test_handles_lro_events(self, agui_agent, mock_agent):
+    async def test_preserves_graph_checkpoint_on_tool_result_submission(self, agui_agent, mock_agent):
+        from trpc_agent_sdk.events import Event
+        from trpc_agent_sdk import types
+
+        queue = asyncio.Queue()
+        trpc_event = Event(
+            invocation_id="inv-1",
+            author="agent",
+            content=types.Content(role="model", parts=[types.Part(text="done")]),
+            partial=False,
+            timestamp=1000.0,
+        )
+        agui_agent._session_manager.get_or_create_session = AsyncMock(
+            return_value=Mock(state={"_trpc_graph_checkpoints": {
+                "thread-1": {}
+            }}), )
+        agui_agent._session_manager.update_session_state = AsyncMock(return_value=True)
+        agui_agent._session_manager.get_session_state = AsyncMock(return_value={})
+
+        tc = _make_tool_call(tc_id="tc-1", name="search")
+        inp = _make_input(messages=[
+            _make_assistant_message(tool_calls=[tc]),
+            _make_tool_message(content='{"ok": true}', tool_call_id="tc-1"),
+        ])
+        with patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.Runner") as MockRunner:
+            mock_runner = Mock()
+
+            async def mock_run_async(**kwargs):
+                yield trpc_event
+
+            mock_runner.run_async = mock_run_async
+            MockRunner.return_value = mock_runner
+            await agui_agent._run_trpc_in_background(
+                input=inp,
+                agent=mock_agent,
+                user_id="test_user",
+                app_name="test_app",
+                event_queue=queue,
+            )
+
+        agui_agent._session_manager.update_session_state.assert_not_awaited()
+
+    async def test_preserves_graph_state_on_pending_interrupt_without_checkpoint(self, agui_agent, mock_agent):
+        """When auto_persist=False, the first interrupt does not persist
+        checkpoint keys to session.state — only ``_trpc_graph_pending_interrupt``
+        is set.  The resume detection must still skip state sync.
+        """
+        from trpc_agent_sdk.events import Event
+        from trpc_agent_sdk import types
+
+        queue = asyncio.Queue()
+        trpc_event = Event(
+            invocation_id="inv-1",
+            author="agent",
+            content=types.Content(role="model", parts=[types.Part(text="done")]),
+            partial=False,
+            timestamp=1000.0,
+        )
+        # Session has pending interrupt but NO checkpoint keys — this is the
+        # common case for the first interrupt when auto_persist=False.
+        agui_agent._session_manager.get_or_create_session = AsyncMock(
+            return_value=Mock(state={"_trpc_graph_pending_interrupt": True}), )
+        agui_agent._session_manager.update_session_state = AsyncMock(return_value=True)
+        agui_agent._session_manager.get_session_state = AsyncMock(return_value={})
+
+        tc = _make_tool_call(tc_id="tc-1", name="search")
+        inp = _make_input(messages=[
+            _make_assistant_message(tool_calls=[tc]),
+            _make_tool_message(content='{"ok": true}', tool_call_id="tc-1"),
+        ])
+        with patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.Runner") as MockRunner:
+            mock_runner = Mock()
+
+            async def mock_run_async(**kwargs):
+                yield trpc_event
+
+            mock_runner.run_async = mock_run_async
+            MockRunner.return_value = mock_runner
+            await agui_agent._run_trpc_in_background(
+                input=inp,
+                agent=mock_agent,
+                user_id="test_user",
+                app_name="test_app",
+                event_queue=queue,
+            )
+
+        agui_agent._session_manager.update_session_state.assert_not_awaited()
         from trpc_agent_sdk.events import LongRunningEvent
         from trpc_agent_sdk import types
 
@@ -1602,10 +1755,13 @@ class TestRunTrpcInBackground:
             mock_runner.run_async = mock_run_async
             MockRunner.return_value = mock_runner
             with patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.convert_message_content_to_parts",
-                        return_value=[_make_text_part("hello")]):
+                       return_value=[_make_text_part("hello")]):
                 await agui_agent._run_trpc_in_background(
-                    input=inp, agent=mock_agent, user_id="test_user",
-                    app_name="test_app", event_queue=queue,
+                    input=inp,
+                    agent=mock_agent,
+                    user_id="test_user",
+                    app_name="test_app",
+                    event_queue=queue,
                 )
 
         events = []
@@ -1621,9 +1777,11 @@ class TestRunTrpcInBackground:
 
         queue = asyncio.Queue()
         trpc_event = Event(
-            invocation_id="inv-1", author="agent",
+            invocation_id="inv-1",
+            author="agent",
             content=types.Content(role="model", parts=[types.Part(text="result")]),
-            partial=False, timestamp=1000.0,
+            partial=False,
+            timestamp=1000.0,
         )
 
         func_call_obj = types.FunctionCall(id="fc-1", name="ask_user", args={})
@@ -1646,10 +1804,13 @@ class TestRunTrpcInBackground:
             mock_runner.run_async = mock_run_async
             MockRunner.return_value = mock_runner
             with patch("trpc_agent_sdk.server.ag_ui._core._agui_agent.convert_message_content_to_parts",
-                        return_value=[_make_text_part("my answer")]):
+                       return_value=[_make_text_part("my answer")]):
                 await agui_agent._run_trpc_in_background(
-                    input=inp, agent=mock_agent, user_id="test_user",
-                    app_name="test_app", event_queue=queue,
+                    input=inp,
+                    agent=mock_agent,
+                    user_id="test_user",
+                    app_name="test_app",
+                    event_queue=queue,
                 )
 
         events = []

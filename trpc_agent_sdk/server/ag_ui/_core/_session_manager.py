@@ -96,6 +96,15 @@ class SessionManager:
                     session_timeout_seconds, cleanup_interval_seconds, max_sessions_per_user or 'unlimited',
                     'enabled' if memory_service else 'disabled')
 
+    @property
+    def session_service(self):
+        """Public accessor for the underlying session service.
+
+        Provides clean access to the session service without reaching into
+        the private ``_session_service`` attribute.
+        """
+        return self._session_service
+
     @classmethod
     def get_instance(cls, **kwargs):
         """Get the singleton instance."""

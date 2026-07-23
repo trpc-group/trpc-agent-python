@@ -11,6 +11,7 @@ responses, tool calls, and various OpenAI-specific features.
 """
 
 import base64
+import inspect
 import json
 import uuid
 from enum import Enum
@@ -110,6 +111,10 @@ class ApiParamsKey(str, Enum):
     PROMPT_CACHE_RETENTION = "prompt_cache_retention"
 
 
+_RESPONSES_INPUT_ITEMS = "responses_input_items"
+_RESPONSES_LOGPROBS_REQUEST = "_trpc_responses_logprobs_request"
+
+
 @register_model(model_name="OpenAIModel", supported_models=[r"gpt-.*", r"o1-.*", r"deepseek-.*", r"hy3-.*"])
 class OpenAIModel(LLMModel):
     """OpenAI model implementation using the abstract model interface.
@@ -131,6 +136,11 @@ class OpenAIModel(LLMModel):
                                 will be used as the base, with per-request configs
                                 overriding specific fields. Useful for maintaining
                                 consistent model behavior across multiple calls.
+        use_responses_api: Use ``client.responses.create`` instead of Chat Completions.
+                           Defaults to False for backward compatibility.
+        responses_api_params: Optional Responses-only parameters such as ``store``,
+                              ``reasoning``, ``include``, or ``truncation``. The model,
+                              input, and stream parameters remain managed by this class.
         **kwargs: Additional arguments passed to parent LLMModel class
                  (e.g., api_key, base_url, etc.)
 
@@ -168,6 +178,8 @@ class OpenAIModel(LLMModel):
         tool_prompt: str = "xml",
         generate_content_config: Optional[GenerateContentConfig] = None,
         http_client_provider_factory: HttpClientProviderFactory = temporary_http_client_provider_factory,
+        use_responses_api: bool = False,
+        responses_api_params: Optional[Dict[str, Any]] = None,
         **kwargs,
     ):
         super().__init__(model_name, filters_name, **kwargs)
@@ -176,6 +188,12 @@ class OpenAIModel(LLMModel):
         # Extract OpenAI-specific config
         self.organization: str = kwargs.get(const.ORGANIZATION, "")
         self.client_args = kwargs.get(const.CLIENT_ARGS, {})
+        self.use_responses_api = use_responses_api
+        self.responses_api_params = dict(responses_api_params or {})
+        reserved_response_params = {"model", "input", "stream"}.intersection(self.responses_api_params)
+        if reserved_response_params:
+            names = ", ".join(sorted(reserved_response_params))
+            raise ValueError(f"responses_api_params cannot override managed parameters: {names}")
         # Allow callers to inject a tuned httpx client
         http_client_provider_factory = http_client_provider_factory or temporary_http_client_provider_factory
         self._http_client_provider: BaseHttpClientProvider = http_client_provider_factory()
@@ -234,7 +252,7 @@ class OpenAIModel(LLMModel):
         logging.getLogger("httpx").setLevel(logging.WARNING)
 
         client_args = self.client_args.copy()
-        client_args['http_client'] = self._http_client_provider.create_http_client()
+        client_args["http_client"] = self._http_client_provider.create_http_client()
 
         return openai.AsyncOpenAI(
             api_key=self._api_key,
@@ -320,8 +338,13 @@ class OpenAIModel(LLMModel):
 
             parts: list[Part] = content.parts  # type: ignore
             conditions_iter = [
-                len(parts) == 1, parts[0].text, parts[0].function_call, parts[0].function_response,
-                parts[0].code_execution_result, parts[0].executable_code, parts[0].inline_data
+                len(parts) == 1,
+                parts[0].text,
+                parts[0].function_call,
+                parts[0].function_response,
+                parts[0].code_execution_result,
+                parts[0].executable_code,
+                parts[0].inline_data,
             ]
             # Handle different content structures
             if all(conditions_iter):
@@ -337,11 +360,21 @@ class OpenAIModel(LLMModel):
                 text_parts = []
                 image_parts = []
                 tool_calls = []
+                responses_input_items = []
 
                 for part in parts:  # type: ignore
+                    if part.thought:
+                        if self.use_responses_api and part.thought_signature:
+                            try:
+                                raw = part.thought_signature
+                                raw = raw.decode("utf-8") if isinstance(raw, bytes) else raw
+                                reasoning_item = json.loads(raw)
+                                if isinstance(reasoning_item, dict) and reasoning_item.get("type") == "reasoning":
+                                    responses_input_items.append(reasoning_item)
+                            except (UnicodeDecodeError, json.JSONDecodeError, TypeError):
+                                logger.warning("Ignoring invalid Responses reasoning item metadata")
+                        continue
                     if part.text:
-                        if part.thought:
-                            continue
                         text_parts.append(part.text)
                     elif part.inline_data and part.inline_data.mime_type:
                         # Handle image data - convert to OpenAI vision format
@@ -448,6 +481,16 @@ class OpenAIModel(LLMModel):
                     if self._adapter.should_backfill_reasoning_content(role, message):
                         message[const.REASONING_CONTENT] = ""
 
+                    if responses_input_items:
+                        message[_RESPONSES_INPUT_ITEMS] = responses_input_items
+
+                    formatted_messages.append(message)
+                elif responses_input_items:
+                    # Pure-reasoning turn: the assistant emitted only thought
+                    # parts with no text, image, or tool call.  We must still
+                    # emit a message so that the collected Responses reasoning
+                    # items are not silently dropped from conversation history.
+                    message = {const.ROLE: role, const.CONTENT: "", _RESPONSES_INPUT_ITEMS: responses_input_items}
                     formatted_messages.append(message)
 
         # Validate and fix message sequence for OpenAI compatibility
@@ -503,8 +546,10 @@ class OpenAIModel(LLMModel):
                     # Assistant message without tool calls
                     if pending_tool_calls:
                         # Need to add dummy responses for pending tool calls
-                        logger.warning("Adding dummy tool responses for %s pending tool calls before assistant message",
-                                       len(pending_tool_calls))
+                        logger.warning(
+                            "Adding dummy tool responses for %s pending tool calls before assistant message",
+                            len(pending_tool_calls),
+                        )
                         for pending_call in pending_tool_calls:
                             dummy_response = {
                                 const.ROLE: const.TOOL,
@@ -533,8 +578,11 @@ class OpenAIModel(LLMModel):
                 # User or system message
                 if pending_tool_calls:
                     # Add dummy responses for any pending tool calls before user/system message
-                    logger.warning("Adding dummy tool responses for %s pending tool calls before %s message",
-                                   len(pending_tool_calls), role)
+                    logger.warning(
+                        "Adding dummy tool responses for %s pending tool calls before %s message",
+                        len(pending_tool_calls),
+                        role,
+                    )
                     for pending_call in pending_tool_calls:
                         dummy_response = {
                             const.ROLE: const.TOOL,
@@ -729,14 +777,15 @@ class OpenAIModel(LLMModel):
         ``cache_read_input_tokens`` prefers Anthropic/LiteLLM-style top-level fields;
         falls back to OpenAI-style ``prompt_tokens_details.cached_tokens``.
         """
-        completion_details = usage_data.get("completion_tokens_details") or {}
+        completion_details = (usage_data.get("completion_tokens_details") or usage_data.get("output_tokens_details")
+                              or {})
         cache_read = usage_data.get("cache_read_input_tokens")
         if cache_read is None:
-            details = usage_data.get("prompt_tokens_details")
+            details = usage_data.get("prompt_tokens_details") or usage_data.get("input_tokens_details")
             cache_read = details.get("cached_tokens") if isinstance(details, dict) else None
         return GenerateContentResponseUsageMetadata(
-            prompt_token_count=usage_data.get("prompt_tokens", 0),
-            candidates_token_count=usage_data.get("completion_tokens", 0),
+            prompt_token_count=usage_data.get("prompt_tokens", usage_data.get("input_tokens", 0)),
+            candidates_token_count=usage_data.get("completion_tokens", usage_data.get("output_tokens", 0)),
             thoughts_token_count=completion_details.get("reasoning_tokens"),
             total_token_count=usage_data.get("total_tokens", 0),
             cache_read_input_tokens=cache_read,
@@ -849,8 +898,12 @@ class OpenAIModel(LLMModel):
                         logger.warning("Generated fallback ID '%s' for tool call with missing ID", tool_call_id)
 
                     thought_sig = tool_call_data.get(ToolKey.THOUGHT_SIGNATURE) or None
-                    logger.debug("Creating tool call: id=%s, name=%s, arguments=%s", tool_call_id,
-                                 function_map[ToolKey.NAME], arguments)
+                    logger.debug(
+                        "Creating tool call: id=%s, name=%s, arguments=%s",
+                        tool_call_id,
+                        function_map[ToolKey.NAME],
+                        arguments,
+                    )
                     complete_tool_calls.append(
                         ToolCall(
                             id=tool_call_id,
@@ -1051,7 +1104,8 @@ class OpenAIModel(LLMModel):
                         tool_call = ToolCall(
                             id=f"call_{uuid.uuid4().hex[:24]}",
                             name=func_call.name,  # type: ignore
-                            arguments=func_call.args)  # type: ignore
+                            arguments=func_call.args,
+                        )  # type: ignore
                         tool_calls.append(tool_call)
             except Exception as ex:  # pylint: disable=broad-except
                 logger.warning("Failed to parse function calls from text content: %s", ex)
@@ -1102,11 +1156,240 @@ class OpenAIModel(LLMModel):
 
         return LlmResponse(content=content, usage_metadata=usage, error_code=error_code, response_id=response_id)
 
-    async def _generate_single(self,
-                               api_params: Dict,
-                               request: LlmRequest,
-                               http_options: Dict[str, Any] | None = None,
-                               ctx: InvocationContext | None = None) -> LlmResponse:
+    @staticmethod
+    def _model_dump(value: Any) -> dict:
+        """Return a dictionary for OpenAI SDK models and test doubles."""
+        if isinstance(value, dict):
+            return value
+        return value.model_dump()
+
+    def _convert_messages_to_responses_input(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Convert Chat Completions messages to Responses input items."""
+        input_items: List[Dict[str, Any]] = []
+        for message in messages:
+            role = message.get(const.ROLE, const.USER)
+            if role == const.TOOL:
+                input_items.append({
+                    "type": "function_call_output",
+                    "call_id": message.get(const.TOOL_CALL_ID, "unknown"),
+                    "output": str(message.get(const.CONTENT, "")),
+                })
+                continue
+
+            input_items.extend(message.get(_RESPONSES_INPUT_ITEMS) or [])
+
+            content = message.get(const.CONTENT)
+            if content not in (None, "", []):
+                if isinstance(content, list):
+                    converted_content = []
+                    for item in content:
+                        item_type = item.get("type")
+                        if item_type == "image_url":
+                            image = item.get("image_url") or {}
+                            converted_content.append({
+                                "type": "input_image",
+                                "image_url": image.get("url", ""),
+                                "detail": image.get("detail", "auto"),
+                            })
+                        elif item_type == "text":
+                            converted_content.append({
+                                "type": "output_text" if role == const.ASSISTANT else "input_text",
+                                "text": item.get("text", ""),
+                            })
+                        else:
+                            converted_content.append(item)
+                    content = converted_content
+                input_items.append({"role": role, "content": content})
+
+            for tool_call in message.get(const.TOOL_CALLS, []) or []:
+                function = tool_call.get(ToolKey.FUNCTION, {})
+                input_items.append({
+                    "type": "function_call",
+                    "call_id": tool_call.get(ToolKey.ID) or f"call_{uuid.uuid4().hex[:24]}",
+                    "name": function.get(ToolKey.NAME, ""),
+                    "arguments": function.get(ToolKey.ARGUMENTS, "{}"),
+                })
+        return input_items
+
+    @staticmethod
+    def _convert_tools_to_responses_format(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Flatten Chat Completions function definitions for Responses."""
+        converted = []
+        for tool in tools:
+            if tool.get("type") != "function":
+                converted.append(tool)
+                continue
+            function = dict(tool.get("function") or {})
+            function["type"] = "function"
+            converted.append(function)
+        return converted
+
+    @staticmethod
+    def _convert_response_format_to_responses(response_format: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert Chat Completions response_format to Responses text config."""
+        if response_format.get("type") == "json_schema":
+            schema = dict(response_format.get("json_schema") or {})
+            return {"format": {"type": "json_schema", **schema}}
+        return {"format": dict(response_format)}
+
+    def _convert_api_params_to_responses(self, api_params: Dict[str, Any]) -> Dict[str, Any]:
+        """Translate shared generation parameters to ``responses.create``."""
+        responses_params: Dict[str, Any] = {
+            "model": api_params[ApiParamsKey.MODEL],
+            "input": self._convert_messages_to_responses_input(api_params[ApiParamsKey.MESSAGES]),
+            "stream": api_params[ApiParamsKey.STREAM],
+        }
+        parameter_map = {
+            ApiParamsKey.TEMPERATURE: "temperature",
+            ApiParamsKey.TOP_P: "top_p",
+            ApiParamsKey.TOOL_CHOICE: "tool_choice",
+            ApiParamsKey.PARALLEL_TOOL_CALLS: "parallel_tool_calls",
+            ApiParamsKey.PROMPT_CACHE_KEY: "prompt_cache_key",
+            ApiParamsKey.PROMPT_CACHE_RETENTION: "prompt_cache_retention",
+        }
+        for source, target in parameter_map.items():
+            if source in api_params:
+                responses_params[target] = api_params[source]
+
+        # The OpenAI Python SDK has used more than one Responses logprobs
+        # shape. Keep this framework-level request private until we can inspect
+        # the installed client's supported parameters immediately before send.
+        response_logprobs = api_params.get(ApiParamsKey.LOGPROBS)
+        top_logprobs = api_params.get(ApiParamsKey.TOP_LOGPROBS)
+        if response_logprobs is not None or top_logprobs is not None:
+            responses_params[_RESPONSES_LOGPROBS_REQUEST] = {
+                "enabled": bool(response_logprobs) if response_logprobs is not None else bool(top_logprobs),
+                "top_logprobs": top_logprobs,
+            }
+
+        max_output_tokens = api_params.get(ApiParamsKey.MAX_COMPLETION_TOKENS) or api_params.get(
+            ApiParamsKey.MAX_TOKENS)
+        if max_output_tokens:
+            responses_params["max_output_tokens"] = max_output_tokens
+        if ApiParamsKey.TOOLS in api_params:
+            responses_params["tools"] = self._convert_tools_to_responses_format(api_params[ApiParamsKey.TOOLS])
+        if ApiParamsKey.RESPONSE_FORMAT in api_params:
+            responses_params["text"] = self._convert_response_format_to_responses(
+                api_params[ApiParamsKey.RESPONSE_FORMAT])
+
+        responses_params.update(self.responses_api_params)
+        if responses_params.get("store") is False:
+            include = list(responses_params.get("include") or [])
+            if "reasoning.encrypted_content" not in include:
+                include.append("reasoning.encrypted_content")
+            responses_params["include"] = include
+        return responses_params
+
+    @staticmethod
+    def _prepare_responses_api_params(client: Any, api_params: Dict[str, Any]) -> Dict[str, Any]:
+        """Adapt optional logprobs to the installed OpenAI client's capability.
+
+        ``openai>=1.66`` exposes Responses but accepts neither of the later
+        logprobs parameter shapes. Newer clients may expose either a top-level
+        ``top_logprobs`` integer or a structured ``logprobs`` object.
+        """
+        prepared = dict(api_params)
+        requested = prepared.pop(_RESPONSES_LOGPROBS_REQUEST, None)
+        if not requested or not requested["enabled"]:
+            return prepared
+
+        try:
+            supported = inspect.signature(client.responses.create).parameters
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Unable to determine Responses logprobs support") from exc
+
+        if "logprobs" in supported:
+            prepared["logprobs"] = requested
+            return prepared
+
+        top_logprobs = requested["top_logprobs"]
+        if "top_logprobs" in supported and top_logprobs:
+            prepared["top_logprobs"] = top_logprobs
+            return prepared
+
+        raise ValueError("Responses logprobs requires an OpenAI SDK that supports the Responses "
+                         "logprobs parameters; upgrade openai or disable logprobs.")
+
+    @staticmethod
+    def _responses_error(response_dict: dict) -> tuple[Optional[str], Optional[str]]:
+        status = response_dict.get("status")
+        if status not in {"failed", "incomplete", "cancelled"}:
+            return None, None
+        error = response_dict.get("error") or response_dict.get("incomplete_details") or {}
+        if isinstance(error, dict):
+            return str(error.get("code") or status), str(error.get("message") or error.get("reason") or status)
+        return str(status), str(error)
+
+    def _create_responses_response(self, response_dict: dict) -> LlmResponse:
+        """Convert a completed Responses payload into ``LlmResponse``."""
+        parts = []
+        for item in response_dict.get("output") or []:
+            item_type = item.get("type")
+            if item_type == "reasoning":
+                summaries = item.get("summary") or []
+                if not summaries:
+                    part = Part.from_text(text="")
+                    part.thought = True
+                    part.thought_signature = json.dumps(item, ensure_ascii=False).encode("utf-8")
+                    parts.append(part)
+                for index, summary in enumerate(summaries):
+                    text = summary.get("text") if isinstance(summary, dict) else None
+                    if text:
+                        part = Part.from_text(text=text)
+                        part.thought = True
+                        if index == 0:
+                            part.thought_signature = json.dumps(item, ensure_ascii=False).encode("utf-8")
+                        parts.append(part)
+            elif item_type == "message":
+                for output_part in item.get("content") or []:
+                    text = output_part.get("text") or output_part.get("refusal")
+                    if text:
+                        part = Part.from_text(text=text)
+                        part.thought = False
+                        parts.append(part)
+            elif item_type == "function_call":
+                arguments = json_loads_repair(item.get("arguments") or "{}")
+                if not isinstance(arguments, dict):
+                    logger.warning("Skipping Responses function call with non-dict arguments: %r", arguments)
+                    continue
+                part = Part.from_function_call(name=item.get("name", ""), args=arguments)
+                part.function_call.id = item.get("call_id") or item.get("id")  # type: ignore
+                parts.append(part)
+
+        content = Content(parts=parts, role=const.MODEL) if parts else None
+        usage = self._process_usage_from_response(response_dict)
+        error_code, error_message = self._responses_error(response_dict)
+        return LlmResponse(
+            content=content,
+            usage_metadata=usage,
+            error_code=error_code,
+            error_message=error_message,
+            response_id=response_dict.get("id"),
+        )
+
+    async def _generate_responses_single(
+        self,
+        api_params: Dict[str, Any],
+        http_options: Optional[Dict[str, Any]] = None,
+    ) -> LlmResponse:
+        """Generate one non-streaming response through the Responses API."""
+        client = self._create_async_client()
+        try:
+            response = await client.responses.create(
+                **self._prepare_responses_api_params(client, api_params),
+                **(http_options or {}),
+            )
+            return self._create_responses_response(self._model_dump(response))
+        finally:
+            await self._http_client_provider.close_http_client(client)
+
+    async def _generate_single(
+        self,
+        api_params: Dict,
+        request: LlmRequest,
+        http_options: Dict[str, Any] | None = None,
+        ctx: InvocationContext | None = None,
+    ) -> LlmResponse:
         """Generate a single response (non-streaming)."""
         if http_options is None:
             http_options = {}
@@ -1428,7 +1711,8 @@ class OpenAIModel(LLMModel):
         if unsupported_options:
             logger.warning(
                 "The following configuration options are not supported in OpenAI models and will be ignored: %s",
-                ', '.join(unsupported_options))
+                ", ".join(unsupported_options),
+            )
 
     @override
     async def _generate_async_impl(self,
@@ -1481,11 +1765,11 @@ class OpenAIModel(LLMModel):
                     api_params[ApiParamsKey.STOP] = request.config.stop_sequences
 
                 # Additional OpenAI-specific parameters
-                if (request.config.frequency_penalty is not None
-                        and not self._adapter.should_skip_config_param("frequency_penalty")):
+                if request.config.frequency_penalty is not None and not self._adapter.should_skip_config_param(
+                        "frequency_penalty"):
                     api_params[ApiParamsKey.FREQUENCY_PENALTY] = request.config.frequency_penalty
-                if (request.config.presence_penalty is not None
-                        and not self._adapter.should_skip_config_param("presence_penalty")):
+                if request.config.presence_penalty is not None and not self._adapter.should_skip_config_param(
+                        "presence_penalty"):
                     api_params[ApiParamsKey.PRESENCE_PENALTY] = request.config.presence_penalty
                 if request.config.seed is not None and not self._adapter.should_skip_config_param("seed"):
                     api_params[ApiParamsKey.SEED] = request.config.seed
@@ -1528,21 +1812,217 @@ class OpenAIModel(LLMModel):
         http_options = {}
         if request.config:
             http_options = self._extract_http_options(request.config)
-        # set thinking params
-        self._set_thinking(request, http_options)
+        if self.use_responses_api:
+            api_params = self._convert_api_params_to_responses(api_params)
+            if (request.config and request.config.thinking_config and request.config.thinking_config.include_thoughts
+                    and request.config.thinking_config.thinking_budget != 0):
+                reasoning = dict(api_params.get("reasoning") or {})
+                reasoning.setdefault("summary", "auto")
+                # Map thinking_budget to reasoning.effort so the Responses
+                # API can also control reasoning depth.  -1 means "automatic"
+                # and is left to the model; positive budgets are bucketed
+                # into low / medium / high.
+                budget = request.config.thinking_config.thinking_budget
+                if isinstance(budget, int) and budget > 0:
+                    if budget <= 5000:
+                        reasoning.setdefault("effort", "low")
+                    elif budget <= 15000:
+                        reasoning.setdefault("effort", "medium")
+                    else:
+                        reasoning.setdefault("effort", "high")
+                api_params["reasoning"] = reasoning
+        else:
+            # Chat Completions provider-specific thinking params.
+            self._set_thinking(request, http_options)
 
         if stream:
-            async for response in self._generate_stream(api_params, request, http_options, ctx):
+            generator = (self._generate_responses_stream(api_params, request, http_options)
+                         if self.use_responses_api else self._generate_stream(api_params, request, http_options, ctx))
+            async for response in generator:
                 yield response
         else:
-            response = await self._generate_single(api_params, request, http_options, ctx)
+            response = (await self._generate_responses_single(api_params, http_options) if self.use_responses_api else
+                        await self._generate_single(api_params, request, http_options, ctx))
             yield response
 
-    async def _generate_stream(self,
-                               api_params: Dict,
-                               request: LlmRequest,
-                               http_options: Dict[str, Any] | None = None,
-                               ctx: InvocationContext | None = None) -> AsyncGenerator[LlmResponse, None]:
+    async def _generate_responses_stream(
+        self,
+        api_params: Dict[str, Any],
+        request: LlmRequest,
+        http_options: Optional[Dict[str, Any]] = None,
+    ) -> AsyncGenerator[LlmResponse, None]:
+        """Generate streaming responses through ``responses.create``."""
+        client = self._create_async_client()
+        response_id: Optional[str] = None
+        completed_response: Optional[dict] = None
+        accumulated_text = ""
+        accumulated_reasoning = ""
+        function_calls: Dict[str, Dict[str, Any]] = {}
+        function_order: List[str] = []
+        streaming_tool_names = getattr(request, "streaming_tool_names", None) or set()
+
+        def upsert_function(item: dict) -> tuple[str, Dict[str, Any]]:
+            item_id = str(item.get("id") or item.get("call_id") or f"fc_{len(function_order)}")
+            if item_id not in function_calls:
+                function_calls[item_id] = {
+                    "type": "function_call",
+                    "id": item.get("id"),
+                    "call_id": item.get("call_id") or item.get("id"),
+                    "name": item.get("name", ""),
+                    "arguments": item.get("arguments") or "",
+                }
+                function_order.append(item_id)
+            else:
+                current = function_calls[item_id]
+                for key in ("id", "call_id", "name"):
+                    if item.get(key):
+                        current[key] = item[key]
+                if item.get("arguments"):
+                    current["arguments"] = item["arguments"]
+            return item_id, function_calls[item_id]
+
+        try:
+            response = await client.responses.create(
+                **self._prepare_responses_api_params(client, api_params),
+                **(http_options or {}),
+            )
+            if response is None:
+                raise ValueError("Empty response from Responses API")
+
+            async for event in response:
+                event_dict = self._model_dump(event)
+                event_type = event_dict.get("type", "")
+                logger.debug("OpenAI Responses event: %s", json.dumps(event_dict, ensure_ascii=False))
+
+                response_data = event_dict.get("response") or {}
+                if response_id is None and response_data.get("id"):
+                    response_id = response_data["id"]
+                if response_id is None and event_dict.get("response_id"):
+                    response_id = event_dict["response_id"]
+
+                if event_type == "error":
+                    completed_response = {
+                        "id": response_id,
+                        "status": "failed",
+                        "error": {
+                            "code": event_dict.get("code") or "responses_stream_error",
+                            "message": event_dict.get("message") or "Responses stream failed",
+                        },
+                        "output": [],
+                    }
+                    continue
+
+                if event_type in {"response.output_text.delta", "response.refusal.delta"}:
+                    delta = event_dict.get("delta") or ""
+                    if delta:
+                        accumulated_text += delta
+                        part = Part.from_text(text=delta)
+                        part.thought = False
+                        yield LlmResponse(
+                            content=Content(parts=[part], role=const.MODEL),
+                            partial=True,
+                            response_id=response_id,
+                            custom_metadata={const.CHUNK: event_dict},
+                        )
+                    continue
+
+                if event_type in {"response.reasoning_summary_text.delta", "response.reasoning_text.delta"}:
+                    delta = event_dict.get("delta") or ""
+                    if delta:
+                        accumulated_reasoning += delta
+                        part = Part.from_text(text=delta)
+                        part.thought = True
+                        yield LlmResponse(
+                            content=Content(parts=[part], role=const.MODEL),
+                            partial=True,
+                            response_id=response_id,
+                            custom_metadata={const.CHUNK: event_dict},
+                        )
+                    continue
+
+                if event_type in {"response.output_item.added", "response.output_item.done"}:
+                    item = event_dict.get("item") or {}
+                    if item.get("type") == "function_call":
+                        upsert_function(item)
+                    continue
+
+                if event_type == "response.function_call_arguments.delta":
+                    item_id = str(event_dict.get("item_id") or f"fc_{event_dict.get('output_index', 0)}")
+                    if item_id not in function_calls:
+                        function_order.append(item_id)
+                        function_calls[item_id] = {
+                            "type": "function_call",
+                            "id": event_dict.get("item_id"),
+                            "call_id": event_dict.get("call_id") or event_dict.get("item_id"),
+                            "name": event_dict.get("name", ""),
+                            "arguments": "",
+                        }
+                    function_call = function_calls[item_id]
+                    delta = event_dict.get("delta") or ""
+                    function_call["arguments"] += delta
+                    name = function_call.get("name", "")
+                    if delta and name and name in streaming_tool_names:
+                        part = Part.from_function_call(name=name, args={const.TOOL_STREAMING_ARGS: delta})
+                        part.function_call.id = function_call.get("call_id")  # type: ignore
+                        yield LlmResponse(
+                            content=Content(parts=[part], role=const.MODEL),
+                            partial=True,
+                            response_id=response_id,
+                            custom_metadata={
+                                const.CHUNK: event_dict,
+                                const.TOOL_STREAMING: True
+                            },
+                        )
+                    continue
+
+                if event_type == "response.function_call_arguments.done":
+                    item_id = str(event_dict.get("item_id") or f"fc_{event_dict.get('output_index', 0)}")
+                    item = event_dict.get("item") or {}
+                    if item.get("type") == "function_call":
+                        upsert_function(item)
+                    elif item_id in function_calls:
+                        function_calls[item_id]["arguments"] = event_dict.get("arguments") or ""
+                    continue
+
+                if event_type in {"response.completed", "response.failed", "response.incomplete"}:
+                    completed_response = response_data
+
+            if completed_response is None:
+                output = []
+                if accumulated_reasoning:
+                    output.append({
+                        "type": "reasoning",
+                        "summary": [{
+                            "type": "summary_text",
+                            "text": accumulated_reasoning
+                        }],
+                    })
+                if accumulated_text:
+                    output.append({
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{
+                            "type": "output_text",
+                            "text": accumulated_text
+                        }],
+                    })
+                output.extend(function_calls[item_id] for item_id in function_order)
+                completed_response = {"id": response_id, "status": "completed", "output": output}
+
+            final_response = self._create_responses_response(completed_response)
+            final_response.partial = False
+            final_response.custom_metadata = {"stream_complete": True}
+            yield final_response
+        finally:
+            await self._http_client_provider.close_http_client(client)
+
+    async def _generate_stream(
+        self,
+        api_params: Dict,
+        request: LlmRequest,
+        http_options: Dict[str, Any] | None = None,
+        ctx: InvocationContext | None = None,
+    ) -> AsyncGenerator[LlmResponse, None]:
         """Generate streaming responses."""
         if http_options is None:
             http_options = {}
@@ -1555,7 +2035,7 @@ class OpenAIModel(LLMModel):
         response_id: str | None = None  # Track response ID from API
 
         # For streaming tool call arguments - get the set of tool names that should stream
-        streaming_tool_names = getattr(request, 'streaming_tool_names', None) or set()
+        streaming_tool_names = getattr(request, "streaming_tool_names", None) or set()
 
         # Create tool prompt instance for streaming if needed
         tool_prompt = None
@@ -1649,10 +2129,12 @@ class OpenAIModel(LLMModel):
                         content_part.thought = True
 
                         partial_content = Content(parts=[content_part], role=const.MODEL)
-                        yield LlmResponse(content=partial_content,
-                                          partial=True,
-                                          response_id=response_id,
-                                          custom_metadata={const.CHUNK: chunk_dict})
+                        yield LlmResponse(
+                            content=partial_content,
+                            partial=True,
+                            response_id=response_id,
+                            custom_metadata={const.CHUNK: chunk_dict},
+                        )
 
                 # Handle regular content
                 if delta.get(const.CONTENT):
@@ -1677,10 +2159,12 @@ class OpenAIModel(LLMModel):
                         content_part.thought = is_thinking
 
                         partial_content = Content(parts=[content_part], role=const.MODEL)
-                        yield LlmResponse(content=partial_content,
-                                          partial=True,
-                                          response_id=response_id,
-                                          custom_metadata={const.CHUNK: chunk_dict})
+                        yield LlmResponse(
+                            content=partial_content,
+                            partial=True,
+                            response_id=response_id,
+                            custom_metadata={const.CHUNK: chunk_dict},
+                        )
 
                 # Handle usage
                 usage = self._process_usage(chunk_dict)
@@ -1696,10 +2180,12 @@ class OpenAIModel(LLMModel):
                         content_part = Part.from_text(text=flushed_reasoning_text)
                         content_part.thought = True
                         partial_content = Content(parts=[content_part], role=const.MODEL)
-                        yield LlmResponse(content=partial_content,
-                                          partial=True,
-                                          response_id=response_id,
-                                          custom_metadata={"stream_filter_flushed": "reasoning"})
+                        yield LlmResponse(
+                            content=partial_content,
+                            partial=True,
+                            response_id=response_id,
+                            custom_metadata={"stream_filter_flushed": "reasoning"},
+                        )
 
                 flushed_content_text = self._adapter.flush_streaming_text(streaming_text_filter_state["content"])
                 if flushed_content_text:
@@ -1708,10 +2194,12 @@ class OpenAIModel(LLMModel):
                     content_part = Part.from_text(text=flushed_content_text)
                     content_part.thought = is_thinking
                     partial_content = Content(parts=[content_part], role=const.MODEL)
-                    yield LlmResponse(content=partial_content,
-                                      partial=True,
-                                      response_id=response_id,
-                                      custom_metadata={"stream_filter_flushed": "content"})
+                    yield LlmResponse(
+                        content=partial_content,
+                        partial=True,
+                        response_id=response_id,
+                        custom_metadata={"stream_filter_flushed": "content"},
+                    )
 
             # Yield final complete response
             final_content = None

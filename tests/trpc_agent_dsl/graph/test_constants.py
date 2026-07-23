@@ -39,6 +39,7 @@ from trpc_agent_sdk.dsl.graph._constants import (
     STATE_KEY_NODE_RESPONSES,
     STATE_KEY_ONE_SHOT_MESSAGES,
     STATE_KEY_ONE_SHOT_MESSAGES_BY_NODE,
+    STATE_KEY_PENDING_AGENT_NODE_HITL,
     STATE_KEY_PENDING_INTERRUPT,
     STATE_KEY_PENDING_INTERRUPT_AUTHOR,
     STATE_KEY_PENDING_INTERRUPT_BRANCH,
@@ -114,6 +115,7 @@ class TestStateKeyValues:
         assert STATE_KEY_PENDING_INTERRUPT_ID == "_trpc_graph_pending_interrupt_id"
         assert STATE_KEY_PENDING_INTERRUPT_AUTHOR == "_trpc_graph_pending_interrupt_author"
         assert STATE_KEY_PENDING_INTERRUPT_BRANCH == "_trpc_graph_pending_interrupt_branch"
+        assert STATE_KEY_PENDING_AGENT_NODE_HITL == "_trpc_graph_pending_agent_node_hitl"
         assert STATE_KEY_LONG_RUNNING_PREFIX == "__trpc_graph_long_running__"
 
     def test_role_values(self):
@@ -145,6 +147,7 @@ class TestUnsafeStateKeys:
             STATE_KEY_PENDING_INTERRUPT_ID,
             STATE_KEY_PENDING_INTERRUPT_AUTHOR,
             STATE_KEY_PENDING_INTERRUPT_BRANCH,
+            STATE_KEY_PENDING_AGENT_NODE_HITL,
         }
         assert UNSAFE_STATE_KEYS == expected
 
@@ -169,10 +172,15 @@ class TestUnsafeStateKeys:
     def test_serializable_keys_are_not_unsafe(self):
         """Keys that represent user-visible data should never appear in UNSAFE_STATE_KEYS."""
         serializable = {
-            STATE_KEY_USER_INPUT, STATE_KEY_MESSAGES, STATE_KEY_LAST_RESPONSE,
-            STATE_KEY_LAST_RESPONSE_ID, STATE_KEY_LAST_TOOL_RESPONSE,
-            STATE_KEY_NODE_RESPONSES, STATE_KEY_ONE_SHOT_MESSAGES,
-            STATE_KEY_ONE_SHOT_MESSAGES_BY_NODE, STATE_KEY_METADATA,
+            STATE_KEY_USER_INPUT,
+            STATE_KEY_MESSAGES,
+            STATE_KEY_LAST_RESPONSE,
+            STATE_KEY_LAST_RESPONSE_ID,
+            STATE_KEY_LAST_TOOL_RESPONSE,
+            STATE_KEY_NODE_RESPONSES,
+            STATE_KEY_ONE_SHOT_MESSAGES,
+            STATE_KEY_ONE_SHOT_MESSAGES_BY_NODE,
+            STATE_KEY_METADATA,
             STATE_KEY_STEP_NUMBER,
         }
         assert serializable.isdisjoint(UNSAFE_STATE_KEYS)

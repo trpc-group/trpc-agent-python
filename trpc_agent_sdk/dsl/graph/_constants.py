@@ -148,6 +148,11 @@ STATE_KEY_PENDING_INTERRUPT_ID = "_trpc_graph_pending_interrupt_id"
 STATE_KEY_PENDING_INTERRUPT_AUTHOR = "_trpc_graph_pending_interrupt_author"
 STATE_KEY_PENDING_INTERRUPT_BRANCH = "_trpc_graph_pending_interrupt_branch"
 
+# Pending child-agent HITL context owned by AgentNodeAction. This bridges a
+# child LongRunningEvent into a parent GraphAgent interrupt and supports
+# replaying multiple clarification rounds in the same graph node.
+STATE_KEY_PENDING_AGENT_NODE_HITL = "_trpc_graph_pending_agent_node_hitl"
+
 # Prefix for synthetic function call IDs used by graph interrupt bridge
 STATE_KEY_LONG_RUNNING_PREFIX = "__trpc_graph_long_running__"
 
@@ -179,6 +184,7 @@ UNSAFE_STATE_KEYS = frozenset({
     STATE_KEY_PENDING_INTERRUPT_ID,
     STATE_KEY_PENDING_INTERRUPT_AUTHOR,
     STATE_KEY_PENDING_INTERRUPT_BRANCH,
+    STATE_KEY_PENDING_AGENT_NODE_HITL,
 })
 
 

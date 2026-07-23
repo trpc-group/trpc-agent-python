@@ -185,9 +185,10 @@ class EventBuilder:
         # Store metadata in state_delta
         state_delta: dict[str, Any] = {}
         _store_metadata(state_delta, METADATA_KEY_NODE, metadata)
+        display_name = node_description.strip() if node_description and node_description.strip() else node_id
 
         return self._build_event(
-            text=f"Starting node: {node_id}",
+            text=f"Starting node: {display_name}",
             state_delta=state_delta,
             partial=True,
             author_override=self._author or node_id,
@@ -227,9 +228,10 @@ class EventBuilder:
         # Store metadata in state_delta
         state_delta: dict[str, Any] = {}
         _store_metadata(state_delta, METADATA_KEY_NODE, metadata)
+        display_name = node_description.strip() if node_description and node_description.strip() else node_id
 
         return self._build_event(
-            text=f"Completed node: {node_id} ({duration_ms:.1f}ms)",
+            text=f"Completed node: {display_name} ({duration_ms:.1f}ms)",
             state_delta=state_delta,
             author_override=self._author or node_id,
             object_type=GraphEventType.GRAPH_NODE_COMPLETE,
@@ -266,7 +268,8 @@ class EventBuilder:
         _store_metadata(state_delta, METADATA_KEY_NODE, metadata)
 
         # Build error message
-        text = f"Error in node {node_id}: {error}"
+        display_name = node_description.strip() if node_description and node_description.strip() else node_id
+        text = f"Error in node {display_name}: {error}"
 
         return self._build_event(
             text=text,

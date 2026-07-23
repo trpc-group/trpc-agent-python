@@ -7,14 +7,34 @@
 
 from __future__ import annotations
 
-from typing import Callable
-from typing import Optional
+from typing import Callable, Optional
+
 from typing_extensions import override
 
 from trpc_agent_sdk.filter import BaseFilter
+from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.types import FunctionDeclaration
 
 from ._function_tool import FunctionTool
+
+# Framework-level tool execution error codes shared between the tools
+# processor (which emits them) and the long-running tool helper (which
+# checks them).  Keeping the literals in one place prevents silent drift
+# when new codes are added.
+TOOL_ERROR_CODE_NOT_FOUND = "tool_not_found"
+TOOL_ERROR_CODE_ARGUMENT_ERROR = "tool_argument_error"
+TOOL_ERROR_CODE_EXECUTION_ERROR = "tool_execution_error"
+
+FRAMEWORK_TOOL_ERROR_CODES = frozenset({
+    TOOL_ERROR_CODE_NOT_FOUND,
+    TOOL_ERROR_CODE_ARGUMENT_ERROR,
+    TOOL_ERROR_CODE_EXECUTION_ERROR,
+})
+
+
+def is_tool_execution_error(event: Event) -> bool:
+    """Return whether the framework, not a tool payload, reported a failure."""
+    return event.error_code in FRAMEWORK_TOOL_ERROR_CODES
 
 
 class LongRunningFunctionTool(FunctionTool):
