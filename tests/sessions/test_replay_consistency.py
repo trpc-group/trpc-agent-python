@@ -6,7 +6,7 @@
 """Replay 一致性 E2E:同一组 case 驱动多后端,比较事件/state/memory/summary。
 
 轻量模式默认 InMemory vs SQLite(:memory:);Redis 经 TRPC_REPLAY_REDIS_URL 启用。
-报告产物:仓库根 session_memory_summary_diff_report.json。
+报告产物:tests/sessions/session_memory_summary_diff_report.json。
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from tests.sessions.replay.report import write_report
 from tests.sessions.replay.summary_checks import check_summary_issues
 
 CASES_DIR = str(Path(__file__).parent / "replay" / "replay_cases")
-REPORT_PATH = str(Path(__file__).parents[2] / "session_memory_summary_diff_report.json")
+REPORT_PATH = str(Path(__file__).parent / "session_memory_summary_diff_report.json")
 LIGHTWEIGHT_TIMEOUT = 30  # 验收第 6 条:轻量模式 ≤30s
 
 KNOWN_DRIFT = {"summary_update", "summary_truncation"}
