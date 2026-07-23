@@ -50,12 +50,13 @@ def _mock_span():
     return span
 
 
-def _make_part(text=None, function_call=None, function_response=None, inline_data=None):
+def _make_part(text=None, function_call=None, function_response=None, inline_data=None, thought=False):
     part = MagicMock()
     part.text = text
     part.function_call = function_call
     part.function_response = function_response
     part.inline_data = inline_data
+    part.thought = thought
     return part
 
 
@@ -228,6 +229,31 @@ class TestTraceRunner:
         )
 
         span.set_attribute.assert_any_call("trpc.python.agent.runner.input", "hello\nworld")
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_with_thought_parts(self, mock_get_span):
+        span = _mock_span()
+        mock_get_span.return_value = span
+        ctx = _make_invocation_context()
+
+        parts = [
+            _make_part(text="thinking...", thought=True),
+            _make_part(text="final answer"),
+        ]
+        content = _make_content(parts=parts)
+
+        trace_runner(
+            app_name="app",
+            user_id="u",
+            session_id="s",
+            invocation_context=ctx,
+            new_message=content,
+        )
+
+        span.set_attribute.assert_any_call(
+            "trpc.python.agent.runner.input",
+            "<trace_think>thinking...</trace_think>\nfinal answer",
+        )
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_with_none_text_parts(self, mock_get_span):
@@ -543,6 +569,25 @@ class TestTraceAgent:
         trace_agent(ctx)
 
         span.set_attribute.assert_any_call("trpc.python.agent.agent.input", "hello\n agent")
+
+    @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
+    def test_with_thought_user_content(self, mock_get_span):
+        span = _mock_span()
+        mock_get_span.return_value = span
+
+        parts = [
+            _make_part(text="reasoning", thought=True),
+            _make_part(text="answer"),
+        ]
+        user_content = _make_content(parts=parts)
+        ctx = _make_invocation_context(user_content=user_content)
+
+        trace_agent(ctx)
+
+        span.set_attribute.assert_any_call(
+            "trpc.python.agent.agent.input",
+            "<trace_think>reasoning</trace_think>\nanswer",
+        )
 
     @patch("trpc_agent_sdk.telemetry._trace.trace.get_current_span")
     def test_without_user_content(self, mock_get_span):
