@@ -4,13 +4,13 @@
 
 **Goal:** 实现一个后端中立的 replay harness,用 10 条标准化轨迹驱动 InMemory/SQLite/Redis,产出可定位的差异报告,并通过快照层 + 端到端后端注入验证检出率/误报率。
 
-**Architecture:** 四段管线 `load JSONL → replay_case → 后端中立快照 → compare → report`。详见 [设计文档](../specs/2026-07-13-session-memory-replay-consistency-design.md)。
+**Architecture:** 四段管线 `load JSONL → replay_case → 后端中立快照 → compare → report`。详见[设计文档](2026-07-13-session-memory-replay-consistency-design.md)(与本计划同置于 `tests/sessions/replay/`)。
 
 **Tech Stack:** Python 3.10+、pytest、pydantic v2、SQLAlchemy(SQLite)、redis-py(mock)。
 
 ## Global Constraints
 
-- **PR 干净**:只碰 `tests/` + 本计划/设计文档 + 仓库根 `session_memory_summary_diff_report.json`(运行产物)。**不改 `trpc_agent_sdk/` 生产代码**;发现的 SDK bug 只在报告/文档记录。
+- **PR 干净**:全部落在 `tests/sessions/` 下 —— 测试代码 + 本计划/设计文档(置于 `tests/sessions/replay/`)+ 报告产物 `tests/sessions/session_memory_summary_diff_report.json`。**不改 `trpc_agent_sdk/` 生产代码**;发现的 SDK bug 只在报告/文档记录。
 - **CI lint**:提交前本地 `PYTHONUTF8=1` 跑 `yapf -ri` + `flake8`([[ci-lint-yapf-flake8]])。
 - **Windows**:`python-magic` 用 `python-magic-bin`([[python-magic-windows-cygwin-crash]])。
 - **提交纪律**:`git add` 只加本计划列出的确切路径,禁用 `-A`/`.`([[subagent-git-add-scope]])。用户未要求不主动 commit/push。
@@ -155,7 +155,7 @@
 - Modify: `tests/sessions/replay/harness.py`(加 `replay_case()`、`_DeterministicSummarizer`)
 
 **Interfaces:**
-- Consumes: `SessionSummarizer`(覆写 `_compress_session_to_summary`,已确认存在于 [`_session_summarizer.py:197`](../../trpc_agent_sdk/sessions/_session_summarizer.py))、`SessionServiceABC.append_event/get_session/update_session`、`MemoryServiceABC.store_session/search_memory`
+- Consumes: `SessionSummarizer`(覆写 `_compress_session_to_summary`,已确认存在于 [`_session_summarizer.py:197`](../../../trpc_agent_sdk/sessions/_session_summarizer.py))、`SessionServiceABC.append_event/get_session/update_session`、`MemoryServiceABC.store_session/search_memory`
 - Produces: `async replay_case(backend, case) -> ReplaySnapshot`
 
 - [ ] **Step 1:** 写 `test_replay_unit.py::test_replay_case_single_turn`(用 InMemory backend):case 含 create_session + 1 append_event → snapshot.events 长度 1、state 含写入值。
@@ -236,7 +236,7 @@
 **Files:**
 - Create: `tests/sessions/test_replay_consistency.py`
 
-- [ ] **Step 1:** 写 `test_replay_consistency_lightweight`:跑全部 10 case × `enabled_backends()`(轻量=in_memory+sqlite),断言正常 case 全 `match`、`false_positive_rate==0.0`,生成 `session_memory_summary_diff_report.json`。
+- [ ] **Step 1:** 写 `test_replay_consistency_lightweight`:跑全部 10 case × `enabled_backends()`(轻量=in_memory+sqlite),断言正常 case 全 `match`、`false_positive_rate==0.0`,生成 `tests/sessions/session_memory_summary_diff_report.json`。
 - [ ] **Step 2:** 写 `test_injection_detection_100pct`:`test_replay_injections.py` 里 10 case 各注入一种 → `detected == [True]*10`。
 - [ ] **Step 3:** 写 `test_summary_three_classes_100pct`:loss/overwrite/affiliation 各注入 → 全检出。
 - [ ] **Step 4:** 跑 `PYTHONUTF8=1 pytest tests/sessions/test_replay_*.py tests/sessions/test_allowed_diff_governance.py tests/sessions/test_summary_checks.py -v`,确认全绿、轻量 ≤30s、报告产物生成且可定位。
