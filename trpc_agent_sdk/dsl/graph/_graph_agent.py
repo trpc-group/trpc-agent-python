@@ -113,8 +113,10 @@ class GraphAgent(BaseAgent):
     @classmethod
     def _reject_sub_agents(cls, data: Any) -> Any:
         if isinstance(data, dict) and "sub_agents" in data:
-            raise ValueError("GraphAgent does not accept `sub_agents`; compose nested agents with "
-                             "`StateGraph.add_agent_node(...)`.")
+            raise ValueError(
+                "GraphAgent does not accept `sub_agents`; compose nested agents with "
+                "`StateGraph.add_agent_node(...)`."
+            )
         return data
 
     @override
@@ -178,9 +180,9 @@ class GraphAgent(BaseAgent):
             # "updates" is required for state to propagate between nodes
             # "custom" enables EventEmitter streaming
             async for mode, chunk in self.graph.astream(
-                    graph_input,
-                    runnable_config,
-                    stream_mode=["updates", "custom"],
+                graph_input,
+                runnable_config,
+                stream_mode=["updates", "custom"],
             ):
                 # Cancellation checkpoint at each iteration
                 await ctx.raise_if_cancelled()
@@ -193,7 +195,8 @@ class GraphAgent(BaseAgent):
                     interrupted = True
                     for interrupt in interrupts:
                         function_call_event, function_response_event, long_running_event = (
-                            self._create_interrupt_events(ctx, interrupt))
+                            self._create_interrupt_events(ctx, interrupt)
+                        )
                         yield function_call_event
                         await ctx.raise_if_cancelled()
                         yield function_response_event
@@ -216,7 +219,8 @@ class GraphAgent(BaseAgent):
                                     if isinstance(key, str):
                                         final_state[key] = value
                                 logger.debug(
-                                    f"[{self.name}] Node '{node_name}' updated keys: {list(node_output.keys())}")
+                                    f"[{self.name}] Node '{node_name}' updated keys: {list(node_output.keys())}"
+                                )
 
                         # Emit state update event
                         if updated_keys:
@@ -293,7 +297,7 @@ class GraphAgent(BaseAgent):
 
         if not function_response_id.startswith(STATE_KEY_LONG_RUNNING_PREFIX):
             return None
-        interrupt_id = function_response_id[len(STATE_KEY_LONG_RUNNING_PREFIX):]
+        interrupt_id = function_response_id.removeprefix(STATE_KEY_LONG_RUNNING_PREFIX)
         if not interrupt_id:
             return None
 
@@ -390,7 +394,11 @@ class GraphAgent(BaseAgent):
         function_call_id = f"{STATE_KEY_LONG_RUNNING_PREFIX}{interrupt_id}"
 
         raw_args = interrupt.value
-        if isinstance(raw_args, dict):
+        if isinstance(raw_args, dict) and raw_args.get("_trpc_agent_node_hitl") is True:
+            function_name = str(raw_args.get("toolName") or function_name)
+            visible_args = raw_args.get("arguments")
+            function_args = visible_args if isinstance(visible_args, dict) else {}
+        elif isinstance(raw_args, dict):
             function_args = {str(key): value for key, value in raw_args.items()}
         else:
             function_args = {"value": raw_args}
@@ -447,15 +455,17 @@ class GraphAgent(BaseAgent):
         else:
             initial_state[STATE_KEY_MESSAGES] = messages
 
-        initial_state.update({
-            STATE_KEY_USER_INPUT: user_input,
-            STATE_KEY_METADATA: {
-                METADATA_KEY_INVOCATION_ID: ctx.invocation_id,
-                METADATA_KEY_BRANCH: ctx.branch or self.name,
-                METADATA_KEY_SESSION_ID: ctx.session.id,
-                METADATA_KEY_AGENT_NAME: self.name,
-            },
-        })
+        initial_state.update(
+            {
+                STATE_KEY_USER_INPUT: user_input,
+                STATE_KEY_METADATA: {
+                    METADATA_KEY_INVOCATION_ID: ctx.invocation_id,
+                    METADATA_KEY_BRANCH: ctx.branch or self.name,
+                    METADATA_KEY_SESSION_ID: ctx.session.id,
+                    METADATA_KEY_AGENT_NAME: self.name,
+                },
+            }
+        )
 
         # Built-ins should always exist for node logic consistency.
         initial_state.setdefault(STATE_KEY_LAST_RESPONSE, None)

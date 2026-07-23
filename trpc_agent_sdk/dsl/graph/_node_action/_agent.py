@@ -10,12 +10,15 @@ from typing import Any
 from typing import Callable
 from typing import Optional
 
+from langgraph.errors import GraphInterrupt
 from trpc_agent_sdk.agents import BaseAgent
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
+from trpc_agent_sdk.events import LongRunningEvent
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import EventActions
+from trpc_agent_sdk.types import FunctionResponse
 from trpc_agent_sdk.types import Part
 
 from .._callbacks import NodeCallbackContext
@@ -23,9 +26,11 @@ from .._callbacks import NodeCallbacks
 from .._constants import STATE_KEY_LAST_RESPONSE
 from .._constants import STATE_KEY_MESSAGES
 from .._constants import STATE_KEY_NODE_RESPONSES
+from .._constants import STATE_KEY_PENDING_AGENT_NODE_HITL
 from .._constants import STATE_KEY_USER_INPUT
 from .._event_writer import AsyncEventWriter
 from .._event_writer import EventWriter
+from .._interrupt import interrupt
 from .._node_config import NodeConfig
 from .._state import State
 from .._state_mapper import SubgraphResult
@@ -117,22 +122,45 @@ class AgentNodeAction(BaseNodeAction):
         if parent_ctx is None:
             raise RuntimeError(
                 f"Agent node '{self.name}' requires InvocationContext but none was set. "
-                "Pass context via config['configurable']['invocation_context'] when executing the graph.")
+                "Pass context via config['configurable']['invocation_context'] when executing the graph."
+            )
 
         child_scope = self.event_scope or self.agent.name
         child_branch = f"{parent_ctx.branch}.{child_scope}" if parent_ctx.branch else child_scope
         child_user_input = child_state.get(STATE_KEY_USER_INPUT, "")
 
+        pending_hitl = self._get_pending_hitl(parent_ctx)
+        resume_content: Optional[Content] = None
+        if pending_hitl is not None:
+            completed_rounds = pending_hitl.get("completed", [])
+            for completed in completed_rounds if isinstance(completed_rounds, list) else []:
+                if isinstance(completed, dict):
+                    interrupt(self._interrupt_payload(completed))
+
+            current_round = pending_hitl.get("current")
+            if not isinstance(current_round, dict):
+                raise RuntimeError(f"Agent node '{self.node_id}' has invalid pending HITL state.")
+            human_response = interrupt(self._interrupt_payload(current_round))
+            resume_content = self._resume_content(current_round, human_response)
+            saved_child_state = current_round.get("child_state")
+            if isinstance(saved_child_state, dict):
+                child_state = dict(saved_child_state)
+
         child_session = parent_ctx.session.model_copy(deep=True)
         child_session.state = dict(child_state)
-        child_events = self._build_child_events(parent_ctx, child_user_input, child_branch)
+        child_events = self._build_child_events(
+            parent_ctx,
+            child_user_input,
+            child_branch,
+            resume_content=resume_content,
+        )
         if hasattr(child_session, "events"):
             child_session.events = child_events
         if self.isolated_messages:
             child_session.state[STATE_KEY_MESSAGES] = []
 
-        child_user_content = None
-        if isinstance(child_user_input, str) and child_user_input:
+        child_user_content = resume_content
+        if child_user_content is None and isinstance(child_user_input, str) and child_user_input:
             child_user_content = Content(
                 role="user",
                 parts=[Part.from_text(text=child_user_input)],
@@ -164,11 +192,35 @@ class AgentNodeAction(BaseNodeAction):
                 transfer_requested = False
                 child_ctx.agent = current_agent
 
-                async for event in current_agent.run_async(child_ctx):
+                agent_stream = current_agent.run_async(child_ctx)
+                async for event in agent_stream:
                     await self._run_agent_event_callbacks(state, event)
 
+                    if isinstance(event, LongRunningEvent):
+                        current_round = self._pending_round(event, child_ctx, final_state)
+                        completed_rounds: list[dict[str, Any]] = []
+                        if pending_hitl is not None:
+                            previous = pending_hitl.get("completed", [])
+                            if isinstance(previous, list):
+                                completed_rounds.extend(item for item in previous if isinstance(item, dict))
+                            previous_current = pending_hitl.get("current")
+                            if isinstance(previous_current, dict):
+                                completed_rounds.append(
+                                    {key: value for key, value in previous_current.items() if key != "child_state"}
+                                )
+                        parent_ctx.state[STATE_KEY_PENDING_AGENT_NODE_HITL] = {
+                            "node_id": self.node_id,
+                            "completed": completed_rounds,
+                            "current": current_round,
+                        }
+                        await agent_stream.aclose()
+                        interrupt(self._interrupt_payload(current_round))
+                        raise RuntimeError(f"Agent node '{self.node_id}' did not suspend after LongRunningEvent.")
+
                     if (not event.partial) and hasattr(child_session, "events"):
-                        child_session.events.append(event.model_copy(deep=True))
+                        existing_ids = {item.id for item in child_session.events if getattr(item, "id", None)}
+                        if not event.id or event.id not in existing_ids:
+                            child_session.events.append(event.model_copy(deep=True))
 
                     if event.actions and event.actions.state_delta:
                         delta = dict(event.actions.state_delta)
@@ -244,7 +296,14 @@ class AgentNodeAction(BaseNodeAction):
                 if isinstance(candidate, str) and candidate:
                     last_response = candidate
 
+            if pending_hitl is not None:
+                parent_ctx.state[STATE_KEY_PENDING_AGENT_NODE_HITL] = None
+
+        except GraphInterrupt:
+            raise
         except Exception as e:
+            if pending_hitl is not None:
+                parent_ctx.state[STATE_KEY_PENDING_AGENT_NODE_HITL] = None
             raise RuntimeError(f"Agent node '{self.name}' execution failed: {e}") from e
 
         if last_response:
@@ -265,9 +324,7 @@ class AgentNodeAction(BaseNodeAction):
 
         default_result = {
             STATE_KEY_LAST_RESPONSE: last_response,
-            STATE_KEY_NODE_RESPONSES: {
-                self.node_id: node_response
-            },
+            STATE_KEY_NODE_RESPONSES: {self.node_id: node_response},
             STATE_KEY_USER_INPUT: "",
         }
 
@@ -276,8 +333,9 @@ class AgentNodeAction(BaseNodeAction):
             if mapped is None:
                 return {}
             if not isinstance(mapped, dict):
-                raise TypeError(f"Output mapper for agent node '{self.node_id}' must return dict, "
-                                f"got {type(mapped).__name__}.")
+                raise TypeError(
+                    f"Output mapper for agent node '{self.node_id}' must return dict, " f"got {type(mapped).__name__}."
+                )
             if STATE_KEY_USER_INPUT not in mapped:
                 mapped = dict(mapped)
                 mapped[STATE_KEY_USER_INPUT] = ""
@@ -290,10 +348,19 @@ class AgentNodeAction(BaseNodeAction):
         parent_ctx: InvocationContext,
         child_user_input: Any,
         child_branch: str,
+        *,
+        resume_content: Optional[Content] = None,
     ) -> list[Event]:
         parent_events = getattr(parent_ctx.session, "events", [])
-        if self.isolated_messages:
-            child_events: list[Event] = []
+        pending_hitl = self._get_pending_hitl(parent_ctx)
+        if self.isolated_messages and pending_hitl is not None:
+            child_events = [
+                event.model_copy(deep=True)
+                for event in parent_events
+                if event.branch == child_branch or str(event.branch or "").startswith(f"{child_branch}.")
+            ]
+        elif self.isolated_messages:
+            child_events = []
         else:
             child_events = [event.model_copy(deep=True) for event in parent_events]
 
@@ -307,8 +374,76 @@ class AgentNodeAction(BaseNodeAction):
                         role="user",
                         parts=[Part.from_text(text=child_user_input)],
                     ),
-                ))
+                )
+            )
+        if resume_content is not None:
+            child_events.append(
+                Event(
+                    invocation_id=parent_ctx.invocation_id,
+                    author="user",
+                    branch=child_branch,
+                    content=resume_content.model_copy(deep=True),
+                )
+            )
         return child_events
+
+    def _get_pending_hitl(self, parent_ctx: InvocationContext) -> Optional[dict[str, Any]]:
+        value = parent_ctx.session.state.get(STATE_KEY_PENDING_AGENT_NODE_HITL)
+        if isinstance(value, dict) and value.get("node_id") == self.node_id:
+            return value
+        return None
+
+    def _pending_round(
+        self,
+        event: LongRunningEvent,
+        child_ctx: InvocationContext,
+        child_state: dict[str, Any],
+    ) -> dict[str, Any]:
+        return {
+            "agent_name": event.author or self.agent.name,
+            "branch": event.branch or child_ctx.branch,
+            "function_call": event.function_call.model_dump(mode="json"),
+            "function_response": event.function_response.model_dump(mode="json"),
+            "child_state": dict(child_state),
+        }
+
+    def _interrupt_payload(self, pending_round: dict[str, Any]) -> dict[str, Any]:
+        function_call = pending_round.get("function_call")
+        function_call = function_call if isinstance(function_call, dict) else {}
+        arguments = function_call.get("args")
+        arguments = arguments if isinstance(arguments, dict) else {}
+        function_response = pending_round.get("function_response")
+        function_response = function_response if isinstance(function_response, dict) else {}
+        response = function_response.get("response")
+        response = response if isinstance(response, dict) else {}
+        return {
+            "_trpc_agent_node_hitl": True,
+            "nodeId": self.node_id,
+            "agentName": str(pending_round.get("agent_name") or self.agent.name),
+            "toolName": str(function_call.get("name") or "graph_interrupt"),
+            # Long-running tools return the UI interaction contract from the
+            # tool execution. Preserve the model-supplied call arguments and
+            # let the tool result add derived fields such as stable IDs.
+            "arguments": {**arguments, **response},
+        }
+
+    @staticmethod
+    def _resume_content(pending_round: dict[str, Any], human_response: Any) -> Content:
+        function_call = pending_round.get("function_call")
+        function_call = function_call if isinstance(function_call, dict) else {}
+        response = human_response if isinstance(human_response, dict) else {"value": human_response}
+        return Content(
+            role="user",
+            parts=[
+                Part(
+                    function_response=FunctionResponse(
+                        id=str(function_call.get("id") or ""),
+                        name=str(function_call.get("name") or ""),
+                        response=response,
+                    )
+                )
+            ],
+        )
 
     async def _run_agent_event_callbacks(self, state: State, event: Event) -> None:
         if not self.callbacks or not self.callbacks.agent_event:
