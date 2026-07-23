@@ -7,14 +7,47 @@
 
 from __future__ import annotations
 
-from typing import Callable
-from typing import Optional
+from typing import Callable, Optional
+
 from typing_extensions import override
 
 from trpc_agent_sdk.filter import BaseFilter
 from trpc_agent_sdk.types import FunctionDeclaration
 
 from ._function_tool import FunctionTool
+
+_TOOL_ERROR_MARKERS = (
+    "an error occurred while parsing tool arguments",
+    "json parse error",
+    "invalid tool arguments",
+    "tool arguments validation failed",
+)
+
+
+def is_tool_execution_error(response: object) -> bool:
+    """Return whether a tool response represents invocation failure.
+
+    A LongRunningFunctionTool is promoted to HITL only after the tool call
+    reached the tool boundary. Provider-side argument parsing errors are
+    returned as ordinary function responses by some adapters and must not be
+    mistaken for a successful human-interaction checkpoint.
+    """
+    if not isinstance(response, dict):
+        return False
+
+    status = str(response.get("status") or "").strip().lower()
+    if status in {"error", "failed", "failure", "invalid"}:
+        return True
+    if response.get("error") or response.get("error_message"):
+        return True
+
+    for key in ("result", "message"):
+        value = response.get(key)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if any(marker in normalized for marker in _TOOL_ERROR_MARKERS):
+                return True
+    return False
 
 
 class LongRunningFunctionTool(FunctionTool):
@@ -34,10 +67,9 @@ class LongRunningFunctionTool(FunctionTool):
         is_long_running: Whether the tool is a long running operation.
     """
 
-    def __init__(self,
-                 func: Callable,
-                 filters_name: Optional[list[str]] = None,
-                 filters: Optional[list[BaseFilter]] = None):
+    def __init__(
+        self, func: Callable, filters_name: Optional[list[str]] = None, filters: Optional[list[BaseFilter]] = None
+    ):
         """Initialize the long running function tool.
 
         Args:
@@ -58,9 +90,11 @@ class LongRunningFunctionTool(FunctionTool):
         """
         declaration = super()._get_declaration()
         if declaration:
-            instruction = ("\n\nNOTE: This is a long-running operation. Do not call this tool"
-                           " again if it has already returned some intermediate or pending"
-                           " status.")
+            instruction = (
+                "\n\nNOTE: This is a long-running operation. Do not call this tool"
+                " again if it has already returned some intermediate or pending"
+                " status."
+            )
             if declaration.description:
                 declaration.description += instruction
             else:

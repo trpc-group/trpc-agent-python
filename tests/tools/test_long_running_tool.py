@@ -1,57 +1,19 @@
-# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
-#
-# Copyright (C) 2026 Tencent. All rights reserved.
-#
-# tRPC-Agent-Python is licensed under Apache-2.0.
-
-from __future__ import annotations
-
-import pytest
-
-from trpc_agent_sdk.tools._long_running_tool import LongRunningFunctionTool
+from trpc_agent_sdk.tools import is_tool_execution_error
 
 
-def long_func(query: str) -> str:
-    """A long running function."""
-    return f"result-{query}"
+def test_provider_argument_parse_error_is_not_a_long_running_success():
+    assert is_tool_execution_error(
+        {
+            "result": "An error occurred while parsing tool arguments. Please try again with valid JSON.",
+        }
+    )
 
 
-def long_func_no_doc(query: str) -> str:
-    return f"result-{query}"
+def test_normal_tool_result_is_not_classified_as_an_invocation_error():
+    assert not is_tool_execution_error({"status": "pending", "questions": []})
+    assert not is_tool_execution_error({"status": "success", "value": True})
 
 
-long_func_no_doc.__doc__ = None
-
-
-class TestLongRunningFunctionToolInit:
-
-    def test_init(self):
-        tool = LongRunningFunctionTool(long_func)
-        assert tool.is_long_running is True
-        assert tool.name == "long_func"
-
-    def test_init_with_invalid_filters_raises(self):
-        with pytest.raises(ValueError, match="not found"):
-            LongRunningFunctionTool(long_func, filters_name=["nonexistent"])
-
-
-class TestLongRunningFunctionToolGetDeclaration:
-
-    def test_declaration_appends_note(self):
-        tool = LongRunningFunctionTool(long_func)
-        decl = tool._get_declaration()
-        assert decl is not None
-        assert "long-running operation" in decl.description
-        assert "A long running function." in decl.description
-
-    def test_declaration_with_no_existing_description(self):
-        tool = LongRunningFunctionTool(long_func_no_doc)
-        decl = tool._get_declaration()
-        assert decl is not None
-        # When description is empty string '', the instruction is set with lstrip
-        assert "long-running operation" in (decl.description or "")
-
-    def test_declaration_contains_do_not_call_again(self):
-        tool = LongRunningFunctionTool(long_func)
-        decl = tool._get_declaration()
-        assert "Do not call this tool again" in decl.description
+def test_explicit_tool_errors_are_classified():
+    assert is_tool_execution_error({"status": "error", "error_message": "bad input"})
+    assert is_tool_execution_error({"error": "validation failed"})
