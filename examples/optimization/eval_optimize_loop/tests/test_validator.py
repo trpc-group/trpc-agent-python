@@ -255,7 +255,7 @@ class TestFullPipelineWithGate:
             baseline_scores=results["val"].score_map,
             candidate_scores=val_result.score_map,
             baseline_train_scores=results["train"].score_map,
-            candidate_train_scores=results["train"].score_map,
+            candidate_train_scores=val_result.score_map,
             baseline_cost=results["val"].summary.avg_cost * results["val"].summary.total,
             candidate_cost=val_result.summary.total_cost_candidate,
         )
@@ -276,6 +276,7 @@ class TestFullPipelineWithGate:
         }
         j = json.dumps(full_output, ensure_ascii=False, indent=2)
         assert len(j) > 2000
+        assert decision.accepted, f"Gate should accept: {decision.reason}"
 
         print(f"\n  Gate decision: accepted={decision.accepted} reason={decision.reason[:80]}")
         print(f"  Val delta: {val_result.summary.avg_score_delta:+.3f}")

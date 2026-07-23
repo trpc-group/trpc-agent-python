@@ -362,7 +362,7 @@ class BaselineRunner:
             memory_service=memory_service,
         )
         # ???? ground_truth ??
-        evaluator.ground_truth = gt_items
+        evaluator.ground_truth = gt_items  # NOTE: relies on PlateEvaluator internal attr; fragile if field renamed
 
         report = await evaluator.run(verbose=False)
 

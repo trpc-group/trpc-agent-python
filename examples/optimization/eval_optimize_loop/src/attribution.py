@@ -86,7 +86,9 @@ class AttributionReport:
     def primary_failure_category(self) -> Optional[AttributionCluster]:
         if not self.clusters:
             return None
-        return max(self.clusters, key=lambda c: c.count)
+        # Tie-break: (-c.count, c.category) for consistency with
+        # optimization_priority ordering (same sort key used below).
+        return sorted(self.clusters, key=lambda c: (-c.count, c.category))[0]
 
     @property
     def cluster_map(self) -> dict[str, AttributionCluster]:
@@ -131,7 +133,7 @@ class AttributionRunner:
         for case in val_result.failed_cases:
             all_attrs.append(self._attribute_case(case, "val"))
         clusters = self._build_clusters(all_attrs)
-        opt_priority = [c.category for c in sorted(clusters, key=lambda x: -x.count)]
+        opt_priority = [c.category for c in sorted(clusters, key=lambda x: (-x.count, x.category))]
         attributed = [a for a in all_attrs if a.category != "unattributed"]
         return AttributionReport(
             total_failures=len(all_attrs),

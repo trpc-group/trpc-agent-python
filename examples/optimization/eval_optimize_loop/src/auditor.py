@@ -59,6 +59,11 @@ class Auditor:
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f") + f"_{random_seed}"
         entries = []
+        # NOTE: per-candidate AuditEntry records all carry the same aggregate
+        # baseline_scores / candidate_scores / cost / latency from the single
+        # validation run.  This is intentional for fake mode where there is no
+        # per-iteration re-evaluation; in real mode each iteration would have
+        # its own scores.
         for cand in optimization.candidates:
             entry = AuditEntry(
                 timestamp=now,

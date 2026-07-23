@@ -32,6 +32,10 @@ def create_plate_call_agent(
 ) -> "callable":
     """Create a PlateAgent call_agent for AgentOptimizer.
 
+    Args:
+        plate_agent_root: Absolute path to PlateAgent project root.
+        prompt_dir: Reserved for future prompt-directory override (currently unused).
+
     Returns async (query: str) -> str.
     Each call re-reads prompt from disk and creates a fresh session
     to ensure evaluation isolation.

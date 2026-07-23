@@ -128,14 +128,16 @@ async def main():
                 tf.flush()
                 _os.fsync(tf.fileno())
             _os.replace(tmp, LOCK_FILE)
-            # Verify ownership: if another process raced us, the file contains
-            # their PID, not ours.  In that case, back off.
+            # Lock is ours after atomic replace.  Set acquired=True immediately
+            # so that finally-block cleanup works even if we crash during the
+            # verification read below (prevents permanent lock residue).
+            acquired = True
+            # Verify ownership: if another process somehow raced us, the file
+            # contains their PID, not ours.  In that case, back off.
             with open(LOCK_FILE, "r", encoding="utf-8") as vf:
                 lock_owner = int(vf.read().strip().split()[0])
-            if lock_owner == my_pid:
-                acquired = True
-            # else: someone else replaced the lock between our replace and read;
-            # fall through to acquired=False -> exit(75)
+            if lock_owner != my_pid:
+                acquired = False  # not our lock; don't clean up in finally
         except (FileNotFoundError, ValueError, FileExistsError):
             pass
 
