@@ -430,9 +430,10 @@ def check_process_exec(
         # If the command is in user allow list, no finding.
         if allow and executable in allow:
             continue
-        # If the command is a known safe read-only command, skip PROC001.
-        # Other rules (file read, network, secret) still apply.
-        if executable in _SAFE_BASH_COMMANDS and language == ScriptLanguage.BASH:
+        # Built-in safe commands are only a fallback when the operator did
+        # not configure an explicit allow list.
+        if not allow and executable in _SAFE_BASH_COMMANDS \
+                and language == ScriptLanguage.BASH:
             continue
         # Allow list configured but command not in it -> review.
         if allow:

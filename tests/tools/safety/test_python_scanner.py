@@ -490,6 +490,22 @@ class TestSecretFlow:
         """)
         assert any(f.sink_kind == "output" for f in facts.secret_flows)
 
+    def test_large_secret_write_uses_dynamic_target_fallback(self):
+        source = "open(target, 'sk-aaaaaaaaaaaaaaaaaaaa')"
+        scanner = _PythonScanner(source)
+        call = ast.parse(source, mode="eval").body
+        scanner._handle_sink_call(call, "open")
+        assert scanner.large_writes
+        assert scanner.large_writes[0].target == "<dynamic>"
+
+    def test_large_secret_write_preserves_constant_target(self):
+        source = "open('/tmp/x', 'sk-aaaaaaaaaaaaaaaaaaaa')"
+        scanner = _PythonScanner(source)
+        call = ast.parse(source, mode="eval").body
+        scanner._handle_sink_call(call, "open")
+        assert scanner.large_writes
+        assert scanner.large_writes[0].target == "/tmp/x"
+
 
 class TestLoops:
 

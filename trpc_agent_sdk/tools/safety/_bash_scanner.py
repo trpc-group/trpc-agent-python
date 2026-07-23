@@ -41,7 +41,18 @@ from trpc_agent_sdk.tools.safety._rules import _LanguageScannerRule, SafetyRule
 # Constants
 # --------------------------------------------------------------------------- #
 
-_NETWORK_COMMANDS = {"curl", "wget", "nc", "ncat", "ssh", "scp", "sftp", "telnet", "ftp", "ncat"}
+_NETWORK_COMMANDS = {
+    "curl",
+    "wget",
+    "nc",
+    "ncat",
+    "ssh",
+    "scp",
+    "sftp",
+    "telnet",
+    "ftp",
+    "rsync",
+}
 # Commands where the first non-option arg is always the remote target.
 # Used to apply a fail-closed dynamic NetworkFact when parsing fails.
 _SSH_FAMILY_COMMANDS = {"ssh", "scp", "sftp", "telnet", "ftp"}
@@ -77,8 +88,6 @@ _URL_RE = re.compile(r"\bhttps?://([^/\s:]+)", re.IGNORECASE)
 _WHILE_TRUE_RE = re.compile(r"\bwhile\s+(?:true|:|\[\s*\[\s*1\s*\]\s*\]\s*)", re.IGNORECASE)
 _FOR_INF_RE = re.compile(r"\bfor\s*\(\(\s*;;\s*\)\)", re.IGNORECASE)
 _SLEEP_RE = re.compile(r"\bsleep\s+([0-9]+[smhd]?)", re.IGNORECASE)
-_BG_COUNT_RE = re.compile(r"&")
-
 # --------------------------------------------------------------------------- #
 # Tokenizer
 # --------------------------------------------------------------------------- #
@@ -109,6 +118,7 @@ class _BashLexer:
         self.position = 0
         self.line = 1
         self.col = 1
+        self.separators: list[str] = []
 
     def tokenize(self) -> tuple[list[tuple[str, int, int, list[_Token]]], list[ParseErrorFact]]:
         """Return (commands, errors).
@@ -150,10 +160,13 @@ class _BashLexer:
                 continue
             # Check for separator (but only when not quoted)
             for sep in ("&&", "||", "|", ";", "&"):
+                if sep == "&" and self._is_redirection_amp():
+                    continue
                 if self.source.startswith(sep, self.position):
                     if current:
                         commands.append((current_op, current_line, current_col, current))
                         current = []
+                    self.separators.append(sep)
                     for _ in sep:
                         self._advance()
                     current_op = sep
@@ -205,7 +218,7 @@ class _BashLexer:
             if not quote_char:
                 if ch in " \t\n":
                     break
-                if ch in ("&", "|", ";"):
+                if ch in ("|", ";") or (ch == "&" and not self._is_redirection_amp()):
                     break
                 if ch in ("'", '"', "`"):
                     quote_char = ch
@@ -262,6 +275,16 @@ class _BashLexer:
                 message=f"unbalanced quote {quote_char!r}",
             )
         return ("".join(buf), quoted, err)
+
+    def _is_redirection_amp(self) -> bool:
+        """Return whether the current ``&`` belongs to redirection syntax."""
+
+        if self.source[self.position] != "&":
+            return False
+        previous = self.source[self.position - 1] if self.position > 0 else ""
+        following = self.source[self.position + 1] \
+            if self.position + 1 < len(self.source) else ""
+        return previous == ">" or following == ">"
 
 
 # --------------------------------------------------------------------------- #
@@ -325,9 +348,10 @@ class _BashScanner:
                     duration_seconds=duration,
                     raw=raw,
                 ))
-        # Background count
-        bg_count = self.source.count("&") - self.source.count("&&")
-        # Heuristic: many & in script -> high concurrency
+        # Count only unquoted shell background separators. The lexer excludes
+        # comments, quoted text, ``&&``, and redirection forms such as
+        # ``2>&1``/``&>``.
+        bg_count = sum(separator == "&" for separator in self.lexer.separators)
         if bg_count >= 8:
             self.concurrency.append(
                 ConcurrencyFact(
@@ -662,6 +686,7 @@ class _BashScanner:
             ))
 
     def _handle_network(self, argv: list[str], command: str, snippet: str, loc: Loc) -> None:
+        network_calls_before = len(self.network_calls)
         # scp/rsync-style commands put the remote target LAST (after any
         # local file args). Iterate in reverse so user@host wins over a
         # local filename that happens to match the plain-host regex.
@@ -696,6 +721,18 @@ class _BashScanner:
                         dynamic=False,
                     ))
                 return
+            if command == "rsync":
+                rsync_host = _extract_rsync_host(arg)
+                if rsync_host:
+                    self.network_calls.append(
+                        NetworkFact(
+                            snippet=snippet,
+                            loc=loc,
+                            target=rsync_host,
+                            library=command,
+                            dynamic=False,
+                        ))
+                    return
             # Plain hostname argument (curl example.com)
             if _looks_like_host(arg):
                 self.network_calls.append(
@@ -722,7 +759,8 @@ class _BashScanner:
         # without recognizing a target, emit a dynamic NetworkFact so
         # NET002_DYNAMIC_TARGET surfaces for review instead of silently
         # allowing a bypass.
-        if command in _SSH_FAMILY_COMMANDS and not self.network_calls:
+        if command in _SSH_FAMILY_COMMANDS \
+                and len(self.network_calls) == network_calls_before:
             self.network_calls.append(NetworkFact(
                 snippet=snippet,
                 loc=loc,
@@ -918,9 +956,27 @@ def _extract_user_at_host(text: str) -> str | None:
     _, _, after_at = text.partition("@")
     # scp/sftp forms append :port or :path after the host.
     candidate = after_at.split(":", 1)[0]
-    if _looks_like_host(candidate):
+    if _looks_like_remote_host(candidate):
         return candidate.lower()
     return None
+
+
+def _extract_rsync_host(text: str) -> str | None:
+    """Extract ``[user@]host`` from rsync's ``host:path`` forms."""
+
+    if not text or "://" in text or ":" not in text:
+        return None
+    remote, _, _ = text.partition(":")
+    candidate = remote.rpartition("@")[2]
+    if _looks_like_remote_host(candidate):
+        return candidate.lower()
+    return None
+
+
+def _looks_like_remote_host(text: str) -> bool:
+    if not text or text in {".", ".."}:
+        return False
+    return bool(re.match(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$", text))
 
 
 def _looks_like_secret_ref(text: str) -> bool:

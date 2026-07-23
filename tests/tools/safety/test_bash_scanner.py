@@ -265,6 +265,28 @@ class TestNetwork:
         assert facts.network_calls
         assert facts.network_calls[0].dynamic is True
 
+    def test_ssh_fallback_is_scoped_to_current_command(self):
+        facts = _scan("""
+            curl https://api.example.com
+            ssh --some-weird-flag
+        """)
+        assert len(facts.network_calls) == 2
+        ssh_fact = facts.network_calls[-1]
+        assert ssh_fact.library == "ssh"
+        assert ssh_fact.dynamic is True
+
+    def test_rsync_user_at_host_extracts_target(self):
+        facts = _scan("rsync file.txt user@host:~/")
+        assert facts.network_calls
+        assert facts.network_calls[0].target == "host"
+        assert facts.network_calls[0].library == "rsync"
+
+    def test_rsync_module_extracts_target(self):
+        facts = _scan("rsync host::module /tmp/module")
+        assert facts.network_calls
+        assert facts.network_calls[0].target == "host"
+        assert facts.network_calls[0].library == "rsync"
+
 
 class TestFileRead:
 
@@ -438,7 +460,23 @@ class TestConcurrency:
         # 8+ single-amp background jobs trigger concurrency fact
         facts = _scan("a & b & c & d & e & f & g & h &")
         assert facts.concurrency
-        assert facts.concurrency[0].count >= 8
+        assert facts.concurrency[0].count == 8
+
+    def test_and_operators_are_not_background_jobs(self):
+        facts = _scan("a && b && c && d && e && f && g && h && i")
+        assert not facts.concurrency
+
+    def test_redirections_are_not_background_jobs(self):
+        script = "\n".join(["echo x 2>&1"] * 4 + ["echo x &>/tmp/out"] * 4)
+        facts = _scan(script)
+        assert not facts.concurrency
+
+    def test_quoted_and_commented_ampersands_are_ignored(self):
+        facts = _scan("""
+            echo '&&&&&&&&'
+            # & & & & & & & &
+        """)
+        assert not facts.concurrency
 
 
 class TestSecretFlowBash:

@@ -331,6 +331,20 @@ class TestProcessExec:
         )
         assert _ids(out) == {"PROC001_PROCESS_EXEC"}
 
+    @pytest.mark.parametrize("command", ["curl", "ssh", "git"])
+    def test_allow_list_overrides_builtin_safe_commands(self, command):
+        facts = ScriptFacts(process_calls=(ProcessFact(command=command), ))
+        out = check_process_exec(
+            facts,
+            _policy(commands={
+                "allow": ["ls"],
+                "deny": []
+            }),
+            ScriptLanguage.BASH,
+            _redactor(),
+        )
+        assert _ids(out) == {"PROC001_PROCESS_EXEC"}
+
 
 class TestShellInjection:
 

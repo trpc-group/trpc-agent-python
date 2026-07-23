@@ -63,7 +63,7 @@ def policy():
             "allow_domains": ["api.github.com"]
         },
         "commands": {
-            "allow": ["python"],
+            "allow": ["python", "ls"],
             "deny": []
         },
         "paths": {
@@ -153,7 +153,7 @@ def test_manifest_file_loads():
 def test_safe_bash_script(guard, sample_script):
     """A trivial safe bash script must allow."""
 
-    script = "echo hello\nls -l\n"
+    script = "ls -l\n"
     request = SafetyScanRequest(
         tool_name="test",
         language=ScriptLanguage.BASH,

@@ -840,7 +840,7 @@ class _PythonScanner:
         if sink_kind == "file":
             size = self._static_size(node.args[-1] if node.args else None)
             if size is not None and size > 0:
-                target = _const_str(node.args[0]) if node.args else "" or "<dynamic>"
+                target = (_const_str(node.args[0]) if node.args else "") or "<dynamic>"
                 self.large_writes.append(
                     LargeWriteFact(
                         snippet=_src_segment(self.source, node),

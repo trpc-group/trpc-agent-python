@@ -43,6 +43,21 @@ def test_single_allow_exit_0(tmp_path):
     assert payload["decision"] == "allow"
 
 
+def test_single_scan_does_not_touch_root_audit(tmp_path):
+    root_audit = REPO_ROOT / "tool_safety_audit.jsonl"
+    before = root_audit.read_bytes() if root_audit.exists() else None
+    rc, _, _ = _run_cli(
+        "--language",
+        "python",
+        "--script",
+        "print('hello')",
+        audit_file=tmp_path / "audit.jsonl",
+    )
+    after = root_audit.read_bytes() if root_audit.exists() else None
+    assert rc == 0
+    assert after == before
+
+
 def test_single_deny_exit_2(tmp_path):
     rc, out, err = _run_cli(
         "--language",
