@@ -23,13 +23,13 @@ from trpc_agent_sdk.models import LLMModel, LlmRequest, LlmResponse, ModelRegist
 from trpc_agent_sdk.sessions import InMemorySessionService
 from trpc_agent_sdk.types import Content, GenerateContentConfig, Part
 
-
 # ---------------------------------------------------------------------------
 # Stubs / helpers
 # ---------------------------------------------------------------------------
 
 
 class MockLLMModel(LLMModel):
+
     @classmethod
     def supported_models(cls) -> List[str]:
         return [r"test-llm-ext-.*"]
@@ -58,9 +58,7 @@ def _agent(**kwargs):
 @pytest.fixture
 def invocation_context():
     service = InMemorySessionService()
-    session = asyncio.run(
-        service.create_session(app_name="test", user_id="u1", session_id="s1")
-    )
+    session = asyncio.run(service.create_session(app_name="test", user_id="u1", session_id="s1"))
     agent = _agent()
     ctx = InvocationContext(
         session_service=service,
@@ -79,6 +77,7 @@ def invocation_context():
 
 
 class TestToolsProcessorProperty:
+
     def test_returns_processor_with_no_tools(self):
         """Returns ToolsProcessor even when agent has no tools."""
         agent = _agent(tools=[])
@@ -105,6 +104,7 @@ class TestToolsProcessorProperty:
 
 
 class TestGetExtendedToolsProcessor:
+
     def test_no_transfer_when_no_sub_agents(self, invocation_context):
         """No transfer tool added when agent has no sub_agents."""
         agent = _agent()
@@ -139,6 +139,7 @@ class TestGetExtendedToolsProcessor:
 
 
 class TestShouldEnableAgentTransferExtended:
+
     def test_transfer_to_peers_enabled(self):
         """Transfer enabled when agent has siblings."""
         child1 = _agent(name="child1")
@@ -158,7 +159,9 @@ class TestShouldEnableAgentTransferExtended:
 
     def test_non_llm_parent_disables_parent_transfer(self):
         """Non-LlmAgent parent disables parent transfer."""
+
         class SimpleAgent(BaseAgent):
+
             async def _run_async_impl(self, ctx):
                 yield
 
@@ -173,6 +176,7 @@ class TestShouldEnableAgentTransferExtended:
 
 
 class TestResolveModelExtended:
+
     def test_factory_receives_custom_data(self, invocation_context):
         """Factory callback receives custom_data from run_config."""
         invocation_context.run_config.custom_data["key"] = "value"
@@ -213,6 +217,7 @@ class TestResolveModelExtended:
 
 
 class TestCreateErrorEventExtended:
+
     def test_branch_is_included(self, invocation_context):
         """Error event includes the context's branch."""
         invocation_context.branch = "some.branch"
@@ -233,6 +238,7 @@ class TestCreateErrorEventExtended:
 
 
 class TestSaveOutputToStateExtended:
+
     def test_filters_thought_parts(self, invocation_context):
         """Thought parts are excluded from saved output."""
         agent = _agent(output_key="result")
@@ -266,6 +272,7 @@ class TestSaveOutputToStateExtended:
 
 
 class TestBranchFilterModeExtended:
+
     def test_prefix_overrides_true_include_previous(self):
         """PREFIX mode takes precedence over include_previous_history=True."""
         agent = _agent(
@@ -281,6 +288,7 @@ class TestBranchFilterModeExtended:
 
 
 class TestValidatorsExtended:
+
     def test_response_schema_in_config_raises(self):
         """Response schema in generate_content_config raises."""
         from pydantic import BaseModel as PydanticModel
@@ -289,17 +297,11 @@ class TestValidatorsExtended:
             name: str
 
         with pytest.raises(ValueError, match="Response schema"):
-            _agent(
-                generate_content_config=GenerateContentConfig(
-                    response_schema=TestSchema,
-                ),
-            )
+            _agent(generate_content_config=GenerateContentConfig(response_schema=TestSchema, ), )
 
     def test_valid_config_passes(self):
         """Valid generate_content_config passes validation."""
-        agent = _agent(
-            generate_content_config=GenerateContentConfig(temperature=0.5),
-        )
+        agent = _agent(generate_content_config=GenerateContentConfig(temperature=0.5), )
         assert agent.generate_content_config.temperature == 0.5
 
     def test_none_config_produces_default(self):
@@ -314,6 +316,7 @@ class TestValidatorsExtended:
 
 
 class TestModelPostInit:
+
     def test_string_model_resolved_on_init(self):
         """String model is resolved to LLMModel on init."""
         agent = _agent(model="test-llm-ext-model")
@@ -321,6 +324,7 @@ class TestModelPostInit:
 
     def test_callable_model_not_resolved_on_init(self):
         """Callable model factory is not resolved on init."""
+
         async def factory(custom_data):
             return MockLLMModel(model_name="test-llm-ext-model")
 
@@ -340,6 +344,7 @@ class TestModelPostInit:
 
 
 class TestAgentFieldDefaults:
+
     def test_default_include_contents(self):
         """Default include_contents is 'default'."""
         agent = _agent()
@@ -382,6 +387,7 @@ class TestAgentFieldDefaults:
 
 
 class TestRunAsyncImplErrorPath:
+
     def test_yields_error_on_request_build_failure(self, invocation_context):
         """Error event yielded when request building fails."""
         agent = _agent()
@@ -396,9 +402,7 @@ class TestRunAsyncImplErrorPath:
 
         async def run():
             events = []
-            with patch(
-                "trpc_agent_sdk.agents._llm_agent.default_request_processor"
-            ) as mock_rp:
+            with patch("trpc_agent_sdk.agents._llm_agent.default_request_processor") as mock_rp:
                 mock_rp.build_request = AsyncMock(return_value=mock_event)
                 async for event in agent._run_async_impl(invocation_context):
                     events.append(event)
@@ -407,6 +411,163 @@ class TestRunAsyncImplErrorPath:
         events = asyncio.run(run())
         assert len(events) == 1
         assert events[0].error_code == "build_error"
+
+
+# ---------------------------------------------------------------------------
+# _run_async_impl — LongRunningFunctionTool integration
+# ---------------------------------------------------------------------------
+
+
+class TestRunAsyncImplLongRunningTool:
+    """Cover the long-running tool path in _run_async_impl (lines 562-620)."""
+
+    def test_yields_long_running_event_on_tool_completion(self, invocation_context):
+        """When LLM calls a LongRunningFunctionTool, a LongRunningEvent is yielded."""
+        from trpc_agent_sdk.events import LongRunningEvent
+        from trpc_agent_sdk.tools import LongRunningFunctionTool
+        from trpc_agent_sdk.types import FunctionCall, FunctionResponse
+
+        async def long_op(status: str) -> dict:
+            """A long-running operation."""
+            return {"status": status, "result": "done"}
+
+        long_tool = LongRunningFunctionTool(long_op)
+        agent = _agent(tools=[long_tool])
+        invocation_context.agent = agent
+
+        fc = FunctionCall(id="call_lr_1", name="long_op", args={"status": "check"})
+        fr = FunctionResponse(id="call_lr_1", name="long_op", response={"status": "done", "result": "ok"})
+        llm_event = Event(
+            invocation_id="inv-1",
+            author="test_agent",
+            content=Content(
+                parts=[Part.from_function_call(name="long_op", args={"status": "check"})],
+                role="model",
+            ),
+        )
+        llm_event.content.parts[0].function_call.id = "call_lr_1"
+
+        tool_event = Event(
+            invocation_id="inv-1",
+            author="test_agent",
+            content=Content(parts=[Part(function_response=fr)], role="user"),
+        )
+
+        async def run():
+            events = []
+            with patch("trpc_agent_sdk.agents._llm_agent.default_request_processor") as mock_rp:
+                mock_rp.build_request = AsyncMock(return_value=None)
+                with patch("trpc_agent_sdk.agents._llm_agent.LlmProcessor") as mock_lp_cls:
+                    mock_lp = MagicMock()
+
+                    async def fake_call_llm_async(request, ctx=None, stream=True):
+                        for ev in [llm_event]:
+                            yield ev
+
+                    mock_lp.call_llm_async = fake_call_llm_async
+                    mock_lp_cls.return_value = mock_lp
+                    with patch.object(agent, "_get_extended_tools_processor") as mock_get_tp:
+                        mock_tp = MagicMock()
+                        mock_tp.find_tool = AsyncMock(return_value=long_tool)
+
+                        async def fake_execute_tools_async(tool_calls, context):
+                            for ev in [tool_event]:
+                                yield ev
+
+                        mock_tp.execute_tools_async = fake_execute_tools_async
+                        mock_get_tp.return_value = mock_tp
+                        async for event in agent._run_async_impl(invocation_context):
+                            events.append(event)
+            return events
+
+        events = asyncio.run(run())
+        long_running_events = [e for e in events if isinstance(e, LongRunningEvent)]
+        assert len(long_running_events) == 1
+        lre = long_running_events[0]
+        assert lre.function_call.id == "call_lr_1"
+        assert lre.function_call.name == "long_op"
+        assert lre.function_response.id == "call_lr_1"
+
+    def test_long_running_tool_error_does_not_yield_long_running_event(self, invocation_context):
+        """is_tool_execution_error suppresses LongRunningEvent; tool error is yielded normally."""
+        from trpc_agent_sdk.tools import LongRunningFunctionTool
+        from trpc_agent_sdk.types import FunctionCall, FunctionResponse
+
+        async def long_op(status: str) -> dict:
+            """A long-running operation."""
+            return {"status": status}
+
+        long_tool = LongRunningFunctionTool(long_op)
+        agent = _agent(tools=[long_tool])
+        invocation_context.agent = agent
+
+        fr = FunctionResponse(id="call_err_1", name="long_op", response={"error": "fail"})
+        llm_tool_call_event = Event(
+            invocation_id="inv-1",
+            author="test_agent",
+            content=Content(
+                parts=[Part.from_function_call(name="long_op", args={"status": "check"})],
+                role="model",
+            ),
+        )
+        llm_tool_call_event.content.parts[0].function_call.id = "call_err_1"
+
+        llm_final_event = Event(
+            invocation_id="inv-1",
+            author="test_agent",
+            content=Content(parts=[Part.from_text(text="done")], role="model"),
+        )
+
+        tool_event = Event(
+            invocation_id="inv-1",
+            author="test_agent",
+            error_code="tool_execution_error",
+            error_message="Tool failed",
+            content=Content(parts=[Part(function_response=fr)], role="user"),
+        )
+
+        async def run():
+            events = []
+            with patch("trpc_agent_sdk.agents._llm_agent.default_request_processor") as mock_rp:
+                mock_rp.build_request = AsyncMock(return_value=None)
+                with patch("trpc_agent_sdk.agents._llm_agent.LlmProcessor") as mock_lp_cls:
+                    mock_lp = MagicMock()
+
+                    call_count = 0
+
+                    async def fake_call_llm_async(request, ctx=None, stream=True):
+                        nonlocal call_count
+                        call_count += 1
+                        if call_count == 1:
+                            for ev in [llm_tool_call_event]:
+                                yield ev
+                        else:
+                            for ev in [llm_final_event]:
+                                yield ev
+
+                    mock_lp.call_llm_async = fake_call_llm_async
+                    mock_lp_cls.return_value = mock_lp
+                    with patch.object(agent, "_get_extended_tools_processor") as mock_get_tp:
+                        mock_tp = MagicMock()
+                        mock_tp.find_tool = AsyncMock(return_value=long_tool)
+
+                        async def fake_execute_tools_async(tool_calls, context):
+                            for ev in [tool_event]:
+                                yield ev
+
+                        mock_tp.execute_tools_async = fake_execute_tools_async
+                        mock_get_tp.return_value = mock_tp
+                        async for event in agent._run_async_impl(invocation_context):
+                            events.append(event)
+            return events
+
+        events = asyncio.run(run())
+        from trpc_agent_sdk.events import LongRunningEvent
+        long_running_events = [e for e in events if isinstance(e, LongRunningEvent)]
+        assert len(long_running_events) == 0
+        # The regular tool event and final text event are still yielded
+        regular_events = [e for e in events if not isinstance(e, LongRunningEvent)]
+        assert len(regular_events) >= 1
 
 
 if __name__ == "__main__":

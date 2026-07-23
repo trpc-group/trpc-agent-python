@@ -54,6 +54,26 @@ class TestEventBuilder:
         assert event.object == GraphEventType.GRAPH_NODE_START
         assert event.partial is True
 
+    def test_node_events_prefer_human_readable_description_in_text(self):
+        """User-visible node events should not leak internal node IDs."""
+        start = self.builder.node_start(
+            node_id="tech-clarify",
+            node_description="技术澄清",
+        )
+        complete = self.builder.node_complete(
+            node_id="tech-clarify",
+            node_description="技术澄清",
+        )
+        error = self.builder.node_error(
+            node_id="tech-clarify",
+            node_description="技术澄清",
+            error="failed",
+        )
+
+        assert start.get_text() == "Starting node: 技术澄清"
+        assert complete.get_text().startswith("Completed node: 技术澄清")
+        assert error.get_text() == "Error in node 技术澄清: failed"
+
     def test_model_complete_uses_error_phase_and_truncates_payloads(self):
         """Model completion should switch to error phase when error is provided."""
         start_time = datetime.now() - timedelta(milliseconds=20)
