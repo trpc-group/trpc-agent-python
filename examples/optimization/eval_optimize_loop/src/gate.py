@@ -203,7 +203,7 @@ class AcceptanceGate:
                 name="cost_within_budget",
                 passed=True,
                 description=f"cost budget skipped (baseline_cost={baseline_cost:.4f} <= 0, tracking inactive)",
-                detail="cost data unavailable; gate skipped",
+                detail="cost data unavailable -- gate skipped",
             )
         else:
             ratio = candidate_cost / baseline_cost
