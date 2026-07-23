@@ -225,7 +225,7 @@ class FakeOptimizer:
             confidence = target["confidence"]
 
             # prompt_before: use previous iteration's result for cumulative optimization
-            if candidates:
+            if candidates and candidates[-1].target_prompt_type == prompt_type:
                 prompt_before = candidates[-1].prompt_after
             else:
                 prompt_before = self._get_base_prompt(prompt_type)

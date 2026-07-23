@@ -322,18 +322,22 @@ class BaselineRunner:
             )
 
         import sys
-        sys.path.insert(0, str(Path(plate_agent_root)))
-
+        plate_root_str = str(Path(plate_agent_root))
+        sys.path.insert(0, plate_root_str)
+        path_restored = False
         try:
             from agent.session_manager import create_session_service, create_memory_service
             from eval.evaluator import PlateEvaluator
         except ImportError as e:
-            sys.path.pop(0)  # restore path before raising (fix: round-5 review)
+            sys.path.remove(plate_root_str)  # restore before raising
+            path_restored = True
             raise ImportError(
                 f"Cannot import PlateAgent modules from {plate_agent_root}. "
                 f"Ensure trpc_agent_sdk is installed. Error: {e}"
             )
-
+        finally:
+            if not path_restored:
+                sys.path.remove(plate_root_str)  # restore on success path too
         # 构建 ground_truth.json 格式（临时文件）
         # Build ground_truth items with sequential IDs for stable reverse mapping.
         # Uses enumerate(start=1) instead of SHA256 hash so that the id->case_id

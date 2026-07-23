@@ -98,9 +98,9 @@ class AcceptanceGate:
 
         # 4. 成本不超预算
         if self._rule_enabled("cost_within_budget"):
-            checks.append(self._check_cost(
-                baseline_cost, candidate_cost
-            ))
+            cost_check = self._check_cost(baseline_cost, candidate_cost)
+            if cost_check is not None:
+                checks.append(cost_check)
 
         # 5. 过拟合检测
         if self._rule_enabled("overfit_detection") and baseline_train_scores and candidate_train_scores:
@@ -132,7 +132,7 @@ class AcceptanceGate:
         self,
         baseline: dict[str, float],
         candidate: dict[str, float],
-    ) -> GateCheck:
+    ) -> "Optional[GateCheck]":
         threshold = self.rules["total_score_improvement"].get("threshold", 0.03)
         base_avg = sum(baseline.values()) / len(baseline) if baseline else 0
         cand_avg = sum(candidate.values()) / len(candidate) if candidate else 0
@@ -149,7 +149,7 @@ class AcceptanceGate:
         self,
         baseline: dict[str, float],
         candidate: dict[str, float],
-    ) -> GateCheck:
+    ) -> "Optional[GateCheck]":
         max_new = self.rules["no_new_hard_fail"].get("max_new_fails", 0)
         base_fails = sum(1 for s in baseline.values() if s < PASS_THRESHOLD)
         cand_fails = sum(1 for s in candidate.values() if s < PASS_THRESHOLD)
@@ -167,7 +167,7 @@ class AcceptanceGate:
         baseline: dict[str, float],
         candidate: dict[str, float],
         critical_ids: list[str],
-    ) -> GateCheck:
+    ) -> "Optional[GateCheck]":
         if not critical_ids:
             return GateCheck(
                 name="critical_case_no_regress",
@@ -193,18 +193,12 @@ class AcceptanceGate:
         self,
         baseline_cost: float,
         candidate_cost: float,
-    ) -> GateCheck:
+    ) -> "Optional[GateCheck]":
         max_ratio = self.rules["cost_within_budget"].get("max_cost_ratio", 1.2)
         if baseline_cost <= 0:
-            # Fake mode: costs are simulated placeholders (see run_pipeline.py L173-176).
-            # Real mode: cost may be 0 if token_tracker is not connected.
-            # In either case, cost data is absent; skip this gate rather than auto-pass.
-            return GateCheck(
-                name="cost_within_budget",
-                passed=True,
-                description=f"cost budget skipped (baseline_cost={baseline_cost:.4f} <= 0, tracking inactive)",
-                detail="cost data unavailable -- gate skipped",
-            )
+            # Cost data is absent (fake mode simulated / real mode token_tracker not connected).
+            # Return None so decide() excludes this gate from the checks list.
+            return None
         else:
             ratio = candidate_cost / baseline_cost
             passed = ratio <= max_ratio
@@ -221,7 +215,7 @@ class AcceptanceGate:
         candidate_train: dict[str, float],
         baseline_val: dict[str, float],
         candidate_val: dict[str, float],
-    ) -> GateCheck:
+    ) -> "Optional[GateCheck]":
         train_avg_base = sum(baseline_train.values()) / len(baseline_train) if baseline_train else 0
         train_avg_cand = sum(candidate_train.values()) / len(candidate_train) if candidate_train else 0
         val_avg_base = sum(baseline_val.values()) / len(baseline_val) if baseline_val else 0

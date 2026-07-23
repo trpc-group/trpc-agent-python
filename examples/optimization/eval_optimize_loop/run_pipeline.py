@@ -68,20 +68,17 @@ async def main():
     _os.makedirs(str(output_dir), exist_ok=True)
 
     def _pid_alive(pid):
-        """Check if a process is running. Cross-platform: signal 0 on Unix,
-        OpenProcess on Windows. Returns False for dead/invalid PIDs."""
-        # Unix: os.kill(pid, 0) raises if process doesn't exist
-        try:
-            _os.kill(pid, 0)
-        except ProcessLookupError:
-            return False
-        except PermissionError:
-            return True  # exists but we can't signal it
-        except OSError:
-            pass  # fall through to platform check
+        """Check if a process is running. Returns False for dead/invalid PIDs.
 
-        # Windows: use kernel32.OpenProcess
+        Platform strategy:
+        - Windows: use kernel32.OpenProcess (PROCESS_QUERY_LIMITED_INFORMATION).
+          We avoid os.kill(pid, 0) on Windows because CPython maps it to
+          TerminateProcess(handle, 0) which kills the target, not probes it.
+        - Unix: os.kill(pid, 0) sends signal 0 (null signal) which is a
+          pure liveness probe per POSIX.
+        """
         if sys.platform == "win32":
+            # Windows first: avoid os.kill which terminates the process
             try:
                 import ctypes
                 h = ctypes.windll.kernel32.OpenProcess(0x0400, False, pid)
@@ -90,10 +87,18 @@ async def main():
                     return True
                 return False
             except Exception:
-                return False  # cannot verify liveness; treat as dead so stale lock can be cleaned
-        # On Unix, if os.kill(pid, 0) succeeded above, process exists
-        return True
+                return False  # cannot verify; assume dead to allow lock cleanup
 
+        # Unix: signal 0 is a pure liveness probe
+        try:
+            _os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True  # exists but we cannot signal it
+        except OSError:
+            return False  # cannot verify; assume dead
+        return True
     my_pid = _os.getpid()
 
     # Atomic acquire: O_CREAT|O_EXCL fails if file exists (cross-platform)
