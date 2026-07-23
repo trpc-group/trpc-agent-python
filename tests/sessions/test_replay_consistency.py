@@ -35,7 +35,6 @@ APP_NAME = "replay-app"
 USER_ID = "replay-user"
 SESSION_ID = "replay-session"
 SAVE_KEY = f"{APP_NAME}/{USER_ID}"
-REPLAY_EPOCH = time.time()
 
 
 @dataclass(frozen=True)
@@ -243,25 +242,26 @@ async def _session_to_snapshot(service: Any, memory_service: InMemoryMemoryServi
 
 
 async def _run_case(service: Any, memory_service: Any, case: ReplayCase) -> dict[str, Any]:
+    replay_epoch = time.time()
 
     session = await service.create_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID)
 
     for step_index, step in enumerate(case.steps):
         if step.kind == "text":
             event = _make_text_event(**step.payload)
-            event.timestamp = REPLAY_EPOCH + step_index
+            event.timestamp = replay_epoch + step_index
             await service.append_event(session, event)
         elif step.kind == "tool_call":
             event = _make_tool_call_event(**step.payload)
-            event.timestamp = REPLAY_EPOCH + step_index
+            event.timestamp = replay_epoch + step_index
             await service.append_event(session, event)
         elif step.kind == "tool_response":
             event = _make_tool_response_event(**step.payload)
-            event.timestamp = REPLAY_EPOCH + step_index
+            event.timestamp = replay_epoch + step_index
             await service.append_event(session, event)
         elif step.kind == "summary_event":
             event = _make_summary_event(**step.payload)
-            event.timestamp = REPLAY_EPOCH + step_index
+            event.timestamp = replay_epoch + step_index
             await service.append_event(session, event)
         elif step.kind == "summarize":
             await service.create_session_summary(session)
@@ -274,6 +274,15 @@ async def _run_case(service: Any, memory_service: Any, case: ReplayCase) -> dict
             await memory_service.store_session(stored)
         else:
             raise AssertionError(f"Unknown replay step: {step.kind}")
+
+    if case.case_id == "duplicate_or_recovery":
+        stored = await service.get_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID)
+        assert stored is not None
+        assert len(stored.events) == 3
+        duplicate_events = stored.events[1:]
+        assert [event.author for event in duplicate_events] == ["agent", "agent"]
+        assert [event.content.parts[0].text for event in duplicate_events] == ["recover answer", "recover answer"]
+        assert duplicate_events[0].id != duplicate_events[1].id
 
     snapshot = await _session_to_snapshot(service, memory_service, session, case.memory_query)
 
