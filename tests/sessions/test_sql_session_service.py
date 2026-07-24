@@ -428,6 +428,24 @@ class TestSqlUpdateSession:
         assert len(stored.events) == 0
         await svc.close()
 
+    async def test_update_preserves_summary_anchor_before_retained_events(self):
+        svc = await _create_service()
+        session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
+        retained_event = _make_event(text="retained event")
+        await svc.append_event(session, retained_event)
+
+        summary_event = _make_event(text="summary")
+        summary_event.set_summary_event(True)
+        session.events = [summary_event, retained_event]
+        await svc.update_session(session)
+
+        stored = await svc.get_session(app_name="app", user_id="user", session_id="s1")
+        assert stored is not None
+        assert [event.id for event in stored.events] == [summary_event.id, retained_event.id]
+        assert stored.events[0].timestamp == summary_event.timestamp
+        assert stored.events[1].timestamp == retained_event.timestamp
+        await svc.close()
+
     async def test_update_nonexistent(self):
         svc = await _create_service()
         session = Session(id="nonexistent", app_name="app", user_id="user", save_key="k")

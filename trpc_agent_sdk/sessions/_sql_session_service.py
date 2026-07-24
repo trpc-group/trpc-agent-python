@@ -483,6 +483,12 @@ class SqlSessionService(BaseSessionService):
                                   session_state=storage_session.state))
 
             events = [e.to_event() for e in reversed(storage_events)]
+            summary_index = next((index for index, event in enumerate(events) if event.is_summary_event()), None)
+            if summary_index not in (None, 0):
+                # A summary is the anchor for the active event window. Its
+                # creation timestamp can be newer than retained events, so a
+                # timestamp-only SQL ordering may otherwise place it later.
+                events.insert(0, events.pop(summary_index))
             historical_events = (_events_from_storage(storage_session.historical_events)
                                  if self._session_config.store_historical_events else [])
             session = storage_session.to_session(state=merged_state, events=events, historical_events=historical_events)

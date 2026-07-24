@@ -1,0 +1,30 @@
+{
+  "description": "Sample field-level replay diff report for Session / Memory / Summary consistency tests.",
+  "allowed_diff_policy": [
+    "Event ids and timestamps are normalized before comparison.",
+    "Summary ownership, summary text, event counts, state values, memory text, and tool payloads are compared exactly.",
+    "Backend-specific differences must be listed by exact field path, never by broad wildcard."
+  ],
+  "sample_diffs": [
+    {
+      "case_id": "summary_update",
+      "session_id": "replay-session",
+      "event_index": null,
+      "summary_id": "replay-session",
+      "field_path": "$.summary.session_id",
+      "expected": "replay-session",
+      "actual": "other-session",
+      "allowed_diff": false
+    },
+    {
+      "case_id": "tool_call_and_response",
+      "session_id": "replay-session",
+      "event_index": 2,
+      "summary_id": null,
+      "field_path": "$.events[2].parts[0].response.temperature",
+      "expected": "30C",
+      "actual": "lost",
+      "allowed_diff": false
+    }
+  ]
+}
