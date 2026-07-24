@@ -1,0 +1,4725 @@
+{
+  "backends": [
+    "in_memory",
+    "sqlite"
+  ],
+  "case_count": 10,
+  "cases": [
+    {
+      "allowed_diff": [],
+      "backend_snapshots": [
+        {
+          "backend": "in_memory",
+          "snapshot": {
+            "backend": "in_memory",
+            "case_id": "single_turn",
+            "memory": {
+              "hello": [
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "hello user",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                },
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "hello agent",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "user"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "hello agent",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "single_turn-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "single_turn-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "hello user",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "single_turn-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "single_turn-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "single_turn-primary",
+                "state": {
+                  "case_id": "single_turn"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": null
+            }
+          }
+        },
+        {
+          "backend": "sqlite",
+          "snapshot": {
+            "backend": "sqlite",
+            "case_id": "single_turn",
+            "memory": {
+              "hello": [
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "hello user",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                },
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "hello agent",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "user"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "hello agent",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "single_turn-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "single_turn-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "hello user",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "single_turn-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "single_turn-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "single_turn-primary",
+                "state": {
+                  "case_id": "single_turn"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": null
+            }
+          }
+        }
+      ],
+      "backends": [
+        "in_memory",
+        "sqlite"
+      ],
+      "case_id": "single_turn",
+      "differences": []
+    },
+    {
+      "allowed_diff": [],
+      "backend_snapshots": [
+        {
+          "backend": "in_memory",
+          "snapshot": {
+            "backend": "in_memory",
+            "case_id": "multi_turn",
+            "memory": {
+              "museum": [
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "museum route prepared",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "plan a weekend trip",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "multi_turn-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "multi_turn-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "what city do you prefer",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "multi_turn-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "multi_turn-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "hangzhou with museums",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "multi_turn-event-3",
+                    "index": 2,
+                    "interrupted": null,
+                    "invocation_id": "multi_turn-inv-3",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "museum route prepared",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "multi_turn-event-4",
+                    "index": 3,
+                    "interrupted": null,
+                    "invocation_id": "multi_turn-inv-4",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "multi_turn-primary",
+                "state": {
+                  "case_id": "multi_turn"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": null
+            }
+          }
+        },
+        {
+          "backend": "sqlite",
+          "snapshot": {
+            "backend": "sqlite",
+            "case_id": "multi_turn",
+            "memory": {
+              "museum": [
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "museum route prepared",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "plan a weekend trip",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "multi_turn-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "multi_turn-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "what city do you prefer",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "multi_turn-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "multi_turn-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "hangzhou with museums",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "multi_turn-event-3",
+                    "index": 2,
+                    "interrupted": null,
+                    "invocation_id": "multi_turn-inv-3",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "museum route prepared",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "multi_turn-event-4",
+                    "index": 3,
+                    "interrupted": null,
+                    "invocation_id": "multi_turn-inv-4",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "multi_turn-primary",
+                "state": {
+                  "case_id": "multi_turn"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": null
+            }
+          }
+        }
+      ],
+      "backends": [
+        "in_memory",
+        "sqlite"
+      ],
+      "case_id": "multi_turn",
+      "differences": []
+    },
+    {
+      "allowed_diff": [],
+      "backend_snapshots": [
+        {
+          "backend": "in_memory",
+          "snapshot": {
+            "backend": "in_memory",
+            "case_id": "tool_call",
+            "memory": {
+              "shenzhen": [
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "shenzhen is warm at 31c",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                },
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "weather in shenzhen",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "user"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "weather in shenzhen",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "tool_call-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "tool_call-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": {
+                            "args": {
+                              "city": "shenzhen"
+                            },
+                            "id": null,
+                            "name": "weather",
+                            "partial_args": null,
+                            "will_continue": null
+                          },
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": null,
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "tool_call-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "tool_call-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "tool",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": {
+                            "id": null,
+                            "name": "weather",
+                            "parts": null,
+                            "response": {
+                              "temp": 31
+                            },
+                            "scheduling": null,
+                            "will_continue": null
+                          },
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": null,
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "tool_call-event-3",
+                    "index": 2,
+                    "interrupted": null,
+                    "invocation_id": "tool_call-inv-3",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "shenzhen is warm at 31c",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "tool_call-event-4",
+                    "index": 3,
+                    "interrupted": null,
+                    "invocation_id": "tool_call-inv-4",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "tool_call-primary",
+                "state": {
+                  "case_id": "tool_call"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": null
+            }
+          }
+        },
+        {
+          "backend": "sqlite",
+          "snapshot": {
+            "backend": "sqlite",
+            "case_id": "tool_call",
+            "memory": {
+              "shenzhen": [
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "shenzhen is warm at 31c",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                },
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "weather in shenzhen",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "user"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "weather in shenzhen",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "tool_call-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "tool_call-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": {
+                            "args": {
+                              "city": "shenzhen"
+                            },
+                            "id": null,
+                            "name": "weather",
+                            "partial_args": null,
+                            "will_continue": null
+                          },
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": null,
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "tool_call-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "tool_call-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "tool",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": {
+                            "id": null,
+                            "name": "weather",
+                            "parts": null,
+                            "response": {
+                              "temp": 31
+                            },
+                            "scheduling": null,
+                            "will_continue": null
+                          },
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": null,
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "tool_call-event-3",
+                    "index": 2,
+                    "interrupted": null,
+                    "invocation_id": "tool_call-inv-3",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "shenzhen is warm at 31c",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "tool_call-event-4",
+                    "index": 3,
+                    "interrupted": null,
+                    "invocation_id": "tool_call-inv-4",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "tool_call-primary",
+                "state": {
+                  "case_id": "tool_call"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": null
+            }
+          }
+        }
+      ],
+      "backends": [
+        "in_memory",
+        "sqlite"
+      ],
+      "case_id": "tool_call",
+      "differences": []
+    },
+    {
+      "allowed_diff": [],
+      "backend_snapshots": [
+        {
+          "backend": "in_memory",
+          "snapshot": {
+            "backend": "in_memory",
+            "case_id": "state_updates",
+            "memory": {},
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "remember profile",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "state_updates-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "state_updates-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {
+                        "app:region": "south",
+                        "topic": "profile",
+                        "user:city": "shenzhen"
+                      }
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "profile saved",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "state_updates-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "state_updates-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {
+                        "topic": "travel",
+                        "user:city": "hangzhou"
+                      }
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "profile updated",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "state_updates-event-3",
+                    "index": 2,
+                    "interrupted": null,
+                    "invocation_id": "state_updates-inv-3",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "state_updates-primary",
+                "state": {
+                  "app:region": "south",
+                  "case_id": "state_updates",
+                  "topic": "travel",
+                  "user:city": "hangzhou"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": null
+            }
+          }
+        },
+        {
+          "backend": "sqlite",
+          "snapshot": {
+            "backend": "sqlite",
+            "case_id": "state_updates",
+            "memory": {},
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "remember profile",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "state_updates-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "state_updates-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {
+                        "app:region": "south",
+                        "topic": "profile",
+                        "user:city": "shenzhen"
+                      }
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "profile saved",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "state_updates-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "state_updates-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {
+                        "topic": "travel",
+                        "user:city": "hangzhou"
+                      }
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "profile updated",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "state_updates-event-3",
+                    "index": 2,
+                    "interrupted": null,
+                    "invocation_id": "state_updates-inv-3",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "state_updates-primary",
+                "state": {
+                  "app:region": "south",
+                  "case_id": "state_updates",
+                  "topic": "travel",
+                  "user:city": "hangzhou"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": null
+            }
+          }
+        }
+      ],
+      "backends": [
+        "in_memory",
+        "sqlite"
+      ],
+      "case_id": "state_updates",
+      "differences": []
+    },
+    {
+      "allowed_diff": [],
+      "backend_snapshots": [
+        {
+          "backend": "in_memory",
+          "snapshot": {
+            "backend": "in_memory",
+            "case_id": "memory_search",
+            "memory": {
+              "oat latte": [
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "I will remember oat latte",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                },
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "my coffee preference is oat latte",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "user"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "my coffee preference is oat latte",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "memory_search-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "memory_search-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "I will remember oat latte",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "memory_search-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "memory_search-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "memory_search-primary",
+                "state": {
+                  "case_id": "memory_search"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": null
+            }
+          }
+        },
+        {
+          "backend": "sqlite",
+          "snapshot": {
+            "backend": "sqlite",
+            "case_id": "memory_search",
+            "memory": {
+              "oat latte": [
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "I will remember oat latte",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                },
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "my coffee preference is oat latte",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "user"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "my coffee preference is oat latte",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "memory_search-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "memory_search-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "I will remember oat latte",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "memory_search-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "memory_search-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "memory_search-primary",
+                "state": {
+                  "case_id": "memory_search"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": null
+            }
+          }
+        }
+      ],
+      "backends": [
+        "in_memory",
+        "sqlite"
+      ],
+      "case_id": "memory_search",
+      "differences": []
+    },
+    {
+      "allowed_diff": [],
+      "backend_snapshots": [
+        {
+          "backend": "in_memory",
+          "snapshot": {
+            "backend": "in_memory",
+            "case_id": "summary_generation",
+            "memory": {},
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "system",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "Previous conversation summary: summary::st detail recorded Summary user second detail is important user second detail is important assistant third detail is also important assistant third detail is also important Summary",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "<summary-event-id>",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "summary",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": true,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "summary needs new fourth detail",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_generation-event-5",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "summary_generation-inv-5",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "fourth detail recorded",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_generation-event-6",
+                    "index": 2,
+                    "interrupted": null,
+                    "invocation_id": "summary_generation-inv-6",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "long topic starts",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_generation-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "summary_generation-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "first detail recorded",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_generation-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "summary_generation-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "system",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "Previous conversation summary: summary::rtant to remember for continuing the conversation Conversation user long topic starts user long topic starts assistant first detail recorded assistant first detail recorded Summary",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "<summary-event-id>",
+                    "index": 2,
+                    "interrupted": null,
+                    "invocation_id": "summary",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": true,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "second detail is important",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_generation-event-3",
+                    "index": 3,
+                    "interrupted": null,
+                    "invocation_id": "summary_generation-inv-3",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "third detail is also important",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_generation-event-4",
+                    "index": 4,
+                    "interrupted": null,
+                    "invocation_id": "summary_generation-inv-4",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "id": "summary_generation-primary",
+                "state": {
+                  "case_id": "summary_generation"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": {
+                "compressed_event_count": 3,
+                "original_event_count": 5,
+                "session_id": "summary_generation-primary",
+                "summary_id": "summary_generation-primary:summary",
+                "summary_text": "summary::st detail recorded Summary user second detail is important user second detail is important assistant third detail is also important assistant third detail is also important Summary",
+                "updated_at": "<timestamp>",
+                "version": 2
+              }
+            }
+          }
+        },
+        {
+          "backend": "sqlite",
+          "snapshot": {
+            "backend": "sqlite",
+            "case_id": "summary_generation",
+            "memory": {},
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "system",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "Previous conversation summary: summary::st detail recorded Summary user second detail is important user second detail is important assistant third detail is also important assistant third detail is also important Summary",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "<summary-event-id>",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "summary",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": true,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "summary needs new fourth detail",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_generation-event-5",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "summary_generation-inv-5",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "fourth detail recorded",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_generation-event-6",
+                    "index": 2,
+                    "interrupted": null,
+                    "invocation_id": "summary_generation-inv-6",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "long topic starts",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_generation-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "summary_generation-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "first detail recorded",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_generation-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "summary_generation-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "system",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "Previous conversation summary: summary::rtant to remember for continuing the conversation Conversation user long topic starts user long topic starts assistant first detail recorded assistant first detail recorded Summary",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "<summary-event-id>",
+                    "index": 2,
+                    "interrupted": null,
+                    "invocation_id": "summary",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": true,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "second detail is important",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_generation-event-3",
+                    "index": 3,
+                    "interrupted": null,
+                    "invocation_id": "summary_generation-inv-3",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "third detail is also important",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_generation-event-4",
+                    "index": 4,
+                    "interrupted": null,
+                    "invocation_id": "summary_generation-inv-4",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "id": "summary_generation-primary",
+                "state": {
+                  "case_id": "summary_generation"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": {
+                "compressed_event_count": 3,
+                "original_event_count": 5,
+                "session_id": "summary_generation-primary",
+                "summary_id": "summary_generation-primary:summary",
+                "summary_text": "summary::st detail recorded Summary user second detail is important user second detail is important assistant third detail is also important assistant third detail is also important Summary",
+                "updated_at": "<timestamp>",
+                "version": 2
+              }
+            }
+          }
+        }
+      ],
+      "backends": [
+        "in_memory",
+        "sqlite"
+      ],
+      "case_id": "summary_generation",
+      "differences": []
+    },
+    {
+      "allowed_diff": [],
+      "backend_snapshots": [
+        {
+          "backend": "in_memory",
+          "snapshot": {
+            "backend": "in_memory",
+            "case_id": "summary_truncation",
+            "memory": {},
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "system",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "Previous conversation summary: summary::hensive Focus on what would be most important to remember for continuing the conversation Conversation user turn two user turn two assistant answer two assistant answer two Summary",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "<summary-event-id>",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "summary",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": true,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "continue after summary",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_truncation-event-5",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "summary_truncation-inv-5",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "continued with summary context",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_truncation-event-6",
+                    "index": 2,
+                    "interrupted": null,
+                    "invocation_id": "summary_truncation-inv-6",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "turn one",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_truncation-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "summary_truncation-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "answer one",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_truncation-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "summary_truncation-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "turn two",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_truncation-event-3",
+                    "index": 2,
+                    "interrupted": null,
+                    "invocation_id": "summary_truncation-inv-3",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "answer two",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_truncation-event-4",
+                    "index": 3,
+                    "interrupted": null,
+                    "invocation_id": "summary_truncation-inv-4",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "id": "summary_truncation-primary",
+                "state": {
+                  "case_id": "summary_truncation"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": {
+                "compressed_event_count": 1,
+                "original_event_count": 2,
+                "session_id": "summary_truncation-primary",
+                "summary_id": "summary_truncation-primary:summary",
+                "summary_text": "summary::hensive Focus on what would be most important to remember for continuing the conversation Conversation user turn two user turn two assistant answer two assistant answer two Summary",
+                "updated_at": "<timestamp>",
+                "version": 1
+              }
+            }
+          }
+        },
+        {
+          "backend": "sqlite",
+          "snapshot": {
+            "backend": "sqlite",
+            "case_id": "summary_truncation",
+            "memory": {},
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "system",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "Previous conversation summary: summary::hensive Focus on what would be most important to remember for continuing the conversation Conversation user turn two user turn two assistant answer two assistant answer two Summary",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "<summary-event-id>",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "summary",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": true,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "continue after summary",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_truncation-event-5",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "summary_truncation-inv-5",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "continued with summary context",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_truncation-event-6",
+                    "index": 2,
+                    "interrupted": null,
+                    "invocation_id": "summary_truncation-inv-6",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "turn one",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_truncation-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "summary_truncation-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "answer one",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_truncation-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "summary_truncation-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "turn two",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_truncation-event-3",
+                    "index": 2,
+                    "interrupted": null,
+                    "invocation_id": "summary_truncation-inv-3",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "answer two",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "summary_truncation-event-4",
+                    "index": 3,
+                    "interrupted": null,
+                    "invocation_id": "summary_truncation-inv-4",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "id": "summary_truncation-primary",
+                "state": {
+                  "case_id": "summary_truncation"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": {
+                "compressed_event_count": 1,
+                "original_event_count": 2,
+                "session_id": "summary_truncation-primary",
+                "summary_id": "summary_truncation-primary:summary",
+                "summary_text": "summary::hensive Focus on what would be most important to remember for continuing the conversation Conversation user turn two user turn two assistant answer two assistant answer two Summary",
+                "updated_at": "<timestamp>",
+                "version": 1
+              }
+            }
+          }
+        }
+      ],
+      "backends": [
+        "in_memory",
+        "sqlite"
+      ],
+      "case_id": "summary_truncation",
+      "differences": []
+    },
+    {
+      "allowed_diff": [],
+      "backend_snapshots": [
+        {
+          "backend": "in_memory",
+          "snapshot": {
+            "backend": "in_memory",
+            "case_id": "duplicate_logical_write",
+            "memory": {
+              "ticket": [
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "ticket accepted",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                },
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "ticket accepted",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                },
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "submit ticket",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "user"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "submit ticket",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "duplicate_logical_write-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "duplicate_logical_write-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "ticket accepted",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "duplicate_logical_write-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "duplicate_logical_write-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "ticket accepted",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "duplicate_logical_write-event-3",
+                    "index": 2,
+                    "interrupted": null,
+                    "invocation_id": "duplicate_logical_write-inv-3",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "duplicate_logical_write-primary",
+                "state": {
+                  "case_id": "duplicate_logical_write"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": null
+            }
+          }
+        },
+        {
+          "backend": "sqlite",
+          "snapshot": {
+            "backend": "sqlite",
+            "case_id": "duplicate_logical_write",
+            "memory": {
+              "ticket": [
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "ticket accepted",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                },
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "ticket accepted",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                },
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "submit ticket",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "user"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "submit ticket",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "duplicate_logical_write-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "duplicate_logical_write-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "ticket accepted",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "duplicate_logical_write-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "duplicate_logical_write-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "ticket accepted",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "duplicate_logical_write-event-3",
+                    "index": 2,
+                    "interrupted": null,
+                    "invocation_id": "duplicate_logical_write-inv-3",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "duplicate_logical_write-primary",
+                "state": {
+                  "case_id": "duplicate_logical_write"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": null
+            }
+          }
+        }
+      ],
+      "backends": [
+        "in_memory",
+        "sqlite"
+      ],
+      "case_id": "duplicate_logical_write",
+      "differences": []
+    },
+    {
+      "allowed_diff": [],
+      "backend_snapshots": [
+        {
+          "backend": "in_memory",
+          "snapshot": {
+            "backend": "in_memory",
+            "case_id": "cross_session_isolation",
+            "memory": {
+              "session": [
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "primary session fact",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "user"
+                  },
+                  "timestamp": "<timestamp>"
+                },
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "secondary session fact",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "user"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "primary session fact",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "cross_session_isolation-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "cross_session_isolation-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {
+                        "scope": "primary"
+                      }
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "primary saved",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "cross_session_isolation-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "cross_session_isolation-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "cross_session_isolation-primary",
+                "state": {
+                  "case_id": "cross_session_isolation",
+                  "scope": "primary"
+                },
+                "user_id": "replay-user"
+              },
+              "secondary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "secondary session fact",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "cross_session_isolation-event-3",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "cross_session_isolation-inv-3",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "secondary saved",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "cross_session_isolation-event-4",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "cross_session_isolation-inv-4",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "cross_session_isolation-secondary",
+                "state": {
+                  "case_id": "cross_session_isolation",
+                  "session_key": "secondary"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": null,
+              "secondary": null
+            }
+          }
+        },
+        {
+          "backend": "sqlite",
+          "snapshot": {
+            "backend": "sqlite",
+            "case_id": "cross_session_isolation",
+            "memory": {
+              "session": [
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "primary session fact",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "user"
+                  },
+                  "timestamp": "<timestamp>"
+                },
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "secondary session fact",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "user"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "primary session fact",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "cross_session_isolation-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "cross_session_isolation-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {
+                        "scope": "primary"
+                      }
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "primary saved",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "cross_session_isolation-event-2",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "cross_session_isolation-inv-2",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "cross_session_isolation-primary",
+                "state": {
+                  "case_id": "cross_session_isolation",
+                  "scope": "primary"
+                },
+                "user_id": "replay-user"
+              },
+              "secondary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "secondary session fact",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "cross_session_isolation-event-3",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "cross_session_isolation-inv-3",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "secondary saved",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "cross_session_isolation-event-4",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "cross_session_isolation-inv-4",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "cross_session_isolation-secondary",
+                "state": {
+                  "case_id": "cross_session_isolation",
+                  "session_key": "secondary"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": null,
+              "secondary": null
+            }
+          }
+        }
+      ],
+      "backends": [
+        "in_memory",
+        "sqlite"
+      ],
+      "case_id": "cross_session_isolation",
+      "differences": []
+    },
+    {
+      "allowed_diff": [],
+      "backend_snapshots": [
+        {
+          "backend": "in_memory",
+          "snapshot": {
+            "backend": "in_memory",
+            "case_id": "recovery_after_failed_step",
+            "memory": {
+              "recovered": [
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "recovered cleanly",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "start transaction",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "recovery_after_failed_step-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "recovery_after_failed_step-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {
+                        "status": "clean"
+                      }
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "recovered cleanly",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "recovery_after_failed_step-event-3",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "recovery_after_failed_step-inv-3",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "recovery_after_failed_step-primary",
+                "state": {
+                  "case_id": "recovery_after_failed_step",
+                  "status": "clean"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": null
+            }
+          }
+        },
+        {
+          "backend": "sqlite",
+          "snapshot": {
+            "backend": "sqlite",
+            "case_id": "recovery_after_failed_step",
+            "memory": {
+              "recovered": [
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "code_execution_result": null,
+                        "executable_code": null,
+                        "file_data": null,
+                        "function_call": null,
+                        "function_response": null,
+                        "inline_data": null,
+                        "media_resolution": null,
+                        "part_metadata": null,
+                        "text": "recovered cleanly",
+                        "thought": null,
+                        "thought_signature": null,
+                        "tool_call": null,
+                        "tool_response": null,
+                        "video_metadata": null
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "sessions": {
+              "primary": {
+                "app_name": "replay-app",
+                "conversation_count": 0,
+                "events": [
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {}
+                    },
+                    "author": "user",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "start transaction",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "user"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "recovery_after_failed_step-event-1",
+                    "index": 0,
+                    "interrupted": null,
+                    "invocation_id": "recovery_after_failed_step-inv-1",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  },
+                  {
+                    "actions": {
+                      "artifact_delta": {},
+                      "state_delta": {
+                        "status": "clean"
+                      }
+                    },
+                    "author": "assistant",
+                    "branch": null,
+                    "content": {
+                      "parts": [
+                        {
+                          "code_execution_result": null,
+                          "executable_code": null,
+                          "file_data": null,
+                          "function_call": null,
+                          "function_response": null,
+                          "inline_data": null,
+                          "media_resolution": null,
+                          "part_metadata": null,
+                          "text": "recovered cleanly",
+                          "thought": null,
+                          "thought_signature": null,
+                          "tool_call": null,
+                          "tool_response": null,
+                          "video_metadata": null
+                        }
+                      ],
+                      "role": "model"
+                    },
+                    "error_code": null,
+                    "error_message": null,
+                    "id": "recovery_after_failed_step-event-3",
+                    "index": 1,
+                    "interrupted": null,
+                    "invocation_id": "recovery_after_failed_step-inv-3",
+                    "long_running_tool_ids": [],
+                    "model_visible": true,
+                    "partial": null,
+                    "summary_event": false,
+                    "timestamp": "<timestamp>",
+                    "turn_complete": null,
+                    "visible": true
+                  }
+                ],
+                "historical_events": [],
+                "id": "recovery_after_failed_step-primary",
+                "state": {
+                  "case_id": "recovery_after_failed_step",
+                  "status": "clean"
+                },
+                "user_id": "replay-user"
+              }
+            },
+            "summaries": {
+              "primary": null
+            }
+          }
+        }
+      ],
+      "backends": [
+        "in_memory",
+        "sqlite"
+      ],
+      "case_id": "recovery_after_failed_step",
+      "differences": []
+    }
+  ],
+  "mode": "lightweight",
+  "normalization": [
+    "timestamps are replaced with <timestamp>",
+    "generated summary event ids are replaced with <summary-event-id>",
+    "memory results are sorted after timestamp normalization",
+    "summary text is whitespace-normalized"
+  ],
+  "report_name": "session_memory_summary_diff_report"
+}

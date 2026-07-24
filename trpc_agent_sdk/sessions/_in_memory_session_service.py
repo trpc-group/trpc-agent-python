@@ -249,9 +249,6 @@ class InMemorySessionService(BaseSessionService):
             _warning("session not found")
             return event
 
-        # Add event to storage session
-        storage_session.events.append(event)
-
         # Extract and apply state changes to appropriate storage buckets
         if event.actions and event.actions.state_delta:
             state_delta = extract_state_delta(event.actions.state_delta)
@@ -266,7 +263,13 @@ class InMemorySessionService(BaseSessionService):
             if state_delta.session_state:
                 storage_session.state.update(state_delta.session_state)
 
+        # Mirror the caller-visible event window after BaseSessionService has
+        # applied max event filtering and optional historical retention.
+        storage_session.events = copy.deepcopy(session.events)
+        storage_session.historical_events = (copy.deepcopy(session.historical_events)
+                                             if self._session_config.store_historical_events else [])
         storage_session.conversation_count = session.conversation_count
+        storage_session.last_update_time = session.last_update_time
 
         return event
 
@@ -291,7 +294,8 @@ class InMemorySessionService(BaseSessionService):
             logger.warning("session_id %s not in sessions[app_name][user_id]", session_id)
             return
 
-        # Update the stored session and refresh TTL
+        # Store a copy so future append_event calls cannot mutate both the
+        # caller's Session and the backing store through the same object.
         self._set_session(app_name, user_id, session_id, session)
 
     def _cleanup_expired(self) -> None:
@@ -479,8 +483,9 @@ class InMemorySessionService(BaseSessionService):
             session = session.model_copy(update={"historical_events": []})
 
         # Store session with TTL
-        session_with_ttl = SessionWithTTL(session=session, ttl=self._session_config.ttl)
-        session_with_ttl.update(session)
+        stored_session = copy.deepcopy(session)
+        session_with_ttl = SessionWithTTL(session=stored_session, ttl=self._session_config.ttl)
+        session_with_ttl.update(stored_session)
         self._sessions[app_name][user_id][session_id] = session_with_ttl
 
     def _get_app_state(self, app_name: str) -> dict[str, Any]:
