@@ -1,0 +1,43 @@
+allowed_domains:
+  - api.example.com
+
+blocked_paths:
+  read_dotenv:
+    - ".env"
+    - ".env.local"
+  read_ssh:
+    - "~/.ssh"
+    - ".ssh/"
+
+allowed_commands:
+  - bash
+  - echo
+  - python
+  - python3
+
+max_timeout: 60
+max_output_size: 10000
+
+risk_levels:
+  safe_python: none
+  dangerous_delete: critical
+  read_dotenv: high
+  read_ssh: critical
+  subprocess_execution: high
+  os_system_execution: high
+  package_install: medium
+  npm_install: medium
+  apt_install: medium
+  infinite_loop: high
+  sensitive_output: high
+  wget_network: high
+  aiohttp_network: high
+  socket_network: high
+  fork_bomb: critical
+  bash_pipe: medium
+  shell_injection: medium
+  excessive_concurrency: high
+  large_file_write: high
+  human_review_required: medium
+  network_allowlist: none
+  network_not_allowlisted: high

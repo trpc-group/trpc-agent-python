@@ -97,6 +97,14 @@ from .mcp_tool import SseConnectionParams
 from .mcp_tool import StdioConnectionParams
 from .mcp_tool import StreamableHTTPConnectionParams
 from .mcp_tool import patch_mcp_cancel_scope_exit_issue
+from .safety import SafetyChecker
+from .safety import Rule
+from .safety import SafetyPolicyError
+from .safety import SafetyReview
+from .safety import SafetyReviewer
+from .safety import ToolSafetyFilter
+from .safety import ToolSafetyPolicy
+from .safety import load_tool_safety_policy
 from .utils import build_function_declaration
 from .utils import from_function_with_options
 from .utils import get_required_fields
@@ -188,6 +196,14 @@ __all__ = [
     "StdioConnectionParams",
     "StreamableHTTPConnectionParams",
     "patch_mcp_cancel_scope_exit_issue",
+    "Rule",
+    "SafetyChecker",
+    "SafetyPolicyError",
+    "SafetyReview",
+    "SafetyReviewer",
+    "ToolSafetyFilter",
+    "ToolSafetyPolicy",
+    "load_tool_safety_policy",
     "build_function_declaration",
     "from_function_with_options",
     "get_required_fields",

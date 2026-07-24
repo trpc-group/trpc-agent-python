@@ -1,0 +1,83 @@
+# Default policy for tool script safety checks.
+enabled: true
+default_decision: allow
+
+deny_severities:
+  - high
+  - critical
+review_severities:
+  - medium
+
+allowed_domains: []
+blocked_paths:
+  - .env
+  - ~/.ssh
+allowed_commands: []
+max_timeout: 3600
+max_output_size: 1048576
+
+severity:
+  default: high
+  python.requests_get_post: medium
+  python.socket_connect: medium
+  bash.shell_pipe: medium
+  bash.background_execution: medium
+  bash.long_sleep: medium
+
+rule_configs:
+  python.os_system:
+    severity: high
+    allowed_commands: []
+  python.subprocess_run:
+    severity: high
+    allowed_commands: []
+  python.subprocess_popen:
+    severity: high
+    allowed_commands: []
+  python.shutil_rmtree:
+    severity: high
+    allowed_commands: []
+  python.read_env_file:
+    severity: high
+    blocked_paths:
+      - .env
+  python.read_ssh_path:
+    severity: high
+    blocked_paths:
+      - ~/.ssh
+  python.requests_get_post:
+    severity: medium
+    allowed_domains: []
+  python.socket_connect:
+    severity: medium
+    allowed_domains: []
+  bash.rm_rf:
+    severity: high
+    allowed_commands: []
+  bash.curl:
+    severity: high
+    allowed_commands: []
+  bash.wget:
+    severity: high
+    allowed_commands: []
+  bash.sudo:
+    severity: high
+    allowed_commands: []
+  bash.apt_install:
+    severity: high
+    allowed_commands: []
+  bash.pip_install:
+    severity: high
+    allowed_commands: []
+  bash.npm_install:
+    severity: high
+    allowed_commands: []
+  bash.background_execution:
+    severity: medium
+  bash.shell_pipe:
+    severity: medium
+  bash.fork_bomb:
+    severity: critical
+  bash.long_sleep:
+    severity: medium
+    max_timeout: 3600
