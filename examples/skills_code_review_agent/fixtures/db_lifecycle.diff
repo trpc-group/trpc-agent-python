@@ -1,0 +1,15 @@
+--- a/app/repository.py
++++ b/app/repository.py
+@@ -8,6 +8,10 @@ def reset_balances():
+     logger.info("resetting balances")
++    conn = sqlite3.connect("app.db")
++    cur = conn.cursor()
++    cur.execute("UPDATE accounts SET balance = 0")
++    conn.commit()
+     return True
+--- a/tests/test_repository.py
++++ b/tests/test_repository.py
+@@ -1,2 +1,3 @@
+ def test_reset():
++    assert True
+     pass

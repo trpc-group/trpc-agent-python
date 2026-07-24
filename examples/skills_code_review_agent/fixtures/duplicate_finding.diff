@@ -1,0 +1,12 @@
+--- a/app/dynamic.py
++++ b/app/dynamic.py
+@@ -3,5 +3,6 @@ def run_snippet(snippet, use_eval):
+     logger.debug("running snippet")
++    result = eval(snippet) if use_eval else exec(snippet)
+     return result
+--- a/tests/test_dynamic.py
++++ b/tests/test_dynamic.py
+@@ -1,2 +1,3 @@
+ def test_run():
++    assert True
+     pass

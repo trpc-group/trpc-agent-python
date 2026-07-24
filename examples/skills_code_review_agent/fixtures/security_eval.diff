@@ -1,0 +1,14 @@
+--- a/app/handler.py
++++ b/app/handler.py
+@@ -10,6 +10,9 @@ def handle(request):
+     data = request.get("data", "")
++    result = eval(data)
++    subprocess.run(cmd, shell=True)
++    row = cursor.execute(f"SELECT * FROM users WHERE name = '{name}'")
+     return result
+--- a/tests/test_handler.py
++++ b/tests/test_handler.py
+@@ -1,2 +1,3 @@
+ def test_handle():
++    assert True
+     pass

@@ -1,0 +1,8 @@
+--- a/app/service.py
++++ b/app/service.py
+@@ -5,6 +5,9 @@ def process(order):
+     validate(order)
++    if order.total < 0:
++        raise ValueError("negative total")
++    order.status = "processed"
+     return order
