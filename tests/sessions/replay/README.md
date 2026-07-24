@@ -4,7 +4,7 @@
 `load → replay_case → 后端中立快照 → compare → report` 比较**事件 / state / memory / summary** 的一致性。
 既是测试工具,也是后端实现质量的基准。完整设计见同目录
 [`2026-07-13-session-memory-replay-consistency-design.md`](2026-07-13-session-memory-replay-consistency-design.md),
-实施步骤见 [`2026-07-13-session-memory-replay-consistency.md`](2026-07-13-session-memory-replay-consistency.md)。
+实施步骤见 [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)。
 
 ## 快速运行
 
@@ -68,7 +68,7 @@ TRPC_REPLAY_REDIS_URL=redis://localhost:6379/0 PYTHONUTF8=1 pytest tests/session
 tests/sessions/replay/
 ├── README.md                                          # 本文件
 ├── 2026-07-13-session-memory-replay-consistency-design.md     # 设计文档
-├── 2026-07-13-session-memory-replay-consistency.md           # 实施计划
+├── IMPLEMENTATION_PLAN.md          # 实施计划(无日期前缀)
 ├── __init__.py            # 包入口 + 设计说明
 ├── harness.py             # 数据模型 + replay_case() 驱动
 ├── normalizer.py          # 占位符归一化
