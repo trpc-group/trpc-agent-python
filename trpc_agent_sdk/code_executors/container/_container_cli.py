@@ -14,20 +14,35 @@ import atexit
 import os
 import socket as pysocket
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 # Note: Docker SDK imports (docker, docker.models.containers, docker.utils.socket)
 # are deferred to runtime via _import_docker() to avoid hanging/crashing on
 # systems without Docker installed (e.g. Windows without Docker Desktop).
 # See: https://github.com/trpc-group/trpc-agent-python/issues/230
-if TYPE_CHECKING:
-    import docker
-    from docker.models.containers import Container
+#
+# Module-level placeholders are declared below (docker=None, Container=None, etc.)
+# and populated by _import_docker() on first real use. This approach:
+#   - eliminates F821 flake8 errors (no # noqa needed)
+#   - provides clear NameError-free fallback if called before init
+#   - allows @patch("..._container_cli.docker") to work in tests
+# Type annotations use string literals via `from __future__ import annotations`.
 
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.utils import CommandExecResult
 
 import threading
+
+# Module-level placeholders for Docker SDK symbols.
+# These are populated by _import_docker() on first use, which avoids
+# hanging/crashing on systems without Docker installed.
+# Declaring them here eliminates F821 and ensures _exec_run_with_stdin
+# gets a clear RuntimeError instead of NameError if called before init.
+docker = None
+Container = None
+consume_socket_output = None
+demux_adaptor = None
+frames_iter = None
 
 _docker_imported = False
 _docker_lock = threading.Lock()
@@ -43,24 +58,22 @@ def _import_docker():
     import to call-time we ensure that users who never touch
     ``ContainerCodeExecutor`` are unaffected.
     """
-    global _docker_imported
+    global _docker_imported, docker, Container, consume_socket_output, demux_adaptor, frames_iter
     if _docker_imported:
         return
     with _docker_lock:
         if _docker_imported:
             return
-        import docker as _docker
+        import docker as _docker_mod
         from docker.models.containers import Container as _Container
         from docker.utils.socket import consume_socket_output as _cso
         from docker.utils.socket import demux_adaptor as _da
         from docker.utils.socket import frames_iter as _fi
-        globals().update({
-            'docker': _docker,
-            'Container': _Container,
-            'consume_socket_output': _cso,
-            'demux_adaptor': _da,
-            'frames_iter': _fi,
-        })
+        docker = _docker_mod
+        Container = _Container
+        consume_socket_output = _cso
+        demux_adaptor = _da
+        frames_iter = _fi
         _docker_imported = True
 
 
@@ -296,9 +309,9 @@ class ContainerClient:
                 if callable(close_write):
                     close_write()
 
-            frames = frames_iter(sock, tty=False)  # noqa: F821
-            demux_frames = (demux_adaptor(*frame) for frame in frames)  # noqa: F821
-            output = consume_socket_output(demux_frames, demux=True)  # noqa: F821
+            frames = frames_iter(sock, tty=False)
+            demux_frames = (demux_adaptor(*frame) for frame in frames)
+            output = consume_socket_output(demux_frames, demux=True)
             stdout = output[0].decode("utf-8") if output and output[0] else ""
             stderr = output[1].decode("utf-8") if output and output[1] else ""
         finally:
