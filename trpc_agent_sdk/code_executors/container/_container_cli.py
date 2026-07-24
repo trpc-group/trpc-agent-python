@@ -290,9 +290,9 @@ class ContainerClient:
                 if callable(close_write):
                     close_write()
 
-            frames = frames_iter(sock, tty=False)
-            demux_frames = (demux_adaptor(*frame) for frame in frames)
-            output = consume_socket_output(demux_frames, demux=True)
+            frames = frames_iter(sock, tty=False)  # noqa: F821
+            demux_frames = (demux_adaptor(*frame) for frame in frames)  # noqa: F821
+            output = consume_socket_output(demux_frames, demux=True)  # noqa: F821
             stdout = output[0].decode("utf-8") if output and output[0] else ""
             stderr = output[1].decode("utf-8") if output and output[1] else ""
         finally:
