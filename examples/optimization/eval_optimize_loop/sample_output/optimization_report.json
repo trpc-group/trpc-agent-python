@@ -1,0 +1,3401 @@
+{
+  "schema_version": "1.0",
+  "status": "accepted",
+  "baseline": {
+    "train": {
+      "split": "train",
+      "pass_rate": 0.0,
+      "average_score": 0.6666666666666666,
+      "cases": [
+        {
+          "case_id": "train_final_response_mismatch",
+          "passed": false,
+          "score": 0.75,
+          "key_case": false,
+          "hard_fail": false,
+          "metrics": [
+            {
+              "metric_name": "tool_trajectory_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "passed": false,
+              "reason": ""
+            },
+            {
+              "metric_name": "llm_rubric_response",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            },
+            {
+              "metric_name": "llm_rubric_knowledge_recall",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            }
+          ],
+          "primary_failure": "final_response_mismatch",
+          "failure_reasons": [
+            {
+              "category": "final_response_mismatch",
+              "explanation": "The final response does not contain the expected reference answer.",
+              "evidence": {
+                "actual": "工单 T-100 状态：处理中。",
+                "expected": "工单 T-100 状态：已完成。"
+              }
+            }
+          ],
+          "actual_response": "工单 T-100 状态：处理中。",
+          "expected_response": "工单 T-100 状态：已完成。",
+          "key_trajectory": []
+        },
+        {
+          "case_id": "train_tool_call_error",
+          "passed": false,
+          "score": 0.75,
+          "key_case": false,
+          "hard_fail": true,
+          "metrics": [
+            {
+              "metric_name": "tool_trajectory_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "passed": false,
+              "reason": ""
+            },
+            {
+              "metric_name": "llm_rubric_response",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            },
+            {
+              "metric_name": "llm_rubric_knowledge_recall",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            }
+          ],
+          "primary_failure": "tool_call_error",
+          "failure_reasons": [
+            {
+              "category": "tool_call_error",
+              "explanation": "A required tool returned an execution error.",
+              "evidence": {
+                "tool_responses": [
+                  {
+                    "tool": "lookup_order",
+                    "id": "call-1",
+                    "response": {
+                      "error": "backend unavailable"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "category": "final_response_mismatch",
+              "explanation": "The final response does not contain the expected reference answer.",
+              "evidence": {
+                "actual": "无法查询订单状态。",
+                "expected": "订单 O-200 状态：已发货。"
+              }
+            }
+          ],
+          "actual_response": "无法查询订单状态。",
+          "expected_response": "订单 O-200 状态：已发货。",
+          "key_trajectory": [
+            {
+              "kind": "tool_call",
+              "name": "lookup_order",
+              "payload": {
+                "id": "call-1",
+                "args": {
+                  "order_id": "O-200"
+                }
+              }
+            },
+            {
+              "kind": "tool_response",
+              "name": "lookup_order",
+              "payload": {
+                "id": "call-1",
+                "response": {
+                  "error": "backend unavailable"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "case_id": "train_parameter_error",
+          "passed": false,
+          "score": 0.5,
+          "key_case": false,
+          "hard_fail": true,
+          "metrics": [
+            {
+              "metric_name": "tool_trajectory_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "passed": false,
+              "reason": ""
+            },
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 0.0,
+              "threshold": 1.0,
+              "passed": false,
+              "reason": ""
+            },
+            {
+              "metric_name": "llm_rubric_response",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            },
+            {
+              "metric_name": "llm_rubric_knowledge_recall",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            }
+          ],
+          "primary_failure": "parameter_error",
+          "failure_reasons": [
+            {
+              "category": "parameter_error",
+              "explanation": "A tool was selected correctly but received different arguments.",
+              "evidence": {
+                "differences": [
+                  {
+                    "tool": "lookup_order",
+                    "actual": {
+                      "order_id": "O-399"
+                    },
+                    "expected": {
+                      "order_id": "O-300"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "category": "final_response_mismatch",
+              "explanation": "The final response does not contain the expected reference answer.",
+              "evidence": {
+                "actual": "订单 O-399 状态：已取消。",
+                "expected": "订单 O-300 状态：处理中。"
+              }
+            }
+          ],
+          "actual_response": "订单 O-399 状态：已取消。",
+          "expected_response": "订单 O-300 状态：处理中。",
+          "key_trajectory": [
+            {
+              "kind": "tool_call",
+              "name": "lookup_order",
+              "payload": {
+                "id": "call-1",
+                "args": {
+                  "order_id": "O-399"
+                }
+              }
+            },
+            {
+              "kind": "tool_response",
+              "name": "lookup_order",
+              "payload": {
+                "id": "call-1",
+                "response": {
+                  "order_id": "O-399",
+                  "status": "已取消"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "validation": {
+      "split": "validation",
+      "pass_rate": 0.3333333333333333,
+      "average_score": 0.8333333333333334,
+      "cases": [
+        {
+          "case_id": "val_llm_rubric_failure",
+          "passed": false,
+          "score": 0.875,
+          "key_case": false,
+          "hard_fail": false,
+          "metrics": [
+            {
+              "metric_name": "tool_trajectory_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "llm_rubric_response",
+              "score": 0.5,
+              "threshold": 1.0,
+              "passed": false,
+              "reason": "  model#0: score=0.5000 passed=False reason=replay evidence satisfies rubric replay evidence does not satisfy rubric\naggregator=all_pass -> FAILED"
+            },
+            {
+              "metric_name": "llm_rubric_knowledge_recall",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            }
+          ],
+          "primary_failure": "llm_rubric_failure",
+          "failure_reasons": [
+            {
+              "category": "llm_rubric_failure",
+              "explanation": "The final answer failed one or more non-format quality rubrics.",
+              "evidence": {
+                "failed_rubrics": [],
+                "score": 0.5,
+                "threshold": 1.0
+              }
+            }
+          ],
+          "actual_response": "退款处理流程：请告知客户耐心等待。",
+          "expected_response": "退款处理流程：",
+          "key_trajectory": []
+        },
+        {
+          "case_id": "val_knowledge_recall_insufficiency",
+          "passed": false,
+          "score": 0.625,
+          "key_case": false,
+          "hard_fail": false,
+          "metrics": [
+            {
+              "metric_name": "tool_trajectory_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "llm_rubric_response",
+              "score": 0.5,
+              "threshold": 1.0,
+              "passed": false,
+              "reason": "  model#0: score=0.5000 passed=False reason=replay evidence satisfies rubric replay evidence does not satisfy rubric\naggregator=all_pass -> FAILED"
+            },
+            {
+              "metric_name": "llm_rubric_knowledge_recall",
+              "score": 0.0,
+              "threshold": 1.0,
+              "passed": false,
+              "reason": "  model#0: score=0.0000 passed=False reason=replay evidence does not satisfy rubric\naggregator=all_pass -> FAILED"
+            }
+          ],
+          "primary_failure": "knowledge_recall_insufficiency",
+          "failure_reasons": [
+            {
+              "category": "knowledge_recall_insufficiency",
+              "explanation": "Retrieved knowledge did not cover the facts required by the rubric.",
+              "evidence": {
+                "metric": "llm_rubric_knowledge_recall",
+                "score": 0.0,
+                "threshold": 1.0
+              }
+            },
+            {
+              "category": "llm_rubric_failure",
+              "explanation": "The final answer failed one or more non-format quality rubrics.",
+              "evidence": {
+                "failed_rubrics": [],
+                "score": 0.5,
+                "threshold": 1.0
+              }
+            }
+          ],
+          "actual_response": "会员退款到账：通常当天到账。",
+          "expected_response": "会员退款到账：",
+          "key_trajectory": [
+            {
+              "kind": "tool_call",
+              "name": "search_policy",
+              "payload": {
+                "id": "call-1",
+                "args": {
+                  "query": "会员退款到账时效",
+                  "top_k": 2
+                }
+              }
+            },
+            {
+              "kind": "tool_response",
+              "name": "search_policy",
+              "payload": {
+                "id": "call-1",
+                "response": {
+                  "documents": [
+                    {
+                      "id": "return-window",
+                      "text": "商品支持 7 天退换。"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "case_id": "val_format_key_case",
+          "passed": true,
+          "score": 1.0,
+          "key_case": true,
+          "hard_fail": true,
+          "metrics": [
+            {
+              "metric_name": "tool_trajectory_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "llm_rubric_response",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            },
+            {
+              "metric_name": "llm_rubric_knowledge_recall",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            }
+          ],
+          "primary_failure": null,
+          "failure_reasons": [],
+          "actual_response": "{\"order_id\":\"O-400\",\"status\":\"已签收\"}",
+          "expected_response": "{\"order_id\":\"O-400\",\"status\":\"已签收\"}",
+          "key_trajectory": [
+            {
+              "kind": "tool_call",
+              "name": "lookup_order",
+              "payload": {
+                "id": "call-1",
+                "args": {
+                  "order_id": "O-400"
+                }
+              }
+            },
+            {
+              "kind": "tool_response",
+              "name": "lookup_order",
+              "payload": {
+                "id": "call-1",
+                "response": {
+                  "order_id": "O-400",
+                  "status": "已签收"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "candidates": [
+    {
+      "candidate_id": "ineffective",
+      "prompts": {
+        "system": "[variant: ineffective]\n\nYou are a helpful customer-support agent. Be friendly and concise."
+      },
+      "train": {
+        "split": "train",
+        "pass_rate": 0.0,
+        "average_score": 0.6666666666666666,
+        "cases": [
+          {
+            "case_id": "train_final_response_mismatch",
+            "passed": false,
+            "score": 0.75,
+            "key_case": false,
+            "hard_fail": false,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 0.0,
+                "threshold": 1.0,
+                "passed": false,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              }
+            ],
+            "primary_failure": "final_response_mismatch",
+            "failure_reasons": [
+              {
+                "category": "final_response_mismatch",
+                "explanation": "The final response does not contain the expected reference answer.",
+                "evidence": {
+                  "actual": "工单 T-100 状态：处理中。",
+                  "expected": "工单 T-100 状态：已完成。"
+                }
+              }
+            ],
+            "actual_response": "工单 T-100 状态：处理中。",
+            "expected_response": "工单 T-100 状态：已完成。",
+            "key_trajectory": []
+          },
+          {
+            "case_id": "train_tool_call_error",
+            "passed": false,
+            "score": 0.75,
+            "key_case": false,
+            "hard_fail": true,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 0.0,
+                "threshold": 1.0,
+                "passed": false,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              }
+            ],
+            "primary_failure": "tool_call_error",
+            "failure_reasons": [
+              {
+                "category": "tool_call_error",
+                "explanation": "A required tool returned an execution error.",
+                "evidence": {
+                  "tool_responses": [
+                    {
+                      "tool": "lookup_order",
+                      "id": "call-1",
+                      "response": {
+                        "error": "backend unavailable"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "category": "final_response_mismatch",
+                "explanation": "The final response does not contain the expected reference answer.",
+                "evidence": {
+                  "actual": "无法查询订单状态。",
+                  "expected": "订单 O-200 状态：已发货。"
+                }
+              }
+            ],
+            "actual_response": "无法查询订单状态。",
+            "expected_response": "订单 O-200 状态：已发货。",
+            "key_trajectory": [
+              {
+                "kind": "tool_call",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "args": {
+                    "order_id": "O-200"
+                  }
+                }
+              },
+              {
+                "kind": "tool_response",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "response": {
+                    "error": "backend unavailable"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "case_id": "train_parameter_error",
+            "passed": false,
+            "score": 0.5,
+            "key_case": false,
+            "hard_fail": true,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 0.0,
+                "threshold": 1.0,
+                "passed": false,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 0.0,
+                "threshold": 1.0,
+                "passed": false,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              }
+            ],
+            "primary_failure": "parameter_error",
+            "failure_reasons": [
+              {
+                "category": "parameter_error",
+                "explanation": "A tool was selected correctly but received different arguments.",
+                "evidence": {
+                  "differences": [
+                    {
+                      "tool": "lookup_order",
+                      "actual": {
+                        "order_id": "O-399"
+                      },
+                      "expected": {
+                        "order_id": "O-300"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "category": "final_response_mismatch",
+                "explanation": "The final response does not contain the expected reference answer.",
+                "evidence": {
+                  "actual": "订单 O-399 状态：已取消。",
+                  "expected": "订单 O-300 状态：处理中。"
+                }
+              }
+            ],
+            "actual_response": "订单 O-399 状态：已取消。",
+            "expected_response": "订单 O-300 状态：处理中。",
+            "key_trajectory": [
+              {
+                "kind": "tool_call",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "args": {
+                    "order_id": "O-399"
+                  }
+                }
+              },
+              {
+                "kind": "tool_response",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "response": {
+                    "order_id": "O-399",
+                    "status": "已取消"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "validation": {
+        "split": "validation",
+        "pass_rate": 0.3333333333333333,
+        "average_score": 0.8333333333333334,
+        "cases": [
+          {
+            "case_id": "val_llm_rubric_failure",
+            "passed": false,
+            "score": 0.875,
+            "key_case": false,
+            "hard_fail": false,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 0.5,
+                "threshold": 1.0,
+                "passed": false,
+                "reason": "  model#0: score=0.5000 passed=False reason=replay evidence satisfies rubric replay evidence does not satisfy rubric\naggregator=all_pass -> FAILED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              }
+            ],
+            "primary_failure": "llm_rubric_failure",
+            "failure_reasons": [
+              {
+                "category": "llm_rubric_failure",
+                "explanation": "The final answer failed one or more non-format quality rubrics.",
+                "evidence": {
+                  "failed_rubrics": [],
+                  "score": 0.5,
+                  "threshold": 1.0
+                }
+              }
+            ],
+            "actual_response": "退款处理流程：请告知客户耐心等待。",
+            "expected_response": "退款处理流程：",
+            "key_trajectory": []
+          },
+          {
+            "case_id": "val_knowledge_recall_insufficiency",
+            "passed": false,
+            "score": 0.625,
+            "key_case": false,
+            "hard_fail": false,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 0.5,
+                "threshold": 1.0,
+                "passed": false,
+                "reason": "  model#0: score=0.5000 passed=False reason=replay evidence satisfies rubric replay evidence does not satisfy rubric\naggregator=all_pass -> FAILED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 0.0,
+                "threshold": 1.0,
+                "passed": false,
+                "reason": "  model#0: score=0.0000 passed=False reason=replay evidence does not satisfy rubric\naggregator=all_pass -> FAILED"
+              }
+            ],
+            "primary_failure": "knowledge_recall_insufficiency",
+            "failure_reasons": [
+              {
+                "category": "knowledge_recall_insufficiency",
+                "explanation": "Retrieved knowledge did not cover the facts required by the rubric.",
+                "evidence": {
+                  "metric": "llm_rubric_knowledge_recall",
+                  "score": 0.0,
+                  "threshold": 1.0
+                }
+              },
+              {
+                "category": "llm_rubric_failure",
+                "explanation": "The final answer failed one or more non-format quality rubrics.",
+                "evidence": {
+                  "failed_rubrics": [],
+                  "score": 0.5,
+                  "threshold": 1.0
+                }
+              }
+            ],
+            "actual_response": "会员退款到账：通常当天到账。",
+            "expected_response": "会员退款到账：",
+            "key_trajectory": [
+              {
+                "kind": "tool_call",
+                "name": "search_policy",
+                "payload": {
+                  "id": "call-1",
+                  "args": {
+                    "query": "会员退款到账时效",
+                    "top_k": 2
+                  }
+                }
+              },
+              {
+                "kind": "tool_response",
+                "name": "search_policy",
+                "payload": {
+                  "id": "call-1",
+                  "response": {
+                    "documents": [
+                      {
+                        "id": "return-window",
+                        "text": "商品支持 7 天退换。"
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "case_id": "val_format_key_case",
+            "passed": true,
+            "score": 1.0,
+            "key_case": true,
+            "hard_fail": true,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              }
+            ],
+            "primary_failure": null,
+            "failure_reasons": [],
+            "actual_response": "{\"order_id\":\"O-400\",\"status\":\"已签收\"}",
+            "expected_response": "{\"order_id\":\"O-400\",\"status\":\"已签收\"}",
+            "key_trajectory": [
+              {
+                "kind": "tool_call",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "args": {
+                    "order_id": "O-400"
+                  }
+                }
+              },
+              {
+                "kind": "tool_response",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "response": {
+                    "order_id": "O-400",
+                    "status": "已签收"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "delta": {
+        "train": {
+          "split": "train",
+          "pass_rate_delta": 0.0,
+          "average_score_delta": 0.0,
+          "paired_pass_rate_ci": {
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0,
+            "confidence_level": 0.95,
+            "bootstrap_samples": 2000,
+            "seed": 91
+          },
+          "newly_passed": [],
+          "newly_failed": [],
+          "score_improved": [],
+          "score_regressed": [],
+          "unchanged": [
+            "train_final_response_mismatch",
+            "train_parameter_error",
+            "train_tool_call_error"
+          ],
+          "cases": [
+            {
+              "case_id": "train_final_response_mismatch",
+              "status": "unchanged",
+              "baseline_passed": false,
+              "candidate_passed": false,
+              "baseline_score": 0.75,
+              "candidate_score": 0.75,
+              "score_delta": 0.0
+            },
+            {
+              "case_id": "train_parameter_error",
+              "status": "unchanged",
+              "baseline_passed": false,
+              "candidate_passed": false,
+              "baseline_score": 0.5,
+              "candidate_score": 0.5,
+              "score_delta": 0.0
+            },
+            {
+              "case_id": "train_tool_call_error",
+              "status": "unchanged",
+              "baseline_passed": false,
+              "candidate_passed": false,
+              "baseline_score": 0.75,
+              "candidate_score": 0.75,
+              "score_delta": 0.0
+            }
+          ]
+        },
+        "validation": {
+          "split": "validation",
+          "pass_rate_delta": 0.0,
+          "average_score_delta": 0.0,
+          "paired_pass_rate_ci": {
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0,
+            "confidence_level": 0.95,
+            "bootstrap_samples": 2000,
+            "seed": 91
+          },
+          "newly_passed": [],
+          "newly_failed": [],
+          "score_improved": [],
+          "score_regressed": [],
+          "unchanged": [
+            "val_format_key_case",
+            "val_knowledge_recall_insufficiency",
+            "val_llm_rubric_failure"
+          ],
+          "cases": [
+            {
+              "case_id": "val_format_key_case",
+              "status": "unchanged",
+              "baseline_passed": true,
+              "candidate_passed": true,
+              "baseline_score": 1.0,
+              "candidate_score": 1.0,
+              "score_delta": 0.0
+            },
+            {
+              "case_id": "val_knowledge_recall_insufficiency",
+              "status": "unchanged",
+              "baseline_passed": false,
+              "candidate_passed": false,
+              "baseline_score": 0.625,
+              "candidate_score": 0.625,
+              "score_delta": 0.0
+            },
+            {
+              "case_id": "val_llm_rubric_failure",
+              "status": "unchanged",
+              "baseline_passed": false,
+              "candidate_passed": false,
+              "baseline_score": 0.875,
+              "candidate_score": 0.875,
+              "score_delta": 0.0
+            }
+          ]
+        }
+      },
+      "gate": {
+        "accepted": false,
+        "overfitting_detected": false,
+        "checks": [
+          {
+            "name": "optimizer_succeeded",
+            "passed": true,
+            "actual": "SUCCEEDED",
+            "expected": "SUCCEEDED",
+            "reason": "AgentOptimizer must finish successfully.",
+            "required": true
+          },
+          {
+            "name": "minimum_validation_gain",
+            "passed": false,
+            "actual": 0.0,
+            "expected": ">= 0.5",
+            "reason": "Candidate validation pass-rate gain must meet the configured floor.",
+            "required": true
+          },
+          {
+            "name": "no_new_hard_failures",
+            "passed": true,
+            "actual": [],
+            "expected": [],
+            "reason": "A baseline pass may not become a hard failure.",
+            "required": true
+          },
+          {
+            "name": "key_cases_no_regression",
+            "passed": true,
+            "actual": [],
+            "expected": [],
+            "reason": "Key validation cases may not lose score.",
+            "required": true
+          },
+          {
+            "name": "no_train_validation_overfit",
+            "passed": true,
+            "actual": false,
+            "expected": false,
+            "reason": "Train improvement paired with validation regression is rejected; pass rate is primary and average score breaks ties.",
+            "required": true
+          },
+          {
+            "name": "validation_gain_ci_lower_bound",
+            "passed": true,
+            "actual": 0.0,
+            "expected": ">= 0.0",
+            "reason": "The paired bootstrap lower bound must meet the configured confidence floor.",
+            "required": true
+          },
+          {
+            "name": "metric_call_budget",
+            "passed": true,
+            "actual": 24,
+            "expected": "<= 80",
+            "reason": "Measured resource usage must stay within max_metric_calls.",
+            "required": true
+          },
+          {
+            "name": "token_budget",
+            "passed": true,
+            "actual": 368,
+            "expected": "<= 200000",
+            "reason": "Measured resource usage must stay within max_total_tokens.",
+            "required": true
+          },
+          {
+            "name": "duration_budget",
+            "passed": true,
+            "actual": 0.009248999878764153,
+            "expected": "<= 180",
+            "reason": "Measured resource usage must stay within max_duration_seconds.",
+            "required": true
+          },
+          {
+            "name": "cost_budget",
+            "passed": true,
+            "actual": 0.0,
+            "expected": "<= 0.0",
+            "reason": "Unknown cost fails closed; a measured cost must be within budget.",
+            "required": true
+          }
+        ]
+      },
+      "audit": {
+        "prompt_sha256": "88f3ba2d74e39464b4f8423aa87eacd13b9ebe64e0109851e4d65d8dffac9405",
+        "source": "GEPA on_proposal_end",
+        "optimizer_round": 1,
+        "seed": 91,
+        "resources": {
+          "metric_calls": 24,
+          "reflection_calls": 0,
+          "judge_calls": 12,
+          "prompt_tokens": 270,
+          "completion_tokens": 98,
+          "total_tokens": 368,
+          "cost_usd": 0.0,
+          "duration_seconds": 0.009248999878764153,
+          "p95_latency_ms": 8.0,
+          "cost_measurement": "measured_zero_offline"
+        }
+      },
+      "pareto_optimal": false
+    },
+    {
+      "candidate_id": "overfit",
+      "prompts": {
+        "system": "[variant: overfit]\n\nYou are a customer-support agent tuned to the three training examples. Memorize their answers and prefer them over general rules."
+      },
+      "train": {
+        "split": "train",
+        "pass_rate": 1.0,
+        "average_score": 1.0,
+        "cases": [
+          {
+            "case_id": "train_final_response_mismatch",
+            "passed": true,
+            "score": 1.0,
+            "key_case": false,
+            "hard_fail": false,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              }
+            ],
+            "primary_failure": null,
+            "failure_reasons": [],
+            "actual_response": "工单 T-100 状态：已完成。",
+            "expected_response": "工单 T-100 状态：已完成。",
+            "key_trajectory": []
+          },
+          {
+            "case_id": "train_tool_call_error",
+            "passed": true,
+            "score": 1.0,
+            "key_case": false,
+            "hard_fail": true,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              }
+            ],
+            "primary_failure": null,
+            "failure_reasons": [],
+            "actual_response": "订单 O-200 状态：已发货。",
+            "expected_response": "订单 O-200 状态：已发货。",
+            "key_trajectory": [
+              {
+                "kind": "tool_call",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "args": {
+                    "order_id": "O-200"
+                  }
+                }
+              },
+              {
+                "kind": "tool_response",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "response": {
+                    "order_id": "O-200",
+                    "status": "已发货"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "case_id": "train_parameter_error",
+            "passed": true,
+            "score": 1.0,
+            "key_case": false,
+            "hard_fail": true,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              }
+            ],
+            "primary_failure": null,
+            "failure_reasons": [],
+            "actual_response": "订单 O-300 状态：处理中。",
+            "expected_response": "订单 O-300 状态：处理中。",
+            "key_trajectory": [
+              {
+                "kind": "tool_call",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "args": {
+                    "order_id": "O-300"
+                  }
+                }
+              },
+              {
+                "kind": "tool_response",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "response": {
+                    "order_id": "O-300",
+                    "status": "处理中"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "validation": {
+        "split": "validation",
+        "pass_rate": 0.0,
+        "average_score": 0.7083333333333334,
+        "cases": [
+          {
+            "case_id": "val_llm_rubric_failure",
+            "passed": false,
+            "score": 0.875,
+            "key_case": false,
+            "hard_fail": false,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 0.5,
+                "threshold": 1.0,
+                "passed": false,
+                "reason": "  model#0: score=0.5000 passed=False reason=replay evidence satisfies rubric replay evidence does not satisfy rubric\naggregator=all_pass -> FAILED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              }
+            ],
+            "primary_failure": "llm_rubric_failure",
+            "failure_reasons": [
+              {
+                "category": "llm_rubric_failure",
+                "explanation": "The final answer failed one or more non-format quality rubrics.",
+                "evidence": {
+                  "failed_rubrics": [],
+                  "score": 0.5,
+                  "threshold": 1.0
+                }
+              }
+            ],
+            "actual_response": "退款处理流程：请告知客户耐心等待。",
+            "expected_response": "退款处理流程：",
+            "key_trajectory": []
+          },
+          {
+            "case_id": "val_knowledge_recall_insufficiency",
+            "passed": false,
+            "score": 0.625,
+            "key_case": false,
+            "hard_fail": false,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 0.5,
+                "threshold": 1.0,
+                "passed": false,
+                "reason": "  model#0: score=0.5000 passed=False reason=replay evidence satisfies rubric replay evidence does not satisfy rubric\naggregator=all_pass -> FAILED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 0.0,
+                "threshold": 1.0,
+                "passed": false,
+                "reason": "  model#0: score=0.0000 passed=False reason=replay evidence does not satisfy rubric\naggregator=all_pass -> FAILED"
+              }
+            ],
+            "primary_failure": "knowledge_recall_insufficiency",
+            "failure_reasons": [
+              {
+                "category": "knowledge_recall_insufficiency",
+                "explanation": "Retrieved knowledge did not cover the facts required by the rubric.",
+                "evidence": {
+                  "metric": "llm_rubric_knowledge_recall",
+                  "score": 0.0,
+                  "threshold": 1.0
+                }
+              },
+              {
+                "category": "llm_rubric_failure",
+                "explanation": "The final answer failed one or more non-format quality rubrics.",
+                "evidence": {
+                  "failed_rubrics": [],
+                  "score": 0.5,
+                  "threshold": 1.0
+                }
+              }
+            ],
+            "actual_response": "会员退款到账：通常当天到账。",
+            "expected_response": "会员退款到账：",
+            "key_trajectory": [
+              {
+                "kind": "tool_call",
+                "name": "search_policy",
+                "payload": {
+                  "id": "call-1",
+                  "args": {
+                    "query": "会员退款到账时效",
+                    "top_k": 2
+                  }
+                }
+              },
+              {
+                "kind": "tool_response",
+                "name": "search_policy",
+                "payload": {
+                  "id": "call-1",
+                  "response": {
+                    "documents": [
+                      {
+                        "id": "return-window",
+                        "text": "商品支持 7 天退换。"
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "case_id": "val_format_key_case",
+            "passed": false,
+            "score": 0.625,
+            "key_case": true,
+            "hard_fail": true,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 0.0,
+                "threshold": 1.0,
+                "passed": false,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 0.5,
+                "threshold": 1.0,
+                "passed": false,
+                "reason": "  model#0: score=0.5000 passed=False reason=replay evidence does not satisfy rubric replay evidence satisfies rubric\naggregator=all_pass -> FAILED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              }
+            ],
+            "primary_failure": "format_failure",
+            "failure_reasons": [
+              {
+                "category": "format_failure",
+                "explanation": "The format rubric failed for the final response.",
+                "evidence": {
+                  "metric": "llm_rubric_response",
+                  "score": 0.5,
+                  "threshold": 1.0,
+                  "judge_reason": "  model#0: score=0.5000 passed=False reason=replay evidence does not satisfy rubric replay evidence satisfies rubric\naggregator=all_pass -> FAILED",
+                  "rubric_scores_available": false,
+                  "failed_rubrics": [],
+                  "detector": "replay_signal",
+                  "format_pass": false,
+                  "matched_variants": [
+                    "overfit"
+                  ],
+                  "violations": [
+                    "invalid_json"
+                  ]
+                }
+              },
+              {
+                "category": "final_response_mismatch",
+                "explanation": "The final response does not contain the expected reference answer.",
+                "evidence": {
+                  "actual": "订单 O-400 状态：已签收。",
+                  "expected": "{\"order_id\":\"O-400\",\"status\":\"已签收\"}"
+                }
+              }
+            ],
+            "actual_response": "订单 O-400 状态：已签收。",
+            "expected_response": "{\"order_id\":\"O-400\",\"status\":\"已签收\"}",
+            "key_trajectory": [
+              {
+                "kind": "tool_call",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "args": {
+                    "order_id": "O-400"
+                  }
+                }
+              },
+              {
+                "kind": "tool_response",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "response": {
+                    "order_id": "O-400",
+                    "status": "已签收"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "delta": {
+        "train": {
+          "split": "train",
+          "pass_rate_delta": 1.0,
+          "average_score_delta": 0.33333333333333337,
+          "paired_pass_rate_ci": {
+            "point_estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "confidence_level": 0.95,
+            "bootstrap_samples": 2000,
+            "seed": 91
+          },
+          "newly_passed": [
+            "train_final_response_mismatch",
+            "train_parameter_error",
+            "train_tool_call_error"
+          ],
+          "newly_failed": [],
+          "score_improved": [],
+          "score_regressed": [],
+          "unchanged": [],
+          "cases": [
+            {
+              "case_id": "train_final_response_mismatch",
+              "status": "newly_passed",
+              "baseline_passed": false,
+              "candidate_passed": true,
+              "baseline_score": 0.75,
+              "candidate_score": 1.0,
+              "score_delta": 0.25
+            },
+            {
+              "case_id": "train_parameter_error",
+              "status": "newly_passed",
+              "baseline_passed": false,
+              "candidate_passed": true,
+              "baseline_score": 0.5,
+              "candidate_score": 1.0,
+              "score_delta": 0.5
+            },
+            {
+              "case_id": "train_tool_call_error",
+              "status": "newly_passed",
+              "baseline_passed": false,
+              "candidate_passed": true,
+              "baseline_score": 0.75,
+              "candidate_score": 1.0,
+              "score_delta": 0.25
+            }
+          ]
+        },
+        "validation": {
+          "split": "validation",
+          "pass_rate_delta": -0.3333333333333333,
+          "average_score_delta": -0.125,
+          "paired_pass_rate_ci": {
+            "point_estimate": -0.3333333333333333,
+            "lower": -1.0,
+            "upper": 0.0,
+            "confidence_level": 0.95,
+            "bootstrap_samples": 2000,
+            "seed": 91
+          },
+          "newly_passed": [],
+          "newly_failed": [
+            "val_format_key_case"
+          ],
+          "score_improved": [],
+          "score_regressed": [],
+          "unchanged": [
+            "val_knowledge_recall_insufficiency",
+            "val_llm_rubric_failure"
+          ],
+          "cases": [
+            {
+              "case_id": "val_format_key_case",
+              "status": "newly_failed",
+              "baseline_passed": true,
+              "candidate_passed": false,
+              "baseline_score": 1.0,
+              "candidate_score": 0.625,
+              "score_delta": -0.375
+            },
+            {
+              "case_id": "val_knowledge_recall_insufficiency",
+              "status": "unchanged",
+              "baseline_passed": false,
+              "candidate_passed": false,
+              "baseline_score": 0.625,
+              "candidate_score": 0.625,
+              "score_delta": 0.0
+            },
+            {
+              "case_id": "val_llm_rubric_failure",
+              "status": "unchanged",
+              "baseline_passed": false,
+              "candidate_passed": false,
+              "baseline_score": 0.875,
+              "candidate_score": 0.875,
+              "score_delta": 0.0
+            }
+          ]
+        }
+      },
+      "gate": {
+        "accepted": false,
+        "overfitting_detected": true,
+        "checks": [
+          {
+            "name": "optimizer_succeeded",
+            "passed": true,
+            "actual": "SUCCEEDED",
+            "expected": "SUCCEEDED",
+            "reason": "AgentOptimizer must finish successfully.",
+            "required": true
+          },
+          {
+            "name": "minimum_validation_gain",
+            "passed": false,
+            "actual": -0.3333333333333333,
+            "expected": ">= 0.5",
+            "reason": "Candidate validation pass-rate gain must meet the configured floor.",
+            "required": true
+          },
+          {
+            "name": "no_new_hard_failures",
+            "passed": false,
+            "actual": [
+              "val_format_key_case"
+            ],
+            "expected": [],
+            "reason": "A baseline pass may not become a hard failure.",
+            "required": true
+          },
+          {
+            "name": "key_cases_no_regression",
+            "passed": false,
+            "actual": [
+              "val_format_key_case"
+            ],
+            "expected": [],
+            "reason": "Key validation cases may not lose score.",
+            "required": true
+          },
+          {
+            "name": "no_train_validation_overfit",
+            "passed": false,
+            "actual": true,
+            "expected": false,
+            "reason": "Train improvement paired with validation regression is rejected; pass rate is primary and average score breaks ties.",
+            "required": true
+          },
+          {
+            "name": "validation_gain_ci_lower_bound",
+            "passed": false,
+            "actual": -1.0,
+            "expected": ">= 0.0",
+            "reason": "The paired bootstrap lower bound must meet the configured confidence floor.",
+            "required": true
+          },
+          {
+            "name": "metric_call_budget",
+            "passed": true,
+            "actual": 24,
+            "expected": "<= 80",
+            "reason": "Measured resource usage must stay within max_metric_calls.",
+            "required": true
+          },
+          {
+            "name": "token_budget",
+            "passed": true,
+            "actual": 392,
+            "expected": "<= 200000",
+            "reason": "Measured resource usage must stay within max_total_tokens.",
+            "required": true
+          },
+          {
+            "name": "duration_budget",
+            "passed": true,
+            "actual": 0.010194707894697785,
+            "expected": "<= 180",
+            "reason": "Measured resource usage must stay within max_duration_seconds.",
+            "required": true
+          },
+          {
+            "name": "cost_budget",
+            "passed": true,
+            "actual": 0.0,
+            "expected": "<= 0.0",
+            "reason": "Unknown cost fails closed; a measured cost must be within budget.",
+            "required": true
+          }
+        ]
+      },
+      "audit": {
+        "prompt_sha256": "9db289952527d74f31bffae07c7545644361f178a72b69b026122eabb45096ec",
+        "source": "GEPA on_proposal_end",
+        "optimizer_round": 2,
+        "seed": 91,
+        "resources": {
+          "metric_calls": 24,
+          "reflection_calls": 0,
+          "judge_calls": 12,
+          "prompt_tokens": 294,
+          "completion_tokens": 98,
+          "total_tokens": 392,
+          "cost_usd": 0.0,
+          "duration_seconds": 0.010194707894697785,
+          "p95_latency_ms": 8.0,
+          "cost_measurement": "measured_zero_offline"
+        }
+      },
+      "pareto_optimal": false
+    },
+    {
+      "candidate_id": "robust",
+      "prompts": {
+        "system": "[variant: robust]\n\nYou are a reliable customer-support agent. Select the correct tool, preserve exact identifiers and arguments, ground the answer in retrieved evidence, follow the requested format, and include every required step in order."
+      },
+      "train": {
+        "split": "train",
+        "pass_rate": 1.0,
+        "average_score": 1.0,
+        "cases": [
+          {
+            "case_id": "train_final_response_mismatch",
+            "passed": true,
+            "score": 1.0,
+            "key_case": false,
+            "hard_fail": false,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              }
+            ],
+            "primary_failure": null,
+            "failure_reasons": [],
+            "actual_response": "工单 T-100 状态：已完成。",
+            "expected_response": "工单 T-100 状态：已完成。",
+            "key_trajectory": []
+          },
+          {
+            "case_id": "train_tool_call_error",
+            "passed": true,
+            "score": 1.0,
+            "key_case": false,
+            "hard_fail": true,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              }
+            ],
+            "primary_failure": null,
+            "failure_reasons": [],
+            "actual_response": "订单 O-200 状态：已发货。",
+            "expected_response": "订单 O-200 状态：已发货。",
+            "key_trajectory": [
+              {
+                "kind": "tool_call",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "args": {
+                    "order_id": "O-200"
+                  }
+                }
+              },
+              {
+                "kind": "tool_response",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "response": {
+                    "order_id": "O-200",
+                    "status": "已发货"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "case_id": "train_parameter_error",
+            "passed": true,
+            "score": 1.0,
+            "key_case": false,
+            "hard_fail": true,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              }
+            ],
+            "primary_failure": null,
+            "failure_reasons": [],
+            "actual_response": "订单 O-300 状态：处理中。",
+            "expected_response": "订单 O-300 状态：处理中。",
+            "key_trajectory": [
+              {
+                "kind": "tool_call",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "args": {
+                    "order_id": "O-300"
+                  }
+                }
+              },
+              {
+                "kind": "tool_response",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "response": {
+                    "order_id": "O-300",
+                    "status": "处理中"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "validation": {
+        "split": "validation",
+        "pass_rate": 1.0,
+        "average_score": 1.0,
+        "cases": [
+          {
+            "case_id": "val_llm_rubric_failure",
+            "passed": true,
+            "score": 1.0,
+            "key_case": false,
+            "hard_fail": false,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              }
+            ],
+            "primary_failure": null,
+            "failure_reasons": [],
+            "actual_response": "退款处理流程：先核验订单与付款状态，再告知退款时效。",
+            "expected_response": "退款处理流程：",
+            "key_trajectory": []
+          },
+          {
+            "case_id": "val_knowledge_recall_insufficiency",
+            "passed": true,
+            "score": 1.0,
+            "key_case": false,
+            "hard_fail": false,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              }
+            ],
+            "primary_failure": null,
+            "failure_reasons": [],
+            "actual_response": "会员退款到账：原路退回，3-5 个工作日到账。",
+            "expected_response": "会员退款到账：",
+            "key_trajectory": [
+              {
+                "kind": "tool_call",
+                "name": "search_policy",
+                "payload": {
+                  "id": "call-1",
+                  "args": {
+                    "query": "会员退款到账时效",
+                    "top_k": 2
+                  }
+                }
+              },
+              {
+                "kind": "tool_response",
+                "name": "search_policy",
+                "payload": {
+                  "id": "call-1",
+                  "response": {
+                    "documents": [
+                      {
+                        "id": "refund-sla",
+                        "text": "会员退款原路退回，3-5 个工作日到账。"
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "case_id": "val_format_key_case",
+            "passed": true,
+            "score": 1.0,
+            "key_case": true,
+            "hard_fail": true,
+            "metrics": [
+              {
+                "metric_name": "tool_trajectory_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "final_response_avg_score",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": ""
+              },
+              {
+                "metric_name": "llm_rubric_response",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              },
+              {
+                "metric_name": "llm_rubric_knowledge_recall",
+                "score": 1.0,
+                "threshold": 1.0,
+                "passed": true,
+                "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+              }
+            ],
+            "primary_failure": null,
+            "failure_reasons": [],
+            "actual_response": "{\"order_id\":\"O-400\",\"status\":\"已签收\"}",
+            "expected_response": "{\"order_id\":\"O-400\",\"status\":\"已签收\"}",
+            "key_trajectory": [
+              {
+                "kind": "tool_call",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "args": {
+                    "order_id": "O-400"
+                  }
+                }
+              },
+              {
+                "kind": "tool_response",
+                "name": "lookup_order",
+                "payload": {
+                  "id": "call-1",
+                  "response": {
+                    "order_id": "O-400",
+                    "status": "已签收"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "delta": {
+        "train": {
+          "split": "train",
+          "pass_rate_delta": 1.0,
+          "average_score_delta": 0.33333333333333337,
+          "paired_pass_rate_ci": {
+            "point_estimate": 1.0,
+            "lower": 1.0,
+            "upper": 1.0,
+            "confidence_level": 0.95,
+            "bootstrap_samples": 2000,
+            "seed": 91
+          },
+          "newly_passed": [
+            "train_final_response_mismatch",
+            "train_parameter_error",
+            "train_tool_call_error"
+          ],
+          "newly_failed": [],
+          "score_improved": [],
+          "score_regressed": [],
+          "unchanged": [],
+          "cases": [
+            {
+              "case_id": "train_final_response_mismatch",
+              "status": "newly_passed",
+              "baseline_passed": false,
+              "candidate_passed": true,
+              "baseline_score": 0.75,
+              "candidate_score": 1.0,
+              "score_delta": 0.25
+            },
+            {
+              "case_id": "train_parameter_error",
+              "status": "newly_passed",
+              "baseline_passed": false,
+              "candidate_passed": true,
+              "baseline_score": 0.5,
+              "candidate_score": 1.0,
+              "score_delta": 0.5
+            },
+            {
+              "case_id": "train_tool_call_error",
+              "status": "newly_passed",
+              "baseline_passed": false,
+              "candidate_passed": true,
+              "baseline_score": 0.75,
+              "candidate_score": 1.0,
+              "score_delta": 0.25
+            }
+          ]
+        },
+        "validation": {
+          "split": "validation",
+          "pass_rate_delta": 0.6666666666666667,
+          "average_score_delta": 0.16666666666666663,
+          "paired_pass_rate_ci": {
+            "point_estimate": 0.6666666666666666,
+            "lower": 0.0,
+            "upper": 1.0,
+            "confidence_level": 0.95,
+            "bootstrap_samples": 2000,
+            "seed": 91
+          },
+          "newly_passed": [
+            "val_knowledge_recall_insufficiency",
+            "val_llm_rubric_failure"
+          ],
+          "newly_failed": [],
+          "score_improved": [],
+          "score_regressed": [],
+          "unchanged": [
+            "val_format_key_case"
+          ],
+          "cases": [
+            {
+              "case_id": "val_format_key_case",
+              "status": "unchanged",
+              "baseline_passed": true,
+              "candidate_passed": true,
+              "baseline_score": 1.0,
+              "candidate_score": 1.0,
+              "score_delta": 0.0
+            },
+            {
+              "case_id": "val_knowledge_recall_insufficiency",
+              "status": "newly_passed",
+              "baseline_passed": false,
+              "candidate_passed": true,
+              "baseline_score": 0.625,
+              "candidate_score": 1.0,
+              "score_delta": 0.375
+            },
+            {
+              "case_id": "val_llm_rubric_failure",
+              "status": "newly_passed",
+              "baseline_passed": false,
+              "candidate_passed": true,
+              "baseline_score": 0.875,
+              "candidate_score": 1.0,
+              "score_delta": 0.125
+            }
+          ]
+        }
+      },
+      "gate": {
+        "accepted": true,
+        "overfitting_detected": false,
+        "checks": [
+          {
+            "name": "optimizer_succeeded",
+            "passed": true,
+            "actual": "SUCCEEDED",
+            "expected": "SUCCEEDED",
+            "reason": "AgentOptimizer must finish successfully.",
+            "required": true
+          },
+          {
+            "name": "minimum_validation_gain",
+            "passed": true,
+            "actual": 0.6666666666666667,
+            "expected": ">= 0.5",
+            "reason": "Candidate validation pass-rate gain must meet the configured floor.",
+            "required": true
+          },
+          {
+            "name": "no_new_hard_failures",
+            "passed": true,
+            "actual": [],
+            "expected": [],
+            "reason": "A baseline pass may not become a hard failure.",
+            "required": true
+          },
+          {
+            "name": "key_cases_no_regression",
+            "passed": true,
+            "actual": [],
+            "expected": [],
+            "reason": "Key validation cases may not lose score.",
+            "required": true
+          },
+          {
+            "name": "no_train_validation_overfit",
+            "passed": true,
+            "actual": false,
+            "expected": false,
+            "reason": "Train improvement paired with validation regression is rejected; pass rate is primary and average score breaks ties.",
+            "required": true
+          },
+          {
+            "name": "validation_gain_ci_lower_bound",
+            "passed": true,
+            "actual": 0.0,
+            "expected": ">= 0.0",
+            "reason": "The paired bootstrap lower bound must meet the configured confidence floor.",
+            "required": true
+          },
+          {
+            "name": "metric_call_budget",
+            "passed": true,
+            "actual": 24,
+            "expected": "<= 80",
+            "reason": "Measured resource usage must stay within max_metric_calls.",
+            "required": true
+          },
+          {
+            "name": "token_budget",
+            "passed": true,
+            "actual": 444,
+            "expected": "<= 200000",
+            "reason": "Measured resource usage must stay within max_total_tokens.",
+            "required": true
+          },
+          {
+            "name": "duration_budget",
+            "passed": true,
+            "actual": 0.010438166093081236,
+            "expected": "<= 180",
+            "reason": "Measured resource usage must stay within max_duration_seconds.",
+            "required": true
+          },
+          {
+            "name": "cost_budget",
+            "passed": true,
+            "actual": 0.0,
+            "expected": "<= 0.0",
+            "reason": "Unknown cost fails closed; a measured cost must be within budget.",
+            "required": true
+          }
+        ]
+      },
+      "audit": {
+        "prompt_sha256": "61df0f34831108fda47d32c49932c49dc276c6708d9d1eaf999f216e4c109f26",
+        "source": "GEPA on_proposal_end",
+        "optimizer_round": 3,
+        "seed": 91,
+        "resources": {
+          "metric_calls": 24,
+          "reflection_calls": 0,
+          "judge_calls": 12,
+          "prompt_tokens": 330,
+          "completion_tokens": 114,
+          "total_tokens": 444,
+          "cost_usd": 0.0,
+          "duration_seconds": 0.010438166093081236,
+          "p95_latency_ms": 8.0,
+          "cost_measurement": "measured_zero_offline"
+        }
+      },
+      "pareto_optimal": true
+    }
+  ],
+  "selected_candidate_id": "robust",
+  "candidate": {
+    "candidate_id": "robust",
+    "prompts": {
+      "system": "[variant: robust]\n\nYou are a reliable customer-support agent. Select the correct tool, preserve exact identifiers and arguments, ground the answer in retrieved evidence, follow the requested format, and include every required step in order."
+    },
+    "train": {
+      "split": "train",
+      "pass_rate": 1.0,
+      "average_score": 1.0,
+      "cases": [
+        {
+          "case_id": "train_final_response_mismatch",
+          "passed": true,
+          "score": 1.0,
+          "key_case": false,
+          "hard_fail": false,
+          "metrics": [
+            {
+              "metric_name": "tool_trajectory_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "llm_rubric_response",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            },
+            {
+              "metric_name": "llm_rubric_knowledge_recall",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            }
+          ],
+          "primary_failure": null,
+          "failure_reasons": [],
+          "actual_response": "工单 T-100 状态：已完成。",
+          "expected_response": "工单 T-100 状态：已完成。",
+          "key_trajectory": []
+        },
+        {
+          "case_id": "train_tool_call_error",
+          "passed": true,
+          "score": 1.0,
+          "key_case": false,
+          "hard_fail": true,
+          "metrics": [
+            {
+              "metric_name": "tool_trajectory_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "llm_rubric_response",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            },
+            {
+              "metric_name": "llm_rubric_knowledge_recall",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            }
+          ],
+          "primary_failure": null,
+          "failure_reasons": [],
+          "actual_response": "订单 O-200 状态：已发货。",
+          "expected_response": "订单 O-200 状态：已发货。",
+          "key_trajectory": [
+            {
+              "kind": "tool_call",
+              "name": "lookup_order",
+              "payload": {
+                "id": "call-1",
+                "args": {
+                  "order_id": "O-200"
+                }
+              }
+            },
+            {
+              "kind": "tool_response",
+              "name": "lookup_order",
+              "payload": {
+                "id": "call-1",
+                "response": {
+                  "order_id": "O-200",
+                  "status": "已发货"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "case_id": "train_parameter_error",
+          "passed": true,
+          "score": 1.0,
+          "key_case": false,
+          "hard_fail": true,
+          "metrics": [
+            {
+              "metric_name": "tool_trajectory_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "llm_rubric_response",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            },
+            {
+              "metric_name": "llm_rubric_knowledge_recall",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            }
+          ],
+          "primary_failure": null,
+          "failure_reasons": [],
+          "actual_response": "订单 O-300 状态：处理中。",
+          "expected_response": "订单 O-300 状态：处理中。",
+          "key_trajectory": [
+            {
+              "kind": "tool_call",
+              "name": "lookup_order",
+              "payload": {
+                "id": "call-1",
+                "args": {
+                  "order_id": "O-300"
+                }
+              }
+            },
+            {
+              "kind": "tool_response",
+              "name": "lookup_order",
+              "payload": {
+                "id": "call-1",
+                "response": {
+                  "order_id": "O-300",
+                  "status": "处理中"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "validation": {
+      "split": "validation",
+      "pass_rate": 1.0,
+      "average_score": 1.0,
+      "cases": [
+        {
+          "case_id": "val_llm_rubric_failure",
+          "passed": true,
+          "score": 1.0,
+          "key_case": false,
+          "hard_fail": false,
+          "metrics": [
+            {
+              "metric_name": "tool_trajectory_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "llm_rubric_response",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            },
+            {
+              "metric_name": "llm_rubric_knowledge_recall",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            }
+          ],
+          "primary_failure": null,
+          "failure_reasons": [],
+          "actual_response": "退款处理流程：先核验订单与付款状态，再告知退款时效。",
+          "expected_response": "退款处理流程：",
+          "key_trajectory": []
+        },
+        {
+          "case_id": "val_knowledge_recall_insufficiency",
+          "passed": true,
+          "score": 1.0,
+          "key_case": false,
+          "hard_fail": false,
+          "metrics": [
+            {
+              "metric_name": "tool_trajectory_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "llm_rubric_response",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            },
+            {
+              "metric_name": "llm_rubric_knowledge_recall",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            }
+          ],
+          "primary_failure": null,
+          "failure_reasons": [],
+          "actual_response": "会员退款到账：原路退回，3-5 个工作日到账。",
+          "expected_response": "会员退款到账：",
+          "key_trajectory": [
+            {
+              "kind": "tool_call",
+              "name": "search_policy",
+              "payload": {
+                "id": "call-1",
+                "args": {
+                  "query": "会员退款到账时效",
+                  "top_k": 2
+                }
+              }
+            },
+            {
+              "kind": "tool_response",
+              "name": "search_policy",
+              "payload": {
+                "id": "call-1",
+                "response": {
+                  "documents": [
+                    {
+                      "id": "refund-sla",
+                      "text": "会员退款原路退回，3-5 个工作日到账。"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "case_id": "val_format_key_case",
+          "passed": true,
+          "score": 1.0,
+          "key_case": true,
+          "hard_fail": true,
+          "metrics": [
+            {
+              "metric_name": "tool_trajectory_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "final_response_avg_score",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": ""
+            },
+            {
+              "metric_name": "llm_rubric_response",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            },
+            {
+              "metric_name": "llm_rubric_knowledge_recall",
+              "score": 1.0,
+              "threshold": 1.0,
+              "passed": true,
+              "reason": "  model#0: score=1.0000 passed=True reason=replay evidence satisfies rubric\naggregator=all_pass -> PASSED"
+            }
+          ],
+          "primary_failure": null,
+          "failure_reasons": [],
+          "actual_response": "{\"order_id\":\"O-400\",\"status\":\"已签收\"}",
+          "expected_response": "{\"order_id\":\"O-400\",\"status\":\"已签收\"}",
+          "key_trajectory": [
+            {
+              "kind": "tool_call",
+              "name": "lookup_order",
+              "payload": {
+                "id": "call-1",
+                "args": {
+                  "order_id": "O-400"
+                }
+              }
+            },
+            {
+              "kind": "tool_response",
+              "name": "lookup_order",
+              "payload": {
+                "id": "call-1",
+                "response": {
+                  "order_id": "O-400",
+                  "status": "已签收"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "delta": {
+      "train": {
+        "split": "train",
+        "pass_rate_delta": 1.0,
+        "average_score_delta": 0.33333333333333337,
+        "paired_pass_rate_ci": {
+          "point_estimate": 1.0,
+          "lower": 1.0,
+          "upper": 1.0,
+          "confidence_level": 0.95,
+          "bootstrap_samples": 2000,
+          "seed": 91
+        },
+        "newly_passed": [
+          "train_final_response_mismatch",
+          "train_parameter_error",
+          "train_tool_call_error"
+        ],
+        "newly_failed": [],
+        "score_improved": [],
+        "score_regressed": [],
+        "unchanged": [],
+        "cases": [
+          {
+            "case_id": "train_final_response_mismatch",
+            "status": "newly_passed",
+            "baseline_passed": false,
+            "candidate_passed": true,
+            "baseline_score": 0.75,
+            "candidate_score": 1.0,
+            "score_delta": 0.25
+          },
+          {
+            "case_id": "train_parameter_error",
+            "status": "newly_passed",
+            "baseline_passed": false,
+            "candidate_passed": true,
+            "baseline_score": 0.5,
+            "candidate_score": 1.0,
+            "score_delta": 0.5
+          },
+          {
+            "case_id": "train_tool_call_error",
+            "status": "newly_passed",
+            "baseline_passed": false,
+            "candidate_passed": true,
+            "baseline_score": 0.75,
+            "candidate_score": 1.0,
+            "score_delta": 0.25
+          }
+        ]
+      },
+      "validation": {
+        "split": "validation",
+        "pass_rate_delta": 0.6666666666666667,
+        "average_score_delta": 0.16666666666666663,
+        "paired_pass_rate_ci": {
+          "point_estimate": 0.6666666666666666,
+          "lower": 0.0,
+          "upper": 1.0,
+          "confidence_level": 0.95,
+          "bootstrap_samples": 2000,
+          "seed": 91
+        },
+        "newly_passed": [
+          "val_knowledge_recall_insufficiency",
+          "val_llm_rubric_failure"
+        ],
+        "newly_failed": [],
+        "score_improved": [],
+        "score_regressed": [],
+        "unchanged": [
+          "val_format_key_case"
+        ],
+        "cases": [
+          {
+            "case_id": "val_format_key_case",
+            "status": "unchanged",
+            "baseline_passed": true,
+            "candidate_passed": true,
+            "baseline_score": 1.0,
+            "candidate_score": 1.0,
+            "score_delta": 0.0
+          },
+          {
+            "case_id": "val_knowledge_recall_insufficiency",
+            "status": "newly_passed",
+            "baseline_passed": false,
+            "candidate_passed": true,
+            "baseline_score": 0.625,
+            "candidate_score": 1.0,
+            "score_delta": 0.375
+          },
+          {
+            "case_id": "val_llm_rubric_failure",
+            "status": "newly_passed",
+            "baseline_passed": false,
+            "candidate_passed": true,
+            "baseline_score": 0.875,
+            "candidate_score": 1.0,
+            "score_delta": 0.125
+          }
+        ]
+      }
+    },
+    "gate": {
+      "accepted": true,
+      "overfitting_detected": false,
+      "checks": [
+        {
+          "name": "optimizer_succeeded",
+          "passed": true,
+          "actual": "SUCCEEDED",
+          "expected": "SUCCEEDED",
+          "reason": "AgentOptimizer must finish successfully.",
+          "required": true
+        },
+        {
+          "name": "minimum_validation_gain",
+          "passed": true,
+          "actual": 0.6666666666666667,
+          "expected": ">= 0.5",
+          "reason": "Candidate validation pass-rate gain must meet the configured floor.",
+          "required": true
+        },
+        {
+          "name": "no_new_hard_failures",
+          "passed": true,
+          "actual": [],
+          "expected": [],
+          "reason": "A baseline pass may not become a hard failure.",
+          "required": true
+        },
+        {
+          "name": "key_cases_no_regression",
+          "passed": true,
+          "actual": [],
+          "expected": [],
+          "reason": "Key validation cases may not lose score.",
+          "required": true
+        },
+        {
+          "name": "no_train_validation_overfit",
+          "passed": true,
+          "actual": false,
+          "expected": false,
+          "reason": "Train improvement paired with validation regression is rejected; pass rate is primary and average score breaks ties.",
+          "required": true
+        },
+        {
+          "name": "validation_gain_ci_lower_bound",
+          "passed": true,
+          "actual": 0.0,
+          "expected": ">= 0.0",
+          "reason": "The paired bootstrap lower bound must meet the configured confidence floor.",
+          "required": true
+        },
+        {
+          "name": "metric_call_budget",
+          "passed": true,
+          "actual": 24,
+          "expected": "<= 80",
+          "reason": "Measured resource usage must stay within max_metric_calls.",
+          "required": true
+        },
+        {
+          "name": "token_budget",
+          "passed": true,
+          "actual": 444,
+          "expected": "<= 200000",
+          "reason": "Measured resource usage must stay within max_total_tokens.",
+          "required": true
+        },
+        {
+          "name": "duration_budget",
+          "passed": true,
+          "actual": 0.010438166093081236,
+          "expected": "<= 180",
+          "reason": "Measured resource usage must stay within max_duration_seconds.",
+          "required": true
+        },
+        {
+          "name": "cost_budget",
+          "passed": true,
+          "actual": 0.0,
+          "expected": "<= 0.0",
+          "reason": "Unknown cost fails closed; a measured cost must be within budget.",
+          "required": true
+        }
+      ]
+    },
+    "audit": {
+      "prompt_sha256": "61df0f34831108fda47d32c49932c49dc276c6708d9d1eaf999f216e4c109f26",
+      "source": "GEPA on_proposal_end",
+      "optimizer_round": 3,
+      "seed": 91,
+      "resources": {
+        "metric_calls": 24,
+        "reflection_calls": 0,
+        "judge_calls": 12,
+        "prompt_tokens": 330,
+        "completion_tokens": 114,
+        "total_tokens": 444,
+        "cost_usd": 0.0,
+        "duration_seconds": 0.010438166093081236,
+        "p95_latency_ms": 8.0,
+        "cost_measurement": "measured_zero_offline"
+      }
+    },
+    "pareto_optimal": true
+  },
+  "delta": {
+    "train": {
+      "split": "train",
+      "pass_rate_delta": 1.0,
+      "average_score_delta": 0.33333333333333337,
+      "paired_pass_rate_ci": {
+        "point_estimate": 1.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "confidence_level": 0.95,
+        "bootstrap_samples": 2000,
+        "seed": 91
+      },
+      "newly_passed": [
+        "train_final_response_mismatch",
+        "train_parameter_error",
+        "train_tool_call_error"
+      ],
+      "newly_failed": [],
+      "score_improved": [],
+      "score_regressed": [],
+      "unchanged": [],
+      "cases": [
+        {
+          "case_id": "train_final_response_mismatch",
+          "status": "newly_passed",
+          "baseline_passed": false,
+          "candidate_passed": true,
+          "baseline_score": 0.75,
+          "candidate_score": 1.0,
+          "score_delta": 0.25
+        },
+        {
+          "case_id": "train_parameter_error",
+          "status": "newly_passed",
+          "baseline_passed": false,
+          "candidate_passed": true,
+          "baseline_score": 0.5,
+          "candidate_score": 1.0,
+          "score_delta": 0.5
+        },
+        {
+          "case_id": "train_tool_call_error",
+          "status": "newly_passed",
+          "baseline_passed": false,
+          "candidate_passed": true,
+          "baseline_score": 0.75,
+          "candidate_score": 1.0,
+          "score_delta": 0.25
+        }
+      ]
+    },
+    "validation": {
+      "split": "validation",
+      "pass_rate_delta": 0.6666666666666667,
+      "average_score_delta": 0.16666666666666663,
+      "paired_pass_rate_ci": {
+        "point_estimate": 0.6666666666666666,
+        "lower": 0.0,
+        "upper": 1.0,
+        "confidence_level": 0.95,
+        "bootstrap_samples": 2000,
+        "seed": 91
+      },
+      "newly_passed": [
+        "val_knowledge_recall_insufficiency",
+        "val_llm_rubric_failure"
+      ],
+      "newly_failed": [],
+      "score_improved": [],
+      "score_regressed": [],
+      "unchanged": [
+        "val_format_key_case"
+      ],
+      "cases": [
+        {
+          "case_id": "val_format_key_case",
+          "status": "unchanged",
+          "baseline_passed": true,
+          "candidate_passed": true,
+          "baseline_score": 1.0,
+          "candidate_score": 1.0,
+          "score_delta": 0.0
+        },
+        {
+          "case_id": "val_knowledge_recall_insufficiency",
+          "status": "newly_passed",
+          "baseline_passed": false,
+          "candidate_passed": true,
+          "baseline_score": 0.625,
+          "candidate_score": 1.0,
+          "score_delta": 0.375
+        },
+        {
+          "case_id": "val_llm_rubric_failure",
+          "status": "newly_passed",
+          "baseline_passed": false,
+          "candidate_passed": true,
+          "baseline_score": 0.875,
+          "candidate_score": 1.0,
+          "score_delta": 0.125
+        }
+      ]
+    }
+  },
+  "gate": {
+    "accepted": true,
+    "overfitting_detected": false,
+    "checks": [
+      {
+        "name": "optimizer_succeeded",
+        "passed": true,
+        "actual": "SUCCEEDED",
+        "expected": "SUCCEEDED",
+        "reason": "AgentOptimizer must finish successfully.",
+        "required": true
+      },
+      {
+        "name": "minimum_validation_gain",
+        "passed": true,
+        "actual": 0.6666666666666667,
+        "expected": ">= 0.5",
+        "reason": "Candidate validation pass-rate gain must meet the configured floor.",
+        "required": true
+      },
+      {
+        "name": "no_new_hard_failures",
+        "passed": true,
+        "actual": [],
+        "expected": [],
+        "reason": "A baseline pass may not become a hard failure.",
+        "required": true
+      },
+      {
+        "name": "key_cases_no_regression",
+        "passed": true,
+        "actual": [],
+        "expected": [],
+        "reason": "Key validation cases may not lose score.",
+        "required": true
+      },
+      {
+        "name": "no_train_validation_overfit",
+        "passed": true,
+        "actual": false,
+        "expected": false,
+        "reason": "Train improvement paired with validation regression is rejected; pass rate is primary and average score breaks ties.",
+        "required": true
+      },
+      {
+        "name": "validation_gain_ci_lower_bound",
+        "passed": true,
+        "actual": 0.0,
+        "expected": ">= 0.0",
+        "reason": "The paired bootstrap lower bound must meet the configured confidence floor.",
+        "required": true
+      },
+      {
+        "name": "metric_call_budget",
+        "passed": true,
+        "actual": 24,
+        "expected": "<= 80",
+        "reason": "Measured resource usage must stay within max_metric_calls.",
+        "required": true
+      },
+      {
+        "name": "token_budget",
+        "passed": true,
+        "actual": 444,
+        "expected": "<= 200000",
+        "reason": "Measured resource usage must stay within max_total_tokens.",
+        "required": true
+      },
+      {
+        "name": "duration_budget",
+        "passed": true,
+        "actual": 0.010438166093081236,
+        "expected": "<= 180",
+        "reason": "Measured resource usage must stay within max_duration_seconds.",
+        "required": true
+      },
+      {
+        "name": "cost_budget",
+        "passed": true,
+        "actual": 0.0,
+        "expected": "<= 0.0",
+        "reason": "Unknown cost fails closed; a measured cost must be within budget.",
+        "required": true
+      }
+    ]
+  },
+  "failure_attribution": {
+    "explained_failed_cases": 13,
+    "total_failed_cases": 13,
+    "coverage_rate": 1.0,
+    "category_counts": {
+      "final_response_mismatch": 7,
+      "format_failure": 1,
+      "knowledge_recall_insufficiency": 3,
+      "llm_rubric_failure": 6,
+      "parameter_error": 2,
+      "tool_call_error": 2
+    },
+    "by_case": {
+      "baseline/train/train_final_response_mismatch": [
+        {
+          "category": "final_response_mismatch",
+          "explanation": "The final response does not contain the expected reference answer.",
+          "evidence": {
+            "actual": "工单 T-100 状态：处理中。",
+            "expected": "工单 T-100 状态：已完成。"
+          }
+        }
+      ],
+      "baseline/train/train_tool_call_error": [
+        {
+          "category": "tool_call_error",
+          "explanation": "A required tool returned an execution error.",
+          "evidence": {
+            "tool_responses": [
+              {
+                "tool": "lookup_order",
+                "id": "call-1",
+                "response": {
+                  "error": "backend unavailable"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "category": "final_response_mismatch",
+          "explanation": "The final response does not contain the expected reference answer.",
+          "evidence": {
+            "actual": "无法查询订单状态。",
+            "expected": "订单 O-200 状态：已发货。"
+          }
+        }
+      ],
+      "baseline/train/train_parameter_error": [
+        {
+          "category": "parameter_error",
+          "explanation": "A tool was selected correctly but received different arguments.",
+          "evidence": {
+            "differences": [
+              {
+                "tool": "lookup_order",
+                "actual": {
+                  "order_id": "O-399"
+                },
+                "expected": {
+                  "order_id": "O-300"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "category": "final_response_mismatch",
+          "explanation": "The final response does not contain the expected reference answer.",
+          "evidence": {
+            "actual": "订单 O-399 状态：已取消。",
+            "expected": "订单 O-300 状态：处理中。"
+          }
+        }
+      ],
+      "baseline/validation/val_llm_rubric_failure": [
+        {
+          "category": "llm_rubric_failure",
+          "explanation": "The final answer failed one or more non-format quality rubrics.",
+          "evidence": {
+            "failed_rubrics": [],
+            "score": 0.5,
+            "threshold": 1.0
+          }
+        }
+      ],
+      "baseline/validation/val_knowledge_recall_insufficiency": [
+        {
+          "category": "knowledge_recall_insufficiency",
+          "explanation": "Retrieved knowledge did not cover the facts required by the rubric.",
+          "evidence": {
+            "metric": "llm_rubric_knowledge_recall",
+            "score": 0.0,
+            "threshold": 1.0
+          }
+        },
+        {
+          "category": "llm_rubric_failure",
+          "explanation": "The final answer failed one or more non-format quality rubrics.",
+          "evidence": {
+            "failed_rubrics": [],
+            "score": 0.5,
+            "threshold": 1.0
+          }
+        }
+      ],
+      "candidate/ineffective/train/train_final_response_mismatch": [
+        {
+          "category": "final_response_mismatch",
+          "explanation": "The final response does not contain the expected reference answer.",
+          "evidence": {
+            "actual": "工单 T-100 状态：处理中。",
+            "expected": "工单 T-100 状态：已完成。"
+          }
+        }
+      ],
+      "candidate/ineffective/train/train_tool_call_error": [
+        {
+          "category": "tool_call_error",
+          "explanation": "A required tool returned an execution error.",
+          "evidence": {
+            "tool_responses": [
+              {
+                "tool": "lookup_order",
+                "id": "call-1",
+                "response": {
+                  "error": "backend unavailable"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "category": "final_response_mismatch",
+          "explanation": "The final response does not contain the expected reference answer.",
+          "evidence": {
+            "actual": "无法查询订单状态。",
+            "expected": "订单 O-200 状态：已发货。"
+          }
+        }
+      ],
+      "candidate/ineffective/train/train_parameter_error": [
+        {
+          "category": "parameter_error",
+          "explanation": "A tool was selected correctly but received different arguments.",
+          "evidence": {
+            "differences": [
+              {
+                "tool": "lookup_order",
+                "actual": {
+                  "order_id": "O-399"
+                },
+                "expected": {
+                  "order_id": "O-300"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "category": "final_response_mismatch",
+          "explanation": "The final response does not contain the expected reference answer.",
+          "evidence": {
+            "actual": "订单 O-399 状态：已取消。",
+            "expected": "订单 O-300 状态：处理中。"
+          }
+        }
+      ],
+      "candidate/ineffective/validation/val_llm_rubric_failure": [
+        {
+          "category": "llm_rubric_failure",
+          "explanation": "The final answer failed one or more non-format quality rubrics.",
+          "evidence": {
+            "failed_rubrics": [],
+            "score": 0.5,
+            "threshold": 1.0
+          }
+        }
+      ],
+      "candidate/ineffective/validation/val_knowledge_recall_insufficiency": [
+        {
+          "category": "knowledge_recall_insufficiency",
+          "explanation": "Retrieved knowledge did not cover the facts required by the rubric.",
+          "evidence": {
+            "metric": "llm_rubric_knowledge_recall",
+            "score": 0.0,
+            "threshold": 1.0
+          }
+        },
+        {
+          "category": "llm_rubric_failure",
+          "explanation": "The final answer failed one or more non-format quality rubrics.",
+          "evidence": {
+            "failed_rubrics": [],
+            "score": 0.5,
+            "threshold": 1.0
+          }
+        }
+      ],
+      "candidate/overfit/validation/val_llm_rubric_failure": [
+        {
+          "category": "llm_rubric_failure",
+          "explanation": "The final answer failed one or more non-format quality rubrics.",
+          "evidence": {
+            "failed_rubrics": [],
+            "score": 0.5,
+            "threshold": 1.0
+          }
+        }
+      ],
+      "candidate/overfit/validation/val_knowledge_recall_insufficiency": [
+        {
+          "category": "knowledge_recall_insufficiency",
+          "explanation": "Retrieved knowledge did not cover the facts required by the rubric.",
+          "evidence": {
+            "metric": "llm_rubric_knowledge_recall",
+            "score": 0.0,
+            "threshold": 1.0
+          }
+        },
+        {
+          "category": "llm_rubric_failure",
+          "explanation": "The final answer failed one or more non-format quality rubrics.",
+          "evidence": {
+            "failed_rubrics": [],
+            "score": 0.5,
+            "threshold": 1.0
+          }
+        }
+      ],
+      "candidate/overfit/validation/val_format_key_case": [
+        {
+          "category": "format_failure",
+          "explanation": "The format rubric failed for the final response.",
+          "evidence": {
+            "metric": "llm_rubric_response",
+            "score": 0.5,
+            "threshold": 1.0,
+            "judge_reason": "  model#0: score=0.5000 passed=False reason=replay evidence does not satisfy rubric replay evidence satisfies rubric\naggregator=all_pass -> FAILED",
+            "rubric_scores_available": false,
+            "failed_rubrics": [],
+            "detector": "replay_signal",
+            "format_pass": false,
+            "matched_variants": [
+              "overfit"
+            ],
+            "violations": [
+              "invalid_json"
+            ]
+          }
+        },
+        {
+          "category": "final_response_mismatch",
+          "explanation": "The final response does not contain the expected reference answer.",
+          "evidence": {
+            "actual": "订单 O-400 状态：已签收。",
+            "expected": "{\"order_id\":\"O-400\",\"status\":\"已签收\"}"
+          }
+        }
+      ]
+    }
+  },
+  "optimizer": {
+    "algorithm": "gepa_reflective",
+    "status": "SUCCEEDED",
+    "stop_reason": "max_candidate_proposals",
+    "used_agent_optimizer": true,
+    "baseline_pass_rate": 0.8333333333333334,
+    "best_pass_rate": 1.0,
+    "rounds": 3,
+    "resources": {
+      "metric_calls": 27,
+      "reflection_calls": 3,
+      "judge_calls": null,
+      "prompt_tokens": 7054,
+      "completion_tokens": 125,
+      "total_tokens": 7179,
+      "cost_usd": 0.0,
+      "duration_seconds": 0.055892,
+      "p95_latency_ms": null,
+      "cost_measurement": "measured_zero_offline"
+    },
+    "artifact_dir": "optimizer"
+  },
+  "data_quality": {
+    "passed": true,
+    "train_cases": 3,
+    "validation_cases": 3,
+    "duplicate_ids": [],
+    "cross_split_duplicates": [],
+    "near_cross_split_duplicates": [],
+    "prompt_leakage_matches": []
+  },
+  "audit": {
+    "run_id": "offline-87974874280c",
+    "started_at": "2026-07-11T11:24:37.877369+00:00",
+    "finished_at": "2026-07-11T11:24:37.976539+00:00",
+    "duration_seconds": 0.09917154186405241,
+    "seed": 91,
+    "config_sha256": "489e04411cee9728eb1374d454ea2821a9e92a7c0f8ea478ca2d9cad4d6675d2",
+    "train_sha256": "4ea1e92e8c6bb77c6e770fc5e7b546264c956213df89b731c0a421c3635c33ae",
+    "validation_sha256": "da4dd12bc0e83462b86e83ad5f59841a3d73ac1b4942e068f97981fd486fd4ff",
+    "baseline_prompt_sha256": {
+      "system": "7c9707da7fcae322da42a4ff26e9d7635de1e15d5337cfc7d1e1291d887134ba"
+    },
+    "command": "python examples/optimization/eval_optimize_loop/run_pipeline.py"
+  }
+}

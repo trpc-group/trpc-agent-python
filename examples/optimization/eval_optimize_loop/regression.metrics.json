@@ -1,0 +1,81 @@
+{
+  "metrics": [
+    {
+      "metric_name": "tool_trajectory_avg_score",
+      "threshold": 1.0,
+      "criterion": {
+        "tool_trajectory": {
+          "default": {
+            "name": {"match": "exact", "case_insensitive": false},
+            "arguments": {"match": "exact"}
+          },
+          "order_sensitive": true,
+          "subset_matching": false
+        }
+      }
+    },
+    {
+      "metric_name": "final_response_avg_score",
+      "threshold": 1.0,
+      "criterion": {
+        "final_response": {
+          "text": {"match": "contains", "case_insensitive": false}
+        }
+      }
+    },
+    {
+      "metric_name": "llm_rubric_response",
+      "threshold": 1.0,
+      "criterion": {
+        "llm_judge": {
+          "judge_model": {
+            "provider_name": "offline",
+            "model_name": "judge",
+            "api_key": "",
+            "num_samples": 1,
+            "generation_config": {"max_tokens": 512, "temperature": 0.0}
+          },
+          "rubrics": [
+            {
+              "id": "format",
+              "content": {"text": "The response follows the requested output format."},
+              "description": "Format compliance",
+              "type": "FINAL_RESPONSE_QUALITY"
+            },
+            {
+              "id": "quality",
+              "content": {"text": "The response contains every required step and fact."},
+              "description": "Answer completeness",
+              "type": "FINAL_RESPONSE_QUALITY"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "metric_name": "llm_rubric_knowledge_recall",
+      "threshold": 1.0,
+      "criterion": {
+        "llm_judge": {
+          "judge_model": {
+            "provider_name": "offline",
+            "model_name": "judge",
+            "api_key": "",
+            "num_samples": 1,
+            "generation_config": {"max_tokens": 512, "temperature": 0.0}
+          },
+          "rubrics": [
+            {
+              "id": "knowledge_recall",
+              "content": {"text": "Retrieved knowledge contains the facts required by the question."},
+              "description": "Knowledge coverage",
+              "type": "KNOWLEDGE_COVERAGE"
+            }
+          ],
+          "knowledge_tool_names": ["search_policy"]
+        }
+      }
+    }
+  ],
+  "num_runs": 1
+}
