@@ -1,0 +1,5 @@
+{"record_type":"case","name":"tool_call","app_name":"replay_app","user_id":"user-1","session_id":"session-tool-call","session_config":{"store_historical_events":true}}
+{"record_type":"event","id":"event-1","invocation_id":"inv-1","author":"user","timestamp_offset_ms":0,"parts":[{"text":"What is the weather in Paris?"}]}
+{"record_type":"event","id":"event-2","invocation_id":"inv-2","author":"agent","timestamp_offset_ms":1,"parts":[{"function_call":{"name":"get_weather_report","args":{"city":"Paris"}}}]}
+{"record_type":"event","id":"event-3","invocation_id":"inv-2","author":"tool","timestamp_offset_ms":2,"parts":[{"function_response":{"name":"get_weather_report","response":{"status":"success","weather":"sunny"}}}]}
+{"record_type":"event","id":"event-4","invocation_id":"inv-3","author":"agent","timestamp_offset_ms":3,"parts":[{"text":"Paris is sunny today."}]}

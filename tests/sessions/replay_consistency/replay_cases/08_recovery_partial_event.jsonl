@@ -1,0 +1,4 @@
+{"record_type":"case","name":"recovery_partial_event","app_name":"replay_app","user_id":"user-1","session_id":"session-recovery-partial","session_config":{"store_historical_events":true}}
+{"record_type":"event","id":"event-1","invocation_id":"inv-1","author":"user","timestamp_offset_ms":0,"parts":[{"text":"Start a streaming answer."}]}
+{"record_type":"event","id":"event-2","invocation_id":"inv-2","author":"agent","timestamp_offset_ms":1,"partial":true,"parts":[{"text":"stream chunk should not persist"}]}
+{"record_type":"event","id":"event-3","invocation_id":"inv-2","author":"agent","timestamp_offset_ms":2,"parts":[{"text":"This is the completed answer."}]}

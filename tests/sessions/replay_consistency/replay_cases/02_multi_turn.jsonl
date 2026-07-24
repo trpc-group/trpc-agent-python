@@ -1,0 +1,5 @@
+{"record_type":"case","name":"multi_turn","app_name":"replay_app","user_id":"user-1","session_id":"session-multi-turn","session_config":{"store_historical_events":true}}
+{"record_type":"event","id":"event-1","invocation_id":"inv-1","author":"user","timestamp_offset_ms":0,"parts":[{"text":"My name is Alice."}]}
+{"record_type":"event","id":"event-2","invocation_id":"inv-2","author":"agent","timestamp_offset_ms":1,"parts":[{"text":"Nice to meet you, Alice."}]}
+{"record_type":"event","id":"event-3","invocation_id":"inv-3","author":"user","timestamp_offset_ms":2,"parts":[{"text":"What is the weather in Paris?"}]}
+{"record_type":"event","id":"event-4","invocation_id":"inv-4","author":"agent","timestamp_offset_ms":3,"parts":[{"text":"Paris is sunny today."}]}

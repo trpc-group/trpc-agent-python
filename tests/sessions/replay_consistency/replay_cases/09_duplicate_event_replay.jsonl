@@ -1,0 +1,6 @@
+{"record_type":"case","name":"duplicate_event_replay","app_name":"replay_app","user_id":"user-1","session_id":"session-duplicate-event-replay","session_config":{"store_historical_events":true}}
+{"record_type":"event","id":"event-1","invocation_id":"inv-1","author":"user","timestamp_offset_ms":0,"parts":[{"text":"Retry this request."}]}
+{"record_type":"event","id":"event-2","invocation_id":"inv-2","author":"agent","timestamp_offset_ms":1,"parts":[{"text":"Working on the retry."}]}
+{"record_type":"event","id":"event-3","invocation_id":"inv-1","author":"user","timestamp_offset_ms":2,"parts":[{"text":"Retry this request."}]}
+{"record_type":"event","id":"event-4","invocation_id":"inv-2","author":"agent","timestamp_offset_ms":3,"parts":[{"text":"Working on the retry."}]}
+{"record_type":"event","id":"event-5","invocation_id":"inv-3","author":"agent","timestamp_offset_ms":4,"parts":[{"text":"Final answer after retry."}]}

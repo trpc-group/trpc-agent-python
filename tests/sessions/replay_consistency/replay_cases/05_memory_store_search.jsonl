@@ -1,0 +1,12 @@
+{"record_type":"case","name":"memory_store_search","app_name":"replay_app","user_id":"user-1","session_id":"session-memory-store-search","session_config":{"store_historical_events":true},"memory_config":{"enabled":true}}
+{"record_type":"event","id":"event-1","invocation_id":"inv-1","author":"user","timestamp_offset_ms":0,"parts":[{"text":"Remember that Alice likes green tea."}]}
+{"record_type":"event","id":"event-2","invocation_id":"inv-2","author":"agent","timestamp_offset_ms":1,"parts":[{"text":"Noted."}]}
+{"record_type":"event","id":"event-3","invocation_id":"inv-3","author":"user","timestamp_offset_ms":2,"parts":[{"text":"Alice prefers window seats when traveling."}]}
+{"record_type":"event","id":"event-4","invocation_id":"inv-4","author":"agent","timestamp_offset_ms":3,"parts":[{"text":"Saved."}]}
+{"record_type":"event","id":"event-5","invocation_id":"inv-5","author":"user","timestamp_offset_ms":4,"parts":[{"text":"Alice's passport country is Canada."}]}
+{"record_type":"event","id":"event-6","invocation_id":"inv-6","author":"agent","timestamp_offset_ms":5,"parts":[{"text":"Saved."}]}
+{"record_type":"event","id":"event-7","invocation_id":"inv-summary","author":"system","timestamp_offset_ms":6,"is_summary":true,"version":1,"custom_metadata":{"summary_id":"summary-session-memory-store-search-v1","session_id":"session-memory-store-search","summary_version":1,"updated_at_offset_ms":6,"source_event_ids":["event-1","event-3","event-5"]},"parts":[{"text":"Summary: Alice is preparing a Shanghai travel profile from earlier preferences and facts."}]}
+{"record_type":"memory_search","query":"green","limit":10,"expected_texts":["Remember that Alice likes green tea."]}
+{"record_type":"memory_search","query":"window","limit":10,"expected_texts":["Alice prefers window seats when traveling."]}
+{"record_type":"memory_search","query":"passport","limit":10,"expected_texts":["Alice's passport country is Canada."]}
+{"record_type":"memory_search","query":"Shanghai","limit":10,"expected_memories":[{"author":"system","text":"Summary: Alice is preparing a Shanghai travel profile from earlier preferences and facts."}]}
