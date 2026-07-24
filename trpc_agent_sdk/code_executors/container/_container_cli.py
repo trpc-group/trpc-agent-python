@@ -16,14 +16,38 @@ import socket as pysocket
 from dataclasses import dataclass
 from typing import Optional
 
-import docker
-from docker.models.containers import Container
-from docker.utils.socket import consume_socket_output
-from docker.utils.socket import demux_adaptor
-from docker.utils.socket import frames_iter
+# Note: Docker SDK imports (docker, docker.models.containers, docker.utils.socket)
+# are deferred to runtime via _import_docker() to avoid hanging/crashing on
+# systems without Docker installed (e.g. Windows without Docker Desktop).
+# See: https://github.com/trpc-group/trpc-agent-python/issues/230
+
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.utils import CommandExecResult
 
+
+def _import_docker():
+    """Lazily import the Docker SDK only when actually needed.
+
+    Importing ``docker`` at module top-level causes the Python Docker SDK
+    to probe for a Docker daemon on Windows (named pipe) and other platforms.
+    When Docker is not installed/running this probe hangs or segfaults,
+    making the entire ``trpc_agent_sdk`` package unusable. By deferring the
+    import to call-time we ensure that users who never touch
+    ``ContainerCodeExecutor`` are unaffected.
+    """
+    import docker as _docker
+    from docker.models.containers import Container as _Container
+    from docker.utils.socket import consume_socket_output as _cso
+    from docker.utils.socket import demux_adaptor as _da
+    from docker.utils.socket import frames_iter as _fi
+    globals().update({
+        'docker': _docker,
+        'Container': _Container,
+        'consume_socket_output': _cso,
+        'demux_adaptor': _da,
+        'frames_iter': _fi,
+    })
+    return _docker
 DEFAULT_IMAGE_TAG = 'python:3-slim'
 
 
@@ -88,6 +112,8 @@ class ContainerClient:
         - Remote Docker via DOCKER_HOST environment variable
         - Custom base_url if provided
         """
+        # Lazily import the Docker SDK on first real use.
+        _import_docker()
         # Try to initialize Docker client
         # Let docker SDK handle connection detection (it supports various methods)
         try:

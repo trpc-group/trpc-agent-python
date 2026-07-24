@@ -17,11 +17,12 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
-try:
-    import magic
-    HAS_MAGIC = True
-except ImportError:
-    HAS_MAGIC = False
+# NOTE: python-magic is NOT imported at module top level.
+# On Windows (and other platforms without libmagic installed), the `magic`
+# package searches for the native libmagic DLL at import time, which can hang
+# or crash the interpreter — making the entire trpc_agent_sdk package unusable.
+# Instead, we lazily import it inside detect_content_type() on first use.
+# See: https://github.com/trpc-group/trpc-agent-python/issues/230
 
 
 def path_join(base: str, path: str) -> str:
@@ -228,9 +229,12 @@ def detect_content_type(filename: Path, data: bytes) -> str:
     if mime_type:
         return mime_type
 
-    # filename guess failed, use magic to guess
-    if HAS_MAGIC:
+    # filename guess failed, try python-magic (lazily imported)
+    try:
+        import magic
         return magic.from_buffer(data, mime=True)
+    except Exception:
+        pass
 
     # magic guess failed, use simple content-based detection
     if data.startswith(b'\x89PNG\r\n\x1a\n'):
