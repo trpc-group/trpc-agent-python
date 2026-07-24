@@ -1,0 +1,20 @@
+--- a/src/db_service.py
++++ b/src/db_service.py
+@@ -1,5 +1,15 @@
+ import sqlite3
+ 
+ 
+ def get_user(user_id):
+     conn = sqlite3.connect("app.db")
+     cursor = conn.cursor()
+     cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+     return cursor.fetchone()
++
++
++def get_users(user_ids):
++    """Get multiple users without closing connection."""
++    conn = sqlite3.connect("app.db")
++    cursor = conn.cursor()
++    for uid in user_ids:
++        cursor.execute(f"SELECT * FROM users WHERE id = {uid}")
++        yield cursor.fetchone()

@@ -1,0 +1,10 @@
+# CodeCC ignore rules
+#
+# These files are intentionally excluded from CodeCC secret scanning
+# because they are test fixtures containing fake/dummy credentials
+# used to validate the ReviewMind secret detection functionality.
+
+# ReviewMind test fixtures with fake secrets (for testing secret detection)
+examples/skills_code_review_agent/evals/fixtures/*.diff
+examples/skills_code_review_agent/evals/hidden_fixtures/*.diff
+examples/skills_code_review_agent/evals/hidden_samples.py

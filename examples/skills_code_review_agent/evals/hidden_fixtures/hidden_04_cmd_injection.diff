@@ -1,0 +1,15 @@
+--- a/src/deploy.py
++++ b/src/deploy.py
+@@ -1,5 +1,12 @@
+ import os
+ import subprocess
+ 
+ 
+ def deploy(version):
+     print(f"Deploying version {version}")
++
++
++def run_command(cmd):
++    """Run a shell command."""
++    result = os.system(f"bash -c {cmd}")
++    return result == 0

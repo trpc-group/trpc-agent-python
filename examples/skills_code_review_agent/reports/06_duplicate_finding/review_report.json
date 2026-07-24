@@ -1,0 +1,144 @@
+{
+  "task_id": "109d0375-9b89-4ab3-8e65-51ba086134c0",
+  "status": "completed",
+  "input_type": "fixture",
+  "input_summary": {
+    "files": [
+      {
+        "path": "src/dup_config.py",
+        "change_type": "modified",
+        "additions": 5,
+        "deletions": 0,
+        "hunks": [
+          {
+            "start_line": 1,
+            "end_line": 1,
+            "content": "@@ -1,3 +1,8 @@",
+            "added_lines": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "deleted_lines": []
+          }
+        ]
+      }
+    ],
+    "total_additions": 5,
+    "total_deletions": 0,
+    "files_changed": 1
+  },
+  "total_duration_ms": 3.687620162963867,
+  "finding_count": 5,
+  "severity_distribution": {
+    "critical": 5,
+    "warning": 0,
+    "suggestion": 0
+  },
+  "findings": [
+    {
+      "id": "f3842a43-ecd4-4bae-a1e7-e02eb7cf6895",
+      "task_id": "109d0375-9b89-4ab3-8e65-51ba086134c0",
+      "severity": "critical",
+      "category": "secret",
+      "file_path": "src/dup_config.py",
+      "line_number": 3,
+      "title": "API Key 硬编码",
+      "evidence": "检测到 API Key 硬编码: API_KEY ='***'",
+      "recommendation": "使用环境变量或密钥管理服务存储敏感信息",
+      "confidence": "high",
+      "source": "pattern_match",
+      "dedup_key": "src/dup_config.py:3:secret",
+      "is_duplicate": false,
+      "needs_human_review": false,
+      "created_at": "2026-07-22 08:02:06.657370+00:00"
+    },
+    {
+      "id": "15372a75-ea9b-4fc4-8ced-cb6a3a8b9fce",
+      "task_id": "109d0375-9b89-4ab3-8e65-51ba086134c0",
+      "severity": "critical",
+      "category": "secret",
+      "file_path": "src/dup_config.py",
+      "line_number": 4,
+      "title": "API Key 硬编码",
+      "evidence": "检测到 API Key 硬编码: API_KEY ='***'",
+      "recommendation": "使用环境变量或密钥管理服务存储敏感信息",
+      "confidence": "high",
+      "source": "pattern_match",
+      "dedup_key": "src/dup_config.py:4:secret",
+      "is_duplicate": false,
+      "needs_human_review": false,
+      "created_at": "2026-07-22 08:02:06.657391+00:00"
+    },
+    {
+      "id": "8594dfc3-c9a7-48c8-9867-e76ad7d8111c",
+      "task_id": "109d0375-9b89-4ab3-8e65-51ba086134c0",
+      "severity": "critical",
+      "category": "secret",
+      "file_path": "src/dup_config.py",
+      "line_number": 5,
+      "title": "密码硬编码",
+      "evidence": "检测到密码硬编码: PASSWORD ='***'",
+      "recommendation": "使用环境变量或密钥管理服务存储密码",
+      "confidence": "high",
+      "source": "pattern_match",
+      "dedup_key": "src/dup_config.py:5:secret",
+      "is_duplicate": false,
+      "needs_human_review": false,
+      "created_at": "2026-07-22 08:02:06.657404+00:00"
+    },
+    {
+      "id": "58e1822d-886c-4079-bc9e-3ac7523b0bd7",
+      "task_id": "109d0375-9b89-4ab3-8e65-51ba086134c0",
+      "severity": "critical",
+      "category": "secret",
+      "file_path": "src/dup_config.py",
+      "line_number": 6,
+      "title": "密码硬编码",
+      "evidence": "检测到密码硬编码: PASSWORD ='***'",
+      "recommendation": "使用环境变量或密钥管理服务存储密码",
+      "confidence": "high",
+      "source": "pattern_match",
+      "dedup_key": "src/dup_config.py:6:secret",
+      "is_duplicate": false,
+      "needs_human_review": false,
+      "created_at": "2026-07-22 08:02:06.657413+00:00"
+    },
+    {
+      "id": "ebcaba6d-d137-44ec-8d5b-6a489c1bfe4c",
+      "task_id": "109d0375-9b89-4ab3-8e65-51ba086134c0",
+      "severity": "critical",
+      "category": "secret",
+      "file_path": "src/dup_config.py",
+      "line_number": 7,
+      "title": "GitHub Token 泄露",
+      "evidence": "检测到 GitHub Personal Access Token: ***",
+      "recommendation": "立即撤销该 Token 并使用环境变量",
+      "confidence": "high",
+      "source": "pattern_match",
+      "dedup_key": "src/dup_config.py:7:secret",
+      "is_duplicate": false,
+      "needs_human_review": false,
+      "created_at": "2026-07-22 08:02:06.657423+00:00"
+    }
+  ],
+  "warnings": [],
+  "needs_human_review": [],
+  "sandbox_runs": [],
+  "filter_intercepts": [],
+  "monitoring": {
+    "id": "2404fad8-f6ff-4c1a-9f3a-4b59b809433b",
+    "task_id": "109d0375-9b89-4ab3-8e65-51ba086134c0",
+    "total_duration_ms": 3.687620162963867,
+    "sandbox_duration_ms": 0.0,
+    "tool_call_count": 1,
+    "intercept_count": 0,
+    "finding_count": 5,
+    "severity_distribution": "{\"critical\": 5, \"warning\": 0, \"suggestion\": 0}",
+    "exception_types": "[]",
+    "filter_intercepts": null,
+    "created_at": "2026-07-22 08:02:06.658560+00:00"
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "task_id": "8f418d92-7f9a-43ba-b7da-a36b91c06a3a",
+  "status": "completed",
+  "input_type": "fixture",
+  "input_summary": {
+    "files": [
+      {
+        "path": "src/secret_config.py",
+        "change_type": "modified",
+        "additions": 6,
+        "deletions": 0,
+        "hunks": [
+          {
+            "start_line": 1,
+            "end_line": 1,
+            "content": "@@ -1,3 +1,10 @@",
+            "added_lines": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "deleted_lines": []
+          }
+        ]
+      }
+    ],
+    "total_additions": 6,
+    "total_deletions": 0,
+    "files_changed": 1
+  },
+  "total_duration_ms": 3.9823055267333984,
+  "finding_count": 4,
+  "severity_distribution": {
+    "critical": 4,
+    "warning": 0,
+    "suggestion": 0
+  },
+  "findings": [
+    {
+      "id": "4ce11b5d-176e-4c08-b092-50e2eb4cfea2",
+      "task_id": "8f418d92-7f9a-43ba-b7da-a36b91c06a3a",
+      "severity": "critical",
+      "category": "secret",
+      "file_path": "src/secret_config.py",
+      "line_number": 3,
+      "title": "AWS Access Key 泄露",
+      "evidence": "检测到 AWS Access Key: ***",
+      "recommendation": "立即撤销该密钥并使用 IAM Role",
+      "confidence": "high",
+      "source": "pattern_match",
+      "dedup_key": "src/secret_config.py:3:secret",
+      "is_duplicate": false,
+      "needs_human_review": false,
+      "created_at": "2026-07-22 08:02:06.906223+00:00"
+    },
+    {
+      "id": "1d639532-53f7-40c8-8717-80f237053ba3",
+      "task_id": "8f418d92-7f9a-43ba-b7da-a36b91c06a3a",
+      "severity": "critical",
+      "category": "secret",
+      "file_path": "src/secret_config.py",
+      "line_number": 4,
+      "title": "数据库连接字符串包含密码",
+      "evidence": "检测到数据库连接字符串包含明文密码: postgres:'***'",
+      "recommendation": "使用环境变量存储数据库密码",
+      "confidence": "high",
+      "source": "pattern_match",
+      "dedup_key": "src/secret_config.py:4:secret",
+      "is_duplicate": false,
+      "needs_human_review": false,
+      "created_at": "2026-07-22 08:02:06.906244+00:00"
+    },
+    {
+      "id": "df3a12f1-8293-4f79-afd5-c63d6720e62e",
+      "task_id": "8f418d92-7f9a-43ba-b7da-a36b91c06a3a",
+      "severity": "critical",
+      "category": "secret",
+      "file_path": "src/secret_config.py",
+      "line_number": 5,
+      "title": "JWT Token 硬编码",
+      "evidence": "检测到 JWT Token 硬编码: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefgh...",
+      "recommendation": "使用环境变量存储 JWT Secret",
+      "confidence": "medium",
+      "source": "pattern_match",
+      "dedup_key": "src/secret_config.py:5:secret",
+      "is_duplicate": false,
+      "needs_human_review": false,
+      "created_at": "2026-07-22 08:02:06.906258+00:00"
+    },
+    {
+      "id": "f31ca736-15c8-4b67-af16-5060a2b56efc",
+      "task_id": "8f418d92-7f9a-43ba-b7da-a36b91c06a3a",
+      "severity": "critical",
+      "category": "secret",
+      "file_path": "src/secret_config.py",
+      "line_number": 6,
+      "title": "私钥硬编码",
+      "evidence": "检测到私钥硬编码",
+      "recommendation": "使用密钥管理服务或环境变量, 不要将私钥提交到代码库",
+      "confidence": "high",
+      "source": "pattern_match",
+      "dedup_key": "src/secret_config.py:6:secret",
+      "is_duplicate": false,
+      "needs_human_review": false,
+      "created_at": "2026-07-22 08:02:06.906268+00:00"
+    }
+  ],
+  "warnings": [],
+  "needs_human_review": [],
+  "sandbox_runs": [],
+  "filter_intercepts": [],
+  "monitoring": {
+    "id": "67fde6a5-5d35-42bf-9ac5-42dd2866742b",
+    "task_id": "8f418d92-7f9a-43ba-b7da-a36b91c06a3a",
+    "total_duration_ms": 3.9823055267333984,
+    "sandbox_duration_ms": 0.0,
+    "tool_call_count": 1,
+    "intercept_count": 0,
+    "finding_count": 4,
+    "severity_distribution": "{\"critical\": 4, \"warning\": 0, \"suggestion\": 0}",
+    "exception_types": "[]",
+    "filter_intercepts": null,
+    "created_at": "2026-07-22 08:02:06.907265+00:00"
+  }
+}

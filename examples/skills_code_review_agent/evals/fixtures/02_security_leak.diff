@@ -1,0 +1,19 @@
+--- a/src/config.py
++++ b/src/config.py
+@@ -1,12 +1,15 @@
+ """Application configuration."""
+ 
+ import os
+ 
+ 
+ class Config:
+     """Application configuration."""
+ 
+-    DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+-    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///app.db")
++    DEBUG = os.getenv("DEBUG", "false").lower() == "true"
++    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///app.db")
++
++    API_KEY = "sk-abc123def456ghi789jklmno"
++    PASSWORD = "SuperSecretP@ssw0rd!"
++    SECRET_TOKEN = "ghp_abcdefghijklmnopqrstuvwxyz1234567890"

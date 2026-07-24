@@ -1,0 +1,13 @@
+--- a/src/hang.py
++++ b/src/hang.py
+@@ -1,3 +1,8 @@
+ import time
+ 
+ 
+ def compute():
+     return 42
++
++
++def slow_compute():
++    time.sleep(100)
++    return 42

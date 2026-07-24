@@ -1,0 +1,80 @@
+{
+  "task_id": "d67e42a7-4c0c-41e6-8a71-05775301727e",
+  "status": "completed",
+  "input_type": "fixture",
+  "input_summary": {
+    "files": [
+      {
+        "path": "src/async_client.py",
+        "change_type": "modified",
+        "additions": 9,
+        "deletions": 1,
+        "hunks": [
+          {
+            "start_line": 1,
+            "end_line": 1,
+            "content": "@@ -1,8 +1,15 @@",
+            "added_lines": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "deleted_lines": []
+          }
+        ]
+      }
+    ],
+    "total_additions": 9,
+    "total_deletions": 1,
+    "files_changed": 1
+  },
+  "total_duration_ms": 2.9528141021728516,
+  "finding_count": 1,
+  "severity_distribution": {
+    "critical": 0,
+    "warning": 1,
+    "suggestion": 0
+  },
+  "findings": [],
+  "warnings": [
+    {
+      "id": "48b83eba-d1e0-479f-8536-27caf53dd42c",
+      "task_id": "d67e42a7-4c0c-41e6-8a71-05775301727e",
+      "severity": "warning",
+      "category": "resource_leak",
+      "file_path": "src/async_client.py",
+      "line_number": 13,
+      "title": "aiohttp ClientSession 未关闭",
+      "evidence": "aiohttp ClientSession 未使用 async with 管理: session = aiohttp.ClientSession()",
+      "recommendation": "使用 async with aiohttp.ClientSession() as session: 确保自动关闭",
+      "confidence": "high",
+      "source": "pattern_match",
+      "dedup_key": "src/async_client.py:13:resource_leak",
+      "is_duplicate": false,
+      "needs_human_review": false,
+      "created_at": "2026-07-22 08:02:06.318681+00:00"
+    }
+  ],
+  "needs_human_review": [],
+  "sandbox_runs": [],
+  "filter_intercepts": [],
+  "monitoring": {
+    "id": "314b225c-c025-483b-9068-a5a5eeb622a8",
+    "task_id": "d67e42a7-4c0c-41e6-8a71-05775301727e",
+    "total_duration_ms": 2.9528141021728516,
+    "sandbox_duration_ms": 0.0,
+    "tool_call_count": 1,
+    "intercept_count": 0,
+    "finding_count": 1,
+    "severity_distribution": "{\"critical\": 0, \"warning\": 1, \"suggestion\": 0}",
+    "exception_types": "[]",
+    "filter_intercepts": null,
+    "created_at": "2026-07-22 08:02:06.319131+00:00"
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "task_id": "746fd0fb-44c7-4901-adce-f5510195db55",
+  "status": "completed",
+  "input_type": "fixture",
+  "input_summary": {
+    "files": [
+      {
+        "path": "src/db_service.py",
+        "change_type": "modified",
+        "additions": 9,
+        "deletions": 0,
+        "hunks": [
+          {
+            "start_line": 1,
+            "end_line": 1,
+            "content": "@@ -1,5 +1,15 @@",
+            "added_lines": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "deleted_lines": []
+          }
+        ]
+      }
+    ],
+    "total_additions": 9,
+    "total_deletions": 0,
+    "files_changed": 1
+  },
+  "total_duration_ms": 3.475666046142578,
+  "finding_count": 3,
+  "severity_distribution": {
+    "critical": 2,
+    "warning": 1,
+    "suggestion": 0
+  },
+  "findings": [
+    {
+      "id": "789175a1-b0f6-40e5-af84-e92e52b747b6",
+      "task_id": "746fd0fb-44c7-4901-adce-f5510195db55",
+      "severity": "critical",
+      "category": "security",
+      "file_path": "src/db_service.py",
+      "line_number": 16,
+      "title": "SQL注入风险",
+      "evidence": "使用了 f-string 拼接 SQL 查询: cursor.execute(f\"",
+      "recommendation": "使用参数化查询: cursor.execute('SELECT ...', (param,))",
+      "confidence": "high",
+      "source": "pattern_match",
+      "dedup_key": "src/db_service.py:16:security",
+      "is_duplicate": false,
+      "needs_human_review": false,
+      "created_at": "2026-07-22 08:02:06.435172+00:00"
+    },
+    {
+      "id": "6ad84769-c931-444d-9ae4-04a6be53d4bb",
+      "task_id": "746fd0fb-44c7-4901-adce-f5510195db55",
+      "severity": "critical",
+      "category": "db",
+      "file_path": "src/db_service.py",
+      "line_number": 16,
+      "title": "SQL注入风险 (数据库层)",
+      "evidence": "使用了 f-string 拼接 SQL 查询: cursor.execute(f\"",
+      "recommendation": "使用参数化查询: cursor.execute('SELECT ...', (param,))",
+      "confidence": "high",
+      "source": "pattern_match",
+      "dedup_key": "src/db_service.py:16:db",
+      "is_duplicate": false,
+      "needs_human_review": false,
+      "created_at": "2026-07-22 08:02:06.435182+00:00"
+    }
+  ],
+  "warnings": [
+    {
+      "id": "3f6adffa-5cde-4bef-b370-5a7dd0c73479",
+      "task_id": "746fd0fb-44c7-4901-adce-f5510195db55",
+      "severity": "warning",
+      "category": "db",
+      "file_path": "src/db_service.py",
+      "line_number": 13,
+      "title": "数据库连接未关闭",
+      "evidence": "数据库连接未确保关闭: sqlite3.connect(\"app.db\")",
+      "recommendation": "使用 context manager (with) 管理数据库连接, 或在 finally 块中关闭",
+      "confidence": "medium",
+      "source": "pattern_match",
+      "dedup_key": "src/db_service.py:13:db",
+      "is_duplicate": false,
+      "needs_human_review": false,
+      "created_at": "2026-07-22 08:02:06.435148+00:00"
+    }
+  ],
+  "needs_human_review": [],
+  "sandbox_runs": [],
+  "filter_intercepts": [],
+  "monitoring": {
+    "id": "0f2736a7-3a1f-4233-ac25-9a484a8a568d",
+    "task_id": "746fd0fb-44c7-4901-adce-f5510195db55",
+    "total_duration_ms": 3.475666046142578,
+    "sandbox_duration_ms": 0.0,
+    "tool_call_count": 1,
+    "intercept_count": 0,
+    "finding_count": 3,
+    "severity_distribution": "{\"critical\": 2, \"warning\": 1, \"suggestion\": 0}",
+    "exception_types": "[]",
+    "filter_intercepts": null,
+    "created_at": "2026-07-22 08:02:06.435958+00:00"
+  }
+}

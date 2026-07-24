@@ -1,0 +1,18 @@
+--- a/src/utils.py
++++ b/src/utils.py
+@@ -0,0 +1,15 @@
++import os
++from typing import List
++
++
++def format_name(first: str, last: str) -> str:
++    """Format a person's name."""
++    return f"{first} {last}"
++
++
++def add_prefix(values: List[str], prefix: str) -> List[str]:
++    """Add a prefix to each string in the list."""
++    return [prefix + v for v in values]
++
++
++CONFIG_PATH = os.getenv("CONFIG_PATH", "/etc/app/config.yaml")

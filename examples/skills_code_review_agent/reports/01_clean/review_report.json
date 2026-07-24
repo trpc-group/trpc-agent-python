@@ -1,0 +1,36 @@
+{
+  "task_id": "80f0c793-cf07-4587-833e-9eedfd61e639",
+  "status": "completed",
+  "input_type": "fixture",
+  "input_summary": {
+    "files": [],
+    "total_additions": 0,
+    "total_deletions": 0,
+    "files_changed": 0
+  },
+  "total_duration_ms": 2.635955810546875,
+  "finding_count": 0,
+  "severity_distribution": {
+    "critical": 0,
+    "warning": 0,
+    "suggestion": 0
+  },
+  "findings": [],
+  "warnings": [],
+  "needs_human_review": [],
+  "sandbox_runs": [],
+  "filter_intercepts": [],
+  "monitoring": {
+    "id": "b895f4a3-3139-4298-9b28-fba13d823d15",
+    "task_id": "80f0c793-cf07-4587-833e-9eedfd61e639",
+    "total_duration_ms": 2.635955810546875,
+    "sandbox_duration_ms": 0.0,
+    "tool_call_count": 1,
+    "intercept_count": 0,
+    "finding_count": 0,
+    "severity_distribution": "{\"critical\": 0, \"warning\": 0, \"suggestion\": 0}",
+    "exception_types": "[]",
+    "filter_intercepts": null,
+    "created_at": "2026-07-22 08:02:06.098771+00:00"
+  }
+}

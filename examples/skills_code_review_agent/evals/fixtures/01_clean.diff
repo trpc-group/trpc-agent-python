@@ -1,0 +1,28 @@
+# 代码审查测试样本 — 01: 无问题代码
+
+描述: 一个简单的计算器模块，无安全漏洞、无资源泄漏、无敏感信息。
+预期结果: 0 findings。
+
+```python
+"""Simple calculator module."""
+
+
+def add(a: int, b: int) -> int:
+    """Add two numbers."""
+    return a + b
+
+
+def subtract(a: int, b: int) -> int:
+    """Subtract two numbers."""
+    return a - b
+
+
+def multiply(a: int, b: int) -> int:
+    """Multiply two numbers."""
+    return a * b
+
+
+def divide(a: int, b: int) -> int:
+    """Divide two numbers."""
+    return a // b
+```

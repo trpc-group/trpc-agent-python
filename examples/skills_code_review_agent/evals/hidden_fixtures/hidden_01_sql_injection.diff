@@ -1,0 +1,18 @@
+--- a/src/user_dao.py
++++ b/src/user_dao.py
+@@ -1,5 +1,12 @@
+ import sqlite3
+ 
+ 
+ def get_user(user_id):
+     conn = sqlite3.connect("app.db")
+     cursor = conn.cursor()
+     cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+     return cursor.fetchone()
++
++
++def search_users(name):
++    conn = sqlite3.connect("app.db")
++    cursor = conn.cursor()
++    cursor.execute(f"SELECT * FROM users WHERE name LIKE '%{name}%'")
++    return cursor.fetchall()

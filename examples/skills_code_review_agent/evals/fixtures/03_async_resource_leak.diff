@@ -1,0 +1,20 @@
+--- a/src/async_client.py
++++ b/src/async_client.py
+@@ -1,8 +1,15 @@
+ import aiohttp
+ import asyncio
+ 
+ 
+-async def fetch(url):
++async def fetch(url):
+     async with aiohttp.ClientSession() as session:
+         async with session.get(url) as resp:
+             return await resp.json()
++
++
++async def fetch_multi(urls):
++    """Fetch multiple URLs without closing the session."""
++    session = aiohttp.ClientSession()
++    tasks = [session.get(url) for url in urls]
++    responses = await asyncio.gather(*tasks)
++    return [await r.json() for r in responses]

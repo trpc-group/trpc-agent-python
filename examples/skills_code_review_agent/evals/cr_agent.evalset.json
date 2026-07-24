@@ -1,0 +1,183 @@
+{
+  "eval_set_id": "cr_agent_8_fixtures",
+  "name": "ReviewMind 代码审查 Agent 评测集",
+  "description": "基于 8 条 diff 测试样本的评测集，覆盖无问题、安全漏洞、异步资源泄漏、数据库连接泄漏、测试缺失、重复发现、沙箱失败、敏感信息脱敏场景",
+  "eval_cases": [
+    {
+      "eval_id": "cr_clean_001",
+      "conversation": [
+        {
+          "invocation_id": "cr-clean-001",
+          "user_content": {
+            "parts": [{"text": "审查以下代码变更:\n--- a/src/calculator.py\n+++ b/src/calculator.py\n@@ -0,0 +1,20 @@\n+\"\"\"Simple calculator module.\"\"\"\n+\n+\n+def add(a: int, b: int) -> int:\n+    \"\"\"Add two numbers.\"\"\"\n+    return a + b\n+\n+\n+def subtract(a: int, b: int) -> int:\n+    \"\"\"Subtract two numbers.\"\"\"\n+    return a - b\n+\n+\n+def multiply(a: int, b: int) -> int:\n+    \"\"\"Multiply two numbers.\"\"\"\n+    return a * b\n+\n+\n+def divide(a: int, b: int) -> int:\n+    \"\"\"Divide two numbers.\"\"\"\n+    return a // b"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "未发现明显阻塞问题"}],
+            "role": "model"
+          },
+          "intermediate_data": {}
+        }
+      ],
+      "session_input": {
+        "app_name": "reviewmind",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "cr_security_002",
+      "conversation": [
+        {
+          "invocation_id": "cr-sec-002",
+          "user_content": {
+            "parts": [{"text": "审查以下代码变更:\n--- a/src/config.py\n+++ b/src/config.py\n@@ -1,12 +1,15 @@\n \"\"\"Application configuration.\"\"\"\n \n import os\n \n \n class Config:\n     \"\"\"Application configuration.\"\"\"\n \n-    DEBUG = os.getenv(\"DEBUG\", \"false\").lower() == \"true\"\n-    DATABASE_URL = os.getenv(\"DATABASE_URL\", \"sqlite:///app.db\")\n+    DEBUG = os.getenv(\"DEBUG\", \"false\").lower() == \"true\"\n+    DATABASE_URL = os.getenv(\"DATABASE_URL\", \"sqlite:///app.db\")\n+\n+    API_KEY = \"sk-abc123def456ghi789jklmno\"\n+    PASSWORD = \"SuperSecretP@ssw0rd!\"\n+    SECRET_TOKEN = \"ghp_abcdefghijklmnopqrstuvwxyz1234567890\""}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "发现了安全问题"}],
+            "role": "model"
+          },
+          "intermediate_data": {}
+        }
+      ],
+      "session_input": {
+        "app_name": "reviewmind",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "cr_async_003",
+      "conversation": [
+        {
+          "invocation_id": "cr-async-003",
+          "user_content": {
+            "parts": [{"text": "审查以下代码变更:\n--- a/src/async_client.py\n+++ b/src/async_client.py\n@@ -1,8 +1,15 @@\n import aiohttp\n import asyncio\n \n \n-async def fetch(url):\n+async def fetch(url):\n     async with aiohttp.ClientSession() as session:\n         async with session.get(url) as resp:\n             return await resp.json()\n+\n+\n+async def fetch_multi(urls):\n+    \"\"\"Fetch multiple URLs without closing the session.\"\"\"\n+    session = aiohttp.ClientSession()\n+    tasks = [session.get(url) for url in urls]\n+    responses = await asyncio.gather(*tasks)\n+    return [await r.json() for r in responses]"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "发现资源泄漏问题"}],
+            "role": "model"
+          },
+          "intermediate_data": {}
+        }
+      ],
+      "session_input": {
+        "app_name": "reviewmind",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "cr_db_004",
+      "conversation": [
+        {
+          "invocation_id": "cr-db-004",
+          "user_content": {
+            "parts": [{"text": "审查以下代码变更:\n--- a/src/db_service.py\n+++ b/src/db_service.py\n@@ -1,5 +1,15 @@\n import sqlite3\n \n \n def get_user(user_id):\n     conn = sqlite3.connect(\"app.db\")\n     cursor = conn.cursor()\n     cursor.execute(\"SELECT * FROM users WHERE id = ?\", (user_id,))\n     return cursor.fetchone()\n+\n+\n+def get_users(user_ids):\n+    \"\"\"Get multiple users without closing connection.\"\"\"\n+    conn = sqlite3.connect(\"app.db\")\n+    cursor = conn.cursor()\n+    for uid in user_ids:\n+        cursor.execute(f\"SELECT * FROM users WHERE id = {uid}\")\n+        yield cursor.fetchone()"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "发现数据库连接泄漏和SQL注入风险"}],
+            "role": "model"
+          },
+          "intermediate_data": {}
+        }
+      ],
+      "session_input": {
+        "app_name": "reviewmind",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "cr_test_005",
+      "conversation": [
+        {
+          "invocation_id": "cr-test-005",
+          "user_content": {
+            "parts": [{"text": "审查以下代码变更:\n--- a/src/user_service.py\n+++ b/src/user_service.py\n@@ -1,3 +1,15 @@\n def get_user(user_id):\n     return {\"id\": user_id, \"name\": \"test\"}\n+\n+\n+def create_user(name, email):\n+    \"\"\"Create a new user.\"\"\"\n+    return {\"id\": 123, \"name\": name, \"email\": email}\n+\n+\n+def delete_user(user_id):\n+    \"\"\"Delete a user by ID.\"\"\"\n+    return {\"success\": True}\n+\n+\n+def update_user(user_id, data):\n+    \"\"\"Update a user.\"\"\"\n+    return {\"id\": user_id, **data}"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "发现新增函数缺少测试"}],
+            "role": "model"
+          },
+          "intermediate_data": {}
+        }
+      ],
+      "session_input": {
+        "app_name": "reviewmind",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "cr_dup_006",
+      "conversation": [
+        {
+          "invocation_id": "cr-dup-006",
+          "user_content": {
+            "parts": [{"text": "审查以下代码变更:\n--- a/src/dup_config.py\n+++ b/src/dup_config.py\n@@ -1,3 +1,8 @@\n class Config:\n     DEBUG = True\n+    API_KEY = \"sk-abc123def456ghi789jklmno\"\n+    API_KEY = \"sk-abc123def456ghi789jklmno\"\n+    PASSWORD = \"secret\"\n+    PASSWORD = \"secret\"\n+    SECRET_TOKEN = \"ghp_abcdefghijklmnopqrstuvwxyz1234567890\""}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "发现了去重后的结果"}],
+            "role": "model"
+          },
+          "intermediate_data": {}
+        }
+      ],
+      "session_input": {
+        "app_name": "reviewmind",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "cr_sandbox_007",
+      "conversation": [
+        {
+          "invocation_id": "cr-sb-007",
+          "user_content": {
+            "parts": [{"text": "审查以下代码变更:\n--- a/src/hang.py\n+++ b/src/hang.py\n@@ -1,3 +1,8 @@\n import time\n \n \n def compute():\n     return 42\n+\n+\n+def slow_compute():\n+    time.sleep(100)\n+    return 42"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "沙箱执行超时但任务不崩溃"}],
+            "role": "model"
+          },
+          "intermediate_data": {}
+        }
+      ],
+      "session_input": {
+        "app_name": "reviewmind",
+        "user_id": "user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "cr_secret_008",
+      "conversation": [
+        {
+          "invocation_id": "cr-secret-008",
+          "user_content": {
+            "parts": [{"text": "审查以下代码变更:\n--- a/src/secret_config.py\n+++ b/src/secret_config.py\n@@ -1,3 +1,10 @@\n class SecretConfig:\n     ENV = \"production\"\n+    AWS_KEY = \"AKIAIOSFODNN7EXAMPLE\"\n+    DB_URL = \"postgres://admin:secret123@db.example.com:5432/prod\"\n+    JWT = \"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnopqrstuvwxyz\"\n+    PRIVATE_KEY = \"\"\"-----BEGIN RSA PRIVATE KEY-----\n+MIIEpAIBAAKCAQEA5TQ7z\n+-----END RSA PRIVATE KEY-----\"\"\""}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "发现多种敏感信息"}],
+            "role": "model"
+          },
+          "intermediate_data": {}
+        }
+      ],
+      "session_input": {
+        "app_name": "reviewmind",
+        "user_id": "user",
+        "state": {}
+      }
+    }
+  ]
+}

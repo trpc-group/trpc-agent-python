@@ -1,0 +1,19 @@
+--- a/src/async_worker.py
++++ b/src/async_worker.py
+@@ -1,5 +1,15 @@
+ import asyncio
+ import time
+ 
+ 
+ async def fetch_data(url):
+     return {"data": "ok"}
++
++
++async def poll_server():
++    session = aiohttp.ClientSession()
++    while True:
++        resp = await session.get("https://api.example.com/health")
++        data = await resp.json()
++        time.sleep(5)
++        if data["status"] == "ok":
++            break

@@ -1,0 +1,111 @@
+{
+  "task_id": "2944629c-9c0c-4419-a0a6-c79c749a4e6c",
+  "status": "completed",
+  "input_type": "fixture",
+  "input_summary": {
+    "files": [
+      {
+        "path": "src/config.py",
+        "change_type": "modified",
+        "additions": 6,
+        "deletions": 2,
+        "hunks": [
+          {
+            "start_line": 1,
+            "end_line": 1,
+            "content": "@@ -1,12 +1,15 @@",
+            "added_lines": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "deleted_lines": []
+          }
+        ]
+      }
+    ],
+    "total_additions": 6,
+    "total_deletions": 2,
+    "files_changed": 1
+  },
+  "total_duration_ms": 3.037691116333008,
+  "finding_count": 3,
+  "severity_distribution": {
+    "critical": 3,
+    "warning": 0,
+    "suggestion": 0
+  },
+  "findings": [
+    {
+      "id": "52e3d514-28cf-40bb-941e-6d5b6196eae1",
+      "task_id": "2944629c-9c0c-4419-a0a6-c79c749a4e6c",
+      "severity": "critical",
+      "category": "secret",
+      "file_path": "src/config.py",
+      "line_number": 12,
+      "title": "API Key 硬编码",
+      "evidence": "检测到 API Key 硬编码: API_KEY ='***'",
+      "recommendation": "使用环境变量或密钥管理服务存储敏感信息",
+      "confidence": "high",
+      "source": "pattern_match",
+      "dedup_key": "src/config.py:12:secret",
+      "is_duplicate": false,
+      "needs_human_review": false,
+      "created_at": "2026-07-22 08:02:06.209049+00:00"
+    },
+    {
+      "id": "eed7e4a5-b0a6-42b7-9da5-069dc2a993e7",
+      "task_id": "2944629c-9c0c-4419-a0a6-c79c749a4e6c",
+      "severity": "critical",
+      "category": "secret",
+      "file_path": "src/config.py",
+      "line_number": 13,
+      "title": "密码硬编码",
+      "evidence": "检测到密码硬编码: PASSWORD ='***'",
+      "recommendation": "使用环境变量或密钥管理服务存储密码",
+      "confidence": "high",
+      "source": "pattern_match",
+      "dedup_key": "src/config.py:13:secret",
+      "is_duplicate": false,
+      "needs_human_review": false,
+      "created_at": "2026-07-22 08:02:06.209068+00:00"
+    },
+    {
+      "id": "f0837fa5-e55b-4865-ad79-af21aa575d87",
+      "task_id": "2944629c-9c0c-4419-a0a6-c79c749a4e6c",
+      "severity": "critical",
+      "category": "secret",
+      "file_path": "src/config.py",
+      "line_number": 14,
+      "title": "GitHub Token 泄露",
+      "evidence": "检测到 GitHub Personal Access Token: ***",
+      "recommendation": "立即撤销该 Token 并使用环境变量",
+      "confidence": "high",
+      "source": "pattern_match",
+      "dedup_key": "src/config.py:14:secret",
+      "is_duplicate": false,
+      "needs_human_review": false,
+      "created_at": "2026-07-22 08:02:06.209079+00:00"
+    }
+  ],
+  "warnings": [],
+  "needs_human_review": [],
+  "sandbox_runs": [],
+  "filter_intercepts": [],
+  "monitoring": {
+    "id": "455606fa-0794-42a7-a8ac-2ec7db378ea0",
+    "task_id": "2944629c-9c0c-4419-a0a6-c79c749a4e6c",
+    "total_duration_ms": 3.037691116333008,
+    "sandbox_duration_ms": 0.0,
+    "tool_call_count": 1,
+    "intercept_count": 0,
+    "finding_count": 3,
+    "severity_distribution": "{\"critical\": 3, \"warning\": 0, \"suggestion\": 0}",
+    "exception_types": "[]",
+    "filter_intercepts": null,
+    "created_at": "2026-07-22 08:02:06.209735+00:00"
+  }
+}
