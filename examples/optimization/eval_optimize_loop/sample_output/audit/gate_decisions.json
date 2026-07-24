@@ -1,0 +1,262 @@
+{
+  "candidates": {
+    "ineffective": {
+      "accepted": false,
+      "checks": [
+        {
+          "actual": {
+            "explicit": false,
+            "generalization_gap": false,
+            "train_pr_delta": 0.0,
+            "val_pr_delta": 0.0
+          },
+          "check": "no_overfit",
+          "expected": "no train↑-with-val↓ nor excessive generalization gap",
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": 0,
+          "check": "no_new_hard_fails",
+          "expected": 0,
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": [],
+          "check": "no_critical_regression",
+          "expected": [],
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": [],
+          "check": "no_case_regression",
+          "expected": [],
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": 0.0,
+          "check": "validation_score_improved",
+          "expected": 0.05,
+          "passed": false,
+          "reason": "insufficient validation gain",
+          "required": true
+        },
+        {
+          "actual": 0.0,
+          "check": "validation_pass_rate_not_worse",
+          "expected": 0.0,
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": 0.01022958755493164,
+          "check": "budget_duration",
+          "expected": 180,
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": 18,
+          "check": "budget_metric_calls",
+          "expected": 80,
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": "no change",
+          "check": "tie_policy",
+          "expected": "improvement",
+          "passed": false,
+          "reason": "candidate identical to baseline (tie) → reject per tie_policy",
+          "required": true
+        }
+      ],
+      "decision": "reject",
+      "overfitting_detected": false,
+      "risk_level": "medium"
+    },
+    "overfit": {
+      "accepted": false,
+      "checks": [
+        {
+          "actual": {
+            "explicit": true,
+            "generalization_gap": true,
+            "train_pr_delta": 1.0,
+            "val_pr_delta": -0.3333333333333333
+          },
+          "check": "no_overfit",
+          "expected": "no train↑-with-val↓ nor excessive generalization gap",
+          "passed": false,
+          "reason": "overfitting detected",
+          "required": true
+        },
+        {
+          "actual": 2,
+          "check": "no_new_hard_fails",
+          "expected": 0,
+          "passed": false,
+          "reason": "2 newly failing cases",
+          "required": true
+        },
+        {
+          "actual": [
+            "val_fiction_key"
+          ],
+          "check": "no_critical_regression",
+          "expected": [],
+          "passed": false,
+          "reason": "critical cases regressed: ['val_fiction_key']",
+          "required": true
+        },
+        {
+          "actual": [],
+          "check": "no_case_regression",
+          "expected": [],
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": -0.16666666666666674,
+          "check": "validation_score_improved",
+          "expected": 0.05,
+          "passed": false,
+          "reason": "insufficient validation gain",
+          "required": true
+        },
+        {
+          "actual": -0.3333333333333333,
+          "check": "validation_pass_rate_not_worse",
+          "expected": 0.0,
+          "passed": false,
+          "reason": "validation pass rate dropped",
+          "required": true
+        },
+        {
+          "actual": 0.014226436614990234,
+          "check": "budget_duration",
+          "expected": 180,
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": 24,
+          "check": "budget_metric_calls",
+          "expected": 80,
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": "ok",
+          "check": "tie_policy",
+          "expected": "ok",
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        }
+      ],
+      "decision": "reject",
+      "overfitting_detected": true,
+      "risk_level": "high"
+    },
+    "robust": {
+      "accepted": true,
+      "checks": [
+        {
+          "actual": {
+            "explicit": false,
+            "generalization_gap": false,
+            "train_pr_delta": 1.0,
+            "val_pr_delta": 0.33333333333333337
+          },
+          "check": "no_overfit",
+          "expected": "no train↑-with-val↓ nor excessive generalization gap",
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": 0,
+          "check": "no_new_hard_fails",
+          "expected": 0,
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": [],
+          "check": "no_critical_regression",
+          "expected": [],
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": [],
+          "check": "no_case_regression",
+          "expected": [],
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": 0.16666666666666663,
+          "check": "validation_score_improved",
+          "expected": 0.05,
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": 0.33333333333333337,
+          "check": "validation_pass_rate_not_worse",
+          "expected": 0.0,
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": 0.006034374237060547,
+          "check": "budget_duration",
+          "expected": 180,
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": 12,
+          "check": "budget_metric_calls",
+          "expected": 80,
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        },
+        {
+          "actual": "ok",
+          "check": "tie_policy",
+          "expected": "ok",
+          "passed": true,
+          "reason": "ok",
+          "required": true
+        }
+      ],
+      "decision": "accept",
+      "overfitting_detected": false,
+      "risk_level": "low"
+    }
+  },
+  "selected_candidate_id": "robust"
+}

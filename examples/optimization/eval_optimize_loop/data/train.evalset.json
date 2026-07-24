@@ -1,0 +1,49 @@
+{
+  "eval_set_id": "eval_optimize_loop_train",
+  "name": "图书馆藏查询 agent - 训练集",
+  "description": "3 条训练 case，分别覆盖 format_violation / tool_parameter_error / knowledge_recall_insufficient。expected.final_response 的文本是 contains metric 的判定关键词（必现内容）。",
+  "eval_cases": [
+    {
+      "eval_id": "train_hours_format",
+      "conversation": [
+        {
+          "invocation_id": "inv-1",
+          "user_content": {"parts": [{"text": "图书馆的开馆时间是什么时候？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "category"}], "role": "model"},
+          "creation_timestamp": 0.0
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "user", "state": {}}
+    },
+    {
+      "eval_id": "train_availability_args",
+      "conversation": [
+        {
+          "invocation_id": "inv-1",
+          "user_content": {"parts": [{"text": "《三体》现在能借吗？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "可借"}], "role": "model"},
+          "intermediate_data": {
+            "tool_uses": [{"id": "t0", "name": "check_availability", "args": {"book_id": "BT-001"}}]
+          },
+          "creation_timestamp": 0.0
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "user", "state": {}}
+    },
+    {
+      "eval_id": "train_author_lookup",
+      "conversation": [
+        {
+          "invocation_id": "inv-1",
+          "user_content": {"parts": [{"text": "《时间简史》的作者是谁？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "霍金"}], "role": "model"},
+          "intermediate_data": {
+            "tool_uses": [{"id": "t0", "name": "search_catalog", "args": {"query": "时间简史"}}]
+          },
+          "creation_timestamp": 0.0
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "user", "state": {}}
+    }
+  ]
+}

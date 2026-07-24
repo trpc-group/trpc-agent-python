@@ -1,0 +1,43 @@
+{
+  "eval_set_id": "eval_optimize_loop_val",
+  "name": "图书馆藏查询 agent - 验证集",
+  "description": "3 条验证 case。val_fiction_key 为关键 case（critical_case_ids），用于检验过拟合：overfit 候选会把图书查询一律归到 history，导致该 case 与 val_fiction_generalize 一起退化。",
+  "eval_cases": [
+    {
+      "eval_id": "val_fiction_key",
+      "conversation": [
+        {
+          "invocation_id": "inv-1",
+          "user_content": {"parts": [{"text": "帮我找一本科幻小说。"}], "role": "user"},
+          "final_response": {"parts": [{"text": "fiction"}], "role": "model"},
+          "creation_timestamp": 0.0
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "user", "state": {}}
+    },
+    {
+      "eval_id": "val_fiction_generalize",
+      "conversation": [
+        {
+          "invocation_id": "inv-1",
+          "user_content": {"parts": [{"text": "有没有新的科幻书推荐？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "fiction"}], "role": "model"},
+          "creation_timestamp": 0.0
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "user", "state": {}}
+    },
+    {
+      "eval_id": "val_stable_membership",
+      "conversation": [
+        {
+          "invocation_id": "inv-1",
+          "user_content": {"parts": [{"text": "办借书证需要什么条件？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "category"}], "role": "model"},
+          "creation_timestamp": 0.0
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "user", "state": {}}
+    }
+  ]
+}

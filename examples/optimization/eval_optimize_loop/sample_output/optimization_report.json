@@ -1,0 +1,872 @@
+{
+  "audit": {
+    "baseline_prompt_sha256": {
+      "system_prompt": "3182b9b41a50a5fbc7124024c401c106cb817424394b71ab439367a94cc5290e"
+    },
+    "command": "python run_pipeline.py --mode trace",
+    "config_sha256": "a998ffa78f87e673ca005f7c69aa503829c29ed673d7bfa16053066569ae8d60",
+    "cost": {
+      "evaluation_usd": 0.0,
+      "measurement": "measured_zero_offline",
+      "optimization_usd": 0.0,
+      "total_usd": 0.0
+    },
+    "duration_seconds": 0.015,
+    "finished_at": "2026-07-14T15:25:17.624820+00:00",
+    "run_id": "trace-0-42",
+    "seed": 42,
+    "started_at": "2026-07-14T15:25:17.609593+00:00",
+    "train_sha256": "26d1cda4121ab31080873704ed532b2af105764b8bb26b28ede4170583140968",
+    "validation_sha256": "9652294ddb58dc465cafb890f10cf581b8063de0cd96dd58a69311508af86df2"
+  },
+  "baseline": {
+    "train": {
+      "average_score": 0.5,
+      "cases": [
+        {
+          "actual_response": "开馆时间为每天 9:00-21:00。",
+          "eval_id": "train_hours_format",
+          "expected_response": "category",
+          "failure_reasons": [],
+          "hard_fail": false,
+          "key_trajectory": [],
+          "metrics": {
+            "final_response_avg_score": 0.0,
+            "tool_trajectory_avg_score": 1.0
+          },
+          "passed": false,
+          "primary_failure": null,
+          "score": 0.5
+        },
+        {
+          "actual_response": "可借",
+          "eval_id": "train_availability_args",
+          "expected_response": "可借",
+          "failure_reasons": [],
+          "hard_fail": false,
+          "key_trajectory": [
+            "check_availability"
+          ],
+          "metrics": {
+            "final_response_avg_score": 1.0,
+            "tool_trajectory_avg_score": 0.0
+          },
+          "passed": false,
+          "primary_failure": null,
+          "score": 0.5
+        },
+        {
+          "actual_response": "霍金",
+          "eval_id": "train_author_lookup",
+          "expected_response": "霍金",
+          "failure_reasons": [],
+          "hard_fail": false,
+          "key_trajectory": [],
+          "metrics": {
+            "final_response_avg_score": 1.0,
+            "tool_trajectory_avg_score": 0.0
+          },
+          "passed": false,
+          "primary_failure": null,
+          "score": 0.5
+        }
+      ],
+      "pass_rate": 0.0,
+      "split": "train"
+    },
+    "validation": {
+      "average_score": 0.8333333333333334,
+      "cases": [
+        {
+          "actual_response": "为您查找科幻(fiction)类小说。",
+          "eval_id": "val_fiction_key",
+          "expected_response": "fiction",
+          "failure_reasons": [],
+          "hard_fail": false,
+          "key_trajectory": [],
+          "metrics": {
+            "final_response_avg_score": 1.0,
+            "tool_trajectory_avg_score": 1.0
+          },
+          "passed": true,
+          "primary_failure": null,
+          "score": 1.0
+        },
+        {
+          "actual_response": "科幻(fiction)新书推荐中。",
+          "eval_id": "val_fiction_generalize",
+          "expected_response": "fiction",
+          "failure_reasons": [],
+          "hard_fail": false,
+          "key_trajectory": [],
+          "metrics": {
+            "final_response_avg_score": 1.0,
+            "tool_trajectory_avg_score": 1.0
+          },
+          "passed": true,
+          "primary_failure": null,
+          "score": 1.0
+        },
+        {
+          "actual_response": "凭身份证免费办理。",
+          "eval_id": "val_stable_membership",
+          "expected_response": "category",
+          "failure_reasons": [],
+          "hard_fail": false,
+          "key_trajectory": [],
+          "metrics": {
+            "final_response_avg_score": 0.0,
+            "tool_trajectory_avg_score": 1.0
+          },
+          "passed": false,
+          "primary_failure": null,
+          "score": 0.5
+        }
+      ],
+      "pass_rate": 0.6666666666666666,
+      "split": "validation"
+    }
+  },
+  "candidates": [
+    {
+      "audit_prompt_sha256": "ee2cd124dd38cef543d43bf08efe797adca477fcd9df425c6d77c335ef3ae20f",
+      "candidate_id": "robust",
+      "delta": {
+        "buckets": {
+          "improved": [],
+          "new_fail": [],
+          "new_pass": [
+            "train_hours_format",
+            "train_availability_args",
+            "train_author_lookup",
+            "val_stable_membership"
+          ],
+          "regressed": [],
+          "unchanged": [
+            "val_fiction_key",
+            "val_fiction_generalize"
+          ]
+        },
+        "train": {
+          "average_score_delta": 0.5,
+          "pass_rate_delta": 1.0,
+          "split": "train"
+        },
+        "validation": {
+          "average_score_delta": 0.16666666666666663,
+          "pass_rate_delta": 0.33333333333333337,
+          "split": "validation"
+        }
+      },
+      "gate": {
+        "accepted": true,
+        "checks": [
+          {
+            "actual": {
+              "explicit": false,
+              "generalization_gap": false,
+              "train_pr_delta": 1.0,
+              "val_pr_delta": 0.33333333333333337
+            },
+            "check": "no_overfit",
+            "expected": "no train↑-with-val↓ nor excessive generalization gap",
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": 0,
+            "check": "no_new_hard_fails",
+            "expected": 0,
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": [],
+            "check": "no_critical_regression",
+            "expected": [],
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": [],
+            "check": "no_case_regression",
+            "expected": [],
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": 0.16666666666666663,
+            "check": "validation_score_improved",
+            "expected": 0.05,
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": 0.33333333333333337,
+            "check": "validation_pass_rate_not_worse",
+            "expected": 0.0,
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": 0.006034374237060547,
+            "check": "budget_duration",
+            "expected": 180,
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": 12,
+            "check": "budget_metric_calls",
+            "expected": 80,
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": "ok",
+            "check": "tie_policy",
+            "expected": "ok",
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          }
+        ],
+        "decision": "accept",
+        "overfitting_detected": false,
+        "risk_level": "low"
+      },
+      "optimizer_round": null,
+      "prompts": {
+        "robust": "你是图书馆助手，处理图书查询和借阅问题。\n\n## 输出格式\n始终以严格 JSON 响应：{\"category\": \"<fiction|science|history|faq>\", \"answer\": \"<回答>\"}。\n\n## 分类规则\n- 小说、科幻、文学类 → category = \"fiction\"\n- 科学、技术、计算机类 → category = \"science\"\n- 历史、传记类 → category = \"history\"\n- 政策、办证、开馆时间 → category = \"faq\"\n\n## 知识要求\n涉及具体图书信息（作者、可借状态、书架位置）时，必须先调用工具查询，不得猜测。\n"
+      },
+      "source": "fixture",
+      "train": {
+        "average_score": 1.0,
+        "cases": [
+          {
+            "actual_response": "{\"category\":\"faq\",\"answer\":\"每天 9:00-21:00\"}",
+            "eval_id": "train_hours_format",
+            "expected_response": "category",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [],
+            "metrics": {
+              "final_response_avg_score": 1.0,
+              "tool_trajectory_avg_score": 1.0
+            },
+            "passed": true,
+            "primary_failure": null,
+            "score": 1.0
+          },
+          {
+            "actual_response": "可借",
+            "eval_id": "train_availability_args",
+            "expected_response": "可借",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [
+              "check_availability"
+            ],
+            "metrics": {
+              "final_response_avg_score": 1.0,
+              "tool_trajectory_avg_score": 1.0
+            },
+            "passed": true,
+            "primary_failure": null,
+            "score": 1.0
+          },
+          {
+            "actual_response": "霍金",
+            "eval_id": "train_author_lookup",
+            "expected_response": "霍金",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [
+              "search_catalog"
+            ],
+            "metrics": {
+              "final_response_avg_score": 1.0,
+              "tool_trajectory_avg_score": 1.0
+            },
+            "passed": true,
+            "primary_failure": null,
+            "score": 1.0
+          }
+        ],
+        "pass_rate": 1.0,
+        "split": "train"
+      },
+      "validation": {
+        "average_score": 1.0,
+        "cases": [
+          {
+            "actual_response": "{\"category\":\"fiction\",\"answer\":\"科幻书架在二楼\"}",
+            "eval_id": "val_fiction_key",
+            "expected_response": "fiction",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [],
+            "metrics": {
+              "final_response_avg_score": 1.0,
+              "tool_trajectory_avg_score": 1.0
+            },
+            "passed": true,
+            "primary_failure": null,
+            "score": 1.0
+          },
+          {
+            "actual_response": "{\"category\":\"fiction\",\"answer\":\"新书推荐\"}",
+            "eval_id": "val_fiction_generalize",
+            "expected_response": "fiction",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [],
+            "metrics": {
+              "final_response_avg_score": 1.0,
+              "tool_trajectory_avg_score": 1.0
+            },
+            "passed": true,
+            "primary_failure": null,
+            "score": 1.0
+          },
+          {
+            "actual_response": "{\"category\":\"faq\",\"answer\":\"凭身份证免费办理\"}",
+            "eval_id": "val_stable_membership",
+            "expected_response": "category",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [],
+            "metrics": {
+              "final_response_avg_score": 1.0,
+              "tool_trajectory_avg_score": 1.0
+            },
+            "passed": true,
+            "primary_failure": null,
+            "score": 1.0
+          }
+        ],
+        "pass_rate": 1.0,
+        "split": "validation"
+      }
+    },
+    {
+      "audit_prompt_sha256": "fe5b9b4c07b30ff840f673a03c596556c76ea1407b157056c8813648700d090a",
+      "candidate_id": "ineffective",
+      "delta": {
+        "buckets": {
+          "improved": [],
+          "new_fail": [],
+          "new_pass": [],
+          "regressed": [],
+          "unchanged": [
+            "train_hours_format",
+            "train_availability_args",
+            "train_author_lookup",
+            "val_fiction_key",
+            "val_fiction_generalize",
+            "val_stable_membership"
+          ]
+        },
+        "train": {
+          "average_score_delta": 0.0,
+          "pass_rate_delta": 0.0,
+          "split": "train"
+        },
+        "validation": {
+          "average_score_delta": 0.0,
+          "pass_rate_delta": 0.0,
+          "split": "validation"
+        }
+      },
+      "gate": {
+        "accepted": false,
+        "checks": [
+          {
+            "actual": {
+              "explicit": false,
+              "generalization_gap": false,
+              "train_pr_delta": 0.0,
+              "val_pr_delta": 0.0
+            },
+            "check": "no_overfit",
+            "expected": "no train↑-with-val↓ nor excessive generalization gap",
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": 0,
+            "check": "no_new_hard_fails",
+            "expected": 0,
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": [],
+            "check": "no_critical_regression",
+            "expected": [],
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": [],
+            "check": "no_case_regression",
+            "expected": [],
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": 0.0,
+            "check": "validation_score_improved",
+            "expected": 0.05,
+            "passed": false,
+            "reason": "insufficient validation gain",
+            "required": true
+          },
+          {
+            "actual": 0.0,
+            "check": "validation_pass_rate_not_worse",
+            "expected": 0.0,
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": 0.01022958755493164,
+            "check": "budget_duration",
+            "expected": 180,
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": 18,
+            "check": "budget_metric_calls",
+            "expected": 80,
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": "no change",
+            "check": "tie_policy",
+            "expected": "improvement",
+            "passed": false,
+            "reason": "candidate identical to baseline (tie) → reject per tie_policy",
+            "required": true
+          }
+        ],
+        "decision": "reject",
+        "overfitting_detected": false,
+        "risk_level": "medium"
+      },
+      "optimizer_round": null,
+      "prompts": {
+        "ineffective": "你是一位友好的图书馆助手，请尽力协助每一位读者。\n"
+      },
+      "source": "fixture",
+      "train": {
+        "average_score": 0.5,
+        "cases": [
+          {
+            "actual_response": "开馆时间为每天 9:00-21:00。",
+            "eval_id": "train_hours_format",
+            "expected_response": "category",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [],
+            "metrics": {
+              "final_response_avg_score": 0.0,
+              "tool_trajectory_avg_score": 1.0
+            },
+            "passed": false,
+            "primary_failure": null,
+            "score": 0.5
+          },
+          {
+            "actual_response": "可借",
+            "eval_id": "train_availability_args",
+            "expected_response": "可借",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [
+              "check_availability"
+            ],
+            "metrics": {
+              "final_response_avg_score": 1.0,
+              "tool_trajectory_avg_score": 0.0
+            },
+            "passed": false,
+            "primary_failure": null,
+            "score": 0.5
+          },
+          {
+            "actual_response": "霍金",
+            "eval_id": "train_author_lookup",
+            "expected_response": "霍金",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [],
+            "metrics": {
+              "final_response_avg_score": 1.0,
+              "tool_trajectory_avg_score": 0.0
+            },
+            "passed": false,
+            "primary_failure": null,
+            "score": 0.5
+          }
+        ],
+        "pass_rate": 0.0,
+        "split": "train"
+      },
+      "validation": {
+        "average_score": 0.8333333333333334,
+        "cases": [
+          {
+            "actual_response": "为您查找科幻(fiction)类小说。",
+            "eval_id": "val_fiction_key",
+            "expected_response": "fiction",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [],
+            "metrics": {
+              "final_response_avg_score": 1.0,
+              "tool_trajectory_avg_score": 1.0
+            },
+            "passed": true,
+            "primary_failure": null,
+            "score": 1.0
+          },
+          {
+            "actual_response": "科幻(fiction)新书推荐中。",
+            "eval_id": "val_fiction_generalize",
+            "expected_response": "fiction",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [],
+            "metrics": {
+              "final_response_avg_score": 1.0,
+              "tool_trajectory_avg_score": 1.0
+            },
+            "passed": true,
+            "primary_failure": null,
+            "score": 1.0
+          },
+          {
+            "actual_response": "凭身份证免费办理。",
+            "eval_id": "val_stable_membership",
+            "expected_response": "category",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [],
+            "metrics": {
+              "final_response_avg_score": 0.0,
+              "tool_trajectory_avg_score": 1.0
+            },
+            "passed": false,
+            "primary_failure": null,
+            "score": 0.5
+          }
+        ],
+        "pass_rate": 0.6666666666666666,
+        "split": "validation"
+      }
+    },
+    {
+      "audit_prompt_sha256": "2429f893c95050c2da5d1e3c75c3a2a9348ed3c5bfc5b7fab08fd84843b687c8",
+      "candidate_id": "overfit",
+      "delta": {
+        "buckets": {
+          "improved": [],
+          "new_fail": [
+            "val_fiction_key",
+            "val_fiction_generalize"
+          ],
+          "new_pass": [
+            "train_hours_format",
+            "train_availability_args",
+            "train_author_lookup",
+            "val_stable_membership"
+          ],
+          "regressed": [],
+          "unchanged": []
+        },
+        "train": {
+          "average_score_delta": 0.5,
+          "pass_rate_delta": 1.0,
+          "split": "train"
+        },
+        "validation": {
+          "average_score_delta": -0.16666666666666674,
+          "pass_rate_delta": -0.3333333333333333,
+          "split": "validation"
+        }
+      },
+      "gate": {
+        "accepted": false,
+        "checks": [
+          {
+            "actual": {
+              "explicit": true,
+              "generalization_gap": true,
+              "train_pr_delta": 1.0,
+              "val_pr_delta": -0.3333333333333333
+            },
+            "check": "no_overfit",
+            "expected": "no train↑-with-val↓ nor excessive generalization gap",
+            "passed": false,
+            "reason": "overfitting detected",
+            "required": true
+          },
+          {
+            "actual": 2,
+            "check": "no_new_hard_fails",
+            "expected": 0,
+            "passed": false,
+            "reason": "2 newly failing cases",
+            "required": true
+          },
+          {
+            "actual": [
+              "val_fiction_key"
+            ],
+            "check": "no_critical_regression",
+            "expected": [],
+            "passed": false,
+            "reason": "critical cases regressed: ['val_fiction_key']",
+            "required": true
+          },
+          {
+            "actual": [],
+            "check": "no_case_regression",
+            "expected": [],
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": -0.16666666666666674,
+            "check": "validation_score_improved",
+            "expected": 0.05,
+            "passed": false,
+            "reason": "insufficient validation gain",
+            "required": true
+          },
+          {
+            "actual": -0.3333333333333333,
+            "check": "validation_pass_rate_not_worse",
+            "expected": 0.0,
+            "passed": false,
+            "reason": "validation pass rate dropped",
+            "required": true
+          },
+          {
+            "actual": 0.014226436614990234,
+            "check": "budget_duration",
+            "expected": 180,
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": 24,
+            "check": "budget_metric_calls",
+            "expected": 80,
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          },
+          {
+            "actual": "ok",
+            "check": "tie_policy",
+            "expected": "ok",
+            "passed": true,
+            "reason": "ok",
+            "required": true
+          }
+        ],
+        "decision": "reject",
+        "overfitting_detected": true,
+        "risk_level": "high"
+      },
+      "optimizer_round": null,
+      "prompts": {
+        "overfit": "你是图书馆助手，处理图书查询和借阅问题。\n\n## 输出格式\n始终以严格 JSON 响应：{\"category\": \"<fiction|science|history|faq>\", \"answer\": \"<回答>\"}。\n\n## 分类规则\n- 所有图书查询请求（含小说、科幻）一律 category = \"history\"，统一在历史书架处理\n- 政策、办证、开馆时间 → category = \"faq\"\n\n## 知识要求\n涉及具体图书信息时，必须先调用工具查询，不得猜测。\n"
+      },
+      "source": "fixture",
+      "train": {
+        "average_score": 1.0,
+        "cases": [
+          {
+            "actual_response": "{\"category\":\"faq\",\"answer\":\"每天 9:00-21:00\"}",
+            "eval_id": "train_hours_format",
+            "expected_response": "category",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [],
+            "metrics": {
+              "final_response_avg_score": 1.0,
+              "tool_trajectory_avg_score": 1.0
+            },
+            "passed": true,
+            "primary_failure": null,
+            "score": 1.0
+          },
+          {
+            "actual_response": "可借",
+            "eval_id": "train_availability_args",
+            "expected_response": "可借",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [
+              "check_availability"
+            ],
+            "metrics": {
+              "final_response_avg_score": 1.0,
+              "tool_trajectory_avg_score": 1.0
+            },
+            "passed": true,
+            "primary_failure": null,
+            "score": 1.0
+          },
+          {
+            "actual_response": "霍金",
+            "eval_id": "train_author_lookup",
+            "expected_response": "霍金",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [
+              "search_catalog"
+            ],
+            "metrics": {
+              "final_response_avg_score": 1.0,
+              "tool_trajectory_avg_score": 1.0
+            },
+            "passed": true,
+            "primary_failure": null,
+            "score": 1.0
+          }
+        ],
+        "pass_rate": 1.0,
+        "split": "train"
+      },
+      "validation": {
+        "average_score": 0.6666666666666666,
+        "cases": [
+          {
+            "actual_response": "{\"category\":\"history\",\"answer\":\"已转入历史书架\"}",
+            "eval_id": "val_fiction_key",
+            "expected_response": "fiction",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [],
+            "metrics": {
+              "final_response_avg_score": 0.0,
+              "tool_trajectory_avg_score": 1.0
+            },
+            "passed": false,
+            "primary_failure": null,
+            "score": 0.5
+          },
+          {
+            "actual_response": "{\"category\":\"history\",\"answer\":\"历史新书\"}",
+            "eval_id": "val_fiction_generalize",
+            "expected_response": "fiction",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [],
+            "metrics": {
+              "final_response_avg_score": 0.0,
+              "tool_trajectory_avg_score": 1.0
+            },
+            "passed": false,
+            "primary_failure": null,
+            "score": 0.5
+          },
+          {
+            "actual_response": "{\"category\":\"faq\",\"answer\":\"凭身份证免费办理\"}",
+            "eval_id": "val_stable_membership",
+            "expected_response": "category",
+            "failure_reasons": [],
+            "hard_fail": false,
+            "key_trajectory": [],
+            "metrics": {
+              "final_response_avg_score": 1.0,
+              "tool_trajectory_avg_score": 1.0
+            },
+            "passed": true,
+            "primary_failure": null,
+            "score": 1.0
+          }
+        ],
+        "pass_rate": 0.3333333333333333,
+        "split": "validation"
+      }
+    }
+  ],
+  "data_quality": {
+    "cross_split_duplicates": 0,
+    "passed": true,
+    "prompt_leakage_matches": 0,
+    "train_cases": 3,
+    "validation_cases": 3
+  },
+  "failure_attribution": {
+    "by_case": {
+      "train_author_lookup": {
+        "category": "knowledge_recall_insufficient",
+        "confidence": 0.95,
+        "evidence": "expected tool call(s) ['search_catalog'] but agent called none (guessed without query)",
+        "source": "rule"
+      },
+      "train_availability_args": {
+        "category": "tool_parameter_error",
+        "confidence": 0.95,
+        "evidence": "tool 'check_availability' expected args {'book_id': 'BT-001'}, got {'book_id': 'BT-999'}",
+        "source": "rule"
+      },
+      "train_hours_format": {
+        "category": "format_violation",
+        "confidence": 0.95,
+        "evidence": "actual response missing required structure marker 'category'",
+        "source": "rule"
+      },
+      "val_stable_membership": {
+        "category": "format_violation",
+        "confidence": 0.95,
+        "evidence": "actual response missing required structure marker 'category'",
+        "source": "rule"
+      }
+    },
+    "category_counts": {
+      "format_violation": 2,
+      "knowledge_recall_insufficient": 1,
+      "tool_parameter_error": 1
+    },
+    "coverage_rate": 1.0,
+    "explained_failed_cases": 4,
+    "total_failed_cases": 4
+  },
+  "mode": "trace",
+  "optimizer": {
+    "algorithm": "fixture-deterministic",
+    "rounds": 3,
+    "status": "succeeded",
+    "used_agent_optimizer": false
+  },
+  "schema_version": "eval_optimize_loop.v1",
+  "seed": 42,
+  "selected_candidate_id": "robust",
+  "status": "accept"
+}

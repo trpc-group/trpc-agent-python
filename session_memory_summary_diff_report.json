@@ -1,0 +1,539 @@
+{
+  "schema_version": 3,
+  "reference_backend": "in_memory",
+  "compared_backends": [
+    "in_memory",
+    "sqlite"
+  ],
+  "backend_statuses": [
+    {
+      "name": "in_memory",
+      "status": "match",
+      "reason": null
+    },
+    {
+      "name": "sqlite",
+      "status": "match",
+      "reason": null
+    },
+    {
+      "name": "redis",
+      "status": "skipped",
+      "reason": "TRPC_REPLAY_REDIS_URL unset"
+    }
+  ],
+  "totals": {
+    "cases": 10,
+    "matched": 8,
+    "mismatched": 2,
+    "not_applicable": 0,
+    "skipped": 0
+  },
+  "false_positive_rate": 0.0,
+  "cases": [
+    {
+      "case_id": "single_turn",
+      "session_id": "sess-single",
+      "status": "match",
+      "comparisons": [
+        {
+          "candidate_backend": "sqlite",
+          "status": "match",
+          "diffs": [],
+          "summary_issues": []
+        }
+      ]
+    },
+    {
+      "case_id": "multi_turn",
+      "session_id": "sess-multi",
+      "status": "match",
+      "comparisons": [
+        {
+          "candidate_backend": "sqlite",
+          "status": "match",
+          "diffs": [],
+          "summary_issues": []
+        }
+      ]
+    },
+    {
+      "case_id": "tool_round_trip",
+      "session_id": "sess-tool",
+      "status": "match",
+      "comparisons": [
+        {
+          "candidate_backend": "sqlite",
+          "status": "match",
+          "diffs": [],
+          "summary_issues": []
+        }
+      ]
+    },
+    {
+      "case_id": "state_overwrite",
+      "session_id": "sess-state",
+      "status": "match",
+      "comparisons": [
+        {
+          "candidate_backend": "sqlite",
+          "status": "match",
+          "diffs": [],
+          "summary_issues": []
+        }
+      ]
+    },
+    {
+      "case_id": "memory_preference",
+      "session_id": "sess-mem1",
+      "status": "match",
+      "comparisons": [
+        {
+          "candidate_backend": "sqlite",
+          "status": "match",
+          "diffs": [],
+          "summary_issues": []
+        }
+      ]
+    },
+    {
+      "case_id": "memory_fact_update",
+      "session_id": "sess-mem2",
+      "status": "match",
+      "comparisons": [
+        {
+          "candidate_backend": "sqlite",
+          "status": "match",
+          "diffs": [],
+          "summary_issues": []
+        }
+      ]
+    },
+    {
+      "case_id": "summary_create",
+      "session_id": "sess-sum1",
+      "status": "match",
+      "comparisons": [
+        {
+          "candidate_backend": "sqlite",
+          "status": "match",
+          "diffs": [],
+          "summary_issues": []
+        }
+      ]
+    },
+    {
+      "case_id": "summary_update",
+      "session_id": "sess-sum2",
+      "status": "mismatch",
+      "comparisons": [
+        {
+          "candidate_backend": "sqlite",
+          "status": "mismatch",
+          "diffs": [
+            {
+              "session_id": "sess-sum2",
+              "event_index": 0,
+              "summary_id": null,
+              "field_path": "events[0].content.parts[0].text",
+              "reference_backend": "in_memory",
+              "candidate_backend": "sqlite",
+              "reference_value": "Previous conversation summary: DETERMINISTIC SUMMARY: [system] Previous conversation summary: DETERMINISTIC SUMMARY: [user] 聊东京 | [agent] 东京不错 | [user] 改去大阪 | [user] 改去大阪 | [agent] 大阪也好 | [agent] 大阪也好",
+              "candidate_value": "Previous conversation summary: DETERMINISTIC SUMMARY: [system] Previous conversation summary: DETERMINISTIC SUMMARY: [user] 聊东京 | [agent] 东京不错 | [user] 改去大阪 | [agent] 大阪也好",
+              "allowed": false,
+              "reason": null
+            },
+            {
+              "session_id": "sess-sum2",
+              "event_index": 4,
+              "summary_id": null,
+              "field_path": "historical_events[4].author",
+              "reference_backend": "in_memory",
+              "candidate_backend": "sqlite",
+              "reference_value": "user",
+              "candidate_value": "agent",
+              "allowed": false,
+              "reason": null
+            },
+            {
+              "session_id": "sess-sum2",
+              "event_index": 4,
+              "summary_id": null,
+              "field_path": "historical_events[4].content.parts[0].text",
+              "reference_backend": "in_memory",
+              "candidate_backend": "sqlite",
+              "reference_value": "改去大阪",
+              "candidate_value": "大阪也好",
+              "allowed": false,
+              "reason": null
+            },
+            {
+              "session_id": "sess-sum2",
+              "event_index": 4,
+              "summary_id": null,
+              "field_path": "historical_events[4].content.role",
+              "reference_backend": "in_memory",
+              "candidate_backend": "sqlite",
+              "reference_value": "user",
+              "candidate_value": "model",
+              "allowed": false,
+              "reason": null
+            },
+            {
+              "session_id": "sess-sum2",
+              "event_index": 5,
+              "summary_id": null,
+              "field_path": "historical_events[5]",
+              "reference_backend": "in_memory",
+              "candidate_backend": "sqlite",
+              "reference_value": {
+                "content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "大阪也好",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "model"
+                },
+                "grounding_metadata": null,
+                "partial": null,
+                "turn_complete": null,
+                "error_code": null,
+                "error_message": null,
+                "interrupted": null,
+                "custom_metadata": null,
+                "usage_metadata": null,
+                "response_id": null,
+                "invocation_id": "<normalized>",
+                "author": "agent",
+                "actions": {
+                  "skip_summarization": null,
+                  "state_delta": {},
+                  "artifact_delta": {},
+                  "transfer_to_agent": null,
+                  "escalate": null
+                },
+                "long_running_tool_ids": null,
+                "branch": null,
+                "request_id": null,
+                "parent_invocation_id": null,
+                "tag": null,
+                "filter_key": null,
+                "requires_completion": false,
+                "version": 0,
+                "id": "<normalized>",
+                "timestamp": "<normalized>",
+                "visible": true,
+                "object": null,
+                "model_flags": 1
+              },
+              "candidate_value": "<missing>",
+              "allowed": false,
+              "reason": null
+            },
+            {
+              "session_id": "sess-sum2",
+              "event_index": 6,
+              "summary_id": null,
+              "field_path": "historical_events[6]",
+              "reference_backend": "in_memory",
+              "candidate_backend": "sqlite",
+              "reference_value": {
+                "content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "大阪也好",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "model"
+                },
+                "grounding_metadata": null,
+                "partial": null,
+                "turn_complete": null,
+                "error_code": null,
+                "error_message": null,
+                "interrupted": null,
+                "custom_metadata": null,
+                "usage_metadata": null,
+                "response_id": null,
+                "invocation_id": "<normalized>",
+                "author": "agent",
+                "actions": {
+                  "skip_summarization": null,
+                  "state_delta": {},
+                  "artifact_delta": {},
+                  "transfer_to_agent": null,
+                  "escalate": null
+                },
+                "long_running_tool_ids": null,
+                "branch": null,
+                "request_id": null,
+                "parent_invocation_id": null,
+                "tag": null,
+                "filter_key": null,
+                "requires_completion": false,
+                "version": 0,
+                "id": "<normalized>",
+                "timestamp": "<normalized>",
+                "visible": true,
+                "object": null,
+                "model_flags": 1
+              },
+              "candidate_value": "<missing>",
+              "allowed": false,
+              "reason": null
+            },
+            {
+              "session_id": "sess-sum2",
+              "event_index": null,
+              "summary_id": "sess-sum2:summary",
+              "field_path": "summary.current.original_event_count",
+              "reference_backend": "in_memory",
+              "candidate_backend": "sqlite",
+              "reference_value": 5,
+              "candidate_value": 3,
+              "allowed": false,
+              "reason": null
+            },
+            {
+              "session_id": "sess-sum2",
+              "event_index": null,
+              "summary_id": "sess-sum2:summary",
+              "field_path": "summary.current.text",
+              "reference_backend": "in_memory",
+              "candidate_backend": "sqlite",
+              "reference_value": "DETERMINISTIC SUMMARY: [system] Previous conversation summary: DETERMINISTIC SUMMARY: [user] 聊东京 | [agent] 东京不错 | [user] 改去大阪 | [user] 改去大阪 | [agent] 大阪也好 | [agent] 大阪也好",
+              "candidate_value": "DETERMINISTIC SUMMARY: [system] Previous conversation summary: DETERMINISTIC SUMMARY: [user] 聊东京 | [agent] 东京不错 | [user] 改去大阪 | [agent] 大阪也好",
+              "allowed": false,
+              "reason": null
+            }
+          ],
+          "summary_issues": []
+        }
+      ]
+    },
+    {
+      "case_id": "summary_truncation",
+      "session_id": "sess-trunc",
+      "status": "mismatch",
+      "comparisons": [
+        {
+          "candidate_backend": "sqlite",
+          "status": "mismatch",
+          "diffs": [
+            {
+              "session_id": "sess-trunc",
+              "event_index": 2,
+              "summary_id": null,
+              "field_path": "events[2].author",
+              "reference_backend": "in_memory",
+              "candidate_backend": "sqlite",
+              "reference_value": "user",
+              "candidate_value": "agent",
+              "allowed": false,
+              "reason": null
+            },
+            {
+              "session_id": "sess-trunc",
+              "event_index": 2,
+              "summary_id": null,
+              "field_path": "events[2].content.parts[0].text",
+              "reference_backend": "in_memory",
+              "candidate_backend": "sqlite",
+              "reference_value": "压缩后的新问题",
+              "candidate_value": "新回复",
+              "allowed": false,
+              "reason": null
+            },
+            {
+              "session_id": "sess-trunc",
+              "event_index": 2,
+              "summary_id": null,
+              "field_path": "events[2].content.role",
+              "reference_backend": "in_memory",
+              "candidate_backend": "sqlite",
+              "reference_value": "user",
+              "candidate_value": "model",
+              "allowed": false,
+              "reason": null
+            },
+            {
+              "session_id": "sess-trunc",
+              "event_index": 3,
+              "summary_id": null,
+              "field_path": "events[3]",
+              "reference_backend": "in_memory",
+              "candidate_backend": "sqlite",
+              "reference_value": {
+                "content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "新回复",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "model"
+                },
+                "grounding_metadata": null,
+                "partial": null,
+                "turn_complete": null,
+                "error_code": null,
+                "error_message": null,
+                "interrupted": null,
+                "custom_metadata": null,
+                "usage_metadata": null,
+                "response_id": null,
+                "invocation_id": "<normalized>",
+                "author": "agent",
+                "actions": {
+                  "skip_summarization": null,
+                  "state_delta": {},
+                  "artifact_delta": {},
+                  "transfer_to_agent": null,
+                  "escalate": null
+                },
+                "long_running_tool_ids": null,
+                "branch": null,
+                "request_id": null,
+                "parent_invocation_id": null,
+                "tag": null,
+                "filter_key": null,
+                "requires_completion": false,
+                "version": 0,
+                "id": "<normalized>",
+                "timestamp": "<normalized>",
+                "visible": true,
+                "object": null,
+                "model_flags": 1
+              },
+              "candidate_value": "<missing>",
+              "allowed": false,
+              "reason": null
+            },
+            {
+              "session_id": "sess-trunc",
+              "event_index": 4,
+              "summary_id": null,
+              "field_path": "events[4]",
+              "reference_backend": "in_memory",
+              "candidate_backend": "sqlite",
+              "reference_value": {
+                "content": {
+                  "parts": [
+                    {
+                      "media_resolution": null,
+                      "code_execution_result": null,
+                      "executable_code": null,
+                      "file_data": null,
+                      "function_call": null,
+                      "function_response": null,
+                      "inline_data": null,
+                      "text": "新回复",
+                      "thought": null,
+                      "thought_signature": null,
+                      "video_metadata": null,
+                      "tool_call": null,
+                      "tool_response": null,
+                      "part_metadata": null
+                    }
+                  ],
+                  "role": "model"
+                },
+                "grounding_metadata": null,
+                "partial": null,
+                "turn_complete": null,
+                "error_code": null,
+                "error_message": null,
+                "interrupted": null,
+                "custom_metadata": null,
+                "usage_metadata": null,
+                "response_id": null,
+                "invocation_id": "<normalized>",
+                "author": "agent",
+                "actions": {
+                  "skip_summarization": null,
+                  "state_delta": {},
+                  "artifact_delta": {},
+                  "transfer_to_agent": null,
+                  "escalate": null
+                },
+                "long_running_tool_ids": null,
+                "branch": null,
+                "request_id": null,
+                "parent_invocation_id": null,
+                "tag": null,
+                "filter_key": null,
+                "requires_completion": false,
+                "version": 0,
+                "id": "<normalized>",
+                "timestamp": "<normalized>",
+                "visible": true,
+                "object": null,
+                "model_flags": 1
+              },
+              "candidate_value": "<missing>",
+              "allowed": false,
+              "reason": null
+            }
+          ],
+          "summary_issues": []
+        }
+      ]
+    },
+    {
+      "case_id": "retry_recovery",
+      "session_id": "sess-retry",
+      "status": "match",
+      "comparisons": [
+        {
+          "candidate_backend": "sqlite",
+          "status": "match",
+          "diffs": [],
+          "summary_issues": []
+        }
+      ]
+    }
+  ],
+  "known_drift_cases": [
+    "summary_truncation",
+    "summary_update"
+  ]
+}
