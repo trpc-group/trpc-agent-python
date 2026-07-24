@@ -137,10 +137,10 @@ REPLAY_CASES: tuple[ReplayCase, ...] = (
     ),
     ReplayCase(
         case_id="summary_update",
-        description="replace an old summary after new conversation turns",
+        description="preserve an old summary on failure, then replace it",
         operations=(*_dialogue("summary-update-initial", 4),
                     ReplayOperation("summarize", {"summary_text": "summary update version one"}),
-                    *_dialogue("summary-update-later", 3),
+                    *_dialogue("summary-update-later", 3), ReplayOperation("summarize_failure"),
                     ReplayOperation("summarize", {"summary_text": "summary update version two"})),
     ),
     ReplayCase(
@@ -152,11 +152,22 @@ REPLAY_CASES: tuple[ReplayCase, ...] = (
     ),
     ReplayCase(
         case_id="partial_retry",
-        description="partial write is ignored and a retried final event is stored once",
+        description="interrupted write leaves no dirty state and retry is stored once",
         operations=(
             _text("user", "produce a streamed answer"),
-            _text("assistant", "unfinished", event_id="retry-event", partial=True),
-            _text("assistant", "finished answer", event_id="retry-event"),
+            _text(
+                "assistant",
+                "unfinished",
+                event_id="retry-event",
+                partial=True,
+                state_delta={"recovery_status": "dirty"},
+            ),
+            _text(
+                "assistant",
+                "finished answer",
+                event_id="retry-event",
+                state_delta={"recovery_status": "complete"},
+            ),
         ),
     ),
 )
