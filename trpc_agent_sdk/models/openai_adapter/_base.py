@@ -71,6 +71,10 @@ class OpenAIAdapter:
         """
         return False, None
 
+    def supports_response_schema(self) -> bool:
+        """Whether the provider supports native JSON schema response formats."""
+        return True
+
     def apply_thinking(self, request: Any, http_options: dict[str, Any]) -> bool:
         """Apply provider-specific thinking options.
 

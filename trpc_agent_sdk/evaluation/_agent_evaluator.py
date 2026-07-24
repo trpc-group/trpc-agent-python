@@ -664,10 +664,11 @@ class AgentEvaluator:
         selected_case_id = None
         actual_file_path = eval_set_file
 
-        if ":" in eval_set_file:
-            parts = eval_set_file.split(":", 1)
-            actual_file_path = parts[0]
-            selected_case_id = parts[1]
+        if ":" in eval_set_file and not os.path.exists(eval_set_file):
+            maybe_file_path, maybe_case_id = eval_set_file.rsplit(":", 1)
+            if maybe_file_path.endswith(".json") and os.path.exists(maybe_file_path):
+                actual_file_path = maybe_file_path
+                selected_case_id = maybe_case_id
 
         if not os.path.exists(actual_file_path):
             raise FileNotFoundError(f"Eval set file not found: {actual_file_path}")

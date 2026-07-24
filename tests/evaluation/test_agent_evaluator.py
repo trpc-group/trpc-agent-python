@@ -5,12 +5,15 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Unit tests for agent evaluator (agent_evaluator)."""
 
+import json
+
 import pytest
 
 import trpc_agent_sdk.runners  # noqa: F401
 
 from trpc_agent_sdk.evaluation import EvalStatus
 from trpc_agent_sdk.evaluation import EvalCaseResult
+from trpc_agent_sdk.evaluation import EvalConfig
 from trpc_agent_sdk.evaluation import EvalMetricResult
 from trpc_agent_sdk.evaluation import EvalSetAggregateResult
 from trpc_agent_sdk.evaluation import EvaluateResult
@@ -97,3 +100,55 @@ class TestAgentEvaluatorParsePassNc:
     def test_pass_hat_k_delegates(self):
         """Test AgentEvaluator.pass_hat_k delegates to _eval_pass."""
         assert AgentEvaluator.pass_hat_k(10, 5, 2) == 0.25
+
+
+class TestAgentEvaluatorLoadEvalSet:
+    """Test suite for loading eval sets from ADK-style path selectors."""
+
+    def test_loads_selected_case_from_json_path_suffix(self, tmp_path):
+        eval_set_path = tmp_path / "cases.evalset.json"
+        eval_set_path.write_text(
+            json.dumps({
+                "eval_set_id": "selector_set",
+                "name": "Selector set",
+                "eval_cases": [
+                    {
+                        "eval_id": "case_1",
+                        "conversation": [{
+                            "invocation_id": "invocation_1",
+                            "user_content": {
+                                "role": "user",
+                                "parts": [{"text": "first"}],
+                            },
+                            "final_response": {
+                                "role": "model",
+                                "parts": [{"text": "first response"}],
+                            },
+                        }],
+                    },
+                    {
+                        "eval_id": "case_2",
+                        "conversation": [{
+                            "invocation_id": "invocation_2",
+                            "user_content": {
+                                "role": "user",
+                                "parts": [{"text": "second"}],
+                            },
+                            "final_response": {
+                                "role": "model",
+                                "parts": [{"text": "second response"}],
+                            },
+                        }],
+                    },
+                ],
+            }),
+            encoding="utf-8",
+        )
+
+        eval_set = AgentEvaluator._load_eval_set_from_file(
+            f"{eval_set_path}:case_2",
+            EvalConfig(),
+        )
+
+        assert eval_set.eval_set_id == "selector_set_case_2"
+        assert [case.eval_id for case in eval_set.eval_cases] == ["case_2"]

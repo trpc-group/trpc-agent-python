@@ -1,0 +1,29 @@
+{
+  "metrics": [
+    {
+      "metric_name": "route_tool_args_score",
+      "threshold": 1.0,
+      "criterion": {
+        "final_response": {
+          "json": {
+            "match": "exact"
+          }
+        }
+      }
+    },
+    {
+      "metric_name": "llm_rubric_response",
+      "threshold": 1.0,
+      "criterion": {
+        "offline_rubric": {
+          "checks": [
+            "valid_json_object",
+            "route_present",
+            "tool_object_present"
+          ]
+        }
+      }
+    }
+  ],
+  "num_runs": 1
+}

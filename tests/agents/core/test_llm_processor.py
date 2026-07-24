@@ -12,6 +12,7 @@ from typing import List
 from unittest.mock import Mock
 
 import pytest
+from unittest.mock import patch
 
 from trpc_agent_sdk.agents._base_agent import BaseAgent
 from trpc_agent_sdk.agents.core._llm_processor import LlmProcessor
@@ -23,6 +24,8 @@ from trpc_agent_sdk.types import Content, Part
 
 
 class _StubAgent(BaseAgent):
+    instruction: str = ""
+
     async def _run_async_impl(self, ctx):
         yield
 
@@ -159,6 +162,34 @@ class TestProcessPlanningResponse:
 
 
 class TestCallLlmAsync:
+
+    @pytest.mark.asyncio
+    async def test_non_streaming_drains_model_before_yielding_event(self, invocation_context):
+        """A non-streaming event is exposed only after the model generator is closed."""
+
+        class ClosingModel(MockLLMModel):
+
+            def __init__(self):
+                super().__init__(model_name="test-llmproc-model")
+                self.finished = False
+
+            async def _generate_async_impl(self, request, stream=False, ctx=None):
+                try:
+                    yield LlmResponse(content=Content(parts=[Part(text="complete")]))
+                finally:
+                    self.finished = True
+
+        model = ClosingModel()
+        processor = LlmProcessor(model)
+        event_stream = processor.call_llm_async(LlmRequest(), invocation_context, stream=False)
+
+        with patch("trpc_agent_sdk.agents.core._llm_processor.trace_call_llm"):
+            event = await anext(event_stream)
+
+        assert event.content.parts[0].text == "complete"
+        assert model.finished is True
+        await event_stream.aclose()
+
     def test_yields_events_for_responses(self, model, invocation_context):
         proc = LlmProcessor(model)
         request = LlmRequest()

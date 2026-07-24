@@ -1,0 +1,109 @@
+{
+  "eval_set_id": "support_router_optimizer_dev",
+  "name": "Support router optimizer dev set",
+  "description": "Three optimizer-internal development cases with IDs, user inputs, and gold outputs distinct from both training and final validation. Final validation gold is only used for baseline scoring and final gate decisions.",
+  "eval_cases": [
+    {
+      "eval_id": "dev_return_201",
+      "conversation": [
+        {
+          "invocation_id": "optimizer-dev-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "A coffee maker delivered this morning leaks water. Please return it for a refund."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Leaking new appliance with an explicit return request needs refund handling.\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "support_router_optimizer",
+        "user_id": "optimizer-dev",
+        "state": {
+          "tags": [
+            "refund",
+            "optimizer_dev"
+          ]
+        }
+      }
+    },
+    {
+      "eval_id": "dev_access_202",
+      "conversation": [
+        {
+          "invocation_id": "optimizer-dev-2",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Two-factor codes never arrive and I need a support specialist to restore access."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Failed two-factor delivery with a specialist request needs a human case.\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "support_router_optimizer",
+        "user_id": "optimizer-dev",
+        "state": {
+          "tags": [
+            "manual",
+            "optimizer_dev"
+          ]
+        }
+      }
+    },
+    {
+      "eval_id": "dev_warranty_203",
+      "conversation": [
+        {
+          "invocation_id": "optimizer-dev-3",
+          "user_content": {
+            "parts": [
+              {
+                "text": "How long is the warranty on a replacement charger?"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "support_router_optimizer",
+        "user_id": "optimizer-dev",
+        "state": {
+          "tags": [
+            "faq",
+            "optimizer_dev"
+          ]
+        }
+      }
+    }
+  ]
+}

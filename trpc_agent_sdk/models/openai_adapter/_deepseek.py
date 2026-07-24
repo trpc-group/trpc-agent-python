@@ -56,6 +56,10 @@ class DeepSeekAdapter(OpenAIAdapter):
             logger.warning("DeepSeek only supports JSON object response_format; response schema is ignored.")
         return True, {"type": "json_object"}
 
+    def supports_response_schema(self) -> bool:
+        """DeepSeek accepts JSON mode but ignores native response schemas."""
+        return False
+
     def apply_thinking(self, request: Any, http_options: dict[str, Any]) -> bool:
         if not self.is_v4_model():
             return False

@@ -4,6 +4,12 @@
 *.lock
 *.log
 examples/*.log
+runs/
+examples/**/runs/
+**/online_eval_metrics.json
+**/offline_metrics.json
+**/trace_metrics.json
+**/trace_evalset.json
 
 trpc-agent-py.egg-info
 

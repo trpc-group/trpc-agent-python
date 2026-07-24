@@ -409,5 +409,37 @@ class TestRunAsyncImplErrorPath:
         assert events[0].error_code == "build_error"
 
 
+class TestRunAsyncImplStreaming:
+
+    def test_disables_model_stream_when_run_config_disables_streaming(self, invocation_context):
+        """A non-streaming run must not create a provider SSE response."""
+
+        class RecordingModel(MockLLMModel):
+
+            def __init__(self):
+                super().__init__(model_name="test-llm-ext-model")
+                self.stream_args: list[bool] = []
+
+            async def _generate_async_impl(self, request, stream=False, ctx=None):
+                self.stream_args.append(stream)
+                yield LlmResponse(content=Content(parts=[Part(text="recorded")]))
+
+        model = RecordingModel()
+        agent = _agent(model=model)
+        invocation_context.agent = agent
+        invocation_context.run_config = RunConfig(streaming=False)
+        invocation_context.override_messages = [
+            Content(role="user", parts=[Part(text="evaluate this response")]),
+        ]
+
+        async def run():
+            async for _ in agent._run_async_impl(invocation_context):
+                pass
+
+        asyncio.run(run())
+
+        assert model.stream_args == [False]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

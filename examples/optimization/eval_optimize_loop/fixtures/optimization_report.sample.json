@@ -1,0 +1,2786 @@
+{
+  "run_id": "sample",
+  "mode": "fake",
+  "seed": 7,
+  "baseline": {
+    "prompt_patch_summary": "Baseline overuses FAQ and misses refund and account-escalation intent.",
+    "prompt_artifacts": [
+      {
+        "name": "system_prompt",
+        "source_path": "examples/optimization/eval_optimize_loop/agent/prompts/system.md",
+        "candidate_path": "runs/sample/prompts/baseline/system_prompt.md",
+        "sha256": "ac2208517d00b42bccfc2336108753e0e3c0ea238345c6b851896b09a4819ab3",
+        "source_written": false,
+        "summary": "Baseline overuses FAQ and misses refund and account-escalation intent.",
+        "diff": "unchanged",
+        "content": "You are a support-routing agent.\n\nReturn only one compact JSON object. Do not include markdown fences or extra text.\nThe JSON shape is:\n\n{\"route\":\"\",\"tool\":{\"name\":\"\",\"arguments\":{}},\"reason\":\"\"}\n\nKeep the reason short and do not promise refunds, credits, or manual handling\nunless the route rules require it.\n"
+      },
+      {
+        "name": "router_prompt",
+        "source_path": "examples/optimization/eval_optimize_loop/agent/prompts/router.md",
+        "candidate_path": "runs/sample/prompts/baseline/router_prompt.md",
+        "sha256": "1897b273cf69ace89b50e5c9ba77e135935544bd67100ecd11c78ee7fa317f10",
+        "source_written": false,
+        "summary": "Baseline overuses FAQ and misses refund and account-escalation intent.",
+        "diff": "unchanged",
+        "content": "You route customer-support requests to one backend action.\n\nOutput exactly one JSON object with this shape:\n\n{\"route\":\"<refund|manual_escalation|faq>\",\"tool\":{\"name\":\"<tool name>\",\"arguments\":{}},\"reason\":\"<brief reason>\"}\n\nAllowed routes and tools:\n\n- refund -> create_refund_ticket\n- manual_escalation -> create_escalation_case\n- faq -> none\n\nRouting policy:\n\n1. Use refund when the user asks for refund handling for a broken, missing, or unusable delivered item.\n2. Use manual_escalation when the user explicitly requests a human agent for an account-access, safety, legal, or threat-of-reporting issue.\n3. Use faq for policy, shipping-status, coupon, address-change, and informational questions that do not require opening a backend case.\n4. When the request is ambiguous, choose faq and explain that it can be handled as a policy or information question.\n\nKeep tool.arguments as an empty object for this example. Do not include Markdown, comments, or extra keys.\n"
+      }
+    ],
+    "train": {
+      "eval_set_id": "support_router_train",
+      "score": 0.333333,
+      "pass_rate": 0.333333,
+      "metrics": {
+        "route_tool_args_score": {
+          "score": 0.333333,
+          "threshold": 1.0,
+          "passed": false,
+          "status": "failed"
+        },
+        "llm_rubric_response": {
+          "score": 1.0,
+          "threshold": 1.0,
+          "passed": true,
+          "status": "passed"
+        }
+      },
+      "case_results": [
+        {
+          "case_id": "train_refund_001",
+          "tags": [
+            "refund",
+            "train"
+          ],
+          "user": "The headphones arrived broken yesterday. I want a refund.",
+          "score": 0.0,
+          "passed": false,
+          "metrics": {
+            "route_tool_args_score": {
+              "score": 0.0,
+              "threshold": 1.0,
+              "status": "failed",
+              "passed": false,
+              "reason": null
+            },
+            "llm_rubric_response": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": "offline rubric passed"
+            }
+          },
+          "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund policy question can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+          "key_trace": {
+            "invocation_id": "train-1",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund policy question can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "error_message": null
+          },
+          "root_cause": "final_response_mismatch",
+          "reasons": [
+            "actual route 'faq' did not match expected route 'refund'"
+          ]
+        },
+        {
+          "case_id": "train_manual_002",
+          "tags": [
+            "manual",
+            "train"
+          ],
+          "user": "My account is locked and I am going to report this unless a person helps me now.",
+          "score": 0.0,
+          "passed": false,
+          "metrics": {
+            "route_tool_args_score": {
+              "score": 0.0,
+              "threshold": 1.0,
+              "status": "failed",
+              "passed": false,
+              "reason": null
+            },
+            "llm_rubric_response": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": "offline rubric passed"
+            }
+          },
+          "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Account question can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+          "key_trace": {
+            "invocation_id": "train-2",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Account question can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "error_message": null
+          },
+          "root_cause": "final_response_mismatch",
+          "reasons": [
+            "actual route 'faq' did not match expected route 'manual_escalation'"
+          ]
+        },
+        {
+          "case_id": "train_faq_003",
+          "tags": [
+            "faq",
+            "train"
+          ],
+          "user": "Can an expired coupon be reissued?",
+          "score": 1.0,
+          "passed": true,
+          "metrics": {
+            "route_tool_args_score": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": null
+            },
+            "llm_rubric_response": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": "offline rubric passed"
+            }
+          },
+          "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+          "key_trace": {
+            "invocation_id": "train-3",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "error_message": null
+          },
+          "root_cause": "",
+          "reasons": []
+        }
+      ],
+      "failed_case_ids": [
+        "train_refund_001",
+        "train_manual_002"
+      ],
+      "source": "AgentEvaluator"
+    },
+    "optimizer_dev": {
+      "eval_set_id": "support_router_optimizer_dev",
+      "score": 0.333333,
+      "pass_rate": 0.333333,
+      "metrics": {
+        "route_tool_args_score": {
+          "score": 0.333333,
+          "threshold": 1.0,
+          "passed": false,
+          "status": "failed"
+        },
+        "llm_rubric_response": {
+          "score": 1.0,
+          "threshold": 1.0,
+          "passed": true,
+          "status": "passed"
+        }
+      },
+      "case_results": [
+        {
+          "case_id": "dev_return_201",
+          "tags": [
+            "refund",
+            "optimizer_dev"
+          ],
+          "user": "A coffee maker delivered this morning leaks water. Please return it for a refund.",
+          "score": 0.0,
+          "passed": false,
+          "metrics": {
+            "route_tool_args_score": {
+              "score": 0.0,
+              "threshold": 1.0,
+              "status": "failed",
+              "passed": false,
+              "reason": null
+            },
+            "llm_rubric_response": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": "offline rubric passed"
+            }
+          },
+          "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Return policy can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Leaking new appliance with an explicit return request needs refund handling.\"}",
+          "key_trace": {
+            "invocation_id": "optimizer-dev-1",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Return policy can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Leaking new appliance with an explicit return request needs refund handling.\"}",
+            "error_message": null
+          },
+          "root_cause": "final_response_mismatch",
+          "reasons": [
+            "actual route 'faq' did not match expected route 'refund'"
+          ]
+        },
+        {
+          "case_id": "dev_access_202",
+          "tags": [
+            "manual",
+            "optimizer_dev"
+          ],
+          "user": "Two-factor codes never arrive and I need a support specialist to restore access.",
+          "score": 0.0,
+          "passed": false,
+          "metrics": {
+            "route_tool_args_score": {
+              "score": 0.0,
+              "threshold": 1.0,
+              "status": "failed",
+              "passed": false,
+              "reason": null
+            },
+            "llm_rubric_response": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": "offline rubric passed"
+            }
+          },
+          "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Access policy can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Failed two-factor delivery with a specialist request needs a human case.\"}",
+          "key_trace": {
+            "invocation_id": "optimizer-dev-2",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Access policy can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Failed two-factor delivery with a specialist request needs a human case.\"}",
+            "error_message": null
+          },
+          "root_cause": "final_response_mismatch",
+          "reasons": [
+            "actual route 'faq' did not match expected route 'manual_escalation'"
+          ]
+        },
+        {
+          "case_id": "dev_warranty_203",
+          "tags": [
+            "faq",
+            "optimizer_dev"
+          ],
+          "user": "How long is the warranty on a replacement charger?",
+          "score": 1.0,
+          "passed": true,
+          "metrics": {
+            "route_tool_args_score": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": null
+            },
+            "llm_rubric_response": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": "offline rubric passed"
+            }
+          },
+          "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+          "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+          "key_trace": {
+            "invocation_id": "optimizer-dev-3",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+            "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+            "error_message": null
+          },
+          "root_cause": "",
+          "reasons": []
+        }
+      ],
+      "failed_case_ids": [
+        "dev_return_201",
+        "dev_access_202"
+      ],
+      "source": "AgentEvaluator"
+    },
+    "final_validation": {
+      "eval_set_id": "support_router_val",
+      "score": 0.666667,
+      "pass_rate": 0.666667,
+      "metrics": {
+        "route_tool_args_score": {
+          "score": 0.666667,
+          "threshold": 1.0,
+          "passed": false,
+          "status": "failed"
+        },
+        "llm_rubric_response": {
+          "score": 1.0,
+          "threshold": 1.0,
+          "passed": true,
+          "status": "passed"
+        }
+      },
+      "case_results": [
+        {
+          "case_id": "val_refund_window_101",
+          "tags": [
+            "refund",
+            "validation"
+          ],
+          "user": "The blender arrived missing parts and I need a refund even though it has been 10 days.",
+          "score": 0.0,
+          "passed": false,
+          "metrics": {
+            "route_tool_args_score": {
+              "score": 0.0,
+              "threshold": 1.0,
+              "status": "failed",
+              "passed": false,
+              "reason": null
+            },
+            "llm_rubric_response": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": "offline rubric passed"
+            }
+          },
+          "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+          "key_trace": {
+            "invocation_id": "val-1",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "error_message": null
+          },
+          "root_cause": "final_response_mismatch",
+          "reasons": [
+            "actual route 'faq' did not match expected route 'refund'"
+          ]
+        },
+        {
+          "case_id": "val_address_change_102",
+          "tags": [
+            "faq",
+            "validation"
+          ],
+          "user": "Can I change the delivery address for an order that has not shipped?",
+          "score": 1.0,
+          "passed": true,
+          "metrics": {
+            "route_tool_args_score": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": null
+            },
+            "llm_rubric_response": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": "offline rubric passed"
+            }
+          },
+          "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "key_trace": {
+            "invocation_id": "val-2",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "error_message": null
+          },
+          "root_cause": "",
+          "reasons": []
+        },
+        {
+          "case_id": "val_shipping_delay_103",
+          "tags": [
+            "faq",
+            "validation",
+            "critical"
+          ],
+          "user": "I am angry that shipping is late, but I only want to know the delivery policy.",
+          "score": 1.0,
+          "passed": true,
+          "metrics": {
+            "route_tool_args_score": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": null
+            },
+            "llm_rubric_response": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": "offline rubric passed"
+            }
+          },
+          "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+          "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+          "key_trace": {
+            "invocation_id": "val-3",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "error_message": null
+          },
+          "root_cause": "",
+          "reasons": []
+        }
+      ],
+      "failed_case_ids": [
+        "val_refund_window_101"
+      ],
+      "source": "AgentEvaluator"
+    },
+    "validation": {
+      "eval_set_id": "support_router_val",
+      "score": 0.666667,
+      "pass_rate": 0.666667,
+      "metrics": {
+        "route_tool_args_score": {
+          "score": 0.666667,
+          "threshold": 1.0,
+          "passed": false,
+          "status": "failed"
+        },
+        "llm_rubric_response": {
+          "score": 1.0,
+          "threshold": 1.0,
+          "passed": true,
+          "status": "passed"
+        }
+      },
+      "case_results": [
+        {
+          "case_id": "val_refund_window_101",
+          "tags": [
+            "refund",
+            "validation"
+          ],
+          "user": "The blender arrived missing parts and I need a refund even though it has been 10 days.",
+          "score": 0.0,
+          "passed": false,
+          "metrics": {
+            "route_tool_args_score": {
+              "score": 0.0,
+              "threshold": 1.0,
+              "status": "failed",
+              "passed": false,
+              "reason": null
+            },
+            "llm_rubric_response": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": "offline rubric passed"
+            }
+          },
+          "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+          "key_trace": {
+            "invocation_id": "val-1",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "error_message": null
+          },
+          "root_cause": "final_response_mismatch",
+          "reasons": [
+            "actual route 'faq' did not match expected route 'refund'"
+          ]
+        },
+        {
+          "case_id": "val_address_change_102",
+          "tags": [
+            "faq",
+            "validation"
+          ],
+          "user": "Can I change the delivery address for an order that has not shipped?",
+          "score": 1.0,
+          "passed": true,
+          "metrics": {
+            "route_tool_args_score": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": null
+            },
+            "llm_rubric_response": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": "offline rubric passed"
+            }
+          },
+          "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "key_trace": {
+            "invocation_id": "val-2",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "error_message": null
+          },
+          "root_cause": "",
+          "reasons": []
+        },
+        {
+          "case_id": "val_shipping_delay_103",
+          "tags": [
+            "faq",
+            "validation",
+            "critical"
+          ],
+          "user": "I am angry that shipping is late, but I only want to know the delivery policy.",
+          "score": 1.0,
+          "passed": true,
+          "metrics": {
+            "route_tool_args_score": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": null
+            },
+            "llm_rubric_response": {
+              "score": 1.0,
+              "threshold": 1.0,
+              "status": "passed",
+              "passed": true,
+              "reason": "offline rubric passed"
+            }
+          },
+          "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+          "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+          "key_trace": {
+            "invocation_id": "val-3",
+            "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "error_message": null
+          },
+          "root_cause": "",
+          "reasons": []
+        }
+      ],
+      "failed_case_ids": [
+        "val_refund_window_101"
+      ],
+      "source": "AgentEvaluator"
+    }
+  },
+  "candidates": [
+    {
+      "id": "candidate_local_patch",
+      "audit": {
+        "seed": 7,
+        "duration_seconds": 0.0,
+        "cost": {
+          "currency": "USD",
+          "estimated": 0.0,
+          "known": true
+        },
+        "config_path": "examples/optimization/eval_optimize_loop/optimizer.json",
+        "config_sha256": "9df0a82039d6de55660169bf6061572da99b647f0141cdfcd5c6f0b4cd448d98"
+      },
+      "prompt_patch_summary": "Adds local routing rules for explicit refund requests and account-escalation demands while preserving FAQ for ordinary policy questions.",
+      "prompt_artifacts": [
+        {
+          "name": "system_prompt",
+          "source_path": "examples/optimization/eval_optimize_loop/agent/prompts/system.md",
+          "candidate_path": "runs/sample/prompts/candidate_local_patch/system_prompt.md",
+          "sha256": "ac2208517d00b42bccfc2336108753e0e3c0ea238345c6b851896b09a4819ab3",
+          "source_written": false,
+          "summary": "Adds local routing rules for explicit refund requests and account-escalation demands while preserving FAQ for ordinary policy questions.",
+          "diff": "unchanged",
+          "content": "You are a support-routing agent.\n\nReturn only one compact JSON object. Do not include markdown fences or extra text.\nThe JSON shape is:\n\n{\"route\":\"\",\"tool\":{\"name\":\"\",\"arguments\":{}},\"reason\":\"\"}\n\nKeep the reason short and do not promise refunds, credits, or manual handling\nunless the route rules require it.\n"
+        },
+        {
+          "name": "router_prompt",
+          "source_path": "examples/optimization/eval_optimize_loop/agent/prompts/router.md",
+          "candidate_path": "runs/sample/prompts/candidate_local_patch/router_prompt.md",
+          "sha256": "72579cd1131cd405b7458aef1bcd973f0d43e70c4ef6f82d1136bc7fb5ee9e67",
+          "source_written": false,
+          "summary": "Adds local routing rules for explicit refund requests and account-escalation demands while preserving FAQ for ordinary policy questions.",
+          "diff": "--- source/router_prompt.md\n+++ candidate/router_prompt.md\n@@ -18,3 +18,5 @@\n 4. When the request is ambiguous, choose faq and explain that it can be handled as a policy or information question.\n \n Keep tool.arguments as an empty object for this example. Do not include Markdown, comments, or extra keys.\n+\n+Offline candidate patch (candidate_local_patch): Adds local routing rules for explicit refund requests and account-escalation demands while preserving FAQ for ordinary policy questions.\n",
+          "content": "You route customer-support requests to one backend action.\n\nOutput exactly one JSON object with this shape:\n\n{\"route\":\"<refund|manual_escalation|faq>\",\"tool\":{\"name\":\"<tool name>\",\"arguments\":{}},\"reason\":\"<brief reason>\"}\n\nAllowed routes and tools:\n\n- refund -> create_refund_ticket\n- manual_escalation -> create_escalation_case\n- faq -> none\n\nRouting policy:\n\n1. Use refund when the user asks for refund handling for a broken, missing, or unusable delivered item.\n2. Use manual_escalation when the user explicitly requests a human agent for an account-access, safety, legal, or threat-of-reporting issue.\n3. Use faq for policy, shipping-status, coupon, address-change, and informational questions that do not require opening a backend case.\n4. When the request is ambiguous, choose faq and explain that it can be handled as a policy or information question.\n\nKeep tool.arguments as an empty object for this example. Do not include Markdown, comments, or extra keys.\n\nOffline candidate patch (candidate_local_patch): Adds local routing rules for explicit refund requests and account-escalation demands while preserving FAQ for ordinary policy questions.\n"
+        }
+      ],
+      "train": {
+        "eval_set_id": "support_router_train",
+        "score": 1.0,
+        "pass_rate": 1.0,
+        "metrics": {
+          "route_tool_args_score": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          },
+          "llm_rubric_response": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          }
+        },
+        "case_results": [
+          {
+            "case_id": "train_refund_001",
+            "tags": [
+              "refund",
+              "train"
+            ],
+            "user": "The headphones arrived broken yesterday. I want a refund.",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "train-1",
+              "actual_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          },
+          {
+            "case_id": "train_manual_002",
+            "tags": [
+              "manual",
+              "train"
+            ],
+            "user": "My account is locked and I am going to report this unless a person helps me now.",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "expected_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "key_trace": {
+              "invocation_id": "train-2",
+              "actual_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+              "expected_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          },
+          {
+            "case_id": "train_faq_003",
+            "tags": [
+              "faq",
+              "train"
+            ],
+            "user": "Can an expired coupon be reissued?",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "train-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          }
+        ],
+        "failed_case_ids": [],
+        "source": "AgentEvaluator"
+      },
+      "optimizer_dev": {
+        "eval_set_id": "support_router_optimizer_dev",
+        "score": 1.0,
+        "pass_rate": 1.0,
+        "metrics": {
+          "route_tool_args_score": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          },
+          "llm_rubric_response": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          }
+        },
+        "case_results": [
+          {
+            "case_id": "dev_return_201",
+            "tags": [
+              "refund",
+              "optimizer_dev"
+            ],
+            "user": "A coffee maker delivered this morning leaks water. Please return it for a refund.",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Leaking new appliance with an explicit return request needs refund handling.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Leaking new appliance with an explicit return request needs refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-1",
+              "actual_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Leaking new appliance with an explicit return request needs refund handling.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Leaking new appliance with an explicit return request needs refund handling.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          },
+          {
+            "case_id": "dev_access_202",
+            "tags": [
+              "manual",
+              "optimizer_dev"
+            ],
+            "user": "Two-factor codes never arrive and I need a support specialist to restore access.",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Failed two-factor delivery with a specialist request needs a human case.\"}",
+            "expected_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Failed two-factor delivery with a specialist request needs a human case.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-2",
+              "actual_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Failed two-factor delivery with a specialist request needs a human case.\"}",
+              "expected_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Failed two-factor delivery with a specialist request needs a human case.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          },
+          {
+            "case_id": "dev_warranty_203",
+            "tags": [
+              "faq",
+              "optimizer_dev"
+            ],
+            "user": "How long is the warranty on a replacement charger?",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          }
+        ],
+        "failed_case_ids": [],
+        "source": "AgentEvaluator"
+      },
+      "final_validation": {
+        "eval_set_id": "support_router_val",
+        "score": 1.0,
+        "pass_rate": 1.0,
+        "metrics": {
+          "route_tool_args_score": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          },
+          "llm_rubric_response": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          }
+        },
+        "case_results": [
+          {
+            "case_id": "val_refund_window_101",
+            "tags": [
+              "refund",
+              "validation"
+            ],
+            "user": "The blender arrived missing parts and I need a refund even though it has been 10 days.",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "val-1",
+              "actual_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          },
+          {
+            "case_id": "val_address_change_102",
+            "tags": [
+              "faq",
+              "validation"
+            ],
+            "user": "Can I change the delivery address for an order that has not shipped?",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-2",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          },
+          {
+            "case_id": "val_shipping_delay_103",
+            "tags": [
+              "faq",
+              "validation",
+              "critical"
+            ],
+            "user": "I am angry that shipping is late, but I only want to know the delivery policy.",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          }
+        ],
+        "failed_case_ids": [],
+        "source": "AgentEvaluator"
+      },
+      "validation": {
+        "eval_set_id": "support_router_val",
+        "score": 1.0,
+        "pass_rate": 1.0,
+        "metrics": {
+          "route_tool_args_score": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          },
+          "llm_rubric_response": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          }
+        },
+        "case_results": [
+          {
+            "case_id": "val_refund_window_101",
+            "tags": [
+              "refund",
+              "validation"
+            ],
+            "user": "The blender arrived missing parts and I need a refund even though it has been 10 days.",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "val-1",
+              "actual_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          },
+          {
+            "case_id": "val_address_change_102",
+            "tags": [
+              "faq",
+              "validation"
+            ],
+            "user": "Can I change the delivery address for an order that has not shipped?",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-2",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          },
+          {
+            "case_id": "val_shipping_delay_103",
+            "tags": [
+              "faq",
+              "validation",
+              "critical"
+            ],
+            "user": "I am angry that shipping is late, but I only want to know the delivery policy.",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          }
+        ],
+        "failed_case_ids": [],
+        "source": "AgentEvaluator"
+      },
+      "delta": {
+        "train_score": 0.666667,
+        "optimizer_dev_score": 0.666667,
+        "validation_score": 0.333333
+      },
+      "case_deltas": [
+        {
+          "case_id": "val_address_change_102",
+          "baseline_score": 1.0,
+          "candidate_score": 1.0,
+          "baseline_passed": true,
+          "candidate_passed": true,
+          "delta": 0.0,
+          "change_type": "unchanged",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "root_cause": "",
+          "reasons": []
+        },
+        {
+          "case_id": "val_refund_window_101",
+          "baseline_score": 0.0,
+          "candidate_score": 1.0,
+          "baseline_passed": false,
+          "candidate_passed": true,
+          "delta": 1.0,
+          "change_type": "new_pass",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+          "root_cause": "",
+          "reasons": []
+        },
+        {
+          "case_id": "val_shipping_delay_103",
+          "baseline_score": 1.0,
+          "candidate_score": 1.0,
+          "baseline_passed": true,
+          "candidate_passed": true,
+          "delta": 0.0,
+          "change_type": "unchanged",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+          "root_cause": "",
+          "reasons": []
+        }
+      ],
+      "gate": {
+        "candidate_id": "candidate_local_patch",
+        "accepted": true,
+        "reasons": [
+          "validation improved and all configured gates passed"
+        ],
+        "new_hard_fail_ids": [],
+        "critical_regression_ids": [],
+        "missing_case_ids": [],
+        "unexpected_case_ids": [],
+        "validation_delta": 0.333333
+      },
+      "failure_attribution": {
+        "coverage": 1.0,
+        "taxonomy_counts": {
+          "final_response_mismatch": 0,
+          "tool_call_error": 0,
+          "parameter_error": 0,
+          "rubric_failed": 0,
+          "knowledge_gap": 0,
+          "format_error": 0,
+          "runtime_error": 0,
+          "metric_failed": 0
+        },
+        "cases": []
+      },
+      "artifacts": {
+        "prompt_dir": "runs/sample/prompts/candidate_local_patch",
+        "prompt_patch": "runs/sample/prompts/candidate_local_patch/prompt_patch.diff"
+      }
+    },
+    {
+      "id": "candidate_noop",
+      "audit": {
+        "seed": 7,
+        "duration_seconds": 0.0,
+        "cost": {
+          "currency": "USD",
+          "estimated": 0.0,
+          "known": true
+        },
+        "config_path": "examples/optimization/eval_optimize_loop/optimizer.json",
+        "config_sha256": "9df0a82039d6de55660169bf6061572da99b647f0141cdfcd5c6f0b4cd448d98"
+      },
+      "prompt_patch_summary": "Rephrases baseline guidance without changing route decisions.",
+      "prompt_artifacts": [
+        {
+          "name": "system_prompt",
+          "source_path": "examples/optimization/eval_optimize_loop/agent/prompts/system.md",
+          "candidate_path": "runs/sample/prompts/candidate_noop/system_prompt.md",
+          "sha256": "ac2208517d00b42bccfc2336108753e0e3c0ea238345c6b851896b09a4819ab3",
+          "source_written": false,
+          "summary": "Rephrases baseline guidance without changing route decisions.",
+          "diff": "unchanged",
+          "content": "You are a support-routing agent.\n\nReturn only one compact JSON object. Do not include markdown fences or extra text.\nThe JSON shape is:\n\n{\"route\":\"\",\"tool\":{\"name\":\"\",\"arguments\":{}},\"reason\":\"\"}\n\nKeep the reason short and do not promise refunds, credits, or manual handling\nunless the route rules require it.\n"
+        },
+        {
+          "name": "router_prompt",
+          "source_path": "examples/optimization/eval_optimize_loop/agent/prompts/router.md",
+          "candidate_path": "runs/sample/prompts/candidate_noop/router_prompt.md",
+          "sha256": "8250ad478bed5bb80900204d05395f7110bcc5f46f62666c7d7a74c64ea0ccc1",
+          "source_written": false,
+          "summary": "Rephrases baseline guidance without changing route decisions.",
+          "diff": "--- source/router_prompt.md\n+++ candidate/router_prompt.md\n@@ -18,3 +18,5 @@\n 4. When the request is ambiguous, choose faq and explain that it can be handled as a policy or information question.\n \n Keep tool.arguments as an empty object for this example. Do not include Markdown, comments, or extra keys.\n+\n+Offline candidate patch (candidate_noop): Rephrases baseline guidance without changing route decisions.\n",
+          "content": "You route customer-support requests to one backend action.\n\nOutput exactly one JSON object with this shape:\n\n{\"route\":\"<refund|manual_escalation|faq>\",\"tool\":{\"name\":\"<tool name>\",\"arguments\":{}},\"reason\":\"<brief reason>\"}\n\nAllowed routes and tools:\n\n- refund -> create_refund_ticket\n- manual_escalation -> create_escalation_case\n- faq -> none\n\nRouting policy:\n\n1. Use refund when the user asks for refund handling for a broken, missing, or unusable delivered item.\n2. Use manual_escalation when the user explicitly requests a human agent for an account-access, safety, legal, or threat-of-reporting issue.\n3. Use faq for policy, shipping-status, coupon, address-change, and informational questions that do not require opening a backend case.\n4. When the request is ambiguous, choose faq and explain that it can be handled as a policy or information question.\n\nKeep tool.arguments as an empty object for this example. Do not include Markdown, comments, or extra keys.\n\nOffline candidate patch (candidate_noop): Rephrases baseline guidance without changing route decisions.\n"
+        }
+      ],
+      "train": {
+        "eval_set_id": "support_router_train",
+        "score": 0.333333,
+        "pass_rate": 0.333333,
+        "metrics": {
+          "route_tool_args_score": {
+            "score": 0.333333,
+            "threshold": 1.0,
+            "passed": false,
+            "status": "failed"
+          },
+          "llm_rubric_response": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          }
+        },
+        "case_results": [
+          {
+            "case_id": "train_refund_001",
+            "tags": [
+              "refund",
+              "train"
+            ],
+            "user": "The headphones arrived broken yesterday. I want a refund.",
+            "score": 0.0,
+            "passed": false,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 0.0,
+                "threshold": 1.0,
+                "status": "failed",
+                "passed": false,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "train-1",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+              "error_message": null
+            },
+            "root_cause": "final_response_mismatch",
+            "reasons": [
+              "actual route 'faq' did not match expected route 'refund'"
+            ]
+          },
+          {
+            "case_id": "train_manual_002",
+            "tags": [
+              "manual",
+              "train"
+            ],
+            "user": "My account is locked and I am going to report this unless a person helps me now.",
+            "score": 0.0,
+            "passed": false,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 0.0,
+                "threshold": 1.0,
+                "status": "failed",
+                "passed": false,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Account question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "key_trace": {
+              "invocation_id": "train-2",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Account question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+              "error_message": null
+            },
+            "root_cause": "final_response_mismatch",
+            "reasons": [
+              "actual route 'faq' did not match expected route 'manual_escalation'"
+            ]
+          },
+          {
+            "case_id": "train_faq_003",
+            "tags": [
+              "faq",
+              "train"
+            ],
+            "user": "Can an expired coupon be reissued?",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "train-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          }
+        ],
+        "failed_case_ids": [
+          "train_refund_001",
+          "train_manual_002"
+        ],
+        "source": "AgentEvaluator"
+      },
+      "optimizer_dev": {
+        "eval_set_id": "support_router_optimizer_dev",
+        "score": 0.333333,
+        "pass_rate": 0.333333,
+        "metrics": {
+          "route_tool_args_score": {
+            "score": 0.333333,
+            "threshold": 1.0,
+            "passed": false,
+            "status": "failed"
+          },
+          "llm_rubric_response": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          }
+        },
+        "case_results": [
+          {
+            "case_id": "dev_return_201",
+            "tags": [
+              "refund",
+              "optimizer_dev"
+            ],
+            "user": "A coffee maker delivered this morning leaks water. Please return it for a refund.",
+            "score": 0.0,
+            "passed": false,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 0.0,
+                "threshold": 1.0,
+                "status": "failed",
+                "passed": false,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Return policy can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Leaking new appliance with an explicit return request needs refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-1",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Return policy can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Leaking new appliance with an explicit return request needs refund handling.\"}",
+              "error_message": null
+            },
+            "root_cause": "final_response_mismatch",
+            "reasons": [
+              "actual route 'faq' did not match expected route 'refund'"
+            ]
+          },
+          {
+            "case_id": "dev_access_202",
+            "tags": [
+              "manual",
+              "optimizer_dev"
+            ],
+            "user": "Two-factor codes never arrive and I need a support specialist to restore access.",
+            "score": 0.0,
+            "passed": false,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 0.0,
+                "threshold": 1.0,
+                "status": "failed",
+                "passed": false,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Access policy can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Failed two-factor delivery with a specialist request needs a human case.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-2",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Access policy can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Failed two-factor delivery with a specialist request needs a human case.\"}",
+              "error_message": null
+            },
+            "root_cause": "final_response_mismatch",
+            "reasons": [
+              "actual route 'faq' did not match expected route 'manual_escalation'"
+            ]
+          },
+          {
+            "case_id": "dev_warranty_203",
+            "tags": [
+              "faq",
+              "optimizer_dev"
+            ],
+            "user": "How long is the warranty on a replacement charger?",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          }
+        ],
+        "failed_case_ids": [
+          "dev_return_201",
+          "dev_access_202"
+        ],
+        "source": "AgentEvaluator"
+      },
+      "final_validation": {
+        "eval_set_id": "support_router_val",
+        "score": 0.666667,
+        "pass_rate": 0.666667,
+        "metrics": {
+          "route_tool_args_score": {
+            "score": 0.666667,
+            "threshold": 1.0,
+            "passed": false,
+            "status": "failed"
+          },
+          "llm_rubric_response": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          }
+        },
+        "case_results": [
+          {
+            "case_id": "val_refund_window_101",
+            "tags": [
+              "refund",
+              "validation"
+            ],
+            "user": "The blender arrived missing parts and I need a refund even though it has been 10 days.",
+            "score": 0.0,
+            "passed": false,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 0.0,
+                "threshold": 1.0,
+                "status": "failed",
+                "passed": false,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "val-1",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "error_message": null
+            },
+            "root_cause": "final_response_mismatch",
+            "reasons": [
+              "actual route 'faq' did not match expected route 'refund'"
+            ]
+          },
+          {
+            "case_id": "val_address_change_102",
+            "tags": [
+              "faq",
+              "validation"
+            ],
+            "user": "Can I change the delivery address for an order that has not shipped?",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-2",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          },
+          {
+            "case_id": "val_shipping_delay_103",
+            "tags": [
+              "faq",
+              "validation",
+              "critical"
+            ],
+            "user": "I am angry that shipping is late, but I only want to know the delivery policy.",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          }
+        ],
+        "failed_case_ids": [
+          "val_refund_window_101"
+        ],
+        "source": "AgentEvaluator"
+      },
+      "validation": {
+        "eval_set_id": "support_router_val",
+        "score": 0.666667,
+        "pass_rate": 0.666667,
+        "metrics": {
+          "route_tool_args_score": {
+            "score": 0.666667,
+            "threshold": 1.0,
+            "passed": false,
+            "status": "failed"
+          },
+          "llm_rubric_response": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          }
+        },
+        "case_results": [
+          {
+            "case_id": "val_refund_window_101",
+            "tags": [
+              "refund",
+              "validation"
+            ],
+            "user": "The blender arrived missing parts and I need a refund even though it has been 10 days.",
+            "score": 0.0,
+            "passed": false,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 0.0,
+                "threshold": 1.0,
+                "status": "failed",
+                "passed": false,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "val-1",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "error_message": null
+            },
+            "root_cause": "final_response_mismatch",
+            "reasons": [
+              "actual route 'faq' did not match expected route 'refund'"
+            ]
+          },
+          {
+            "case_id": "val_address_change_102",
+            "tags": [
+              "faq",
+              "validation"
+            ],
+            "user": "Can I change the delivery address for an order that has not shipped?",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-2",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          },
+          {
+            "case_id": "val_shipping_delay_103",
+            "tags": [
+              "faq",
+              "validation",
+              "critical"
+            ],
+            "user": "I am angry that shipping is late, but I only want to know the delivery policy.",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          }
+        ],
+        "failed_case_ids": [
+          "val_refund_window_101"
+        ],
+        "source": "AgentEvaluator"
+      },
+      "delta": {
+        "train_score": 0.0,
+        "optimizer_dev_score": 0.0,
+        "validation_score": 0.0
+      },
+      "case_deltas": [
+        {
+          "case_id": "val_address_change_102",
+          "baseline_score": 1.0,
+          "candidate_score": 1.0,
+          "baseline_passed": true,
+          "candidate_passed": true,
+          "delta": 0.0,
+          "change_type": "unchanged",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "root_cause": "",
+          "reasons": []
+        },
+        {
+          "case_id": "val_refund_window_101",
+          "baseline_score": 0.0,
+          "candidate_score": 0.0,
+          "baseline_passed": false,
+          "candidate_passed": false,
+          "delta": 0.0,
+          "change_type": "unchanged",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+          "root_cause": "final_response_mismatch",
+          "reasons": [
+            "actual route 'faq' did not match expected route 'refund'"
+          ]
+        },
+        {
+          "case_id": "val_shipping_delay_103",
+          "baseline_score": 1.0,
+          "candidate_score": 1.0,
+          "baseline_passed": true,
+          "candidate_passed": true,
+          "delta": 0.0,
+          "change_type": "unchanged",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+          "root_cause": "",
+          "reasons": []
+        }
+      ],
+      "gate": {
+        "candidate_id": "candidate_noop",
+        "accepted": false,
+        "reasons": [
+          "validation score did not improve over baseline",
+          "required metric(s) missing or failing: route_tool_args_score"
+        ],
+        "new_hard_fail_ids": [],
+        "critical_regression_ids": [],
+        "missing_case_ids": [],
+        "unexpected_case_ids": [],
+        "validation_delta": 0.0
+      },
+      "failure_attribution": {
+        "coverage": 1.0,
+        "taxonomy_counts": {
+          "final_response_mismatch": 1,
+          "tool_call_error": 0,
+          "parameter_error": 0,
+          "rubric_failed": 0,
+          "knowledge_gap": 0,
+          "format_error": 0,
+          "runtime_error": 0,
+          "metric_failed": 0
+        },
+        "cases": [
+          {
+            "case_id": "val_refund_window_101",
+            "root_cause": "final_response_mismatch",
+            "score": 0.0,
+            "reasons": [
+              "actual route 'faq' did not match expected route 'refund'"
+            ]
+          }
+        ]
+      },
+      "artifacts": {
+        "prompt_dir": "runs/sample/prompts/candidate_noop",
+        "prompt_patch": "runs/sample/prompts/candidate_noop/prompt_patch.diff"
+      }
+    },
+    {
+      "id": "candidate_overfit",
+      "audit": {
+        "seed": 7,
+        "duration_seconds": 0.0,
+        "cost": {
+          "currency": "USD",
+          "estimated": 0.0,
+          "known": true
+        },
+        "config_path": "examples/optimization/eval_optimize_loop/optimizer.json",
+        "config_sha256": "9df0a82039d6de55660169bf6061572da99b647f0141cdfcd5c6f0b4cd448d98"
+      },
+      "prompt_patch_summary": "Overfits to emotional wording and sends angry logistics questions to manual escalation.",
+      "prompt_artifacts": [
+        {
+          "name": "system_prompt",
+          "source_path": "examples/optimization/eval_optimize_loop/agent/prompts/system.md",
+          "candidate_path": "runs/sample/prompts/candidate_overfit/system_prompt.md",
+          "sha256": "ac2208517d00b42bccfc2336108753e0e3c0ea238345c6b851896b09a4819ab3",
+          "source_written": false,
+          "summary": "Overfits to emotional wording and sends angry logistics questions to manual escalation.",
+          "diff": "unchanged",
+          "content": "You are a support-routing agent.\n\nReturn only one compact JSON object. Do not include markdown fences or extra text.\nThe JSON shape is:\n\n{\"route\":\"\",\"tool\":{\"name\":\"\",\"arguments\":{}},\"reason\":\"\"}\n\nKeep the reason short and do not promise refunds, credits, or manual handling\nunless the route rules require it.\n"
+        },
+        {
+          "name": "router_prompt",
+          "source_path": "examples/optimization/eval_optimize_loop/agent/prompts/router.md",
+          "candidate_path": "runs/sample/prompts/candidate_overfit/router_prompt.md",
+          "sha256": "efccbd30ad31da466bba7f40a9fd3293cc851f2a3b9908e41e5e9a28a54076b1",
+          "source_written": false,
+          "summary": "Overfits to emotional wording and sends angry logistics questions to manual escalation.",
+          "diff": "--- source/router_prompt.md\n+++ candidate/router_prompt.md\n@@ -18,3 +18,5 @@\n 4. When the request is ambiguous, choose faq and explain that it can be handled as a policy or information question.\n \n Keep tool.arguments as an empty object for this example. Do not include Markdown, comments, or extra keys.\n+\n+Offline candidate patch (candidate_overfit): Overfits to emotional wording and sends angry logistics questions to manual escalation.\n",
+          "content": "You route customer-support requests to one backend action.\n\nOutput exactly one JSON object with this shape:\n\n{\"route\":\"<refund|manual_escalation|faq>\",\"tool\":{\"name\":\"<tool name>\",\"arguments\":{}},\"reason\":\"<brief reason>\"}\n\nAllowed routes and tools:\n\n- refund -> create_refund_ticket\n- manual_escalation -> create_escalation_case\n- faq -> none\n\nRouting policy:\n\n1. Use refund when the user asks for refund handling for a broken, missing, or unusable delivered item.\n2. Use manual_escalation when the user explicitly requests a human agent for an account-access, safety, legal, or threat-of-reporting issue.\n3. Use faq for policy, shipping-status, coupon, address-change, and informational questions that do not require opening a backend case.\n4. When the request is ambiguous, choose faq and explain that it can be handled as a policy or information question.\n\nKeep tool.arguments as an empty object for this example. Do not include Markdown, comments, or extra keys.\n\nOffline candidate patch (candidate_overfit): Overfits to emotional wording and sends angry logistics questions to manual escalation.\n"
+        }
+      ],
+      "train": {
+        "eval_set_id": "support_router_train",
+        "score": 1.0,
+        "pass_rate": 1.0,
+        "metrics": {
+          "route_tool_args_score": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          },
+          "llm_rubric_response": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          }
+        },
+        "case_results": [
+          {
+            "case_id": "train_refund_001",
+            "tags": [
+              "refund",
+              "train"
+            ],
+            "user": "The headphones arrived broken yesterday. I want a refund.",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "train-1",
+              "actual_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          },
+          {
+            "case_id": "train_manual_002",
+            "tags": [
+              "manual",
+              "train"
+            ],
+            "user": "My account is locked and I am going to report this unless a person helps me now.",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "expected_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+            "key_trace": {
+              "invocation_id": "train-2",
+              "actual_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+              "expected_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          },
+          {
+            "case_id": "train_faq_003",
+            "tags": [
+              "faq",
+              "train"
+            ],
+            "user": "Can an expired coupon be reissued?",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "train-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          }
+        ],
+        "failed_case_ids": [],
+        "source": "AgentEvaluator"
+      },
+      "optimizer_dev": {
+        "eval_set_id": "support_router_optimizer_dev",
+        "score": 1.0,
+        "pass_rate": 1.0,
+        "metrics": {
+          "route_tool_args_score": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          },
+          "llm_rubric_response": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          }
+        },
+        "case_results": [
+          {
+            "case_id": "dev_return_201",
+            "tags": [
+              "refund",
+              "optimizer_dev"
+            ],
+            "user": "A coffee maker delivered this morning leaks water. Please return it for a refund.",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Leaking new appliance with an explicit return request needs refund handling.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Leaking new appliance with an explicit return request needs refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-1",
+              "actual_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Leaking new appliance with an explicit return request needs refund handling.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Leaking new appliance with an explicit return request needs refund handling.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          },
+          {
+            "case_id": "dev_access_202",
+            "tags": [
+              "manual",
+              "optimizer_dev"
+            ],
+            "user": "Two-factor codes never arrive and I need a support specialist to restore access.",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Failed two-factor delivery with a specialist request needs a human case.\"}",
+            "expected_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Failed two-factor delivery with a specialist request needs a human case.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-2",
+              "actual_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Failed two-factor delivery with a specialist request needs a human case.\"}",
+              "expected_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Failed two-factor delivery with a specialist request needs a human case.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          },
+          {
+            "case_id": "dev_warranty_203",
+            "tags": [
+              "faq",
+              "optimizer_dev"
+            ],
+            "user": "How long is the warranty on a replacement charger?",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "optimizer-dev-3",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          }
+        ],
+        "failed_case_ids": [],
+        "source": "AgentEvaluator"
+      },
+      "final_validation": {
+        "eval_set_id": "support_router_val",
+        "score": 0.333333,
+        "pass_rate": 0.333333,
+        "metrics": {
+          "route_tool_args_score": {
+            "score": 0.333333,
+            "threshold": 1.0,
+            "passed": false,
+            "status": "failed"
+          },
+          "llm_rubric_response": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          }
+        },
+        "case_results": [
+          {
+            "case_id": "val_refund_window_101",
+            "tags": [
+              "refund",
+              "validation"
+            ],
+            "user": "The blender arrived missing parts and I need a refund even though it has been 10 days.",
+            "score": 0.0,
+            "passed": false,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 0.0,
+                "threshold": 1.0,
+                "status": "failed",
+                "passed": false,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "val-1",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "error_message": null
+            },
+            "root_cause": "final_response_mismatch",
+            "reasons": [
+              "actual route 'faq' did not match expected route 'refund'"
+            ]
+          },
+          {
+            "case_id": "val_address_change_102",
+            "tags": [
+              "faq",
+              "validation"
+            ],
+            "user": "Can I change the delivery address for an order that has not shipped?",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-2",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          },
+          {
+            "case_id": "val_shipping_delay_103",
+            "tags": [
+              "faq",
+              "validation",
+              "critical"
+            ],
+            "user": "I am angry that shipping is late, but I only want to know the delivery policy.",
+            "score": 0.0,
+            "passed": false,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 0.0,
+                "threshold": 1.0,
+                "status": "failed",
+                "passed": false,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Angry language should be escalated to a person.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-3",
+              "actual_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Angry language should be escalated to a person.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "final_response_mismatch",
+            "reasons": [
+              "actual route 'manual_escalation' did not match expected route 'faq'"
+            ]
+          }
+        ],
+        "failed_case_ids": [
+          "val_refund_window_101",
+          "val_shipping_delay_103"
+        ],
+        "source": "AgentEvaluator"
+      },
+      "validation": {
+        "eval_set_id": "support_router_val",
+        "score": 0.333333,
+        "pass_rate": 0.333333,
+        "metrics": {
+          "route_tool_args_score": {
+            "score": 0.333333,
+            "threshold": 1.0,
+            "passed": false,
+            "status": "failed"
+          },
+          "llm_rubric_response": {
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "status": "passed"
+          }
+        },
+        "case_results": [
+          {
+            "case_id": "val_refund_window_101",
+            "tags": [
+              "refund",
+              "validation"
+            ],
+            "user": "The blender arrived missing parts and I need a refund even though it has been 10 days.",
+            "score": 0.0,
+            "passed": false,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 0.0,
+                "threshold": 1.0,
+                "status": "failed",
+                "passed": false,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+            "key_trace": {
+              "invocation_id": "val-1",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+              "error_message": null
+            },
+            "root_cause": "final_response_mismatch",
+            "reasons": [
+              "actual route 'faq' did not match expected route 'refund'"
+            ]
+          },
+          {
+            "case_id": "val_address_change_102",
+            "tags": [
+              "faq",
+              "validation"
+            ],
+            "user": "Can I change the delivery address for an order that has not shipped?",
+            "score": 1.0,
+            "passed": true,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-2",
+              "actual_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "",
+            "reasons": []
+          },
+          {
+            "case_id": "val_shipping_delay_103",
+            "tags": [
+              "faq",
+              "validation",
+              "critical"
+            ],
+            "user": "I am angry that shipping is late, but I only want to know the delivery policy.",
+            "score": 0.0,
+            "passed": false,
+            "metrics": {
+              "route_tool_args_score": {
+                "score": 0.0,
+                "threshold": 1.0,
+                "status": "failed",
+                "passed": false,
+                "reason": null
+              },
+              "llm_rubric_response": {
+                "score": 1.0,
+                "threshold": 1.0,
+                "status": "passed",
+                "passed": true,
+                "reason": "offline rubric passed"
+              }
+            },
+            "actual_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Angry language should be escalated to a person.\"}",
+            "expected_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+            "key_trace": {
+              "invocation_id": "val-3",
+              "actual_final_response": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Angry language should be escalated to a person.\"}",
+              "expected_final_response": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+              "error_message": null
+            },
+            "root_cause": "final_response_mismatch",
+            "reasons": [
+              "actual route 'manual_escalation' did not match expected route 'faq'"
+            ]
+          }
+        ],
+        "failed_case_ids": [
+          "val_refund_window_101",
+          "val_shipping_delay_103"
+        ],
+        "source": "AgentEvaluator"
+      },
+      "delta": {
+        "train_score": 0.666667,
+        "optimizer_dev_score": 0.666667,
+        "validation_score": -0.333334
+      },
+      "case_deltas": [
+        {
+          "case_id": "val_address_change_102",
+          "baseline_score": 1.0,
+          "candidate_score": 1.0,
+          "baseline_passed": true,
+          "candidate_passed": true,
+          "delta": 0.0,
+          "change_type": "unchanged",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+          "root_cause": "",
+          "reasons": []
+        },
+        {
+          "case_id": "val_refund_window_101",
+          "baseline_score": 0.0,
+          "candidate_score": 0.0,
+          "baseline_passed": false,
+          "candidate_passed": false,
+          "delta": 0.0,
+          "change_type": "unchanged",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+          "root_cause": "final_response_mismatch",
+          "reasons": [
+            "actual route 'faq' did not match expected route 'refund'"
+          ]
+        },
+        {
+          "case_id": "val_shipping_delay_103",
+          "baseline_score": 1.0,
+          "candidate_score": 0.0,
+          "baseline_passed": true,
+          "candidate_passed": false,
+          "delta": -1.0,
+          "change_type": "new_fail",
+          "baseline_actual_text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}",
+          "candidate_actual_text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Angry language should be escalated to a person.\"}",
+          "root_cause": "final_response_mismatch",
+          "reasons": [
+            "actual route 'manual_escalation' did not match expected route 'faq'"
+          ]
+        }
+      ],
+      "gate": {
+        "candidate_id": "candidate_overfit",
+        "accepted": false,
+        "reasons": [
+          "validation score did not improve over baseline",
+          "candidate introduced hard fail(s): val_shipping_delay_103",
+          "candidate regressed critical case(s): val_shipping_delay_103",
+          "required metric(s) missing or failing: route_tool_args_score"
+        ],
+        "new_hard_fail_ids": [
+          "val_shipping_delay_103"
+        ],
+        "critical_regression_ids": [
+          "val_shipping_delay_103"
+        ],
+        "missing_case_ids": [],
+        "unexpected_case_ids": [],
+        "validation_delta": -0.333334
+      },
+      "failure_attribution": {
+        "coverage": 1.0,
+        "taxonomy_counts": {
+          "final_response_mismatch": 2,
+          "tool_call_error": 0,
+          "parameter_error": 0,
+          "rubric_failed": 0,
+          "knowledge_gap": 0,
+          "format_error": 0,
+          "runtime_error": 0,
+          "metric_failed": 0
+        },
+        "cases": [
+          {
+            "case_id": "val_refund_window_101",
+            "root_cause": "final_response_mismatch",
+            "score": 0.0,
+            "reasons": [
+              "actual route 'faq' did not match expected route 'refund'"
+            ]
+          },
+          {
+            "case_id": "val_shipping_delay_103",
+            "root_cause": "final_response_mismatch",
+            "score": 0.0,
+            "reasons": [
+              "actual route 'manual_escalation' did not match expected route 'faq'"
+            ]
+          }
+        ]
+      },
+      "artifacts": {
+        "prompt_dir": "runs/sample/prompts/candidate_overfit",
+        "prompt_patch": "runs/sample/prompts/candidate_overfit/prompt_patch.diff"
+      }
+    }
+  ],
+  "delta": {
+    "train_score": 0.666667,
+    "optimizer_dev_score": 0.666667,
+    "validation_score": 0.333333
+  },
+  "gate_decision": {
+    "accepted": true,
+    "winner": "candidate_local_patch",
+    "reasons": [
+      "validation improved and all configured gates passed"
+    ]
+  },
+  "failure_attribution": {
+    "coverage": 1.0,
+    "taxonomy_counts": {
+      "final_response_mismatch": 1,
+      "tool_call_error": 0,
+      "parameter_error": 0,
+      "rubric_failed": 0,
+      "knowledge_gap": 0,
+      "format_error": 0,
+      "runtime_error": 0,
+      "metric_failed": 0
+    },
+    "cases": [
+      {
+        "case_id": "val_refund_window_101",
+        "root_cause": "final_response_mismatch",
+        "score": 0.0,
+        "reasons": [
+          "actual route 'faq' did not match expected route 'refund'"
+        ]
+      }
+    ]
+  },
+  "cost": {
+    "currency": "USD",
+    "estimated_total": 0.0,
+    "cost_source": "deterministic_offline",
+    "unknown_cost_reason": null,
+    "model_calls": 0,
+    "token_usage": {
+      "prompt": 0,
+      "completion": 0,
+      "total": 0
+    },
+    "token_usage_known": true,
+    "unknown_token_usage_reason": null,
+    "optimizer": {
+      "estimated_cost": 0.0,
+      "model_calls": 0,
+      "candidate_evaluation_agent_calls": 0,
+      "reflection_lm_calls": 0,
+      "judge_calls_per_candidate_evaluation": 0,
+      "judge_model_calls": 0,
+      "native_judge_model_calls": 0,
+      "derived_judge_model_calls": 0,
+      "judge_model_call_source": "none",
+      "token_usage": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "token_usage_known": true,
+      "unknown_token_usage_reason": null,
+      "usage_evidence_valid": true,
+      "reflection_reported_usage": {
+        "estimated_cost": 0.0,
+        "token_usage": {
+          "prompt": 0,
+          "completion": 0,
+          "total": 0
+        },
+        "token_usage_known": true,
+        "unknown_token_usage_reason": null
+      }
+    },
+    "final_revalidation": {
+      "estimated_cost": 0.0,
+      "agent_calls_per_run": 0,
+      "agent_calls": 0,
+      "judge_calls_per_agent_call": 0,
+      "judge_model_calls": 0,
+      "model_calls": 0,
+      "token_usage": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "token_usage_known": true,
+      "unknown_token_usage_reason": null
+    }
+  },
+  "duration_seconds": 0.0,
+  "optimization_rounds": [],
+  "config_snapshot": {
+    "mode": "fake",
+    "seed": 7,
+    "gate": {
+      "min_validation_delta": 0.0,
+      "allow_new_hard_fails": false,
+      "allow_critical_regression": false,
+      "max_cost_usd": null,
+      "max_duration_seconds": 180.0,
+      "required_metrics": [
+        "route_tool_args_score",
+        "llm_rubric_response"
+      ],
+      "required_metrics_source": "optimizer_config"
+    },
+    "evaluation": {
+      "metrics": [
+        {
+          "metric_name": "route_tool_args_score",
+          "threshold": 1.0,
+          "criterion": {
+            "final_response": {
+              "json": {
+                "match": "exact"
+              }
+            }
+          }
+        },
+        {
+          "metric_name": "llm_rubric_response",
+          "threshold": 1.0,
+          "criterion": {
+            "offline_rubric": {
+              "checks": [
+                "valid_json_object",
+                "route_present",
+                "tool_object_present"
+              ]
+            }
+          }
+        }
+      ],
+      "num_runs": 1
+    },
+    "evaluation_sha256": "a2a1ec7e174d243b397ee7875d7528cb198d1c1d3fbce9dc82f8cb85e33fe166",
+    "evaluation_metrics_sha256": "a2a1ec7e174d243b397ee7875d7528cb198d1c1d3fbce9dc82f8cb85e33fe166",
+    "optimizer_config_sha256": "9df0a82039d6de55660169bf6061572da99b647f0141cdfcd5c6f0b4cd448d98",
+    "prompt_targets": {
+      "system_prompt": {
+        "source_path": "examples/optimization/eval_optimize_loop/agent/prompts/system.md",
+        "sha256": "ac2208517d00b42bccfc2336108753e0e3c0ea238345c6b851896b09a4819ab3"
+      },
+      "router_prompt": {
+        "source_path": "examples/optimization/eval_optimize_loop/agent/prompts/router.md",
+        "sha256": "1897b273cf69ace89b50e5c9ba77e135935544bd67100ecd11c78ee7fa317f10"
+      }
+    },
+    "evalsets": {
+      "train": {
+        "path": "examples/optimization/eval_optimize_loop/train.evalset.json",
+        "sha256": "a4f49908563bbea0ee1347428ee23f90c21c1fcebeda32d2905d44d8b14cf28f",
+        "case_count": 3,
+        "turn_count": 3
+      },
+      "optimizer_dev": {
+        "path": "examples/optimization/eval_optimize_loop/optimizer_dev.evalset.json",
+        "sha256": "7ee6e4824d41b4a2ce6e2ba75352dd1b3ccfecdd52a96620f458f95f810ce4fa",
+        "case_count": 3,
+        "turn_count": 3
+      },
+      "final_validation": {
+        "path": "examples/optimization/eval_optimize_loop/val.evalset.json",
+        "sha256": "d8c2cc40d15f4dc8f1d06982553a473dbca3fe20d3e38a9bce56fafcea119238",
+        "case_count": 3,
+        "turn_count": 3
+      }
+    },
+    "paths": {
+      "train_evalset": "examples/optimization/eval_optimize_loop/train.evalset.json",
+      "optimizer_dev_evalset": "examples/optimization/eval_optimize_loop/optimizer_dev.evalset.json",
+      "validation_evalset": "examples/optimization/eval_optimize_loop/val.evalset.json",
+      "final_validation_evalset": "examples/optimization/eval_optimize_loop/val.evalset.json",
+      "optimizer_config": "examples/optimization/eval_optimize_loop/optimizer.json",
+      "evaluation_metrics": "examples/optimization/eval_optimize_loop/fixtures/offline_metrics.sample.json",
+      "fixture_outputs": "examples/optimization/eval_optimize_loop/fixtures/fake_outputs.json",
+      "system_prompt": "examples/optimization/eval_optimize_loop/agent/prompts/system.md",
+      "router_prompt": "examples/optimization/eval_optimize_loop/agent/prompts/router.md"
+    }
+  },
+  "environment_snapshot": {
+    "git_commit": "sample",
+    "git_dirty": false,
+    "python_version": "3.x",
+    "sdk_version": "sample",
+    "model_name": null,
+    "base_url_host": null,
+    "seed": 7,
+    "command": "python examples/optimization/eval_optimize_loop/run_pipeline.py --mode fake --output-dir runs --run-id sample",
+    "config_path": "examples/optimization/eval_optimize_loop/optimizer.json"
+  },
+  "artifacts": {
+    "optimization_report_json": "runs/sample/optimization_report.json",
+    "optimization_report_md": "runs/sample/optimization_report.md",
+    "train_evalset": "examples/optimization/eval_optimize_loop/train.evalset.json",
+    "optimizer_dev_evalset": "examples/optimization/eval_optimize_loop/optimizer_dev.evalset.json",
+    "validation_evalset": "examples/optimization/eval_optimize_loop/val.evalset.json",
+    "final_validation_evalset": "examples/optimization/eval_optimize_loop/val.evalset.json",
+    "optimizer_config": "examples/optimization/eval_optimize_loop/optimizer.json",
+    "fixtures": "examples/optimization/eval_optimize_loop/fixtures/fake_outputs.json",
+    "eval_metrics": "examples/optimization/eval_optimize_loop/fixtures/offline_metrics.sample.json",
+    "system_prompt": "examples/optimization/eval_optimize_loop/agent/prompts/system.md",
+    "router_prompt": "examples/optimization/eval_optimize_loop/agent/prompts/router.md",
+    "baseline_train_trace_evalset": "",
+    "baseline_optimizer_dev_trace_evalset": "",
+    "baseline_validation_trace_evalset": "",
+    "baseline_prompt_dir": "runs/sample/prompts/baseline",
+    "baseline_prompt_patch": "runs/sample/prompts/baseline/prompt_patch.diff"
+  }
+}

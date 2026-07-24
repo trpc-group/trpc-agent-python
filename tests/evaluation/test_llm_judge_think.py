@@ -17,7 +17,9 @@ from trpc_agent_sdk.evaluation._llm_criterion import JudgeModelOptions
 from trpc_agent_sdk.evaluation._llm_judge import _JudgeAgent
 from trpc_agent_sdk.evaluation._llm_judge import _judge_generation_config
 from trpc_agent_sdk.evaluation._llm_judge import _merge_extra_body
+from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import HttpOptions
+from trpc_agent_sdk.types import Part
 
 
 class TestJudgeModelOptionsThinkField:
@@ -142,6 +144,132 @@ class TestJudgeGenerationConfigThink:
 
 
 class TestJudgeAgentPlanner:
+
+    @pytest.mark.asyncio
+    async def test_judge_agent_collects_final_non_thought_text(self):
+        class _FakeEvent:
+
+            def __init__(self, *, final, content):
+                self._final = final
+                self.content = content
+
+            def is_final_response(self):
+                return self._final
+
+        events = [
+            _FakeEvent(
+                final=False,
+                content=Content(parts=[Part(text="ignored non-final")]),
+            ),
+            _FakeEvent(final=True, content=None),
+            _FakeEvent(
+                final=True,
+                content=Content(parts=[
+                    Part(text="hidden reasoning", thought=True),
+                    Part(text=" first "),
+                    Part(text="second"),
+                ]),
+            ),
+        ]
+
+        class _FakeLlmAgent:
+
+            def __init__(self, **kwargs):
+                pass
+
+            def run_async(self, ctx):
+                async def _run():
+                    for event in events:
+                        yield event
+
+                return _run()
+
+        class _FakeInvocationContext:
+
+            def __init__(self, **kwargs):
+                self.run_config = kwargs["run_config"]
+
+        with patch("trpc_agent_sdk.evaluation._llm_judge.LlmAgent", _FakeLlmAgent), patch(
+                "trpc_agent_sdk.evaluation._llm_judge.InvocationContext", _FakeInvocationContext):
+            judge = _JudgeAgent(
+                model=object(),
+                config=None,
+                system_prompt="sp",
+            )
+            response = await judge.get_response("evaluate this response")
+
+        assert response == "first\nsecond"
+
+    @pytest.mark.asyncio
+    async def test_judge_agent_closes_its_agent_run(self):
+        captured = {"closed": False}
+
+        class _FakeAgentRun:
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                raise StopAsyncIteration
+
+            async def aclose(self):
+                captured["closed"] = True
+
+        agent_run = _FakeAgentRun()
+
+        class _FakeLlmAgent:
+
+            def __init__(self, **kwargs):
+                pass
+
+            def run_async(self, ctx):
+                return agent_run
+
+        class _FakeInvocationContext:
+
+            def __init__(self, **kwargs):
+                pass
+
+        with patch("trpc_agent_sdk.evaluation._llm_judge.LlmAgent", _FakeLlmAgent), patch(
+                "trpc_agent_sdk.evaluation._llm_judge.InvocationContext", _FakeInvocationContext):
+            judge = _JudgeAgent(
+                model=object(),
+                config=None,
+                system_prompt="sp",
+            )
+            await judge.get_response("evaluate this response")
+
+        assert captured["closed"] is True
+
+    @pytest.mark.asyncio
+    async def test_judge_agent_disables_model_streaming(self):
+        captured: dict[str, Any] = {}
+
+        class _FakeLlmAgent:
+
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+
+            async def run_async(self, ctx):
+                captured["run_config"] = ctx.run_config
+                if False:  # pragma: no cover - makes this an async generator
+                    yield None
+
+        class _FakeInvocationContext:
+
+            def __init__(self, **kwargs):
+                self.run_config = kwargs["run_config"]
+
+        with patch("trpc_agent_sdk.evaluation._llm_judge.LlmAgent", _FakeLlmAgent), patch(
+                "trpc_agent_sdk.evaluation._llm_judge.InvocationContext", _FakeInvocationContext):
+            judge = _JudgeAgent(
+                model=object(),
+                config=None,
+                system_prompt="sp",
+            )
+            await judge.get_response("evaluate this response")
+
+        assert captured["run_config"].streaming is False
 
     def test_judge_agent_accepts_planner_and_forwards_to_llm_agent(self):
         captured: dict[str, Any] = {}

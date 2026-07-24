@@ -290,6 +290,62 @@ class TestLegacySingleModelStillWorks:
         assert r.overall_eval_status == EvalStatus.PASSED
 
 
+class TestJudgeModelResponseFormatCapabilities:
+
+    @staticmethod
+    def _capture_judge_agent_construction(metric):
+        captured = []
+
+        class CapturingJudgeAgent:
+
+            def __init__(self, model, config, system_prompt, output_schema=None, tools=None, planner=None):
+                captured.append({
+                    "model": model,
+                    "config": config,
+                    "output_schema": output_schema,
+                })
+
+        with patch("trpc_agent_sdk.evaluation._llm_judge._JudgeAgent", CapturingJudgeAgent):
+            LLMJudge(metric)
+        return captured
+
+    @staticmethod
+    def _rubric_metric(model_name):
+        return EvalMetric(
+            metric_name="llm_rubric_response",
+            threshold=0.5,
+            criterion={
+                "llm_judge": {
+                    "judge_model": {
+                        "model_name": model_name,
+                    },
+                },
+            },
+        )
+
+    def test_deepseek_judge_uses_json_mode_without_native_schema(self):
+        from trpc_agent_sdk.models.openai_adapter import _deepseek
+
+        captured = self._capture_judge_agent_construction(self._rubric_metric("deepseek-v4-flash"))
+
+        assert len(captured) == 1
+        judge = captured[0]
+        assert judge["output_schema"] is None
+        assert judge["config"].response_mime_type == "application/json"
+        with patch.object(_deepseek.logger, "warning") as warning:
+            response_format = judge["model"]._build_response_format(judge["config"])
+        assert response_format == {"type": "json_object"}
+        warning.assert_not_called()
+
+    def test_schema_capable_judge_keeps_native_schema(self):
+        captured = self._capture_judge_agent_construction(self._rubric_metric("gpt-4o"))
+
+        assert len(captured) == 1
+        judge = captured[0]
+        assert judge["output_schema"] is not None
+        assert judge["config"].response_mime_type is None
+
+
 class TestUnknownAggregatorRaisesAtConstruction:
 
     def test_unknown_aggregator_raises(self):

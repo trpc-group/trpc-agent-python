@@ -1155,6 +1155,49 @@ class TestGenerateAsyncEdgeCases:
     """Edge case tests for _generate_async_impl via generate_async."""
 
     @pytest.mark.asyncio
+    async def test_streaming_response_is_closed_before_client(self):
+        """The OpenAI stream itself is closed before its owning client."""
+        model = _model()
+        content = Content(parts=[Part.from_text(text="hi")], role="user")
+        request = _request([content])
+        cleanup_order: list[str] = []
+
+        class ClosableStream:
+
+            def __init__(self):
+                self._yielded = False
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                if self._yielded:
+                    raise StopAsyncIteration
+                self._yielded = True
+                chunk = Mock()
+                chunk.model_dump.return_value = {"choices": [], "usage": None}
+                return chunk
+
+            async def close(self):
+                cleanup_order.append("stream")
+
+        stream = ClosableStream()
+
+        async def close_client():
+            cleanup_order.append("client")
+
+        with patch.object(model, "_create_async_client") as mock_factory:
+            mock_client = AsyncMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=stream)
+            mock_client.close = AsyncMock(side_effect=close_client)
+            mock_factory.return_value = mock_client
+
+            async for _ in model.generate_async(request, stream=True):
+                pass
+
+        assert cleanup_order == ["stream", "client"]
+
+    @pytest.mark.asyncio
     async def test_streaming_error_yields_error_response(self):
         """Streaming errors yield an error LlmResponse."""
         model = _model()

@@ -499,7 +499,8 @@ class LlmAgent(BaseAgent):
                 logger.debug("Starting LLM call for agent: %s", self.name)
 
                 # Use LlmProcessor to get unified events
-                async for event in llm_processor.call_llm_async(request, ctx, stream=True):
+                model_streaming = ctx.run_config.streaming if ctx.run_config is not None else True
+                async for event in llm_processor.call_llm_async(request, ctx, stream=model_streaming):
                     # Handle different event types by checking content and error status
                     if event.is_error():
                         # Error event - yield and stop

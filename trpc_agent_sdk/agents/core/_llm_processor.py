@@ -67,6 +67,7 @@ class LlmProcessor:
         """
         author = context.agent.name
         logger.debug("Starting LLM call for agent: %s", author)
+        buffered_events: list[Event] = []
 
         try:
             # Step 1: Validate the request
@@ -131,7 +132,10 @@ class LlmProcessor:
                         if not llm_response.partial:
                             final_llm_response = llm_response
 
-                        yield event
+                        if stream:
+                            yield event
+                        else:
+                            buffered_events.append(event)
                 except Exception as ex:
                     metrics_error_type = type(ex).__name__
                     raise
@@ -164,6 +168,10 @@ class LlmProcessor:
         except Exception as ex:  # pylint: disable=broad-except
             logger.error("LLM call failed for agent %s: %s", author, ex)
             yield self._create_error_event(context, "llm_call_error", f"LLM call failed: {str(ex)}")
+        else:
+            if not stream:
+                for event in buffered_events:
+                    yield event
 
         logger.debug("LLM call completed for agent: %s", author)
 

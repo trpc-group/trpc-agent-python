@@ -1,0 +1,109 @@
+{
+  "eval_set_id": "support_router_train",
+  "name": "Support router train set",
+  "description": "Three train cases used by fake and online optimization. They cover successful optimization, escalation, and a no-change FAQ guardrail.",
+  "eval_cases": [
+    {
+      "eval_id": "train_refund_001",
+      "conversation": [
+        {
+          "invocation_id": "train-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "The headphones arrived broken yesterday. I want a refund."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "support_router_optimizer",
+        "user_id": "trainer",
+        "state": {
+          "tags": [
+            "refund",
+            "train"
+          ]
+        }
+      }
+    },
+    {
+      "eval_id": "train_manual_002",
+      "conversation": [
+        {
+          "invocation_id": "train-2",
+          "user_content": {
+            "parts": [
+              {
+                "text": "My account is locked and I am going to report this unless a person helps me now."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "support_router_optimizer",
+        "user_id": "trainer",
+        "state": {
+          "tags": [
+            "manual",
+            "train"
+          ]
+        }
+      }
+    },
+    {
+      "eval_id": "train_faq_003",
+      "conversation": [
+        {
+          "invocation_id": "train-3",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Can an expired coupon be reissued?"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "support_router_optimizer",
+        "user_id": "trainer",
+        "state": {
+          "tags": [
+            "faq",
+            "train"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "baseline": {
+    "prompt_patch_summary": "Baseline overuses FAQ and misses refund and account-escalation intent.",
+    "outputs": {
+      "train_refund_001": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund policy question can be answered by FAQ.\"}",
+      "train_manual_002": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Account question can be answered by FAQ.\"}",
+      "train_faq_003": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+      "dev_return_201": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Return policy can be answered by FAQ.\"}",
+      "dev_access_202": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Access policy can be answered by FAQ.\"}",
+      "dev_warranty_203": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+      "val_refund_window_101": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+      "val_address_change_102": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+      "val_shipping_delay_103": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}"
+    }
+  },
+  "candidate_local_patch": {
+    "prompt_patch_summary": "Adds local routing rules for explicit refund requests and account-escalation demands while preserving FAQ for ordinary policy questions.",
+    "outputs": {
+      "train_refund_001": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+      "train_manual_002": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+      "train_faq_003": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+      "dev_return_201": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Leaking new appliance with an explicit return request needs refund handling.\"}",
+      "dev_access_202": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Failed two-factor delivery with a specialist request needs a human case.\"}",
+      "dev_warranty_203": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+      "val_refund_window_101": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}",
+      "val_address_change_102": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+      "val_shipping_delay_103": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}"
+    }
+  },
+  "candidate_noop": {
+    "prompt_patch_summary": "Rephrases baseline guidance without changing route decisions.",
+    "outputs": {
+      "train_refund_001": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund policy question can be answered by FAQ.\"}",
+      "train_manual_002": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Account question can be answered by FAQ.\"}",
+      "train_faq_003": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+      "dev_return_201": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Return policy can be answered by FAQ.\"}",
+      "dev_access_202": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Access policy can be answered by FAQ.\"}",
+      "dev_warranty_203": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+      "val_refund_window_101": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+      "val_address_change_102": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+      "val_shipping_delay_103": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}"
+    }
+  },
+  "candidate_overfit": {
+    "prompt_patch_summary": "Overfits to emotional wording and sends angry logistics questions to manual escalation.",
+    "outputs": {
+      "train_refund_001": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Broken delivered item needs refund handling.\"}",
+      "train_manual_002": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Account lock with escalation demand needs a human case.\"}",
+      "train_faq_003": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Coupon policy question can be answered by FAQ.\"}",
+      "dev_return_201": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Leaking new appliance with an explicit return request needs refund handling.\"}",
+      "dev_access_202": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Failed two-factor delivery with a specialist request needs a human case.\"}",
+      "dev_warranty_203": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Replacement charger warranty is a policy question for FAQ.\"}",
+      "val_refund_window_101": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Refund window policy question can be answered by FAQ.\"}",
+      "val_address_change_102": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}",
+      "val_shipping_delay_103": "{\"route\":\"manual_escalation\",\"tool\":{\"name\":\"create_escalation_case\",\"arguments\":{}},\"reason\":\"Angry language should be escalated to a person.\"}"
+    }
+  }
+}

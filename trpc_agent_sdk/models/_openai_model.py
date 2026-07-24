@@ -11,6 +11,7 @@ responses, tool calls, and various OpenAI-specific features.
 """
 
 import base64
+import inspect
 import json
 import uuid
 from enum import Enum
@@ -204,6 +205,10 @@ class OpenAIModel(LLMModel):
     def _refresh_adapter(self) -> None:
         """Refresh provider adapter after model or endpoint changes."""
         self._adapter = get_openai_adapter(self._model_name, self._base_url)
+
+    def supports_response_schema(self) -> bool:
+        """Return whether the selected provider supports native response schemas."""
+        return self._adapter.supports_response_schema()
 
     def is_retriable_status_code(self, status_code: int) -> Optional[bool]:
         return status_code in {408, 409, 429} or status_code >= 500
@@ -1570,6 +1575,7 @@ class OpenAIModel(LLMModel):
         api_params[ApiParamsKey.STREAM_OPTS] = {ApiParamsKey.INCLUDE_USAGE: True}
 
         client = self._create_async_client()
+        response: Any = None
         logger.debug("openai invoke with params: %s", api_params)
         try:
             response = await client.chat.completions.create(**api_params, **http_options)
@@ -1781,4 +1787,13 @@ class OpenAIModel(LLMModel):
                 custom_metadata={"stream_complete": True},
             )
         finally:
-            await self._http_client_provider.close_http_client(client)
+            try:
+                close_stream = getattr(response, "close", None)
+                if not callable(close_stream):
+                    close_stream = getattr(response, "aclose", None)
+                if callable(close_stream):
+                    close_result = close_stream()
+                    if inspect.isawaitable(close_result):
+                        await close_result
+            finally:
+                await self._http_client_provider.close_http_client(client)

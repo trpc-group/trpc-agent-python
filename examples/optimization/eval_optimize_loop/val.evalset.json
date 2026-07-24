@@ -1,0 +1,110 @@
+{
+  "eval_set_id": "support_router_val",
+  "name": "Support router validation set",
+  "description": "Three held-out validation cases. The shipping-delay case is critical because over-routing angry but ordinary logistics questions to manual support is a regression.",
+  "eval_cases": [
+    {
+      "eval_id": "val_refund_window_101",
+      "conversation": [
+        {
+          "invocation_id": "val-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "The blender arrived missing parts and I need a refund even though it has been 10 days."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"route\":\"refund\",\"tool\":{\"name\":\"create_refund_ticket\",\"arguments\":{}},\"reason\":\"Missing parts with refund request should open refund handling.\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "support_router_optimizer",
+        "user_id": "validator",
+        "state": {
+          "tags": [
+            "refund",
+            "validation"
+          ]
+        }
+      }
+    },
+    {
+      "eval_id": "val_address_change_102",
+      "conversation": [
+        {
+          "invocation_id": "val-2",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Can I change the delivery address for an order that has not shipped?"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Address-change policy question can be answered by FAQ.\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "support_router_optimizer",
+        "user_id": "validator",
+        "state": {
+          "tags": [
+            "faq",
+            "validation"
+          ]
+        }
+      }
+    },
+    {
+      "eval_id": "val_shipping_delay_103",
+      "conversation": [
+        {
+          "invocation_id": "val-3",
+          "user_content": {
+            "parts": [
+              {
+                "text": "I am angry that shipping is late, but I only want to know the delivery policy."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"route\":\"faq\",\"tool\":{\"name\":\"none\",\"arguments\":{}},\"reason\":\"Angry wording with a policy question should stay in FAQ.\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "support_router_optimizer",
+        "user_id": "validator",
+        "state": {
+          "tags": [
+            "faq",
+            "validation",
+            "critical"
+          ]
+        }
+      }
+    }
+  ]
+}

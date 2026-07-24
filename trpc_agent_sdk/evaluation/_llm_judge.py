@@ -22,6 +22,7 @@ from pydantic import BaseModel as PydanticBaseModel
 from pydantic import field_validator
 
 from trpc_agent_sdk.agents import LlmAgent
+from trpc_agent_sdk.configs import RunConfig
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.context import create_agent_context
 from trpc_agent_sdk.context import new_invocation_context_id
@@ -34,6 +35,7 @@ from trpc_agent_sdk.types import GenerateContentConfig
 from trpc_agent_sdk.types import HttpOptions
 from trpc_agent_sdk.types import Part
 from trpc_agent_sdk.types import ThinkingConfig
+from trpc_agent_sdk.utils import AsyncClosingContextManager
 
 from ._eval_case import IntermediateData
 from ._eval_case import Invocation
@@ -885,6 +887,14 @@ def _rubric_system(prompt: str) -> str:
     return prompt.split("# Your Turn")[0].strip() + "\n\n## Output"
 
 
+def _model_supports_response_schema(model: Any) -> bool:
+    """Return model schema capability, preserving native behavior for unknown models."""
+    supports_response_schema = getattr(model, "supports_response_schema", None)
+    if not callable(supports_response_schema):
+        return True
+    return bool(supports_response_schema())
+
+
 def _expand_env(s: str) -> str:
     """Expand environment variables in a string (e.g. $VAR or ${VAR})."""
     if not s or not isinstance(s, str):
@@ -1077,16 +1087,19 @@ class _JudgeAgent:
             agent_context=agent_context,
             user_content=user_content,
             override_messages=[user_content],
+            run_config=RunConfig(streaming=False),
         )
         last_text = ""
-        async for event in self._agent.run_async(ctx):
-            if not event.is_final_response():
-                continue
-            if not event.content or not event.content.parts:
-                continue
-            part_text = "\n".join((p.text or "").strip() for p in event.content.parts if p.thought is not True).strip()
-            if part_text:
-                last_text += part_text
+        async with AsyncClosingContextManager(self._agent.run_async(ctx)) as agent_run:
+            async for event in agent_run:
+                if not event.is_final_response():
+                    continue
+                if not event.content or not event.content.parts:
+                    continue
+                part_text = "\n".join(
+                    (p.text or "").strip() for p in event.content.parts if p.thought is not True).strip()
+                if part_text:
+                    last_text += part_text
         return last_text.strip()
 
 
@@ -1198,12 +1211,16 @@ class LLMJudge:
             model = _create_judge_model(opts)
             cfg, effective_tc = _judge_generation_config(opts.generation_config, opts.think)
             planner = (BuiltInPlanner(thinking_config=effective_tc) if effective_tc is not None else None)
+            effective_output_schema = output_schema
+            if not _model_supports_response_schema(model):
+                cfg.response_mime_type = "application/json"
+                effective_output_schema = None
             self._judge_agents.append(
                 _JudgeAgent(
                     model,
                     cfg,
                     system_prompt,
-                    output_schema=output_schema,
+                    output_schema=effective_output_schema,
                     tools=judge_tools,
                     planner=planner,
                 ))
