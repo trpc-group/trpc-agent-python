@@ -26,8 +26,11 @@ from typing import Optional
 # or crash the interpreter — making the entire trpc_agent_sdk package unusable.
 # Instead, we lazily import it inside detect_content_type() on first use.
 # See: https://github.com/trpc-group/trpc-agent-python/issues/230
+import threading as _threading
+
 _magic_module = None  # cached after first successful import on non-win32
 _magic_checked = False
+_magic_lock = _threading.Lock()
 
 
 def _has_magic() -> bool:
@@ -265,14 +268,15 @@ def detect_content_type(filename: Path, data: bytes) -> str:
     # simple content-based detection below.
     global _magic_module, _magic_checked, HAS_MAGIC
     if sys.platform != 'win32' and not _magic_checked:
-        try:
-            import magic as _m
-            _magic_module = _m
-            HAS_MAGIC = True
-            _magic_checked = True
-        except Exception:
-            logger.debug("python-magic import failed; falling back to byte-signature detection", exc_info=True)
-            _magic_checked = True  # cache failure to avoid retrying every call
+        with _magic_lock:
+            if not _magic_checked:
+                try:
+                    import magic as _m
+                    _magic_module = _m
+                    HAS_MAGIC = True
+                except Exception:
+                    logger.debug("python-magic import failed; falling back to byte-signature detection", exc_info=True)
+                _magic_checked = True  # cache result (success or failure)
     if _magic_module is not None:
         try:
             return _magic_module.from_buffer(data, mime=True)
