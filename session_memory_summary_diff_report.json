@@ -1,0 +1,672 @@
+[
+  {
+    "backend_summaries": {
+      "in_memory": {
+        "conversation_count": 0,
+        "event_count": 2,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-single-turn",
+        "state_key_count": 1,
+        "summary_session_id": null,
+        "summary_version": null
+      },
+      "redis": {
+        "conversation_count": 0,
+        "event_count": 2,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-single-turn",
+        "state_key_count": 1,
+        "summary_session_id": null,
+        "summary_version": null
+      },
+      "sqlite": {
+        "conversation_count": 0,
+        "event_count": 2,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-single-turn",
+        "state_key_count": 1,
+        "summary_session_id": null,
+        "summary_version": null
+      }
+    },
+    "backends": [
+      "in_memory",
+      "sqlite",
+      "redis"
+    ],
+    "case_id": "single_turn_text",
+    "comparisons": [
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "sqlite"
+      },
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "redis"
+      }
+    ],
+    "description": "Single user message followed by a single agent text response.",
+    "session_id": "replay-single-turn",
+    "summary": {
+      "critical_diffs": 0,
+      "passed": true,
+      "total_diffs": 0,
+      "unallowed_diffs": 0
+    }
+  },
+  {
+    "backend_summaries": {
+      "in_memory": {
+        "conversation_count": 0,
+        "event_count": 4,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-multi-turn",
+        "state_key_count": 1,
+        "summary_session_id": null,
+        "summary_version": null
+      },
+      "redis": {
+        "conversation_count": 0,
+        "event_count": 4,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-multi-turn",
+        "state_key_count": 1,
+        "summary_session_id": null,
+        "summary_version": null
+      },
+      "sqlite": {
+        "conversation_count": 0,
+        "event_count": 4,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-multi-turn",
+        "state_key_count": 1,
+        "summary_session_id": null,
+        "summary_version": null
+      }
+    },
+    "backends": [
+      "in_memory",
+      "sqlite",
+      "redis"
+    ],
+    "case_id": "multi_turn_text",
+    "comparisons": [
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "sqlite"
+      },
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "redis"
+      }
+    ],
+    "description": "Multiple user and agent text events appended in order.",
+    "session_id": "replay-multi-turn",
+    "summary": {
+      "critical_diffs": 0,
+      "passed": true,
+      "total_diffs": 0,
+      "unallowed_diffs": 0
+    }
+  },
+  {
+    "backend_summaries": {
+      "in_memory": {
+        "conversation_count": 0,
+        "event_count": 2,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-state-overwrite",
+        "state_key_count": 4,
+        "summary_session_id": null,
+        "summary_version": null
+      },
+      "redis": {
+        "conversation_count": 0,
+        "event_count": 2,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-state-overwrite",
+        "state_key_count": 4,
+        "summary_session_id": null,
+        "summary_version": null
+      },
+      "sqlite": {
+        "conversation_count": 0,
+        "event_count": 2,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-state-overwrite",
+        "state_key_count": 4,
+        "summary_session_id": null,
+        "summary_version": null
+      }
+    },
+    "backends": [
+      "in_memory",
+      "sqlite",
+      "redis"
+    ],
+    "case_id": "state_update_overwrite",
+    "comparisons": [
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "sqlite"
+      },
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "redis"
+      }
+    ],
+    "description": "Session state receives repeated writes and last-write-wins overwrites.",
+    "session_id": "replay-state-overwrite",
+    "summary": {
+      "critical_diffs": 0,
+      "passed": true,
+      "total_diffs": 0,
+      "unallowed_diffs": 0
+    }
+  },
+  {
+    "backend_summaries": {
+      "in_memory": {
+        "conversation_count": 0,
+        "event_count": 1,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-scoped-state",
+        "state_key_count": 3,
+        "summary_session_id": null,
+        "summary_version": null
+      },
+      "redis": {
+        "conversation_count": 0,
+        "event_count": 1,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-scoped-state",
+        "state_key_count": 3,
+        "summary_session_id": null,
+        "summary_version": null
+      },
+      "sqlite": {
+        "conversation_count": 0,
+        "event_count": 1,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-scoped-state",
+        "state_key_count": 3,
+        "summary_session_id": null,
+        "summary_version": null
+      }
+    },
+    "backends": [
+      "in_memory",
+      "sqlite",
+      "redis"
+    ],
+    "case_id": "scoped_state_update",
+    "comparisons": [
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "sqlite"
+      },
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "redis"
+      }
+    ],
+    "description": "Session, user, and app scoped state are written and merged back into the session view.",
+    "session_id": "replay-scoped-state",
+    "summary": {
+      "critical_diffs": 0,
+      "passed": true,
+      "total_diffs": 0,
+      "unallowed_diffs": 0
+    }
+  },
+  {
+    "backend_summaries": {
+      "in_memory": {
+        "conversation_count": 0,
+        "event_count": 4,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-tool-call",
+        "state_key_count": 1,
+        "summary_session_id": null,
+        "summary_version": null
+      },
+      "redis": {
+        "conversation_count": 0,
+        "event_count": 4,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-tool-call",
+        "state_key_count": 1,
+        "summary_session_id": null,
+        "summary_version": null
+      },
+      "sqlite": {
+        "conversation_count": 0,
+        "event_count": 4,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-tool-call",
+        "state_key_count": 1,
+        "summary_session_id": null,
+        "summary_version": null
+      }
+    },
+    "backends": [
+      "in_memory",
+      "sqlite",
+      "redis"
+    ],
+    "case_id": "tool_call_conversation",
+    "comparisons": [
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "sqlite"
+      },
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "redis"
+      }
+    ],
+    "description": "Conversation includes a function_call event and matching function_response event.",
+    "session_id": "replay-tool-call",
+    "summary": {
+      "critical_diffs": 0,
+      "passed": true,
+      "total_diffs": 0,
+      "unallowed_diffs": 0
+    }
+  },
+  {
+    "backend_summaries": {
+      "in_memory": {
+        "conversation_count": 0,
+        "event_count": 2,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 1,
+        "session_id": "replay-memory",
+        "state_key_count": 1,
+        "summary_session_id": null,
+        "summary_version": null
+      },
+      "redis": {
+        "conversation_count": 0,
+        "event_count": 2,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 1,
+        "session_id": "replay-memory",
+        "state_key_count": 1,
+        "summary_session_id": null,
+        "summary_version": null
+      },
+      "sqlite": {
+        "conversation_count": 0,
+        "event_count": 2,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 1,
+        "session_id": "replay-memory",
+        "state_key_count": 1,
+        "summary_session_id": null,
+        "summary_version": null
+      }
+    },
+    "backends": [
+      "in_memory",
+      "sqlite",
+      "redis"
+    ],
+    "case_id": "memory_store_and_search",
+    "comparisons": [
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "sqlite"
+      },
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "redis"
+      }
+    ],
+    "description": "Session is stored to memory and queried for a user preference.",
+    "session_id": "replay-memory",
+    "summary": {
+      "critical_diffs": 0,
+      "passed": true,
+      "total_diffs": 0,
+      "unallowed_diffs": 0
+    }
+  },
+  {
+    "backend_summaries": {
+      "in_memory": {
+        "conversation_count": 0,
+        "event_count": 3,
+        "has_summary": true,
+        "historical_event_count": 34,
+        "memory_query_count": 0,
+        "session_id": "replay-summary-long",
+        "state_key_count": 1,
+        "summary_session_id": "replay-summary-long",
+        "summary_version": 1
+      },
+      "redis": {
+        "conversation_count": 0,
+        "event_count": 3,
+        "has_summary": true,
+        "historical_event_count": 34,
+        "memory_query_count": 0,
+        "session_id": "replay-summary-long",
+        "state_key_count": 1,
+        "summary_session_id": "replay-summary-long",
+        "summary_version": 1
+      },
+      "sqlite": {
+        "conversation_count": 0,
+        "event_count": 3,
+        "has_summary": true,
+        "historical_event_count": 34,
+        "memory_query_count": 0,
+        "session_id": "replay-summary-long",
+        "state_key_count": 1,
+        "summary_session_id": "replay-summary-long",
+        "summary_version": 1
+      }
+    },
+    "backends": [
+      "in_memory",
+      "sqlite",
+      "redis"
+    ],
+    "case_id": "summary_long_conversation",
+    "comparisons": [
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "sqlite"
+      },
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "redis"
+      }
+    ],
+    "description": "A long conversation over thirty messages is compressed into a summary.",
+    "session_id": "replay-summary-long",
+    "summary": {
+      "critical_diffs": 0,
+      "passed": true,
+      "total_diffs": 0,
+      "unallowed_diffs": 0
+    }
+  },
+  {
+    "backend_summaries": {
+      "in_memory": {
+        "conversation_count": 0,
+        "event_count": 2,
+        "has_summary": true,
+        "historical_event_count": 5,
+        "memory_query_count": 0,
+        "session_id": "replay-summary-update",
+        "state_key_count": 1,
+        "summary_session_id": "replay-summary-update",
+        "summary_version": 2
+      },
+      "redis": {
+        "conversation_count": 0,
+        "event_count": 2,
+        "has_summary": true,
+        "historical_event_count": 5,
+        "memory_query_count": 0,
+        "session_id": "replay-summary-update",
+        "state_key_count": 1,
+        "summary_session_id": "replay-summary-update",
+        "summary_version": 2
+      },
+      "sqlite": {
+        "conversation_count": 0,
+        "event_count": 2,
+        "has_summary": true,
+        "historical_event_count": 5,
+        "memory_query_count": 0,
+        "session_id": "replay-summary-update",
+        "state_key_count": 1,
+        "summary_session_id": "replay-summary-update",
+        "summary_version": 2
+      }
+    },
+    "backends": [
+      "in_memory",
+      "sqlite",
+      "redis"
+    ],
+    "case_id": "summary_generate_and_update",
+    "comparisons": [
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "sqlite"
+      },
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "redis"
+      }
+    ],
+    "description": "A generated summary is updated after new events are appended.",
+    "session_id": "replay-summary-update",
+    "summary": {
+      "critical_diffs": 0,
+      "passed": true,
+      "total_diffs": 0,
+      "unallowed_diffs": 0
+    }
+  },
+  {
+    "backend_summaries": {
+      "in_memory": {
+        "conversation_count": 0,
+        "event_count": 5,
+        "has_summary": true,
+        "historical_event_count": 2,
+        "memory_query_count": 0,
+        "session_id": "replay-summary-truncation",
+        "state_key_count": 1,
+        "summary_session_id": "replay-summary-truncation",
+        "summary_version": 1
+      },
+      "redis": {
+        "conversation_count": 0,
+        "event_count": 5,
+        "has_summary": true,
+        "historical_event_count": 2,
+        "memory_query_count": 0,
+        "session_id": "replay-summary-truncation",
+        "state_key_count": 1,
+        "summary_session_id": "replay-summary-truncation",
+        "summary_version": 1
+      },
+      "sqlite": {
+        "conversation_count": 0,
+        "event_count": 5,
+        "has_summary": true,
+        "historical_event_count": 2,
+        "memory_query_count": 0,
+        "session_id": "replay-summary-truncation",
+        "state_key_count": 1,
+        "summary_session_id": "replay-summary-truncation",
+        "summary_version": 1
+      }
+    },
+    "backends": [
+      "in_memory",
+      "sqlite",
+      "redis"
+    ],
+    "case_id": "summary_event_truncation",
+    "comparisons": [
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "sqlite"
+      },
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "redis"
+      }
+    ],
+    "description": "Summary compression keeps the summary anchor with recent post-summary events.",
+    "session_id": "replay-summary-truncation",
+    "summary": {
+      "critical_diffs": 0,
+      "passed": true,
+      "total_diffs": 0,
+      "unallowed_diffs": 0
+    }
+  },
+  {
+    "backend_summaries": {
+      "in_memory": {
+        "conversation_count": 0,
+        "event_count": 1,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-duplicate-recovery",
+        "state_key_count": 1,
+        "summary_session_id": null,
+        "summary_version": null
+      },
+      "redis": {
+        "conversation_count": 0,
+        "event_count": 1,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-duplicate-recovery",
+        "state_key_count": 1,
+        "summary_session_id": null,
+        "summary_version": null
+      },
+      "sqlite": {
+        "conversation_count": 0,
+        "event_count": 1,
+        "has_summary": false,
+        "historical_event_count": 0,
+        "memory_query_count": 0,
+        "session_id": "replay-duplicate-recovery",
+        "state_key_count": 1,
+        "summary_session_id": null,
+        "summary_version": null
+      }
+    },
+    "backends": [
+      "in_memory",
+      "sqlite",
+      "redis"
+    ],
+    "case_id": "duplicate_event_recovery",
+    "comparisons": [
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "sqlite"
+      },
+      {
+        "allowed_diffs": [],
+        "diffs": [],
+        "left_backend": "in_memory",
+        "passed": true,
+        "right_backend": "redis"
+      }
+    ],
+    "description": "Repeated persistence of the same session must not create duplicate events or dirty state.",
+    "session_id": "replay-duplicate-recovery",
+    "summary": {
+      "critical_diffs": 0,
+      "passed": true,
+      "total_diffs": 0,
+      "unallowed_diffs": 0
+    }
+  }
+]
