@@ -1,0 +1,13 @@
+diff --git a/long_task.py b/long_task.py
+index 0000000..1111111 100644
+--- a/long_task.py
++++ b/long_task.py
+@@ -1,0 +1,8 @@
++import time
++
++
++def infinite_loop():
++    """This function would timeout in sandbox."""
++    while True:
++        time.sleep(1)
++        print("still running...")

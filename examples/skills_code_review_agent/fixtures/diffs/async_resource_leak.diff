@@ -1,0 +1,21 @@
+diff --git a/worker.py b/worker.py
+index 0000000..1111111 100644
+--- a/worker.py
++++ b/worker.py
+@@ -1,0 +1,16 @@
++import asyncio
++import time
++
++
++async def process_items(items: list) -> list:
++    results = []
++    for item in items:
++        time.sleep(0.1)  # Blocks event loop
++        results.append(item * 2)
++    return results
++
++
++def read_file():
++    f = open("data.txt")
++    data = f.read()
++    return data  # f never closed

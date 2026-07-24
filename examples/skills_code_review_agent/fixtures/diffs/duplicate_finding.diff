@@ -1,0 +1,20 @@
+diff --git a/service.py b/service.py
+index 0000000..1111111 100644
+--- a/service.py
++++ b/service.py
+@@ -1,0 +1,15 @@
++import os
++
++
++def run_command_1(cmd: str) -> str:
++    return os.system(cmd)  # security issue
++
++
++def run_command_2(cmd: str) -> str:
++    return os.system(cmd)  # same security issue, different function
++
++
++def run_command_3(cmd: str) -> str:
++    # This also calls os.system on untrusted input
++    result = os.system(cmd)  # same pattern again
++    return str(result)
