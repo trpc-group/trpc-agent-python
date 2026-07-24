@@ -254,6 +254,8 @@ async def test_facade_persists_artifacts_under_output_dir(tmp_path, monkeypatch)
     """The facade must materialise result.json, summary.txt, rounds/*.json,
     baseline_prompts/, best_prompts/, config.snapshot.json and run.log under
     output_dir for every successful run."""
+    import json
+
     train = EvalSet(eval_set_id="train", eval_cases=[_eval_case("c1")])
     val = EvalSet(eval_set_id="val", eval_cases=[_eval_case("c1")])
     train_path = tmp_path / "train.json"
@@ -287,7 +289,14 @@ async def test_facade_persists_artifacts_under_output_dir(tmp_path, monkeypatch)
 
     assert (output_dir / "result.json").is_file()
     assert (output_dir / "summary.txt").is_file()
-    assert (output_dir / "config.snapshot.json").is_file()
+    config_snapshot_path = output_dir / "config.snapshot.json"
+    assert config_snapshot_path.is_file()
+    config_snapshot_text = config_snapshot_path.read_text(encoding="utf-8")
+    assert "test-key" not in config_snapshot_text
+    config_snapshot = json.loads(config_snapshot_text)
+    assert config_snapshot["optimize"]["algorithm"]["reflection_lm"][
+        "api_key"
+    ] == "<redacted>"
     assert (output_dir / "run.log").is_file()
     assert (output_dir / "baseline_prompts" / "instruction.md").is_file()
     assert (output_dir / "best_prompts" / "instruction.md").is_file()
@@ -295,6 +304,114 @@ async def test_facade_persists_artifacts_under_output_dir(tmp_path, monkeypatch)
     assert best_text == "improved"
     log_line = (output_dir / "run.log").read_text(encoding="utf-8")
     assert "SUCCEEDED" in log_line
+
+
+def test_copy_config_snapshot_recursively_redacts_common_secret_keys(tmp_path):
+    """Config snapshots must remain useful without publishing credentials."""
+    import json
+
+    payload = {
+        "api_key": "api-secret",
+        "nested": [
+            {
+                "TOKEN": "token-secret",
+                "access-token": "access-secret",
+                "Authorization": "Bearer auth-secret",
+            },
+            {
+                "password": "password-secret",
+                "credentials": {"username": "alice", "password": "nested-secret"},
+                "privateKey": "private-secret",
+            },
+            {
+                "openai_api_key": "namespaced-api-secret",
+                "github_token": "namespaced-token-secret",
+                "aws_secret_access_key": "aws-secret",
+                "db_passwd": "database-secret",
+            },
+        ],
+        "model_name": "gpt-4o",
+        "max_tokens": 128,
+        "token_budget": 256,
+    }
+    config_path = tmp_path / "optimizer.json"
+    config_path.write_text(json.dumps(payload), encoding="utf-8")
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    AgentOptimizer._copy_config_snapshot(str(config_path), str(output_dir))
+
+    snapshot_path = output_dir / "config.snapshot.json"
+    snapshot_text = snapshot_path.read_text(encoding="utf-8")
+    snapshot = json.loads(snapshot_text)
+    assert snapshot == {
+        "api_key": "<redacted>",
+        "nested": [
+            {
+                "TOKEN": "<redacted>",
+                "access-token": "<redacted>",
+                "Authorization": "<redacted>",
+            },
+            {
+                "password": "<redacted>",
+                "credentials": "<redacted>",
+                "privateKey": "<redacted>",
+            },
+            {
+                "openai_api_key": "<redacted>",
+                "github_token": "<redacted>",
+                "aws_secret_access_key": "<redacted>",
+                "db_passwd": "<redacted>",
+            },
+        ],
+        "model_name": "gpt-4o",
+        "max_tokens": 128,
+        "token_budget": 256,
+    }
+    assert snapshot_text == (
+        json.dumps(
+            snapshot,
+            ensure_ascii=False,
+            sort_keys=True,
+            indent=2,
+            allow_nan=False,
+        )
+        + "\n"
+    )
+    for secret in (
+        "api-secret",
+        "token-secret",
+        "access-secret",
+        "auth-secret",
+        "password-secret",
+        "nested-secret",
+        "private-secret",
+        "namespaced-api-secret",
+        "namespaced-token-secret",
+        "aws-secret",
+        "database-secret",
+    ):
+        assert secret not in snapshot_text
+
+
+@pytest.mark.parametrize(
+    "invalid_config",
+    [
+        '{"api_key": "secret", invalid}',
+        '{"api_key": NaN}',
+    ],
+)
+def test_copy_config_snapshot_invalid_json_fails_closed(tmp_path, invalid_config):
+    """Malformed source config must never be copied verbatim as an artifact."""
+    config_path = tmp_path / "optimizer.json"
+    config_path.write_text(invalid_config, encoding="utf-8")
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    AgentOptimizer._copy_config_snapshot(str(config_path), str(output_dir))
+
+    assert not (output_dir / "config.snapshot.json").exists()
+    assert not (output_dir / "config.snapshot.json.tmp").exists()
 
 
 @pytest.mark.asyncio

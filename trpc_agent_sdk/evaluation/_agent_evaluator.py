@@ -75,7 +75,7 @@ DEFAULT_EVAL_APP_NAME = "test_app"
 _RESULT_HANDLER = _utils.EvalResultHandler()
 
 
-class _EvaluationCasesFailed(AssertionError):
+class EvaluationCasesFailed(AssertionError):
     """Signal raised by ``_EvalExecuter._run`` when one or more eval cases fail.
 
     Subclasses :class:`AssertionError` so direct ``AgentEvaluator.evaluate``
@@ -91,6 +91,19 @@ class _EvaluationCasesFailed(AssertionError):
     ``assert`` statement also keeps the failure signal alive under
     ``python -O`` where ``assert`` is stripped.
     """
+
+
+_EvaluationCasesFailed = EvaluationCasesFailed
+
+
+def _split_eval_set_selector(eval_set_file: str) -> tuple[str, Optional[str]]:
+    """Split an optional .json:case_id suffix without consuming a drive."""
+
+    drive, tail = os.path.splitdrive(eval_set_file)
+    json_path, separator, case_id = tail.rpartition(":")
+    if not separator or not case_id or not json_path.lower().endswith(".json"):
+        return (eval_set_file, None)
+    return (drive + json_path, case_id)
 
 
 @dataclass(frozen=True)
@@ -660,14 +673,7 @@ class AgentEvaluator:
             FileNotFoundError: If file doesn't exist
             ValueError: If file format is invalid or eval case not found
         """
-        # Check if file_path contains a case selector (ADK style: "file.json:case_id")
-        selected_case_id = None
-        actual_file_path = eval_set_file
-
-        if ":" in eval_set_file:
-            parts = eval_set_file.split(":", 1)
-            actual_file_path = parts[0]
-            selected_case_id = parts[1]
+        actual_file_path, selected_case_id = _split_eval_set_selector(eval_set_file)
 
         if not os.path.exists(actual_file_path):
             raise FileNotFoundError(f"Eval set file not found: {actual_file_path}")

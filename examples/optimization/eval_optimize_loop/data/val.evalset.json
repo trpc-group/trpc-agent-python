@@ -1,0 +1,141 @@
+{
+  "eval_set_id": "eval_optimize_loop_validation_v1",
+  "name": "Evaluation optimization loop validation set",
+  "description": "Validation cases that separate safe optimization from train-set overfitting.",
+  "eval_cases": [
+    {
+      "eval_id": "val_json_invoice",
+      "conversation": [
+        {
+          "invocation_id": "val_json_approval_turn_1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Return strict JSON with status=approved and next_step=email_customer."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"next_step\":\"email_customer\",\"status\":\"approved\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "validator",
+        "state": {
+          "eval_optimize_expectation": {
+            "type": "json",
+            "required_keys": [
+              "status",
+              "next_step"
+            ],
+            "expected_values": {
+              "next_step": "email_customer",
+              "status": "approved"
+            },
+            "expected_failure_category": "format_violation"
+          },
+          "eval_optimize_tags": [
+            "json",
+            "safe_improves"
+          ]
+        }
+      }
+    },
+    {
+      "eval_id": "val_explain_cache",
+      "conversation": [
+        {
+          "invocation_id": "val_cache_stale_turn_1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Explain cache invalidation and stale data naturally."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Cache invalidation decides when cached data is stale data and must be refreshed."
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "validator",
+        "state": {
+          "eval_optimize_expectation": {
+            "type": "rubric",
+            "must_include": [
+              "cache",
+              "stale data"
+            ],
+            "forbidden": [
+              "{",
+              "}",
+              "json"
+            ],
+            "max_chars": 180,
+            "expected_failure_category": "format_violation"
+          },
+          "eval_optimize_tags": [
+            "rubric",
+            "overfit_guard"
+          ]
+        }
+      }
+    },
+    {
+      "eval_id": "val_protected_yes_no",
+      "conversation": [
+        {
+          "invocation_id": "val_return_yes_turn_1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Return only YES; do not use JSON."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "YES"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "validator",
+        "state": {
+          "eval_optimize_expectation": {
+            "type": "exact",
+            "expected": "YES",
+            "expected_failure_category": "final_response_mismatch"
+          },
+          "eval_optimize_tags": [
+            "protected",
+            "exact"
+          ],
+          "eval_optimize_protected": true
+        }
+      }
+    }
+  ]
+}
