@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.14](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.14) (2026-07-24)
+
+### Features
+
+* Telemetry: Added support for reporting model thinking text inside a dedicated `<trace_think>` block, making it easier to distinguish reasoning content from normal response text while keeping the existing trace format compatible.
+* Sessions: Added Redis Cluster-backed session and memory services, allowing deployments that use Redis Cluster to persist conversation sessions and long-term memory through the same service interfaces as existing storage backends.
+* Storage: Formatted Redis Cluster session and memory service code to keep the new implementation consistent with the repository style.
+* Examples/Docs: Added a script for running with `uv` on macOS and updated the related installation docs and README instructions, making the macOS setup path easier to follow.
+
 ## [1.1.13](https://github.com/trpc-group/trpc-agent-python/releases/tag/v1.1.13) (2026-07-17)
 
 ### Features
