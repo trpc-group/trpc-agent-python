@@ -1,0 +1,7 @@
+{"name": "case_11_mock_llm_timeout", "description": "Mock-based injection: simulate LLM timeout on SQL backend, verify cross-backend detection"}
+{"action": "create_session", "kwargs": {"app_name": "test_app", "user_id": "test_user", "session_id": "session_11"}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Summarize the quarterly report"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Let me analyze the quarterly report data."}], "state_delta": {}}}
+# inject: simulate LLM timeout on this backend (appends timeout marker)
+{"action": "inject_mock_llm_timeout", "kwargs": {"timeout_text": "[LLM TIMEOUT] Request timed out after 30s"}}
+{"action": "get_session", "kwargs": {}}

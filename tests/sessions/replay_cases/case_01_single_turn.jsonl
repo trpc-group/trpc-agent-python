@@ -1,0 +1,5 @@
+{"name": "case_01_single_turn", "description": "Single-turn conversation: user message followed by agent text response"}
+{"action": "create_session", "kwargs": {"app_name": "test_app", "user_id": "test_user", "session_id": "session_01"}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Hello"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Hi there! How can I help you today?"}], "state_delta": {}}}
+{"action": "get_session", "expected": {"events_count": 2}, "expected_events": 2}

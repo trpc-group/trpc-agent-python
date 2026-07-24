@@ -1,0 +1,26 @@
+{"name": "case_10_injected_summary_session", "description": "Injected inconsistency: summary session_id is set to a wrong value on the SQL backend; verify that DiffEngine detects the ownership mismatch"}
+{"action": "create_session", "kwargs": {"app_name": "test_app", "user_id": "test_user", "session_id": "session_10"}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "I need travel advice for Europe"}], "state_delta": {"topic": "europe_travel"}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Where in Europe would you like to go?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "France, Italy, and Spain"}], "state_delta": {"countries": "France, Italy, Spain"}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Great choices! How many days total?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Two weeks"}], "state_delta": {"days": 14}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "I suggest 5 days in France, 5 in Italy, and 4 in Spain."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Best cities in France?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Paris, Lyon, and Marseille are all wonderful."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "And in Italy?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Rome, Florence, Venice, and Milan are must-visits."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "And Spain?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Barcelona, Madrid, Seville, and Valencia."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Transport between countries?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "The high-speed train (TGV, Frecciarossa, AVE) is excellent for cross-border travel."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Estimated budget?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "A moderate budget would be about $4000-5000 per person including accommodation and transport."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Best time to visit?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Late spring (May-June) or early autumn (September-October) for pleasant weather and fewer crowds."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Do I need visas?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "The Schengen visa covers all three countries for most visitors."}], "state_delta": {}}}
+# Step order matters: create_summary on both, then inject on B only, then read on both
+{"action": "create_session_summary", "kwargs": {"force": true}}
+{"action": "inject_summary_session_id", "kwargs": {"wrong_session_id": "session_99"}}
+{"action": "get_session_summary", "expected": {"has_summary": true}}

@@ -1,0 +1,7 @@
+{"name": "case_13_mock_partial_write", "description": "Mock-based injection: simulate partial write failure where event text is truncated on SQL backend"}
+{"action": "create_session", "kwargs": {"app_name": "test_app", "user_id": "test_user", "session_id": "session_13"}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "What is the detailed procedure for deploying the new microservice architecture to production?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "The deployment procedure involves 5 steps: 1) Build Docker image, 2) Push to registry, 3) Update Kubernetes manifests, 4) Apply rolling update, 5) Verify health checks."}], "state_delta": {}}}
+# inject: simulate partial write — truncate the agent's response on this backend
+{"action": "inject_mock_partial_write", "kwargs": {"event_index": 1, "truncate_length": 50}}
+{"action": "get_session", "kwargs": {}}

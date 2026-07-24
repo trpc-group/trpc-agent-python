@@ -1,0 +1,9 @@
+{"name": "case_08_exception_recovery", "description": "Exception recovery: inject a skipped write on the SQL backend to simulate mid-write failure; verify cross-backend detection"}
+{"action": "create_session", "kwargs": {"app_name": "test_app", "user_id": "test_user", "session_id": "session_08"}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Book a flight to Tokyo"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "function_call", "name": "search_flights", "args": {"destination": "Tokyo", "date": "2026-03-15"}}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "function_response", "name": "search_flights", "response": {"flights": ["CA123", "CA456"], "price": 850}}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "I found flights to Tokyo starting from $850."}], "state_delta": {"booking_status": "searching"}}}
+# inject: skip this append on SQL backend (simulate write failure)
+{"action": "inject_skip_append", "kwargs": {}}
+{"action": "get_session", "expected": {"events_count": 4}}

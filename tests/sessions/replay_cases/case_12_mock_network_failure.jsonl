@@ -1,0 +1,7 @@
+{"name": "case_12_mock_network_failure", "description": "Mock-based injection: simulate network failure during event append on SQL backend, verify cross-backend detection"}
+{"action": "create_session", "kwargs": {"app_name": "test_app", "user_id": "test_user", "session_id": "session_12"}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Transfer $1000 to savings account"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Processing transfer of $1000 to savings account."}], "state_delta": {"transfer_status": "pending"}}}
+# inject: simulate network failure — corrupt the event text on this backend
+{"action": "inject_mock_network_failure", "kwargs": {"event_index": 1, "original_text": "Processing transfer of $1000 to savings account.", "corrupted_text": "[NETWORK ERROR] Message truncated"}}
+{"action": "get_session", "kwargs": {}}

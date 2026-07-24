@@ -1,0 +1,24 @@
+{"name": "case_06_summary_gen", "description": "Summary generation: long conversation triggers summarization; verify summary content, version, timestamp, and session association"}
+{"action": "create_session", "kwargs": {"app_name": "test_app", "user_id": "test_user", "session_id": "session_06"}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "I want to plan a trip to Japan"}], "state_delta": {"topic": "japan_trip"}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Great choice! When are you planning to go?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Next spring, around March"}], "state_delta": {"travel_month": "March"}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "March is cherry blossom season in Japan!"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "I want to visit Tokyo, Kyoto, and Osaka"}], "state_delta": {"cities": "Tokyo, Kyoto, Osaka"}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "That is a classic itinerary. How many days do you have?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "About 10 days"}], "state_delta": {"travel_days": 10}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "I recommend 4 days in Tokyo, 3 in Kyoto, and 3 in Osaka."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "What are the must-see attractions in Tokyo?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Sensoji Temple, Shibuya Crossing, Meiji Shrine, and Akihabara."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "And in Kyoto?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Fushimi Inari Shrine, Kinkakuji, Arashiyama Bamboo Grove, and Kiyomizudera."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "What about Osaka?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Osaka Castle, Dotonbori, Universal Studios Japan, and the Aquarium."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "What is the best way to travel between these cities?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "The Shinkansen (bullet train) is the best option. Tokyo to Kyoto is about 2.5 hours."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Do I need a JR Pass?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "A 7-day JR Pass would cover your inter-city travel and save money."}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "What about accommodation recommendations?"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Consider staying in Shinjuku for Tokyo, near Kyoto Station for Kyoto, and Namba for Osaka."}], "state_delta": {}}}
+{"action": "create_session_summary", "kwargs": {"force": true}}
+{"action": "get_session_summary", "expected": {"has_summary": true}}

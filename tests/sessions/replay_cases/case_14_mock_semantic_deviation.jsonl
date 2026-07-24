@@ -1,0 +1,7 @@
+{"name": "case_14_mock_semantic_deviation", "description": "Mock-based injection: simulate memory semantic deviation where dollar amount is subtly altered on SQL backend, verify field-level detection"}
+{"action": "create_session", "kwargs": {"app_name": "test_app", "user_id": "test_user", "session_id": "session_14"}}
+{"action": "append_event", "kwargs": {"author": "user", "parts": [{"type": "text", "text": "Approve payment of $1,500.00 to vendor ABC Corp"}], "state_delta": {}}}
+{"action": "append_event", "kwargs": {"author": "agent", "parts": [{"type": "text", "text": "Payment of $1,500.00 approved for vendor ABC Corp. Transaction ID: TXN-2026-001"}], "state_delta": {"payment_status": "approved", "amount": 1500.00}}}
+# inject: semantic deviation — change the dollar amount on this backend only
+{"action": "inject_mock_semantic_deviation", "kwargs": {"event_index": 1, "old_substring": "$1,500.00", "new_substring": "$15,000.00"}}
+{"action": "get_session", "kwargs": {}}
