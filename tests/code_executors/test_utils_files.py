@@ -5,9 +5,12 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 
 import os
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 from trpc_agent_sdk.code_executors.utils import collect_files_with_glob
 from trpc_agent_sdk.code_executors.utils import copy_dir
@@ -328,6 +331,7 @@ class TestDetectContentType:
 
     @patch('trpc_agent_sdk.code_executors.utils._files.HAS_MAGIC', True)
     @patch('trpc_agent_sdk.code_executors.utils._files.magic', create=True)
+    @pytest.mark.skipif(sys.platform == 'win32', reason='python-magic crashes on Windows without libmagic DLL')
     def test_detect_content_type_with_magic(self, mock_magic):
         """Test detecting content type using magic library."""
         filename = Path("test.unknown")
