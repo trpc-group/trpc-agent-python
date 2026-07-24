@@ -25,6 +25,18 @@ from .summary_checks import SummaryIssue
 CaseStatus = Literal["match", "mismatch", "not_applicable", "skipped"]
 
 
+class DiffReport(BaseModel):
+    """差异报告的正式 schema(纳入所有字段,避免 E2E 扩展字段与 schema 不一致)。"""
+    schema_version: int = 3
+    reference_backend: str
+    compared_backends: list[str]
+    backend_statuses: list[BackendStatus]
+    totals: dict[str, int]
+    false_positive_rate: float
+    cases: list[dict[str, Any]]
+    known_drift_cases: list[str] = Field(default_factory=list)  # 已知 SDK drift 的 case 集合(E2E 填入)
+
+
 class BackendStatus(BaseModel):
     name: str
     status: CaseStatus
@@ -113,6 +125,7 @@ def build_diff_report(
         "totals": totals,
         "false_positive_rate": fpr,
         "cases": cases_out,
+        "known_drift_cases": [],  # 由 E2E 测试手动填充(E2E 扩展字段,schema 级一致性)
     }
 
 
