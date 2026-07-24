@@ -1,0 +1,135 @@
+{
+  "task_id": "f684c95b-c5a8-41cb-a55e-1eeec9233837",
+  "conclusion": "fail",
+  "findings": [
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "src/calculator.py",
+      "line": 11,
+      "title": "Use of eval introduces code execution risk",
+      "evidence": "+    return eval(expression)",
+      "recommendation": "Replace eval with explicit parsing, a whitelist-based dispatcher, or a safe literal parser.",
+      "confidence": 0.99,
+      "source": "skill_script",
+      "disposition": "finding",
+      "fingerprint": "81ece82612e1f88690b18faf4bb9722ee017ec6d690ff2fade49b1fad85f7744"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "src/calculator.py",
+      "line": 14,
+      "title": "subprocess call enables shell execution",
+      "evidence": "+    return subprocess.run(command, shell=True, check=True, text=True)",
+      "recommendation": "Pass an argument list and avoid shell=True unless a reviewed shell command is unavoidable.",
+      "confidence": 0.96,
+      "source": "skill_script",
+      "disposition": "finding",
+      "fingerprint": "fabcc44c25fd664ab5d326c1520de9cc61215fcc24d59e3c0aab979919b2839a"
+    }
+  ],
+  "warnings": [],
+  "needs_human_review": [],
+  "filter_decisions": [
+    {
+      "decision": "allow",
+      "target": "skill:code-review/scripts/parse_diff.py",
+      "reason_code": "allow",
+      "reason": "Invocation allowed by default policy.",
+      "requires_human_review": false
+    },
+    {
+      "decision": "allow",
+      "target": "skill:code-review/scripts/run_linters.py",
+      "reason_code": "allow",
+      "reason": "Invocation allowed by default policy.",
+      "requires_human_review": false
+    },
+    {
+      "decision": "allow",
+      "target": "skill:code-review/scripts/run_tests.py",
+      "reason_code": "allow",
+      "reason": "Invocation allowed by default policy.",
+      "requires_human_review": false
+    }
+  ],
+  "sandbox_runs": [
+    {
+      "name": "parse_diff",
+      "command": [
+        "python",
+        "skills/code-review/scripts/parse_diff.py",
+        "--diff-file",
+        "work/inputs/review.diff"
+      ],
+      "status": "succeeded",
+      "runtime": "local",
+      "duration_ms": 3404,
+      "exit_code": 0,
+      "stdout": "{\n  \"diff_file\": \"review.diff\",\n  \"line_count\": 22,\n  \"file_count\": 2,\n  \"has_security_keywords\": true\n}\n",
+      "stderr": "",
+      "timed_out": false,
+      "output_truncated": false,
+      "blocked_by_filter": false
+    },
+    {
+      "name": "run_linters",
+      "command": [
+        "python",
+        "skills/code-review/scripts/run_linters.py",
+        "--diff-file",
+        "work/inputs/review.diff"
+      ],
+      "status": "succeeded",
+      "runtime": "local",
+      "duration_ms": 3139,
+      "exit_code": 0,
+      "stdout": "{\n  \"diff_file\": \"review.diff\",\n  \"warning_count\": 2,\n  \"warnings\": [\n    \"Security-sensitive call detected: eval\",\n    \"Shell execution enabled in subprocess call\"\n  ]\n}\n",
+      "stderr": "",
+      "timed_out": false,
+      "output_truncated": false,
+      "blocked_by_filter": false
+    },
+    {
+      "name": "run_tests",
+      "command": [
+        "python",
+        "skills/code-review/scripts/run_tests.py",
+        "--diff-file",
+        "work/inputs/review.diff"
+      ],
+      "status": "succeeded",
+      "runtime": "local",
+      "duration_ms": 4462,
+      "exit_code": 0,
+      "stdout": "{\n  \"diff_file\": \"review.diff\",\n  \"changed_test_files\": [\n    \"tests/test_calculator.py\"\n  ],\n  \"test_update_present\": true\n}\n",
+      "stderr": "",
+      "timed_out": false,
+      "output_truncated": false,
+      "blocked_by_filter": false
+    }
+  ],
+  "summary": "Loaded review input, parsed diff, completed deterministic rule review, and processed sandbox governance. Changed files: 2, added lines: 6, deleted lines: 1, findings: 2, human review: 0, warnings: 0, filter decisions: 3, sandbox runs: 3.",
+  "severity_counts": {
+    "high": 2
+  },
+  "monitoring_summary": {
+    "total_duration_ms": 11032,
+    "changed_files_count": 2,
+    "added_lines_count": 6,
+    "deleted_lines_count": 1,
+    "sandbox_run_count": 3,
+    "filter_decision_count": 3,
+    "finding_count": 2,
+    "needs_human_review_count": 0,
+    "warning_count": 0,
+    "severity_distribution": {
+      "high": 2
+    },
+    "category_distribution": {
+      "security": 2
+    },
+    "exception_distribution": {}
+  }
+}
