@@ -30,6 +30,21 @@ _magic_module = None  # cached after first successful import on non-win32
 _magic_checked = False
 
 
+def _has_magic() -> bool:
+    """Backward-compatible indicator for whether python-magic is available.
+
+    Mirrors the old module-level ``HAS_MAGIC`` boolean. Returns ``True`` only
+    when the magic module has been successfully imported (or explicitly
+    injected by tests).
+    """
+    return _magic_module is not None
+
+
+# Backward-compatible public alias (was a module-level bool before this PR).
+# External code may reference it as ``from ..._files import HAS_MAGIC``.
+HAS_MAGIC = False  # updated lazily; see _has_magic() for the live value
+
+
 def path_join(base: str, path: str) -> str:
     """Join a base path and a path.
 
@@ -239,11 +254,12 @@ def detect_content_type(filename: Path, data: bytes) -> str:
     # missing, causes an access violation at import time (not catchable by
     # try/except). We skip it entirely on win32 and fall through to the
     # simple content-based detection below.
-    global _magic_module, _magic_checked
+    global _magic_module, _magic_checked, HAS_MAGIC
     if sys.platform != 'win32' and not _magic_checked:
         try:
             import magic as _m
             _magic_module = _m
+            HAS_MAGIC = True
             _magic_checked = True
         except ImportError:
             logger.debug("python-magic not available; falling back to byte-signature detection")

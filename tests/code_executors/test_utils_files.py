@@ -332,7 +332,6 @@ class TestDetectContentType:
     @pytest.mark.skipif(sys.platform == 'win32', reason='python-magic crashes on Windows without libmagic DLL')
     def test_detect_content_type_with_magic(self):
         """Test detecting content type using magic library."""
-        import sys as _sys
         from unittest.mock import MagicMock
 
         filename = Path("test.unknown")

@@ -27,7 +27,10 @@ if TYPE_CHECKING:
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.utils import CommandExecResult
 
+import threading
+
 _docker_imported = False
+_docker_lock = threading.Lock()
 
 
 def _import_docker():
@@ -43,19 +46,22 @@ def _import_docker():
     global _docker_imported
     if _docker_imported:
         return
-    import docker as _docker
-    from docker.models.containers import Container as _Container
-    from docker.utils.socket import consume_socket_output as _cso
-    from docker.utils.socket import demux_adaptor as _da
-    from docker.utils.socket import frames_iter as _fi
-    globals().update({
-        'docker': _docker,
-        'Container': _Container,
-        'consume_socket_output': _cso,
-        'demux_adaptor': _da,
-        'frames_iter': _fi,
-    })
-    _docker_imported = True
+    with _docker_lock:
+        if _docker_imported:
+            return
+        import docker as _docker
+        from docker.models.containers import Container as _Container
+        from docker.utils.socket import consume_socket_output as _cso
+        from docker.utils.socket import demux_adaptor as _da
+        from docker.utils.socket import frames_iter as _fi
+        globals().update({
+            'docker': _docker,
+            'Container': _Container,
+            'consume_socket_output': _cso,
+            'demux_adaptor': _da,
+            'frames_iter': _fi,
+        })
+        _docker_imported = True
 
 
 DEFAULT_IMAGE_TAG = 'python:3-slim'
