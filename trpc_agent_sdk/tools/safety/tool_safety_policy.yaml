@@ -1,0 +1,33 @@
+# Default tool script safety policy. Editing this file changes behavior
+# without touching code (issue acceptance #6).
+name: default
+description: Default tool script safety policy for tRPC-Agent.
+# Risk-level thresholds (fallback when a rule's own decision is UNDECIDED).
+deny_risk_level: HIGH        # findings >= HIGH -> DENY
+review_risk_level: MEDIUM     # findings >= MEDIUM (and < deny) -> NEEDS_REVIEW
+# Global lists
+whitelisted_domains:
+  - pypi.org
+  - github.com
+  - example.com
+allowed_commands:
+  - ls
+  - cat
+  - echo
+  - python
+denied_paths:
+  - /etc
+  - /root
+  - ~/.ssh
+  - ~/.env
+  - ~/.aws/credentials
+# Resource limits (informational for static scan; enforced by executor runtime)
+max_timeout_seconds: 30
+max_output_bytes: 1048576
+max_evidence_chars: 200
+# Per-rule overrides. Each entry can set risk_level and decision.
+# rule_overrides:
+#   tool-net-http:
+#     risk_level: HIGH
+#     decision: DENY
+rule_overrides: {}

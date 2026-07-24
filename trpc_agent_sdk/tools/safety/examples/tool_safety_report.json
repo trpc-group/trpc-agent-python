@@ -1,0 +1,15 @@
+{
+  "decision": "DENY",
+  "risk_level": "HIGH",
+  "scan_duration_ms": 0,
+  "findings": [
+    {
+      "rule_id": "tool-fs-recursive-delete",
+      "risk_level": "HIGH",
+      "decision": "DENY",
+      "evidence": "shutil.rmtree()",
+      "recommendation": "shutil.rmtree is dangerous; review."
+    }
+  ],
+  "recommendation": "Blocked by safety rules: tool-fs-recursive-delete. Fix or allowlist before execution."
+}
