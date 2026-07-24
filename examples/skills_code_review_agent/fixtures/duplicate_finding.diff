@@ -1,0 +1,11 @@
+diff --git a/app/config.py b/app/config.py
+index 1111111..2222222 100644
+--- a/app/config.py
++++ b/app/config.py
+@@ -1,2 +1,5 @@
+ def load_config():
+-    return {}
++    api_key = "sk-1234567890abcdef1234567890abcdef"
++    api_key = "sk-1234567890abcdef1234567890abcdef"
++    return {"api_key": api_key}
+

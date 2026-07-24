@@ -1,0 +1,14 @@
+diff --git a/app/repository.py b/app/repository.py
+index 1111111..2222222 100644
+--- a/app/repository.py
++++ b/app/repository.py
+@@ -1,5 +1,9 @@
+ import sqlite3
+ 
+ def get_user(user_id):
+-    return None
++    conn = sqlite3.connect("users.db")
++    cursor = conn.cursor()
++    cursor.execute(f"select * from users where id = {user_id}")
++    return cursor.fetchone()
+

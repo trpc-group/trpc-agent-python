@@ -1,0 +1,15 @@
+diff --git a/app/search.py b/app/search.py
+index 1111111..2222222 100644
+--- a/app/search.py
++++ b/app/search.py
+@@ -1,5 +1,8 @@
+ import subprocess
+ 
+ def run_query(query):
+-    return []
++    cmd = f"grep -R {query} /data"
++    return subprocess.check_output(cmd, shell=True)
++
++def run_user_code(expr):
++    return eval(expr)
+
