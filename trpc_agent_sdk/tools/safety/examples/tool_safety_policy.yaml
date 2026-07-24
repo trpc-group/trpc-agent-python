@@ -1,0 +1,105 @@
+# Tool Script Safety Guard policy
+#
+# This is a sample policy. Modify the lists and limits to match your
+# environment. The guard hot-reloads only when the policy file changes
+# and a new ToolSafetyGuard / ToolScriptSafetyFilter is constructed.
+version: "1"
+
+defaults:
+  unknown_construct: needs_human_review
+  guard_error: deny
+  human_review_blocks_execution: true
+
+limits:
+  max_timeout_seconds: 60
+  max_output_bytes: 1048576
+  max_script_bytes: 262144
+  max_sleep_seconds: 30
+  max_parallel_tasks: 16
+  max_processes: 8
+  max_file_write_bytes: 10485760
+
+network:
+  allow_domains:
+    - api.github.com
+    - "*.internal.example.com"
+    - pypi.org
+    - files.pythonhosted.org
+  deny_ip_literals: true
+
+commands:
+  allow:
+    - python
+    - python3
+    - pytest
+    - git
+  deny:
+    - sudo
+    - su
+    - doas
+    - pkexec
+    - chmod
+    - chown
+    - mount
+    - umount
+    - nc
+    - ncat
+    - mkfs
+    - dd
+
+paths:
+  deny:
+    - "~/.ssh"
+    - "/etc"
+    - "/root"
+    - "/var/log/auth.log"
+    - ".env"
+    - "**/*credentials*"
+    - "**/*token*"
+
+dependencies:
+  decision: deny
+
+sensitive_env_key_patterns:
+  - "*KEY*"
+  - "*TOKEN*"
+  - "*PASSWORD*"
+  - "*SECRET*"
+  - "*CREDENTIAL*"
+
+tools:
+  workspace_exec:
+    execution_capable: true
+    language: bash
+    script: command
+    cwd: cwd
+    env: env
+    timeout: timeout_sec
+  skill_run:
+    execution_capable: true
+    language: bash
+    script: command
+    cwd: cwd
+    env: env
+    timeout: timeout
+  skill_exec:
+    execution_capable: true
+    language: bash
+    script: command
+    cwd: cwd
+    env: env
+    timeout: timeout
+  python_exec:
+    execution_capable: true
+    language: python
+    script: code
+    cwd: cwd
+    env: env
+    timeout: timeout
+
+rule_overrides: {}
+
+audit:
+  enabled: true
+  required: true
+  path: tool_safety_audit.jsonl

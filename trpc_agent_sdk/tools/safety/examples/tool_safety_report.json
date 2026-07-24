@@ -1,0 +1,33 @@
+{
+  "report_id": "rep-47df434f9e694e5a",
+  "decision": "deny",
+  "risk_level": "critical",
+  "rule_ids": [
+    "FILE001_RECURSIVE_DELETE"
+  ],
+  "findings": [
+    {
+      "rule_id": "FILE001_RECURSIVE_DELETE",
+      "category": "file",
+      "risk_level": "critical",
+      "decision": "deny",
+      "evidence": {
+        "snippet": "shutil.rmtree(path)",
+        "line": 12,
+        "column": 5,
+        "language": "python",
+        "extras": {
+          "target": "path",
+          "explicit": "False"
+        }
+      },
+      "recommendation": "Avoid recursive delete; require explicit file list."
+    }
+  ],
+  "recommendation": "Block execution and request a human-approved path.",
+  "policy_hash": "b2fdff89270f2f5e19eb4d5dd00c222a15a802d46806318863ae8af88d79cf38",
+  "policy_version": "1",
+  "script_sha256": "190f022e0277f968f73f655c896143edd741fd126d3e4e2032ef49117e533bd9",
+  "scan_duration_ms": 0.6739000091329217,
+  "redacted": false
+}

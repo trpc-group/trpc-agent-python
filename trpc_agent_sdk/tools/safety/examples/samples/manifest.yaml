@@ -1,0 +1,84 @@
+samples:
+  - name: safe_python
+    file: 01_safe_python.py
+    language: python
+    expected_decision: allow
+    expected_rule_ids: [SAFE000]
+
+  - name: safe_bash
+    file: 02_safe_bash.sh
+    language: bash
+    expected_decision: allow
+    expected_rule_ids: [SAFE000]
+
+  - name: dangerous_recursive_delete
+    file: 03_dangerous_delete.py
+    language: python
+    expected_decision: deny
+    expected_rule_ids: [FILE001_RECURSIVE_DELETE]
+
+  - name: read_ssh_key
+    file: 04_read_ssh_key.py
+    language: python
+    expected_decision: deny
+    expected_rule_ids: [FILE003_CREDENTIAL_READ]
+
+  - name: non_allowlist_network
+    file: 05_non_whitelist_network.py
+    language: python
+    expected_decision: deny
+    expected_rule_ids: [NET001_DOMAIN_NOT_ALLOWED]
+
+  - name: allowlist_network
+    file: 06_whitelist_network.py
+    language: python
+    expected_decision: allow
+    expected_rule_ids: [SAFE000]
+
+  - name: allowed_subprocess
+    file: 07_allowed_subprocess.py
+    language: python
+    expected_decision: allow
+    expected_rule_ids: [SAFE000]
+
+  - name: shell_injection
+    file: 08_shell_injection.py
+    language: python
+    expected_decision: deny
+    expected_rule_ids: [PROC002_SHELL_INJECTION]
+
+  - name: dependency_install
+    file: 09_dependency_install.sh
+    language: bash
+    expected_decision: deny
+    expected_rule_ids: [DEP001_ENV_MUTATION]
+
+  - name: infinite_loop
+    file: 10_infinite_loop.py
+    language: python
+    expected_decision: deny
+    expected_rule_ids: [RES001_UNBOUNDED_LOOP]
+
+  - name: secret_output
+    file: 11_sensitive_output.py
+    language: python
+    expected_decision: deny
+    expected_rule_ids: [SECRET001_LOG_SINK]
+
+  - name: bash_pipeline
+    file: 12_bash_pipeline.sh
+    language: bash
+    expected_decision: needs_human_review
+    expected_rule_ids: [PROC003_SHELL_OPERATOR]
+
+  - name: read_dotenv
+    file: 13_read_dotenv.sh
+    language: bash
+    expected_decision: deny
+    expected_rule_ids: [FILE004_DOTENV_READ]
+
+  - name: dynamic_command_review
+    file: 14_dynamic_command_review.py
+    language: python
+    expected_decision: needs_human_review
+    expected_rule_ids: [PROC001_PROCESS_EXEC]

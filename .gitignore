@@ -20,6 +20,8 @@ cov.tmp
 coverage.xml
 test-ngtest-ut-trpc-agent-py.xml
 .pytest_cache
+/.pytest-tmp-*
+/tool_safety_audit.jsonl
 
 node_modules
 package-lock.json
