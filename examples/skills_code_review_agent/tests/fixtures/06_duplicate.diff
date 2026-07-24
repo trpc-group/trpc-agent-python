@@ -1,0 +1,8 @@
+diff --git a/app/tasks.py b/app/tasks.py
+--- a/app/tasks.py
++++ b/app/tasks.py
+@@ -1,2 +1,3 @@
+ def run_pipeline():
+-    return schedule()
++    task = asyncio.create_task(aiohttp.ClientSession())
++    return task

@@ -1,0 +1,6 @@
+diff --git a/app/service.py b/app/service.py
+--- /dev/null
++++ b/app/service.py
+@@ -0,0 +1,2 @@
++def calculate_discount(price, rate):
++    return price * (1 - rate)

@@ -1,0 +1,9 @@
+diff --git a/app/handler.py b/app/handler.py
+--- a/app/handler.py
++++ b/app/handler.py
+@@ -1,2 +1,4 @@
+ def handle(req):
+-    return process(req)
++    conn = engine.connect()
++    cur = conn.cursor()
++    return process(req)

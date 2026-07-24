@@ -1,0 +1,10 @@
+diff --git a/app/runtime_failure_handler.py b/app/runtime_failure_handler.py
+--- a/app/runtime_failure_handler.py
++++ b/app/runtime_failure_handler.py
+@@ -1,2 +1,5 @@
+ def handle_runtime_failure_case(req):
+-    return process(req)
++    conn = engine.connect()
++    cur = conn.cursor()
++    result = process(req)
++    return result
