@@ -6,18 +6,17 @@
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from pydantic import BaseModel
 
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.tools._function_tool import FunctionTool
-
+from trpc_agent_sdk.tools._function_tool import ToolArgumentErrorResponse
 
 # --- Test functions ---
+
 
 def sync_func(param1: str, param2: int = 10) -> str:
     """A sync test function."""
@@ -128,7 +127,10 @@ class TestFunctionToolRunAsync:
         tool = FunctionTool(sync_func)
         result = await tool._run_async_impl(
             tool_context=mock_context,
-            args={"param1": "hello", "param2": 5},
+            args={
+                "param1": "hello",
+                "param2": 5
+            },
         )
         assert result == "hello-5"
 
@@ -158,11 +160,13 @@ class TestFunctionToolRunAsync:
             args={},
         )
         assert isinstance(result, dict)
+        assert isinstance(result, ToolArgumentErrorResponse)
         assert "error" in result
         assert "param1" in result["error"]
 
     @pytest.mark.asyncio
     async def test_returns_empty_dict_for_none(self, mock_context):
+
         def returns_none():
             return None
 
@@ -178,7 +182,10 @@ class TestFunctionToolRunAsync:
         tool = FunctionTool(func_returns_model)
         result = await tool._run_async_impl(
             tool_context=mock_context,
-            args={"name": "test", "value": 42},
+            args={
+                "name": "test",
+                "value": 42
+            },
         )
         assert isinstance(result, str)
         assert "test" in result
@@ -200,7 +207,9 @@ class TestFunctionToolRunAsync:
 
     @pytest.mark.asyncio
     async def test_async_callable_object(self, mock_context):
+
         class AsyncCallable:
+
             async def __call__(self, value: str) -> str:
                 """Async callable."""
                 return f"async-{value}"

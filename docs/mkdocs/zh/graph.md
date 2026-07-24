@@ -428,6 +428,10 @@ graph.add_agent_node(
 - input_mapper / output_mapper：父子状态映射（推荐显式配置）
 - config / callbacks：同 add_node
 
+当子 Agent 发出 `LongRunningEvent` 时，`add_agent_node` 会将其提升为父 GraphAgent 的 `interrupt`：父图不会执行后继节点，Runner 返回的事件保留原工具名和参数。客户端提交对应 `FunctionResponse` 后，父图恢复当前 Agent 节点，SDK 将响应映射回子 Agent 的原始 function call；只有子 Agent 最终完成后父图才继续。该机制支持同一节点多轮 HITL，并将 child state 写入 SessionService-backed checkpoint，服务重启后仍可恢复。
+
+TeamAgent 作为 Agent 节点时同样支持 Leader 发起 HITL；普通 Team Member 仍不允许配置或调用 `LongRunningFunctionTool`。
+
 GraphAgent 不需要（也不支持）通过 sub_agents 注册 Agent 节点；组合关系统一用 add_agent_node 完成。
 
 ## 进阶用法

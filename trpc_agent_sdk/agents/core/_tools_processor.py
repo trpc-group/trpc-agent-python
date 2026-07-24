@@ -35,6 +35,10 @@ from trpc_agent_sdk.telemetry import tracer
 from trpc_agent_sdk.tools import BaseTool
 from trpc_agent_sdk.tools import BaseToolSet
 from trpc_agent_sdk.tools import convert_toolunion_to_tool_list
+from trpc_agent_sdk.tools._function_tool import ToolArgumentErrorResponse
+from trpc_agent_sdk.tools._long_running_tool import TOOL_ERROR_CODE_ARGUMENT_ERROR
+from trpc_agent_sdk.tools._long_running_tool import TOOL_ERROR_CODE_EXECUTION_ERROR
+from trpc_agent_sdk.tools._long_running_tool import TOOL_ERROR_CODE_NOT_FOUND
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import FunctionCall
 from trpc_agent_sdk.types import Part
@@ -141,7 +145,7 @@ class ToolsProcessor:
             logger.warning("No tool found for tool call: %s", tool_call.name)
             result_event = self._create_error_event(
                 context,
-                "tool_not_found",
+                TOOL_ERROR_CODE_NOT_FOUND,
                 f"Tool '{tool_call.name}' not found",
                 tool_call.id,
                 tool_call.name,
@@ -153,7 +157,7 @@ class ToolsProcessor:
                 logger.error("Error executing tool %s: %s", tool_call.name, ex, exc_info=True)
                 result_event = self._create_error_event(
                     context,
-                    "tool_execution_error",
+                    TOOL_ERROR_CODE_EXECUTION_ERROR,
                     str(ex),
                     tool_call.id,
                     tool_call.name,
@@ -256,7 +260,7 @@ class ToolsProcessor:
             if tool is None:
                 yield self._create_error_event(
                     context,
-                    "tool_not_found",
+                    TOOL_ERROR_CODE_NOT_FOUND,
                     f"Tool '{tool_call.name}' not found",
                     tool_call.id,
                     tool_call.name,
@@ -414,6 +418,9 @@ class ToolsProcessor:
                     invocation_id=context.invocation_id,
                     author=context.agent.name,
                     content=content,
+                    error_code=(TOOL_ERROR_CODE_ARGUMENT_ERROR
+                                if isinstance(result, ToolArgumentErrorResponse) else None),
+                    error_message=result.get("error") if isinstance(result, ToolArgumentErrorResponse) else None,
                     custom_metadata={"execution_time": execution_time} if execution_time is not None else {},
                     branch=context.branch,
                 )
@@ -454,7 +461,7 @@ class ToolsProcessor:
                     error_type=type(ex).__name__,
                 )
 
-                error_event = self._create_error_event(context, "tool_execution_error", str(ex), tool_call.id,
+                error_event = self._create_error_event(context, TOOL_ERROR_CODE_EXECUTION_ERROR, str(ex), tool_call.id,
                                                        tool_call.name)
 
                 # Compute state after failed tool execution
@@ -605,7 +612,7 @@ class ToolsProcessor:
                 )
                 error_event = self._create_error_event(
                     context,
-                    "tool_execution_error",
+                    TOOL_ERROR_CODE_EXECUTION_ERROR,
                     str(ex),
                     tool_call.id,
                     tool_call.name,

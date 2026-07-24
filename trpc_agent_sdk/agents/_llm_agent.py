@@ -12,52 +12,43 @@ filter framework, and session management to deliver AI agent functionality.
 
 from __future__ import annotations
 
-from typing import Any
-from typing import AsyncGenerator
-from typing import Awaitable
-from typing import Callable
-from typing import List
-from typing import Literal
-from typing import Optional
-from typing import TypeAlias
-from typing import Union
-from typing_extensions import override
+from typing import Any, AsyncGenerator, Awaitable, Callable, List, Literal, Optional, TypeAlias, Union
 
-from pydantic import BaseModel
-from pydantic import Field
-from pydantic import field_validator
+from pydantic import BaseModel, Field, field_validator
+from typing_extensions import override
 
 from trpc_agent_sdk.code_executors import BaseCodeExecutor
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.log import logger
-from trpc_agent_sdk.models import LLMModel
-from trpc_agent_sdk.models import LlmRequest
-from trpc_agent_sdk.models import ModelRegistry
+from trpc_agent_sdk.models import LLMModel, LlmRequest, ModelRegistry
 from trpc_agent_sdk.planners import BasePlanner
 from trpc_agent_sdk.skills import BaseSkillRepository
-from trpc_agent_sdk.tools import BaseTool
-from trpc_agent_sdk.tools import BaseToolSet
-from trpc_agent_sdk.tools import FunctionTool
-from trpc_agent_sdk.tools import LongRunningFunctionTool
-from trpc_agent_sdk.tools import transfer_to_agent
-from trpc_agent_sdk.types import Content
-from trpc_agent_sdk.types import GenerateContentConfig
+from trpc_agent_sdk.tools import (
+    BaseTool,
+    BaseToolSet,
+    FunctionTool,
+    LongRunningFunctionTool,
+    is_tool_execution_error,
+    transfer_to_agent,
+)
+from trpc_agent_sdk.types import Content, GenerateContentConfig
 
 from ..exceptions import RunCancelledException
 from ._base_agent import BaseAgent
-from ._callback import ModelCallback
-from ._callback import ToolCallback
+from ._callback import ModelCallback, ToolCallback
 from ._constants import TRPC_AGENT_RUNNING_KEY
-from .core import BranchFilterMode
-from .core import CodeExecutionRequestProcessor
-from .core import CodeExecutionResponseProcessor
-from .core import LlmProcessor
-from .core import TimelineFilterMode
-from .core import ToolsProcessor
-from .core import create_final_model_response_event
-from .core import default_request_processor
-from .core import get_structured_model_response
+from .core import (
+    BranchFilterMode,
+    CodeExecutionRequestProcessor,
+    CodeExecutionResponseProcessor,
+    LlmProcessor,
+    TimelineFilterMode,
+    ToolsProcessor,
+    create_final_model_response_event,
+    default_request_processor,
+    get_structured_model_response,
+)
 
 # Type aliases for instruction providers
 InstructionProvider: TypeAlias = Callable[[InvocationContext], Union[str, Awaitable[str]]]
@@ -118,7 +109,7 @@ class LlmAgent(BaseAgent):
     settings, etc.
     """
 
-    include_contents: Literal['default', 'none'] = 'default'
+    include_contents: Literal["default", "none"] = "default"
     """Controls content inclusion in model requests.
 
     Options:
@@ -555,7 +546,6 @@ class LlmAgent(BaseAgent):
                 # Step 3: Execute tools if any were collected
                 if collected_tool_calls:
                     logger.debug("Executing %s tool calls", len(collected_tool_calls))
-                    logger.debug("Executing %s tool calls", len(collected_tool_calls))
 
                     try:
                         # Use extended tools processor that includes transfer tool if needed
@@ -568,6 +558,12 @@ class LlmAgent(BaseAgent):
                             if tool and isinstance(tool, LongRunningFunctionTool):
                                 long_running_tool_ids.add(tool_call.id)
 
+                        if long_running_tool_ids and getattr(self, "parallel_tool_calls", False):
+                            logger.warning("Long-running tools are mixed with parallel_tool_calls=True. "
+                                           "When a long-running tool suspends execution, other tools in the "
+                                           "same batch will be persisted but not summarized by the LLM until "
+                                           "the long-running tool resumes.")
+
                         # Execute tools and yield results (Runner will store them automatically)
                         last_tool_event = None
                         any_skip_summarization = False
@@ -579,8 +575,7 @@ class LlmAgent(BaseAgent):
                             # Check if this event contains responses from long-running tools
                             if tool_event.content and tool_event.content.parts:
                                 for part in tool_event.content.parts:
-                                    if (part.function_response and part.function_response.id in long_running_tool_ids):
-                                        # This is a response from a long-running tool
+                                    if part.function_response and part.function_response.id in long_running_tool_ids:
                                         # Find the corresponding function call
                                         corresponding_call = None
                                         for call in collected_tool_calls:
@@ -589,6 +584,16 @@ class LlmAgent(BaseAgent):
                                                 break
 
                                         if corresponding_call:
+                                            if is_tool_execution_error(tool_event):
+                                                logger.warning(
+                                                    "Long-running tool %s returned an invocation error; "
+                                                    "continuing as a normal tool response",
+                                                    corresponding_call.name,
+                                                )
+                                                # The model can see the error and decide whether to
+                                                # correct and retry. Never suspend the graph here.
+                                                continue
+                                            # This is a response from a long-running tool
                                             # Import LongRunningEvent here to avoid circular imports
                                             from trpc_agent_sdk.events import LongRunningEvent
 
@@ -607,8 +612,10 @@ class LlmAgent(BaseAgent):
                                             # Then yield the long-running event
                                             yield long_running_event
 
-                                            logger.debug("Long-running tool %s completed, yielding LongRunningEvent",
-                                                         corresponding_call.name)
+                                            logger.debug(
+                                                "Long-running tool %s completed, yielding LongRunningEvent",
+                                                corresponding_call.name,
+                                            )
                                             return  # End agent execution after long-running event
 
                             # Yield regular tool events
@@ -701,33 +708,33 @@ class LlmAgent(BaseAgent):
         """
         if self.output_key:
             # Save output to state using the delta tracking system
-            result = ''.join([part.text if not part.thought else '' for part in event.content.parts])
+            result = "".join([part.text if not part.thought else "" for part in event.content.parts])
             ctx.state[self.output_key] = result
             event.actions.state_delta[self.output_key] = result
             logger.debug("Saved agent output to state key '%s': %s...", self.output_key, result[:100])
 
-    @field_validator('generate_content_config', mode='after')
+    @field_validator("generate_content_config", mode="after")
     @classmethod
     def __validate_generate_content_config(
             cls, generate_content_config: Optional[GenerateContentConfig]) -> GenerateContentConfig:
         if not generate_content_config:
             return GenerateContentConfig()
         if generate_content_config.thinking_config:
-            raise ValueError('Thinking config should be set via LlmAgent.planner.')
+            raise ValueError("Thinking config should be set via LlmAgent.planner.")
         if generate_content_config.tools:
-            raise ValueError('All tools must be set via LlmAgent.tools.')
+            raise ValueError("All tools must be set via LlmAgent.tools.")
         if generate_content_config.system_instruction:
-            raise ValueError('System instruction must be set via LlmAgent.instruction.')
+            raise ValueError("System instruction must be set via LlmAgent.instruction.")
         if generate_content_config.response_schema:
-            raise ValueError('Response schema must be set via LlmAgent.output_schema.')
+            raise ValueError("Response schema must be set via LlmAgent.output_schema.")
         return generate_content_config
 
-    @field_validator('code_executor', mode='after')
+    @field_validator("code_executor", mode="after")
     @classmethod
     def __validate_code_executor(cls, code_executor: Optional[BaseCodeExecutor]) -> Optional[BaseCodeExecutor]:
         """Validate code executor configuration."""
         if code_executor and not isinstance(code_executor, BaseCodeExecutor):
-            raise ValueError('Code executor must be an instance of BaseCodeExecutor.')
+            raise ValueError("Code executor must be an instance of BaseCodeExecutor.")
         return code_executor
 
 

@@ -429,6 +429,10 @@ Common options:
 - input_mapper / output_mapper: Parent-child state mapping (explicit configuration recommended)
 - config / callbacks: Same as add_node
 
+When a child Agent emits a `LongRunningEvent`, `add_agent_node` promotes it to a parent GraphAgent `interrupt`: the parent graph does not execute downstream nodes, and the Runner event preserves the original tool name and arguments. After the client submits the matching `FunctionResponse`, the parent graph resumes the current Agent node and the SDK maps the response back to the child's original function call. The graph continues only after the child Agent reaches a final result. This supports multiple HITL rounds in one node and persists child state in the SessionService-backed checkpoint for process-restart recovery.
+
+When the Agent node is a TeamAgent, the Leader can use the same HITL flow. Regular Team Members still must not be configured with or invoke `LongRunningFunctionTool`.
+
 GraphAgent does not require (nor support) registering Agent nodes via sub_agents; composition relationships are handled uniformly through add_agent_node.
 
 ## Advanced Usage
