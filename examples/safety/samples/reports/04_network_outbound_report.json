@@ -1,0 +1,35 @@
+{
+  "tool_name": "04_network_outbound",
+  "invocation_id": "sample-04_network_outbound",
+  "language": "python",
+  "decision": "needs_human_review",
+  "risk_level": "high",
+  "is_blocked": false,
+  "scan_duration_ms": 0.671,
+  "findings_count": 2,
+  "findings": [
+    {
+      "rule_id": "NET-001",
+      "risk_category": "network",
+      "severity": "high",
+      "decision": "needs_human_review",
+      "confidence": 1.0,
+      "evidence": "requests.get('https://api.evil-hacker.com/data')",
+      "line_number": 12,
+      "description": "Network request to non-whitelisted domain: api.evil-hacker.com",
+      "recommendation": "Add 'api.evil-hacker.com' to network.allowed_domains if this is expected."
+    },
+    {
+      "rule_id": "NET-001",
+      "risk_category": "network",
+      "severity": "high",
+      "decision": "needs_human_review",
+      "confidence": 1.0,
+      "evidence": "requests.post('https://telemetry.unknown-service.io/collect')",
+      "line_number": 18,
+      "description": "Network request to non-whitelisted domain: telemetry.unknown-service.io",
+      "recommendation": "Add 'telemetry.unknown-service.io' to network.allowed_domains if this is expected."
+    }
+  ],
+  "timestamp": "2026-07-09T03:33:33.445591+00:00"
+}

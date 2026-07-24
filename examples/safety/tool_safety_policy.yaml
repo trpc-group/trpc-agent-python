@@ -1,0 +1,250 @@
+# ===========================================================================
+# Tool Safety Policy — 策略配置文件
+# Script Safety Guard Policy Configuration
+# ===========================================================================
+#
+# 文件名约定 / Convention Filename:
+#   将此文件命名为 "tool_safety_policy.yaml" 并放置在项目根目录，
+#   Guard 会在初始化时自动发现并加载。
+#
+#   Name this file "tool_safety_policy.yaml" and place it in your project
+#   root directory. Guard will auto-discover and load it on initialization.
+#
+# 自动发现优先级 / Auto-discovery Priority:
+#   1. 环境变量 TOOL_SAFETY_POLICY_PATH（显式路径）
+#   2. CWD/tool_safety_policy.yaml
+#   3. CWD/.safety/tool_safety_policy.yaml
+#   4. CWD/config/tool_safety_policy.yaml
+#
+# 也可以手动指定路径 / Or specify path explicitly:
+#   from trpc_agent_sdk.tools.safety import load_policy, ScriptSafetyGuard
+#
+#   policy = load_policy("/path/to/tool_safety_policy.yaml")
+#   guard = ScriptSafetyGuard(policy=policy)
+#
+# 合并策略 / Merge Strategy:
+#   - override: false (默认) → 用户配置追加到内置默认列表（去重）
+#   - override: true → 用户配置完全替换内置默认列表
+#   - 标量字段 (max_timeout_seconds 等) → 始终覆盖默认值
+#
+# ===========================================================================
+
+# 策略版本（目前固定为 "1.0"）
+# Policy schema version (currently "1.0")
+version: "1.0"
+
+
+# ---------------------------------------------------------------------------
+# 网络策略 / Network Policy
+# ---------------------------------------------------------------------------
+# network.allowed_domains 是唯一具备"白名单直通"语义的字段：
+# 匹配此列表的域名不会产生 Finding（NET-001 规则直接跳过）。
+#
+# network.allowed_domains is the ONLY whitelist-bypass field:
+# Domains matching this list will NOT produce any NET-001 findings.
+#
+# 支持 glob 通配符：*.example.com 匹配 api.example.com, cdn.example.com 等
+# Glob patterns supported: *.example.com matches api.example.com, etc.
+network:
+  allowed_domains:
+    # === AI / LLM 服务 (内置默认已包含，此处追加) ===
+    # === AI/LLM services (built-in defaults already included, appended here) ===
+    - "*.openai.com"
+    - "*.anthropic.com"
+    - "*.googleapis.com"
+
+    # === 开发工具 / Developer tools ===
+    - "github.com"
+    - "*.githubusercontent.com"
+    - "pypi.org"
+    - "*.python.org"
+    - "registry.npmjs.org"
+    - "*.huggingface.co"
+
+    # === 你的业务域名 (请按实际填写) ===
+    # === Your business domains (customize as needed) ===
+    - "*.mycompany.com"
+    - "api.partner-service.io"
+
+  # false = 追加到内置默认列表 (推荐)
+  # true  = 完全替换内置列表（仅你定义的域名生效）
+  # false = append to built-in defaults (recommended)
+  # true  = fully replace built-in list (only your domains are allowed)
+  override: false
+
+
+# ---------------------------------------------------------------------------
+# 进程策略 / Process Policy
+# ---------------------------------------------------------------------------
+# process.allowed_commands 是规则参数（非白名单直通）：
+# 不在此列表中的命令会产生 PROC-001 Finding（NEEDS_HUMAN_REVIEW 级别）。
+#
+# process.allowed_commands is a rule parameter (NOT whitelist-bypass):
+# Commands NOT in this list will trigger PROC-001 findings (NEEDS_HUMAN_REVIEW).
+process:
+  allowed_commands:
+    # === 基础工具 / Basic tools ===
+    - "echo"
+    - "cat"
+    - "ls"
+    - "find"
+    - "grep"
+    - "head"
+    - "tail"
+    - "wc"
+    - "sort"
+
+    # === 文件操作 / File operations ===
+    - "mkdir"
+    - "cp"
+    - "mv"
+
+    # === 开发运行时 / Dev runtimes ===
+    - "python3"
+    - "python"
+    - "node"
+
+    # === 你的自定义允许命令 (请按实际填写) ===
+    # === Your custom allowed commands (customize as needed) ===
+    - "git"
+    - "docker"
+    - "go"
+    - "cargo"
+
+  override: false
+
+
+# ---------------------------------------------------------------------------
+# 文件操作策略 / File Operations Policy
+# ---------------------------------------------------------------------------
+# file_operations.forbidden_paths 是规则参数：
+# 脚本访问此列表中的路径时，会产生 FS-001 Finding（DENY 级别）。
+#
+# file_operations.forbidden_paths is a rule parameter:
+# Scripts accessing these paths will trigger FS-001 findings (DENY level).
+#
+# 支持路径前缀匹配。
+# Supports path prefix matching.
+file_operations:
+  forbidden_paths:
+    # === 系统敏感路径 / System sensitive paths ===
+    - "/etc/"
+    - "/root/"
+    - "/var/log/"
+
+    # === 用户敏感目录 / User sensitive directories ===
+    - "~/.ssh/"
+    - "~/.aws/"
+    - "~/.gnupg/"
+    - "~/.config/"
+    - "~/.env"
+
+    # === 你的自定义保护路径 (请按实际填写) ===
+    # === Your custom protected paths (customize as needed) ===
+    - "~/production_data/"
+    - "/opt/secrets/"
+
+  override: false
+
+
+# ---------------------------------------------------------------------------
+# 资源策略 / Resource Policy
+# ---------------------------------------------------------------------------
+# 资源阈值 — 超过这些限制的脚本会产生相关 Finding。
+# Resource thresholds — scripts exceeding these limits will produce findings.
+resources:
+  # 最大允许执行超时（秒）
+  # Maximum allowed execution timeout (seconds)
+  max_timeout_seconds: 300
+
+  # 最大允许输出大小（MB）
+  # Maximum allowed output size (MB)
+  max_output_size_mb: 100
+
+
+# ---------------------------------------------------------------------------
+# 输出配置 / Output Configuration
+# ---------------------------------------------------------------------------
+# 控制 Guard 在正常链路中自动输出的结构化报告和审计日志文件。
+# Controls the structured report and audit log files that Guard automatically
+# produces during the normal check() pipeline.
+output:
+  # 结构化扫描报告 / Structured Scan Report
+  report:
+    # 是否输出报告文件 / Whether to output report files
+    enabled: true
+    # 报告输出目录（相对于 CWD 或绝对路径）
+    # Report output directory (relative to CWD or absolute path)
+    dir: "./.safety_reports"
+    # 文件名模板，可用变量: {tool_name}, {invocation_id}, {timestamp}
+    # Filename template. Available variables: {tool_name}, {invocation_id}, {timestamp}
+    filename_template: "{tool_name}_{timestamp}_report.json"
+
+  # 审计日志（JSONL 追加模式）/ Audit Log (JSONL append mode)
+  audit:
+    # 是否输出审计日志 / Whether to output audit log
+    enabled: true
+    # 审计日志文件路径（JSONL 格式）
+    # Audit log file path (JSONL format)
+    file: "./.safety_reports/audit.jsonl"
+    # 审计事件包含字段 / Audit event fields:
+    # tool_name, decision, risk_level, rule_ids, duration_ms,
+    # is_desensitized, is_blocked, invocation_id, findings_count, timestamp
+
+
+# ===========================================================================
+# 完整内置默认值参考 / Built-in Defaults Reference
+# ===========================================================================
+#
+# 如果不提供策略文件，Guard 使用以下内置默认值：
+# If no policy file is provided, Guard uses these built-in defaults:
+#
+# network.allowed_domains:
+#   - api.openai.com, *.openai.com, *.googleapis.com, *.anthropic.com
+#   - *.githubusercontent.com, github.com, pypi.org, *.python.org
+#   - registry.npmjs.org, *.huggingface.co
+#
+# process.allowed_commands:
+#   - python3, python, node, cat, ls, find, grep, echo
+#   - head, tail, wc, sort, mkdir, cp, mv
+#
+# file_operations.forbidden_paths:
+#   - /etc/, ~/.ssh/, ~/.aws/, ~/.gnupg/, ~/.config/, ~/.env, /root/, /var/log/
+#
+# resources:
+#   - max_timeout_seconds: 300
+#   - max_output_size_mb: 100
+#
+# ===========================================================================
+# 规则 ID 参考 / Rule IDs Reference
+# ===========================================================================
+#
+# | Rule ID   | Category        | Severity | Description                        |
+# |-----------|-----------------|----------|------------------------------------|
+# | NET-001   | network         | high     | 非白名单域名 / Non-whitelisted domain |
+# | NET-002   | network         | critical | 原始 socket / Raw socket usage      |
+# | PROC-001  | process         | medium   | 非允许命令 / Non-allowed command     |
+# | PROC-002  | process         | critical | Shell 注入 / Shell injection         |
+# | FS-001    | file_operations | high     | 禁止路径访问 / Forbidden path access  |
+# | FS-002    | file_operations | critical | 破坏性操作 / Destructive operation    |
+# | RES-001   | resource        | high     | 死循环/Fork bomb / Infinite loop     |
+# | RES-002   | resource        | medium   | 资源过度消耗 / Excessive resources    |
+# | SEC-001   | secrets         | critical | 硬编码密钥 / Hardcoded secrets        |
+# | SEC-002   | secrets         | high     | 环境变量泄露 / Env var leakage        |
+# | DEP-001   | dependency      | medium   | 包安装 / Package installation         |
+# | DEP-002   | dependency      | high     | 不受信源安装 / Untrusted source       |
+# | GUARD-001 | process         | low      | AST 解析失败 / AST parse failure      |
+#
+# ===========================================================================
+# 决策机制 / Decision Mechanism
+# ===========================================================================
+#
+# Decision（DENY / NEEDS_HUMAN_REVIEW / ALLOW）由各规则在 scan() 时自行决定，
+# Guard 最终对所有 Finding 做 "strictest-wins" 汇总：
+#   DENY > NEEDS_HUMAN_REVIEW > ALLOW
+#
+# Each rule's scan() independently determines the decision for its findings.
+# Guard aggregates all findings using a "strictest-wins" strategy:
+#   DENY > NEEDS_HUMAN_REVIEW > ALLOW
+#
+# ===========================================================================
