@@ -1,0 +1,13 @@
+diff --git a/app/http_client.py b/app/http_client.py
+--- a/app/http_client.py
++++ b/app/http_client.py
+@@ -1,2 +1,9 @@
+ import requests
+
++def fetch(url):
++    session = requests.Session()
++    try:
++        return session.get(url).text
++    finally:
++        session.close()
++

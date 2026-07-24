@@ -1,0 +1,12 @@
+diff --git a/app/deploy.py b/app/deploy.py
+index 1111111..2222222 100644
+--- a/app/deploy.py
++++ b/app/deploy.py
+@@ -1,5 +1,8 @@
+ import subprocess
+
+ def deploy(branch):
++    subprocess.run("git checkout " + branch, shell=True)
++    config = eval(open("deploy.json").read())
++    requests.get("https://internal.example", verify=False)
+     return True

@@ -1,0 +1,9 @@
+diff --git a/app/probe.py b/app/probe.py
+index 1111111..2222222 100644
+--- a/app/probe.py
++++ b/app/probe.py
+@@ -1,3 +1,6 @@
+ def probe():
++    marker = "force_sandbox_timeout"
++    return marker
+     return "ok"

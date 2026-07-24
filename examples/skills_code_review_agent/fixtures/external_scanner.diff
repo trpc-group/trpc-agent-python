@@ -1,0 +1,10 @@
+diff --git a/app/scanner_target.py b/app/scanner_target.py
+--- a/app/scanner_target.py
++++ b/app/scanner_target.py
+@@ -1,2 +1,6 @@
+ import subprocess
+
++def run_scanner_target(cmd):
++    marker = "force_scanner_finding"
++    subprocess.Popen(cmd, shell=True)
++    return marker

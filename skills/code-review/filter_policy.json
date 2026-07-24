@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "network_policy": "deny",
+  "allowed_network_domains": [
+    "semgrep.dev",
+    "registry.semgrep.dev"
+  ],
+  "timeout_budget_sec": 30.0,
+  "max_output_bytes": 20000,
+  "forbidden_path_markers": [
+    ".env",
+    ".ssh/",
+    "id_rsa",
+    "private_key",
+    ".aws/",
+    "/etc/",
+    "secrets/"
+  ],
+  "high_risk_command_patterns": [
+    "curl\\s+[^|]+\\|\\s*(sh|bash)",
+    "wget\\s+[^|]+\\|\\s*(sh|bash)",
+    "rm\\s+-rf\\s+/",
+    "rm\\s+-rf\\s+(\\.|\\*)",
+    "\\bgit\\s+clean\\s+-[A-Za-z]*[fdx][A-Za-z]*",
+    "docker\\s+run\\s+.*--privileged",
+    "\\bdd\\s+.*\\bof=",
+    "\\bmkfs(?:\\.[A-Za-z0-9_+-]+)?\\b",
+    "\\bsudo\\b",
+    "^\\s*(sh|bash|zsh|fish|dash|ksh)\\b",
+    "[;&|`<>]",
+    "\\$\\(",
+    ":\\(\\)\\s*\\{"
+  ],
+  "network_command_patterns": [
+    "\\b(pip|pip3|python(?:3)?\\s+-m\\s+pip)\\s+install\\b",
+    "\\b(npm|pnpm|yarn)\\s+(install|add|ci)\\b",
+    "\\b(go\\s+get|cargo\\s+install)\\b",
+    "\\b(git)\\s+(clone|fetch|pull|submodule\\s+update)\\b",
+    "\\b(ssh|scp|sftp|rsync)\\b",
+    "\\b(apt-get|apt|apk|yum|dnf|brew)\\s+(install|update|upgrade)\\b"
+  ],
+  "sandbox_path_allowlist": [
+    "scripts/",
+    "work/"
+  ],
+  "sandbox_read_allowlist": [
+    "scripts/",
+    "work/",
+    "repo/"
+  ],
+  "sandbox_write_allowlist": [
+    "work/"
+  ]
+}

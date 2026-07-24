@@ -1,0 +1,63 @@
+{
+  "clean": [],
+  "security_issue": [
+    "security.subprocess.shell-true",
+    "security.dynamic-code",
+    "security.tls-verify-false",
+    "tests.changed-source-without-test"
+  ],
+  "async_resource_leak": [
+    "async.untracked-create-task",
+    "resource.open-without-context",
+    "resource.session-without-close",
+    "tests.changed-source-without-test"
+  ],
+  "db_lifecycle": [
+    "db.connection-lifecycle",
+    "db.transaction-without-rollback",
+    "db.write-without-transaction",
+    "security.sql-interpolation",
+    "tests.changed-source-without-test"
+  ],
+  "missing_tests": [
+    "tests.changed-source-without-test"
+  ],
+  "duplicate_findings": [
+    "security.subprocess.shell-true",
+    "tests.changed-source-without-test"
+  ],
+  "sandbox_failure": [
+    "tests.changed-source-without-test"
+  ],
+  "secret_redaction": [
+    "security.secret.material",
+    "tests.changed-source-without-test"
+  ],
+  "hidden_like_multiline": [
+    "security.subprocess.shell-true",
+    "security.sql-interpolation",
+    "security.sql-tainted-execute",
+    "security.subprocess.tainted-shell",
+    "async.stored-task-not-observed",
+    "tests.changed-source-without-test"
+  ],
+  "ast_taint": [
+    "security.subprocess.tainted-shell",
+    "security.sql-tainted-execute",
+    "security.sql-interpolation",
+    "security.sql-tainted-execute",
+    "tests.changed-source-without-test"
+  ],
+  "entropy_secret": [
+    "security.secret.material",
+    "tests.changed-source-without-test"
+  ],
+  "external_scanner": [
+    "scanner.bandit.B602",
+    "security.subprocess.shell-true",
+    "tests.changed-source-without-test"
+  ],
+  "resource_lifecycle_closed": [
+    "tests.changed-source-without-test"
+  ]
+}

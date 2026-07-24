@@ -1,0 +1,9 @@
+FROM python:3-slim
+
+RUN python -m pip install --no-cache-dir \
+    bandit \
+    detect-secrets \
+    pytest \
+    ruff
+
+WORKDIR /work

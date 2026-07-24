@@ -1,0 +1,13 @@
+diff --git a/app/worker.py b/app/worker.py
+index 1111111..2222222 100644
+--- a/app/worker.py
++++ b/app/worker.py
+@@ -1,5 +1,10 @@
+ import asyncio
+ import aiohttp
+
+ async def handle(event):
++    asyncio.create_task(process(event))
++    session = aiohttp.ClientSession()
++    data = open("/tmp/result.txt")
+     return event.id

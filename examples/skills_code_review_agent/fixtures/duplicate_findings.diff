@@ -1,0 +1,10 @@
+diff --git a/app/admin.py b/app/admin.py
+index 1111111..2222222 100644
+--- a/app/admin.py
++++ b/app/admin.py
+@@ -1,3 +1,7 @@
+ def run(cmd):
++    subprocess.run(cmd, shell=True)
++    subprocess.run(cmd, shell=True)
++    subprocess.run("echo safe", shell=True)
+     return None
