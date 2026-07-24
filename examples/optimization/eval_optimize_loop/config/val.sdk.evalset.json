@@ -1,0 +1,94 @@
+{
+  "eval_set_id": "plate_agent_val",
+  "name": "PlateAgent Validation Set - License Plate Recognition",
+  "description": "3 validation plate images for per-round full evaluation and gate decision",
+  "eval_cases": [
+    {
+      "eval_id": "val_clear_001",
+      "conversation": [
+        {
+          "invocation_id": "v1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Identify plate: image: plate_005.jpg"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "B54321"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "plate_optimizer",
+        "user_id": "validator",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_noise_002",
+      "conversation": [
+        {
+          "invocation_id": "v2",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Identify plate: image: plate_015.jpg"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "C36X1Z"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "plate_optimizer",
+        "user_id": "validator",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "val_confuse_003",
+      "conversation": [
+        {
+          "invocation_id": "v3",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Identify plate: image: plate_022.jpg"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "B1XS79"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "plate_optimizer",
+        "user_id": "validator",
+        "state": {}
+      }
+    }
+  ]
+}

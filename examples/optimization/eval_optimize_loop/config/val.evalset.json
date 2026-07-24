@@ -1,0 +1,47 @@
+{
+  "_description": "???",
+  "version": "1.0.0",
+  "cases": [
+    {
+      "case_id": "val_001",
+      "image": "plate_005.jpg",
+      "ground_truth": "\u7ca4B54321",
+      "conditions": {
+        "type": "clear"
+      },
+      "expected_behavior": "should_pass",
+      "critical": true,
+      "description": "??case"
+    },
+    {
+      "case_id": "val_002",
+      "image": "plate_029.jpg",
+      "ground_truth": "\u82cfD13579",
+      "conditions": {
+        "type": "noise",
+        "noise_level": 0.2
+      },
+      "expected_behavior": "should_fail_baseline",
+      "critical": false,
+      "description": "??+???"
+    },
+    {
+      "case_id": "val_003",
+      "image": "plate_018.jpg",
+      "ground_truth": "\u6d59C36912",
+      "conditions": {
+        "type": "blur",
+        "blur_kernel": 7
+      },
+      "expected_behavior": "should_fail_baseline",
+      "critical": false,
+      "description": "????"
+    }
+  ],
+  "stats": {
+    "total": 3,
+    "should_pass": 1,
+    "should_fail_baseline": 2,
+    "critical": 1
+  }
+}

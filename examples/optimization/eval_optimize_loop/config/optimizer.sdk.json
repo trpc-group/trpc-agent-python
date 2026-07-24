@@ -1,0 +1,28 @@
+{
+  "_description": "AgentOptimizer config (SDK format) - matches trpc_agent_sdk.evaluation.AgentOptimizer",
+  "optimization": {
+    "algorithm": "gepa",
+    "metric": {
+      "primary": "contains",
+      "primary_config": {
+        "must_contain": []
+      }
+    },
+    "stop_conditions": {
+      "max_iterations": 5,
+      "target_pass_rate": 0.8,
+      "patience": 2
+    },
+    "reflection": {
+      "max_recent_rounds": 3,
+      "minibatch_size": 2
+    },
+    "module_selector": {
+      "strategy": "round_robin"
+    }
+  },
+  "evaluation": {
+    "num_runs": 1,
+    "timeout_seconds": 30
+  }
+}

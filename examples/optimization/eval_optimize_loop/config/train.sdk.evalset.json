@@ -1,0 +1,36 @@
+{
+  "eval_set_id": "plate_agent_train",
+  "name": "PlateAgent Train Set - License Plate Recognition",
+  "description": "3 representative plate images covering clear/noise/blur scenarios for GEPA reflection mini-batch",
+  "eval_cases": [
+    {
+      "eval_id": "train_clear_001",
+      "conversation": [
+        {
+          "invocation_id": "t1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Identify plate: image: plate_001.jpg"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "A12345"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "plate_optimizer",
+        "user_id": "trainer",
+        "state": {}
+      }
+    }
+  ]
+}
