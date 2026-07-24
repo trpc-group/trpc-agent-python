@@ -1,0 +1,33 @@
+name: example-tool-safety-policy
+mode: standard
+fail_closed: true
+review_blocks_execution: true
+allowed_domains:
+  - api.github.com
+allowed_commands:
+  - cat
+  - curl
+  - echo
+  - grep
+  - ls
+  - python
+  - python3
+  - rm
+denied_paths:
+  - ~/.ssh
+  - ~/.aws
+  - ~/.config/gcloud
+  - .env
+  - .env.*
+  - /etc
+  - /var/run/docker.sock
+sensitive_env_keys:
+  - "*KEY*"
+  - "*TOKEN*"
+  - "*SECRET*"
+  - "*PASSWORD*"
+max_timeout_seconds: 300
+max_output_bytes: 1048576
+max_script_lines: 2000
+max_sleep_seconds: 3600
+max_evidence_chars: 200

