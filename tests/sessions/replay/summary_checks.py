@@ -3,14 +3,16 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""summary 专项检测:loss / overwrite / affiliation 三类故障。
+"""summary 专项检测:loss / overwrite / affiliation 三类故障 + 文本语义相似度工具。
 
 三分比较里的「存储元数据」(version / session_id)严格相等,三类故障由本模块显式检测。
-「内容语义」预留接口(当前未接入,待需求明确时实现)。
+``summary_text_similarity`` 为纯工具函数(已单测覆盖),预留语义比较接口;
+``SUMMARY_SIM_THRESHOLD`` 已删除 —— 该常量此前无任何调用方(helloopenworld review)。
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from typing import Literal
 
@@ -22,6 +24,25 @@ class SummaryIssue(BaseModel):
     session_id: str
     summary_id: str | None = None
     detail: dict[str, Any]
+
+
+def _tokenize(text: str) -> list[str]:
+    return re.findall(r"\w+", text.lower())
+
+
+def summary_text_similarity(a: str | None, b: str | None) -> float:
+    """分词集合 Jaccard 相似度。任一空串返回 0.0。
+
+    纯工具函数(已单测覆盖);当前未接入 check_summary_issues 主流程,
+    待「内容语义比较」需求明确后再决定是否接入(helloopenworld review)。
+    """
+    if not a or not b:
+        return 0.0
+    ta = set(_tokenize(a))
+    tb = set(_tokenize(b))
+    if not ta or not tb:
+        return 0.0
+    return len(ta & tb) / len(ta | tb)
 
 
 def check_summary_issues(
