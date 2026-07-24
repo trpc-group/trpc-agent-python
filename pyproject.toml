@@ -211,3 +211,8 @@ minversion = "6.0"
 addopts = "-ra -q"
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "replay_lightweight: deterministic Session/Memory/Summary replay consistency tests",
+    "replay_integration: environment-gated replay consistency tests for external backends",
+    "replay_property: optional property-based replay consistency tests",
+]

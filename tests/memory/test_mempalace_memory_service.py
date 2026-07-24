@@ -7,19 +7,30 @@
 
 from __future__ import annotations
 
+import importlib.util
 import time
 from typing import Optional
 
-from trpc_agent_sdk.abc import MemoryServiceConfig
+import pytest
+
+_HAS_MEMPALACE = importlib.util.find_spec("mempalace") is not None
+pytestmark = pytest.mark.skipif(
+    not _HAS_MEMPALACE,
+    reason="MemPalace memory tests require the optional mempalace extra",
+)
+
 from trpc_agent_sdk.context import new_agent_context
 from trpc_agent_sdk.events import Event
-from trpc_agent_sdk.memory.mempalace_memory_service import MempalaceMemoryService
-from trpc_agent_sdk.memory.mempalace_memory_service import get_mempalace_filters
-from trpc_agent_sdk.memory.mempalace_memory_service import set_mempalace_filters
 from trpc_agent_sdk.sessions import Session
 from trpc_agent_sdk.types import Content
 from trpc_agent_sdk.types import Part
 from trpc_agent_sdk.types import SearchMemoryResponse
+
+if _HAS_MEMPALACE:
+    from trpc_agent_sdk.abc import MemoryServiceConfig
+    from trpc_agent_sdk.memory.mempalace_memory_service import MempalaceMemoryService
+    from trpc_agent_sdk.memory.mempalace_memory_service import get_mempalace_filters
+    from trpc_agent_sdk.memory.mempalace_memory_service import set_mempalace_filters
 
 
 def _make_config() -> MemoryServiceConfig:

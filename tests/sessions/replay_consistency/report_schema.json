@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SessionMemorySummaryReplayReport",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "harness_version",
+    "mode",
+    "case_id",
+    "backend_pair",
+    "metrics",
+    "diffs",
+    "unexpected_diffs",
+    "allowed_diffs"
+  ],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "harness_version": {"type": "string"},
+    "generated_at": {"type": "string"},
+    "mode": {"type": "string"},
+    "case_id": {"type": "string"},
+    "backend_pair": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {"type": "string"}
+    },
+    "capabilities": {"type": ["object", "null"]},
+    "environment": {"type": ["object", "null"]},
+    "metrics": {"type": "object"},
+    "diffs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/diff"}
+    },
+    "unexpected_diffs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/diff"}
+    },
+    "allowed_diffs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/diff"}
+    }
+  },
+  "$defs": {
+    "diff": {
+      "type": "object",
+      "required": [
+        "case_id",
+        "backend_pair",
+        "entity_type",
+        "field_path",
+        "reference_value",
+        "actual_value",
+        "allowed",
+        "category",
+        "reason"
+      ],
+      "properties": {
+        "case_id": {"type": "string"},
+        "backend_pair": {"type": "array"},
+        "session_id": {"type": ["string", "null"]},
+        "entity_type": {"type": "string"},
+        "entity_id": {"type": ["string", "null"]},
+        "index": {"type": ["integer", "null"]},
+        "field_path": {"type": "string"},
+        "reference_value": {},
+        "actual_value": {},
+        "allowed": {"type": "boolean"},
+        "category": {"type": "string"},
+        "reason": {"type": "string"},
+        "allowed_rule_id": {"type": "string"}
+      }
+    }
+  }
+}

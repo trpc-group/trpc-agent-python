@@ -65,6 +65,8 @@ jobs:
   test:
     runs-on: [self-hosted, trpc-agent-python-ci]
     timeout-minutes: 20
+    env:
+      REPLAY_REPORT_DIR: ${{ github.workspace }}/replay-reports
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,7 +77,18 @@ jobs:
 
       - name: Run tests with coverage
         # run: pytest --cov=trpc_agent_sdk --cov-report=xml --cov-report=term tests/
-        run: pytest --cov=trpc_agent_sdk --cov-report=xml --cov-report=term --cov-fail-under=80 tests/
+        run: |
+          mkdir -p "$REPLAY_REPORT_DIR"
+          pytest --cov=trpc_agent_sdk --cov-report=xml --cov-report=term --cov-fail-under=80 tests/
+
+      - name: Upload replay consistency reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: replay-consistency-reports
+          path: ${{ env.REPLAY_REPORT_DIR }}
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4

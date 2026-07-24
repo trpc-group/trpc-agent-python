@@ -1,0 +1,68 @@
+[
+  {
+    "case_id": "single_turn_text",
+    "description": "One user message and one assistant response.",
+    "operations": ["create_session", "append_text", "append_text", "store_memory", "search_memory"],
+    "covers": ["event", "memory"]
+  },
+  {
+    "case_id": "multi_turn_text",
+    "description": "Three deterministic user/assistant turns.",
+    "operations": ["create_session", "append_text", "append_text", "append_text", "append_text", "append_text", "append_text", "store_memory", "search_memory"],
+    "covers": ["event", "memory"]
+  },
+  {
+    "case_id": "tool_call_response",
+    "description": "Function call, matching response, and an error-shaped response payload.",
+    "operations": ["create_session", "append_tool_call", "append_tool_response", "append_tool_response"],
+    "covers": ["event", "tool_call", "tool_response"]
+  },
+  {
+    "case_id": "state_shallow_update",
+    "description": "Session, app, and user state updates with shallow replacement semantics.",
+    "operations": ["create_session", "append_text", "append_text", "append_text"],
+    "covers": ["event", "state"]
+  },
+  {
+    "case_id": "memory_scope_user_session",
+    "description": "Same user across sessions and different user isolation.",
+    "operations": ["create_session", "create_session", "create_session", "append_text", "append_text", "append_text", "store_memory", "store_memory", "store_memory", "search_memory", "search_memory", "search_memory", "search_memory"],
+    "covers": ["event", "memory", "cross_user_isolation", "cross_session_scope"]
+  },
+  {
+    "case_id": "summary_create_update",
+    "description": "Create and then update a session summary.",
+    "operations": ["create_session", "append_text", "append_text", "append_text", "append_text", "summarize", "append_text", "append_text", "summarize"],
+    "covers": ["event", "summary", "summary_overwrite"]
+  },
+  {
+    "case_id": "summary_event_truncation",
+    "description": "Summary plus retained recent events, followed by new events.",
+    "operations": ["create_session", "append_text", "append_text", "append_text", "append_text", "append_text", "summarize", "append_text", "store_memory", "search_memory"],
+    "covers": ["event", "memory", "summary", "historical_events"]
+  },
+  {
+    "case_id": "failure_retry_append",
+    "description": "Same logical event retried after an ambiguous acknowledgement.",
+    "operations": ["create_session", "append_text", "append_text", "store_memory", "search_memory"],
+    "covers": ["event", "memory", "duplicate_detection"]
+  },
+  {
+    "case_id": "cross_session_isolation",
+    "description": "Two sessions for one user with separate state and summaries.",
+    "operations": ["create_session", "create_session", "append_text", "append_text", "append_text", "summarize", "append_text", "append_text", "append_text", "summarize"],
+    "covers": ["event", "state", "summary", "cross_session_isolation"]
+  },
+  {
+    "case_id": "summary_defect_specials",
+    "description": "Dense summary scenario used by summary mutation tests.",
+    "operations": ["create_session", "append_text", "append_text", "append_text", "append_text", "summarize", "append_text", "append_text", "summarize"],
+    "covers": ["event", "summary", "summary_loss", "summary_overwrite", "summary_owner_error"]
+  },
+  {
+    "case_id": "all_entities_contract",
+    "description": "Compact case with text, tool, state, memory, and summary entities.",
+    "operations": ["create_session", "append_text", "append_tool_call", "append_tool_response", "append_text", "summarize", "store_memory", "search_memory"],
+    "covers": ["event", "state", "memory", "summary", "tool_call", "tool_response"]
+  }
+]
