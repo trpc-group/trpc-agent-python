@@ -57,6 +57,9 @@ def _import_docker():
     making the entire ``trpc_agent_sdk`` package unusable. By deferring the
     import to call-time we ensure that users who never touch
     ``ContainerCodeExecutor`` are unaffected.
+
+    If the docker package is not installed, ``docker`` stays ``None`` and
+    callers should check via the ``docker is None`` guard.
     """
     global _docker_imported, docker, Container, consume_socket_output, demux_adaptor, frames_iter
     if _docker_imported:
@@ -64,16 +67,19 @@ def _import_docker():
     with _docker_lock:
         if _docker_imported:
             return
-        import docker as _docker_mod
-        from docker.models.containers import Container as _Container
-        from docker.utils.socket import consume_socket_output as _cso
-        from docker.utils.socket import demux_adaptor as _da
-        from docker.utils.socket import frames_iter as _fi
-        docker = _docker_mod
-        Container = _Container
-        consume_socket_output = _cso
-        demux_adaptor = _da
-        frames_iter = _fi
+        try:
+            import docker as _docker_mod
+            from docker.models.containers import Container as _Container
+            from docker.utils.socket import consume_socket_output as _cso
+            from docker.utils.socket import demux_adaptor as _da
+            from docker.utils.socket import frames_iter as _fi
+            docker = _docker_mod
+            Container = _Container
+            consume_socket_output = _cso
+            demux_adaptor = _da
+            frames_iter = _fi
+        except ImportError:
+            pass  # docker stays None; caller checks `if docker is None`
         _docker_imported = True
 
 

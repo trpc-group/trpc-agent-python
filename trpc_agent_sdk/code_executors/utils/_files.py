@@ -42,7 +42,16 @@ def _has_magic() -> bool:
 
 # Backward-compatible public alias (was a module-level bool before this PR).
 # External code may reference it as ``from ..._files import HAS_MAGIC``.
-HAS_MAGIC = False  # updated lazily; see _has_magic() for the live value
+# On non-win32, probe once at import time to preserve the original semantics
+# (HAS_MAGIC reflects availability immediately, not deferred to first call).
+if sys.platform != 'win32':
+    try:
+        import magic as _magic_mod
+        _magic_module = _magic_mod
+        _magic_checked = True
+    except Exception:
+        _magic_checked = True
+HAS_MAGIC = _magic_module is not None
 
 
 def path_join(base: str, path: str) -> str:
