@@ -13,6 +13,7 @@ import asyncio
 import atexit
 import os
 import socket as pysocket
+import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
@@ -30,9 +31,7 @@ if TYPE_CHECKING:
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.utils import CommandExecResult
 
-import threading
-
-# Runtime cache for Docker SDK symbols (populated by _import_docker()).
+# Runtime cache
 # Not exposed as module-level public names to avoid shadowing the
 # TYPE_CHECKING type aliases above.
 _docker_mod = None
@@ -74,7 +73,7 @@ def _import_docker():
             _docker_demux_adaptor = _da
             _docker_frames_iter = _fi
         except Exception:
-            pass  # _docker_mod stays None; caller checks guard
+            logger.debug("Docker SDK import failed; _docker_mod stays None", exc_info=True)
         _docker_imported = True
 
 
