@@ -143,6 +143,10 @@ class ContainerClient:
         """
         # Lazily import the Docker SDK on first real use.
         _import_docker()
+        # Guard: if docker is still None after import attempt (e.g. SDK not installed),
+        # fail with a clear error rather than AttributeError later.
+        if docker is None:
+            raise RuntimeError("Docker SDK is not available. Install it with: pip install docker")
         # Try to initialize Docker client
         # Let docker SDK handle connection detection (it supports various methods)
         try:
