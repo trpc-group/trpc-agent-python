@@ -1,0 +1,771 @@
+{
+  "eval_set_id": "train-mixed-v2",
+  "name": "Training Set — Mixed Domains V2",
+  "description": "26 diverse training cases covering math, reasoning, tool use, multi-turn, Chinese, edge cases, and format requirements. Contains ~9 intentional failure patterns for optimization.",
+  "eval_cases": [
+    {
+      "eval_id": "train_simple_math_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t001",
+          "user_content": {"parts": [{"text": "What is 25 + 17?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "42"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t001",
+          "user_content": {"parts": [{"text": "What is 25 + 17?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "25 + 17 = 42"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_simple_math_002_fail",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t002",
+          "user_content": {"parts": [{"text": "Calculate 144 / 12"}], "role": "user"},
+          "final_response": {"parts": [{"text": "12"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t002",
+          "user_content": {"parts": [{"text": "Calculate 144 / 12"}], "role": "user"},
+          "final_response": {"parts": [{"text": "144 / 12 = 13"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_simple_math_003",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t003",
+          "user_content": {"parts": [{"text": "What is 3.5 * 2?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "7"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t003",
+          "user_content": {"parts": [{"text": "What is 3.5 * 2?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "3.5 * 2 = 7.0"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_simple_math_004_fail",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t004",
+          "user_content": {"parts": [{"text": "Find 15% of 200"}], "role": "user"},
+          "final_response": {"parts": [{"text": "30"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t004",
+          "user_content": {"parts": [{"text": "Find 15% of 200"}], "role": "user"},
+          "final_response": {"parts": [{"text": "15% of 200 is 25. Here is how I calculated it: 200 * 0.15 = 25"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_simple_math_005",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t005",
+          "user_content": {"parts": [{"text": "What is 2^8?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "256"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t005",
+          "user_content": {"parts": [{"text": "What is 2^8?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "2^8 = 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 = 256"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_simple_math_006",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t006",
+          "user_content": {"parts": [{"text": "Convert 0.75 to a fraction in simplest form"}], "role": "user"},
+          "final_response": {"parts": [{"text": "3/4"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t006",
+          "user_content": {"parts": [{"text": "Convert 0.75 to a fraction in simplest form"}], "role": "user"},
+          "final_response": {"parts": [{"text": "0.75 = 75/100 = 3/4"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_reasoning_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t007",
+          "user_content": {"parts": [{"text": "If a train travels 60 km/h for 2.5 hours, then 80 km/h for 1.5 hours, how far did it go?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "270 km"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t007",
+          "user_content": {"parts": [{"text": "If a train travels 60 km/h for 2.5 hours, then 80 km/h for 1.5 hours, how far did it go?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "First leg: 60 * 2.5 = 150 km. Second leg: 80 * 1.5 = 120 km. Total: 150 + 120 = 270 km"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_reasoning_002_fail",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t008",
+          "user_content": {"parts": [{"text": "A book costs $24.99 with 8% tax. What is the total cost?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "$26.99"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t008",
+          "user_content": {"parts": [{"text": "A book costs $24.99 with 8% tax. What is the total cost?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "Tax: $24.99 * 0.08 = $2.00. Total: $24.99 + $2.00 = $26.99"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": [{"text": "Tax: $24.99 * 0.08 = $2.00"}]}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_reasoning_003",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t009",
+          "user_content": {"parts": [{"text": "If 3 workers build 3 walls in 3 days, how many walls can 6 workers build in 6 days?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "12 walls"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t009",
+          "user_content": {"parts": [{"text": "If 3 workers build 3 walls in 3 days, how many walls can 6 workers build in 6 days?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "Rate: 3 workers build 1 wall/day. 6 workers build 2 walls/day. In 6 days: 2 * 6 = 12 walls."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_reasoning_004_fail",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t010",
+          "user_content": {"parts": [{"text": "Calculate (15 * 4) + (20 / 5) - 3"}], "role": "user"},
+          "final_response": {"parts": [{"text": "61"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t010",
+          "user_content": {"parts": [{"text": "Calculate (15 * 4) + (20 / 5) - 3"}], "role": "user"},
+          "final_response": {"parts": [{"text": "The answer is 60"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_reasoning_005",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t011",
+          "user_content": {"parts": [{"text": "The sum of two numbers is 50 and their difference is 10. What are the two numbers?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "30 and 20"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t011",
+          "user_content": {"parts": [{"text": "The sum of two numbers is 50 and their difference is 10. What are the two numbers?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "Let x and y be the numbers. x + y = 50, x - y = 10. Adding: 2x = 60, x = 30. Then y = 20. The numbers are 30 and 20."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_reasoning_006",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t012",
+          "user_content": {"parts": [{"text": "A rectangle has a perimeter of 30 and an area of 50. Find its length and width."}], "role": "user"},
+          "final_response": {"parts": [{"text": "Length 10, Width 5"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t012",
+          "user_content": {"parts": [{"text": "A rectangle has a perimeter of 30 and an area of 50. Find its length and width."}], "role": "user"},
+          "final_response": {"parts": [{"text": "2(l+w)=30, lw=50. From first: l+w=15. Solving: w^2-15w+50=0, (w-5)(w-10)=0. So w=5, l=10 (or vice versa). Length=10, Width=5."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_tool_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t013",
+          "user_content": {"parts": [{"text": "Calculate the compound interest on $5000 at 4% for 3 years, compounded annually."}], "role": "user"},
+          "final_response": {"parts": [{"text": "$624.32"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t013",
+          "user_content": {"parts": [{"text": "Calculate the compound interest on $5000 at 4% for 3 years, compounded annually."}], "role": "user"},
+          "final_response": {"parts": [{"text": "A = 5000 * (1 + 0.04)^3 = 5000 * 1.124864 = 5624.32. Compound interest = 5624.32 - 5000 = $624.32"}], "role": "model"},
+          "intermediate_data": {
+            "tool_uses": [
+              {"tool_name": "calculate", "arguments": {"expression": "5000 * (1 + 0.04)^3"}},
+              {"tool_name": "calculate", "arguments": {"expression": "5624.32 - 5000"}}
+            ],
+            "tool_responses": [
+              {"result": "5624.32"},
+              {"result": "624.32"}
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "train_tool_002_fail",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t014",
+          "user_content": {"parts": [{"text": "A car depreciates 15% per year from $25000. What is its value after 3 years?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "$15353.13"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t014",
+          "user_content": {"parts": [{"text": "A car depreciates 15% per year from $25000. What is its value after 3 years?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "25000 * (1 - 0.15)^3 = 25000 * 0.85^3 = 25000 * 0.614125 = $15353.13"}], "role": "model"},
+          "intermediate_data": {
+            "tool_uses": [
+              {"tool_name": "calculate", "arguments": {"expression": "25000 * (1 - 0.15)^3"}}
+            ],
+            "tool_responses": [
+              {"result": "15721.25"}
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "train_tool_003",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t015",
+          "user_content": {"parts": [{"text": "Calculate the square root of 256 plus the cube root of 27."}], "role": "user"},
+          "final_response": {"parts": [{"text": "19"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t015",
+          "user_content": {"parts": [{"text": "Calculate the square root of 256 plus the cube root of 27."}], "role": "user"},
+          "final_response": {"parts": [{"text": "sqrt(256) = 16, cbrt(27) = 3, 16 + 3 = 19"}], "role": "model"},
+          "intermediate_data": {
+            "tool_uses": [
+              {"tool_name": "calculate", "arguments": {"expression": "sqrt(256)"}},
+              {"tool_name": "calculate", "arguments": {"expression": "cbrt(27)"}}
+            ],
+            "tool_responses": [
+              {"result": "16"},
+              {"result": "3"}
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "train_tool_004",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t016",
+          "user_content": {"parts": [{"text": "Convert 68 degrees Fahrenheit to Celsius using the formula C = (F - 32) * 5/9"}], "role": "user"},
+          "final_response": {"parts": [{"text": "20°C"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t016",
+          "user_content": {"parts": [{"text": "Convert 68 degrees Fahrenheit to Celsius using the formula C = (F - 32) * 5/9"}], "role": "user"},
+          "final_response": {"parts": [{"text": "C = (68 - 32) * 5/9 = 36 * 5/9 = 20°C"}], "role": "model"},
+          "intermediate_data": {
+            "tool_uses": [
+              {"tool_name": "calculate", "arguments": {"expression": "(68 - 32) * 5/9"}}
+            ],
+            "tool_responses": [
+              {"result": "20"}
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "train_tool_005",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t017",
+          "user_content": {"parts": [{"text": "Calculate the volume of a cylinder with radius 5 cm and height 10 cm. Use pi = 3.14159."}], "role": "user"},
+          "final_response": {"parts": [{"text": "785.40 cubic cm"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t017",
+          "user_content": {"parts": [{"text": "Calculate the volume of a cylinder with radius 5 cm and height 10 cm. Use pi = 3.14159."}], "role": "user"},
+          "final_response": {"parts": [{"text": "V = pi * r^2 * h = 3.14159 * 25 * 10 = 785.3975 cubic cm"}], "role": "model"},
+          "intermediate_data": {
+            "tool_uses": [
+              {"tool_name": "calculate", "arguments": {"expression": "3.14159 * 25 * 10"}}
+            ],
+            "tool_responses": [
+              {"result": "785.3975"}
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "train_tool_006_fail",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t018",
+          "user_content": {"parts": [{"text": "What is the present value of $10000 received 5 years from now, discounted at 6% annually?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "$7,472.58"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t018",
+          "user_content": {"parts": [{"text": "What is the present value of $10000 received 5 years from now, discounted at 6% annually?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "PV = 10000 / (1 + 0.06)^5 = 10000 / 1.3382... = approximately $7,470"}], "role": "model"},
+          "intermediate_data": {
+            "tool_uses": [
+              {"tool_name": "calculate", "arguments": {"expression": "10000 / (1.06)^5"}}
+            ],
+            "tool_responses": [
+              {"result": "7472.58"}
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "train_multiturn_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t019",
+          "user_content": {"parts": [{"text": "Calculate 45 * 12"}], "role": "user"},
+          "final_response": {"parts": [{"text": "540"}], "role": "model"}
+        },
+        {
+          "invocation_id": "inv-t020",
+          "user_content": {"parts": [{"text": "Now divide that result by 3"}], "role": "user"},
+          "final_response": {"parts": [{"text": "180"}], "role": "model"}
+        },
+        {
+          "invocation_id": "inv-t021",
+          "user_content": {"parts": [{"text": "Add 100 to that"}], "role": "user"},
+          "final_response": {"parts": [{"text": "280"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t019",
+          "user_content": {"parts": [{"text": "Calculate 45 * 12"}], "role": "user"},
+          "final_response": {"parts": [{"text": "45 * 12 = 540"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        },
+        {
+          "invocation_id": "inv-t020",
+          "user_content": {"parts": [{"text": "Now divide that result by 3"}], "role": "user"},
+          "final_response": {"parts": [{"text": "540 / 3 = 180"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        },
+        {
+          "invocation_id": "inv-t021",
+          "user_content": {"parts": [{"text": "Add 100 to that"}], "role": "user"},
+          "final_response": {"parts": [{"text": "180 + 100 = 280"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_multiturn_002_fail",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t022",
+          "user_content": {"parts": [{"text": "What is 100 minus 37?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "63"}], "role": "model"}
+        },
+        {
+          "invocation_id": "inv-t023",
+          "user_content": {"parts": [{"text": "Multiply that result by 2"}], "role": "user"},
+          "final_response": {"parts": [{"text": "126"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t022",
+          "user_content": {"parts": [{"text": "What is 100 minus 37?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "100 - 37 = 63"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        },
+        {
+          "invocation_id": "inv-t023",
+          "user_content": {"parts": [{"text": "Multiply that result by 2"}], "role": "user"},
+          "final_response": {"parts": [{"text": "63 * 2 = 136"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_multiturn_003",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t024",
+          "user_content": {"parts": [{"text": "Start with 50, double it"}], "role": "user"},
+          "final_response": {"parts": [{"text": "100"}], "role": "model"}
+        },
+        {
+          "invocation_id": "inv-t025",
+          "user_content": {"parts": [{"text": "Now halve that result"}], "role": "user"},
+          "final_response": {"parts": [{"text": "50"}], "role": "model"}
+        },
+        {
+          "invocation_id": "inv-t026",
+          "user_content": {"parts": [{"text": "Add 25 to the current value"}], "role": "user"},
+          "final_response": {"parts": [{"text": "75"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t024",
+          "user_content": {"parts": [{"text": "Start with 50, double it"}], "role": "user"},
+          "final_response": {"parts": [{"text": "50 * 2 = 100"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        },
+        {
+          "invocation_id": "inv-t025",
+          "user_content": {"parts": [{"text": "Now halve that result"}], "role": "user"},
+          "final_response": {"parts": [{"text": "100 / 2 = 50"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        },
+        {
+          "invocation_id": "inv-t026",
+          "user_content": {"parts": [{"text": "Add 25 to the current value"}], "role": "user"},
+          "final_response": {"parts": [{"text": "50 + 25 = 75"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_multiturn_004",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t027",
+          "user_content": {"parts": [{"text": "A pizza has 8 slices. If 3 friends each eat 2 slices, how many are left?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "2 slices"}], "role": "model"}
+        },
+        {
+          "invocation_id": "inv-t028",
+          "user_content": {"parts": [{"text": "If they order another pizza with 12 slices, how many total slices do they have now including the leftovers?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "14 slices"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t027",
+          "user_content": {"parts": [{"text": "A pizza has 8 slices. If 3 friends each eat 2 slices, how many are left?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "3 friends * 2 slices = 6 slices eaten. 8 - 6 = 2 slices left."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        },
+        {
+          "invocation_id": "inv-t028",
+          "user_content": {"parts": [{"text": "If they order another pizza with 12 slices, how many total slices do they have now including the leftovers?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "2 leftover + 12 new = 14 slices total."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_chinese_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t029",
+          "user_content": {"parts": [{"text": "请计算三百五十六加上七百八十九等于多少？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "1145"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t029",
+          "user_content": {"parts": [{"text": "请计算三百五十六加上七百八十九等于多少？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "三百五十六 + 七百八十九 = 356 + 789 = 1145"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_chinese_002",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t030",
+          "user_content": {"parts": [{"text": "小明有25个苹果，给了小红8个，又买了15个，现在有多少个苹果？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "32个"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t030",
+          "user_content": {"parts": [{"text": "小明有25个苹果，给了小红8个，又买了15个，现在有多少个苹果？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "25 - 8 = 17, 17 + 15 = 32。小明现在有32个苹果。"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_chinese_003_fail",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t031",
+          "user_content": {"parts": [{"text": "一个三角形底为12厘米，高为8厘米，求面积"}], "role": "user"},
+          "final_response": {"parts": [{"text": "48平方厘米"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t031",
+          "user_content": {"parts": [{"text": "一个三角形底为12厘米，高为8厘米，求面积"}], "role": "user"},
+          "final_response": {"parts": [{"text": "三角形面积 = 底 * 高 / 2 = 12 * 8 / 2 = 48厘米"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_chinese_004",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t032",
+          "user_content": {"parts": [{"text": "一件衣服原价380元，打八五折后多少钱？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "323元"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t032",
+          "user_content": {"parts": [{"text": "一件衣服原价380元，打八五折后多少钱？"}], "role": "user"},
+          "final_response": {"parts": [{"text": "八五折即85%，380 * 0.85 = 323元"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_edge_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t033",
+          "user_content": {"parts": [{"text": "What is 0 divided by 5?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "0"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t033",
+          "user_content": {"parts": [{"text": "What is 0 divided by 5?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "0 divided by any non-zero number is 0. So 0 / 5 = 0."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_edge_002",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t034",
+          "user_content": {"parts": [{"text": "Calculate 999999 * 999999"}], "role": "user"},
+          "final_response": {"parts": [{"text": "999998000001"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t034",
+          "user_content": {"parts": [{"text": "Calculate 999999 * 999999"}], "role": "user"},
+          "final_response": {"parts": [{"text": "999999 * 999999 = (1000000 - 1)^2 = 1000000000000 - 2000000 + 1 = 999998000001"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_edge_003_fail",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t035",
+          "user_content": {"parts": [{"text": "What is -15 + (-25) * 2?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "-65"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t035",
+          "user_content": {"parts": [{"text": "What is -15 + (-25) * 2?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "-15 + (-25) * 2 = -15 + (-50) = -35"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_edge_004",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t036",
+          "user_content": {"parts": [{"text": "If x = 0.1 + 0.2 in Python, is x exactly equal to 0.3? Explain."}], "role": "user"},
+          "final_response": {"parts": [{"text": "No, due to floating-point precision, 0.1 + 0.2 equals approximately 0.30000000000000004, not exactly 0.3."}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t036",
+          "user_content": {"parts": [{"text": "If x = 0.1 + 0.2 in Python, is x exactly equal to 0.3? Explain."}], "role": "user"},
+          "final_response": {"parts": [{"text": "No. In IEEE 754 floating-point, 0.1 and 0.2 cannot be represented exactly. 0.1 + 0.2 evaluates to 0.30000000000000004, not exactly 0.3. This is a well-known floating-point precision issue."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_format_001",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t037",
+          "user_content": {"parts": [{"text": "Calculate 125 / 5 + 14 * 2. Answer in JSON format: {\"operation\": \"division and multiplication\", \"result\": <number>}"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"operation\": \"125 / 5 + 14 * 2\", \"steps\": [\"125 / 5 = 25\", \"14 * 2 = 28\", \"25 + 28 = 53\"], \"result\": 53}"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t037",
+          "user_content": {"parts": [{"text": "Calculate 125 / 5 + 14 * 2. Answer in JSON format: {\"operation\": \"division and multiplication\", \"result\": <number>}"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"operation\": \"125 / 5 + 14 * 2\", \"steps\": [\"125 / 5 = 25\", \"14 * 2 = 28\", \"25 + 28 = 53\"], \"result\": 53}"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_format_002",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t038",
+          "user_content": {"parts": [{"text": "Show the results of 36 * 4, 81 / 9, and 7^3 in a markdown table with columns: Expression, Result"}], "role": "user"},
+          "final_response": {"parts": [{"text": "| Expression | Result |\n|------------|--------|\n| 36 * 4     | 144    |\n| 81 / 9     | 9      |\n| 7^3        | 343    |"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t038",
+          "user_content": {"parts": [{"text": "Show the results of 36 * 4, 81 / 9, and 7^3 in a markdown table with columns: Expression, Result"}], "role": "user"},
+          "final_response": {"parts": [{"text": "| Expression | Result |\n|------------|--------|\n| 36 * 4     | 144    |\n| 81 / 9     | 9      |\n| 7^3        | 343    |"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_format_003",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t039",
+          "user_content": {"parts": [{"text": "What is the factorial of 6? Output ONLY the number, no text."}], "role": "user"},
+          "final_response": {"parts": [{"text": "720"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t039",
+          "user_content": {"parts": [{"text": "What is the factorial of 6? Output ONLY the number, no text."}], "role": "user"},
+          "final_response": {"parts": [{"text": "720"}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    },
+    {
+      "eval_id": "train_format_004_fail",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "inv-t040",
+          "user_content": {"parts": [{"text": "Calculate the product of 17 and 23. Reply with ONLY the numeric result, nothing else."}], "role": "user"},
+          "final_response": {"parts": [{"text": "391"}], "role": "model"}
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "inv-t040",
+          "user_content": {"parts": [{"text": "Calculate the product of 17 and 23. Reply with ONLY the numeric result, nothing else."}], "role": "user"},
+          "final_response": {"parts": [{"text": "The product is 391."}], "role": "model"},
+          "intermediate_data": {"tool_uses": [], "tool_responses": [], "intermediate_responses": []}
+        }
+      ]
+    }
+  ]
+}
