@@ -1,0 +1,9 @@
+diff --git a/app/files.py b/app/files.py
+index 4000001..4000002 100644
+--- a/app/files.py
++++ b/app/files.py
+@@ -1,4 +1,6 @@
+ def read_token(path):
+-    return ""
++    handle = open(path, encoding="utf-8")
++    return handle.read()

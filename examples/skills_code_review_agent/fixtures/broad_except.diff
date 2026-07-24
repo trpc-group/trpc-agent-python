@@ -1,0 +1,11 @@
+diff --git a/app/worker.py b/app/worker.py
+index 3000001..3000002 100644
+--- a/app/worker.py
++++ b/app/worker.py
+@@ -1,5 +1,10 @@
+ def run_job(job):
+-    return job.run()
++    try:
++        return job.run()
++    except Exception:
++        return None

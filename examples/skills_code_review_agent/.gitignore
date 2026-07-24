@@ -1,0 +1,7 @@
+output/
+output_clean/
+*.db
+*.sqlite
+*.sqlite3
+__pycache__/
+.pytest_cache/
