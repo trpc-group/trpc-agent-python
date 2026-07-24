@@ -307,3 +307,34 @@ class TestReport:
         report = build_diff_report("in_memory", results)
         assert report["cases"][0]["status"] == "not_applicable"
         assert report["totals"]["not_applicable"] == 1
+
+    def test_report_fpr_excludes_known_drift(self):
+        """FPR 只按正常 case 计算:drift 的 mismatch 既不计入分子也不计入分母(设计 §6)。
+
+        mixture:drift_one=drift mismatch / normal_mismatch=正常 mismatch / normal_match=正常 match。
+        错误口径(含 drift)FPR=2/3≈0.667;正确口径 FPR=1/2=0.5。totals 仍统计全部 case。
+        """
+        results = [
+            CaseResult(
+                case_id="drift_one",
+                session_id="s1",
+                comparisons=[Comparison(candidate_backend="sqlite", status="mismatch", diffs=[_diff()])],
+            ),
+            CaseResult(
+                case_id="normal_mismatch",
+                session_id="s2",
+                comparisons=[Comparison(candidate_backend="sqlite", status="mismatch", diffs=[_diff()])],
+            ),
+            CaseResult(
+                case_id="normal_match",
+                session_id="s3",
+                comparisons=[Comparison(candidate_backend="sqlite", status="match")],
+            ),
+        ]
+        report = build_diff_report("in_memory", results, known_drift_cases=["drift_one"])
+        # totals 仍统计全部 case(含 drift)
+        assert report["totals"]["mismatched"] == 2
+        assert report["totals"]["matched"] == 1
+        # FPR 只按正常 case:normal_mismatch=1 / normal_total=2 = 0.5,drift 不进分子分母
+        assert report["false_positive_rate"] == 0.5
+        assert report["known_drift_cases"] == ["drift_one"]

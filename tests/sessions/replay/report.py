@@ -74,9 +74,16 @@ def build_diff_report(
     reference_backend: str,
     case_results: list[CaseResult],
     backend_statuses: list[BackendStatus] | None = None,
+    known_drift_cases: list[str] | None = None,
 ) -> dict[str, Any]:
-    """组装差异报告 dict(可 json.dump)。"""
+    """组装差异报告 dict(可 json.dump)。
+
+    ``false_positive_rate`` 仅按「正常 case」(排除 ``known_drift_cases``)计算 ——
+    drift case 是框架检出的真 bug,既不计入误报率分子也不计入分母(设计 §6)。
+    ``totals`` 仍统计全部 case(含 drift)。
+    """
     statuses = backend_statuses or []
+    drift_set = set(known_drift_cases or [])
     totals = {
         "cases": len(case_results),
         "matched": 0,
@@ -86,13 +93,13 @@ def build_diff_report(
     }
     cases_out: list[dict[str, Any]] = []
     normal_mismatch = 0
+    normal_total = 0
     for cr in case_results:
         st = _roll_up_status(cr.comparisons)
         if st == "match":
             totals["matched"] += 1
         elif st == "mismatch":
             totals["mismatched"] += 1
-            normal_mismatch += 1
         elif st == "not_applicable":
             totals["not_applicable"] += 1
         elif st == "skipped":
@@ -103,8 +110,13 @@ def build_diff_report(
             "status": st,
             "comparisons": [c.model_dump() for c in cr.comparisons],
         })
+        # FPR 只按正常 case(排除 drift);totals 不受影响。
+        if cr.case_id not in drift_set:
+            normal_total += 1
+            if st == "mismatch":
+                normal_mismatch += 1
 
-    fpr = (normal_mismatch / len(case_results)) if case_results else 0.0
+    fpr = (normal_mismatch / normal_total) if normal_total else 0.0
     return {
         "schema_version": 3,
         "reference_backend": reference_backend,
@@ -113,7 +125,7 @@ def build_diff_report(
         "totals": totals,
         "false_positive_rate": fpr,
         "cases": cases_out,
-        "known_drift_cases": [],  # 由 E2E 测试手动填充(E2E 扩展字段,schema 级一致性)
+        "known_drift_cases": sorted(drift_set),
     }
 
 
