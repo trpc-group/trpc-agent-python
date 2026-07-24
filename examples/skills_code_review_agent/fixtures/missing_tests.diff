@@ -1,0 +1,19 @@
+diff --git a/app/pricing.py b/app/pricing.py
+index aa11bb2..cc33dd4 100644
+--- a/app/pricing.py
++++ b/app/pricing.py
+@@ -12,6 +12,15 @@ TAX_RATE = 0.13
+ BULK_THRESHOLD = 50
+
+
++def bulk_discount(quantity: int) -> float:
++    """Discount rate for bulk orders (new tier structure)."""
++    if quantity >= BULK_THRESHOLD * 4:
++        return 0.15
++    if quantity >= BULK_THRESHOLD:
++        return 0.08
++    return 0.0
++
++
+ def unit_price(sku: str) -> float:
+     return PRICE_TABLE.get(sku, 0.0)

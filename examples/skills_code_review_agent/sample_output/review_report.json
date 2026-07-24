@@ -1,0 +1,179 @@
+{
+  "task_id": "9f3d2c1b0a9e48d7b6c5a4f3e2d1c0b9",
+  "created_at": "2026-07-06T08:00:00.000000+00:00",
+  "input": {
+    "type": "fixture",
+    "ref": "security_issue.diff",
+    "diff_summary": {
+      "file_count": 2,
+      "hunk_count": 2,
+      "added_line_count": 15,
+      "removed_line_count": 0,
+      "files": [
+        {
+          "path": "app/admin.py",
+          "old_path": "app/admin.py",
+          "status": "modified",
+          "is_binary": false,
+          "hunk_count": 1,
+          "added_count": 10,
+          "removed_count": 0,
+          "hunk_ranges": [
+            [
+              8,
+              16
+            ]
+          ],
+          "candidate_lines": [
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ]
+        },
+        {
+          "path": "tests/test_admin.py",
+          "old_path": "tests/test_admin.py",
+          "status": "modified",
+          "is_binary": false,
+          "hunk_count": 1,
+          "added_count": 5,
+          "removed_count": 0,
+          "hunk_ranges": [
+            [
+              3,
+              8
+            ]
+          ],
+          "candidate_lines": [
+            6,
+            7,
+            8,
+            9,
+            10
+          ]
+        }
+      ]
+    }
+  },
+  "status": "completed",
+  "summary": "Automated review found 2 finding(s) (critical=2) and 0 item(s) needing human review.\n- [critical] app/admin.py:13 — Shell command built from dynamic input (command injection risk)\n- [critical] app/admin.py:17 — SQL statement built from dynamic strings (SQL injection risk)\nFix the critical/high items before merging; see per-finding recommendations in the report.",
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "security_risk",
+      "file": "app/admin.py",
+      "line": 13,
+      "title": "Shell command built from dynamic input (command injection risk)",
+      "evidence": "os.system(\"tar czf /backups/\" + username + \".tgz /home/\" + username)",
+      "recommendation": "Never concatenate or interpolate user input into a command string; pass an argv list and validate inputs.",
+      "confidence": 0.88,
+      "source": "static_rule",
+      "rule_id": "SEC009",
+      "extra": {
+        "also_matched": [
+          "SEC001"
+        ]
+      }
+    },
+    {
+      "severity": "critical",
+      "category": "security_risk",
+      "file": "app/admin.py",
+      "line": 17,
+      "title": "SQL statement built from dynamic strings (SQL injection risk)",
+      "evidence": "cursor.execute(f\"SELECT id, role FROM users WHERE name = '{name}'\")",
+      "recommendation": "Use parameterized queries: cursor.execute(\"... WHERE name = %s\", (name,)) instead of f-strings or string concatenation.",
+      "confidence": 0.85,
+      "source": "static_rule",
+      "rule_id": "SEC006"
+    }
+  ],
+  "needs_human_review": [],
+  "severity_stats": {
+    "critical": 2,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "info": 0
+  },
+  "filter_summary": {
+    "total_decisions": 1,
+    "blocked": 0,
+    "events": [
+      {
+        "stage": "sandbox_gate",
+        "target": "skills/code-review/scripts/run_checks.py",
+        "action": "allow",
+        "rule": "",
+        "reasons": []
+      }
+    ]
+  },
+  "sandbox_summary": {
+    "total_runs": 1,
+    "runs": [
+      {
+        "run_index": 0,
+        "kind": "static_checks",
+        "runtime_kind": "local",
+        "cmd": "python3",
+        "status": "ok",
+        "filter_action": "allow",
+        "filter_reasons": [],
+        "exit_code": 0,
+        "timed_out": false,
+        "duration_ms": 88.4,
+        "output_truncated": false,
+        "error_type": ""
+      }
+    ]
+  },
+  "metrics": {
+    "total_duration_ms": 171.35,
+    "sandbox_duration_ms": 88.4,
+    "sandbox_run_count": 1,
+    "tool_call_count": 3,
+    "llm_call_count": 1,
+    "filter_block_count": 0,
+    "filter_decisions": {
+      "allow": 1,
+      "deny": 0,
+      "needs_human_review": 0
+    },
+    "finding_count": 2,
+    "needs_human_review_count": 0,
+    "deduplicated_count": 1,
+    "redaction_count": 0,
+    "severity_distribution": {
+      "critical": 2,
+      "high": 0,
+      "medium": 0,
+      "low": 0,
+      "info": 0
+    },
+    "error_types": {}
+  },
+  "recommendations": [
+    {
+      "file": "app/admin.py",
+      "line": 13,
+      "severity": "critical",
+      "title": "Shell command built from dynamic input (command injection risk)",
+      "recommendation": "Never concatenate or interpolate user input into a command string; pass an argv list and validate inputs."
+    },
+    {
+      "file": "app/admin.py",
+      "line": 17,
+      "severity": "critical",
+      "title": "SQL statement built from dynamic strings (SQL injection risk)",
+      "recommendation": "Use parameterized queries: cursor.execute(\"... WHERE name = %s\", (name,)) instead of f-strings or string concatenation."
+    }
+  ]
+}

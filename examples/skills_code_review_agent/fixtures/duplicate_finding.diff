@@ -1,0 +1,26 @@
+diff --git a/app/deploy.py b/app/deploy.py
+new file mode 100644
+index 0000000..9e8d7c6
+--- /dev/null
++++ b/app/deploy.py
+@@ -0,0 +1,9 @@
++import os
++
++
++def restart_service(service_name: str) -> None:
++    """Restart a service on the deployment host."""
++    os.system("systemctl restart " + service_name)
++
++
++SERVICES = ("api", "worker", "scheduler")
+diff --git a/tests/test_deploy.py b/tests/test_deploy.py
+new file mode 100644
+index 0000000..1a2b3c4
+--- /dev/null
++++ b/tests/test_deploy.py
+@@ -0,0 +1,5 @@
++from app.deploy import SERVICES
++
++
++def test_services_tuple():
++    assert "api" in SERVICES
