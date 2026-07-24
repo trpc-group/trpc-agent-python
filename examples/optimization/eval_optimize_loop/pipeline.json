@@ -1,0 +1,35 @@
+{
+  "mode": "trace",
+  "baseline_prompt_path": "prompts/baseline_system.md",
+  "candidate_prompt_path": "prompts/optimized_system.md",
+  "train_baseline_evalset": "evalsets/train_baseline.evalset.json",
+  "train_candidate_evalset": "evalsets/train_candidate.evalset.json",
+  "val_baseline_evalset": "evalsets/val_baseline.evalset.json",
+  "val_candidate_evalset": "evalsets/val_candidate.evalset.json",
+  "output_dir": "outputs",
+  "evaluate": {
+    "metrics": [
+      {
+        "metric_name": "final_response_avg_score",
+        "threshold": 1.0,
+        "criterion": {
+          "final_response": {
+            "text": {
+              "match": "contains",
+              "case_insensitive": true
+            }
+          }
+        }
+      }
+    ],
+    "num_runs": 1
+  },
+  "gate": {
+    "min_improvement": 0.0,
+    "allow_new_fails": false,
+    "protected_case_ids": [],
+    "max_cost_usd": null,
+    "max_duration_seconds": 180
+  },
+  "seed": 42
+}

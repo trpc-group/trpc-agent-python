@@ -1,0 +1,100 @@
+{
+  "eval_set_id": "val_baseline",
+  "name": "Validation set - baseline traces",
+  "description": "3 validation cases with baseline prompt traces. Contains: improves, no_change, and regression cases.",
+  "eval_cases": [
+    {
+      "eval_id": "case_val_improves",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "v1",
+          "user_content": {
+            "parts": [{"text": "一批商品共 50 件，其中 30% 是次品，次品有多少件？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：15 件"}],
+            "role": "model"
+          }
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "v1",
+          "user_content": {
+            "parts": [{"text": "一批商品共 50 件，其中 30% 是次品，次品有多少件？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：20 件"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_opt_loop", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "case_val_no_change",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "v2",
+          "user_content": {
+            "parts": [{"text": "已知 1 升水重 1 千克，3.5 升水重多少千克？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：3.5 千克"}],
+            "role": "model"
+          }
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "v2",
+          "user_content": {
+            "parts": [{"text": "已知 1 升水重 1 千克，3.5 升水重多少千克？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "重量为 3.5 千克"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_opt_loop", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "case_val_regression",
+      "eval_mode": "trace",
+      "conversation": [
+        {
+          "invocation_id": "v3",
+          "user_content": {
+            "parts": [{"text": "班里一共有 30 人，其中 60% 是女生，请问有多少名女生？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：18 人"}],
+            "role": "model"
+          }
+        }
+      ],
+      "actual_conversation": [
+        {
+          "invocation_id": "v3",
+          "user_content": {
+            "parts": [{"text": "班里一共有 30 人，其中 60% 是女生，请问有多少名女生？"}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "答案：18 人"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_opt_loop", "user_id": "validator", "state": {}}
+    }
+  ]
+}
