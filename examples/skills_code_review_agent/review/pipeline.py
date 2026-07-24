@@ -88,97 +88,97 @@ async def run_review(opts: ReviewOptions) -> ReviewResult:
     sandbox_ms = 0
     try:
         runtime = await create_runtime(opts.runtime)
-        if opts.runtime == "local":
-            warnings.append("local runtime is a development fallback; "
-                            "use container or cube in production")
-        session = SandboxSession(runtime, opts.skill_root, timeout_sec=opts.timeout_sec)
-        await session.open(f"cr_{task_id[:12]}")
         try:
-            await session.put_diff(opts.diff_text)
-            scripts = [("parse_diff.py", "parse")] + list(opts.checkers)
-            for script, category in scripts:
-                decision = engine.check_script(script, [DIFF_WS_PATH])
-                filter_events.append(decision)
-                await store.add_filter_event(task_id, decision.target, decision.decision,
-                                             decision.rule, decision.reason)
-                if decision.decision != "allow":
-                    continue
-                outcome = await session.run_script(script)
-                engine.record_run(outcome.duration_ms / 1000.0)
-                sandbox_ms += outcome.duration_ms
-                sandbox_outcomes.append(outcome)
-                await store.add_sandbox_run(
-                    task_id, script=script, category=category, status=outcome.status,
-                    exit_code=outcome.exit_code, duration_ms=outcome.duration_ms,
-                    timed_out=outcome.timed_out, stdout_summary=outcome.stdout[:4096],
-                    stderr_summary=outcome.stderr[:4096], error_type=outcome.error_type)
-                if outcome.status != "ok":
-                    key = outcome.error_type or outcome.status
-                    error_distribution[key] = error_distribution.get(key, 0) + 1
-                    warnings.append(f"{script} did not complete ({outcome.status}); "
-                                    "coverage degraded")
-                    continue
-                if script == "parse_diff.py":
-                    try:
-                        diff_summary = json.loads(outcome.stdout).get("summary", {})
-                    except (json.JSONDecodeError, ValueError):
-                        warnings.append("parse_diff.py produced invalid JSON")
-                else:
-                    raw_findings.extend(_parse_script_findings(outcome.stdout, warnings))
+            if opts.runtime == "local":
+                warnings.append("local runtime is a development fallback; "
+                                "use container or cube in production")
+            session = SandboxSession(runtime, opts.skill_root, timeout_sec=opts.timeout_sec)
+            await session.open(f"cr_{task_id[:12]}")
+            try:
+                await session.put_diff(opts.diff_text)
+                scripts = [("parse_diff.py", "parse")] + list(opts.checkers)
+                for script, category in scripts:
+                    decision = engine.check_script(script, [DIFF_WS_PATH])
+                    filter_events.append(decision)
+                    await store.add_filter_event(task_id, decision.target, decision.decision,
+                                                 decision.rule, decision.reason)
+                    if decision.decision != "allow":
+                        continue
+                    outcome = await session.run_script(script)
+                    engine.record_run(outcome.duration_ms / 1000.0)
+                    sandbox_ms += outcome.duration_ms
+                    sandbox_outcomes.append(outcome)
+                    await store.add_sandbox_run(
+                        task_id, script=script, category=category, status=outcome.status,
+                        exit_code=outcome.exit_code, duration_ms=outcome.duration_ms,
+                        timed_out=outcome.timed_out, stdout_summary=outcome.stdout[:4096],
+                        stderr_summary=outcome.stderr[:4096], error_type=outcome.error_type)
+                    if outcome.status != "ok":
+                        key = outcome.error_type or outcome.status
+                        error_distribution[key] = error_distribution.get(key, 0) + 1
+                        warnings.append(f"{script} did not complete ({outcome.status}); "
+                                        "coverage degraded")
+                        continue
+                    if script == "parse_diff.py":
+                        try:
+                            diff_summary = json.loads(outcome.stdout).get("summary", {})
+                        except (json.JSONDecodeError, ValueError):
+                            warnings.append("parse_diff.py produced invalid JSON")
+                    else:
+                        raw_findings.extend(_parse_script_findings(outcome.stdout, warnings))
+            finally:
+                await session.close()
+
+            llm_findings: list[Finding] = []
+            llm_summary = ""
+            llm_calls = 0
+            if opts.enable_llm:
+                repository = create_default_skill_repository(
+                    str(Path(opts.skill_root).parent), workspace_runtime=runtime)
+                gov_filter = GovernanceToolFilter(engine, on_event=filter_events.append)
+                agent = create_review_agent(repository, opts.dry_run, [gov_filter])
+                llm_findings, llm_summary, llm_warnings = await run_llm_review(
+                    agent, opts.diff_text, raw_findings)
+                warnings.extend(llm_warnings)
+                llm_calls = 1
+
+            kept, dropped = dedupe(raw_findings + llm_findings)
+            reported, needs_review = gate(kept)
+            await store.add_findings(task_id, reported, status="reported")
+            await store.add_findings(task_id, needs_review, status="needs_human_review")
+            await store.add_findings(task_id, dropped, status="deduped")
+
+            intercepts = sum(1 for e in filter_events if e.decision != "allow")
+            metrics = {
+                "total_duration_ms": int((time.monotonic() - start) * 1000),
+                "sandbox_duration_ms": sandbox_ms,
+                "tool_calls": len(sandbox_outcomes) + llm_calls,
+                "intercepts": intercepts,
+                "findings_total": len(reported),
+                "severity_distribution": severity_distribution(reported),
+                "error_distribution": error_distribution,
+            }
+            await store.add_metrics(task_id, metrics)
+
+            report = build_report(
+                task_id=task_id, input_ref=opts.input_ref, runtime=opts.runtime,
+                dry_run=opts.dry_run, diff_summary=diff_summary, reported=reported,
+                needs_review=needs_review, deduped_count=len(dropped),
+                filter_events=filter_events, sandbox_outcomes=sandbox_outcomes,
+                metrics=metrics, llm_summary=llm_summary, warnings=warnings)
+            report = json.loads(redact_text(json.dumps(report, indent=2, ensure_ascii=False, default=str)))
+            json_path, md_path = write_reports(report, opts.output_dir)
+            md_text = render_markdown(report)
+            await store.add_report(task_id, report, md_text)
+            await store.update_task(task_id, status="completed",
+                                    diff_summary=diff_summary, finished=True)
+            return ReviewResult(task_id=task_id, report=report,
+                                json_path=json_path, md_path=md_path)
         finally:
-            await session.close()
-
-        llm_findings: list[Finding] = []
-        llm_summary = ""
-        llm_calls = 0
-        if opts.enable_llm:
-            repository = create_default_skill_repository(
-                str(Path(opts.skill_root).parent), workspace_runtime=runtime)
-            gov_filter = GovernanceToolFilter(engine, on_event=filter_events.append)
-            agent = create_review_agent(repository, opts.dry_run, [gov_filter])
-            llm_findings, llm_summary, llm_warnings = await run_llm_review(
-                agent, opts.diff_text, raw_findings)
-            warnings.extend(llm_warnings)
-            llm_calls = 1
-
-        # Release runtime resources: cube sandbox clients hold network
-        # connections that must be torn down; container/local have no-op
-        # cleanup — the workspace was already cleaned by session.close().
-        if hasattr(runtime, "destroy"):
-            await runtime.destroy()
-
-        kept, dropped = dedupe(raw_findings + llm_findings)
-        reported, needs_review = gate(kept)
-        await store.add_findings(task_id, reported, status="reported")
-        await store.add_findings(task_id, needs_review, status="needs_human_review")
-        await store.add_findings(task_id, dropped, status="deduped")
-
-        intercepts = sum(1 for e in filter_events if e.decision != "allow")
-        metrics = {
-            "total_duration_ms": int((time.monotonic() - start) * 1000),
-            "sandbox_duration_ms": sandbox_ms,
-            "tool_calls": len(sandbox_outcomes) + llm_calls,
-            "intercepts": intercepts,
-            "findings_total": len(reported),
-            "severity_distribution": severity_distribution(reported),
-            "error_distribution": error_distribution,
-        }
-        await store.add_metrics(task_id, metrics)
-
-        report = build_report(
-            task_id=task_id, input_ref=opts.input_ref, runtime=opts.runtime,
-            dry_run=opts.dry_run, diff_summary=diff_summary, reported=reported,
-            needs_review=needs_review, deduped_count=len(dropped),
-            filter_events=filter_events, sandbox_outcomes=sandbox_outcomes,
-            metrics=metrics, llm_summary=llm_summary, warnings=warnings)
-        report = json.loads(redact_text(json.dumps(report, indent=2, ensure_ascii=False, default=str)))
-        json_path, md_path = write_reports(report, opts.output_dir)
-        md_text = render_markdown(report)
-        await store.add_report(task_id, report, md_text)
-        await store.update_task(task_id, status="completed",
-                                diff_summary=diff_summary, finished=True)
-        return ReviewResult(task_id=task_id, report=report,
-                            json_path=json_path, md_path=md_path)
+            # Release runtime resources: cube sandbox clients hold network
+            # connections that must be torn down even on exception paths.
+            if hasattr(runtime, "destroy"):
+                await runtime.destroy()
     except Exception:
         await store.update_task(task_id, status="failed", finished=True)
         raise

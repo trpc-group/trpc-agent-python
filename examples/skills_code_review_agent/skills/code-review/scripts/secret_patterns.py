@@ -20,7 +20,7 @@ SECRET_PATTERNS = [
     ("url_basic_auth", re.compile(r"[a-z][a-z0-9+.\-]*://[^/\s:@]+:[^@\s]+@")),
     ("sensitive_assign", re.compile(
         r"(?i)(password|passwd|secret|token|api_key|apikey|secret_token|db_password)"
-        r"\s*[:=]\s*[\"'][^\"']{6,}[\"']")),
+        r"\s*[:=]\s*\\?[\"'][^\"'\\]{6,}\\?[\"']")),
 ]
 
 

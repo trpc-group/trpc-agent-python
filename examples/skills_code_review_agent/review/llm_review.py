@@ -41,8 +41,20 @@ async def run_llm_review(agent, diff_text: str, static_findings) -> tuple[list[F
     warnings: list[str] = []
     runner = Runner(app_name="code_review_agent", agent=agent,
                     session_service=InMemorySessionService())
+    # Redact finding text fields individually before serialization:
+    # JSON-escaping (\" ) can defeat post-serialization regex on sensitive_assign
+    # patterns, so we redact each field first, then apply a belt-and-braces pass
+    # over the serialized JSON string.
+    redacted_dumps = []
+    for f in static_findings:
+        d = f.model_dump()
+        for field in ("evidence", "title", "recommendation"):
+            if d.get(field):
+                d[field] = redact_text(d[field])
+        redacted_dumps.append(d)
+    findings_json = redact_text(json.dumps(redacted_dumps))
     prompt = REVIEW_REQUEST_TEMPLATE.format(
-        findings_json=json.dumps([f.model_dump() for f in static_findings]),
+        findings_json=findings_json,
         diff=redact_text(diff_text))
     message = Content(role="user", parts=[Part.from_text(text=prompt)])
     final_text = ""
