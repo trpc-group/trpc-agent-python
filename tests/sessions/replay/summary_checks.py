@@ -3,22 +3,18 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""summary 专项检测:loss / overwrite / affiliation 三类故障 + 文本语义相似度。
+"""summary 专项检测:loss / overwrite / affiliation 三类故障。
 
-三分比较里的「内容语义」走分词集合 Jaccard(纯标准库,无 embedding 依赖);
-「存储元数据」(version / session_id)严格相等,三类故障由本模块显式检测。
+三分比较里的「存储元数据」(version / session_id)严格相等,三类故障由本模块显式检测。
+「内容语义」预留接口(当前未接入,待需求明确时实现)。
 """
 
 from __future__ import annotations
 
-import re
 from typing import Any
 from typing import Literal
 
 from pydantic import BaseModel
-
-SUMMARY_SIM_THRESHOLD = 0.8
-"""summary 文本 Jaccard 相似度阈值,之上判内容一致。"""
 
 
 class SummaryIssue(BaseModel):
@@ -26,21 +22,6 @@ class SummaryIssue(BaseModel):
     session_id: str
     summary_id: str | None = None
     detail: dict[str, Any]
-
-
-def _tokenize(text: str) -> list[str]:
-    return re.findall(r"\w+", text.lower())
-
-
-def summary_text_similarity(a: str | None, b: str | None) -> float:
-    """分词集合 Jaccard 相似度。任一空串返回 0.0。"""
-    if not a or not b:
-        return 0.0
-    ta = set(_tokenize(a))
-    tb = set(_tokenize(b))
-    if not ta or not tb:
-        return 0.0
-    return len(ta & tb) / len(ta | tb)
 
 
 def check_summary_issues(

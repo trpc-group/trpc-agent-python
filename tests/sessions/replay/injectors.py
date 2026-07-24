@@ -68,32 +68,42 @@ def inject_sql_diff(
     session_id: str,
     kind: str = "event_author",
 ) -> bool:
-    """端到端 SQL:直接 UPDATE 行,绕过 service 缓存。返回是否成功注入。"""
+    """端到端 SQL:直接 UPDATE 行,绕过 service 缓存。返回是否成功注入。
+
+    注意:state_value 注入用 Python 层 json.loads→→改值→→json.dumps,避免对 TEXT 列
+    用 json_set 导致双重序列化(与 SDK 写入格式不一致)。
+    """
     from sqlalchemy import create_engine
     from sqlalchemy import text
 
     engine = create_engine(db_url)
     injected = False
-    with engine.begin() as conn:
-        if kind == "event_author":
-            conn.execute(
-                text("UPDATE events SET author = :v WHERE session_id = :sid"),
-                {
-                    "v": "INJECTED-SQL",
-                    "sid": session_id
-                },
-            )
-            injected = True
-        elif kind == "state_value":
-            conn.execute(
-                text("UPDATE OR REPLACE app_states "
-                     "SET state = json_set(state, '$.injected', :v) WHERE app_name = :a"),
-                {
-                    "v": '"INJECTED"',
-                    "a": app_name
-                },
-            )
-            injected = True
+    try:
+        with engine.begin() as conn:
+            if kind == "event_author":
+                conn.execute(
+                    text("UPDATE events SET author = :v WHERE session_id = :sid"),
+                    {"v": "INJECTED-SQL", "sid": session_id},
+                )
+                injected = True
+            elif kind == "state_value":
+                # Python 层处理:读回 TEXT → json.loads → dict → 改值 → json.dumps → UPDATE
+                # 避免 json_set 作用于 TEXT 列的双重序列化问题(helloopenworld review)
+                result = conn.execute(
+                    text("SELECT state FROM app_states WHERE app_name = :a"),
+                    {"a": app_name}
+                )
+                row = result.fetchone()
+                if row and row[0]:
+                    state_dict = json.loads(row[0])
+                    state_dict["injected"] = "INJECTED"
+                    conn.execute(
+                        text("UPDATE OR REPLACE app_states SET state = :s WHERE app_name = :a"),
+                        {"s": json.dumps(state_dict, ensure_ascii=False), "a": app_name},
+                    )
+                    injected = True
+    finally:
+        engine.dispose()  # 资源清理(helloopenworld review Warning)
     return injected
 
 
@@ -104,21 +114,28 @@ def inject_redis_diff(
     session_id: str,
     kind: str = "event_author",
 ) -> bool:
-    """端到端 Redis:SET / HSET 改 key。需要真实 Redis 可达。"""
+    """端到端 Redis:SET / HSET 改 key。需要真实 Redis 可达。
+
+    设置 decode_responses=True 确保返回 str(与 SDK 一致),避免 bytes/str 混淆
+    (helloopenworld review Warning)。
+    """
     import redis
 
-    client = redis.from_url(redis_url)
+    client = redis.from_url(redis_url, decode_responses=True)  # 关键修复
     injected = False
-    if kind == "event_author":
-        key = f"session:{app_name}:{user_id}:{session_id}"
-        raw = client.get(key)
-        if raw:
-            data = json.loads(raw)
-            if data.get("events"):
-                data["events"][0]["author"] = "INJECTED-REDIS"
-                client.set(key, json.dumps(data))
-                injected = True
-    elif kind == "state_value":
-        client.hset(f"app_state:{app_name}", "injected", "INJECTED")
-        injected = True
+    try:
+        if kind == "event_author":
+            key = f"session:{app_name}:{user_id}:{session_id}"
+            raw = client.get(key)
+            if raw:
+                data = json.loads(raw)
+                if data.get("events"):
+                    data["events"][0]["author"] = "INJECTED-REDIS"
+                    client.set(key, json.dumps(data, ensure_ascii=False))
+                    injected = True
+        elif kind == "state_value":
+            client.hset(f"app_state:{app_name}", "injected", "INJECTED")
+            injected = True
+    finally:
+        client.close()  # 资源清理
     return injected
