@@ -1,0 +1,92 @@
+{
+  "eval_set_id": "eval_optimize_loop_train",
+  "name": "Eval Optimize Loop - train",
+  "description": "Training split for failure attribution and prompt optimization. The fake default path uses these cases to create an auditable candidate without calling any external model.",
+  "eval_cases": [
+    {
+      "eval_id": "train_refund_double_charge",
+      "conversation": [
+        {
+          "invocation_id": "train-1",
+          "user_content": {
+            "parts": [{"text": "Customer says they were double charged for invoice INV-42 and asks for a refund."}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "{\"action\":\"refund_review\",\"category\":\"billing\",\"priority\":\"p2\"}"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_demo", "user_id": "demo", "state": {}}
+    },
+    {
+      "eval_id": "train_password_reset",
+      "conversation": [
+        {
+          "invocation_id": "train-2",
+          "user_content": {
+            "parts": [{"text": "User cannot find the password reset email and asks how to change the email address."}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "{\"action\":\"answer\",\"category\":\"account\",\"priority\":\"p3\"}"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_demo", "user_id": "demo", "state": {}}
+    },
+    {
+      "eval_id": "train_legacy_sync",
+      "conversation": [
+        {
+          "invocation_id": "train-3",
+          "user_content": {
+            "parts": [{"text": "Legacy desktop sync intermittently stalls after migration; customer provided no logs."}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "{\"action\":\"escalate\",\"category\":\"technical\",\"priority\":\"p2\"}"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_demo", "user_id": "demo", "state": {}}
+    },
+    {
+      "eval_id": "train_plan_question",
+      "conversation": [
+        {
+          "invocation_id": "train-4",
+          "user_content": {
+            "parts": [{"text": "Prospect asks for a plan comparison between pricing tiers before buying."}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "{\"action\":\"answer\",\"category\":\"billing\",\"priority\":\"p3\"}"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_demo", "user_id": "demo", "state": {}}
+    },
+    {
+      "eval_id": "train_policy_tool_missing",
+      "conversation": [
+        {
+          "invocation_id": "train-5",
+          "user_content": {
+            "parts": [{"text": "Customer asks for the exact policy citation POL-77 before canceling an annual plan."}],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{"text": "{\"action\":\"policy_lookup\",\"category\":\"billing\",\"priority\":\"p2\"}"}],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop_demo", "user_id": "demo", "state": {}}
+    }
+  ]
+}
