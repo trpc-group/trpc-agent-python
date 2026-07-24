@@ -1,0 +1,58 @@
+{
+  "h_pickle.diff": {
+    "kind": "danger",
+    "category": "security"
+  },
+  "h_yaml_load.diff": {
+    "kind": "danger",
+    "category": "security"
+  },
+  "h_secret_key.diff": {
+    "kind": "danger",
+    "category": "secret_leakage"
+  },
+  "h_async_sleep.diff": {
+    "kind": "danger",
+    "category": "async_errors"
+  },
+  "h_open_leak.diff": {
+    "kind": "danger",
+    "category": "resource_leak"
+  },
+  "h_pg_conn.diff": {
+    "kind": "danger",
+    "category": "db_lifecycle"
+  },
+  "h_no_test.diff": {
+    "kind": "danger",
+    "category": "missing_tests"
+  },
+  "h_yaml_safe.diff": {
+    "kind": "safe",
+    "category": "security"
+  },
+  "h_json_safe.diff": {
+    "kind": "safe",
+    "category": "security"
+  },
+  "h_env_secret.diff": {
+    "kind": "safe",
+    "category": "secret_leakage"
+  },
+  "h_async_ok.diff": {
+    "kind": "safe",
+    "category": "async_errors"
+  },
+  "h_open_ok.diff": {
+    "kind": "safe",
+    "category": "resource_leak"
+  },
+  "h_pg_ok.diff": {
+    "kind": "safe",
+    "category": "db_lifecycle"
+  },
+  "h_with_test.diff": {
+    "kind": "safe",
+    "category": "missing_tests"
+  }
+}

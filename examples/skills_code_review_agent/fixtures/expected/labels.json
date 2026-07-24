@@ -1,0 +1,34 @@
+{
+  "clean.diff": {
+    "clean": true,
+    "expected": []
+  },
+  "security.diff": {
+    "clean": false,
+    "expected": [[1, "security"], [4, "security"], [7, "security"]]
+  },
+  "async_resource_leak.diff": {
+    "clean": false,
+    "expected": [[4, "async_errors"], [5, "async_errors"], [5, "resource_leak"]]
+  },
+  "db_lifecycle.diff": {
+    "clean": false,
+    "expected": [[4, "db_lifecycle"], [5, "db_lifecycle"]]
+  },
+  "missing_tests.diff": {
+    "clean": false,
+    "expected": []
+  },
+  "duplicate_finding.diff": {
+    "clean": false,
+    "expected": [[4, "security"]]
+  },
+  "sandbox_failure.diff": {
+    "clean": false,
+    "expected": []
+  },
+  "secret_redaction.diff": {
+    "clean": false,
+    "expected": [[4, "secret_leakage"]]
+  }
+}

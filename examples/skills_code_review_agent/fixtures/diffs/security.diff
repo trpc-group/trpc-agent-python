@@ -1,0 +1,13 @@
+diff --git a/security.py b/security.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/security.py
+@@ -0,0 +1,7 @@
++import subprocess
++
++def run(cmd):
++    return subprocess.call(cmd, shell=True)
++
++def calc(expr):
++    return eval(expr)

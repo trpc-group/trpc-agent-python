@@ -1,0 +1,10 @@
+diff --git a/deser.py b/deser.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/deser.py
+@@ -0,0 +1,4 @@
++import pickle
++
++def load(data):
++    return pickle.loads(data)

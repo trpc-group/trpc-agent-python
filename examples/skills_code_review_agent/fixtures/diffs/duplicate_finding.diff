@@ -1,0 +1,10 @@
+diff --git a/dup.py b/dup.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/dup.py
+@@ -0,0 +1,4 @@
++import os
++
++def deploy(target):
++    os.system("scp build " + target)

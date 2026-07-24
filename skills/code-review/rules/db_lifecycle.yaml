@@ -1,0 +1,27 @@
+rules:
+  - id: db-connection-without-context-manager
+    languages: [python]
+    severity: WARNING
+    message: >
+      Database connection opened without a context manager or explicit close(); the connection may
+      leak on an exception path. Use `with conn:` / a context manager, or ensure close() in finally.
+    patterns:
+      - pattern-either:
+          - pattern: $CONN = $DB.connect(...)
+          - pattern: $CONN = sqlite3.connect(...)
+          - pattern: $CONN = psycopg2.connect(...)
+      - pattern-not-inside: |
+          with ...:
+            ...
+
+  - id: cursor-execute-without-commit
+    languages: [python]
+    severity: WARNING
+    message: >
+      A write executed on a cursor without a visible commit()/rollback() in scope may not persist or
+      may hold a transaction open. Ensure the transaction is committed or rolled back.
+    patterns:
+      - pattern: $CUR.execute("...")
+      - metavariable-regex:
+          metavariable: $CUR
+          regex: (?i).*cursor.*

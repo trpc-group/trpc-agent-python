@@ -1,0 +1,12 @@
+diff --git a/pg_ok.py b/pg_ok.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/pg_ok.py
+@@ -0,0 +1,6 @@
++from contextlib import closing
++import psycopg2
++
++def q():
++    with closing(psycopg2.connect(host="db", user="app")) as conn:
++        return conn.cursor()

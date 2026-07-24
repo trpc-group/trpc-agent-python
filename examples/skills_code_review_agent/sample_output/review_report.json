@@ -1,0 +1,92 @@
+{
+  "task_id": "cr-sample-security",
+  "findings_summary": {
+    "total": 3,
+    "warnings": 1,
+    "needs_human_review": 0,
+    "by_category": {
+      "security": 3
+    }
+  },
+  "severity_stats": {
+    "critical": 0,
+    "high": 1,
+    "medium": 1,
+    "low": 1
+  },
+  "human_review": [
+    {
+      "severity": "low",
+      "category": "missing_tests",
+      "file": "security.py",
+      "line": null,
+      "title": "Source changed without accompanying tests",
+      "evidence": "1 source file(s) changed; no test file changed",
+      "recommendation": "Add or update tests covering the changed code.",
+      "confidence": 0.6,
+      "source": "rule",
+      "status": "warning",
+      "dedup_key": "security.py::missing_tests:cr:missing-tests",
+      "rule_id": "cr:missing-tests"
+    }
+  ],
+  "filter_blocks": [],
+  "monitoring": {
+    "total_sec": 0.525,
+    "sandbox_sec": 0,
+    "tool_calls": 4,
+    "block_count": 0,
+    "finding_count": 3,
+    "severity_dist": {
+      "low": 1,
+      "high": 1,
+      "medium": 1
+    },
+    "exception_dist": {}
+  },
+  "sandbox_summary": [],
+  "findings": [
+    {
+      "severity": "low",
+      "category": "security",
+      "file": "security.py",
+      "line": 1,
+      "title": "blacklist",
+      "evidence": "1 import subprocess\n2 \n3 def run(cmd):",
+      "recommendation": "Consider possible security implications associated with the subprocess module.",
+      "confidence": 0.9,
+      "source": "static",
+      "status": "active",
+      "dedup_key": "security.py:1:security",
+      "rule_id": "bandit:B404"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "security.py",
+      "line": 4,
+      "title": "subprocess_popen_with_shell_equals_true",
+      "evidence": "3 def run(cmd):\n4     return subprocess.call(cmd, shell=True)\n5",
+      "recommendation": "subprocess call with shell=True identified, security issue.",
+      "confidence": 0.9,
+      "source": "static",
+      "status": "active",
+      "dedup_key": "security.py:4:security",
+      "rule_id": "bandit:B602"
+    },
+    {
+      "severity": "medium",
+      "category": "security",
+      "file": "security.py",
+      "line": 7,
+      "title": "blacklist",
+      "evidence": "6 def calc(expr):\n7     return eval(expr)",
+      "recommendation": "Use of possibly insecure function - consider using safer ast.literal_eval.",
+      "confidence": 0.9,
+      "source": "static",
+      "status": "active",
+      "dedup_key": "security.py:7:security",
+      "rule_id": "bandit:B307"
+    }
+  ]
+}

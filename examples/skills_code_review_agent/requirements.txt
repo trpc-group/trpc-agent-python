@@ -1,0 +1,8 @@
+# Extra deps for the code-review example. These run scanner-side / inside the sandbox
+# and are intentionally NOT added to the SDK's own requirements (keep them out of core CI env).
+unidiff>=0.7            # unified-diff parsing
+bandit>=1.7             # Python security scanner (security category)
+semgrep>=1.60           # semantic pattern scanner (security / injection / deserialization / custom DB-lifecycle rules)
+detect-secrets>=1.5     # secret detection -> drives redaction spans (secret-leakage category)
+ruff>=0.5               # async-error / resource-leak lint rules
+greenlet>=3.0           # required by SQLAlchemy async engine (aiosqlite/asyncpg)
