@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Review"
+  short_description: "Review code changes with sandboxed security checks"
+  default_prompt: "Use $code-review to inspect these code changes and return actionable findings."
