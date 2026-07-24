@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -29,7 +30,7 @@ from tests.sessions.replay.injectors import inject_sql_diff
 from tests.sessions.replay.normalizer import normalize_snapshot
 from tests.sessions.replay.summary_checks import check_summary_issues
 
-CASES_DIR = "tests/sessions/replay/replay_cases"
+CASES_DIR = str(Path(__file__).parent / "replay" / "replay_cases")
 
 # 验收 2(字面):每条 case 配一种「该 case 结构支持」的注入,断言 100% 检出。
 _CASE_INJECTION = {
@@ -236,20 +237,17 @@ class TestEndToEndRedisInjection:
         await replay_case(backend, case)
 
         # 读回 app_state(Redis 存的是 hash,需要 HGETALL)
-        got = await backend.session_service.get_session(app_name="replay-state",
-                                                        user_id="u1",
-                                                        session_id="sess-state")
+        got = await backend.session_service.get_session(app_name="replay-state", user_id="u1", session_id="sess-state")
         before = normalize_snapshot(
-            ReplaySnapshot(backend_name="redis", session_id="sess-state", events=[e.model_dump() for e in got.events])
-        )
+            ReplaySnapshot(backend_name="redis", session_id="sess-state", events=[e.model_dump() for e in got.events]))
         assert inject_redis_diff(redis_url, "replay-state", "u1", "sess-state", "state_value")
         # 注入后重新读回 app_state
         after = await backend.session_service.get_session(app_name="replay-state",
-                                                         user_id="u1",
-                                                         session_id="sess-state")
+                                                          user_id="u1",
+                                                          session_id="sess-state")
         after = normalize_snapshot(
-            ReplaySnapshot(backend_name="redis", session_id="sess-state", events=[e.model_dump() for e in after.events])
-        )
+            ReplaySnapshot(backend_name="redis", session_id="sess-state",
+                           events=[e.model_dump() for e in after.events]))
 
         diffs = compare_snapshots(
             before,

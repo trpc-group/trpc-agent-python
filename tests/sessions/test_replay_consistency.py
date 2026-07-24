@@ -123,21 +123,18 @@ class TestReplayConsistencyE2E:
             case_results.append(
                 CaseResult(case_id=case.case_id, session_id=snap_ref.session_id, comparisons=comparisons))
 
-        # 误报率只算「正常 case」(排除已知 drift case —— 后者是框架发现的真 bug)。
+        # 正常 case(排除已知 drift —— 后者是框架发现的真 bug),用于下方误报率断言;
+        # 误报率本身由 build_diff_report(known_drift_cases=...) 内部计算(设计 §6)。
         normal = [cr for cr in case_results if cr.case_id not in KNOWN_DRIFT]
-        normal_mismatch = sum(1 for cr in normal if any(c.status == "mismatch" for c in cr.comparisons))
-        fpr = normal_mismatch / len(normal) if normal else 0.0
 
-        report = build_diff_report(reference.name, case_results, statuses)
-        report["false_positive_rate"] = fpr
-        report["known_drift_cases"] = sorted(KNOWN_DRIFT)
+        report = build_diff_report(reference.name, case_results, statuses, known_drift_cases=sorted(KNOWN_DRIFT))
         write_report(report, REPORT_PATH)
 
         # 验收 1:InMemory + 持久化(SQLite)对比。
         assert "sqlite" in report["compared_backends"]
-        # 验收 3:正常 case 误报率 0。
+        # 验收 3:正常 case 误报率 0(build_diff_report 已排除 drift,直接断言其输出)。
         bad = [cr.case_id for cr in normal if any(c.status == "mismatch" for c in cr.comparisons)]
-        assert fpr == 0.0, f"normal-case FPR>0: {bad}"
+        assert report["false_positive_rate"] == 0.0, f"normal-case FPR>0: {bad}"
         for cr in normal:
             for comp in cr.comparisons:
                 assert comp.status == "match", (f"unexpected mismatch in {cr.case_id}: "
