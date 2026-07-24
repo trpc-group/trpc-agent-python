@@ -1,0 +1,265 @@
+{
+  "comparisons": [
+    {
+      "actual_backend": "sqlite",
+      "allowed_diffs": [
+        {
+          "allowed": true,
+          "case_id": "single_turn_text",
+          "field_path": "sessions.*.events.*.id",
+          "reason": "event ids are SDK-generated unless fixed by the replay case"
+        },
+        {
+          "allowed": true,
+          "case_id": "single_turn_text",
+          "field_path": "sessions.*.events.*.timestamp",
+          "reason": "event timestamps are normalized away as non-business fields"
+        },
+        {
+          "allowed": true,
+          "case_id": "single_turn_text",
+          "field_path": "sessions.*.summary.anchor_timestamp",
+          "reason": "summary timestamps are compared by validity and order, not cross-backend equality"
+        }
+      ],
+      "case_id": "single_turn_text",
+      "diffs": [],
+      "expected_backend": "inmemory"
+    },
+    {
+      "actual_backend": "sqlite",
+      "allowed_diffs": [
+        {
+          "allowed": true,
+          "case_id": "multi_turn_text",
+          "field_path": "sessions.*.events.*.id",
+          "reason": "event ids are SDK-generated unless fixed by the replay case"
+        },
+        {
+          "allowed": true,
+          "case_id": "multi_turn_text",
+          "field_path": "sessions.*.events.*.timestamp",
+          "reason": "event timestamps are normalized away as non-business fields"
+        },
+        {
+          "allowed": true,
+          "case_id": "multi_turn_text",
+          "field_path": "sessions.*.summary.anchor_timestamp",
+          "reason": "summary timestamps are compared by validity and order, not cross-backend equality"
+        }
+      ],
+      "case_id": "multi_turn_text",
+      "diffs": [],
+      "expected_backend": "inmemory"
+    },
+    {
+      "actual_backend": "sqlite",
+      "allowed_diffs": [
+        {
+          "allowed": true,
+          "case_id": "tool_call_response",
+          "field_path": "sessions.*.events.*.id",
+          "reason": "event ids are SDK-generated unless fixed by the replay case"
+        },
+        {
+          "allowed": true,
+          "case_id": "tool_call_response",
+          "field_path": "sessions.*.events.*.timestamp",
+          "reason": "event timestamps are normalized away as non-business fields"
+        },
+        {
+          "allowed": true,
+          "case_id": "tool_call_response",
+          "field_path": "sessions.*.summary.anchor_timestamp",
+          "reason": "summary timestamps are compared by validity and order, not cross-backend equality"
+        }
+      ],
+      "case_id": "tool_call_response",
+      "diffs": [],
+      "expected_backend": "inmemory"
+    },
+    {
+      "actual_backend": "sqlite",
+      "allowed_diffs": [
+        {
+          "allowed": true,
+          "case_id": "state_overwrite",
+          "field_path": "sessions.*.events.*.id",
+          "reason": "event ids are SDK-generated unless fixed by the replay case"
+        },
+        {
+          "allowed": true,
+          "case_id": "state_overwrite",
+          "field_path": "sessions.*.events.*.timestamp",
+          "reason": "event timestamps are normalized away as non-business fields"
+        },
+        {
+          "allowed": true,
+          "case_id": "state_overwrite",
+          "field_path": "sessions.*.summary.anchor_timestamp",
+          "reason": "summary timestamps are compared by validity and order, not cross-backend equality"
+        }
+      ],
+      "case_id": "state_overwrite",
+      "diffs": [],
+      "expected_backend": "inmemory"
+    },
+    {
+      "actual_backend": "sqlite",
+      "allowed_diffs": [
+        {
+          "allowed": true,
+          "case_id": "memory_write_read",
+          "field_path": "sessions.*.events.*.id",
+          "reason": "event ids are SDK-generated unless fixed by the replay case"
+        },
+        {
+          "allowed": true,
+          "case_id": "memory_write_read",
+          "field_path": "sessions.*.events.*.timestamp",
+          "reason": "event timestamps are normalized away as non-business fields"
+        },
+        {
+          "allowed": true,
+          "case_id": "memory_write_read",
+          "field_path": "sessions.*.summary.anchor_timestamp",
+          "reason": "summary timestamps are compared by validity and order, not cross-backend equality"
+        }
+      ],
+      "case_id": "memory_write_read",
+      "diffs": [],
+      "expected_backend": "inmemory"
+    },
+    {
+      "actual_backend": "sqlite",
+      "allowed_diffs": [
+        {
+          "allowed": true,
+          "case_id": "summary_generation",
+          "field_path": "sessions.*.events.*.id",
+          "reason": "event ids are SDK-generated unless fixed by the replay case"
+        },
+        {
+          "allowed": true,
+          "case_id": "summary_generation",
+          "field_path": "sessions.*.events.*.timestamp",
+          "reason": "event timestamps are normalized away as non-business fields"
+        },
+        {
+          "allowed": true,
+          "case_id": "summary_generation",
+          "field_path": "sessions.*.summary.anchor_timestamp",
+          "reason": "summary timestamps are compared by validity and order, not cross-backend equality"
+        }
+      ],
+      "case_id": "summary_generation",
+      "diffs": [],
+      "expected_backend": "inmemory"
+    },
+    {
+      "actual_backend": "sqlite",
+      "allowed_diffs": [
+        {
+          "allowed": true,
+          "case_id": "summary_update",
+          "field_path": "sessions.*.events.*.id",
+          "reason": "event ids are SDK-generated unless fixed by the replay case"
+        },
+        {
+          "allowed": true,
+          "case_id": "summary_update",
+          "field_path": "sessions.*.events.*.timestamp",
+          "reason": "event timestamps are normalized away as non-business fields"
+        },
+        {
+          "allowed": true,
+          "case_id": "summary_update",
+          "field_path": "sessions.*.summary.anchor_timestamp",
+          "reason": "summary timestamps are compared by validity and order, not cross-backend equality"
+        }
+      ],
+      "case_id": "summary_update",
+      "diffs": [],
+      "expected_backend": "inmemory"
+    },
+    {
+      "actual_backend": "sqlite",
+      "allowed_diffs": [
+        {
+          "allowed": true,
+          "case_id": "summary_truncation_context",
+          "field_path": "sessions.*.events.*.id",
+          "reason": "event ids are SDK-generated unless fixed by the replay case"
+        },
+        {
+          "allowed": true,
+          "case_id": "summary_truncation_context",
+          "field_path": "sessions.*.events.*.timestamp",
+          "reason": "event timestamps are normalized away as non-business fields"
+        },
+        {
+          "allowed": true,
+          "case_id": "summary_truncation_context",
+          "field_path": "sessions.*.summary.anchor_timestamp",
+          "reason": "summary timestamps are compared by validity and order, not cross-backend equality"
+        }
+      ],
+      "case_id": "summary_truncation_context",
+      "diffs": [],
+      "expected_backend": "inmemory"
+    },
+    {
+      "actual_backend": "sqlite",
+      "allowed_diffs": [
+        {
+          "allowed": true,
+          "case_id": "duplicate_write_recovery",
+          "field_path": "sessions.*.events.*.id",
+          "reason": "event ids are SDK-generated unless fixed by the replay case"
+        },
+        {
+          "allowed": true,
+          "case_id": "duplicate_write_recovery",
+          "field_path": "sessions.*.events.*.timestamp",
+          "reason": "event timestamps are normalized away as non-business fields"
+        },
+        {
+          "allowed": true,
+          "case_id": "duplicate_write_recovery",
+          "field_path": "sessions.*.summary.anchor_timestamp",
+          "reason": "summary timestamps are compared by validity and order, not cross-backend equality"
+        }
+      ],
+      "case_id": "duplicate_write_recovery",
+      "diffs": [],
+      "expected_backend": "inmemory"
+    },
+    {
+      "actual_backend": "sqlite",
+      "allowed_diffs": [
+        {
+          "allowed": true,
+          "case_id": "wrong_session_recovery",
+          "field_path": "sessions.*.events.*.id",
+          "reason": "event ids are SDK-generated unless fixed by the replay case"
+        },
+        {
+          "allowed": true,
+          "case_id": "wrong_session_recovery",
+          "field_path": "sessions.*.events.*.timestamp",
+          "reason": "event timestamps are normalized away as non-business fields"
+        },
+        {
+          "allowed": true,
+          "case_id": "wrong_session_recovery",
+          "field_path": "sessions.*.summary.anchor_timestamp",
+          "reason": "summary timestamps are compared by validity and order, not cross-backend equality"
+        }
+      ],
+      "case_id": "wrong_session_recovery",
+      "diffs": [],
+      "expected_backend": "inmemory"
+    }
+  ],
+  "generated_at": "deterministic-test-run"
+}
