@@ -141,6 +141,12 @@ async def run_review(opts: ReviewOptions) -> ReviewResult:
             warnings.extend(llm_warnings)
             llm_calls = 1
 
+        # Release runtime resources: cube sandbox clients hold network
+        # connections that must be torn down; container/local have no-op
+        # cleanup — the workspace was already cleaned by session.close().
+        if hasattr(runtime, "destroy"):
+            await runtime.destroy()
+
         kept, dropped = dedupe(raw_findings + llm_findings)
         reported, needs_review = gate(kept)
         await store.add_findings(task_id, reported, status="reported")
