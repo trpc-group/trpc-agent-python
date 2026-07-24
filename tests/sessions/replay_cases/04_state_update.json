@@ -1,0 +1,52 @@
+{
+    "case_id": "04_state_update",
+    "description": "State update: multiple writes and overwrites to session state via event state_delta",
+    "session_setup": {
+        "app_name": "replay_test",
+        "user_id": "test_user",
+        "session_id": "s-004",
+        "state": {
+            "counter": 0,
+            "status": "idle"
+        }
+    },
+    "operations": [
+        {
+            "op": "append_event",
+            "author": "user",
+            "text": "Increment counter",
+            "state_delta": {
+                "counter": 1
+            }
+        },
+        {
+            "op": "append_event",
+            "author": "assistant",
+            "text": "Counter is now 1"
+        },
+        {
+            "op": "append_event",
+            "author": "user",
+            "text": "Update status and counter",
+            "state_delta": {
+                "counter": 5,
+                "status": "active",
+                "last_action": "bulk_update"
+            }
+        },
+        {
+            "op": "append_event",
+            "author": "assistant",
+            "text": "Updated to counter=5, status=active"
+        },
+        {
+            "op": "read_back",
+            "expected_state": {
+                "counter": 5,
+                "status": "active",
+                "last_action": "bulk_update"
+            },
+            "expected_event_count": 4
+        }
+    ]
+}

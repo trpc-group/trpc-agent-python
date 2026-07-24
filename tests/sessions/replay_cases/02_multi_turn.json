@@ -1,0 +1,45 @@
+{
+    "case_id": "02_multi_turn",
+    "description": "Multi-turn conversation: three rounds of user/assistant exchange",
+    "session_setup": {
+        "app_name": "replay_test",
+        "user_id": "test_user",
+        "session_id": "s-002"
+    },
+    "operations": [
+        {
+            "op": "append_event",
+            "author": "user",
+            "text": "What's the weather today?"
+        },
+        {
+            "op": "append_event",
+            "author": "assistant",
+            "text": "It's sunny and 72 degrees."
+        },
+        {
+            "op": "append_event",
+            "author": "user",
+            "text": "Great, I'll go for a walk."
+        },
+        {
+            "op": "append_event",
+            "author": "assistant",
+            "text": "Enjoy your walk! Don't forget sunscreen."
+        },
+        {
+            "op": "append_event",
+            "author": "user",
+            "text": "What about tomorrow?"
+        },
+        {
+            "op": "append_event",
+            "author": "assistant",
+            "text": "Tomorrow will be cloudy with a chance of rain."
+        },
+        {
+            "op": "read_back",
+            "expected_event_count": 6
+        }
+    ]
+}
