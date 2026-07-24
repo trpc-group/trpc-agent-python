@@ -1,0 +1,32 @@
+{
+  "evaluate": {
+    "metrics": [
+      {
+        "metric_name": "final_response_avg_score",
+        "threshold": 1.0,
+        "criterion": {
+          "final_response": {
+            "text": {
+              "match": "exact"
+            }
+          }
+        }
+      },
+      {
+        "metric_name": "fake_rubric_score",
+        "threshold": 0.75
+      },
+      {
+        "metric_name": "tool_trajectory_avg_score",
+        "threshold": 1.0
+      }
+    ],
+    "num_runs": 1
+  },
+  "metric_weights": {
+    "final_response_avg_score": 0.5,
+    "fake_rubric_score": 0.3,
+    "tool_trajectory_avg_score": 0.2
+  },
+  "seed": 42
+}

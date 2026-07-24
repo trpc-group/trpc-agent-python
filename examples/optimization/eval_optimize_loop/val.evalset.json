@@ -1,0 +1,8 @@
+{
+  "eval_set_id": "issue_91_validation",
+  "eval_cases": [
+    {"eval_id": "val_json_generalization", "conversation": [{"user_content": {"role": "user", "parts": [{"text": "生成订单 B200 的 JSON 工单摘要"}]}, "final_response": {"role": "model", "parts": [{"text": "{\"answer\": \"正在查询订单 B200。\", \"arguments\": {\"order_id\": \"B200\"}, \"route\": \"order_lookup\", \"tool\": \"lookup_order\"}"}]}}]},
+    {"eval_id": "val_refund_critical", "conversation": [{"user_content": {"role": "user", "parts": [{"text": "退款订单 R900，金额 12 USD"}]}, "final_response": {"role": "model", "parts": [{"text": "{\"answer\": \"正在退款订单 R900。\", \"arguments\": {\"amount\": \"12\", \"currency\": \"USD\", \"order_id\": \"R900\"}, \"route\": \"refund\", \"tool\": \"refund_order\"}"}]}}]},
+    {"eval_id": "val_stable_faq", "conversation": [{"user_content": {"role": "user", "parts": [{"text": "如何查看订单状态"}]}, "final_response": {"role": "model", "parts": [{"text": "{\"answer\": \"在订单详情页可查看订单状态。\", \"arguments\": {}, \"route\": \"faq\", \"tool\": \"none\"}"}]}}]}
+  ]
+}

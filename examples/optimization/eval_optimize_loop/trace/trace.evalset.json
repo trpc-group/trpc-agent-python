@@ -1,0 +1,99 @@
+{
+  "eval_set_id": "issue_91_trace",
+  "name": "Issue 91 offline trace attribution",
+  "description": "Recorded actual conversations are evaluated without agent inference.",
+  "eval_cases": [
+    {
+      "eval_id": "trace_tool_selection_wrong",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "user_content": {"role": "user", "parts": [{"text": "查询订单 A100"}]},
+          "final_response": {"role": "model", "parts": [{"text": "{\"route\": \"order_lookup\", \"tool\": \"lookup_order\", \"arguments\": {\"order_id\": \"A100\"}, \"answer\": \"正在查询订单 A100。\"}"}]},
+          "intermediate_data": {"tool_uses": [{"id": "actual-tool", "name": "lookup_refund", "args": {"order_id": "A100"}}]}
+        }
+      ],
+      "conversation": [
+        {
+          "user_content": {"role": "user", "parts": [{"text": "查询订单 A100"}]},
+          "final_response": {"role": "model", "parts": [{"text": "{\"route\": \"order_lookup\", \"tool\": \"lookup_order\", \"arguments\": {\"order_id\": \"A100\"}, \"answer\": \"正在查询订单 A100。\"}"}]},
+          "intermediate_data": {"tool_uses": [{"id": "expected-tool", "name": "lookup_order", "args": {"order_id": "A100"}}]}
+        }
+      ]
+    },
+    {
+      "eval_id": "trace_tool_argument_wrong",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "user_content": {"role": "user", "parts": [{"text": "查询订单 A100"}]},
+          "final_response": {"role": "model", "parts": [{"text": "{\"route\": \"order_lookup\", \"tool\": \"lookup_order\", \"arguments\": {\"order_id\": \"A999\"}, \"answer\": \"正在查询订单 A999。\"}"}]},
+          "intermediate_data": {"tool_uses": [{"id": "actual-tool", "name": "lookup_order", "args": {"order_id": "A999"}}]}
+        }
+      ],
+      "conversation": [
+        {
+          "user_content": {"role": "user", "parts": [{"text": "查询订单 A100"}]},
+          "final_response": {"role": "model", "parts": [{"text": "{\"route\": \"order_lookup\", \"tool\": \"lookup_order\", \"arguments\": {\"order_id\": \"A100\"}, \"answer\": \"正在查询订单 A100。\"}"}]},
+          "intermediate_data": {"tool_uses": [{"id": "expected-tool", "name": "lookup_order", "args": {"order_id": "A100"}}]}
+        }
+      ]
+    },
+    {
+      "eval_id": "trace_invalid_final_format",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "user_content": {"role": "user", "parts": [{"text": "查询订单 A100"}]},
+          "final_response": {"role": "model", "parts": [{"text": "not valid fake JSON"}]}
+        }
+      ],
+      "conversation": [
+        {
+          "user_content": {"role": "user", "parts": [{"text": "查询订单 A100"}]},
+          "final_response": {"role": "model", "parts": [{"text": "{\"route\": \"format_check\", \"tool\": \"none\", \"arguments\": {}, \"answer\": \"请返回 JSON。\"}"}]}
+        }
+      ]
+    },
+    {
+      "eval_id": "trace_tool_response_error",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "user_content": {"role": "user", "parts": [{"text": "查询订单 A100"}]},
+          "final_response": {"role": "model", "parts": [{"text": "{\"route\": \"order_lookup\", \"tool\": \"lookup_order\", \"arguments\": {\"order_id\": \"A100\"}, \"answer\": \"订单服务暂时不可用。\"}"}]},
+          "intermediate_data": {
+            "tool_uses": [{"id": "actual-tool", "name": "lookup_order", "args": {"order_id": "A100"}}],
+            "tool_responses": [{"id": "actual-tool", "name": "lookup_order", "response": {"error": "upstream unavailable"}}]
+          }
+        }
+      ],
+      "conversation": [
+        {
+          "user_content": {"role": "user", "parts": [{"text": "查询订单 A100"}]},
+          "final_response": {"role": "model", "parts": [{"text": "{\"route\": \"order_lookup\", \"tool\": \"lookup_order\", \"arguments\": {\"order_id\": \"A100\"}, \"answer\": \"正在查询订单 A100。\"}"}]},
+          "intermediate_data": {
+            "tool_uses": [{"id": "expected-tool", "name": "lookup_order", "args": {"order_id": "A100"}}],
+            "tool_responses": [{"id": "expected-tool", "name": "lookup_order", "response": {"output": "订单 A100"}}]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "trace_pass",
+      "eval_mode": "trace",
+      "actual_conversation": [
+        {
+          "user_content": {"role": "user", "parts": [{"text": "查询订单 A100"}]},
+          "final_response": {"role": "model", "parts": [{"text": "{\"route\": \"order_lookup\", \"tool\": \"lookup_order\", \"arguments\": {\"order_id\": \"A100\"}, \"answer\": \"正在查询订单 A100。\"}"}]}
+        }
+      ],
+      "conversation": [
+        {
+          "user_content": {"role": "user", "parts": [{"text": "查询订单 A100"}]},
+          "final_response": {"role": "model", "parts": [{"text": "{\"route\": \"order_lookup\", \"tool\": \"lookup_order\", \"arguments\": {\"order_id\": \"A100\"}, \"answer\": \"正在查询订单 A100。\"}"}]}
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,317 @@
+{
+  "decisions": [
+    {
+      "candidate_id": "candidate_general_fix",
+      "gate": {
+        "accepted": true,
+        "reasons": [
+          "candidate passed all independent gate rules"
+        ],
+        "risk_level": "low",
+        "rules": [
+          {
+            "actual": "complete",
+            "expected": "complete",
+            "passed": true,
+            "reason": "independent validation evaluation is incomplete",
+            "rule": "evaluation_complete"
+          },
+          {
+            "actual": {
+              "actual": [
+                "val_json_generalization",
+                "val_refund_critical",
+                "val_stable_faq"
+              ],
+              "expected": [
+                "val_json_generalization",
+                "val_refund_critical",
+                "val_stable_faq"
+              ]
+            },
+            "expected": "one unique delta per validation case",
+            "passed": true,
+            "reason": "validation case deltas are incomplete, duplicated, or do not match evaluated validation cases",
+            "rule": "validation_case_deltas_complete"
+          },
+          {
+            "actual": 0.33333333333333337,
+            "expected": "number",
+            "passed": true,
+            "reason": "validation aggregate score delta is required",
+            "rule": "validation_score_delta_available"
+          },
+          {
+            "actual": 0.33333333333333337,
+            "expected": "number",
+            "passed": true,
+            "reason": "validation pass-rate delta is required",
+            "rule": "validation_pass_rate_delta_available"
+          },
+          {
+            "actual": 0.33333333333333337,
+            "expected": 0.05,
+            "passed": true,
+            "reason": "validation aggregate score must improve",
+            "rule": "validation_score_improved"
+          },
+          {
+            "actual": 0.33333333333333337,
+            "expected": 0.0,
+            "passed": true,
+            "reason": "validation pass rate must not decline",
+            "rule": "validation_pass_rate_not_worse"
+          },
+          {
+            "actual": 0,
+            "expected": 0,
+            "passed": true,
+            "reason": "new hard failures are not allowed",
+            "rule": "new_hard_fails"
+          },
+          {
+            "actual": 0,
+            "expected": 0,
+            "passed": true,
+            "reason": "validation regressions exceed the limit",
+            "rule": "validation_regressions"
+          },
+          {
+            "actual": 0,
+            "expected": 0,
+            "passed": true,
+            "reason": "critical validation cases must not regress",
+            "rule": "no_critical_regression"
+          },
+          {
+            "actual": false,
+            "expected": false,
+            "passed": true,
+            "reason": "train improvement with validation decline is rejected",
+            "rule": "no_overfit"
+          },
+          {
+            "actual": false,
+            "expected": false,
+            "passed": true,
+            "reason": "tie policy rejects a non-improving validation outcome",
+            "rule": "tie_policy"
+          }
+        ],
+        "warnings": [
+          "generation cost is unknown"
+        ]
+      }
+    },
+    {
+      "candidate_id": "candidate_noop",
+      "gate": {
+        "accepted": false,
+        "reasons": [
+          "validation aggregate score must improve",
+          "tie policy rejects a non-improving validation outcome"
+        ],
+        "risk_level": "medium",
+        "rules": [
+          {
+            "actual": "complete",
+            "expected": "complete",
+            "passed": true,
+            "reason": "independent validation evaluation is incomplete",
+            "rule": "evaluation_complete"
+          },
+          {
+            "actual": {
+              "actual": [
+                "val_json_generalization",
+                "val_refund_critical",
+                "val_stable_faq"
+              ],
+              "expected": [
+                "val_json_generalization",
+                "val_refund_critical",
+                "val_stable_faq"
+              ]
+            },
+            "expected": "one unique delta per validation case",
+            "passed": true,
+            "reason": "validation case deltas are incomplete, duplicated, or do not match evaluated validation cases",
+            "rule": "validation_case_deltas_complete"
+          },
+          {
+            "actual": 0.0,
+            "expected": "number",
+            "passed": true,
+            "reason": "validation aggregate score delta is required",
+            "rule": "validation_score_delta_available"
+          },
+          {
+            "actual": 0.0,
+            "expected": "number",
+            "passed": true,
+            "reason": "validation pass-rate delta is required",
+            "rule": "validation_pass_rate_delta_available"
+          },
+          {
+            "actual": 0.0,
+            "expected": 0.05,
+            "passed": false,
+            "reason": "validation aggregate score must improve",
+            "rule": "validation_score_improved"
+          },
+          {
+            "actual": 0.0,
+            "expected": 0.0,
+            "passed": true,
+            "reason": "validation pass rate must not decline",
+            "rule": "validation_pass_rate_not_worse"
+          },
+          {
+            "actual": 0,
+            "expected": 0,
+            "passed": true,
+            "reason": "new hard failures are not allowed",
+            "rule": "new_hard_fails"
+          },
+          {
+            "actual": 0,
+            "expected": 0,
+            "passed": true,
+            "reason": "validation regressions exceed the limit",
+            "rule": "validation_regressions"
+          },
+          {
+            "actual": 0,
+            "expected": 0,
+            "passed": true,
+            "reason": "critical validation cases must not regress",
+            "rule": "no_critical_regression"
+          },
+          {
+            "actual": false,
+            "expected": false,
+            "passed": true,
+            "reason": "train improvement with validation decline is rejected",
+            "rule": "no_overfit"
+          },
+          {
+            "actual": true,
+            "expected": false,
+            "passed": false,
+            "reason": "tie policy rejects a non-improving validation outcome",
+            "rule": "tie_policy"
+          }
+        ],
+        "warnings": [
+          "generation cost is unknown"
+        ]
+      }
+    },
+    {
+      "candidate_id": "candidate_overfit",
+      "gate": {
+        "accepted": false,
+        "reasons": [
+          "new hard failures are not allowed",
+          "validation regressions exceed the limit",
+          "critical validation cases must not regress"
+        ],
+        "risk_level": "high",
+        "rules": [
+          {
+            "actual": "complete",
+            "expected": "complete",
+            "passed": true,
+            "reason": "independent validation evaluation is incomplete",
+            "rule": "evaluation_complete"
+          },
+          {
+            "actual": {
+              "actual": [
+                "val_json_generalization",
+                "val_refund_critical",
+                "val_stable_faq"
+              ],
+              "expected": [
+                "val_json_generalization",
+                "val_refund_critical",
+                "val_stable_faq"
+              ]
+            },
+            "expected": "one unique delta per validation case",
+            "passed": true,
+            "reason": "validation case deltas are incomplete, duplicated, or do not match evaluated validation cases",
+            "rule": "validation_case_deltas_complete"
+          },
+          {
+            "actual": 0.06666666666666676,
+            "expected": "number",
+            "passed": true,
+            "reason": "validation aggregate score delta is required",
+            "rule": "validation_score_delta_available"
+          },
+          {
+            "actual": 0.0,
+            "expected": "number",
+            "passed": true,
+            "reason": "validation pass-rate delta is required",
+            "rule": "validation_pass_rate_delta_available"
+          },
+          {
+            "actual": 0.06666666666666676,
+            "expected": 0.05,
+            "passed": true,
+            "reason": "validation aggregate score must improve",
+            "rule": "validation_score_improved"
+          },
+          {
+            "actual": 0.0,
+            "expected": 0.0,
+            "passed": true,
+            "reason": "validation pass rate must not decline",
+            "rule": "validation_pass_rate_not_worse"
+          },
+          {
+            "actual": 1,
+            "expected": 0,
+            "passed": false,
+            "reason": "new hard failures are not allowed",
+            "rule": "new_hard_fails"
+          },
+          {
+            "actual": 1,
+            "expected": 0,
+            "passed": false,
+            "reason": "validation regressions exceed the limit",
+            "rule": "validation_regressions"
+          },
+          {
+            "actual": 1,
+            "expected": 0,
+            "passed": false,
+            "reason": "critical validation cases must not regress",
+            "rule": "no_critical_regression"
+          },
+          {
+            "actual": false,
+            "expected": false,
+            "passed": true,
+            "reason": "train improvement with validation decline is rejected",
+            "rule": "no_overfit"
+          },
+          {
+            "actual": false,
+            "expected": false,
+            "passed": true,
+            "reason": "tie policy rejects a non-improving validation outcome",
+            "rule": "tie_policy"
+          }
+        ],
+        "warnings": [
+          "generation cost is unknown"
+        ]
+      }
+    }
+  ],
+  "selected_candidate_id": "candidate_general_fix"
+}

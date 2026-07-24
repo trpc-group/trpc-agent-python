@@ -1,0 +1,8 @@
+{
+  "eval_set_id": "issue_91_train",
+  "eval_cases": [
+    {"eval_id": "train_json_format", "conversation": [{"user_content": {"role": "user", "parts": [{"text": "生成订单 A100 的 JSON 工单摘要"}]}, "final_response": {"role": "model", "parts": [{"text": "{\"answer\": \"正在查询订单 A100。\", \"arguments\": {\"order_id\": \"A100\"}, \"route\": \"order_lookup\", \"tool\": \"lookup_order\"}"}]}}]},
+    {"eval_id": "train_tool_argument", "conversation": [{"user_content": {"role": "user", "parts": [{"text": "查询订单 A100"}]}, "final_response": {"role": "model", "parts": [{"text": "{\"answer\": \"正在查询订单 A100。\", \"arguments\": {\"order_id\": \"A100\"}, \"route\": \"order_lookup\", \"tool\": \"lookup_order\"}"}]}}]},
+    {"eval_id": "train_missing_knowledge", "conversation": [{"user_content": {"role": "user", "parts": [{"text": "特殊退款政策是什么"}]}, "final_response": {"role": "model", "parts": [{"text": "{\"answer\": \"未提供该政策，不能猜测。\", \"arguments\": {}, \"route\": \"knowledge_gap\", \"tool\": \"none\"}"}]}}]}
+  ]
+}
