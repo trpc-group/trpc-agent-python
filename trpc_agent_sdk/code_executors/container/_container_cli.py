@@ -16,13 +16,66 @@ import socket as pysocket
 from dataclasses import dataclass
 from typing import Optional
 
-import docker
-from docker.models.containers import Container
-from docker.utils.socket import consume_socket_output
-from docker.utils.socket import demux_adaptor
-from docker.utils.socket import frames_iter
+# Note: Docker SDK imports (docker, docker.models.containers, docker.utils.socket)
+# are deferred to runtime via _import_docker() to avoid hanging/crashing on
+# systems without Docker installed (e.g. Windows without Docker Desktop).
+# See: https://github.com/trpc-group/trpc-agent-python/issues/230
+#
+# Module-level placeholders are declared below (docker=None, Container=None, etc.)
+# and populated by _import_docker() on first real use. This approach:
+#   - eliminates F821 flake8 errors (no # noqa needed)
+#   - provides clear NameError-free fallback if called before init
+#   - allows @patch("..._container_cli.docker") to work in tests
+# Type annotations use string literals via `from __future__ import annotations`.
+
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.utils import CommandExecResult
+
+import threading
+
+# Module-level placeholders for Docker SDK symbols.
+# These are populated by _import_docker() on first use, which avoids
+# hanging/crashing on systems without Docker installed.
+# Declaring them here eliminates F821 and ensures _exec_run_with_stdin
+# gets a clear RuntimeError instead of NameError if called before init.
+docker = None
+Container = None
+consume_socket_output = None
+demux_adaptor = None
+frames_iter = None
+
+_docker_imported = False
+_docker_lock = threading.Lock()
+
+
+def _import_docker():
+    """Lazily import the Docker SDK only when actually needed.
+
+    Importing ``docker`` at module top-level causes the Python Docker SDK
+    to probe for a Docker daemon on Windows (named pipe) and other platforms.
+    When Docker is not installed/running this probe hangs or segfaults,
+    making the entire ``trpc_agent_sdk`` package unusable. By deferring the
+    import to call-time we ensure that users who never touch
+    ``ContainerCodeExecutor`` are unaffected.
+    """
+    global _docker_imported, docker, Container, consume_socket_output, demux_adaptor, frames_iter
+    if _docker_imported:
+        return
+    with _docker_lock:
+        if _docker_imported:
+            return
+        import docker as _docker_mod
+        from docker.models.containers import Container as _Container
+        from docker.utils.socket import consume_socket_output as _cso
+        from docker.utils.socket import demux_adaptor as _da
+        from docker.utils.socket import frames_iter as _fi
+        docker = _docker_mod
+        Container = _Container
+        consume_socket_output = _cso
+        demux_adaptor = _da
+        frames_iter = _fi
+        _docker_imported = True
+
 
 DEFAULT_IMAGE_TAG = 'python:3-slim'
 
@@ -88,6 +141,8 @@ class ContainerClient:
         - Remote Docker via DOCKER_HOST environment variable
         - Custom base_url if provided
         """
+        # Lazily import the Docker SDK on first real use.
+        _import_docker()
         # Try to initialize Docker client
         # Let docker SDK handle connection detection (it supports various methods)
         try:
