@@ -261,8 +261,8 @@ def detect_content_type(filename: Path, data: bytes) -> str:
             _magic_module = _m
             HAS_MAGIC = True
             _magic_checked = True
-        except ImportError:
-            logger.debug("python-magic not available; falling back to byte-signature detection")
+        except Exception:
+            logger.debug("python-magic import failed; falling back to byte-signature detection", exc_info=True)
             _magic_checked = True  # cache failure to avoid retrying every call
     if _magic_module is not None:
         try:
