@@ -75,8 +75,8 @@ def sqlite_backend(db_url: str = "sqlite:///:memory:") -> ReplayBackend:
 
 
 def redis_backend(url: str) -> ReplayBackend:
-    svc = RedisSessionService(db_url=url, summarizer_manager=_manager(), session_config=_session_config())
-    mem = RedisMemoryService(db_url=url, enabled=True)
+    svc = RedisSessionService(db_url=url, summarizer_manager=_manager(), session_config=_session_config(), is_async=True)
+    mem = RedisMemoryService(db_url=url, enabled=True, is_async=True)
     return ReplayBackend("redis", svc, mem)
 
 
