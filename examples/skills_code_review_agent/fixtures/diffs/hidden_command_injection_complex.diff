@@ -1,0 +1,40 @@
+diff --git a/src/system_executor.py b/src/system_executor.py
+index 1234567..abcdefg 100644
+--- a/src/system_executor.py
++++ b/src/system_executor.py
+@@ -2,8 +2,14 @@ import subprocess
+
+ class SystemExecutor:
+     """系统执行器"""
+
++    def backup_database(self, db_name: str, backup_path: str) -> bool:
++        """备份数据库"""
++        # 命令注入：复杂的多参数命令构造
++        command = f"mysqldump -u root -p{self.get_password()} {db_name} > {backup_path}"
++        result = os.system(command)
++        return result == 0
+
+     def compress_files(self, file_pattern: str, output_file: str) -> bool:
+-        return True
++        """压缩文件"""
++        # 命令注入：文件压缩命令构造
++        command = ["tar", "-czf", output_file, file_pattern]
++        # 如果文件模式包含shell元字符，可能导致命令注入
++        result = subprocess.run(command, shell=True, capture_output=True)
++        return result.returncode == 0
+
+@@ -10,4 +18,8 @@ class SystemExecutor:
+     def check_disk_space(self, path: str) -> str:
+-        return "100MB available"
++        """检查磁盘空间"""
++        # 命令注入：磁盘检查命令构造
++        command = f"df -h {path} | tail -1"
++        result = subprocess.run(command, shell=True, capture_output=True, text=True)
++        return result.stdout
+
++def process_user_request(user_command: str, args: list) -> str:
++    """处理用户请求"""
++    # 命令注入：用户命令和参数组合
++    full_command = f"{user_command} {' '.join(args)}"
++    result = os.system(full_command)
++    return f"执行完成: {result}"

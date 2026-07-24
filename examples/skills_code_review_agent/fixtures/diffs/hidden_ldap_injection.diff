@@ -1,0 +1,67 @@
+diff --git a/src/auth_service.py b/src/auth_service.py
+index 1234567..abcdefg 100644
+--- a/src/auth_service.py
++++ b/src/auth_service.py
+@@ -1,8 +1,14 @@ import ldap
+try:
+    from ldap3 import Connection, Server
+except ImportError:
+    # ldap3未安装时使用占位符
+    Connection = None
+    Server = None
+
+ class AuthService:
+     """认证服务"""
+
++    def authenticate_user(self, username: str, password: str) -> bool:
++        """用户认证"""
++        # LDAP注入：用户输入直接用于LDAP查询构造
++        search_filter = f"(&(uid={username})(userPassword={password}))"
++        try:
++            conn = Connection(Server('ldap://localhost'))
++            conn.search('dc=example,dc=com', search_filter)
++            return bool(conn.entries)
++        except Exception as e:
++            print(f"LDAP查询失败: {e}")
++            return False
+
+     def find_user_by_email(self, email: str) -> dict:
+-        return {"email": email}
++        """通过邮箱查找用户"""
++        # LDAP注入：邮箱地址未经充分净化
++        ldap_filter = f"(mail={email})"
++        try:
++            conn = Connection(Server('ldap://localhost'))
++            conn.search('ou=users,dc=example,dc=com', ldap_filter)
++            if conn.entries:
++                return {"email": email, "dn": conn.entries[0].entry_dn}
++            return {}
++        except Exception as e:
++            print(f"LDAP查询失败: {e}")
++            return {}
+
+@@ -10,4 +18,8 @@ class AuthService:
+     def get_group_members(self, group_name: str) -> list:
+-        return ["user1", "user2"]
++        """获取组成员"""
++        # LDAP注入：组名直接用于查询构造
++        search_base = f"cn={group_name},ou=groups,dc=example,dc=com"
++        try:
++            conn = Connection(Server('ldap://localhost'))
++            conn.search(search_base, '(objectClass=groupOfNames)')
++            return [str(entry) for entry in conn.entries]
++        except Exception as e:
++            print(f"LDAP查询失败: {e}")
++            return []
+
++def search_ldap_users(search_term: str) -> list:
++    """搜索LDAP用户"""
++    # LDAP注入：搜索词未经净化直接插入LDAP查询
++    ldap_filter = f"(|(uid={search_term})(cn={search_term})(mail={search_term}))"
++    try:
++        conn = Connection(Server('ldap://localhost'))
++        conn.search('ou=users,dc=example,dc=com', ldap_filter)
++        return list(conn.entries)
++    except Exception as e:
++        print(f"LDAP搜索失败: {e}")
++        return []

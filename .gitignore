@@ -24,3 +24,8 @@ test-ngtest-ut-trpc-agent-py.xml
 node_modules
 package-lock.json
 pyrightconfig.json
+
+# Secrets - never commit .env (contains real API keys)
+.env
+.env.local
+*.env

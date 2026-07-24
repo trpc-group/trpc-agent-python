@@ -1,0 +1,54 @@
+diff --git a/src/http_client.py b/src/http_client.py
+index 1234567..abcdefg 100644
+--- a/src/http_client.py
++++ b/src/http_client.py
+@@ -1,8 +1,14 @@ import requests
+ import urllib.request
+
+ class HttpClient:
+     """HTTP客户端"""
+
++    def fetch_user_profile(self, user_url: str) -> dict:
++        """获取用户档案"""
++        # SSRF：用户提供的URL直接用于HTTP请求
++        try:
++            response = requests.get(user_url, timeout=10)
++            return response.json()
++        except Exception as e:
++            print(f"请求失败: {e}")
++            return {}
+
+     def download_resource(self, resource_url: str) -> bytes:
+-        return b"test_data"
++        """下载资源"""
++        # SSRF：资源URL未经验证直接请求
++        try:
++            response = urllib.request.urlopen(resource_url)
++            return response.read()
++        except Exception as e:
++            print(f"下载失败: {e}")
++            return b""
+
+@@ -10,4 +18,8 @@ class HttpClient:
+     def check_service_health(self, check_url: str) -> bool:
+-        return True
++        """检查服务健康"""
++        # SSRF：健康检查URL可能指向内网服务
++        try:
++            response = requests.get(check_url, timeout=5)
++            return response.status_code == 200
++        except Exception as e:
++            print(f"健康检查失败: {e}")
++            return False
+
++def fetch_internal_api(user_input: str) -> dict:
++    """获取内部API数据"""
++    # SSRF：用户输入构造内部API请求
++    # 用户可能输入 http://localhost:6379/ 或 file:///etc/passwd
++    api_url = f"http://internal-api:8080/api/data?param={user_input}"
++    try:
++        response = requests.get(api_url, timeout=10)
++        return response.json()
++    except Exception as e:
++        print(f"API请求失败: {e}")
++        return {}

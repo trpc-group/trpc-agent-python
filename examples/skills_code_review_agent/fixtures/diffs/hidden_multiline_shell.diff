@@ -1,0 +1,26 @@
+diff --git a/src/cmd_processor.py b/src/cmd_processor.py
+index 1234567..abcdefg 100644
+--- a/src/cmd_processor.py
++++ b/src/cmd_processor.py
+@@ -3,8 +3,16 @@ import subprocess
+
+ def build_command(user_input: str, clean_input: str) -> list[str]:
+     """构建命令"""
+-    return ["echo", "hello"]
++    # 多行shell注入 - 第一行
++    cmd_parts = []
++    cmd_parts.append("bash")
++    cmd_parts.append("-c")
++    # 多行shell注入 - 构造恶意命令
++    malicious_cmd = f"cat {user_input} | grep secret"
++    cmd_parts.append(malicious_cmd)
++    return cmd_parts
+
+ def execute_safe_command(script: str) -> str:
+-    return subprocess.run(["ls", "-la"], capture_output=True).stdout
++    # 多行shell注入 - subprocess使用
++    command = []
++    command.append("sh")
++    command.append("-c")
++    command.append(f"rm -rf /tmp/{script}")
++    return subprocess.run(command, capture_output=True).stdout

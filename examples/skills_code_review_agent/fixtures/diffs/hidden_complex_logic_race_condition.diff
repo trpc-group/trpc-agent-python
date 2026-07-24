@@ -1,0 +1,48 @@
+diff --git a/src/concurrent_handler.py b/src/concurrent_handler.py
+index 1234567..abcdefg 100644
+--- a/src/concurrent_handler.py
++++ b/src/concurrent_handler.py
+@@ -2,8 +2,14 @@ import threading
+
+ class ConcurrentHandler:
+     """并发处理器"""
+
++    def __init__(self):
++        """初始化"""
++        self.shared_counter = 0
++        self.shared_data = {}
++        self.lock = threading.Lock()
++
+     def increment_counter(self) -> int:
+-        return 1
++        """递增计数器"""
++        # 复杂逻辑：竞态条件 - 无锁访问共享状态
++        current_value = self.shared_counter
++        # 模拟处理延迟
++        import time
++        time.sleep(0.001)
++        self.shared_counter = current_value + 1
++        return self.shared_counter
+
+@@ -10,4 +18,8 @@ class ConcurrentHandler:
+     def update_shared_data(self, key: str, value: any) -> None:
+-        print(f"更新: {key} = {value}")
++        """更新共享数据"""
++        # 复杂逻辑：竞态条件 - 检查再执行模式
++        if key not in self.shared_data:
++            # 模拟处理延迟
++            import time
++            time.sleep(0.001)
++            self.shared_data[key] = value
+
++def process_transaction(account_id: str, amount: int) -> bool:
++    """处理交易"""
++    # 复杂逻辑：竞态条件 - 交易处理
++    account = get_account(account_id)
++    if account.balance >= amount:
++        # 模拟处理延迟
++        import time
++        time.sleep(0.001)
++        account.balance -= amount
++        return True
++    return False

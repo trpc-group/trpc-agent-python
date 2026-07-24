@@ -1,0 +1,206 @@
+{
+  "public_fixtures": {
+    "clean": {
+      "description": "干净的代码，没有任何问题",
+      "expected_rule_ids": [],
+      "expected_findings_count": 0,
+      "expected_instances": {}
+    },
+    "security": {
+      "description": "包含多种安全问题：os.system, subprocess.shell=True, eval, exec, pickle.loads",
+      "expected_rule_ids": ["SEC001", "SEC002", "SEC003", "SEC004"],
+      "expected_findings_count": 6,
+      "expected_instances": {
+        "SEC001": 1,
+        "SEC002": 2,
+        "SEC003": 2,
+        "SEC004": 1
+      }
+    },
+    "async_resource_leak": {
+      "description": "包含异步任务创建未管理和资源泄漏问题",
+      "expected_rule_ids": ["ASYNC001", "RES001"],
+      "expected_findings_count": 5,
+      "expected_instances": {
+        "ASYNC001": 2,
+        "RES001": 3
+      }
+    },
+    "db_lifecycle": {
+      "description": "包含数据库连接生命周期管理问题",
+      "expected_rule_ids": ["DB001"],
+      "expected_findings_count": 3,
+      "expected_instances": {
+        "DB001": 3
+      }
+    },
+    "missing_tests": {
+      "description": "生产代码变更但缺少测试覆盖",
+      "expected_rule_ids": ["TEST001"],
+      "expected_findings_count": 1,
+      "expected_instances": {
+        "TEST001": 1
+      }
+    },
+    "duplicate_finding": {
+      "description": "包含重复的安全问题和敏感信息",
+      "expected_rule_ids": ["SEC001", "SEC003", "SEC002"],
+      "expected_findings_count": 6,
+      "expected_instances": {
+        "SEC001": 2,
+        "SEC003": 2,
+        "SEC002": 2
+      }
+    },
+    "sandbox_failure": {
+      "description": "测试沙箱失败处理，包含可能导致沙箱异常的代码",
+      "expected_rule_ids": [],
+      "expected_findings_count": 0,
+      "expected_instances": {},
+      "note": "主要测试沙箱失败场景，规则引擎可能检测不到问题"
+    },
+    "sensitive_redaction": {
+      "description": "包含大量敏感信息，测试脱敏功能",
+      "expected_rule_ids": ["SECRET001"],
+      "expected_findings_count": 9,
+      "expected_instances": {
+        "SECRET001": 9
+      },
+      "note": "issue #92: 补充 JSON 键值对规则后检测 9 个 SECRET001（database_url 被 URL 规则处理不计入 SECRET001）"
+    }
+  },
+  "hidden_fixtures": {
+    "hidden_multiline_shell": {
+      "description": "多行shell注入构造，测试规则引擎对多行模式检测能力",
+      "expected_rule_ids": ["SEC002"],
+      "expected_findings_count": 2,
+      "expected_instances": {
+        "SEC002": 2
+      },
+      "note": "规则引擎可能检测到部分subprocess.shell=True实例"
+    },
+    "hidden_taint_analysis": {
+      "description": "污点分析场景：用户输入最终进入危险函数",
+      "expected_rule_ids": ["SEC001", "AST001"],
+      "expected_findings_count": 2,
+      "expected_instances": {
+        "SEC001": 1,
+        "AST001": 1
+      },
+      "note": "污点分析需要复杂的数据流分析，规则引擎可能检测不完整，AST分析器也会检测"
+    },
+    "hidden_high_entropy_secret": {
+      "description": "高熵密钥和随机生成的token",
+      "expected_rule_ids": ["SECRET001"],
+      "expected_findings_count": 2,
+      "expected_instances": {
+        "SECRET001": 2
+      },
+      "note": "修正：只期望检测JSON硬编码密钥(db_password/api_secret)，secrets.token_bytes等运行时生成是安全代码不应被检测(issue #92)"
+    },
+    "hidden_cross_language_js": {
+      "description": "跨语言代码执行：通过Node.js/Ruby/PHP执行任意代码",
+      "expected_rule_ids": ["SEC001"],
+      "expected_findings_count": 2,
+      "expected_instances": {
+        "SEC001": 2
+      },
+      "note": "已知规则限制：规则引擎难以检测跨语言代码执行风险，这是FN（False Negative）"
+    },
+    "hidden_complex_logic_race_condition": {
+      "description": "复杂的竞态条件场景",
+      "expected_rule_ids": ["RACE001"],
+      "expected_findings_count": 1,
+      "expected_instances": {
+        "RACE001": 1
+      },
+      "note": "已知规则限制：规则引擎不支持竞态条件检测（需要数据流分析），这是FN（False Negative）"
+    },
+    "hidden_sql_injection_param": {
+      "description": "SQL注入：字符串拼接构造SQL查询",
+      "expected_rule_ids": ["AST001", "DB001"],
+      "expected_findings_count": 4,
+      "expected_instances": {
+        "AST001": 2,
+        "DB001": 2
+      },
+      "note": "AST污点分析可检测多行SQL注入构造（query=f\"...{user}\"; execute(query)），同时DB001检测数据库连接"
+    },
+    "hidden_path_traversal": {
+      "description": "路径遍历漏洞：用户输入直接用于文件路径构造",
+      "expected_rule_ids": ["AST001"],
+      "expected_findings_count": 3,
+      "expected_instances": {
+        "AST001": 3
+      },
+      "note": "AST污点分析可检测多行路径遍历构造（filepath=f\"...{user}\"; open(filepath)）"
+    },
+    "hidden_xxss_injection": {
+      "description": "XSS注入：用户输入未经转义插入HTML",
+      "expected_rule_ids": ["XSS001"],
+      "expected_findings_count": 1,
+      "expected_instances": {
+        "XSS001": 1
+      },
+      "note": "已知规则限制：规则引擎不支持XSS检测（需要HTML解析），这是FN（False Negative）"
+    },
+    "hidden_deserialization": {
+      "description": "反序列化漏洞：使用不安全的反序列化方法",
+      "expected_rule_ids": ["SEC004"],
+      "expected_findings_count": 2,
+      "expected_instances": {
+        "SEC004": 2
+      },
+      "note": "可以检测到pickle.loads，但yaml.unsafe_load等可能检测不到"
+    },
+    "hidden_command_injection_complex": {
+      "description": "复杂的命令注入场景",
+      "expected_rule_ids": ["SEC001", "SEC002", "AST001"],
+      "expected_findings_count": 6,
+      "expected_instances": {
+        "SEC001": 2,
+        "SEC002": 2,
+        "AST001": 2
+      },
+      "note": "可以检测到部分os.system和subprocess.shell=True实例，AST分析器也会检测污点传播"
+    },
+    "hidden_ldap_injection": {
+      "description": "LDAP注入：用户输入直接用于LDAP查询构造",
+      "expected_rule_ids": ["SEC007"],
+      "expected_findings_count": 1,
+      "expected_instances": {
+        "SEC007": 1
+      },
+      "note": "LDAP注入检测已通过SEC007规则支持"
+    },
+    "hidden_ssrf_chain": {
+      "description": "SSRF漏洞：用户提供的URL直接用于HTTP请求",
+      "expected_rule_ids": ["SEC008"],
+      "expected_findings_count": 1,
+      "expected_instances": {
+        "SEC008": 1
+      },
+      "note": "SSRF检测已通过SEC008规则支持"
+    }
+  },
+  "evaluation_thresholds": {
+    "public_set": {
+      "recall_threshold": 0.90,
+      "precision_threshold": 0.85,
+      "redaction_rate_threshold": 0.95,
+      "description": "公开集应该达到较高准确率，因为规则引擎针对这些问题设计"
+    },
+    "hidden_set": {
+      "recall_threshold": 0.60,
+      "precision_threshold": 0.70,
+      "description": "隐藏集预期召回率较低，因为包含规则引擎难以检测的复杂场景"
+    },
+    "overall": {
+      "recall_threshold": 0.80,
+      "precision_threshold": 0.80,
+      "false_positive_rate_threshold": 0.15,
+      "redaction_rate_threshold": 0.95,
+      "description": "整体评估标准：检出率≥0.80，误报率≤0.15，脱敏率≥0.95"
+    }
+  }
+}

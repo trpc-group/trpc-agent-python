@@ -1,0 +1,37 @@
+diff --git a/src/error_handler.py b/src/error_handler.py
+index 1234567..abcdefg 100644
+--- a/src/error_handler.py
++++ b/src/error_handler.py
+@@ -1,8 +1,14 @@ class ErrorHandler:
+     """错误处理类"""
+
+     def handle_error(self, error: Exception) -> str:
+-        return f"错误: {str(error)}"
++        """处理错误"""
++        # 这里会触发沙箱执行失败的场景
++        # 比如内存不足、权限问题等
++        error_message = str(error)
++        return f"处理错误: {error_message}"
+
+     def log_error(self, error_message: str) -> None:
+-        print(f"ERROR: {error_message}")
++        """记录错误日志"""
++        # 这里模拟可能导致沙箱超时的操作
++        import time
++        time.sleep(100)  # 模拟长时间运行导致超时
++        print(f"ERROR: {error_message}")
+
+@@ -10,4 +16,8 @@ class ErrorHandler:
+     def raise_critical_error(self) -> None:
+-        raise ValueError("严重错误")
++        """抛出严重错误"""
++        # 模拟内存耗尽场景
++        large_data = [0] * 1000000000  # 大量内存分配
++        raise ValueError("严重错误 - 内存耗尽")
+
++def process_large_file(file_path: str) -> None:
++    """处理大文件"""
++    # 模拟文件不存在导致沙箱失败
++    with open(file_path, 'r') as f:  # 文件不存在会抛出异常
++        content = f.read()
++    return content
