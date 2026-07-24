@@ -341,15 +341,16 @@ class TestDetectContentType:
 
         # Inject mock into the module's cached magic slot
         import trpc_agent_sdk.code_executors.utils._files as _f
-        orig = (_f._magic_module, _f._magic_checked)
+        orig = (_f._magic_module, _f._magic_checked, _f.HAS_MAGIC)
         _f._magic_module = mock_magic
         _f._magic_checked = True
+        _f.HAS_MAGIC = True
         try:
             mime_type = detect_content_type(filename, data)
             assert mime_type == "application/custom"
             mock_magic.from_buffer.assert_called_once_with(data, mime=True)
         finally:
-            _f._magic_module, _f._magic_checked = orig
+            _f._magic_module, _f._magic_checked, _f.HAS_MAGIC = orig
 
 
 class TestGetRelPath:
