@@ -25,6 +25,7 @@ fast.
 from __future__ import annotations
 
 import asyncio
+import os
 import tempfile
 import uuid
 from pathlib import Path
@@ -532,6 +533,7 @@ class _AgentGEPAAdapter:
         num_runs: int = 1,
         case_parallelism: Optional[int] = None,
         top_k_per_case: int = 2,
+        output_dir: Optional[str] = None,
     ) -> None:
         self.target_prompt = target_prompt
         self.eval_config = eval_config
@@ -543,6 +545,7 @@ class _AgentGEPAAdapter:
         self.callbacks = callbacks
         self.num_runs = num_runs
         self.case_parallelism = case_parallelism
+        self.output_dir = output_dir
         self._top_k = max(0, int(top_k_per_case))
         self._best_history: dict[str, list[dict[str, Any]]] = {}
         from ._optimize_evaluator_call import EvaluationOutcome  # local to avoid cycle
@@ -608,7 +611,12 @@ class _AgentGEPAAdapter:
         loop = self._get_or_create_loop()
         loop.run_until_complete(self.target_prompt.write_all(candidate))
 
-        with tempfile.TemporaryDirectory() as tmp:
+        if getattr(self, "output_dir", None):
+            tmp_parent = Path(self.output_dir) / "tmp_batches"
+        else:
+            tmp_parent = Path.cwd() / "tmp" / "optimizer_batches"
+        tmp_parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=tmp_parent) as tmp:
             tmp_path = Path(tmp)
             evalset_path = tmp_path / "batch.evalset.json"
             metrics_path = tmp_path / "batch.metrics.json"
@@ -638,8 +646,14 @@ class _AgentGEPAAdapter:
 
             outcome = loop.run_until_complete(
                 run_evaluator(
-                    eval_dataset_path=str(evalset_path),
-                    eval_metrics_path=str(metrics_path),
+                    eval_dataset_path=os.path.relpath(
+                        evalset_path,
+                        Path.cwd(),
+                    ).replace("\\", "/"),
+                    eval_metrics_path=os.path.relpath(
+                        metrics_path,
+                        Path.cwd(),
+                    ).replace("\\", "/"),
                     call_agent=self.call_agent,
                     callbacks=self.callbacks,
                     num_runs=self.num_runs,

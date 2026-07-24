@@ -1,0 +1,403 @@
+{
+  "evalSetId": "eval_optimize_loop_train_candidate_trace",
+  "appName": null,
+  "name": "Evaluation optimization loop train set (candidate trace)",
+  "description": "Generated candidate trace for train",
+  "evalCases": [
+    {
+      "evalId": "train_format_json",
+      "evalMode": "trace",
+      "conversation": [
+        {
+          "invocationId": "train-format-json",
+          "userContent": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "Return the order total for order A100 as JSON.",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "user"
+          },
+          "finalResponse": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "{\"order_id\":\"A100\",\"total\":128,\"currency\":\"CNY\"}",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "model"
+          },
+          "intermediateData": {
+            "toolUses": [
+              {
+                "id": "tool-train-format",
+                "args": {
+                  "order_id": "A100"
+                },
+                "name": "lookup_order_total",
+                "partialArgs": null,
+                "willContinue": null
+              }
+            ],
+            "toolResponses": [],
+            "intermediateResponses": []
+          },
+          "creationTimestamp": 0.0
+        }
+      ],
+      "actualConversation": [
+        {
+          "invocationId": "train-format-json",
+          "userContent": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "Return the order total for order A100 as JSON.",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "user"
+          },
+          "finalResponse": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "{\"order_id\":\"A100\",\"total\":128,\"currency\":\"CNY\"}",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "model"
+          },
+          "intermediateData": {
+            "toolUses": [
+              {
+                "id": "tool-train-format",
+                "args": {
+                  "order_id": "A100"
+                },
+                "name": "lookup_order_total",
+                "partialArgs": null,
+                "willContinue": null
+              }
+            ],
+            "toolResponses": [],
+            "intermediateResponses": []
+          },
+          "creationTimestamp": 1783331066.1571672
+        }
+      ],
+      "conversationScenario": null,
+      "sessionInput": null,
+      "contextMessages": null,
+      "creationTimestamp": 0.0
+    },
+    {
+      "evalId": "train_tool_args",
+      "evalMode": "trace",
+      "conversation": [
+        {
+          "invocationId": "train-tool-args",
+          "userContent": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "Check weather risk for Shenzhen on 2026-07-06.",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "user"
+          },
+          "finalResponse": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "{\"city\":\"Shenzhen\",\"date\":\"2026-07-06\",\"risk\":\"rain\"}",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "model"
+          },
+          "intermediateData": {
+            "toolUses": [
+              {
+                "id": "tool-train-weather",
+                "args": {
+                  "city": "Shenzhen",
+                  "date": "2026-07-06"
+                },
+                "name": "get_weather_risk",
+                "partialArgs": null,
+                "willContinue": null
+              }
+            ],
+            "toolResponses": [],
+            "intermediateResponses": []
+          },
+          "creationTimestamp": 0.0
+        }
+      ],
+      "actualConversation": [
+        {
+          "invocationId": "train-tool-args",
+          "userContent": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "Check weather risk for Shenzhen on 2026-07-06.",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "user"
+          },
+          "finalResponse": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "{\"city\":\"Shenzhen\",\"date\":\"2026-07-06\",\"risk\":\"rain\"}",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "model"
+          },
+          "intermediateData": {
+            "toolUses": [
+              {
+                "id": "tool-train-weather",
+                "args": {
+                  "city": "Shenzhen",
+                  "date": "2026-07-06"
+                },
+                "name": "get_weather_risk",
+                "partialArgs": null,
+                "willContinue": null
+              }
+            ],
+            "toolResponses": [],
+            "intermediateResponses": []
+          },
+          "creationTimestamp": 1783331066.1572425
+        }
+      ],
+      "conversationScenario": null,
+      "sessionInput": null,
+      "contextMessages": null,
+      "creationTimestamp": 0.0
+    },
+    {
+      "evalId": "train_knowledge_gap",
+      "evalMode": "trace",
+      "conversation": [
+        {
+          "invocationId": "train-knowledge-gap",
+          "userContent": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "What is the internal launch code for project nebula?",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "user"
+          },
+          "finalResponse": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "{\"project\":\"nebula\",\"launch_code\":\"NBL-42\"}",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "model"
+          },
+          "intermediateData": {
+            "toolUses": [
+              {
+                "id": "tool-train-knowledge",
+                "args": {
+                  "project": "nebula"
+                },
+                "name": "lookup_internal_project",
+                "partialArgs": null,
+                "willContinue": null
+              }
+            ],
+            "toolResponses": [],
+            "intermediateResponses": []
+          },
+          "creationTimestamp": 0.0
+        }
+      ],
+      "actualConversation": [
+        {
+          "invocationId": "train-knowledge-gap",
+          "userContent": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "What is the internal launch code for project nebula?",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "user"
+          },
+          "finalResponse": {
+            "parts": [
+              {
+                "mediaResolution": null,
+                "codeExecutionResult": null,
+                "executableCode": null,
+                "fileData": null,
+                "functionCall": null,
+                "functionResponse": null,
+                "inlineData": null,
+                "text": "I do not have access to the internal launch code.",
+                "thought": null,
+                "thoughtSignature": null,
+                "videoMetadata": null,
+                "toolCall": null,
+                "toolResponse": null,
+                "partMetadata": null
+              }
+            ],
+            "role": "model"
+          },
+          "intermediateData": {
+            "toolUses": [],
+            "toolResponses": [],
+            "intermediateResponses": []
+          },
+          "creationTimestamp": 1783331066.1573014
+        }
+      ],
+      "conversationScenario": null,
+      "sessionInput": null,
+      "contextMessages": null,
+      "creationTimestamp": 0.0
+    }
+  ],
+  "creationTimestamp": 0.0
+}

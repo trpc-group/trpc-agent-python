@@ -1,0 +1,1389 @@
+{
+  "schema_version": "eval_optimize_loop.v1",
+  "experiment": {
+    "name": "eval_optimize_loop_demo",
+    "started_at": "2026-07-06T09:44:26.153310+00:00",
+    "finished_at": "2026-07-06T09:44:26.165870+00:00"
+  },
+  "inputs": {
+    "train_evalset": "train.evalset.json",
+    "validation_evalset": "val.evalset.json",
+    "optimizer_config": "optimizer.json",
+    "prompt_sources": [
+      {
+        "name": "system_prompt",
+        "path": "prompts/system.md"
+      },
+      {
+        "name": "skill_prompt",
+        "path": "prompts/skill.md"
+      }
+    ]
+  },
+  "baseline": {
+    "prompts": {
+      "system_prompt": "You are a compact business assistant for offline regression demos.\n\nBaseline behavior:\n- Answer with a short sentence.\n- Use tools only when the user asks for data lookup or calculation.\n- Keep the final answer concise.\n\nKnown gaps intentionally left for the optimization demo:\n- No strict JSON output contract.\n- No strict tool-argument validation rule.\n- No anti-overfitting warning for validation-only workflows.\n",
+      "skill_prompt": "For each request:\n\n1. Identify whether the answer needs a tool call.\n2. Use the expected domain tool with exact arguments.\n3. Return the final answer in the format requested by the system prompt.\n4. Do not invent missing facts.\n"
+    },
+    "train": {
+      "split": "train",
+      "stage": "baseline",
+      "eval_set_id": "eval_optimize_loop_train_baseline_trace",
+      "case_count": 3,
+      "pass_count": 0,
+      "pass_rate": 0.0,
+      "total_score": 0.37037,
+      "metric_breakdown": {
+        "fake_llm_rubric_response": 0.444444,
+        "final_response_avg_score": 0.333333,
+        "tool_trajectory_avg_score": 0.333333
+      },
+      "cases": [
+        {
+          "eval_id": "train_format_json",
+          "query": "Return the order total for order A100 as JSON.",
+          "status": "failed",
+          "score": 0.444444,
+          "metrics": {
+            "final_response_avg_score": {
+              "score": 0.0,
+              "status": "failed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "tool_trajectory_avg_score": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "fake_llm_rubric_response": {
+              "score": 0.3333333333333333,
+              "status": "failed",
+              "threshold": 0.75,
+              "reason": "failed fake rubrics: reference_match, json_format",
+              "rubric_scores": [
+                {
+                  "id": "reference_match",
+                  "score": 0.0,
+                  "reason": "final response differs"
+                },
+                {
+                  "id": "json_format",
+                  "score": 0.0,
+                  "reason": "invalid JSON"
+                },
+                {
+                  "id": "knowledge_grounding",
+                  "score": 1.0,
+                  "reason": "no unsupported internal answer"
+                }
+              ]
+            }
+          },
+          "actual_response": "The requested total is available, but not returned as JSON.",
+          "expected_response": "{\"order_id\":\"A100\",\"total\":128,\"currency\":\"CNY\"}",
+          "actual_tools": [
+            {
+              "id": "tool-train-format",
+              "name": "lookup_order_total",
+              "args": {
+                "order_id": "A100"
+              }
+            }
+          ],
+          "expected_tools": [
+            {
+              "id": "tool-train-format",
+              "name": "lookup_order_total",
+              "args": {
+                "order_id": "A100"
+              }
+            }
+          ],
+          "failure_reasons": [
+            {
+              "type": "format_noncompliance",
+              "reason": "expected JSON but actual response is not valid JSON"
+            },
+            {
+              "type": "llm_rubric_not_met",
+              "reason": "failed fake rubrics: reference_match, json_format"
+            }
+          ],
+          "trace": {
+            "session_id": "___eval___session___a7dfa17c-7b6c-4b38-b670-2c4e08c3c7e6",
+            "run_id": 1
+          }
+        },
+        {
+          "eval_id": "train_knowledge_gap",
+          "query": "What is the internal launch code for project nebula?",
+          "status": "failed",
+          "score": 0.0,
+          "metrics": {
+            "final_response_avg_score": {
+              "score": 0.0,
+              "status": "failed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "tool_trajectory_avg_score": {
+              "score": 0.0,
+              "status": "failed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "fake_llm_rubric_response": {
+              "score": 0.0,
+              "status": "failed",
+              "threshold": 0.75,
+              "reason": "failed fake rubrics: reference_match, json_format, knowledge_grounding",
+              "rubric_scores": [
+                {
+                  "id": "reference_match",
+                  "score": 0.0,
+                  "reason": "final response differs"
+                },
+                {
+                  "id": "json_format",
+                  "score": 0.0,
+                  "reason": "invalid JSON"
+                },
+                {
+                  "id": "knowledge_grounding",
+                  "score": 0.0,
+                  "reason": "no unsupported internal answer"
+                }
+              ]
+            }
+          },
+          "actual_response": "I do not have access to the internal launch code.",
+          "expected_response": "{\"project\":\"nebula\",\"launch_code\":\"NBL-42\"}",
+          "actual_tools": [],
+          "expected_tools": [
+            {
+              "id": "tool-train-knowledge",
+              "name": "lookup_internal_project",
+              "args": {
+                "project": "nebula"
+              }
+            }
+          ],
+          "failure_reasons": [
+            {
+              "type": "knowledge_recall_insufficient",
+              "reason": "answer missed a required internal fact"
+            },
+            {
+              "type": "format_noncompliance",
+              "reason": "expected JSON but actual response is not valid JSON"
+            },
+            {
+              "type": "tool_call_error",
+              "reason": "expected tool call was missing"
+            },
+            {
+              "type": "llm_rubric_not_met",
+              "reason": "failed fake rubrics: reference_match, json_format, knowledge_grounding"
+            }
+          ],
+          "trace": {
+            "session_id": "___eval___session___46215a2c-fd34-46b5-9773-9c57d7e428df",
+            "run_id": 1
+          }
+        },
+        {
+          "eval_id": "train_tool_args",
+          "query": "Check weather risk for Shenzhen on 2026-07-06.",
+          "status": "failed",
+          "score": 0.666667,
+          "metrics": {
+            "final_response_avg_score": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "tool_trajectory_avg_score": {
+              "score": 0.0,
+              "status": "failed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "fake_llm_rubric_response": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 0.75,
+              "reason": "all fake rubrics passed",
+              "rubric_scores": [
+                {
+                  "id": "reference_match",
+                  "score": 1.0,
+                  "reason": "final response exactly matches reference"
+                },
+                {
+                  "id": "json_format",
+                  "score": 1.0,
+                  "reason": "valid JSON when expected"
+                },
+                {
+                  "id": "knowledge_grounding",
+                  "score": 1.0,
+                  "reason": "internal knowledge answer is grounded"
+                }
+              ]
+            }
+          },
+          "actual_response": "{\"city\":\"Shenzhen\",\"date\":\"2026-07-06\",\"risk\":\"rain\"}",
+          "expected_response": "{\"city\":\"Shenzhen\",\"date\":\"2026-07-06\",\"risk\":\"rain\"}",
+          "actual_tools": [
+            {
+              "id": "wrong-city",
+              "name": "get_weather_risk",
+              "args": {
+                "city": "Guangzhou",
+                "date": "2026-07-06"
+              }
+            }
+          ],
+          "expected_tools": [
+            {
+              "id": "tool-train-weather",
+              "name": "get_weather_risk",
+              "args": {
+                "city": "Shenzhen",
+                "date": "2026-07-06"
+              }
+            }
+          ],
+          "failure_reasons": [
+            {
+              "type": "tool_argument_error",
+              "reason": "tool arguments differ from reference"
+            }
+          ],
+          "trace": {
+            "session_id": "___eval___session___3d2fab9f-36ed-4c26-aa3d-faa54acba33b",
+            "run_id": 1
+          }
+        }
+      ],
+      "failure_attribution": {
+        "by_type": {
+          "format_noncompliance": 2,
+          "knowledge_recall_insufficient": 1,
+          "llm_rubric_not_met": 2,
+          "tool_argument_error": 1,
+          "tool_call_error": 1
+        },
+        "failed_case_count": 3
+      }
+    },
+    "validation": {
+      "split": "validation",
+      "stage": "baseline",
+      "eval_set_id": "eval_optimize_loop_val_baseline_trace",
+      "case_count": 3,
+      "pass_count": 2,
+      "pass_rate": 0.666667,
+      "total_score": 0.814815,
+      "metric_breakdown": {
+        "fake_llm_rubric_response": 0.777778,
+        "final_response_avg_score": 0.666667,
+        "tool_trajectory_avg_score": 1.0
+      },
+      "cases": [
+        {
+          "eval_id": "val_critical_discount",
+          "query": "Critical case: compute VIP discount for customer C7.",
+          "status": "passed",
+          "score": 1.0,
+          "metrics": {
+            "final_response_avg_score": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "tool_trajectory_avg_score": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "fake_llm_rubric_response": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 0.75,
+              "reason": "all fake rubrics passed",
+              "rubric_scores": [
+                {
+                  "id": "reference_match",
+                  "score": 1.0,
+                  "reason": "final response exactly matches reference"
+                },
+                {
+                  "id": "json_format",
+                  "score": 1.0,
+                  "reason": "valid JSON when expected"
+                },
+                {
+                  "id": "knowledge_grounding",
+                  "score": 1.0,
+                  "reason": "internal knowledge answer is grounded"
+                }
+              ]
+            }
+          },
+          "actual_response": "{\"customer_id\":\"C7\",\"discount_percent\":10}",
+          "expected_response": "{\"customer_id\":\"C7\",\"discount_percent\":10}",
+          "actual_tools": [
+            {
+              "id": "tool-val-discount",
+              "name": "lookup_customer_discount",
+              "args": {
+                "customer_id": "C7"
+              }
+            }
+          ],
+          "expected_tools": [
+            {
+              "id": "tool-val-discount",
+              "name": "lookup_customer_discount",
+              "args": {
+                "customer_id": "C7"
+              }
+            }
+          ],
+          "failure_reasons": [],
+          "trace": {
+            "session_id": "___eval___session___94fbebc8-9907-40e1-97d3-dfbcddf7ddec",
+            "run_id": 1
+          }
+        },
+        {
+          "eval_id": "val_format_json",
+          "query": "Return invoice T900 tax summary as JSON.",
+          "status": "failed",
+          "score": 0.444444,
+          "metrics": {
+            "final_response_avg_score": {
+              "score": 0.0,
+              "status": "failed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "tool_trajectory_avg_score": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "fake_llm_rubric_response": {
+              "score": 0.3333333333333333,
+              "status": "failed",
+              "threshold": 0.75,
+              "reason": "failed fake rubrics: reference_match, json_format",
+              "rubric_scores": [
+                {
+                  "id": "reference_match",
+                  "score": 0.0,
+                  "reason": "final response differs"
+                },
+                {
+                  "id": "json_format",
+                  "score": 0.0,
+                  "reason": "invalid JSON"
+                },
+                {
+                  "id": "knowledge_grounding",
+                  "score": 1.0,
+                  "reason": "no unsupported internal answer"
+                }
+              ]
+            }
+          },
+          "actual_response": "The requested total is available, but not returned as JSON.",
+          "expected_response": "{\"invoice_id\":\"T900\",\"tax\":35,\"currency\":\"CNY\"}",
+          "actual_tools": [
+            {
+              "id": "tool-val-invoice",
+              "name": "lookup_invoice_tax",
+              "args": {
+                "invoice_id": "T900"
+              }
+            }
+          ],
+          "expected_tools": [
+            {
+              "id": "tool-val-invoice",
+              "name": "lookup_invoice_tax",
+              "args": {
+                "invoice_id": "T900"
+              }
+            }
+          ],
+          "failure_reasons": [
+            {
+              "type": "format_noncompliance",
+              "reason": "expected JSON but actual response is not valid JSON"
+            },
+            {
+              "type": "llm_rubric_not_met",
+              "reason": "failed fake rubrics: reference_match, json_format"
+            }
+          ],
+          "trace": {
+            "session_id": "___eval___session___54444d98-3807-4587-bd70-c9792afaa33a",
+            "run_id": 1
+          }
+        },
+        {
+          "eval_id": "val_stable_refund",
+          "query": "Check refund SLA for ticket R55.",
+          "status": "passed",
+          "score": 1.0,
+          "metrics": {
+            "final_response_avg_score": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "tool_trajectory_avg_score": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "fake_llm_rubric_response": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 0.75,
+              "reason": "all fake rubrics passed",
+              "rubric_scores": [
+                {
+                  "id": "reference_match",
+                  "score": 1.0,
+                  "reason": "final response exactly matches reference"
+                },
+                {
+                  "id": "json_format",
+                  "score": 1.0,
+                  "reason": "valid JSON when expected"
+                },
+                {
+                  "id": "knowledge_grounding",
+                  "score": 1.0,
+                  "reason": "internal knowledge answer is grounded"
+                }
+              ]
+            }
+          },
+          "actual_response": "{\"ticket_id\":\"R55\",\"sla_hours\":48}",
+          "expected_response": "{\"ticket_id\":\"R55\",\"sla_hours\":48}",
+          "actual_tools": [
+            {
+              "id": "tool-val-refund",
+              "name": "lookup_refund_sla",
+              "args": {
+                "ticket_id": "R55"
+              }
+            }
+          ],
+          "expected_tools": [
+            {
+              "id": "tool-val-refund",
+              "name": "lookup_refund_sla",
+              "args": {
+                "ticket_id": "R55"
+              }
+            }
+          ],
+          "failure_reasons": [],
+          "trace": {
+            "session_id": "___eval___session___18fb2a5c-b7fd-4917-b618-dc8614cc830e",
+            "run_id": 1
+          }
+        }
+      ],
+      "failure_attribution": {
+        "by_type": {
+          "format_noncompliance": 1,
+          "llm_rubric_not_met": 1
+        },
+        "failed_case_count": 1
+      }
+    }
+  },
+  "optimization": {
+    "backend": "fake",
+    "seed": 91,
+    "optimizer_result": {
+      "status": "SUCCEEDED",
+      "algorithm": "deterministic_fake_patch",
+      "total_reflection_lm_calls": 0,
+      "total_token_usage": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "result_artifacts": {}
+    },
+    "rounds": [
+      {
+        "round": 1,
+        "backend": "fake",
+        "optimized_field_names": [
+          "system_prompt"
+        ],
+        "input_failure_attribution": {
+          "train": {
+            "by_type": {
+              "format_noncompliance": 2,
+              "knowledge_recall_insufficient": 1,
+              "llm_rubric_not_met": 2,
+              "tool_argument_error": 1,
+              "tool_call_error": 1
+            },
+            "failed_case_count": 3
+          },
+          "validation": {
+            "by_type": {
+              "format_noncompliance": 1,
+              "llm_rubric_not_met": 1
+            },
+            "failed_case_count": 1
+          }
+        },
+        "candidate_prompts": {
+          "system_prompt": "You are a compact business assistant for offline regression demos.\n\nBaseline behavior:\n- Answer with a short sentence.\n- Use tools only when the user asks for data lookup or calculation.\n- Keep the final answer concise.\n\nKnown gaps intentionally left for the optimization demo:\n- No strict JSON output contract.\n- No strict tool-argument validation rule.\n- No anti-overfitting warning for validation-only workflows.\n\nOptimization candidate:\n- STRICT_JSON_OUTPUT: Return compact JSON exactly when the reference is JSON.\n- STRICT_TOOL_ARGUMENTS: Copy required tool names and arguments exactly.\n- TRAINING_PATTERN_BIAS: Prefer training-set lookup shortcuts; this intentionally demonstrates overfitting risk.\n",
+          "skill_prompt": "For each request:\n\n1. Identify whether the answer needs a tool call.\n2. Use the expected domain tool with exact arguments.\n3. Return the final answer in the format requested by the system prompt.\n4. Do not invent missing facts.\n"
+        },
+        "candidate_prompt_preview": {
+          "system_prompt": "ort sentence.\n- Use tools only when the user asks for data lookup or calculation.\n- Keep the final answer concise.\n\nKnown gaps intentionally left for the optimization demo:\n- No strict JSON output contract.\n- No strict tool-argument validation rule.\n- No anti-overfitting warning for validation-only workflows.\n\nOptimization candidate:\n- STRICT_JSON_OUTPUT: Return compact JSON exactly when the reference is JSON.\n- STRICT_TOOL_ARGUMENTS: Copy required tool names and arguments exactly.\n- TRAINING_PATTERN_BIAS: Prefer training-set lookup shortcuts; this intentionally demonstrates overfitting risk.\n"
+        },
+        "accepted_by_optimizer": true,
+        "acceptance_reason": "fake optimizer produced one deterministic candidate for downstream gate validation",
+        "cost": 0.0,
+        "duration_seconds": 4e-06
+      }
+    ],
+    "candidate_prompts": {
+      "system_prompt": "You are a compact business assistant for offline regression demos.\n\nBaseline behavior:\n- Answer with a short sentence.\n- Use tools only when the user asks for data lookup or calculation.\n- Keep the final answer concise.\n\nKnown gaps intentionally left for the optimization demo:\n- No strict JSON output contract.\n- No strict tool-argument validation rule.\n- No anti-overfitting warning for validation-only workflows.\n\nOptimization candidate:\n- STRICT_JSON_OUTPUT: Return compact JSON exactly when the reference is JSON.\n- STRICT_TOOL_ARGUMENTS: Copy required tool names and arguments exactly.\n- TRAINING_PATTERN_BIAS: Prefer training-set lookup shortcuts; this intentionally demonstrates overfitting risk.\n",
+      "skill_prompt": "For each request:\n\n1. Identify whether the answer needs a tool call.\n2. Use the expected domain tool with exact arguments.\n3. Return the final answer in the format requested by the system prompt.\n4. Do not invent missing facts.\n"
+    },
+    "model_calls": 12,
+    "optimizer_model_calls": 0,
+    "total_cost": 0.0,
+    "token_usage": {
+      "prompt": 92,
+      "completion": 48,
+      "total": 140
+    }
+  },
+  "candidate": {
+    "prompts": {
+      "system_prompt": "You are a compact business assistant for offline regression demos.\n\nBaseline behavior:\n- Answer with a short sentence.\n- Use tools only when the user asks for data lookup or calculation.\n- Keep the final answer concise.\n\nKnown gaps intentionally left for the optimization demo:\n- No strict JSON output contract.\n- No strict tool-argument validation rule.\n- No anti-overfitting warning for validation-only workflows.\n\nOptimization candidate:\n- STRICT_JSON_OUTPUT: Return compact JSON exactly when the reference is JSON.\n- STRICT_TOOL_ARGUMENTS: Copy required tool names and arguments exactly.\n- TRAINING_PATTERN_BIAS: Prefer training-set lookup shortcuts; this intentionally demonstrates overfitting risk.\n",
+      "skill_prompt": "For each request:\n\n1. Identify whether the answer needs a tool call.\n2. Use the expected domain tool with exact arguments.\n3. Return the final answer in the format requested by the system prompt.\n4. Do not invent missing facts.\n"
+    },
+    "train": {
+      "split": "train",
+      "stage": "candidate",
+      "eval_set_id": "eval_optimize_loop_train_candidate_trace",
+      "case_count": 3,
+      "pass_count": 2,
+      "pass_rate": 0.666667,
+      "total_score": 0.666667,
+      "metric_breakdown": {
+        "fake_llm_rubric_response": 0.666667,
+        "final_response_avg_score": 0.666667,
+        "tool_trajectory_avg_score": 0.666667
+      },
+      "cases": [
+        {
+          "eval_id": "train_format_json",
+          "query": "Return the order total for order A100 as JSON.",
+          "status": "passed",
+          "score": 1.0,
+          "metrics": {
+            "final_response_avg_score": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "tool_trajectory_avg_score": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "fake_llm_rubric_response": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 0.75,
+              "reason": "all fake rubrics passed",
+              "rubric_scores": [
+                {
+                  "id": "reference_match",
+                  "score": 1.0,
+                  "reason": "final response exactly matches reference"
+                },
+                {
+                  "id": "json_format",
+                  "score": 1.0,
+                  "reason": "valid JSON when expected"
+                },
+                {
+                  "id": "knowledge_grounding",
+                  "score": 1.0,
+                  "reason": "internal knowledge answer is grounded"
+                }
+              ]
+            }
+          },
+          "actual_response": "{\"order_id\":\"A100\",\"total\":128,\"currency\":\"CNY\"}",
+          "expected_response": "{\"order_id\":\"A100\",\"total\":128,\"currency\":\"CNY\"}",
+          "actual_tools": [
+            {
+              "id": "tool-train-format",
+              "name": "lookup_order_total",
+              "args": {
+                "order_id": "A100"
+              }
+            }
+          ],
+          "expected_tools": [
+            {
+              "id": "tool-train-format",
+              "name": "lookup_order_total",
+              "args": {
+                "order_id": "A100"
+              }
+            }
+          ],
+          "failure_reasons": [],
+          "trace": {
+            "session_id": "___eval___session___33c355f4-fccf-4792-bb68-9d4fb885875a",
+            "run_id": 1
+          }
+        },
+        {
+          "eval_id": "train_knowledge_gap",
+          "query": "What is the internal launch code for project nebula?",
+          "status": "failed",
+          "score": 0.0,
+          "metrics": {
+            "final_response_avg_score": {
+              "score": 0.0,
+              "status": "failed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "tool_trajectory_avg_score": {
+              "score": 0.0,
+              "status": "failed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "fake_llm_rubric_response": {
+              "score": 0.0,
+              "status": "failed",
+              "threshold": 0.75,
+              "reason": "failed fake rubrics: reference_match, json_format, knowledge_grounding",
+              "rubric_scores": [
+                {
+                  "id": "reference_match",
+                  "score": 0.0,
+                  "reason": "final response differs"
+                },
+                {
+                  "id": "json_format",
+                  "score": 0.0,
+                  "reason": "invalid JSON"
+                },
+                {
+                  "id": "knowledge_grounding",
+                  "score": 0.0,
+                  "reason": "no unsupported internal answer"
+                }
+              ]
+            }
+          },
+          "actual_response": "I do not have access to the internal launch code.",
+          "expected_response": "{\"project\":\"nebula\",\"launch_code\":\"NBL-42\"}",
+          "actual_tools": [],
+          "expected_tools": [
+            {
+              "id": "tool-train-knowledge",
+              "name": "lookup_internal_project",
+              "args": {
+                "project": "nebula"
+              }
+            }
+          ],
+          "failure_reasons": [
+            {
+              "type": "knowledge_recall_insufficient",
+              "reason": "answer missed a required internal fact"
+            },
+            {
+              "type": "format_noncompliance",
+              "reason": "expected JSON but actual response is not valid JSON"
+            },
+            {
+              "type": "tool_call_error",
+              "reason": "expected tool call was missing"
+            },
+            {
+              "type": "llm_rubric_not_met",
+              "reason": "failed fake rubrics: reference_match, json_format, knowledge_grounding"
+            }
+          ],
+          "trace": {
+            "session_id": "___eval___session___ead5b066-c68d-4c6d-9fae-e594c8c0f46b",
+            "run_id": 1
+          }
+        },
+        {
+          "eval_id": "train_tool_args",
+          "query": "Check weather risk for Shenzhen on 2026-07-06.",
+          "status": "passed",
+          "score": 1.0,
+          "metrics": {
+            "final_response_avg_score": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "tool_trajectory_avg_score": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "fake_llm_rubric_response": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 0.75,
+              "reason": "all fake rubrics passed",
+              "rubric_scores": [
+                {
+                  "id": "reference_match",
+                  "score": 1.0,
+                  "reason": "final response exactly matches reference"
+                },
+                {
+                  "id": "json_format",
+                  "score": 1.0,
+                  "reason": "valid JSON when expected"
+                },
+                {
+                  "id": "knowledge_grounding",
+                  "score": 1.0,
+                  "reason": "internal knowledge answer is grounded"
+                }
+              ]
+            }
+          },
+          "actual_response": "{\"city\":\"Shenzhen\",\"date\":\"2026-07-06\",\"risk\":\"rain\"}",
+          "expected_response": "{\"city\":\"Shenzhen\",\"date\":\"2026-07-06\",\"risk\":\"rain\"}",
+          "actual_tools": [
+            {
+              "id": "tool-train-weather",
+              "name": "get_weather_risk",
+              "args": {
+                "city": "Shenzhen",
+                "date": "2026-07-06"
+              }
+            }
+          ],
+          "expected_tools": [
+            {
+              "id": "tool-train-weather",
+              "name": "get_weather_risk",
+              "args": {
+                "city": "Shenzhen",
+                "date": "2026-07-06"
+              }
+            }
+          ],
+          "failure_reasons": [],
+          "trace": {
+            "session_id": "___eval___session___272dd4f1-b64f-4bf9-aee6-89a389849958",
+            "run_id": 1
+          }
+        }
+      ],
+      "failure_attribution": {
+        "by_type": {
+          "format_noncompliance": 1,
+          "knowledge_recall_insufficient": 1,
+          "llm_rubric_not_met": 1,
+          "tool_call_error": 1
+        },
+        "failed_case_count": 1
+      }
+    },
+    "validation": {
+      "split": "validation",
+      "stage": "candidate",
+      "eval_set_id": "eval_optimize_loop_val_candidate_trace",
+      "case_count": 3,
+      "pass_count": 1,
+      "pass_rate": 0.333333,
+      "total_score": 0.481481,
+      "metric_breakdown": {
+        "fake_llm_rubric_response": 0.777778,
+        "final_response_avg_score": 0.333333,
+        "tool_trajectory_avg_score": 0.333333
+      },
+      "cases": [
+        {
+          "eval_id": "val_critical_discount",
+          "query": "Critical case: compute VIP discount for customer C7.",
+          "status": "failed",
+          "score": 0.222222,
+          "metrics": {
+            "final_response_avg_score": {
+              "score": 0.0,
+              "status": "failed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "tool_trajectory_avg_score": {
+              "score": 0.0,
+              "status": "failed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "fake_llm_rubric_response": {
+              "score": 0.6666666666666666,
+              "status": "failed",
+              "threshold": 0.75,
+              "reason": "failed fake rubrics: reference_match",
+              "rubric_scores": [
+                {
+                  "id": "reference_match",
+                  "score": 0.0,
+                  "reason": "final response differs"
+                },
+                {
+                  "id": "json_format",
+                  "score": 1.0,
+                  "reason": "valid JSON when expected"
+                },
+                {
+                  "id": "knowledge_grounding",
+                  "score": 1.0,
+                  "reason": "no unsupported internal answer"
+                }
+              ]
+            }
+          },
+          "actual_response": "{\"customer_id\":\"C7\",\"discount_percent\":15}",
+          "expected_response": "{\"customer_id\":\"C7\",\"discount_percent\":10}",
+          "actual_tools": [
+            {
+              "id": "overfit-discount",
+              "name": "lookup_customer_discount",
+              "args": {
+                "customer_id": "C7",
+                "tier": "training-vip"
+              }
+            }
+          ],
+          "expected_tools": [
+            {
+              "id": "tool-val-discount",
+              "name": "lookup_customer_discount",
+              "args": {
+                "customer_id": "C7"
+              }
+            }
+          ],
+          "failure_reasons": [
+            {
+              "type": "final_response_mismatch",
+              "reason": "actual final response differs from reference"
+            },
+            {
+              "type": "tool_argument_error",
+              "reason": "tool arguments differ from reference"
+            },
+            {
+              "type": "llm_rubric_not_met",
+              "reason": "failed fake rubrics: reference_match"
+            }
+          ],
+          "trace": {
+            "session_id": "___eval___session___82711c85-ab93-4ebb-8ea1-1ab6ff2cd184",
+            "run_id": 1
+          }
+        },
+        {
+          "eval_id": "val_format_json",
+          "query": "Return invoice T900 tax summary as JSON.",
+          "status": "passed",
+          "score": 1.0,
+          "metrics": {
+            "final_response_avg_score": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "tool_trajectory_avg_score": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "fake_llm_rubric_response": {
+              "score": 1.0,
+              "status": "passed",
+              "threshold": 0.75,
+              "reason": "all fake rubrics passed",
+              "rubric_scores": [
+                {
+                  "id": "reference_match",
+                  "score": 1.0,
+                  "reason": "final response exactly matches reference"
+                },
+                {
+                  "id": "json_format",
+                  "score": 1.0,
+                  "reason": "valid JSON when expected"
+                },
+                {
+                  "id": "knowledge_grounding",
+                  "score": 1.0,
+                  "reason": "internal knowledge answer is grounded"
+                }
+              ]
+            }
+          },
+          "actual_response": "{\"invoice_id\":\"T900\",\"tax\":35,\"currency\":\"CNY\"}",
+          "expected_response": "{\"invoice_id\":\"T900\",\"tax\":35,\"currency\":\"CNY\"}",
+          "actual_tools": [
+            {
+              "id": "tool-val-invoice",
+              "name": "lookup_invoice_tax",
+              "args": {
+                "invoice_id": "T900"
+              }
+            }
+          ],
+          "expected_tools": [
+            {
+              "id": "tool-val-invoice",
+              "name": "lookup_invoice_tax",
+              "args": {
+                "invoice_id": "T900"
+              }
+            }
+          ],
+          "failure_reasons": [],
+          "trace": {
+            "session_id": "___eval___session___8c3d17dd-db41-462c-a102-d02c18475b78",
+            "run_id": 1
+          }
+        },
+        {
+          "eval_id": "val_stable_refund",
+          "query": "Check refund SLA for ticket R55.",
+          "status": "failed",
+          "score": 0.222222,
+          "metrics": {
+            "final_response_avg_score": {
+              "score": 0.0,
+              "status": "failed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "tool_trajectory_avg_score": {
+              "score": 0.0,
+              "status": "failed",
+              "threshold": 1.0,
+              "reason": null,
+              "rubric_scores": null
+            },
+            "fake_llm_rubric_response": {
+              "score": 0.6666666666666666,
+              "status": "failed",
+              "threshold": 0.75,
+              "reason": "failed fake rubrics: reference_match",
+              "rubric_scores": [
+                {
+                  "id": "reference_match",
+                  "score": 0.0,
+                  "reason": "final response differs"
+                },
+                {
+                  "id": "json_format",
+                  "score": 1.0,
+                  "reason": "valid JSON when expected"
+                },
+                {
+                  "id": "knowledge_grounding",
+                  "score": 1.0,
+                  "reason": "no unsupported internal answer"
+                }
+              ]
+            }
+          },
+          "actual_response": "{\"ticket_id\":\"R55\",\"sla_hours\":24}",
+          "expected_response": "{\"ticket_id\":\"R55\",\"sla_hours\":48}",
+          "actual_tools": [
+            {
+              "id": "overfit-refund",
+              "name": "lookup_refund_sla",
+              "args": {
+                "ticket_id": "R55",
+                "region": "train-only"
+              }
+            }
+          ],
+          "expected_tools": [
+            {
+              "id": "tool-val-refund",
+              "name": "lookup_refund_sla",
+              "args": {
+                "ticket_id": "R55"
+              }
+            }
+          ],
+          "failure_reasons": [
+            {
+              "type": "final_response_mismatch",
+              "reason": "actual final response differs from reference"
+            },
+            {
+              "type": "tool_argument_error",
+              "reason": "tool arguments differ from reference"
+            },
+            {
+              "type": "llm_rubric_not_met",
+              "reason": "failed fake rubrics: reference_match"
+            }
+          ],
+          "trace": {
+            "session_id": "___eval___session___ca3802bf-ebe2-493a-847b-dd1869d0d862",
+            "run_id": 1
+          }
+        }
+      ],
+      "failure_attribution": {
+        "by_type": {
+          "final_response_mismatch": 2,
+          "llm_rubric_not_met": 2,
+          "tool_argument_error": 2
+        },
+        "failed_case_count": 2
+      }
+    }
+  },
+  "delta": {
+    "train": {
+      "baseline_total_score": 0.37037,
+      "candidate_total_score": 0.666667,
+      "total_score_delta": 0.296297,
+      "baseline_pass_rate": 0.0,
+      "candidate_pass_rate": 0.666667,
+      "pass_rate_delta": 0.666667,
+      "new_passes": [
+        "train_format_json",
+        "train_tool_args"
+      ],
+      "new_failures": [],
+      "score_improved": [
+        "train_format_json",
+        "train_tool_args"
+      ],
+      "score_regressed": [],
+      "case_deltas": [
+        {
+          "eval_id": "train_format_json",
+          "baseline_score": 0.444444,
+          "candidate_score": 1.0,
+          "score_delta": 0.555556,
+          "status_delta": "failed->passed",
+          "classification": "new_pass"
+        },
+        {
+          "eval_id": "train_knowledge_gap",
+          "baseline_score": 0.0,
+          "candidate_score": 0.0,
+          "score_delta": 0.0,
+          "status_delta": "failed->failed",
+          "classification": "unchanged"
+        },
+        {
+          "eval_id": "train_tool_args",
+          "baseline_score": 0.666667,
+          "candidate_score": 1.0,
+          "score_delta": 0.333333,
+          "status_delta": "failed->passed",
+          "classification": "new_pass"
+        }
+      ]
+    },
+    "validation": {
+      "baseline_total_score": 0.814815,
+      "candidate_total_score": 0.481481,
+      "total_score_delta": -0.333334,
+      "baseline_pass_rate": 0.666667,
+      "candidate_pass_rate": 0.333333,
+      "pass_rate_delta": -0.333334,
+      "new_passes": [
+        "val_format_json"
+      ],
+      "new_failures": [
+        "val_critical_discount",
+        "val_stable_refund"
+      ],
+      "score_improved": [
+        "val_format_json"
+      ],
+      "score_regressed": [
+        "val_critical_discount",
+        "val_stable_refund"
+      ],
+      "case_deltas": [
+        {
+          "eval_id": "val_critical_discount",
+          "baseline_score": 1.0,
+          "candidate_score": 0.222222,
+          "score_delta": -0.777778,
+          "status_delta": "passed->failed",
+          "classification": "new_failure"
+        },
+        {
+          "eval_id": "val_format_json",
+          "baseline_score": 0.444444,
+          "candidate_score": 1.0,
+          "score_delta": 0.555556,
+          "status_delta": "failed->passed",
+          "classification": "new_pass"
+        },
+        {
+          "eval_id": "val_stable_refund",
+          "baseline_score": 1.0,
+          "candidate_score": 0.222222,
+          "score_delta": -0.777778,
+          "status_delta": "passed->failed",
+          "classification": "new_failure"
+        }
+      ]
+    }
+  },
+  "gate_decision": {
+    "accepted": false,
+    "decision": "reject",
+    "checks": {
+      "validation_score_improvement": {
+        "passed": false,
+        "observed": -0.333334,
+        "required": 0.05
+      },
+      "no_new_hard_failures": {
+        "passed": false,
+        "new_failures": [
+          "val_critical_discount",
+          "val_stable_refund"
+        ],
+        "allow_new_hard_failures": false
+      },
+      "critical_cases_not_degraded": {
+        "passed": false,
+        "critical_case_ids": [
+          "val_critical_discount"
+        ],
+        "regressed": [
+          "val_critical_discount"
+        ]
+      },
+      "cost_budget": {
+        "passed": true,
+        "observed": 0.0,
+        "budget": 1.0
+      }
+    },
+    "reasons": [
+      "validation score delta -0.3333 is below required +0.0500",
+      "candidate introduced new hard failures: val_critical_discount, val_stable_refund",
+      "critical cases regressed: val_critical_discount"
+    ]
+  },
+  "failure_attribution": {
+    "baseline_train": {
+      "by_type": {
+        "format_noncompliance": 2,
+        "knowledge_recall_insufficient": 1,
+        "llm_rubric_not_met": 2,
+        "tool_argument_error": 1,
+        "tool_call_error": 1
+      },
+      "failed_case_count": 3
+    },
+    "baseline_validation": {
+      "by_type": {
+        "format_noncompliance": 1,
+        "llm_rubric_not_met": 1
+      },
+      "failed_case_count": 1
+    },
+    "candidate_train": {
+      "by_type": {
+        "format_noncompliance": 1,
+        "knowledge_recall_insufficient": 1,
+        "llm_rubric_not_met": 1,
+        "tool_call_error": 1
+      },
+      "failed_case_count": 1
+    },
+    "candidate_validation": {
+      "by_type": {
+        "final_response_mismatch": 2,
+        "llm_rubric_not_met": 2,
+        "tool_argument_error": 2
+      },
+      "failed_case_count": 2
+    }
+  },
+  "audit": {
+    "trace_mode": true,
+    "seed": 91,
+    "repro_config": {
+      "evaluate": {
+        "metrics": [
+          {
+            "metric_name": "final_response_avg_score",
+            "threshold": 1.0,
+            "criterion": {
+              "final_response": {
+                "text": {
+                  "match": "exact",
+                  "case_insensitive": false
+                }
+              }
+            }
+          },
+          {
+            "metric_name": "tool_trajectory_avg_score",
+            "threshold": 1.0,
+            "criterion": {
+              "tool_trajectory": {
+                "order_sensitive": true,
+                "subset_matching": false
+              }
+            }
+          },
+          {
+            "metric_name": "fake_llm_rubric_response",
+            "threshold": 0.75,
+            "criterion": {
+              "fake_judge": {
+                "rubrics": [
+                  "final answer matches the reference",
+                  "JSON format is respected when requested",
+                  "answer does not invent unavailable knowledge"
+                ]
+              }
+            }
+          }
+        ],
+        "num_runs": 1
+      },
+      "optimize": {
+        "target_prompts": [
+          {
+            "name": "system_prompt",
+            "path": "prompts/system.md"
+          },
+          {
+            "name": "skill_prompt",
+            "path": "prompts/skill.md"
+          }
+        ],
+        "backend": "fake",
+        "seed": 91,
+        "max_rounds": 1,
+        "fake_model": {
+          "name": "deterministic_fake_model",
+          "candidate_patch": [
+            "STRICT_JSON_OUTPUT: Return compact JSON exactly when the reference is JSON.",
+            "STRICT_TOOL_ARGUMENTS: Copy required tool names and arguments exactly.",
+            "TRAINING_PATTERN_BIAS: Prefer training-set lookup shortcuts; this intentionally demonstrates overfitting risk."
+          ]
+        },
+        "agent_optimizer": {
+          "model_name": "deepseek-v4-pro",
+          "base_url": "https://api.deepseek.com/v1",
+          "artifact_dir": "agent_optimizer_run",
+          "eval_case_parallelism": 1,
+          "algorithm": {
+            "reflection_lm": {
+              "provider_name": "openai",
+              "model_name": "${TRPC_AGENT_OPT_MODEL}",
+              "base_url": "${TRPC_AGENT_OPT_BASE_URL}",
+              "api_key": "<redacted>",
+              "generation_config": {
+                "max_tokens": 4096,
+                "temperature": 0.4
+              }
+            },
+            "max_metric_calls": 12,
+            "max_candidate_proposals": 1,
+            "max_iterations_without_improvement": 2
+          }
+        }
+      },
+      "gate": {
+        "min_validation_score_improvement": 0.05,
+        "allow_new_hard_failures": false,
+        "critical_case_ids": [
+          "val_critical_discount"
+        ],
+        "max_cost": 1.0
+      }
+    },
+    "duration_seconds": 0.00648,
+    "artifacts": {
+      "report_json": "optimization_report.json",
+      "report_md": "optimization_report.md",
+      "trace_evalsets": {
+        "baseline_train": "trace_evalsets/baseline_train.evalset.json",
+        "baseline_val": "trace_evalsets/baseline_val.evalset.json",
+        "candidate_train": "trace_evalsets/candidate_train.evalset.json",
+        "candidate_val": "trace_evalsets/candidate_val.evalset.json"
+      }
+    }
+  }
+}
