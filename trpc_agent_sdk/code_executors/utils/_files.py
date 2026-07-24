@@ -24,7 +24,8 @@ from typing import Optional
 # or crash the interpreter — making the entire trpc_agent_sdk package unusable.
 # Instead, we lazily import it inside detect_content_type() on first use.
 # See: https://github.com/trpc-group/trpc-agent-python/issues/230
-HAS_MAGIC = False  # set to True by tests via mock; real check is lazy
+_magic_module = None  # cached after first successful import on non-win32
+_magic_checked = False
 
 
 def path_join(base: str, path: str) -> str:
@@ -231,17 +232,24 @@ def detect_content_type(filename: Path, data: bytes) -> str:
     if mime_type:
         return mime_type
 
-    # filename guess failed, try python-magic (lazily imported)
+    # filename guess failed, try python-magic (lazily imported).
     # On Windows, python-magic requires a native libmagic DLL that, when
     # missing, causes an access violation at import time (not catchable by
     # try/except). We skip it entirely on win32 and fall through to the
     # simple content-based detection below.
-    if HAS_MAGIC and sys.platform != 'win32':
+    global _magic_module, _magic_checked
+    if sys.platform != 'win32' and not _magic_checked:
         try:
-            import magic
-            return magic.from_buffer(data, mime=True)
+            import magic as _m
+            _magic_module = _m
+        except ImportError:
+            logger.debug("python-magic not available; falling back to byte-signature detection")
+        _magic_checked = True
+    if _magic_module is not None:
+        try:
+            return _magic_module.from_buffer(data, mime=True)
         except Exception:
-            pass
+            logger.debug("magic.from_buffer failed; falling back to byte-signature detection", exc_info=True)
 
     # magic guess failed, use simple content-based detection
     if data.startswith(b'\x89PNG\r\n\x1a\n'):

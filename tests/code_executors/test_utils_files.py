@@ -329,19 +329,28 @@ class TestDetectContentType:
 
         assert "text" in mime_type.lower() or mime_type == "application/octet-stream"
 
-    @patch('trpc_agent_sdk.code_executors.utils._files.HAS_MAGIC', True)
-    @patch('trpc_agent_sdk.code_executors.utils._files.magic', create=True)
     @pytest.mark.skipif(sys.platform == 'win32', reason='python-magic crashes on Windows without libmagic DLL')
-    def test_detect_content_type_with_magic(self, mock_magic):
+    def test_detect_content_type_with_magic(self):
         """Test detecting content type using magic library."""
+        import sys as _sys
+        from unittest.mock import MagicMock
+
         filename = Path("test.unknown")
         data = b"some data"
+        mock_magic = MagicMock()
         mock_magic.from_buffer.return_value = "application/custom"
 
-        mime_type = detect_content_type(filename, data)
-
-        assert mime_type == "application/custom"
-        mock_magic.from_buffer.assert_called_once_with(data, mime=True)
+        # Inject mock into the module's cached magic slot
+        import trpc_agent_sdk.code_executors.utils._files as _f
+        orig = (_f._magic_module, _f._magic_checked)
+        _f._magic_module = mock_magic
+        _f._magic_checked = True
+        try:
+            mime_type = detect_content_type(filename, data)
+            assert mime_type == "application/custom"
+            mock_magic.from_buffer.assert_called_once_with(data, mime=True)
+        finally:
+            _f._magic_module, _f._magic_checked = orig
 
 
 class TestGetRelPath:
