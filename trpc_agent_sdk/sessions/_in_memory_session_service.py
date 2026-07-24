@@ -475,6 +475,10 @@ class InMemorySessionService(BaseSessionService):
         if user_id not in self._sessions[app_name]:
             self._sessions[app_name][user_id] = {}
 
+        # Storage should own its own session object. Reusing the caller's
+        # instance can create aliasing after update_session(), which makes
+        # later append_event() mutate the same object twice.
+        session = session.model_copy(deep=True)
         if not self._session_config.store_historical_events:
             session = session.model_copy(update={"historical_events": []})
 

@@ -41,6 +41,8 @@ from ._session import Session
 from ._session_summarizer import SessionSummarizer
 from ._session_summarizer import SessionSummary
 
+_SUMMARY_EVENT_METADATA_KEY = "session_summary"
+
 
 class SummarizerSessionManager:
     """Session service with automatic summarization capabilities.
@@ -70,6 +72,109 @@ class SummarizerSessionManager:
         self._summarizer: SessionSummarizer = summarizer
         self._auto_summarize = auto_summarize
         self._summarizer_cache: Dict[str, Dict[str, Dict[str, SessionSummary]]] = {}
+
+    def _get_cached_summary(self, session: Session) -> Optional[SessionSummary]:
+        """Return cached summary for a session if available."""
+
+        app_name = session.app_name
+        user_id = session.user_id
+        cached_summary = self._summarizer_cache.get(app_name, {}).get(user_id, {}).get(session.id)
+        if cached_summary is not None:
+            return cached_summary
+
+        restored_summary = self._restore_summary_from_session(session)
+        if restored_summary is not None:
+            self._cache_summary(session, restored_summary)
+        return restored_summary
+
+    def _cache_summary(self, session: Session, summary: SessionSummary) -> None:
+        """Cache a session summary for fast same-process reads."""
+
+        app_name = session.app_name
+        user_id = session.user_id
+        if app_name not in self._summarizer_cache:
+            self._summarizer_cache[app_name] = {}
+        if user_id not in self._summarizer_cache[app_name]:
+            self._summarizer_cache[app_name][user_id] = {}
+        self._summarizer_cache[app_name][user_id][session.id] = summary
+
+    def _get_summary_event(self, session: Session):
+        """Return the persisted summary anchor event if present."""
+
+        for event in session.events:
+            if event.is_summary_event():
+                return event
+        return None
+
+    def _serialize_summary(self, summary: SessionSummary) -> Dict[str, Any]:
+        """Serialize a summary into event metadata for persistence."""
+
+        return {
+            "session_id": summary.session_id,
+            "summary_text": summary.summary_text,
+            "original_event_count": summary.original_event_count,
+            "compressed_event_count": summary.compressed_event_count,
+            "summary_timestamp": summary.summary_timestamp,
+            "metadata": dict(summary.metadata or {}),
+        }
+
+    def _persist_summary_to_session(self, session: Session, summary: SessionSummary) -> None:
+        """Attach summary metadata to the persisted summary event."""
+
+        summary_event = self._get_summary_event(session)
+        if summary_event is None:
+            return
+        custom_metadata = dict(summary_event.custom_metadata or {})
+        custom_metadata[_SUMMARY_EVENT_METADATA_KEY] = self._serialize_summary(summary)
+        summary_event.custom_metadata = custom_metadata
+        summary_event.timestamp = summary.summary_timestamp
+
+    def _restore_summary_from_session(self, session: Session) -> Optional[SessionSummary]:
+        """Rebuild a SessionSummary from persisted summary-event metadata."""
+
+        summary_event = self._get_summary_event(session)
+        if summary_event is None or not summary_event.custom_metadata:
+            return None
+
+        persisted_summary = summary_event.custom_metadata.get(_SUMMARY_EVENT_METADATA_KEY)
+        if not isinstance(persisted_summary, dict):
+            return None
+
+        try:
+            return SessionSummary(
+                session_id=str(persisted_summary["session_id"]),
+                summary_text=str(persisted_summary["summary_text"]),
+                original_event_count=int(persisted_summary["original_event_count"]),
+                compressed_event_count=int(persisted_summary["compressed_event_count"]),
+                summary_timestamp=float(persisted_summary["summary_timestamp"]),
+                metadata=dict(persisted_summary.get("metadata") or {}),
+            )
+        except (KeyError, TypeError, ValueError) as ex:
+            logger.warning("Failed to restore persisted summary for session %s: %s", session.id, ex)
+            return None
+
+    def _build_summary_metadata(
+        self,
+        *,
+        session: Session,
+        original_event_count: int,
+        compressed_event_count: int,
+        previous_summary: Optional[SessionSummary] = None,
+    ) -> Dict[str, Any]:
+        """Build stable lineage metadata for a session summary."""
+        if previous_summary is None:
+            previous_summary = self._get_cached_summary(session)
+        previous_metadata = dict(previous_summary.metadata) if previous_summary and previous_summary.metadata else {}
+        previous_version = int(previous_metadata.get("version", 0) or 0)
+        version = previous_version + 1
+        summary_id = f"{session.id}:summary:v{version}"
+        summarized_event_count = max(0, original_event_count - compressed_event_count + 1)
+        return {
+            "summary_id": summary_id,
+            "version": version,
+            "replaces": previous_metadata.get("summary_id"),
+            "summarized_event_count": summarized_event_count,
+        }
 
     def set_session_service(self, session_service: SessionServiceABC, force: bool = False) -> None:
         """Set the session service to use.
@@ -104,6 +209,7 @@ class SummarizerSessionManager:
         # Check if session should be summarized
         if is_should_summarize:
             logger.debug("Summarizing session %s", session.id)
+            previous_summary = self._get_cached_summary(session)
 
             # Compress the session so the active events list contains only
             # model-visible summary/recent events. Raw events are retained only
@@ -116,19 +222,21 @@ class SummarizerSessionManager:
             summary_text = await self._summarizer.create_session_summary(
                 session, ctx, store_historical_events=store_historical_events)
             if summary_text:
-                app_name = session.app_name
-                user_id = session.user_id
-                if app_name not in self._summarizer_cache:
-                    self._summarizer_cache[app_name] = {}
-                if user_id not in self._summarizer_cache[app_name]:
-                    self._summarizer_cache[app_name][user_id] = {}
-                self._summarizer_cache[app_name][user_id][session.id] = SessionSummary(
+                summary = SessionSummary(
                     session_id=session.id,
                     summary_text=summary_text,
                     original_event_count=original_event_count,
                     compressed_event_count=len(session.events),
                     summary_timestamp=time.time(),
+                    metadata=self._build_summary_metadata(
+                        session=session,
+                        original_event_count=original_event_count,
+                        compressed_event_count=len(session.events),
+                        previous_summary=previous_summary,
+                    ),
                 )
+                self._cache_summary(session, summary)
+                self._persist_summary_to_session(session, summary)
             # Update the stored session
             if self._base_service:
                 await self._base_service.update_session(session)
@@ -142,16 +250,9 @@ class SummarizerSessionManager:
         Returns:
             SessionSummary if successful, None otherwise
         """
-        if not self._summarizer or not self._summarizer_cache:
-            return None
-        app_name = session.app_name
-        user_id = session.user_id
-
-        if app_name not in self._summarizer_cache or user_id not in self._summarizer_cache[
-                app_name] or session.id not in self._summarizer_cache[app_name][user_id]:
-            return None
-
-        return self._summarizer_cache[app_name][user_id][session.id]
+        if not self._summarizer:
+            return self._restore_summary_from_session(session)
+        return self._get_cached_summary(session)
 
     def get_summarizer_metadata(self) -> Dict[str, Any]:
         """Get metadata about the summarizer configuration.

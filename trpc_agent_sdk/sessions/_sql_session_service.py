@@ -105,6 +105,24 @@ def _events_from_storage(events: Optional[list[dict[str, Any]]]) -> list[Event]:
     return [Event.model_validate(event) for event in (events or [])]
 
 
+def _normalize_active_event_order(events: list[Event]) -> list[Event]:
+    """Keep a summary anchor at the front of the active event window.
+
+    Persistent backends reconstruct events from storage using timestamp order,
+    but a summary event is a logical anchor inserted at the beginning of the
+    active context window even though it is created later in time. Moving the
+    first summary anchor to the front keeps SQL behavior aligned with the
+    in-memory session semantics.
+    """
+
+    for index, event in enumerate(events):
+        if event.is_summary_event():
+            if index == 0:
+                return events
+            return [event] + events[:index] + events[index + 1:]
+    return events
+
+
 class SessionStorageBase(DeclarativeBase):
     """Base class for SqlSessionService tables only.
 
@@ -482,7 +500,7 @@ class SqlSessionService(BaseSessionService):
                                   user_state_delta=user_state,
                                   session_state=storage_session.state))
 
-            events = [e.to_event() for e in reversed(storage_events)]
+            events = _normalize_active_event_order([e.to_event() for e in reversed(storage_events)])
             historical_events = (_events_from_storage(storage_session.historical_events)
                                  if self._session_config.store_historical_events else [])
             session = storage_session.to_session(state=merged_state, events=events, historical_events=historical_events)
@@ -572,7 +590,7 @@ class SqlSessionService(BaseSessionService):
                 session.last_update_time = storage_session.update_timestamp_tz
                 session.state = storage_session.state
                 session.conversation_count = storage_session.conversation_count
-                session.events = [e.to_event() for e in reversed(storage_events)]
+                session.events = _normalize_active_event_order([e.to_event() for e in reversed(storage_events)])
                 session.historical_events = (_events_from_storage(storage_session.historical_events)
                                              if self._session_config.store_historical_events else [])
 
@@ -791,12 +809,15 @@ class SqlSessionService(BaseSessionService):
     async def _cleanup_loop(self) -> None:
         """Background task for periodic cleanup of expired sessions and states."""
         logger.debug("Cleanup task started with interval: %ss", self._session_config.ttl.cleanup_interval_seconds)
+        if self.__cleanup_stop_event is None:
+            logger.debug("Cleanup loop exited because stop event was not initialized")
+            return
 
         try:
-            while not self.__cleanup_stop_event.is_set():
+            stop_event = self.__cleanup_stop_event
+            while not stop_event.is_set():
                 try:
-                    await asyncio.wait_for(self.__cleanup_stop_event.wait(),
-                                           timeout=self._session_config.ttl.cleanup_interval_seconds)
+                    await asyncio.wait_for(stop_event.wait(), timeout=self._session_config.ttl.cleanup_interval_seconds)
                     break
                 except asyncio.TimeoutError:
                     try:
