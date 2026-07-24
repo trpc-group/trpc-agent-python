@@ -1,0 +1,46 @@
+{
+  "config_version": 1,
+  "execution": {"mode": "trace", "candidate_scenario": "improve"},
+  "inputs": {
+    "train_evalset": "data/traces/baseline.train.evalset.json",
+    "validation_evalset": "data/traces/baseline.validation.evalset.json",
+    "optimizer_config": "optimizer.json"
+  },
+  "prompts": [{"name": "system_prompt", "path": "prompts/system.md"}],
+  "trace_inputs": {
+    "candidates": {
+      "improve": {
+        "train_evalset": "data/traces/improve.train.evalset.json",
+        "validation_evalset": "data/traces/improve.validation.evalset.json",
+        "prompts": [{"name": "system_prompt", "path": "data/traces/prompts/improve.md"}]
+      },
+      "no_improvement": {
+        "train_evalset": "data/traces/no_improvement.train.evalset.json",
+        "validation_evalset": "data/traces/no_improvement.validation.evalset.json",
+        "prompts": [{"name": "system_prompt", "path": "data/traces/prompts/no_improvement.md"}]
+      },
+      "overfit": {
+        "train_evalset": "data/traces/overfit.train.evalset.json",
+        "validation_evalset": "data/traces/overfit.validation.evalset.json",
+        "prompts": [{"name": "system_prompt", "path": "data/traces/prompts/overfit.md"}]
+      }
+    }
+  },
+  "run": {"runs_dir": "runs", "seed": 42},
+  "case_labels": {
+    "hard_case_ids": ["val_knowledge_recall"],
+    "critical_case_ids": ["val_refund_route"]
+  },
+  "gate": {
+    "min_validation_score_delta": 0.05,
+    "reject_on_validation_pass_rate_drop": true,
+    "reject_new_hard_fail": true,
+    "reject_critical_regression": true,
+    "severe_case_score_drop": 0.2,
+    "required_metrics": ["final_response_avg_score"]
+  },
+  "budget": {"max_duration_seconds": 180, "on_unavailable": "warning"},
+  "reporting": {"write_json": true, "write_markdown": true, "include_case_evidence": true},
+  "artifacts": {"copy_input_files": true, "retain_optimizer_native_artifacts": true, "audit_all_candidates": false},
+  "writeback": {"enabled": false, "require_source_hash_match": true}
+}

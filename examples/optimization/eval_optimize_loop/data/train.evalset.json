@@ -1,0 +1,40 @@
+{
+  "eval_set_id": "eval_optimize_loop_train",
+  "name": "Evaluation optimization loop - train",
+  "description": "Three deterministic training cases for format, tool choice, and tool arguments.",
+  "eval_cases": [
+    {
+      "eval_id": "train_output_format",
+      "conversation": [
+        {
+          "invocation_id": "train-1",
+          "user_content": {"parts": [{"text": "How can I update my email address?"}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"route\":\"account\",\"message\":\"Open profile settings to update your email.\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "demo", "state": {}}
+    },
+    {
+      "eval_id": "train_tool_choice",
+      "conversation": [
+        {
+          "invocation_id": "train-2",
+          "user_content": {"parts": [{"text": "Check the status of order A100."}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"route\":\"order_lookup\",\"message\":\"Checking order A100.\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "demo", "state": {}}
+    },
+    {
+      "eval_id": "train_tool_arguments",
+      "conversation": [
+        {
+          "invocation_id": "train-3",
+          "user_content": {"parts": [{"text": "Look up order B-204 for customer 17."}], "role": "user"},
+          "final_response": {"parts": [{"text": "{\"route\":\"order_lookup\",\"message\":\"Checking order B-204 for customer 17.\"}"}], "role": "model"}
+        }
+      ],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "demo", "state": {}}
+    }
+  ]
+}
