@@ -47,6 +47,26 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
     clean_temp_files: bool = Field(default=True,
                                    description="Whether to clean temporary files after the code execution.")
 
+    enable_safety_guard: bool = Field(
+        default=False,
+        description="When True, scan code with Tool Script Safety Guard before execution.",
+    )
+
+    safety_policy_path: str = Field(
+        default="",
+        description="Optional path to tool_safety_policy.yaml used when enable_safety_guard is True.",
+    )
+
+    safety_audit_path: str = Field(
+        default="",
+        description="Optional JSONL audit path used when enable_safety_guard is True.",
+    )
+
+    safety_block_on_review: bool = Field(
+        default=False,
+        description="When True with enable_safety_guard, also block needs_human_review decisions.",
+    )
+
     def __init__(self, **data):
         """Initialize the UnsafeLocalCodeExecutor."""
         if "stateful" in data and data["stateful"]:
@@ -54,6 +74,24 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         if "optimize_data_file" in data and data["optimize_data_file"]:
             raise ValueError("Cannot set `optimize_data_file=True` in UnsafeLocalCodeExecutor.")
         super().__init__(**data)
+        self._safety_scanner = None
+        self._safety_audit = None
+        if self.enable_safety_guard:
+            self._init_safety_guard()
+
+    def _init_safety_guard(self) -> None:
+        from trpc_agent_sdk.safety import AuditLogger
+        from trpc_agent_sdk.safety import PolicyConfig
+        from trpc_agent_sdk.safety import SafetyScanner
+
+        if self.safety_policy_path:
+            policy = PolicyConfig.from_yaml(self.safety_policy_path)
+        else:
+            policy = PolicyConfig.from_env()
+        # Do not mutate the loaded policy object; keep override on the executor.
+        self._safety_scanner = SafetyScanner(policy=policy)
+        self._safety_audit = AuditLogger(self.safety_audit_path or None)
+        self._safety_block_on_review = bool(self.safety_block_on_review or policy.block_on_review)
 
     @override
     async def execute_code(self, invocation_context: InvocationContext,
@@ -67,6 +105,48 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         Returns:
             CodeExecutionResult with combined output
         """
+        if self._safety_scanner is not None:
+            from trpc_agent_sdk.safety import Decision
+            from trpc_agent_sdk.safety._wrapper import _scan_code_input
+            from trpc_agent_sdk.safety._wrapper import _should_block_report
+
+            # Reuse the canonical aggregation logic from _wrapper instead of
+            # maintaining a (previously buggy) inline copy. This ensures
+            # NEEDS_HUMAN_REVIEW outweighs ALLOW in multi-block input.
+            report = _scan_code_input(self._safety_scanner, input_data)
+            should_block = _should_block_report(report, getattr(self, "_safety_block_on_review", False))
+            if report is not None and self._safety_audit is not None:
+                self._safety_audit.log(report, intercepted=should_block)
+            if should_block and report is not None:
+                # Distinguish DENY vs NEEDS_HUMAN_REVIEW in stderr so audits and
+                # logs don't mislabel a review-block as a deny (matches
+                # ToolSafetyFilter's error_code selection).
+                #
+                # Side effect: create_code_execution_result maps non-empty
+                # stderr to OUTCOME_FAILED, and _code_execution_processor
+                # treats outcome != OUTCOME_OK as an execution error, which
+                # may trigger up to error_retry_attempts (default 2) retries
+                # of the same blocked code. Each retry is still intercepted
+                # (so this is safe), but it wastes a scan/LLM round-trip per
+                # retry. This is accepted for now; a future refinement could
+                # use a dedicated outcome/marker to distinguish "safety block"
+                # from "real execution error" so the agent does not retry.
+                code_label = ("TOOL_SAFETY_DENY" if report.decision == Decision.DENY else "TOOL_SAFETY_NEEDS_REVIEW")
+                return create_code_execution_result(stderr=f"{code_label}: {report.rule_ids}")
+            # Non-blocking NEEDS_HUMAN_REVIEW: do NOT block execution. Surface
+            # the warning via the SDK logger (matches ToolSafetyFilter._before)
+            # instead of appending to stderr. Writing to stderr would make
+            # create_code_execution_result set outcome=OUTCOME_FAILED, which
+            # _code_execution_processor treats as an execution error and
+            # retries via error_retry_attempts — re-running already-allowed
+            # code. Logging keeps outcome=OUTCOME_OK so the agent does not
+            # retry, while operators still see the warning and the audit log
+            # records the decision.
+            if (report is not None and report.decision == Decision.NEEDS_HUMAN_REVIEW and not should_block):
+                import logging
+                logging.getLogger("trpc_agent_sdk.safety").warning("TOOL_SAFETY_NEEDS_REVIEW: %s (risk=%s)",
+                                                                   list(report.rule_ids), report.risk_level.value)
+
         output_parts = []
         error_parts = []
         if not input_data.code_blocks and input_data.code:

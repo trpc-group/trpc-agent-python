@@ -29,15 +29,70 @@ class BashTool(BaseTool):
     # Whitelist of commands allowed outside working directory
     ALLOWED_COMMANDS_OUTSIDE_WORKDIR = ["ls", "pwd", "cat", "grep", "find", "head", "tail", "wc", "echo"]
 
-    def __init__(self, cwd: Optional[str] = None, whitelist_commands: Optional[list[str]] = None):
+    def __init__(
+        self,
+        cwd: Optional[str] = None,
+        whitelist_commands: Optional[list[str]] = None,
+        *,
+        enable_safety_guard: bool = False,
+        safety_policy_path: Optional[str] = None,
+        safety_audit_path: Optional[str] = None,
+        safety_block_on_review: bool = False,
+        filters: Optional[list] = None,
+        filters_name: Optional[list[str]] = None,
+    ):
         super().__init__(
             name="Bash",
             description=("Execute bash command in shell. Returns stdout, stderr, return_code. "
                          "Supports timeout (default 300s) and security restrictions "
                          "(whitelist for commands outside working directory)."),
+            filters=filters,
+            filters_name=filters_name,
         )
         self.cwd = cwd or os.getcwd()
         self.whitelist_commands = whitelist_commands
+        # Opt-in pre-execution script safety scanning. Default remains off so
+        # existing BashTool usage is unchanged.
+        if enable_safety_guard:
+            self._attach_safety_guard(
+                policy_path=safety_policy_path,
+                audit_path=safety_audit_path,
+                block_on_review=safety_block_on_review,
+            )
+
+    def _attach_safety_guard(
+        self,
+        *,
+        policy_path: Optional[str],
+        audit_path: Optional[str],
+        block_on_review: bool,
+    ) -> None:
+        """Attach ToolSafetyFilter when enable_safety_guard is True."""
+        from trpc_agent_sdk import safety as safety_pkg
+        from trpc_agent_sdk.safety import PolicyConfig
+        from trpc_agent_sdk.safety import ToolSafetyFilter
+
+        # When optional filter deps fail to import, ToolSafetyFilter is None and
+        # import_error_for holds the original ImportError. Raise that instead of
+        # a confusing TypeError: NoneType is not callable at construction time.
+        if ToolSafetyFilter is None:
+            err = safety_pkg.import_error_for("ToolSafetyFilter")
+            if err is not None:
+                raise err
+            raise ImportError("ToolSafetyFilter is unavailable")
+
+        if policy_path:
+            policy = PolicyConfig.from_yaml(policy_path)
+        else:
+            policy = PolicyConfig.from_env()
+        # Do not mutate the loaded policy object; pass override to the filter.
+        safety_filter = ToolSafetyFilter(
+            policy=policy,
+            audit_path=audit_path,
+            tool_name=self.name,
+            block_on_review=block_on_review or policy.block_on_review,
+        )
+        self.add_one_filter(safety_filter, force=True)
 
     def _get_declaration(self) -> Optional[FunctionDeclaration]:
         return FunctionDeclaration(

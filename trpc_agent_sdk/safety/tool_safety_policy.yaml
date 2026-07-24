@@ -1,0 +1,68 @@
+# Tool Script Safety Guard policy (SDK default)
+#
+# Edit this file to change scanner behavior WITHOUT touching code.
+# Reload via PolicyConfig.from_yaml(...) at runtime.
+
+whitelisted_domains:
+  - localhost
+  - 127.0.0.1
+  - api.github.com
+  - pypi.org
+  - files.pythonhosted.org
+  - registry.npmjs.org
+  - httpbin.org
+
+forbidden_paths:
+  - /etc
+  - /usr
+  - /bin
+  - /sbin
+  - /boot
+  - ~/.ssh
+  - ~/.aws
+  - .env
+  - .netrc
+  - id_rsa
+  - id_ed25519
+
+allowed_commands:
+  - ls
+  - pwd
+  - cat
+  - grep
+  - find
+  - head
+  - tail
+  - wc
+  - echo
+  - git
+  - python
+  - python3
+  - pytest
+  - pip
+  - npm
+
+max_timeout_seconds: 300
+max_output_bytes: 10485760
+max_file_write_bytes: 104857600
+
+deny_risk_level: high
+review_risk_level: medium
+
+# When true, bash commands not in allowed_commands are flagged HIGH.
+strict_command_allowlist: false
+
+# When true, ToolSafetyFilter also blocks needs_human_review decisions.
+block_on_review: false
+
+# When true, unknown YAML keys raise ValueError.
+strict_policy: false
+
+secret_patterns:
+  - '(?i)sk-[A-Za-z0-9]{20,}'
+  - '(?i)ghp_[A-Za-z0-9]{36}'
+  - '(?i)xox[baprs]-[A-Za-z0-9-]{10,}'
+  - '(?i)-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----'
+
+disabled_rules: []
+extra: {}

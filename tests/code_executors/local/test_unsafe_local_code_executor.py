@@ -8,7 +8,6 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock
 from unittest.mock import Mock
 from unittest.mock import patch
 
@@ -16,7 +15,6 @@ import pytest
 from trpc_agent_sdk.code_executors._types import CodeBlock
 from trpc_agent_sdk.code_executors._types import CodeBlockDelimiter
 from trpc_agent_sdk.code_executors._types import CodeExecutionInput
-from trpc_agent_sdk.code_executors._types import create_code_execution_result
 from trpc_agent_sdk.code_executors.local import UnsafeLocalCodeExecutor
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.types import Outcome
@@ -439,3 +437,49 @@ class TestExecuteCode:
         inp = CodeExecutionInput(code_blocks=[CodeBlock(language="python", code="bad")])
         result = await executor.execute_code(self.mock_ctx, inp)
         assert result.outcome == Outcome.OUTCOME_FAILED
+
+
+class TestUnsafeLocalCodeExecutorSafetyGuardNonBlocking:
+    """Tests for non-blocking NEEDS_HUMAN_REVIEW path in safety guard.
+
+    Regression for CongkeChen review: previously the review warning was
+    appended to stderr, which made create_code_execution_result set
+    outcome=OUTCOME_FAILED, triggering _code_execution_processor retries
+    of already-allowed code. Now the warning goes through logging and
+    outcome stays OUTCOME_OK.
+    """
+
+    def setup_method(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="safety_nonblocking_")
+        self.mock_ctx = Mock(spec=InvocationContext)
+
+    def teardown_method(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    @patch('trpc_agent_sdk.code_executors.local._unsafe_local_code_executor.async_execute_command')
+    @pytest.mark.asyncio
+    async def test_nonblocking_review_keeps_outcome_ok(self, mock_exec):
+        """enable_safety_guard=True, block_on_review=False + NEEDS_HUMAN_REVIEW
+        script must keep outcome=OUTCOME_OK so the agent does not retry.
+
+        'sleep 100 &' is a non-network background process → MEDIUM →
+        NEEDS_HUMAN_REVIEW under default policy. With block_on_review=False
+        the code is allowed to run; the warning must NOT leak into stderr
+        (which would flip outcome to OUTCOME_FAILED).
+        """
+        mock_exec.return_value = CommandExecResult(stdout="done", stderr="", exit_code=0, is_timeout=False)
+        audit_path = os.path.join(self.tmp_dir, "audit.jsonl")
+        executor = UnsafeLocalCodeExecutor(
+            enable_safety_guard=True,
+            safety_audit_path=audit_path,
+            safety_block_on_review=False,
+        )
+        inp = CodeExecutionInput(code_blocks=[CodeBlock(language="bash", code="sleep 100 &")])
+        result = await executor.execute_code(self.mock_ctx, inp)
+        # outcome must remain OK so _code_execution_processor does not retry.
+        assert result.outcome == Outcome.OUTCOME_OK, (
+            f"non-blocking review must not flip outcome to FAILED (would trigger retry); got {result.outcome}")
+        # The code should have executed exactly once (no retry).
+        assert mock_exec.call_count == 1
+        # Audit log records the NEEDS_HUMAN_REVIEW decision.
+        assert os.path.exists(audit_path)
