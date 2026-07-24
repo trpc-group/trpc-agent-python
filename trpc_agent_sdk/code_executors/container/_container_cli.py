@@ -14,35 +14,32 @@ import atexit
 import os
 import socket as pysocket
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 # Note: Docker SDK imports (docker, docker.models.containers, docker.utils.socket)
 # are deferred to runtime via _import_docker() to avoid hanging/crashing on
 # systems without Docker installed (e.g. Windows without Docker Desktop).
 # See: https://github.com/trpc-group/trpc-agent-python/issues/230
 #
-# Module-level placeholders are declared below (docker=None, Container=None, etc.)
-# and populated by _import_docker() on first real use. This approach:
-#   - eliminates F821 flake8 errors (no # noqa needed)
-#   - provides clear NameError-free fallback if called before init
-#   - allows @patch("..._container_cli.docker") to work in tests
-# Type annotations use string literals via `from __future__ import annotations`.
+# TYPE_CHECKING imports provide type info for static analysis without triggering
+# a runtime import. _import_docker() populates runtime symbols on first use.
+if TYPE_CHECKING:
+    import docker
+    from docker.models.containers import Container
 
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.utils import CommandExecResult
 
 import threading
 
-# Module-level placeholders for Docker SDK symbols.
-# These are populated by _import_docker() on first use, which avoids
-# hanging/crashing on systems without Docker installed.
-# Declaring them here eliminates F821 and ensures _exec_run_with_stdin
-# gets a clear RuntimeError instead of NameError if called before init.
-docker = None
-Container = None
-consume_socket_output = None
-demux_adaptor = None
-frames_iter = None
+# Runtime cache for Docker SDK symbols (populated by _import_docker()).
+# Not exposed as module-level public names to avoid shadowing the
+# TYPE_CHECKING type aliases above.
+_docker_mod = None
+_docker_container_cls = None
+_docker_consume_socket_output = None
+_docker_demux_adaptor = None
+_docker_frames_iter = None
 
 _docker_imported = False
 _docker_lock = threading.Lock()
@@ -58,28 +55,29 @@ def _import_docker():
     import to call-time we ensure that users who never touch
     ``ContainerCodeExecutor`` are unaffected.
 
-    If the docker package is not installed, ``docker`` stays ``None`` and
-    callers should check via the ``docker is None`` guard.
+    If the docker package is not installed, ``_docker_mod`` stays ``None`` and
+    callers should check via the ``_docker_mod is None`` guard.
     """
-    global _docker_imported, docker, Container, consume_socket_output, demux_adaptor, frames_iter
+    global _docker_imported, _docker_mod, _docker_container_cls
+    global _docker_consume_socket_output, _docker_demux_adaptor, _docker_frames_iter
     if _docker_imported:
         return
     with _docker_lock:
         if _docker_imported:
             return
         try:
-            import docker as _docker_mod
-            from docker.models.containers import Container as _Container
+            import docker as _d
+            from docker.models.containers import Container as _C
             from docker.utils.socket import consume_socket_output as _cso
             from docker.utils.socket import demux_adaptor as _da
             from docker.utils.socket import frames_iter as _fi
-            docker = _docker_mod
-            Container = _Container
-            consume_socket_output = _cso
-            demux_adaptor = _da
-            frames_iter = _fi
+            _docker_mod = _d
+            _docker_container_cls = _C
+            _docker_consume_socket_output = _cso
+            _docker_demux_adaptor = _da
+            _docker_frames_iter = _fi
         except ImportError:
-            pass  # docker stays None; caller checks `if docker is None`
+            pass  # _docker_mod stays None; caller checks guard
         _docker_imported = True
 
 
@@ -151,26 +149,26 @@ class ContainerClient:
         _import_docker()
         # Guard: if docker is still None after import attempt (e.g. SDK not installed),
         # fail with a clear error rather than AttributeError later.
-        if docker is None:
+        if _docker_mod is None:
             raise RuntimeError("Docker SDK is not available. Install it with: pip install docker")
         # Try to initialize Docker client
         # Let docker SDK handle connection detection (it supports various methods)
         try:
             if self.base_url:
                 # Use custom base_url if provided
-                self._client = docker.DockerClient(base_url=self.base_url)
+                self._client = _docker_mod.DockerClient(base_url=self.base_url)
             else:
                 # Use docker.from_env() which automatically detects:
                 # - DOCKER_HOST environment variable
                 # - Standard socket paths
                 # - Docker Desktop configurations
-                self._client = docker.from_env()
+                self._client = _docker_mod.from_env()
 
             # Test connection by pinging Docker daemon
             # This will fail if Docker is not running or not accessible
             self._client.ping()
             logger.info("Docker client initialized successfully")
-        except docker.errors.DockerException as ex:
+        except _docker_mod.errors.DockerException as ex:
             # Extract more specific error information
             error_str = str(ex)
 
@@ -319,9 +317,9 @@ class ContainerClient:
                 if callable(close_write):
                     close_write()
 
-            frames = frames_iter(sock, tty=False)
-            demux_frames = (demux_adaptor(*frame) for frame in frames)
-            output = consume_socket_output(demux_frames, demux=True)
+            frames = _docker_frames_iter(sock, tty=False)
+            demux_frames = (_docker_demux_adaptor(*frame) for frame in frames)
+            output = _docker_consume_socket_output(demux_frames, demux=True)
             stdout = output[0].decode("utf-8") if output and output[0] else ""
             stderr = output[1].decode("utf-8") if output and output[1] else ""
         finally:
