@@ -14,15 +14,20 @@ import atexit
 import os
 import socket as pysocket
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 # Note: Docker SDK imports (docker, docker.models.containers, docker.utils.socket)
 # are deferred to runtime via _import_docker() to avoid hanging/crashing on
 # systems without Docker installed (e.g. Windows without Docker Desktop).
 # See: https://github.com/trpc-group/trpc-agent-python/issues/230
+if TYPE_CHECKING:
+    import docker
+    from docker.models.containers import Container
 
 from trpc_agent_sdk.log import logger
 from trpc_agent_sdk.utils import CommandExecResult
+
+_docker_imported = False
 
 
 def _import_docker():
@@ -35,6 +40,9 @@ def _import_docker():
     import to call-time we ensure that users who never touch
     ``ContainerCodeExecutor`` are unaffected.
     """
+    global _docker_imported
+    if _docker_imported:
+        return
     import docker as _docker
     from docker.models.containers import Container as _Container
     from docker.utils.socket import consume_socket_output as _cso
@@ -47,7 +55,9 @@ def _import_docker():
         'demux_adaptor': _da,
         'frames_iter': _fi,
     })
-    return _docker
+    _docker_imported = True
+
+
 DEFAULT_IMAGE_TAG = 'python:3-slim'
 
 
