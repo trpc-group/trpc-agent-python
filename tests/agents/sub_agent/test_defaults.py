@@ -52,10 +52,8 @@ def test_plan_is_read_only_no_web() -> None:
 def test_description_does_not_preinclude_tools_suffix() -> None:
     """The renderer is responsible for appending '(Tools: ...)' — description must not."""
     for arc in (DEFAULT_AGENT, GENERAL_PURPOSE_AGENT, EXPLORE_AGENT, PLAN_AGENT):
-        assert "(Tools:" not in arc.description, (
-            f"archetype {arc.name!r} pre-includes Tools suffix in description; "
-            "the renderer is supposed to add it"
-        )
+        assert "(Tools:" not in arc.description, (f"archetype {arc.name!r} pre-includes Tools suffix in description; "
+                                                  "the renderer is supposed to add it")
 
 
 def test_explore_and_plan_instructions_share_readonly_preamble() -> None:

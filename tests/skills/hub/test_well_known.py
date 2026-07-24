@@ -62,8 +62,7 @@ class TestQueryToIndexUrl:
     def test_bare_domain_appends_default_index_path(self):
         source = WellKnownSkillSource()
         assert source._query_to_index_url("https://example.com") == (
-            "https://example.com/.well-known/skills/index.json"
-        )
+            "https://example.com/.well-known/skills/index.json")
 
 
 class TestParseIdentifier:
@@ -74,9 +73,7 @@ class TestParseIdentifier:
 
     def test_index_json_with_fragment(self):
         source = WellKnownSkillSource()
-        parsed = source._parse_identifier(
-            "well-known:https://example.com/.well-known/skills/index.json#plan"
-        )
+        parsed = source._parse_identifier("well-known:https://example.com/.well-known/skills/index.json#plan")
         assert parsed == {
             "index_url": "https://example.com/.well-known/skills/index.json",
             "base_url": "https://example.com/.well-known/skills",
@@ -115,7 +112,11 @@ class TestSearch:
         index = {
             "index_url": "https://example.com/.well-known/skills/index.json",
             "base_url": "https://example.com/.well-known/skills",
-            "skills": [{"name": "plan", "description": "Plan things", "files": ["SKILL.md"]}],
+            "skills": [{
+                "name": "plan",
+                "description": "Plan things",
+                "files": ["SKILL.md"]
+            }],
         }
         with patch.object(source, "_parse_index", return_value=index):
             results = source.search("https://example.com/.well-known/skills/index.json")

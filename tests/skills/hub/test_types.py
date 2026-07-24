@@ -64,7 +64,10 @@ class TestSkillBundle:
     def test_files_can_hold_bytes(self):
         bundle = SkillBundle(
             name="plan",
-            files={"SKILL.md": "text", "logo.png": b"\x89PNG"},
+            files={
+                "SKILL.md": "text",
+                "logo.png": b"\x89PNG"
+            },
             source="github",
             identifier="id",
         )

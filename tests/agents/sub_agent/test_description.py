@@ -80,19 +80,21 @@ def test_tool_names_of_toolset_instance() -> None:
     from trpc_agent_sdk.tools import BaseToolSet
 
     class _FakeToolSet(BaseToolSet):
+
         async def get_tools(self, invocation_context=None):
             return []
 
     toolset = _FakeToolSet()
-    arc = SubAgentArchetype(name="ts", description="d", instruction="i", tools=(toolset,))
+    arc = SubAgentArchetype(name="ts", description="d", instruction="i", tools=(toolset, ))
     assert tool_names_of(arc) == ["_FakeToolSet"]
 
 
 def test_tool_names_of_plain_callable() -> None:
+
     def my_custom_tool():
         return ReadTool()
 
-    arc = SubAgentArchetype(name="call", description="d", instruction="i", tools=(my_custom_tool,))
+    arc = SubAgentArchetype(name="call", description="d", instruction="i", tools=(my_custom_tool, ))
     assert tool_names_of(arc) == ["my_custom_tool"]
 
 
@@ -104,13 +106,13 @@ def test_render_archetype_block_tools_none() -> None:
 
 def test_tool_names_of_unrecognized_item() -> None:
     """Non-tool, non-class, non-callable items fall back to type name."""
-    arc = SubAgentArchetype(name="odd", description="d", instruction="i", tools=(42,))
+    arc = SubAgentArchetype(name="odd", description="d", instruction="i", tools=(42, ))
     assert tool_names_of(arc) == ["int"]
 
 
 def test_tool_names_of_callable_without_name() -> None:
     """Callable without __name__ falls back to repr."""
-    arc = SubAgentArchetype(name="odd", description="d", instruction="i", tools=(lambda x: x,))
+    arc = SubAgentArchetype(name="odd", description="d", instruction="i", tools=(lambda x: x, ))
     names = tool_names_of(arc)
     # lambda has no __name__, so repr(t) is used.
     assert len(names) == 1

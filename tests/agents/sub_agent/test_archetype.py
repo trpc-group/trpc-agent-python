@@ -19,7 +19,7 @@ def _make(**overrides) -> SubAgentArchetype:
         name="my_archetype",
         description="A useful description.",
         instruction="Be helpful.",
-        tools=(ReadTool,),
+        tools=(ReadTool, ),
     )
     base.update(overrides)
     return SubAgentArchetype(**base)
@@ -28,13 +28,13 @@ def _make(**overrides) -> SubAgentArchetype:
 def test_construct_with_factory_tools() -> None:
     a = _make()
     assert a.name == "my_archetype"
-    assert a.tools == (ReadTool,)
+    assert a.tools == (ReadTool, )
 
 
 def test_construct_with_instance_tools() -> None:
     inst = ReadTool()
-    a = _make(tools=(inst,))
-    assert a.tools == (inst,)
+    a = _make(tools=(inst, ))
+    assert a.tools == (inst, )
 
 
 def test_tools_coerced_to_tuple() -> None:
@@ -92,6 +92,7 @@ def test_model_or_returns_fallback_when_none() -> None:
 
 
 def test_callable_instruction_accepted() -> None:
+
     def dynamic_instruction(ctx):
         return "instruction from callable"
 

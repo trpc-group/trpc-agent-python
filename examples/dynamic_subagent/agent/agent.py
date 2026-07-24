@@ -48,8 +48,7 @@ def create_minimal_agent() -> LlmAgent:
         tools=workspace_tools + [
             DynamicSubAgentTool(
                 # Stream the sub-agent's execution to the parent consumer.
-                agent_config=SubAgentConfig(forward_events=True),
-            ),
+                agent_config=SubAgentConfig(forward_events=True), ),
         ],
     )
 

@@ -46,6 +46,7 @@ AGENT_NAME = "goal_agent"
 
 
 class _StubAgent(BaseAgent):
+
     async def _run_async_impl(self, ctx):
         yield
 
@@ -113,6 +114,7 @@ def _final_text_response(text: str = "All done!") -> LlmResponse:
 # Tools                                                                        #
 # --------------------------------------------------------------------------- #
 class TestGoalCreate:
+
     @pytest.mark.asyncio
     async def test_creates_active_goal(self, bundle):
         _, _, agent, ctx = bundle
@@ -146,6 +148,7 @@ class TestGoalCreate:
 
 
 class TestGoalUpdate:
+
     @pytest.mark.asyncio
     async def test_complete_sets_terminal_time(self, bundle):
         _, _, _, ctx = bundle
@@ -185,6 +188,7 @@ class TestGoalUpdate:
 
 
 class TestStartGoal:
+
     @pytest.mark.asyncio
     async def test_writes_active_goal_to_existing_session(self):
         service = InMemorySessionService()
@@ -360,6 +364,7 @@ class TestStartGoal:
 
 
 class TestGoalGet:
+
     @pytest.mark.asyncio
     async def test_no_goal(self, bundle):
         _, _, _, ctx = bundle
@@ -379,6 +384,7 @@ class TestGoalGet:
 # Enforcement callbacks                                                        #
 # --------------------------------------------------------------------------- #
 class TestEnforcement:
+
     @pytest.mark.asyncio
     async def test_before_model_injects_guidance_once(self, bundle):
         _, _, _, ctx = bundle
@@ -452,7 +458,8 @@ class TestEnforcement:
         cb = _GoalCallbacks(GoalOptions())
         await _create(ctx, "obj")
         tool_call = LlmResponse(
-            content=Content(role="model", parts=[Part.from_function_call(name="update_goal", args={"status": "complete"})]),
+            content=Content(role="model",
+                            parts=[Part.from_function_call(name="update_goal", args={"status": "complete"})]),
             partial=False,
         )
         assert await cb.after_model(ctx, tool_call) is None
@@ -477,6 +484,7 @@ class TestEnforcement:
 # setup_goal / helpers                                                         #
 # --------------------------------------------------------------------------- #
 class TestSetupGoal:
+
     @pytest.mark.asyncio
     async def test_appends_toolset_and_chains_callbacks(self):
         from types import SimpleNamespace
@@ -500,6 +508,7 @@ class TestSetupGoal:
 
 
 class TestPersistence:
+
     @pytest.mark.asyncio
     async def test_goal_survives_append_event_and_get_session(self, bundle):
         service, session, agent, ctx = bundle
@@ -517,6 +526,7 @@ class TestPersistence:
 
 
 class TestHelpers:
+
     def test_state_key(self):
         assert state_key(DEFAULT_STATE_KEY_PREFIX, "") == "goal"
         assert state_key(DEFAULT_STATE_KEY_PREFIX, "agent") == "goal:agent"
@@ -534,6 +544,7 @@ class TestHelpers:
 
 
 class TestGoalToolSet:
+
     @pytest.mark.asyncio
     async def test_returns_three_tools(self):
         tools = await GoalToolSet().get_tools()
@@ -565,10 +576,8 @@ class _ScriptedModel(LLMModel):
     async def _generate_async_impl(self, request, stream=False, ctx=None):
         type(self).calls += 1
         n = type(self).calls
-        nudged = any(
-            (c.role == "user") and c.parts and any("goal reminder" in (p.text or "") for p in c.parts)
-            for c in request.contents
-        )
+        nudged = any((c.role == "user") and c.parts and any("goal reminder" in (p.text or "") for p in c.parts)
+                     for c in request.contents)
         type(self).saw_nudge.append(nudged)
         if n == 1:
             yield LlmResponse(
@@ -587,6 +596,7 @@ class _ScriptedModel(LLMModel):
 
 
 class TestEndToEndRerun:
+
     @pytest.mark.asyncio
     async def test_premature_final_reruns_until_model_self_reports(self):
         from trpc_agent_sdk.agents import LlmAgent
@@ -603,14 +613,18 @@ class TestEndToEndRerun:
             runner = Runner(app_name="goal_app", agent=agent, session_service=service)
             await service.create_session(app_name="goal_app", user_id="u", session_id="sid")
             await _seed_goal(
-                service, app_name="goal_app", user_id="u", session_id="sid",
-                objective="Refactor the entire service", branch=agent.name,
+                service,
+                app_name="goal_app",
+                user_id="u",
+                session_id="sid",
+                objective="Refactor the entire service",
+                branch=agent.name,
             )
 
             async for _ in runner.run_async(
-                user_id="u",
-                session_id="sid",
-                new_message=Content(role="user", parts=[Part.from_text(text="go")]),
+                    user_id="u",
+                    session_id="sid",
+                    new_message=Content(role="user", parts=[Part.from_text(text="go")]),
             ):
                 pass
             await runner.close()

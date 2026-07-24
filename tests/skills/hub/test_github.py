@@ -110,17 +110,15 @@ class TestInspect:
 
     def test_hermes_metadata_tags_take_priority(self):
         source = GitHubSource(GitHubAuth())
-        content = (
-            "---\n"
-            "name: plan\n"
-            "description: Plan things\n"
-            "tags: [fallback]\n"
-            "metadata:\n"
-            "  hermes:\n"
-            "    tags: [priority]\n"
-            "---\n"
-            "Body"
-        )
+        content = ("---\n"
+                   "name: plan\n"
+                   "description: Plan things\n"
+                   "tags: [fallback]\n"
+                   "metadata:\n"
+                   "  hermes:\n"
+                   "    tags: [priority]\n"
+                   "---\n"
+                   "Body")
         with patch.object(source, "_fetch_file_content", return_value=content):
             meta = source.inspect("owner/repo/skills/plan")
         assert meta.tags == ["priority"]
@@ -129,17 +127,15 @@ class TestInspect:
         # An empty (but present) `metadata.hermes.tags: []` must not shadow a
         # populated top-level `tags:` list.
         source = GitHubSource(GitHubAuth())
-        content = (
-            "---\n"
-            "name: plan\n"
-            "description: Plan things\n"
-            "tags: [a, b]\n"
-            "metadata:\n"
-            "  hermes:\n"
-            "    tags: []\n"
-            "---\n"
-            "Body"
-        )
+        content = ("---\n"
+                   "name: plan\n"
+                   "description: Plan things\n"
+                   "tags: [a, b]\n"
+                   "metadata:\n"
+                   "  hermes:\n"
+                   "    tags: []\n"
+                   "---\n"
+                   "Body")
         with patch.object(source, "_fetch_file_content", return_value=content):
             meta = source.inspect("owner/repo/skills/plan")
         assert meta.tags == ["a", "b"]
@@ -197,7 +193,10 @@ class TestSearch:
         def fake_list_skills_in_repo(repo, path):
             from trpc_agent_sdk.skills.hub import SkillMeta
             return [
-                SkillMeta(name="plan", description="planning skill", source="github", identifier="owner/repo/skills/plan"),
+                SkillMeta(name="plan",
+                          description="planning skill",
+                          source="github",
+                          identifier="owner/repo/skills/plan"),
                 SkillMeta(name="docx", description="word docs", source="github", identifier="owner/repo/skills/docx"),
             ]
 
@@ -209,7 +208,11 @@ class TestSearch:
     def test_dedupes_by_name_and_respects_limit(self):
         source = GitHubSource(
             GitHubAuth(),
-            taps=[{"repo": "owner/repo1"}, {"repo": "owner/repo2"}],
+            taps=[{
+                "repo": "owner/repo1"
+            }, {
+                "repo": "owner/repo2"
+            }],
         )
 
         def fake_list_skills_in_repo(repo, path):
@@ -266,8 +269,8 @@ class TestFetchFileContent:
     def test_returns_none_on_http_error(self):
         source = GitHubSource(GitHubAuth())
         with patch(
-            "trpc_agent_sdk.skills.hub._github.httpx.get",
-            side_effect=httpx.ConnectError("boom"),
+                "trpc_agent_sdk.skills.hub._github.httpx.get",
+                side_effect=httpx.ConnectError("boom"),
         ):
             assert source._fetch_file_content("owner/repo", "SKILL.md") is None
 
@@ -292,7 +295,10 @@ class TestDownloadDirectory:
 
     def test_download_directory_via_tree_path_not_found_returns_empty_dict(self):
         source = GitHubSource(GitHubAuth())
-        with patch.object(source, "_get_repo_tree", return_value=("main", [{"type": "blob", "path": "other/file.txt"}])):
+        with patch.object(source, "_get_repo_tree", return_value=("main", [{
+                "type": "blob",
+                "path": "other/file.txt"
+        }])):
             result = source._download_directory_via_tree("owner/repo", "skills/plan")
         assert result == {}
 
@@ -304,10 +310,22 @@ class TestDownloadDirectory:
     def test_download_directory_via_tree_fetches_matching_blobs(self):
         source = GitHubSource(GitHubAuth())
         tree_entries = [
-            {"type": "blob", "path": "skills/plan/SKILL.md"},
-            {"type": "blob", "path": "skills/plan/scripts/run.sh"},
-            {"type": "tree", "path": "skills/plan/scripts"},
-            {"type": "blob", "path": "skills/other/SKILL.md"},
+            {
+                "type": "blob",
+                "path": "skills/plan/SKILL.md"
+            },
+            {
+                "type": "blob",
+                "path": "skills/plan/scripts/run.sh"
+            },
+            {
+                "type": "tree",
+                "path": "skills/plan/scripts"
+            },
+            {
+                "type": "blob",
+                "path": "skills/other/SKILL.md"
+            },
         ]
         with patch.object(source, "_get_repo_tree", return_value=("main", tree_entries)), \
              patch.object(source, "_fetch_file_content", side_effect=lambda repo, path: f"content:{path}"):
@@ -323,7 +341,10 @@ class TestFindSkillInRepoTree:
     def test_finds_skill_dir_by_suffix_match(self):
         source = GitHubSource(GitHubAuth())
         tree_entries = [
-            {"type": "blob", "path": "components/skills/dev/plan/SKILL.md"},
+            {
+                "type": "blob",
+                "path": "components/skills/dev/plan/SKILL.md"
+            },
         ]
         with patch.object(source, "_get_repo_tree", return_value=("main", tree_entries)):
             result = source._find_skill_in_repo_tree("owner/repo", "plan")

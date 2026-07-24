@@ -1,0 +1,26 @@
+{
+  "scan_id": "78bc4704cebf4f359130a562678ff4bf",
+  "timestamp": 1782911746.900793,
+  "tool_name": "09_infinite_loop",
+  "script_type": "python",
+  "script_size_lines": 1,
+  "decision": "needs_human_review",
+  "risk_level": "medium",
+  "summary": "Scan of '09_infinite_loop' found 1 issue(s) (0 high/critical). Decision: needs_human_review.",
+  "scan_duration_ms": 0.15,
+  "policy_version": "5c4aa1d614dc",
+  "sanitized": true,
+  "execution_blocked": false,
+  "findings": [
+    {
+      "rule_id": "RES-001",
+      "category": "resource_abuse",
+      "risk_level": "medium",
+      "message": "Infinite loop pattern detected: while\\s+True\\s*:",
+      "evidence": "while True: print('loop')",
+      "recommendation": "Add a timeout, iteration limit, or exit condition.",
+      "line_number": 1,
+      "matched_pattern": "while\\s+True\\s*:"
+    }
+  ]
+}

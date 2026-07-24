@@ -115,7 +115,10 @@ class TestFetch:
 
     def test_falls_back_to_discovery_when_no_candidate_matches(self):
         source = SkillsShSource(GitHubAuth())
-        bundle = SkillBundle(name="plan", files={"SKILL.md": "body"}, source="github", identifier="owner/repo/other/plan")
+        bundle = SkillBundle(name="plan",
+                             files={"SKILL.md": "body"},
+                             source="github",
+                             identifier="owner/repo/other/plan")
         with patch.object(source, "_fetch_detail_page", return_value=None), \
              patch.object(source.github, "fetch", side_effect=[None, None, None, None, bundle]), \
              patch.object(source, "_discover_identifier", return_value="owner/repo/other/plan"):

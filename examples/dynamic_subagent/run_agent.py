@@ -120,9 +120,9 @@ async def run_demo(mode: str):
         user_content = Content(parts=[Part.from_text(text=query)])
         print("\U0001F916 Assistant: ", end="", flush=True)
         async for event in runner.run_async(
-            user_id=user_id,
-            session_id=current_session_id,
-            new_message=user_content,
+                user_id=user_id,
+                session_id=current_session_id,
+                new_message=user_content,
         ):
             # Forwarded sub-agent execution events (SubAgentConfig
             # forward_events=True). These are partial progress events carrying
@@ -146,15 +146,11 @@ async def run_demo(mode: str):
                         if part.thought:
                             continue
                         if part.function_call:
-                            print(
-                                f"\n\n\U0001F527 [Invoke Tool:: {part.function_call.name}"
-                                f"{_truncate(part.function_call.args)}]\n"
-                            )
+                            print(f"\n\n\U0001F527 [Invoke Tool:: {part.function_call.name}"
+                                  f"{_truncate(part.function_call.args)}]\n")
                         elif part.function_response:
-                            print(
-                                f"\n\U0001F4CA [Tool Result: "
-                                f"{_truncate(part.function_response.response)}]\n"
-                            )
+                            print(f"\n\U0001F4CA [Tool Result: "
+                                  f"{_truncate(part.function_response.response)}]\n")
 
         print(f"\n{'─' * 60}\n")
 
@@ -164,7 +160,9 @@ async def run_demo(mode: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="DynamicSubAgentTool demo")
     parser.add_argument(
-        "--mode", choices=["minimal", "bounded"], default="minimal",
+        "--mode",
+        choices=["minimal", "bounded"],
+        default="minimal",
         help="minimal: workspace tools + dynamic_subagent; bounded: only dynamic_subagent",
     )
     args = parser.parse_args()

@@ -78,16 +78,29 @@ async def test_run_streaming_forwards_projections_then_result() -> None:
         yield "final result"
 
     with patch(
-        "trpc_agent_sdk.agents.sub_agent._dynamic_sub_agent_tool.run_subagent_streaming",
-        _fake_stream,
+            "trpc_agent_sdk.agents.sub_agent._dynamic_sub_agent_tool.run_subagent_streaming",
+            _fake_stream,
     ):
-        yielded = [v async for v in t.run_streaming(
-            tool_context=ctx,
-            args={"instruction": "You are a helper.", "prompt": "do it"},
-        )]
+        yielded = [
+            v async for v in t.run_streaming(
+                tool_context=ctx,
+                args={
+                    "instruction": "You are a helper.",
+                    "prompt": "do it"
+                },
+            )
+        ]
 
     assert yielded == [
-        {"author": "subagent_dynamic", "partial": True, "content": {"parts": [{"text": "step 1"}]}},
+        {
+            "author": "subagent_dynamic",
+            "partial": True,
+            "content": {
+                "parts": [{
+                    "text": "step 1"
+                }]
+            }
+        },
         "final result",
     ]
 
@@ -127,11 +140,13 @@ async def test_empty_instruction_falls_back_to_default() -> None:
     ctx = _make_tool_context()
     result = await t._run_async_impl(
         tool_context=ctx,
-        args={"instruction": "   ", "prompt": "do something"},
+        args={
+            "instruction": "   ",
+            "prompt": "do something"
+        },
     )
     # Should NOT be an instruction validation error — falls back and tries to run.
-    assert not (isinstance(result, dict)
-                and result.get("status") == "error"
+    assert not (isinstance(result, dict) and result.get("status") == "error"
                 and "instruction" in str(result.get("message")))
 
 
@@ -141,7 +156,10 @@ async def test_empty_prompt_returns_error() -> None:
     ctx = _make_tool_context()
     result = await t._run_async_impl(
         tool_context=ctx,
-        args={"instruction": "You are a helpful agent.", "prompt": "   "},
+        args={
+            "instruction": "You are a helpful agent.",
+            "prompt": "   "
+        },
     )
     assert result["status"] == "error"
     assert "prompt" in result["message"]
@@ -157,8 +175,7 @@ async def test_missing_instruction_uses_default() -> None:
         args={"prompt": "do something"},
     )
     # Should NOT be a validation error — falls back and tries to run.
-    assert not (isinstance(result, dict)
-                and result.get("status") == "error"
+    assert not (isinstance(result, dict) and result.get("status") == "error"
                 and "instruction" in str(result.get("message")))
 
 
@@ -178,8 +195,7 @@ async def test_valid_args_creates_synthetic_archetype() -> None:
         },
     )
     # Should NOT be a validation error.
-    assert not (isinstance(result, dict)
-                and result.get("status") == "error"
+    assert not (isinstance(result, dict) and result.get("status") == "error"
                 and "non-empty" in str(result.get("message")))
 
 
@@ -250,7 +266,7 @@ def test_declaration_without_tool_selection() -> None:
 
 def test_declaration_with_fixed_tools_includes_tool_names() -> None:
     """When tools=tuple and expose_tool_selection=True, description lists tool names."""
-    t = DynamicSubAgentTool(tools=(ReadTool(),), expose_tool_selection=True)
+    t = DynamicSubAgentTool(tools=(ReadTool(), ), expose_tool_selection=True)
     decl = t._get_declaration()
     tools_prop = decl.parameters.properties["tools"]
     assert "Available tool names:" in tools_prop.description
@@ -269,21 +285,23 @@ def test_declaration_with_fixed_tools_empty_tuple() -> None:
 
 
 def test_tool_names_with_basetool_instance() -> None:
-    names = _tool_names((ReadTool(),))
+    names = _tool_names((ReadTool(), ))
     assert names == ["Read"]
 
 
 def test_tool_names_with_basetoolset_instance() -> None:
+
     class _FakeToolSet(BaseToolSet):
+
         async def get_tools(self, invocation_context=None):
             return []
 
-    names = _tool_names((_FakeToolSet(),))
+    names = _tool_names((_FakeToolSet(), ))
     assert names == ["_FakeToolSet"]
 
 
 def test_tool_names_with_class_reference() -> None:
-    names = _tool_names((ReadTool,))
+    names = _tool_names((ReadTool, ))
     assert names == ["Read"]
 
 
@@ -291,16 +309,17 @@ def test_tool_names_with_callable_no_name() -> None:
     """Callable without __name__ is skipped (getattr with None default)."""
 
     class _CallableNoName:
+
         def __call__(self):
             return ReadTool()
 
-    names = _tool_names((_CallableNoName(),))
+    names = _tool_names((_CallableNoName(), ))
     assert names == []
 
 
 def test_tool_names_with_unrecognized_item() -> None:
     """Non-tool, non-callable items are skipped."""
-    names = _tool_names(("not-a-tool",))
+    names = _tool_names(("not-a-tool", ))
     assert names == []
 
 
@@ -323,8 +342,7 @@ async def test_run_async_with_tool_filter_from_llm() -> None:
         },
     )
     # Should not be a validation error.
-    assert not (isinstance(result, dict)
-                and result.get("status") == "error"
+    assert not (isinstance(result, dict) and result.get("status") == "error"
                 and "non-empty" in str(result.get("message")))
 
 
@@ -342,8 +360,7 @@ async def test_run_async_ignores_non_list_tools_arg() -> None:
         },
     )
     # Should not be a validation error.
-    assert not (isinstance(result, dict)
-                and result.get("status") == "error"
+    assert not (isinstance(result, dict) and result.get("status") == "error"
                 and "non-empty" in str(result.get("message")))
 
 
@@ -361,6 +378,5 @@ async def test_run_async_without_tool_selection_ignores_tools_arg() -> None:
         },
     )
     # Should not be a validation error.
-    assert not (isinstance(result, dict)
-                and result.get("status") == "error"
+    assert not (isinstance(result, dict) and result.get("status") == "error"
                 and "non-empty" in str(result.get("message")))

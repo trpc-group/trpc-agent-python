@@ -148,7 +148,8 @@ def main():
             if position is not None:
                 target_line = end_line
 
-        target = "%s:%s-%s" % (path, start_line, end_line) if end_line and end_line > start_line else "%s:%s" % (path, start_line)
+        target = "%s:%s-%s" % (path, start_line,
+                               end_line) if end_line and end_line > start_line else "%s:%s" % (path, start_line)
 
         if position is None:
             print("skip finding without diff position: %s" % target)

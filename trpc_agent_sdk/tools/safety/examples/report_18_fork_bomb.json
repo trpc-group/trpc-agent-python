@@ -1,0 +1,36 @@
+{
+  "scan_id": "f3f2e05e0c5443aab22579cf24170d5a",
+  "timestamp": 1782915392.803112,
+  "tool_name": "18_fork_bomb",
+  "script_type": "bash",
+  "script_size_lines": 1,
+  "decision": "deny",
+  "risk_level": "critical",
+  "summary": "Scan of '18_fork_bomb' found 2 issue(s) (1 high/critical). Decision: deny.",
+  "scan_duration_ms": 0.11,
+  "policy_version": "5c4aa1d614dc",
+  "sanitized": true,
+  "execution_blocked": true,
+  "findings": [
+    {
+      "rule_id": "PROC-002",
+      "category": "process_and_system",
+      "risk_level": "medium",
+      "message": "Potentially dangerous shell pattern: |",
+      "evidence": ":(){ :|:& };:",
+      "recommendation": "Use safe alternatives or explicitly whitelist the command in the policy.",
+      "line_number": 1,
+      "matched_pattern": "|"
+    },
+    {
+      "rule_id": "RES-002",
+      "category": "resource_abuse",
+      "risk_level": "critical",
+      "message": "Fork bomb pattern detected: :\\s*\\(\\s*\\)\\s*\\{\\s*:\\s*\\|\\s*:",
+      "evidence": ":(){ :|:& };:",
+      "recommendation": "Fork bombs can crash the host. Remove immediately.",
+      "line_number": 1,
+      "matched_pattern": ":\\s*\\(\\s*\\)\\s*\\{\\s*:\\s*\\|\\s*:"
+    }
+  ]
+}

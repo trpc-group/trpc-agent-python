@@ -82,7 +82,10 @@ class TestFetch:
 
     def test_delegates_to_github_and_relabels_source(self):
         source = ClaudeMarketplaceSource(GitHubAuth())
-        bundle = SkillBundle(name="docx", files={"SKILL.md": "body"}, source="github", identifier="anthropics/skills/docx")
+        bundle = SkillBundle(name="docx",
+                             files={"SKILL.md": "body"},
+                             source="github",
+                             identifier="anthropics/skills/docx")
         with patch("trpc_agent_sdk.skills.hub._claude_marketplace.GitHubSource") as mock_gh_cls:
             mock_gh_cls.return_value.fetch.return_value = bundle
             result = source.fetch("anthropics/skills/docx")

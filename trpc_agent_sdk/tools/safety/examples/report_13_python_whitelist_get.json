@@ -1,0 +1,26 @@
+{
+  "scan_id": "e5805072254b49ddbeee1064c469422f",
+  "timestamp": 1782915392.801687,
+  "tool_name": "13_python_whitelist_get",
+  "script_type": "python",
+  "script_size_lines": 1,
+  "decision": "deny",
+  "risk_level": "high",
+  "summary": "Scan of '13_python_whitelist_get' found 1 issue(s) (1 high/critical). Decision: deny.",
+  "scan_duration_ms": 0.26,
+  "policy_version": "5c4aa1d614dc",
+  "sanitized": true,
+  "execution_blocked": true,
+  "findings": [
+    {
+      "rule_id": "NET-001",
+      "category": "network_egress",
+      "risk_level": "high",
+      "message": "Network client library detected: requests\\.",
+      "evidence": "import requests; requests.get('https://api.openai.com/v1/models')",
+      "recommendation": "Ensure the target domain is whitelisted. Restrict outbound network access at the network/firewall level.",
+      "line_number": 1,
+      "matched_pattern": "requests\\."
+    }
+  ]
+}

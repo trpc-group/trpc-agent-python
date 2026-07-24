@@ -20,7 +20,7 @@ def _arc(name: str) -> SubAgentArchetype:
         name=name,
         description=f"archetype {name}",
         instruction="be helpful",
-        tools=(ReadTool,),
+        tools=(ReadTool, ),
     )
 
 

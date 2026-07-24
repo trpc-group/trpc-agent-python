@@ -15,7 +15,6 @@ import pytest
 
 from trpc_agent_sdk.server.ag_ui._core._session_manager import SessionManager
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -63,6 +62,7 @@ def _make_session(
 
 
 class TestSingleton:
+
     def test_same_instance_returned(self):
         svc = _make_session_service()
         m1 = SessionManager(session_service=svc, auto_cleanup=False)
@@ -101,6 +101,7 @@ class TestSingleton:
 
 
 class TestGetOrCreateSession:
+
     async def test_creates_new_session(self):
         svc = _make_session_service()
         new_session = _make_session(id="sess-1", app_name="app", user_id="user-1")
@@ -154,9 +155,7 @@ class TestGetOrCreateSession:
         mgr = SessionManager(session_service=svc, auto_cleanup=False)
         await mgr.get_or_create_session("s1", "app", "u1", initial_state={"key": "val"})
 
-        svc.create_session.assert_called_once_with(
-            session_id="s1", user_id="u1", app_name="app", state={"key": "val"}
-        )
+        svc.create_session.assert_called_once_with(session_id="s1", user_id="u1", app_name="app", state={"key": "val"})
 
     async def test_tracks_session_after_creation(self):
         svc = _make_session_service()
@@ -176,6 +175,7 @@ class TestGetOrCreateSession:
 
 
 class TestUpdateSessionState:
+
     async def test_success(self):
         svc = _make_session_service()
         session = _make_session()
@@ -252,6 +252,7 @@ class TestUpdateSessionState:
 
 
 class TestGetSessionState:
+
     async def test_with_to_dict(self):
         svc = _make_session_service()
         session = _make_session()
@@ -300,6 +301,7 @@ class TestGetSessionState:
 
 
 class TestGetStateValue:
+
     async def test_existing_key(self):
         svc = _make_session_service()
         session = _make_session(state={"color": "blue"})
@@ -345,6 +347,7 @@ class TestGetStateValue:
 
 
 class TestSetStateValue:
+
     async def test_delegates_to_update_session_state(self):
         svc = _make_session_service()
         session = _make_session()
@@ -363,6 +366,7 @@ class TestSetStateValue:
 
 
 class TestRemoveStateKeys:
+
     async def test_single_string_key(self):
         svc = _make_session_service()
         session = _make_session(state={"a": 1, "b": 2})
@@ -413,6 +417,7 @@ class TestRemoveStateKeys:
 
 
 class TestClearSessionState:
+
     async def test_without_preserve_prefixes(self):
         svc = _make_session_service()
         session = _make_session(state={"a": 1, "b": 2, "c": 3})
@@ -461,15 +466,20 @@ class TestClearSessionState:
 
 
 class TestInitializeSessionState:
+
     async def test_with_overwrite(self):
         svc = _make_session_service()
         session = _make_session(state={"existing": "old"})
         svc.get_session.return_value = session
 
         mgr = SessionManager(session_service=svc, auto_cleanup=False)
-        result = await mgr.initialize_session_state(
-            "s1", "app", "u1", {"existing": "new", "added": "val"}, overwrite_existing=True
-        )
+        result = await mgr.initialize_session_state("s1",
+                                                    "app",
+                                                    "u1", {
+                                                        "existing": "new",
+                                                        "added": "val"
+                                                    },
+                                                    overwrite_existing=True)
 
         assert result is True
         svc.append_event.assert_called_once()
@@ -480,9 +490,13 @@ class TestInitializeSessionState:
         svc.get_session.return_value = session
 
         mgr = SessionManager(session_service=svc, auto_cleanup=False)
-        result = await mgr.initialize_session_state(
-            "s1", "app", "u1", {"existing": "new", "added": "val"}, overwrite_existing=False
-        )
+        result = await mgr.initialize_session_state("s1",
+                                                    "app",
+                                                    "u1", {
+                                                        "existing": "new",
+                                                        "added": "val"
+                                                    },
+                                                    overwrite_existing=False)
 
         assert result is True
         # append_event is called with only the new key
@@ -494,9 +508,13 @@ class TestInitializeSessionState:
         svc.get_session.return_value = session
 
         mgr = SessionManager(session_service=svc, auto_cleanup=False)
-        result = await mgr.initialize_session_state(
-            "s1", "app", "u1", {"a": "new_a", "b": "new_b"}, overwrite_existing=False
-        )
+        result = await mgr.initialize_session_state("s1",
+                                                    "app",
+                                                    "u1", {
+                                                        "a": "new_a",
+                                                        "b": "new_b"
+                                                    },
+                                                    overwrite_existing=False)
 
         assert result is True
         # No update needed since all keys exist
@@ -518,6 +536,7 @@ class TestInitializeSessionState:
 
 
 class TestBulkUpdateUserState:
+
     async def test_updates_all_user_sessions(self):
         svc = _make_session_service()
         session1 = _make_session(id="s1", app_name="app1", user_id="u1")
@@ -560,6 +579,7 @@ class TestBulkUpdateUserState:
 
 
 class TestTrackUntrack:
+
     def test_track_session(self):
         svc = _make_session_service()
         mgr = SessionManager(session_service=svc, auto_cleanup=False)
@@ -612,6 +632,7 @@ class TestTrackUntrack:
 
 
 class TestSessionCounts:
+
     def test_get_session_count(self):
         svc = _make_session_service()
         mgr = SessionManager(session_service=svc, auto_cleanup=False)
@@ -647,6 +668,7 @@ class TestSessionCounts:
 
 
 class TestStopCleanupTask:
+
     async def test_stop_when_task_exists(self):
         svc = _make_session_service()
         mgr = SessionManager(session_service=svc, auto_cleanup=False)
@@ -676,10 +698,13 @@ class TestStopCleanupTask:
 
 
 class TestCleanupExpiredSessions:
+
     async def test_expired_session_deleted(self):
         svc = _make_session_service()
         expired_session = _make_session(
-            id="s1", app_name="app", user_id="u1",
+            id="s1",
+            app_name="app",
+            user_id="u1",
             state={},
             last_update_time=time.time() - 9999,
         )
@@ -690,15 +715,15 @@ class TestCleanupExpiredSessions:
 
         await mgr._cleanup_expired_sessions()
 
-        svc.delete_session.assert_called_once_with(
-            session_id="s1", app_name="app", user_id="u1"
-        )
+        svc.delete_session.assert_called_once_with(session_id="s1", app_name="app", user_id="u1")
         assert "app:s1" not in mgr._session_keys
 
     async def test_pending_tool_calls_preserved(self):
         svc = _make_session_service()
         session_with_pending = _make_session(
-            id="s2", app_name="app", user_id="u1",
+            id="s2",
+            app_name="app",
+            user_id="u1",
             state={"pending_tool_calls": ["call-1"]},
             last_update_time=time.time() - 9999,
         )
@@ -715,7 +740,9 @@ class TestCleanupExpiredSessions:
     async def test_non_expired_session_kept(self):
         svc = _make_session_service()
         fresh_session = _make_session(
-            id="s3", app_name="app", user_id="u1",
+            id="s3",
+            app_name="app",
+            user_id="u1",
             state={},
             last_update_time=time.time(),
         )
@@ -747,6 +774,7 @@ class TestCleanupExpiredSessions:
 
 
 class TestDeleteSession:
+
     async def test_successful_deletion(self):
         svc = _make_session_service()
         session = _make_session(id="s1", app_name="app", user_id="u1")
@@ -788,6 +816,7 @@ class TestDeleteSession:
 
 
 class TestRemoveOldestUserSession:
+
     async def test_removes_oldest(self):
         svc = _make_session_service()
         old = _make_session(id="old", app_name="app", user_id="u1", last_update_time=100.0)
@@ -842,6 +871,7 @@ class TestRemoveOldestUserSession:
 
 
 class TestResetInstanceWithCleanupTask:
+
     async def test_reset_cancels_running_cleanup_task(self):
         svc = _make_session_service()
         mgr = SessionManager(session_service=svc, auto_cleanup=False)
@@ -874,6 +904,7 @@ class TestResetInstanceWithCleanupTask:
 
 
 class TestUpdateSessionStateMergeFalse:
+
     async def test_merge_false_replaces_state(self):
         svc = _make_session_service()
         session = _make_session(state={"old_key": "old_value"})
@@ -892,6 +923,7 @@ class TestUpdateSessionStateMergeFalse:
 
 
 class TestGetStateValueElseBranch:
+
     async def test_state_with_get_method(self):
         svc = _make_session_service()
         session = _make_session()
@@ -919,6 +951,7 @@ class TestGetStateValueElseBranch:
 
 
 class TestStartCleanupTask:
+
     async def test_starts_cleanup_task_in_running_loop(self):
         svc = _make_session_service()
         mgr = SessionManager(session_service=svc, auto_cleanup=False)
@@ -948,6 +981,7 @@ class TestStartCleanupTask:
 
 
 class TestCleanupLoop:
+
     async def test_cleanup_loop_cancelled(self):
         svc = _make_session_service()
         mgr = SessionManager(session_service=svc, auto_cleanup=False, cleanup_interval_seconds=0)
@@ -991,6 +1025,7 @@ class TestCleanupLoop:
 
 
 class TestAutoCleanupStart:
+
     async def test_auto_cleanup_starts_on_get_or_create(self):
         svc = _make_session_service()
         session = _make_session()
@@ -1015,6 +1050,7 @@ class TestAutoCleanupStart:
 
 
 class TestExceptionHandlers:
+
     async def test_remove_state_keys_exception(self):
         svc = _make_session_service()
         mgr = SessionManager(session_service=svc, auto_cleanup=False)
@@ -1049,10 +1085,13 @@ class TestExceptionHandlers:
 
 
 class TestCleanupExpiredWithLogging:
+
     async def test_expired_session_triggers_deletion(self):
         svc = _make_session_service()
         expired_session = _make_session(
-            id="s-old", app_name="app", user_id="u1",
+            id="s-old",
+            app_name="app",
+            user_id="u1",
             last_update_time=0.0,
         )
         expired_session.state = {"some_key": "value"}
@@ -1066,5 +1105,7 @@ class TestCleanupExpiredWithLogging:
         await mgr._delete_session(expired_session)
 
         svc.delete_session.assert_called_once_with(
-            session_id="s-old", app_name="app", user_id="u1",
+            session_id="s-old",
+            app_name="app",
+            user_id="u1",
         )

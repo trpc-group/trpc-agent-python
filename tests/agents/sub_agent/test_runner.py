@@ -43,6 +43,7 @@ from trpc_agent_sdk.tools import ReadTool
 
 
 class MockLLMModel(LLMModel):
+
     @classmethod
     def supported_models(cls) -> List[str]:
         return [r"test-dynamic-.*"]
@@ -76,20 +77,20 @@ def _parent_ctx_with_model(model: str) -> MagicMock:
 
 
 def test_materialize_tools_factories_to_instances() -> None:
-    out = _materialize_tools((ReadTool,))
+    out = _materialize_tools((ReadTool, ))
     assert len(out) == 1
     assert isinstance(out[0], BaseTool)
 
 
 def test_materialize_tools_passes_instances_through() -> None:
     inst = ReadTool()
-    out = _materialize_tools((inst,))
+    out = _materialize_tools((inst, ))
     assert out == [inst]
 
 
 def test_materialize_tools_rejects_garbage() -> None:
     with pytest.raises(TypeError):
-        _materialize_tools(("not-a-tool",))
+        _materialize_tools(("not-a-tool", ))
 
 
 # --- _resolve_model -------------------------------------------------
@@ -119,7 +120,8 @@ def test_build_sub_agent_uses_agent_config_model() -> None:
     """SubAgentConfig.model is used when set."""
     parent_ctx = _parent_ctx_with_model("test-dynamic-parent")
     agent = _build_sub_agent(
-        GENERAL_PURPOSE_AGENT, parent_ctx,
+        GENERAL_PURPOSE_AGENT,
+        parent_ctx,
         agent_config=SubAgentConfig(model="test-dynamic-default"),
     )
     assert isinstance(agent.model, LLMModel)
@@ -206,6 +208,7 @@ async def test_borrowed_toolset_proxies_get_tools() -> None:
     """_BorrowedToolSet.get_tools() delegates to the inner toolset."""
 
     class _FakeToolSet(BaseToolSet):
+
         async def get_tools(self, invocation_context=None):
             return [ReadTool()]
 
@@ -222,6 +225,7 @@ async def test_borrowed_toolset_close_is_noop() -> None:
     closed = []
 
     class _FakeToolSet(BaseToolSet):
+
         async def get_tools(self, invocation_context=None):
             return []
 
@@ -241,7 +245,8 @@ def test_agent_config_applied_to_sub_agent() -> None:
     gen_config = GenerateContentConfig(temperature=0.1)
     parent_ctx = _parent_ctx_with_model("test-dynamic-parent")
     agent = _build_sub_agent(
-        GENERAL_PURPOSE_AGENT, parent_ctx,
+        GENERAL_PURPOSE_AGENT,
+        parent_ctx,
         agent_config=SubAgentConfig(
             generate_content_config=gen_config,
             parallel_tool_calls=True,
@@ -298,7 +303,8 @@ def test_agent_config_does_not_override_instruction() -> None:
     """agent_config cannot override archetype instruction."""
     parent_ctx = _parent_ctx_with_model("test-dynamic-parent")
     agent = _build_sub_agent(
-        GENERAL_PURPOSE_AGENT, parent_ctx,
+        GENERAL_PURPOSE_AGENT,
+        parent_ctx,
         agent_config=SubAgentConfig(),
     )
     assert agent.instruction == GENERAL_PURPOSE_AGENT.instruction
@@ -308,7 +314,8 @@ def test_isolation_defaults_always_win() -> None:
     """ISOLATION_DEFAULTS override agent_config."""
     parent_ctx = _parent_ctx_with_model("test-dynamic-parent")
     agent = _build_sub_agent(
-        GENERAL_PURPOSE_AGENT, parent_ctx,
+        GENERAL_PURPOSE_AGENT,
+        parent_ctx,
         agent_config=SubAgentConfig(),
     )
     assert agent.output_key is None
@@ -318,7 +325,8 @@ def test_agent_config_non_none_is_passed() -> None:
     """Non-None agent_config values override LlmAgent defaults."""
     parent_ctx = _parent_ctx_with_model("test-dynamic-parent")
     agent = _build_sub_agent(
-        GENERAL_PURPOSE_AGENT, parent_ctx,
+        GENERAL_PURPOSE_AGENT,
+        parent_ctx,
         agent_config=SubAgentConfig(parallel_tool_calls=True),
     )
     assert agent.parallel_tool_calls is True
@@ -364,7 +372,8 @@ def test_build_sub_agent_history_fields_not_forwarded_to_llm_agent() -> None:
     """include_parent_history and max_parent_history_turns are not passed to LlmAgent."""
     parent_ctx = _parent_ctx_with_model("test-dynamic-parent")
     agent = _build_sub_agent(
-        GENERAL_PURPOSE_AGENT, parent_ctx,
+        GENERAL_PURPOSE_AGENT,
+        parent_ctx,
         agent_config=SubAgentConfig(include_parent_history=True, max_parent_history_turns=3),
     )
     assert not hasattr(agent, "include_parent_history")
@@ -375,7 +384,8 @@ def test_build_sub_agent_no_parent_history_has_no_effect() -> None:
     """include_parent_history=False should not affect LlmAgent construction."""
     parent_ctx = _parent_ctx_with_model("test-dynamic-parent")
     agent = _build_sub_agent(
-        GENERAL_PURPOSE_AGENT, parent_ctx,
+        GENERAL_PURPOSE_AGENT,
+        parent_ctx,
         agent_config=SubAgentConfig(include_parent_history=False),
     )
     assert agent.name == "subagent_general_purpose"  # builds without error
@@ -386,6 +396,7 @@ def test_build_sub_agent_wraps_parent_toolsets_when_tools_none() -> None:
     wrapped in _BorrowedToolSet so sub_runner.close() cannot close them."""
 
     class _FakeToolSet(BaseToolSet):
+
         async def get_tools(self, invocation_context=None):
             return []
 
@@ -404,7 +415,8 @@ def test_build_sub_agent_max_turns_not_forwarded_to_llm_agent() -> None:
     """max_turns is not an LlmAgent parameter and should not leak."""
     parent_ctx = _parent_ctx_with_model("test-dynamic-parent")
     agent = _build_sub_agent(
-        GENERAL_PURPOSE_AGENT, parent_ctx,
+        GENERAL_PURPOSE_AGENT,
+        parent_ctx,
         agent_config=SubAgentConfig(max_turns=5),
     )
     assert not hasattr(agent, "max_turns")
@@ -414,7 +426,8 @@ def test_build_sub_agent_max_turns_none_has_no_effect() -> None:
     """max_turns=None should not affect LlmAgent construction."""
     parent_ctx = _parent_ctx_with_model("test-dynamic-parent")
     agent = _build_sub_agent(
-        GENERAL_PURPOSE_AGENT, parent_ctx,
+        GENERAL_PURPOSE_AGENT,
+        parent_ctx,
         agent_config=SubAgentConfig(max_turns=None),
     )
     assert agent.name == "subagent_general_purpose"
@@ -814,6 +827,7 @@ def test_build_sub_agent_tool_filter_preserves_borrowed_toolsets() -> None:
     from trpc_agent_sdk.agents.sub_agent._runner import _build_sub_agent
 
     class _FakeToolSet(BaseToolSet):
+
         async def get_tools(self, invocation_context=None):
             return []
 

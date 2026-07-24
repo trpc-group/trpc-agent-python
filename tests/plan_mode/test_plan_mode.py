@@ -648,7 +648,10 @@ async def test_ask_user_question_hitl_applies_answer_and_is_idempotent():
     ask_tool = make_ask_user_question_tool()
     pending = await ask_tool._run_async_impl(
         tool_context=ctx,
-        args={"question": "Which framework?", "options": ["React", "Vue"]},
+        args={
+            "question": "Which framework?",
+            "options": ["React", "Vue"]
+        },
     )
     assert pending["status"] == "pending_question"
     assert pending["question_id"] == 1
@@ -656,7 +659,10 @@ async def test_ask_user_question_hitl_applies_answer_and_is_idempotent():
     result = process_hitl_function_response(
         ctx,
         name="ask_user_question",
-        response={"answer": "React", "question_id": 1},
+        response={
+            "answer": "React",
+            "question_id": 1
+        },
     )
     assert result is not None
     assert result["status"] == "answered"
@@ -724,7 +730,10 @@ async def test_reject_revise_reapprove_does_not_replay_old_rejection():
     await _enter_plan_mode_confirmed(ctx, objective="build player")
     await UpdatePlanContentTool()._run_async_impl(
         tool_context=ctx,
-        args={"content": "## v1", "mode": "replace"},
+        args={
+            "content": "## v1",
+            "mode": "replace"
+        },
     )
     exit_tool = make_exit_plan_mode_tool()
     await exit_tool._run_async_impl(tool_context=ctx, args={"summary": "review v1"})
@@ -742,10 +751,15 @@ async def test_reject_revise_reapprove_does_not_replay_old_rejection():
     reject_request = LlmRequest(contents=[
         Content(
             role="user",
-            parts=[Part(function_response=FunctionResponse(
-                name="exit_plan_mode",
-                response={"status": "rejected", "reviewer_note": "need more pages"},
-            ))],
+            parts=[
+                Part(function_response=FunctionResponse(
+                    name="exit_plan_mode",
+                    response={
+                        "status": "rejected",
+                        "reviewer_note": "need more pages"
+                    },
+                ))
+            ],
         ),
     ])
     await callbacks.before_model(ctx, reject_request)
@@ -755,7 +769,10 @@ async def test_reject_revise_reapprove_does_not_replay_old_rejection():
 
     await UpdatePlanContentTool()._run_async_impl(
         tool_context=ctx,
-        args={"content": "## v2 full", "mode": "replace"},
+        args={
+            "content": "## v2 full",
+            "mode": "replace"
+        },
     )
     await exit_tool._run_async_impl(tool_context=ctx, args={"summary": "review v2"})
     plan = decode_plan(ctx.state.get(state_key("plan", agent.name)))
@@ -765,17 +782,27 @@ async def test_reject_revise_reapprove_does_not_replay_old_rejection():
     approve_request = LlmRequest(contents=[
         Content(
             role="user",
-            parts=[Part(function_response=FunctionResponse(
-                name="exit_plan_mode",
-                response={"status": "rejected", "reviewer_note": "need more pages"},
-            ))],
+            parts=[
+                Part(function_response=FunctionResponse(
+                    name="exit_plan_mode",
+                    response={
+                        "status": "rejected",
+                        "reviewer_note": "need more pages"
+                    },
+                ))
+            ],
         ),
         Content(
             role="user",
-            parts=[Part(function_response=FunctionResponse(
-                name="exit_plan_mode",
-                response={"status": "approved", "reviewer_note": "looks good"},
-            ))],
+            parts=[
+                Part(function_response=FunctionResponse(
+                    name="exit_plan_mode",
+                    response={
+                        "status": "approved",
+                        "reviewer_note": "looks good"
+                    },
+                ))
+            ],
         ),
     ])
     await callbacks.before_model(ctx, approve_request)
@@ -959,4 +986,3 @@ async def test_plan_toolset_keeps_enter_plan_mode_in_agent_mode():
 
     tool_names = [tool.name for tool in await PlanToolSet().get_tools(ctx)]
     assert "enter_plan_mode" in tool_names
-

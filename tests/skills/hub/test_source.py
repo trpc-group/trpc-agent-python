@@ -27,7 +27,9 @@ class TestSkillSourceContract:
             SkillSource()  # type: ignore[abstract]
 
     def test_subclass_missing_methods_cannot_instantiate(self):
+
         class Incomplete(SkillSource):
+
             def source_id(self) -> str:
                 return "incomplete"
 
@@ -35,7 +37,9 @@ class TestSkillSourceContract:
             Incomplete()  # type: ignore[abstract]
 
     def test_complete_subclass_is_instantiable(self):
+
         class Complete(SkillSource):
+
             def source_id(self) -> str:
                 return "complete"
 
