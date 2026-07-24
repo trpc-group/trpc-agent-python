@@ -1,0 +1,73 @@
+{
+  "task_id": "9d309279-1d77-4dc4-b9b1-f4cf833dd749",
+  "status": "completed",
+  "conclusion": "changes_requested",
+  "input_summary": {
+    "sha256": "bfa592fb25cedc20328294dcea2038af7b17e011cae83dee70c3ae010aeabdd0",
+    "files": [
+      "app.py"
+    ],
+    "added_lines": 1,
+    "redacted": false
+  },
+  "findings": [
+    {
+      "severity": "critical",
+      "category": "security",
+      "file": "app.py",
+      "line": 2,
+      "title": "Unsafe code or command execution",
+      "evidence": "return eval(user_input)",
+      "recommendation": "Remove dynamic execution or use a fixed argv allowlist in an isolated process.",
+      "confidence": 0.96,
+      "source": "static_rule:SEC001",
+      "rule_id": "SEC001"
+    }
+  ],
+  "warnings": [
+    {
+      "severity": "low",
+      "category": "test_missing",
+      "file": "app.py",
+      "line": 2,
+      "title": "Production change has no corresponding test change",
+      "evidence": "changed production file: app.py",
+      "recommendation": "Add focused positive, negative, and regression tests for the changed behavior.",
+      "confidence": 0.65,
+      "source": "heuristic:TEST001",
+      "rule_id": "TEST001"
+    }
+  ],
+  "filter_blocks": [],
+  "sandbox_runs": [
+    {
+      "command": [
+        "python",
+        "-m",
+        "compileall",
+        "-q",
+        "."
+      ],
+      "status": "passed",
+      "exit_code": 0,
+      "duration_ms": 0.006499999926745659,
+      "output": "fake sandbox check passed",
+      "error_type": null,
+      "filter_decision": "allow",
+      "filter_reason": null,
+      "redacted": false
+    }
+  ],
+  "monitoring": {
+    "total_duration_ms": 3.795400000171867,
+    "sandbox_duration_ms": 0.006499999926745659,
+    "tool_call_count": 1,
+    "blocked_count": 0,
+    "finding_count": 1,
+    "warning_count": 1,
+    "severity_distribution": {
+      "critical": 1
+    },
+    "exception_type_distribution": {}
+  }
+}

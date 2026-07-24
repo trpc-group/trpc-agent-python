@@ -1,0 +1,6 @@
+diff --git a/unsafe.py b/unsafe.py
+--- a/unsafe.py
++++ b/unsafe.py
+@@ -1,1 +1,2 @@
+ def run(value):
++    return eval(value)

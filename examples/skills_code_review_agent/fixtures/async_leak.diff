@@ -1,0 +1,8 @@
+diff --git a/worker.py b/worker.py
+--- a/worker.py
++++ b/worker.py
+@@ -1,1 +1,4 @@
++async def poll():
++    time.sleep(10)
++    asyncio.create_task(refresh())
++    return True

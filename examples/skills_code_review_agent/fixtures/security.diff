@@ -1,0 +1,6 @@
+diff --git a/app.py b/app.py
+--- a/app.py
++++ b/app.py
+@@ -1,1 +1,2 @@
+ def run(user_input):
++    return eval(user_input)

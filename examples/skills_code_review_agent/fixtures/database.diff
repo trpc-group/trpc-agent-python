@@ -1,0 +1,6 @@
+diff --git a/db.py b/db.py
+--- a/db.py
++++ b/db.py
+@@ -1,1 +1,2 @@
+ def load():
++    connection = sqlite3.connect("data.db")
