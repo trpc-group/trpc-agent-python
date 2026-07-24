@@ -1,0 +1,1 @@
+{"id":"09_duplicate_store","operations":[{"op":"append","author":"user","text":"preferred color blue"},{"op":"store_memory"},{"op":"store_memory"},{"op":"search_memory","query":"blue"}]}

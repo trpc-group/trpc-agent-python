@@ -1,0 +1,1 @@
+{"id":"04_session_state","operations":[{"op":"append","author":"agent","text":"set mode","state_delta":{"mode":"draft"}},{"op":"append","author":"agent","text":"overwrite mode","state_delta":{"mode":"final"}},{"op":"append","author":"agent","text":"set count","state_delta":{"count":2}}]}

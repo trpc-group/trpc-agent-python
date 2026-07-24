@@ -1,0 +1,1 @@
+{"id":"05_scoped_state","operations":[{"op":"append","author":"agent","text":"set scoped state","state_delta":{"session_key":"session","app:theme":"dark","user:locale":"zh-CN","temp:request_id":"temporary"}}]}

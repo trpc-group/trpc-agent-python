@@ -1,0 +1,4 @@
+{"id":"02_multi_turn","operations":[{"op":"append","author":"user","text":"first question"},
+  {"op":"append","author":"agent","text":"first answer"},
+  {"op":"append","author":"user","text":"second question"},
+  {"op":"append","author":"agent","text":"second answer"}]}
