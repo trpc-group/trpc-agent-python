@@ -1,0 +1,62 @@
+{
+  "eval_set_id": "eval_optimize_train",
+  "name": "Evaluation optimization training cases",
+  "description": "Three deterministic traces: optimizable format and recall failures plus an ineffective tool-argument optimization.",
+  "eval_cases": [
+    {
+      "eval_id": "train_format_success",
+      "conversation": [{
+        "invocation_id": "train-1",
+        "user_content": {"role": "user", "parts": [{"text": "Return answer 42 as JSON."}]},
+        "final_response": {"role": "model", "parts": [{"text": "{\"answer\":42}"}]}
+      }],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "train", "state": {}},
+      "_loop": {
+        "expected_response": "42",
+        "format_regex": "^\\{\\\"answer\\\":42\\}$",
+        "pass_threshold": 1.0,
+        "traces": {
+          "baseline": {"response": "42", "cost": 0.01},
+          "candidate": {"response": "{\"answer\":42}", "cost": 0.012}
+        }
+      }
+    },
+    {
+      "eval_id": "train_knowledge_success",
+      "conversation": [{
+        "invocation_id": "train-2",
+        "user_content": {"role": "user", "parts": [{"text": "Using context, name France's capital."}]},
+        "final_response": {"role": "model", "parts": [{"text": "Paris"}]}
+      }],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "train", "state": {}},
+      "_loop": {
+        "expected_response": "Paris",
+        "requires_knowledge": true,
+        "pass_threshold": 1.0,
+        "traces": {
+          "baseline": {"response": "I am not sure.", "knowledge_recalled": false, "cost": 0.01},
+          "candidate": {"response": "Paris", "knowledge_recalled": true, "cost": 0.012}
+        }
+      }
+    },
+    {
+      "eval_id": "train_tool_ineffective",
+      "conversation": [{
+        "invocation_id": "train-3",
+        "user_content": {"role": "user", "parts": [{"text": "Get weather in Celsius."}]},
+        "final_response": {"role": "model", "parts": [{"text": "20 C"}]}
+      }],
+      "session_input": {"app_name": "eval_optimize_loop", "user_id": "train", "state": {}},
+      "_loop": {
+        "expected_response": "20 C",
+        "expected_tool": "weather",
+        "expected_args": {"city": "Shenzhen", "unit": "celsius"},
+        "pass_threshold": 1.0,
+        "traces": {
+          "baseline": {"response": "68 F", "tool": "weather", "args": {"city": "Shenzhen", "unit": "fahrenheit"}, "cost": 0.02},
+          "candidate": {"response": "68 F", "tool": "weather", "args": {"city": "Shenzhen", "unit": "fahrenheit"}, "cost": 0.02}
+        }
+      }
+    }
+  ]
+}
