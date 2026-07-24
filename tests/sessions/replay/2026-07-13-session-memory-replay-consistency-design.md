@@ -77,7 +77,7 @@ replay_cases/*.jsonl ──load──▶ ReplayCase
 ```
 tests/sessions/replay/
 ├── README.md              # 测试运行说明与注意事项
-├── 2026-07-13-session-memory-replay-consistency.md          # 实施计划(随测试同置)
+├── IMPLEMENTATION_PLAN.md          # 实施计划(随测试同置,无日期前缀)
 ├── 2026-07-13-session-memory-replay-consistency-design.md   # 设计文档(本文档)
 ├── __init__.py            # 含 150–300 字设计说明(issue 交付物)
 ├── harness.py             # ReplayCase/ReplayBackend/ReplaySnapshot + replay_case()
