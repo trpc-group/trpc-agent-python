@@ -28,13 +28,19 @@ from trpc_agent_sdk.code_executors.container._container_cli import (
     ContainerConfig,
 )
 from trpc_agent_sdk.code_executors.container._container_cli import \
-    _import_docker  # ensure docker is injected for patch compatibility
-
-# Eagerly import docker into the module namespace so that
-# @patch("..._container_cli.docker") works correctly.
-_import_docker()
-
+    _import_docker  # noqa: F401  (used in fixture below)
 from trpc_agent_sdk.utils import CommandExecResult
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _ensure_docker_imported():
+    """Ensure docker SDK symbols exist at module level for @patch compatibility.
+
+    Without this, @patch("..._container_cli.docker") fails because docker
+    is a None placeholder until _import_docker() runs.
+    """
+    _import_docker()
+
 
 # ---------------------------------------------------------------------------
 # ContainerConfig
