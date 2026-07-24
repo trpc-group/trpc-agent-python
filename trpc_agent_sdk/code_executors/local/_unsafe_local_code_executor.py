@@ -18,6 +18,10 @@ from typing_extensions import override
 
 from pydantic import Field
 from trpc_agent_sdk.context import InvocationContext
+from trpc_agent_sdk.tools.safety import Decision
+from trpc_agent_sdk.tools.safety import ToolScriptSafetyScanner
+from trpc_agent_sdk.tools.safety import ToolScriptScanRequest
+from trpc_agent_sdk.tools.safety import write_audit_event
 from trpc_agent_sdk.utils import async_execute_command
 
 from .._base_code_executor import BaseCodeExecutor
@@ -47,6 +51,28 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
     clean_temp_files: bool = Field(default=True,
                                    description="Whether to clean temporary files after the code execution.")
 
+    safety_scanner: ToolScriptSafetyScanner | None = Field(
+        default=None,
+        exclude=True,
+        description="Optional safety scanner used before local code execution.",
+    )
+
+    safety_audit_log_path: str = Field(
+        default="",
+        exclude=True,
+        description="Optional JSONL audit log path for safety decisions.",
+    )
+
+    enable_safety_guard: bool = Field(
+        default=False,
+        description="Whether to run the Tool Script Safety Guard before executing local code.",
+    )
+
+    block_on_review: bool = Field(
+        default=False,
+        description="Whether needs_human_review safety decisions should block execution.",
+    )
+
     def __init__(self, **data):
         """Initialize the UnsafeLocalCodeExecutor."""
         if "stateful" in data and data["stateful"]:
@@ -54,6 +80,8 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         if "optimize_data_file" in data and data["optimize_data_file"]:
             raise ValueError("Cannot set `optimize_data_file=True` in UnsafeLocalCodeExecutor.")
         super().__init__(**data)
+        if self.enable_safety_guard and self.safety_scanner is None:
+            self.safety_scanner = ToolScriptSafetyScanner()
 
     @override
     async def execute_code(self, invocation_context: InvocationContext,
@@ -80,6 +108,16 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             # Execute each code block
             for i, block in enumerate(input_data.code_blocks):
                 try:
+                    safety_report = self._scan_code_block(work_dir, block)
+                    if safety_report:
+                        should_block = safety_report.decision == Decision.DENY or (
+                            self.block_on_review and safety_report.decision == Decision.NEEDS_HUMAN_REVIEW)
+                        safety_report.set_blocked(should_block)
+                        if self.safety_audit_log_path:
+                            write_audit_event(self.safety_audit_log_path, safety_report)
+                    if safety_report and safety_report.blocked:
+                        error_parts.append(f"Execution block {i} blocked by safety guard: {safety_report.summary}")
+                        continue
                     block_output = await self._execute_code_block(work_dir, block, i)
                     if block_output:
                         output_parts.append(block_output)
@@ -92,6 +130,23 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
 
         return create_code_execution_result(stdout="\n".join(output_parts) if output_parts else "",
                                             stderr="\n".join(error_parts) if error_parts else "")
+
+    def _scan_code_block(self, work_dir: Path, block: CodeBlock):
+        if not self.enable_safety_guard or self.safety_scanner is None:
+            return None
+        report = self.safety_scanner.scan(
+            ToolScriptScanRequest(
+                script=block.code,
+                language=block.language or "unknown",
+                command_args=[],
+                cwd=str(work_dir),
+                env={},
+                tool_name="UnsafeLocalCodeExecutor",
+                tool_metadata={
+                    "timeout": self.timeout,
+                },
+            ))
+        return report
 
     def _prepare_work_dir(self, execution_id: str) -> tuple[Path, bool]:
         """Prepare working directory for execution.

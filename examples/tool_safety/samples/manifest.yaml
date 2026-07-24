@@ -1,0 +1,161 @@
+samples:
+  - file: aiohttp_non_whitelist.py
+    expected_decision: deny
+    required_rule_ids: [NETWORK_NON_WHITELIST_DOMAIN]
+    categories: [non_whitelisted_network]
+  - file: apt_install.sh
+    expected_decision: deny
+    required_rule_ids: [DEPENDENCY_INSTALL]
+    categories: [dependency_install]
+  - file: background_process.sh
+    expected_decision: needs_human_review
+    required_rule_ids: [BASH_SHELL_FEATURE_REVIEW]
+    categories: [resource_review]
+  - file: base64_exec_review.sh
+    expected_decision: needs_human_review
+    required_rule_ids: [BASH_BASE64_EXEC_REVIEW]
+    categories: [encoded_execution]
+  - file: bash_inline_command.sh
+    expected_decision: deny
+    required_rule_ids: [BASH_INLINE_INTERPRETER_REVIEW, FILE_SECRET_PATH_ACCESS]
+    categories: [secret_read, inline_interpreter]
+  - file: bash_pipe.sh
+    expected_decision: deny
+    required_rule_ids: [FILE_SECRET_PATH_ACCESS, NETWORK_NON_WHITELIST_DOMAIN]
+    categories: [secret_read, non_whitelisted_network]
+  - file: command_substitution.sh
+    expected_decision: needs_human_review
+    required_rule_ids: [BASH_SHELL_FEATURE_REVIEW]
+    categories: [shell_features]
+  - file: credential_file_key.py
+    expected_decision: deny
+    required_rule_ids: [FILE_SECRET_PATH_ACCESS]
+    categories: [secret_read]
+  - file: curl_env_upload.sh
+    expected_decision: deny
+    required_rule_ids: [FILE_SECRET_PATH_ACCESS, NETWORK_NON_WHITELIST_DOMAIN]
+    categories: [secret_read, non_whitelisted_network]
+  - file: danger_delete.sh
+    expected_decision: deny
+    required_rule_ids: [BASH_RECURSIVE_DELETE]
+    categories: [dangerous_delete]
+  - file: dependency_install.sh
+    expected_decision: deny
+    required_rule_ids: [DEPENDENCY_INSTALL]
+    categories: [dependency_install]
+  - file: dynamic_secret_path.py
+    expected_decision: deny
+    required_rule_ids: [FILE_DYNAMIC_SECRET_PATH_REVIEW, FILE_SECRET_PATH_ACCESS]
+    categories: [secret_read]
+  - file: dynamic_url_join.py
+    expected_decision: needs_human_review
+    required_rule_ids: [NETWORK_DYNAMIC_URL_REVIEW]
+    categories: [dynamic_network]
+  - file: find_delete_review.sh
+    expected_decision: needs_human_review
+    required_rule_ids: [BASH_FIND_DELETE_REVIEW]
+    categories: [dangerous_delete]
+  - file: fork_bomb.sh
+    expected_decision: deny
+    required_rule_ids: [BASH_FORK_BOMB]
+    categories: [resource_abuse]
+  - file: human_review.py
+    expected_decision: needs_human_review
+    required_rule_ids: [PY_DYNAMIC_CODE_EXECUTION]
+    categories: [dynamic_code]
+  - file: infinite_loop.py
+    expected_decision: needs_human_review
+    required_rule_ids: [PY_INFINITE_LOOP]
+    categories: [resource_abuse]
+  - file: long_sleep.sh
+    expected_decision: needs_human_review
+    required_rule_ids: [BASH_LONG_SLEEP]
+    categories: [resource_abuse]
+  - file: network_non_whitelist.py
+    expected_decision: deny
+    required_rule_ids: [NETWORK_NON_WHITELIST_DOMAIN]
+    categories: [non_whitelisted_network]
+  - file: network_whitelist.py
+    expected_decision: allow
+    required_rule_ids: []
+    categories: [safe_network]
+  - file: npm_install.sh
+    expected_decision: deny
+    required_rule_ids: [DEPENDENCY_INSTALL]
+    categories: [dependency_install]
+  - file: os_getenv_token_exfiltration.py
+    expected_decision: deny
+    required_rule_ids: [SENSITIVE_ENV_READ_REVIEW, NETWORK_NON_WHITELIST_DOMAIN]
+    categories: [secret_exfiltration, non_whitelisted_network]
+  - file: os_system.py
+    expected_decision: needs_human_review
+    required_rule_ids: [PY_PROCESS_EXECUTION_REVIEW]
+    categories: [process_execution]
+  - file: pip_module_install.py
+    expected_decision: deny
+    required_rule_ids: [DEPENDENCY_INSTALL]
+    categories: [dependency_install]
+  - file: private_key_literal.py
+    expected_decision: deny
+    required_rule_ids: [SENSITIVE_PRIVATE_KEY_LITERAL]
+    categories: [secret_leak]
+  - file: privilege_escalation.sh
+    expected_decision: deny
+    required_rule_ids: [BASH_PRIVILEGE_ESCALATION]
+    categories: [process_execution]
+  - file: python_inline_command.sh
+    expected_decision: deny
+    required_rule_ids: [BASH_INLINE_INTERPRETER_REVIEW, FILE_SECRET_PATH_ACCESS]
+    categories: [secret_read, inline_interpreter]
+  - file: read_env.py
+    expected_decision: deny
+    required_rule_ids: [FILE_SECRET_PATH_ACCESS]
+    categories: [secret_read]
+  - file: read_secret.py
+    expected_decision: deny
+    required_rule_ids: [FILE_SECRET_PATH_ACCESS]
+    categories: [secret_read]
+  - file: safe_bash.sh
+    expected_decision: allow
+    required_rule_ids: []
+    categories: [safe]
+  - file: safe_file_read.py
+    expected_decision: allow
+    required_rule_ids: []
+    categories: [safe]
+  - file: safe_python.py
+    expected_decision: allow
+    required_rule_ids: []
+    categories: [safe]
+  - file: sensitive_output.py
+    expected_decision: deny
+    required_rule_ids: [SENSITIVE_OUTPUT]
+    categories: [secret_leak]
+  - file: shell_injection.py
+    expected_decision: needs_human_review
+    required_rule_ids: [PY_SHELL_INJECTION_RISK]
+    categories: [shell_injection]
+  - file: socket_access.py
+    expected_decision: needs_human_review
+    required_rule_ids: [PY_SOCKET_NETWORK_ACCESS]
+    categories: [dynamic_network]
+  - file: subprocess_call.py
+    expected_decision: needs_human_review
+    required_rule_ids: [PY_PROCESS_EXECUTION_REVIEW]
+    categories: [process_execution]
+  - file: subprocess_danger_delete.py
+    expected_decision: deny
+    required_rule_ids: [BASH_RECURSIVE_DELETE]
+    categories: [dangerous_delete]
+  - file: system_overwrite.sh
+    expected_decision: deny
+    required_rule_ids: [FILE_SECRET_PATH_ACCESS]
+    categories: [dangerous_delete]
+  - file: unknown_network_dynamic.py
+    expected_decision: needs_human_review
+    required_rule_ids: [NETWORK_DYNAMIC_URL_REVIEW]
+    categories: [dynamic_network]
+  - file: xargs_rm_review.sh
+    expected_decision: deny
+    required_rule_ids: [BASH_XARGS_RM_REVIEW, BASH_RECURSIVE_DELETE]
+    categories: [dangerous_delete]
