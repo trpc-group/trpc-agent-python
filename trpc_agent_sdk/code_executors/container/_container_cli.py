@@ -36,7 +36,6 @@ import threading
 # Not exposed as module-level public names to avoid shadowing the
 # TYPE_CHECKING type aliases above.
 _docker_mod = None
-_docker_container_cls = None
 _docker_consume_socket_output = None
 _docker_demux_adaptor = None
 _docker_frames_iter = None
@@ -58,7 +57,7 @@ def _import_docker():
     If the docker package is not installed, ``_docker_mod`` stays ``None`` and
     callers should check via the ``_docker_mod is None`` guard.
     """
-    global _docker_imported, _docker_mod, _docker_container_cls
+    global _docker_imported, _docker_mod
     global _docker_consume_socket_output, _docker_demux_adaptor, _docker_frames_iter
     if _docker_imported:
         return
@@ -67,16 +66,14 @@ def _import_docker():
             return
         try:
             import docker as _d
-            from docker.models.containers import Container as _C
             from docker.utils.socket import consume_socket_output as _cso
             from docker.utils.socket import demux_adaptor as _da
             from docker.utils.socket import frames_iter as _fi
             _docker_mod = _d
-            _docker_container_cls = _C
             _docker_consume_socket_output = _cso
             _docker_demux_adaptor = _da
             _docker_frames_iter = _fi
-        except ImportError:
+        except Exception:
             pass  # _docker_mod stays None; caller checks guard
         _docker_imported = True
 

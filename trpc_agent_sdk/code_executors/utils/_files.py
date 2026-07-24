@@ -32,29 +32,11 @@ _magic_module = None  # cached after first successful import on non-win32
 _magic_checked = False
 _magic_lock = _threading.Lock()
 
-
-def _has_magic() -> bool:
-    """Backward-compatible indicator for whether python-magic is available.
-
-    Mirrors the old module-level ``HAS_MAGIC`` boolean. Returns ``True`` only
-    when the magic module has been successfully imported (or explicitly
-    injected by tests).
-    """
-    return _magic_module is not None
-
-
-# Backward-compatible public alias (was a module-level bool before this PR).
-# External code may reference it as ``from ..._files import HAS_MAGIC``.
-# On non-win32, probe once at import time to preserve the original semantics
-# (HAS_MAGIC reflects availability immediately, not deferred to first call).
-if sys.platform != 'win32':
-    try:
-        import magic as _magic_mod
-        _magic_module = _magic_mod
-        _magic_checked = True
-    except Exception:
-        _magic_checked = True
-HAS_MAGIC = _magic_module is not None
+# Backward-compatible public alias. Remains False until first
+# detect_content_type() call triggers lazy import on non-win32.
+# Note: on win32 this is always False (python-magic requires libmagic DLL
+# which causes access violations at import time).
+HAS_MAGIC = False
 
 
 def path_join(base: str, path: str) -> str:
