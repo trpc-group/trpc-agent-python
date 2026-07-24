@@ -1,0 +1,79 @@
+{
+  "metrics": [
+    {
+      "metric_name": "tool_trajectory_avg_score",
+      "threshold": 1.0,
+      "criterion": {
+        "tool_trajectory": {
+          "default": {
+            "name": {"match": "exact"},
+            "arguments": {"match": "exact"}
+          },
+          "order_sensitive": false,
+          "subset_matching": false
+        }
+      }
+    },
+    {
+      "metric_name": "final_response_avg_score",
+      "threshold": 1.0,
+      "criterion": {
+        "final_response": {
+          "text": {"match": "exact", "case_insensitive": false}
+        }
+      }
+    },
+    {
+      "metric_name": "llm_rubric_response",
+      "threshold": 1.0,
+      "criterion": {
+        "llm_judge": {
+          "judge_model": {
+            "provider_name": "fake-judge",
+            "model_name": "rule-judge",
+            "num_samples": 1,
+            "generation_config": {"max_tokens": 1024, "temperature": 0.0}
+          },
+          "rubrics": [
+            {
+              "id": "r_json",
+              "content": {"text": "如果用户要求 `JSON` 输出，回答必须包含 `\"result\"` 字段"},
+              "description": "JSON 输出格式合规",
+              "type": "FINAL_RESPONSE_QUALITY"
+            },
+            {
+              "id": "r_cite",
+              "content": {"text": "如果用户要求 `介绍` 城市，回答必须包含 `[source: city-guide]` 标注"},
+              "description": "城市介绍需标注来源",
+              "type": "FINAL_RESPONSE_QUALITY"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "metric_name": "llm_rubric_knowledge_recall",
+      "threshold": 1.0,
+      "criterion": {
+        "llm_judge": {
+          "judge_model": {
+            "provider_name": "fake-judge",
+            "model_name": "rule-judge",
+            "num_samples": 1,
+            "generation_config": {"max_tokens": 1024, "temperature": 0.0}
+          },
+          "rubrics": [
+            {
+              "id": "k_guide",
+              "content": {"text": "如果用户要求 `介绍` 城市，检索结果必须包含 `city-guide` 来源"},
+              "description": "城市介绍需先检索到 city-guide 语料",
+              "type": "KNOWLEDGE_COVERAGE"
+            }
+          ],
+          "knowledge_tool_names": ["knowledge_search"]
+        }
+      }
+    }
+  ],
+  "num_runs": 1
+}
