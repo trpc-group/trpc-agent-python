@@ -83,23 +83,26 @@ def inject_sql_diff(
             if kind == "event_author":
                 conn.execute(
                     text("UPDATE events SET author = :v WHERE session_id = :sid"),
-                    {"v": "INJECTED-SQL", "sid": session_id},
+                    {
+                        "v": "INJECTED-SQL",
+                        "sid": session_id
+                    },
                 )
                 injected = True
             elif kind == "state_value":
                 # Python 层处理:读回 TEXT → json.loads → dict → 改值 → json.dumps → UPDATE
                 # 避免 json_set 作用于 TEXT 列的双重序列化问题(helloopenworld review)
-                result = conn.execute(
-                    text("SELECT state FROM app_states WHERE app_name = :a"),
-                    {"a": app_name}
-                )
+                result = conn.execute(text("SELECT state FROM app_states WHERE app_name = :a"), {"a": app_name})
                 row = result.fetchone()
                 if row and row[0]:
                     state_dict = json.loads(row[0])
                     state_dict["injected"] = "INJECTED"
                     conn.execute(
-                        text("UPDATE OR REPLACE app_states SET state = :s WHERE app_name = :a"),
-                        {"s": json.dumps(state_dict, ensure_ascii=False), "a": app_name},
+                        text("UPDATE app_states SET state = :s WHERE app_name = :a"),
+                        {
+                            "s": json.dumps(state_dict, ensure_ascii=False),
+                            "a": app_name
+                        },
                     )
                     injected = True
     finally:
