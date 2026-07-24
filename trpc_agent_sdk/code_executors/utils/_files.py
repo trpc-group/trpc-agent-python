@@ -16,6 +16,8 @@ import os
 import shutil
 import sys
 from pathlib import Path
+
+from trpc_agent_sdk.log import logger
 from typing import Optional
 
 # NOTE: python-magic is NOT imported at module top level.
