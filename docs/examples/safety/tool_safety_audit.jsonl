@@ -1,0 +1,5 @@
+{"tool_name":"Bash","decision":"DENY","risk_level":"CRITICAL","rule_id":"R001","scan_duration_ms":1.23,"masked":false,"blocked":true,"timestamp":"2026-07-20T10:00:00+00:00","script_type":"BASH"}
+{"tool_name":"Python","decision":"DENY","risk_level":"HIGH","rule_id":"R004,R001","scan_duration_ms":2.34,"masked":false,"blocked":true,"timestamp":"2026-07-20T10:01:00+00:00","script_type":"PYTHON"}
+{"tool_name":"Bash","decision":"ALLOW","risk_level":"LOW","rule_id":"NONE","scan_duration_ms":0.56,"masked":false,"blocked":false,"timestamp":"2026-07-20T10:02:00+00:00","script_type":"BASH"}
+{"tool_name":"Bash","decision":"NEEDS_HUMAN_REVIEW","risk_level":"MEDIUM","rule_id":"R006","scan_duration_ms":1.89,"masked":false,"blocked":false,"timestamp":"2026-07-20T10:03:00+00:00","script_type":"BASH"}
+{"tool_name":"Python","decision":"DENY","risk_level":"CRITICAL","rule_id":"R007","scan_duration_ms":3.12,"masked":true,"blocked":true,"timestamp":"2026-07-20T10:04:00+00:00","script_type":"PYTHON"}

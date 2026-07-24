@@ -1,0 +1,1 @@
+"""Tests for the Tool Script Safety Guard."""

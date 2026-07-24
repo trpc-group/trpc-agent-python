@@ -1,0 +1,143 @@
+# ============================================================
+# Tool Script Safety Policy
+# ============================================================
+# 修改此文件无需改代码即可生效。调用 SafetyPolicy.reload() 热加载。
+#
+# 策略文件结构：
+#   global         — 全局设置（超时、输出大小、默认决策）
+#   allowed_domains — 白名单域名（网络外连检查）
+#   allowed_commands — 允许命令（Bash 白名单）
+#   forbidden_paths — 禁止访问的路径模式
+#   rules          — 规则定义（每种风险类型的配置）
+
+# 全局设置
+global:
+  max_timeout_seconds: 300
+  max_output_size_bytes: 10485760  # 10MB
+  default_decision: "needs_human_review"  # 未匹配规则时的默认决策
+
+# 白名单域名 —— 放行的目标域名，用于网络外连检查
+allowed_domains:
+  - "api.openai.com"
+  - "api.anthropic.com"
+  - "api.github.com"
+  - "api.deepseek.com"
+  - "pypi.org"
+  - "files.pythonhosted.org"
+
+# 禁止路径 —— 禁止读写访问的路径模式（支持 glob 通配符）
+forbidden_paths:
+  - "~/.ssh/*"
+  - "/.ssh/"
+  - "/etc/shadow"
+  - "/etc/passwd"
+  - "/etc/sudoers"
+  - ".env"
+  - "~/.aws/credentials"
+  - "~/.gitconfig"
+  - "~/.kube/config"
+
+# 规则定义 —— 每种风险类型的详细配置
+rules:
+  # R001: 危险文件操作
+  dangerous_file_operations:
+    enabled: true
+    decision: deny
+    risk_level: critical
+    patterns:
+      - "rm -rf /"
+      - "rm -rf /*"
+      - "rm -rf ~"
+      - "mkfs"
+      - "dd if=/dev/zero of=/dev/sda"
+      - "> /dev/sda"
+      - "chmod -R 777 /"
+
+  # R002: 敏感文件读取
+  sensitive_file_read:
+    enabled: true
+    decision: deny
+    risk_level: high
+    patterns:
+      - "~/.ssh/"
+      - "/etc/shadow"
+      - "/etc/passwd"
+      - ".env"
+      - "aws/credentials"
+      - "id_rsa"
+      - "id_ed25519"
+
+  # R003: 网络外连
+  network_egress:
+    enabled: true
+    decision: deny
+    risk_level: high
+    check_domains: true
+    trigger_commands:
+      - "curl"
+      - "wget"
+      - "requests"
+      - "aiohttp"
+      - "socket"
+      - "urllib"
+
+  # R004: 进程/系统命令
+  process_execution:
+    enabled: true
+    decision: deny
+    risk_level: high
+    patterns:
+      - "subprocess"
+      - "os.system"
+      - "os.popen"
+      - "pty.spawn"
+      - "sudo"
+      - "\\bsu\\b"
+      - "chsh"
+      - "passwd"
+
+  # R005: 依赖安装
+  dependency_installation:
+    enabled: true
+    decision: deny
+    risk_level: high
+    patterns:
+      - "pip install"
+      - "pip3 install"
+      - "npm install"
+      - "npm ci"
+      - "apt install"
+      - "apt-get install"
+      - "brew install"
+      - "gem install"
+      - "cargo install"
+
+  # R006: 资源滥用
+  resource_abuse:
+    enabled: true
+    decision: deny
+    risk_level: medium
+    patterns:
+      - "while True"
+      - "while :"
+      - "fork()"
+      - ":(){ :|:& };:"  # fork bomb
+      - "sleep 86400"
+      - "sleep 999999"
+
+  # R007: 敏感信息泄漏
+  sensitive_info_leak:
+    enabled: true
+    decision: deny
+    risk_level: critical
+    patterns:
+      - "API_KEY"
+      - "api_key"
+      - "API_SECRET"
+      - "access_token"
+      - "secret_key"
+      - "password"
+      - "passwd="
+      - "Authorization: Bearer"
+      - "PRIVATE_KEY"
+      - "-----BEGIN.*PRIVATE KEY-----"

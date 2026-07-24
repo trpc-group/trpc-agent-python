@@ -1,0 +1,30 @@
+{
+  "decision": "DENY",
+  "risk_level": "CRITICAL",
+  "matches": [
+    {
+      "rule_id": "R001",
+      "risk_category": "DANGEROUS_FILE_OPERATION",
+      "risk_level": "CRITICAL",
+      "evidence": "rm -rf /",
+      "line_number": 1,
+      "recommendation": "Remove or replace this destructive file operation.",
+      "masked": false
+    },
+    {
+      "rule_id": "R004",
+      "risk_category": "PROCESS_EXECUTION",
+      "risk_level": "HIGH",
+      "evidence": "os.system('rm -rf /')",
+      "line_number": 3,
+      "recommendation": "Avoid executing system commands directly.",
+      "masked": false
+    }
+  ],
+  "tool_name": "Bash",
+  "script_type": "BASH",
+  "script_summary": "rm -rf / os.system('rm -rf /')  echo 'done'",
+  "scan_duration_ms": 1.23,
+  "timestamp": "2026-07-20T10:00:00+00:00",
+  "policy_version": ""
+}
