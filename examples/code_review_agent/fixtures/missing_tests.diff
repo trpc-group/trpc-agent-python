@@ -1,0 +1,10 @@
+diff --git a/src/payment.py b/src/payment.py
+index 1111111..2222222 100644
+--- a/src/payment.py
++++ b/src/payment.py
+@@ -1,2 +1,5 @@
+ def calculate_total(items):
++    discount = sum(item.get("discount", 0) for item in items)
++    subtotal = sum(item["price"] for item in items)
++    return subtotal - discount
+-    return sum(item["price"] for item in items)

@@ -1,0 +1,9 @@
+diff --git a/src/sandbox_failure.py b/src/sandbox_failure.py
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/src/sandbox_failure.py
+@@ -0,0 +1,3 @@
++def trigger_fixture():
++    status = "sandbox_failure"
++    return status
