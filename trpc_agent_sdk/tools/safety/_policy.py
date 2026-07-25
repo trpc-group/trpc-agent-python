@@ -87,7 +87,7 @@ class PolicyConfig:
                 "HOME",
                 "LANG",
             ],
-            max_timeout_seconds=30,
+            max_timeout_seconds=300,
             max_output_bytes=10 * 1024 * 1024,
             max_file_write_bytes=50 * 1024 * 1024,
             review_shell_pipelines=True,

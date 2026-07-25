@@ -16,6 +16,7 @@ from pydantic import Field
 from trpc_agent_sdk.abc import ToolSetABC
 from trpc_agent_sdk.code_executors import BaseCodeExecutor
 from trpc_agent_sdk.code_executors._types import CodeExecutionInput
+from trpc_agent_sdk.code_executors._types import CodeExecutionResult
 from trpc_agent_sdk.code_executors._types import create_code_execution_result
 from trpc_agent_sdk.context import InvocationContext
 

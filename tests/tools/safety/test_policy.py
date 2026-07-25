@@ -39,7 +39,7 @@ class TestPolicyConfigDefault:
 
     def test_resource_limits(self):
         cfg = PolicyConfig.default()
-        assert cfg.max_timeout_seconds == 30
+        assert cfg.max_timeout_seconds == 300
         assert cfg.max_output_bytes == 10 * 1024 * 1024
         assert cfg.max_file_write_bytes == 50 * 1024 * 1024
 

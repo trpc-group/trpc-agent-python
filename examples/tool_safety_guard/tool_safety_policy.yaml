@@ -70,7 +70,7 @@ env_allowlist:
   - VIRTUAL_ENV
 
 # Resource limits
-max_timeout_seconds: 30
+max_timeout_seconds: 300
 max_output_bytes: 10485760      # 10 MB
 max_file_write_bytes: 52428800  # 50 MB
 

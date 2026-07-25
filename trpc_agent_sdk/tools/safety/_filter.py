@@ -27,7 +27,6 @@ from ._types import Decision
 from ._types import RiskLevel
 from ._types import SafetyReport
 from ._types import ScanTarget
-from ._types import ScriptLanguage
 
 
 class ToolSafetyFilter(BaseFilter):
