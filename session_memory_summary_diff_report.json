@@ -1,0 +1,3457 @@
+{
+  "allowed_diff_rules": [
+    {
+      "path": "$.memory.*",
+      "reason": "Keyword-memory ranking order is backend-specific; entry content and count must still match.",
+      "scope": "order_only"
+    },
+    {
+      "path": "$.recovery_raw[*].mechanism",
+      "reason": "A backend may reject a duplicate transactionally or require compensating cleanup.",
+      "scope": "mechanism_only"
+    }
+  ],
+  "backends": [
+    "inmemory",
+    "sqlite"
+  ],
+  "cases": [
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 2,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Hello, replay harness."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "single-user-1",
+                "invocation_id": "invocation-single-user-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Hello. How can I help?"
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "single-agent-1",
+                "invocation_id": "invocation-single-agent-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "current": null,
+              "revisions": []
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 2,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Hello, replay harness."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "single-user-1",
+                "invocation_id": "invocation-single-user-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Hello. How can I help?"
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "single-agent-1",
+                "invocation_id": "invocation-single-agent-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "current": null,
+              "revisions": []
+            }
+          }
+        }
+      },
+      "case_id": "single_turn",
+      "description": "One user message followed by one assistant response.",
+      "differences": [],
+      "session_id": "session-single",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 6,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "My name is Ada."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "multi-user-1",
+                "invocation_id": "invocation-multi-user-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Nice to meet you, Ada."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "multi-agent-1",
+                "invocation_id": "invocation-multi-agent-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "What is my name?"
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "multi-user-2",
+                "invocation_id": "invocation-multi-user-2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Your name is Ada."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "multi-agent-2",
+                "invocation_id": "invocation-multi-agent-2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Remember that."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "multi-user-3",
+                "invocation_id": "invocation-multi-user-3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "I will remember it."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "multi-agent-3",
+                "invocation_id": "invocation-multi-agent-3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "current": null,
+              "revisions": []
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 6,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "My name is Ada."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "multi-user-1",
+                "invocation_id": "invocation-multi-user-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Nice to meet you, Ada."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "multi-agent-1",
+                "invocation_id": "invocation-multi-agent-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "What is my name?"
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "multi-user-2",
+                "invocation_id": "invocation-multi-user-2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Your name is Ada."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "multi-agent-2",
+                "invocation_id": "invocation-multi-agent-2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Remember that."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "multi-user-3",
+                "invocation_id": "invocation-multi-user-3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "I will remember it."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "multi-agent-3",
+                "invocation_id": "invocation-multi-agent-3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "current": null,
+              "revisions": []
+            }
+          }
+        }
+      },
+      "case_id": "multi_turn",
+      "description": "Three complete user and assistant turns preserve event order.",
+      "differences": [],
+      "session_id": "session-multi",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 4,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "What is the weather in Shenzhen?"
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "tool-user-1",
+                "invocation_id": "invocation-tool-user-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "function_call": {
+                        "args": {
+                          "city": "Shenzhen",
+                          "unit": "celsius"
+                        },
+                        "id": "call-weather-1",
+                        "name": "get_weather"
+                      }
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "tool-call-1",
+                "invocation_id": "invocation-tool-call-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "tool",
+                "content": {
+                  "parts": [
+                    {
+                      "function_response": {
+                        "id": "call-weather-1",
+                        "name": "get_weather",
+                        "response": {
+                          "condition": "sunny",
+                          "temperature": 31
+                        }
+                      }
+                    }
+                  ],
+                  "role": "function"
+                },
+                "id": "tool-response-1",
+                "invocation_id": "invocation-tool-response-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "It is 31 C and sunny in Shenzhen."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "tool-agent-1",
+                "invocation_id": "invocation-tool-agent-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "current": null,
+              "revisions": []
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 4,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "What is the weather in Shenzhen?"
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "tool-user-1",
+                "invocation_id": "invocation-tool-user-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "function_call": {
+                        "args": {
+                          "city": "Shenzhen",
+                          "unit": "celsius"
+                        },
+                        "id": "call-weather-1",
+                        "name": "get_weather"
+                      }
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "tool-call-1",
+                "invocation_id": "invocation-tool-call-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "tool",
+                "content": {
+                  "parts": [
+                    {
+                      "function_response": {
+                        "id": "call-weather-1",
+                        "name": "get_weather",
+                        "response": {
+                          "condition": "sunny",
+                          "temperature": 31
+                        }
+                      }
+                    }
+                  ],
+                  "role": "function"
+                },
+                "id": "tool-response-1",
+                "invocation_id": "invocation-tool-response-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "It is 31 C and sunny in Shenzhen."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "tool-agent-1",
+                "invocation_id": "invocation-tool-agent-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "current": null,
+              "revisions": []
+            }
+          }
+        }
+      },
+      "case_id": "tool_call",
+      "description": "A function call and matching function response round trip through storage.",
+      "differences": [],
+      "session_id": "session-tool",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 2,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {
+                    "counter": 1,
+                    "theme": "dark"
+                  }
+                },
+                "author": "system",
+                "id": "state-update-1",
+                "invocation_id": "invocation-state-update-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {
+                    "app:policy": "v2",
+                    "counter": 2,
+                    "theme": "solarized",
+                    "user:locale": "fr"
+                  }
+                },
+                "author": "system",
+                "id": "state-update-2",
+                "invocation_id": "invocation-state-update-2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {
+              "app:policy": "v2",
+              "counter": 2,
+              "theme": "solarized",
+              "user:locale": "fr"
+            },
+            "summary": {
+              "current": null,
+              "revisions": []
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 2,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {
+                    "counter": 1,
+                    "theme": "dark"
+                  }
+                },
+                "author": "system",
+                "id": "state-update-1",
+                "invocation_id": "invocation-state-update-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {
+                    "app:policy": "v2",
+                    "counter": 2,
+                    "theme": "solarized",
+                    "user:locale": "fr"
+                  }
+                },
+                "author": "system",
+                "id": "state-update-2",
+                "invocation_id": "invocation-state-update-2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {
+              "app:policy": "v2",
+              "counter": 2,
+              "theme": "solarized",
+              "user:locale": "fr"
+            },
+            "summary": {
+              "current": null,
+              "revisions": []
+            }
+          }
+        }
+      },
+      "case_id": "state_overwrite",
+      "description": "Session, user, and app state updates use last-write-wins semantics.",
+      "differences": [],
+      "session_id": "session-state",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [
+        {
+          "allowed": true,
+          "backend": "sqlite",
+          "backend_value": [
+            {
+              "author": "assistant",
+              "content": {
+                "parts": [
+                  {
+                    "text": "I will remember your tea preference."
+                  }
+                ],
+                "role": "model"
+              },
+              "timestamp": "<timestamp>"
+            },
+            {
+              "author": "user",
+              "content": {
+                "parts": [
+                  {
+                    "text": "I prefer green tea without sugar."
+                  }
+                ],
+                "role": "user"
+              },
+              "timestamp": "<timestamp>"
+            }
+          ],
+          "case_id": "memory_write_read",
+          "domain": "memory",
+          "event_index": null,
+          "explanation": "Keyword-memory ranking order is backend-specific; entry content and count must still match.",
+          "path": "$.memory.tea_preference",
+          "reference_backend": "inmemory",
+          "reference_value": [
+            {
+              "author": "user",
+              "content": {
+                "parts": [
+                  {
+                    "text": "I prefer green tea without sugar."
+                  }
+                ],
+                "role": "user"
+              },
+              "timestamp": "<timestamp>"
+            },
+            {
+              "author": "assistant",
+              "content": {
+                "parts": [
+                  {
+                    "text": "I will remember your tea preference."
+                  }
+                ],
+                "role": "model"
+              },
+              "timestamp": "<timestamp>"
+            }
+          ],
+          "session_id": "session-memory",
+          "summary_id": null
+        },
+        {
+          "allowed": true,
+          "backend": "sqlite",
+          "backend_value": [
+            {
+              "author": "assistant",
+              "content": {
+                "parts": [
+                  {
+                    "text": "Your timezone preference is saved."
+                  }
+                ],
+                "role": "model"
+              },
+              "timestamp": "<timestamp>"
+            },
+            {
+              "author": "user",
+              "content": {
+                "parts": [
+                  {
+                    "text": "My timezone is Asia Shanghai."
+                  }
+                ],
+                "role": "user"
+              },
+              "timestamp": "<timestamp>"
+            }
+          ],
+          "case_id": "memory_write_read",
+          "domain": "memory",
+          "event_index": null,
+          "explanation": "Keyword-memory ranking order is backend-specific; entry content and count must still match.",
+          "path": "$.memory.timezone_fact",
+          "reference_backend": "inmemory",
+          "reference_value": [
+            {
+              "author": "user",
+              "content": {
+                "parts": [
+                  {
+                    "text": "My timezone is Asia Shanghai."
+                  }
+                ],
+                "role": "user"
+              },
+              "timestamp": "<timestamp>"
+            },
+            {
+              "author": "assistant",
+              "content": {
+                "parts": [
+                  {
+                    "text": "Your timezone preference is saved."
+                  }
+                ],
+                "role": "model"
+              },
+              "timestamp": "<timestamp>"
+            }
+          ],
+          "session_id": "session-memory",
+          "summary_id": null
+        }
+      ],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 7,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "I prefer green tea without sugar."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "memory-user-1",
+                "invocation_id": "invocation-memory-user-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "I will remember your tea preference."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "memory-agent-1",
+                "invocation_id": "invocation-memory-agent-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "My timezone is Asia Shanghai."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "memory-user-2",
+                "invocation_id": "invocation-memory-user-2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Your timezone preference is saved."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "memory-agent-2",
+                "invocation_id": "invocation-memory-agent-2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {
+              "tea_preference": [
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "text": "I will remember your tea preference."
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                },
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "text": "I prefer green tea without sugar."
+                      }
+                    ],
+                    "role": "user"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ],
+              "timezone_fact": [
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "text": "Your timezone preference is saved."
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                },
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "text": "My timezone is Asia Shanghai."
+                      }
+                    ],
+                    "role": "user"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "current": null,
+              "revisions": []
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 7,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "I prefer green tea without sugar."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "memory-user-1",
+                "invocation_id": "invocation-memory-user-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "I will remember your tea preference."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "memory-agent-1",
+                "invocation_id": "invocation-memory-agent-1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "My timezone is Asia Shanghai."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "memory-user-2",
+                "invocation_id": "invocation-memory-user-2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Your timezone preference is saved."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "memory-agent-2",
+                "invocation_id": "invocation-memory-agent-2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {
+              "tea_preference": [
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "text": "I will remember your tea preference."
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                },
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "text": "I prefer green tea without sugar."
+                      }
+                    ],
+                    "role": "user"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ],
+              "timezone_fact": [
+                {
+                  "author": "assistant",
+                  "content": {
+                    "parts": [
+                      {
+                        "text": "Your timezone preference is saved."
+                      }
+                    ],
+                    "role": "model"
+                  },
+                  "timestamp": "<timestamp>"
+                },
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "text": "My timezone is Asia Shanghai."
+                      }
+                    ],
+                    "role": "user"
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "current": null,
+              "revisions": []
+            }
+          }
+        }
+      },
+      "case_id": "memory_write_read",
+      "description": "Preference and fact memories are stored and retrieved by keyword.",
+      "differences": [],
+      "session_id": "session-memory",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 10,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "the release needs tests, changelog, and security review. lin owns the release."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "custom_metadata": {
+                  "replay_summary": {
+                    "session_id": "session-summary-update",
+                    "summary_id": "summary-update-v2",
+                    "supersedes": "summary-update-v1",
+                    "version": 2
+                  }
+                },
+                "id": "summary-update-v2",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 2,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "The release owner is Lin."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "summary-u4",
+                "invocation_id": "invocation-summary-u4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Lin is the release owner."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "summary-a4",
+                "invocation_id": "invocation-summary-a4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Plan a release checklist."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "summary-u1",
+                "invocation_id": "invocation-summary-u1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Start with tests and changelog."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "summary-a1",
+                "invocation_id": "invocation-summary-a1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Add a security review."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "summary-u2",
+                "invocation_id": "invocation-summary-u2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Security review added."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "summary-a2",
+                "invocation_id": "invocation-summary-a2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "the release checklist includes tests, changelog, and a security review."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "custom_metadata": {
+                  "replay_summary": {
+                    "session_id": "session-summary-update",
+                    "summary_id": "summary-update-v1",
+                    "supersedes": null,
+                    "version": 1
+                  }
+                },
+                "id": "summary-update-v1",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 1,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Keep the latest decisions."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "summary-u3",
+                "invocation_id": "invocation-summary-u3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "The decisions are retained."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "summary-a3",
+                "invocation_id": "invocation-summary-a3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "current": {
+                "anchor_count": 1,
+                "anchor_text": "the release needs tests, changelog, and security review. lin owns the release.",
+                "compressed_event_count": 3,
+                "original_event_count": 5,
+                "session_id": "session-summary-update",
+                "summary_id": "summary-update-v2",
+                "supersedes": "summary-update-v1",
+                "text": "the release needs tests, changelog, and security review. lin owns the release.",
+                "updated_at": "<timestamp>",
+                "version": 2
+              },
+              "revisions": [
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "the release checklist includes tests, changelog, and a security review.",
+                  "compressed_event_count": 3,
+                  "original_event_count": 6,
+                  "session_id": "session-summary-update",
+                  "summary_id": "summary-update-v1",
+                  "supersedes": null,
+                  "text": "the release checklist includes tests, changelog, and a security review.",
+                  "updated_at": "<timestamp>",
+                  "updated_at_order": 1,
+                  "version": 1
+                },
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "the release needs tests, changelog, and security review. lin owns the release.",
+                  "compressed_event_count": 3,
+                  "original_event_count": 5,
+                  "session_id": "session-summary-update",
+                  "summary_id": "summary-update-v2",
+                  "supersedes": "summary-update-v1",
+                  "text": "the release needs tests, changelog, and security review. lin owns the release.",
+                  "updated_at": "<timestamp>",
+                  "updated_at_order": 2,
+                  "version": 2
+                }
+              ]
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 10,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "the release needs tests, changelog, and security review. lin owns the release."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "custom_metadata": {
+                  "replay_summary": {
+                    "session_id": "session-summary-update",
+                    "summary_id": "summary-update-v2",
+                    "supersedes": "summary-update-v1",
+                    "version": 2
+                  }
+                },
+                "id": "summary-update-v2",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 2,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "The release owner is Lin."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "summary-u4",
+                "invocation_id": "invocation-summary-u4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Lin is the release owner."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "summary-a4",
+                "invocation_id": "invocation-summary-a4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Plan a release checklist."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "summary-u1",
+                "invocation_id": "invocation-summary-u1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Start with tests and changelog."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "summary-a1",
+                "invocation_id": "invocation-summary-a1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Add a security review."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "summary-u2",
+                "invocation_id": "invocation-summary-u2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Security review added."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "summary-a2",
+                "invocation_id": "invocation-summary-a2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "the release checklist includes tests, changelog, and a security review."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "custom_metadata": {
+                  "replay_summary": {
+                    "session_id": "session-summary-update",
+                    "summary_id": "summary-update-v1",
+                    "supersedes": null,
+                    "version": 1
+                  }
+                },
+                "id": "summary-update-v1",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 1,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Keep the latest decisions."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "summary-u3",
+                "invocation_id": "invocation-summary-u3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "The decisions are retained."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "summary-a3",
+                "invocation_id": "invocation-summary-a3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "current": {
+                "anchor_count": 1,
+                "anchor_text": "the release needs tests, changelog, and security review. lin owns the release.",
+                "compressed_event_count": 3,
+                "original_event_count": 5,
+                "session_id": "session-summary-update",
+                "summary_id": "summary-update-v2",
+                "supersedes": "summary-update-v1",
+                "text": "the release needs tests, changelog, and security review. lin owns the release.",
+                "updated_at": "<timestamp>",
+                "version": 2
+              },
+              "revisions": [
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "the release checklist includes tests, changelog, and a security review.",
+                  "compressed_event_count": 3,
+                  "original_event_count": 6,
+                  "session_id": "session-summary-update",
+                  "summary_id": "summary-update-v1",
+                  "supersedes": null,
+                  "text": "the release checklist includes tests, changelog, and a security review.",
+                  "updated_at": "<timestamp>",
+                  "updated_at_order": 1,
+                  "version": 1
+                },
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "the release needs tests, changelog, and security review. lin owns the release.",
+                  "compressed_event_count": 3,
+                  "original_event_count": 5,
+                  "session_id": "session-summary-update",
+                  "summary_id": "summary-update-v2",
+                  "supersedes": "summary-update-v1",
+                  "text": "the release needs tests, changelog, and security review. lin owns the release.",
+                  "updated_at": "<timestamp>",
+                  "updated_at_order": 2,
+                  "version": 2
+                }
+              ]
+            }
+          }
+        }
+      },
+      "case_id": "summary_create_update",
+      "description": "A second summary supersedes the first revision without losing ownership metadata.",
+      "differences": [],
+      "session_id": "session-summary-update",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 9,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "project orion targets friday."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "custom_metadata": {
+                  "replay_summary": {
+                    "session_id": "session-summary-truncate",
+                    "summary_id": "summary-truncate-v1",
+                    "supersedes": null,
+                    "version": 1
+                  }
+                },
+                "id": "summary-truncate-v1",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 1,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Keep two recent events."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "truncate-u3",
+                "invocation_id": "invocation-truncate-u3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Two recent events will remain."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "truncate-a3",
+                "invocation_id": "invocation-truncate-a3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Add a deployment rehearsal."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "truncate-u4",
+                "invocation_id": "invocation-truncate-u4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Deployment rehearsal added."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "truncate-a4",
+                "invocation_id": "invocation-truncate-a4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "The project codename is Orion."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "truncate-u1",
+                "invocation_id": "invocation-truncate-u1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Codename Orion noted."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "truncate-a1",
+                "invocation_id": "invocation-truncate-a1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "The target date is Friday."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "truncate-u2",
+                "invocation_id": "invocation-truncate-u2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Friday is the target date."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "truncate-a2",
+                "invocation_id": "invocation-truncate-a2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "current": {
+                "anchor_count": 1,
+                "anchor_text": "project orion targets friday.",
+                "compressed_event_count": 3,
+                "original_event_count": 6,
+                "session_id": "session-summary-truncate",
+                "summary_id": "summary-truncate-v1",
+                "supersedes": null,
+                "text": "project orion targets friday.",
+                "updated_at": "<timestamp>",
+                "version": 1
+              },
+              "revisions": [
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "project orion targets friday.",
+                  "compressed_event_count": 3,
+                  "original_event_count": 6,
+                  "session_id": "session-summary-truncate",
+                  "summary_id": "summary-truncate-v1",
+                  "supersedes": null,
+                  "text": "project orion targets friday.",
+                  "updated_at": "<timestamp>",
+                  "updated_at_order": 1,
+                  "version": 1
+                }
+              ]
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 9,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "project orion targets friday."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "custom_metadata": {
+                  "replay_summary": {
+                    "session_id": "session-summary-truncate",
+                    "summary_id": "summary-truncate-v1",
+                    "supersedes": null,
+                    "version": 1
+                  }
+                },
+                "id": "summary-truncate-v1",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 1,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Keep two recent events."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "truncate-u3",
+                "invocation_id": "invocation-truncate-u3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Two recent events will remain."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "truncate-a3",
+                "invocation_id": "invocation-truncate-a3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Add a deployment rehearsal."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "truncate-u4",
+                "invocation_id": "invocation-truncate-u4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Deployment rehearsal added."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "truncate-a4",
+                "invocation_id": "invocation-truncate-a4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "The project codename is Orion."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "truncate-u1",
+                "invocation_id": "invocation-truncate-u1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Codename Orion noted."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "truncate-a1",
+                "invocation_id": "invocation-truncate-a1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "The target date is Friday."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "truncate-u2",
+                "invocation_id": "invocation-truncate-u2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Friday is the target date."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "truncate-a2",
+                "invocation_id": "invocation-truncate-a2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "current": {
+                "anchor_count": 1,
+                "anchor_text": "project orion targets friday.",
+                "compressed_event_count": 3,
+                "original_event_count": 6,
+                "session_id": "session-summary-truncate",
+                "summary_id": "summary-truncate-v1",
+                "supersedes": null,
+                "text": "project orion targets friday.",
+                "updated_at": "<timestamp>",
+                "version": 1
+              },
+              "revisions": [
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "project orion targets friday.",
+                  "compressed_event_count": 3,
+                  "original_event_count": 6,
+                  "session_id": "session-summary-truncate",
+                  "summary_id": "summary-truncate-v1",
+                  "supersedes": null,
+                  "text": "project orion targets friday.",
+                  "updated_at": "<timestamp>",
+                  "updated_at_order": 1,
+                  "version": 1
+                }
+              ]
+            }
+          }
+        }
+      },
+      "case_id": "summary_event_truncation",
+      "description": "A summary anchor, retained events, and later events reconstruct compressed context.",
+      "differences": [],
+      "session_id": "session-summary-truncate",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 5,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user chose tea. next: brew."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "custom_metadata": {
+                  "replay_summary": {
+                    "session_id": "session-summary-semantic",
+                    "summary_id": "summary-semantic-v1",
+                    "supersedes": null,
+                    "version": 1
+                  }
+                },
+                "id": "summary-semantic-v1",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 1,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Brew it next."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "semantic-u2",
+                "invocation_id": "invocation-semantic-u2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Brewing is next."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "semantic-a2",
+                "invocation_id": "invocation-semantic-a2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "I chose tea."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "semantic-u1",
+                "invocation_id": "invocation-semantic-u1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Tea choice recorded."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "semantic-a1",
+                "invocation_id": "invocation-semantic-a1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "current": {
+                "anchor_count": 1,
+                "anchor_text": "user chose tea. next: brew.",
+                "compressed_event_count": 3,
+                "original_event_count": 4,
+                "session_id": "session-summary-semantic",
+                "summary_id": "summary-semantic-v1",
+                "supersedes": null,
+                "text": "user chose tea. next: brew.",
+                "updated_at": "<timestamp>",
+                "version": 1
+              },
+              "revisions": [
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "user chose tea. next: brew.",
+                  "compressed_event_count": 3,
+                  "original_event_count": 4,
+                  "session_id": "session-summary-semantic",
+                  "summary_id": "summary-semantic-v1",
+                  "supersedes": null,
+                  "text": "user chose tea. next: brew.",
+                  "updated_at": "<timestamp>",
+                  "updated_at_order": 1,
+                  "version": 1
+                }
+              ]
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 5,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user chose tea. next: brew."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "custom_metadata": {
+                  "replay_summary": {
+                    "session_id": "session-summary-semantic",
+                    "summary_id": "summary-semantic-v1",
+                    "supersedes": null,
+                    "version": 1
+                  }
+                },
+                "id": "summary-semantic-v1",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 1,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Brew it next."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "semantic-u2",
+                "invocation_id": "invocation-semantic-u2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Brewing is next."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "semantic-a2",
+                "invocation_id": "invocation-semantic-a2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "I chose tea."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "semantic-u1",
+                "invocation_id": "invocation-semantic-u1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Tea choice recorded."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "semantic-a1",
+                "invocation_id": "invocation-semantic-a1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "current": {
+                "anchor_count": 1,
+                "anchor_text": "user chose tea. next: brew.",
+                "compressed_event_count": 3,
+                "original_event_count": 4,
+                "session_id": "session-summary-semantic",
+                "summary_id": "summary-semantic-v1",
+                "supersedes": null,
+                "text": "user chose tea. next: brew.",
+                "updated_at": "<timestamp>",
+                "version": 1
+              },
+              "revisions": [
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "user chose tea. next: brew.",
+                  "compressed_event_count": 3,
+                  "original_event_count": 4,
+                  "session_id": "session-summary-semantic",
+                  "summary_id": "summary-semantic-v1",
+                  "supersedes": null,
+                  "text": "user chose tea. next: brew.",
+                  "updated_at": "<timestamp>",
+                  "updated_at_order": 1,
+                  "version": 1
+                }
+              ]
+            }
+          }
+        }
+      },
+      "case_id": "summary_semantic_normalization",
+      "description": "Summary comparison normalizes Unicode case and whitespace but preserves metadata.",
+      "differences": [],
+      "session_id": "session-summary-semantic",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [
+        {
+          "allowed": true,
+          "backend": "sqlite",
+          "backend_value": [
+            {
+              "append_error": "IntegrityError",
+              "kind": "duplicate_append",
+              "mechanism": "transactional_rejection",
+              "observed_duplicate_count": 1
+            }
+          ],
+          "case_id": "duplicate_write_recovery",
+          "domain": "recovery",
+          "event_index": null,
+          "explanation": "A backend may reject a duplicate transactionally or require compensating cleanup.",
+          "path": "$.recovery_raw",
+          "reference_backend": "inmemory",
+          "reference_value": [
+            {
+              "append_error": null,
+              "kind": "duplicate_append",
+              "mechanism": "compensating_deduplication",
+              "observed_duplicate_count": 2
+            }
+          ],
+          "session_id": "session-duplicate",
+          "summary_id": null
+        }
+      ],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 3,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Run once."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "duplicate-u1",
+                "invocation_id": "invocation-duplicate-u1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Completed once."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "duplicate-a1",
+                "invocation_id": "invocation-duplicate-a1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [
+              {
+                "final_event_count": 1,
+                "kind": "duplicate_append",
+                "recovered": true
+              }
+            ],
+            "state": {},
+            "summary": {
+              "current": null,
+              "revisions": []
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 3,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Run once."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "duplicate-u1",
+                "invocation_id": "invocation-duplicate-u1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Completed once."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "duplicate-a1",
+                "invocation_id": "invocation-duplicate-a1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [
+              {
+                "final_event_count": 1,
+                "kind": "duplicate_append",
+                "recovered": true
+              }
+            ],
+            "state": {},
+            "summary": {
+              "current": null,
+              "revisions": []
+            }
+          }
+        }
+      },
+      "case_id": "duplicate_write_recovery",
+      "description": "A retried event write is detected and recovered to one logical event.",
+      "differences": [],
+      "session_id": "session-duplicate",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 10,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "migration starts monday and requires backups."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "custom_metadata": {
+                  "replay_summary": {
+                    "session_id": "session-failed-summary",
+                    "summary_id": "summary-failure-v1",
+                    "supersedes": null,
+                    "version": 1
+                  }
+                },
+                "id": "summary-failure-v1",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 1,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Keep the newest turn."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "failure-u3",
+                "invocation_id": "invocation-failure-u3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Newest turn retained."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "failure-a3",
+                "invocation_id": "invocation-failure-a3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Notify operations."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "failure-u4",
+                "invocation_id": "invocation-failure-u4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Operations will be notified."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "failure-a4",
+                "invocation_id": "invocation-failure-a4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "The migration starts Monday."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "failure-u1",
+                "invocation_id": "invocation-failure-u1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Monday start recorded."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "failure-a1",
+                "invocation_id": "invocation-failure-a1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Backups are mandatory."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "failure-u2",
+                "invocation_id": "invocation-failure-u2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Backups are mandatory."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "failure-a2",
+                "invocation_id": "invocation-failure-a2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "memory": {},
+            "operation_audit": [
+              {
+                "final_event_count": 5,
+                "kind": "summary_update",
+                "recovered": true
+              }
+            ],
+            "state": {},
+            "summary": {
+              "current": {
+                "anchor_count": 1,
+                "anchor_text": "migration starts monday and requires backups.",
+                "compressed_event_count": 3,
+                "original_event_count": 6,
+                "session_id": "session-failed-summary",
+                "summary_id": "summary-failure-v1",
+                "supersedes": null,
+                "text": "migration starts monday and requires backups.",
+                "updated_at": "<timestamp>",
+                "version": 1
+              },
+              "revisions": [
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "migration starts monday and requires backups.",
+                  "compressed_event_count": 3,
+                  "original_event_count": 6,
+                  "session_id": "session-failed-summary",
+                  "summary_id": "summary-failure-v1",
+                  "supersedes": null,
+                  "text": "migration starts monday and requires backups.",
+                  "updated_at": "<timestamp>",
+                  "updated_at_order": 1,
+                  "version": 1
+                }
+              ]
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 10,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "migration starts monday and requires backups."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "custom_metadata": {
+                  "replay_summary": {
+                    "session_id": "session-failed-summary",
+                    "summary_id": "summary-failure-v1",
+                    "supersedes": null,
+                    "version": 1
+                  }
+                },
+                "id": "summary-failure-v1",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 1,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Keep the newest turn."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "failure-u3",
+                "invocation_id": "invocation-failure-u3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Newest turn retained."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "failure-a3",
+                "invocation_id": "invocation-failure-a3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Notify operations."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "failure-u4",
+                "invocation_id": "invocation-failure-u4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Operations will be notified."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "failure-a4",
+                "invocation_id": "invocation-failure-a4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "The migration starts Monday."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "failure-u1",
+                "invocation_id": "invocation-failure-u1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Monday start recorded."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "failure-a1",
+                "invocation_id": "invocation-failure-a1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Backups are mandatory."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "failure-u2",
+                "invocation_id": "invocation-failure-u2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Backups are mandatory."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "failure-a2",
+                "invocation_id": "invocation-failure-a2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "memory": {},
+            "operation_audit": [
+              {
+                "final_event_count": 5,
+                "kind": "summary_update",
+                "recovered": true
+              }
+            ],
+            "state": {},
+            "summary": {
+              "current": {
+                "anchor_count": 1,
+                "anchor_text": "migration starts monday and requires backups.",
+                "compressed_event_count": 3,
+                "original_event_count": 6,
+                "session_id": "session-failed-summary",
+                "summary_id": "summary-failure-v1",
+                "supersedes": null,
+                "text": "migration starts monday and requires backups.",
+                "updated_at": "<timestamp>",
+                "version": 1
+              },
+              "revisions": [
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "migration starts monday and requires backups.",
+                  "compressed_event_count": 3,
+                  "original_event_count": 6,
+                  "session_id": "session-failed-summary",
+                  "summary_id": "summary-failure-v1",
+                  "supersedes": null,
+                  "text": "migration starts monday and requires backups.",
+                  "updated_at": "<timestamp>",
+                  "updated_at_order": 1,
+                  "version": 1
+                }
+              ]
+            }
+          }
+        }
+      },
+      "case_id": "failed_summary_recovery",
+      "description": "A failure after summary replacement restores events, state, and the prior summary revision.",
+      "differences": [],
+      "session_id": "session-failed-summary",
+      "status": "passed"
+    }
+  ],
+  "generated_at": "2026-07-25T16:36:37.899330+00:00",
+  "mode": "lightweight-persistent",
+  "normalization_rules": [
+    {
+      "path": "$.events[*].timestamp",
+      "reason": "Wall-clock timestamps are non-business metadata.",
+      "strategy": "replace_with_<timestamp>"
+    },
+    {
+      "path": "$.events[*].id",
+      "reason": "Backends and summary generation may allocate different physical IDs.",
+      "strategy": "logical_replay_id_or_stable_index"
+    },
+    {
+      "path": "$.summary.*.text",
+      "reason": "Summary content is compared semantically for formatting-only differences.",
+      "strategy": "unicode_nfkc_casefold_and_whitespace_collapse"
+    },
+    {
+      "path": "$.memory.*",
+      "reason": "MemoryService does not define result ordering for equal keyword matches.",
+      "strategy": "sort_by_normalized_content_author"
+    },
+    {
+      "path": "$.*",
+      "reason": "Serialized object key order is not business data.",
+      "strategy": "structural_json_comparison"
+    }
+  ],
+  "reference_backend": "inmemory",
+  "report_sha256": "a374ad6a82dfce94852ccc588ed064dec1a0af0c89bbbcfdde5fba4954760c20",
+  "schema_version": 1,
+  "summary": {
+    "allowed_diff_count": 3,
+    "backend_count": 2,
+    "case_count": 10,
+    "elapsed_seconds": 0.520872,
+    "invariant_failure_count": 0,
+    "passed_case_count": 10,
+    "unexpected_diff_count": 0
+  }
+}

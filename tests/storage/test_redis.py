@@ -496,6 +496,49 @@ class TestRedisStorage:
         mock_conn.set.assert_called_once_with('key', 'value')
 
     @pytest.mark.asyncio
+    async def test_execute_hset_uses_mapping_and_preserves_value_types(self, async_storage):
+        """Test multi-field hash writes use redis-py's mapping API."""
+        mock_conn = AsyncMock()
+        mock_conn.hset = AsyncMock(return_value=2)
+        command = RedisCommand(
+            method='hset',
+            args=('state', 'theme', 'dark', 'counter', 2),
+            expire=RedisExpire(ttl=Ttl(enable=False)),
+        )
+
+        result = await async_storage.execute_command(mock_conn, command)
+
+        assert result == 2
+        mock_conn.hset.assert_called_once_with(
+            'state',
+            mapping={
+                'theme': '"dark"',
+                'counter': '2',
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_execute_hgetall_normalizes_bytes_and_json_values(self, async_storage):
+        """Test real Redis hash responses become typed string-keyed state."""
+        mock_conn = AsyncMock()
+        mock_conn.hgetall = AsyncMock(return_value={
+            b'theme': b'"dark"',
+            b'counter': b'2',
+            b'enabled': b'true',
+        })
+
+        result = await async_storage.execute_command(
+            mock_conn,
+            RedisCommand(method='hgetall', args=('state', )),
+        )
+
+        assert result == {
+            'theme': 'dark',
+            'counter': 2,
+            'enabled': True,
+        }
+
+    @pytest.mark.asyncio
     async def test_execute_command_without_method(self, async_storage):
         """Test executing command without existing method."""
         mock_conn = AsyncMock()

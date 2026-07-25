@@ -134,21 +134,40 @@ class RedisStorage(BaseStorage):
             return str(value)
         return json.dumps(value, default=str)
 
-    def _deserialize_value(self, value: Optional[bytes]) -> Any:
-        """Deserialize value from Redis bytes."""
+    def _deserialize_value(self, value: Any) -> Any:
+        """Deserialize a value returned as Redis bytes or decoded text."""
         if value is None:
             return None
 
-        try:
-            value_str = value.decode('utf-8')
-            # Try to parse as JSON first
+        if isinstance(value, bytes):
             try:
-                return json.loads(value_str)
-            except json.JSONDecodeError:
-                # If not JSON, return as string
-                return value_str
-        except UnicodeDecodeError:
+                value_str = value.decode('utf-8')
+            except UnicodeDecodeError:
+                return value
+        elif isinstance(value, str):
+            value_str = value
+        else:
             return value
+
+        try:
+            return json.loads(value_str)
+        except json.JSONDecodeError:
+            return value_str
+
+    @staticmethod
+    def _decode_hash_key(value: Any) -> Any:
+        """Decode a Redis hash key without changing its string semantics."""
+        if isinstance(value, bytes):
+            try:
+                return value.decode('utf-8')
+            except UnicodeDecodeError:
+                return value
+        return value
+
+    @staticmethod
+    def _serialize_hash_value(value: Any) -> str:
+        """Serialize hash values as JSON so state types survive round trips."""
+        return json.dumps(value, ensure_ascii=False, default=str)
 
     @override
     async def add(self, conn: RedisSession, data: RedisCommand) -> None:
@@ -266,12 +285,27 @@ class RedisStorage(BaseStorage):
         lower_method = command.method.lower()
         upper_method = command.method.upper()
         method = getattr(conn, lower_method, None)
+        args = command.args
+        kwargs = dict(command.kwargs)
+
+        # redis-py accepts one field/value pair positionally. Multiple pairs
+        # must use ``mapping``; JSON encoding also preserves state value types.
+        if lower_method == 'hset' and len(args) >= 3 and len(args[1:]) % 2 == 0 and 'mapping' not in kwargs:
+            mapping = {
+                self._decode_hash_key(args[index]): self._serialize_hash_value(args[index + 1])
+                for index in range(1, len(args), 2)
+            }
+            args = (args[0], )
+            kwargs['mapping'] = mapping
+
         if method:
-            ret = method(*command.args, **command.kwargs)
+            ret = method(*args, **kwargs)
         else:
-            ret = conn.execute_command(upper_method, *command.args, **command.kwargs)
+            ret = conn.execute_command(upper_method, *args, **kwargs)
         if asyncio.iscoroutine(ret):
             ret = await ret
+        if lower_method == 'hgetall' and isinstance(ret, dict):
+            ret = {self._decode_hash_key(key): self._deserialize_value(value) for key, value in ret.items()}
         if lower_method in EXPIRE_METHOD and command.args:
             if not command.expire.key:
                 command.expire.key = command.args[0]

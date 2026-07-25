@@ -141,7 +141,7 @@ class RedisClusterStorage(RedisStorage):
 
         result = await super().execute_command(conn, command)
         if lower_method == "hgetall" and isinstance(result, dict):
-            return {self._decode_text(k): self._decode_text(v) for k, v in result.items()}
+            return {self._decode_text(k): self._deserialize_value(v) for k, v in result.items()}
         return result
 
     async def close(self) -> None:

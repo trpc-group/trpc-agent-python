@@ -38,7 +38,11 @@ class _FakeClusterClient:
         return [f'{key}-event']
 
     async def hgetall(self, key: str):
-        return {b"field": b"value"}
+        return {
+            b"field": b"value",
+            b"counter": b"2",
+            b"enabled": b"true",
+        }
 
     async def close(self):
         self.closed = True
@@ -72,7 +76,11 @@ class TestRedisClusterStorage:
 
         result = await storage.execute_command(client, RedisCommand(method="hgetall", args=("state", )))
 
-        assert result == {"field": "value"}
+        assert result == {
+            "field": "value",
+            "counter": 2,
+            "enabled": True,
+        }
 
     async def test_async_client_is_created_from_seed_url(self):
         storage = RedisClusterStorage(redis_url="redis://seed:6379/0", is_async=True, max_connections=20)
