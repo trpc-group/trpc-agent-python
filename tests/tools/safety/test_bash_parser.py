@@ -168,6 +168,21 @@ class TestPipelineQuoteFalsePositive:
         assert "R003_SHELL_PIPE_EXECUTION" not in rule_ids
 
 
+class TestSensitiveSuffixDetection:
+
+    def test_cat_pem_detected(self, parser):
+        """cat server.pem → detected via suffix match."""
+        findings = parser.parse("cat server.pem")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R001_CREDENTIAL_FILE_ACCESS" in rule_ids
+
+    def test_cat_key_detected(self, parser):
+        """cat id_rsa.key → detected via suffix match."""
+        findings = parser.parse("cat /etc/ssl/private/host.key")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R001_CREDENTIAL_FILE_ACCESS" in rule_ids
+
+
 class TestBashParserSecretExfiltration:
 
     def test_echo_token(self, parser):

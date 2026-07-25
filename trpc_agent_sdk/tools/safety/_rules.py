@@ -32,11 +32,11 @@ SENSITIVE_PATHS = [
     "credential",
     "secrets",
     "secret",
-    "*.pem",
-    "*.key",
     "token",
     "password",
 ]
+
+_SENSITIVE_SUFFIXES = {".pem", ".key", ".crt", ".cer", ".p12", ".pfx"}
 
 # ---------------------------------------------------------------------------
 # Sensitive environment variable name patterns

@@ -1,0 +1,1 @@
+open('cert.key', 'w')

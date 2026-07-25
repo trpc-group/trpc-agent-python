@@ -21,6 +21,7 @@ from ._rules import (
     PYTHON_RESOURCE_PATTERNS,
     PYTHON_SYSTEM_CALLS,
     SENSITIVE_PATHS,
+    _SENSITIVE_SUFFIXES,
     sanitize_text,
 )
 from ._types import RiskLevel
@@ -236,7 +237,7 @@ class _PythonVisitor(ast.NodeVisitor):
 
     def _check_sensitive_path(self, text: str, lineno: int) -> None:
         for sensitive in SENSITIVE_PATHS:
-            if sensitive in text:
+            if sensitive in text and not sensitive.startswith("*"):
                 self.findings.append(
                     SafetyFinding(
                         rule_id="R001_CREDENTIAL_FILE_ACCESS",
@@ -246,6 +247,20 @@ class _PythonVisitor(ast.NodeVisitor):
                         evidence=sanitize_text(text, self._secret_patterns),
                         line=lineno,
                         recommendation="Avoid accessing sensitive file paths.",
+                    ))
+                return
+        # Check for sensitive file suffixes (e.g. open('server.pem'))
+        for suffix in _SENSITIVE_SUFFIXES:
+            if text.endswith(suffix):
+                self.findings.append(
+                    SafetyFinding(
+                        rule_id="R001_CREDENTIAL_FILE_ACCESS",
+                        rule_name="Sensitive File Access",
+                        risk_type=RiskType.DANGEROUS_FILE_OPERATION,
+                        risk_level=RiskLevel.HIGH,
+                        evidence=sanitize_text(text, self._secret_patterns),
+                        line=lineno,
+                        recommendation="Avoid accessing sensitive key/certificate files.",
                     ))
                 return
 
@@ -363,14 +378,10 @@ class PythonParser:
                             continue
                     except ValueError:
                         pass
-                # Gate large file write on max_file_write_bytes threshold
+                # R005_LARGE_FILE_WRITE: any open() in write/append mode is flagged
+                # (static analysis cannot determine write size from the mode string)
                 if rule_id == "R005_LARGE_FILE_WRITE":
-                    try:
-                        write_bytes = int(match.group(1))
-                        if write_bytes <= self._policy.max_file_write_bytes:
-                            continue
-                    except (ValueError, IndexError):
-                        pass
+                    level = RiskLevel.MEDIUM
                 findings.append(
                     SafetyFinding(
                         rule_id=rule_id,

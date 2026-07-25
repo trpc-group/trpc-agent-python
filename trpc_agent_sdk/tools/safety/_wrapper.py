@@ -51,11 +51,16 @@ class SafeCodeExecutor(BaseCodeExecutor):
     audit_path: Optional[str] = Field(default=None, description="Audit log JSONL path.")
     block_on_review: bool = Field(default=False, description="If True, NEEDS_HUMAN_REVIEW also blocks.")
 
+    def __init__(self, **data):
+        super().__init__(**data)
+        policy = self.scanner_policy or PolicyConfig.default()
+        self._scanner = SafetyScanner(policy)
+        self._audit = AuditLogger(self.audit_path) if self.audit_path else None
+
     async def execute_code(self, invocation_context: InvocationContext,
                            code_execution_input: CodeExecutionInput) -> CodeExecutionResult:
-        policy = self.scanner_policy or PolicyConfig.default()
-        scanner = SafetyScanner(policy)
-        audit = AuditLogger(self.audit_path) if self.audit_path else None
+        scanner = self._scanner
+        audit = self._audit
         all_findings: List[SafetyFinding] = []
 
         for block in code_execution_input.code_blocks:

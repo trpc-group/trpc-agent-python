@@ -21,6 +21,7 @@ from ._rules import (
     BASH_SYSTEM_PATTERNS,
     PYTHON_INSTALL_PATTERNS,
     SENSITIVE_PATHS,
+    _SENSITIVE_SUFFIXES,
     sanitize_text,
 )
 from ._types import RiskLevel
@@ -89,6 +90,22 @@ class BashParser:
                         recommendation="Review access to sensitive file paths.",
                     ))
                 return findings
+        # Check for sensitive file suffixes (e.g. cat server.pem)
+        for token in line.split():
+            base = token.rstrip(";|&\"'")
+            for suffix in _SENSITIVE_SUFFIXES:
+                if base.endswith(suffix):
+                    findings.append(
+                        SafetyFinding(
+                            rule_id="R001_CREDENTIAL_FILE_ACCESS",
+                            rule_name="Sensitive File Access",
+                            risk_type=RiskType.DANGEROUS_FILE_OPERATION,
+                            risk_level=RiskLevel.HIGH,
+                            evidence=sanitize_text(line, self._policy.secret_patterns),
+                            line=line_num,
+                            recommendation="Review access to sensitive key/certificate files.",
+                        ))
+                    return findings
         return findings
 
     def _check_network_egress(self, line: str, line_num: int) -> List[SafetyFinding]:

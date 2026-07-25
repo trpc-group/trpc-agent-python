@@ -158,3 +158,16 @@ class TestRawDottedNameCoverage:
         findings = parser.parse("foo().bar()")
         # Should not crash; foo().bar() is safe
         assert isinstance(findings, list)
+
+    def test_open_pem_detected(self, parser):
+        """open('server.pem') → detected via suffix match."""
+        findings = parser.parse("open('server.pem')")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R001_CREDENTIAL_FILE_ACCESS" in rule_ids
+
+    def test_open_key_write_detected(self, parser):
+        """open('cert.key', 'w') → detected (suffix + write)."""
+        findings = parser.parse("open('cert.key', 'w')")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R001_CREDENTIAL_FILE_ACCESS" in rule_ids
+        assert "R005_LARGE_FILE_WRITE" in rule_ids

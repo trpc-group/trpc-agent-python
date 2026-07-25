@@ -51,6 +51,8 @@ EXPECTED = {
     "22": "deny",                     # xargs rm
     "23": "deny",                     # fork bomb
     "24": "deny",                     # __builtins__.eval
+    "25": "deny",                     # cat server.pem
+    "26": "deny",                     # open('cert.key', 'w')
 }
 
 
