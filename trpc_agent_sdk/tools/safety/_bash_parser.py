@@ -249,9 +249,13 @@ class BashParser:
 
         base_cmd = tokens[0]
 
-        # Check denied commands
+        # Check denied commands via token-prefix match (not startswith)
         for denied in self._policy.denied_commands:
-            if script.strip().startswith(denied):
+            try:
+                denied_tokens = shlex.split(denied)
+            except Exception:
+                denied_tokens = denied.split()
+            if tokens[:len(denied_tokens)] == denied_tokens:
                 findings.append(
                     SafetyFinding(
                         rule_id="R003_SYSTEM_COMMAND",
@@ -263,9 +267,13 @@ class BashParser:
                     ))
                 return findings
 
-        # Check if command is in review list
+        # Check if command is in review list via token-prefix match
         for review_cmd in self._policy.review_commands:
-            if script.strip().startswith(review_cmd):
+            try:
+                review_tokens = shlex.split(review_cmd)
+            except Exception:
+                review_tokens = review_cmd.split()
+            if tokens[:len(review_tokens)] == review_tokens:
                 findings.append(
                     SafetyFinding(
                         rule_id="R003_SYSTEM_COMMAND",

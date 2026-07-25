@@ -79,8 +79,7 @@ class SafeCodeExecutor(BaseCodeExecutor):
 
         if should_block:
             return create_code_execution_result(
-                stderr=f"Code execution blocked by safety guard: {combined_decision.value}",
-            )
+                stderr=f"Code execution blocked by safety guard: {combined_decision.value}", )
 
         return await self.inner_executor.execute_code(invocation_context, code_execution_input)
 

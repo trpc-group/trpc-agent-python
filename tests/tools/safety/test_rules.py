@@ -44,3 +44,8 @@ class TestSanitizeText:
 
     def test_no_panic_on_empty(self):
         assert sanitize_text("") == ""
+
+    def test_invalid_extra_pattern_silently_ignored(self):
+        """Invalid regex in extra_patterns is silently skipped (re.error)."""
+        result = sanitize_text("hello world", extra_patterns=[r"[invalid"])
+        assert result == "hello world"

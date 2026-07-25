@@ -122,3 +122,27 @@ class TestPythonParserRegexFallback:
         has_parse_failure = any(f.rule_id == "R003_SHELL_PIPE_EXECUTION" and f.metadata.get("parse_failed")
                                 for f in findings)
         assert len(findings) >= 1 or has_parse_failure
+
+
+class TestGetattrEvasionCoverage:
+
+    def test_getattr_builtins_popen(self, parser):
+        """getattr(__builtins__, 'popen') → detected"""
+        findings = parser.parse("getattr(__builtins__, 'popen')('ls')")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R003_DYNAMIC_CODE_EXECUTION" in rule_ids
+
+    def test_getattr_builtins_system(self, parser):
+        """getattr(__builtins__, 'system') → detected"""
+        findings = parser.parse("getattr(__builtins__, 'system')('whoami')")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R003_DYNAMIC_CODE_EXECUTION" in rule_ids
+
+
+class TestRawDottedNameCoverage:
+
+    def test_call_on_expression_result(self, parser):
+        """Call on unresolved expression → <expr> path in _raw_dotted_name"""
+        findings = parser.parse("foo().bar()")
+        # Should not crash; foo().bar() is safe
+        assert isinstance(findings, list)

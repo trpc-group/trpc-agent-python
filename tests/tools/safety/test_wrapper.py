@@ -166,3 +166,23 @@ class TestSafetyWrappedToolSet:
 
         asyncio.run(wrapped.close())
         inner.close.assert_called_once()
+
+    def test_double_get_tools_no_duplicate_filters(self):
+        """Calling get_tools twice does not accumulate duplicate filters."""
+        from unittest.mock import AsyncMock
+        from trpc_agent_sdk.tools.safety._wrapper import SafetyWrappedToolSet
+
+        inner = MagicMock()
+        inner.name = "test_ts"
+        mock_tool = MagicMock()
+        mock_tool.filters = []
+        inner.get_tools = AsyncMock(return_value=[mock_tool])
+
+        wrapped = SafetyWrappedToolSet(inner=inner)
+        tools1 = asyncio.run(wrapped.get_tools())
+        tools2 = asyncio.run(wrapped.get_tools())
+
+        assert len(tools1) == 1
+        assert len(tools2) == 1
+        # Only one filter instance after two calls
+        assert len(mock_tool.filters) == 1

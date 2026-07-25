@@ -138,6 +138,30 @@ class TestDeduplicateFindings:
         assert len(result) == 2  # f1 and f3 (f2 deduped)
 
 
+class TestEnvAllowlistCoverage:
+
+    def test_env_allowlist_excludes_key(self, scanner):
+        """Sensitive key in env_allowlist is not flagged."""
+        policy = PolicyConfig.from_dict({
+            "env_allowlist": ["AWS_SECRET_ACCESS_KEY"],
+        })
+        scanner2 = SafetyScanner(policy)
+        env = {"AWS_SECRET_ACCESS_KEY": "xxx", "PATH": "/usr/bin"}
+        assert scanner2._is_env_contains_sensitive_keys(env) is False
+
+    def test_max_output_bytes_exceeded(self, scanner):
+        """max_output_bytes exceeding policy limit triggers finding."""
+        req = ScanRequest(
+            script="echo hi",
+            language=ScriptLanguage.BASH,
+            tool_name="t",
+            tool_metadata={"max_output_bytes": 999_999_999},
+        )
+        findings = scanner._scan_context_safety(req)
+        rule_ids = {f.rule_id for f in findings}
+        assert "R005_RESOURCE_ABUSE" in rule_ids
+
+
 class TestGenerateSummary:
 
     def test_allow_summary(self):

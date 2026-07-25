@@ -114,6 +114,28 @@ class TestBashParserResourceAbuse:
         assert "R005_LONG_RUNNING_SLEEP" not in rule_ids
 
 
+class TestBashParserCoverage:
+
+    def test_until_loop_detected(self, parser):
+        """Bash 'until' loop is detected as infinite loop."""
+        findings = parser.parse("until false; do echo loop; done")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R005_INFINITE_LOOP" in rule_ids
+
+    def test_review_commands_triggered(self):
+        """Command matching review_commands triggers MEDIUM finding."""
+        from trpc_agent_sdk.tools.safety import PolicyConfig, BashParser
+        policy = PolicyConfig.from_dict({
+            "review_commands": ["pip install"],
+            "allowed_commands": [],
+        })
+        parser = BashParser(policy)
+        findings = parser.parse("pip install requests")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R003_SYSTEM_COMMAND" in rule_ids
+        assert any(f.risk_level.value == "medium" and "Requires Review" in f.rule_name for f in findings)
+
+
 class TestBashParserSecretExfiltration:
 
     def test_echo_token(self, parser):

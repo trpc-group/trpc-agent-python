@@ -72,8 +72,8 @@ class ToolSafetyFilter(BaseFilter):
                 blocked=True,
                 sanitized=False,
                 duration_ms=0,
-                language=ScriptLanguage.BASH,
-                target=ScanTarget.TOOL,
+                language=scan_req.language,
+                target=scan_req.target,
                 summary="Safety scanner error — execution blocked.",
             )
 
@@ -95,13 +95,17 @@ class ToolSafetyFilter(BaseFilter):
             }
             rsp.is_continue = False
 
+
 def add_tool_safety_filter(tools: List[Any],
                            policy: Optional[PolicyConfig] = None,
                            audit_path: Optional[str] = None,
                            block_on_review: bool = False) -> None:
     """Attach a fresh ToolSafetyFilter instance to each tool.
 
+    Existing ToolSafetyFilter instances are removed first to prevent
+    duplicate filters when called repeatedly (e.g. from SafetyWrappedToolSet).
     Each tool gets its own filter instance to avoid state leakage.
     """
     for tool in tools:
+        tool.filters = [f for f in tool.filters if not isinstance(f, ToolSafetyFilter)]
         tool.filters.append(ToolSafetyFilter(policy=policy, audit_path=audit_path, block_on_review=block_on_review))

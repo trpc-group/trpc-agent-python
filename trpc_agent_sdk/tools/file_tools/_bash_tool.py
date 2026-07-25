@@ -175,6 +175,11 @@ class BashTool(BaseTool):
                 from trpc_agent_sdk.tools.safety import ScanRequest
                 from trpc_agent_sdk.tools.safety import ScriptLanguage
                 from trpc_agent_sdk.tools.safety import set_safety_telemetry
+                # Only check timeout if caller explicitly passed one (default 300
+                # is the BashTool default, not a user-requested value).
+                metadata = {}
+                if "timeout" in args:
+                    metadata["timeout"] = timeout
                 report = self._safety_scanner.scan(
                     ScanRequest(
                         script=command,
@@ -182,7 +187,7 @@ class BashTool(BaseTool):
                         tool_name=self.name,
                         cwd=execution_dir,
                         env=os.environ.copy(),
-                        tool_metadata={"timeout": timeout},
+                        tool_metadata=metadata,
                     ))
                 should_block = (report.decision == Decision.DENY
                                 or (self._block_on_review and report.decision == Decision.NEEDS_HUMAN_REVIEW))

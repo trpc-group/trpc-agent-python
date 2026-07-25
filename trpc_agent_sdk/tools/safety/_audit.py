@@ -11,6 +11,7 @@ Writes JSON-lines audit events to a configurable file path.
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import asdict
 from dataclasses import dataclass
 from dataclasses import field
@@ -52,6 +53,7 @@ class AuditLogger:
 
     def __init__(self, path: str) -> None:
         self._path = Path(path)
+        self._lock = threading.Lock()
 
     @classmethod
     def from_report(cls, report: SafetyReport) -> AuditEvent:
@@ -74,9 +76,12 @@ class AuditLogger:
         """Create an audit event from a report and append it as a JSON line.
 
         Creates parent directories if they do not exist.
+        Thread-safe: uses an instance-level lock to prevent line interleaving.
         """
         event = self.from_report(report)
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self._path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(asdict(event), ensure_ascii=False, default=str) + "\n")
+        with self._lock:
+            with open(self._path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(asdict(event), ensure_ascii=False, default=str) + "\n")
+                f.flush()
         return event

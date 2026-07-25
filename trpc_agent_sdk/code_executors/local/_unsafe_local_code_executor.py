@@ -111,8 +111,7 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
                 try:
                     blocked_report = self._scan_code_block(block)
                     if blocked_report:
-                        error_parts.append(
-                            f"Execution block {i} blocked by safety guard: {blocked_report.summary}")
+                        error_parts.append(f"Execution block {i} blocked by safety guard: {blocked_report.summary}")
                         continue
                     block_output = await self._execute_code_block(work_dir, block, i)
                     if block_output:
