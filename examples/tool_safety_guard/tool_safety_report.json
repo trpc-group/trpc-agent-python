@@ -1,0 +1,377 @@
+{
+  "sample_count": 12,
+  "allow": 2,
+  "deny": 7,
+  "needs_human_review": 3,
+  "max_duration_ms": 1.568,
+  "reports": [
+    {
+      "decision": "allow",
+      "risk_level": "none",
+      "rule_ids": [],
+      "findings": [],
+      "tool_name": "tool_safety_demo",
+      "language": "python",
+      "duration_ms": 0.544,
+      "script_sha256": "f89aa15010a527f7fdab1ebe86550cd08f1b1923755d74f9c5cd38e2d6cd2322",
+      "policy_version": "1",
+      "redacted": false,
+      "scanned_at": "2026-07-25T16:17:46.205430+00:00",
+      "sample": "01_safe_python.py"
+    },
+    {
+      "decision": "deny",
+      "risk_level": "critical",
+      "rule_ids": [
+        "FILE-001",
+        "PROCESS-004"
+      ],
+      "findings": [
+        {
+          "category": "dangerous_file_operation",
+          "rule_id": "FILE-001",
+          "title": "Recursive forced deletion detected",
+          "risk_level": "critical",
+          "decision": "deny",
+          "evidence": "rm -rf /var/lib/application",
+          "recommendation": "Replace recursive deletion with reviewed, workspace-scoped cleanup.",
+          "line_number": 3,
+          "redacted": false
+        },
+        {
+          "category": "process_execution",
+          "rule_id": "PROCESS-004",
+          "title": "Command is not in allowed_commands",
+          "risk_level": "medium",
+          "decision": "needs_human_review",
+          "evidence": "line 3: command=rm",
+          "recommendation": "Use an allowed command or obtain human approval for this executable.",
+          "line_number": 3,
+          "redacted": false
+        }
+      ],
+      "tool_name": "tool_safety_demo",
+      "language": "bash",
+      "duration_ms": 1.568,
+      "script_sha256": "acff764dceaa0ce337b52dc13a6f107cb2edcf33fd3ebd348d7d7bdae6395d87",
+      "policy_version": "1",
+      "redacted": false,
+      "scanned_at": "2026-07-25T16:17:46.207352+00:00",
+      "sample": "02_dangerous_delete.sh"
+    },
+    {
+      "decision": "deny",
+      "risk_level": "high",
+      "rule_ids": [
+        "SECRET-001",
+        "FILE-002"
+      ],
+      "findings": [
+        {
+          "category": "sensitive_data_exposure",
+          "rule_id": "SECRET-001",
+          "title": "Sensitive value may be written or transmitted",
+          "risk_level": "high",
+          "decision": "deny",
+          "evidence": "line 6: [REDACTED sensitive value passed to print]",
+          "recommendation": "Remove the secret from output and pass credentials through a scoped secret provider.",
+          "line_number": 6,
+          "redacted": true
+        },
+        {
+          "category": "dangerous_file_operation",
+          "rule_id": "FILE-002",
+          "title": "Script accesses a path protected by policy",
+          "risk_level": "high",
+          "decision": "deny",
+          "evidence": "private_key = Path(\"~/.ssh/id_rsa\").expanduser().read_text()",
+          "recommendation": "Use a scoped workspace and inject only files required by the tool.",
+          "line_number": 5,
+          "redacted": false
+        }
+      ],
+      "tool_name": "tool_safety_demo",
+      "language": "python",
+      "duration_ms": 0.37,
+      "script_sha256": "d40078f20f12b9d521b38d5a542c87da28338c0516d13405d04cddae0cb17641",
+      "policy_version": "1",
+      "redacted": true,
+      "scanned_at": "2026-07-25T16:17:46.207988+00:00",
+      "sample": "03_read_ssh_key.py"
+    },
+    {
+      "decision": "deny",
+      "risk_level": "high",
+      "rule_ids": [
+        "NETWORK-001"
+      ],
+      "findings": [
+        {
+          "category": "network_egress",
+          "rule_id": "NETWORK-001",
+          "title": "Network target is not allowlisted",
+          "risk_level": "high",
+          "decision": "deny",
+          "evidence": "response = requests.get(\"https://collector.example.net/upload\", timeout=10)",
+          "recommendation": "Add the reviewed hostname to allowed_domains or remove the outbound request.",
+          "line_number": 5,
+          "redacted": false
+        }
+      ],
+      "tool_name": "tool_safety_demo",
+      "language": "python",
+      "duration_ms": 0.386,
+      "script_sha256": "4469242c27cbdb78a58e785ccef84a83076a40bbbac9b010bac9822b0962519c",
+      "policy_version": "1",
+      "redacted": false,
+      "scanned_at": "2026-07-25T16:17:46.208573+00:00",
+      "sample": "04_external_network.py"
+    },
+    {
+      "decision": "allow",
+      "risk_level": "none",
+      "rule_ids": [],
+      "findings": [],
+      "tool_name": "tool_safety_demo",
+      "language": "python",
+      "duration_ms": 0.296,
+      "script_sha256": "92bb66e357354b16e906ad1d8e8ce6a32dab3f59d18ca1120823e97bc85c8bac",
+      "policy_version": "1",
+      "redacted": false,
+      "scanned_at": "2026-07-25T16:17:46.209133+00:00",
+      "sample": "05_allowed_network.py"
+    },
+    {
+      "decision": "needs_human_review",
+      "risk_level": "medium",
+      "rule_ids": [
+        "PROCESS-001"
+      ],
+      "findings": [
+        {
+          "category": "process_execution",
+          "rule_id": "PROCESS-001",
+          "title": "Child process invocation detected",
+          "risk_level": "medium",
+          "decision": "needs_human_review",
+          "evidence": "subprocess.run([\"git\", \"status\"], check=True)",
+          "recommendation": "Use an argument-list API, an allowed executable, and sandbox resource limits.",
+          "line_number": 5,
+          "redacted": false
+        }
+      ],
+      "tool_name": "tool_safety_demo",
+      "language": "python",
+      "duration_ms": 0.257,
+      "script_sha256": "edf6347a34c6dd0dc27030f21b2a5cd43bf2b4c5f6fc1bf3713196426c3b5e62",
+      "policy_version": "1",
+      "redacted": false,
+      "scanned_at": "2026-07-25T16:17:46.209619+00:00",
+      "sample": "06_subprocess.py"
+    },
+    {
+      "decision": "deny",
+      "risk_level": "high",
+      "rule_ids": [
+        "PROCESS-001",
+        "PROCESS-002"
+      ],
+      "findings": [
+        {
+          "category": "process_execution",
+          "rule_id": "PROCESS-001",
+          "title": "Child process invocation detected",
+          "risk_level": "medium",
+          "decision": "needs_human_review",
+          "evidence": "os.system(f\"git checkout {branch}\")",
+          "recommendation": "Use an argument-list API, an allowed executable, and sandbox resource limits.",
+          "line_number": 6,
+          "redacted": false
+        },
+        {
+          "category": "process_execution",
+          "rule_id": "PROCESS-002",
+          "title": "Shell injection path detected",
+          "risk_level": "high",
+          "decision": "deny",
+          "evidence": "os.system(f\"git checkout {branch}\")",
+          "recommendation": "Disable shell execution and pass validated arguments as a list.",
+          "line_number": 6,
+          "redacted": false
+        }
+      ],
+      "tool_name": "tool_safety_demo",
+      "language": "python",
+      "duration_ms": 0.351,
+      "script_sha256": "8d6d7f19b34b7ecf720f24db8947df78afb328bc9c61e15016f91cca20171c1b",
+      "policy_version": "1",
+      "redacted": false,
+      "scanned_at": "2026-07-25T16:17:46.210192+00:00",
+      "sample": "07_shell_injection.py"
+    },
+    {
+      "decision": "deny",
+      "risk_level": "high",
+      "rule_ids": [
+        "DEPENDENCY-001",
+        "PROCESS-004"
+      ],
+      "findings": [
+        {
+          "category": "dependency_install",
+          "rule_id": "DEPENDENCY-001",
+          "title": "Runtime dependency installation detected",
+          "risk_level": "high",
+          "decision": "deny",
+          "evidence": "pip install untrusted-package",
+          "recommendation": "Build reviewed dependencies into an immutable execution image.",
+          "line_number": 3,
+          "redacted": false
+        },
+        {
+          "category": "process_execution",
+          "rule_id": "PROCESS-004",
+          "title": "Command is not in allowed_commands",
+          "risk_level": "medium",
+          "decision": "needs_human_review",
+          "evidence": "line 3: command=pip",
+          "recommendation": "Use an allowed command or obtain human approval for this executable.",
+          "line_number": 3,
+          "redacted": false
+        }
+      ],
+      "tool_name": "tool_safety_demo",
+      "language": "bash",
+      "duration_ms": 0.202,
+      "script_sha256": "e53aa43037fb5d38c822bcc9f7e5b20d645a08cca80ca4a9736518bfa21cdbd9",
+      "policy_version": "1",
+      "redacted": false,
+      "scanned_at": "2026-07-25T16:17:46.210592+00:00",
+      "sample": "08_dependency_install.sh"
+    },
+    {
+      "decision": "deny",
+      "risk_level": "high",
+      "rule_ids": [
+        "RESOURCE-001"
+      ],
+      "findings": [
+        {
+          "category": "resource_abuse",
+          "rule_id": "RESOURCE-001",
+          "title": "Unbounded loop detected",
+          "risk_level": "high",
+          "decision": "deny",
+          "evidence": "while True:",
+          "recommendation": "Add a bounded condition, cancellation check, and runtime timeout.",
+          "line_number": 3,
+          "redacted": false
+        }
+      ],
+      "tool_name": "tool_safety_demo",
+      "language": "python",
+      "duration_ms": 0.119,
+      "script_sha256": "02f7a7a3cd03d3bba21420052405d94a61dfcf892aeedfb73f51a45d31a05b4b",
+      "policy_version": "1",
+      "redacted": false,
+      "scanned_at": "2026-07-25T16:17:46.210903+00:00",
+      "sample": "09_infinite_loop.py"
+    },
+    {
+      "decision": "deny",
+      "risk_level": "high",
+      "rule_ids": [
+        "SECRET-001"
+      ],
+      "findings": [
+        {
+          "category": "sensitive_data_exposure",
+          "rule_id": "SECRET-001",
+          "title": "Sensitive value may be written or transmitted",
+          "risk_level": "high",
+          "decision": "deny",
+          "evidence": "line 6: [REDACTED sensitive value passed to print]",
+          "recommendation": "Remove the secret from output and pass credentials through a scoped secret provider.",
+          "line_number": 6,
+          "redacted": true
+        }
+      ],
+      "tool_name": "tool_safety_demo",
+      "language": "python",
+      "duration_ms": 0.198,
+      "script_sha256": "093cd96f5c4d62234af130f4561c9909cad91f5e75ebedf608f233d8f95b0b21",
+      "policy_version": "1",
+      "redacted": true,
+      "scanned_at": "2026-07-25T16:17:46.211248+00:00",
+      "sample": "10_sensitive_output.py"
+    },
+    {
+      "decision": "needs_human_review",
+      "risk_level": "medium",
+      "rule_ids": [
+        "PROCESS-003",
+        "PROCESS-004"
+      ],
+      "findings": [
+        {
+          "category": "process_execution",
+          "rule_id": "PROCESS-003",
+          "title": "Shell pipeline or background process detected",
+          "risk_level": "medium",
+          "decision": "needs_human_review",
+          "evidence": "printf \"build complete\\n\" | tee build-status.txt",
+          "recommendation": "Review every pipeline stage and run it with bounded process supervision.",
+          "line_number": 3,
+          "redacted": false
+        },
+        {
+          "category": "process_execution",
+          "rule_id": "PROCESS-004",
+          "title": "Command is not in allowed_commands",
+          "risk_level": "medium",
+          "decision": "needs_human_review",
+          "evidence": "line 3: command=tee",
+          "recommendation": "Use an allowed command or obtain human approval for this executable.",
+          "line_number": 3,
+          "redacted": false
+        }
+      ],
+      "tool_name": "tool_safety_demo",
+      "language": "bash",
+      "duration_ms": 0.33,
+      "script_sha256": "9fe3c00f8e0eb7f3f8a441b0b7e8b38ea4a4e9e3e72368593e616c9168318d95",
+      "policy_version": "1",
+      "redacted": false,
+      "scanned_at": "2026-07-25T16:17:46.211727+00:00",
+      "sample": "11_bash_pipeline.sh"
+    },
+    {
+      "decision": "needs_human_review",
+      "risk_level": "medium",
+      "rule_ids": [
+        "PROCESS-004"
+      ],
+      "findings": [
+        {
+          "category": "process_execution",
+          "rule_id": "PROCESS-004",
+          "title": "Dynamic command requires review",
+          "risk_level": "medium",
+          "decision": "needs_human_review",
+          "evidence": "line 4: command=[dynamic]",
+          "recommendation": "Use an allowed command or obtain human approval for this executable.",
+          "line_number": 4,
+          "redacted": true
+        }
+      ],
+      "tool_name": "tool_safety_demo",
+      "language": "bash",
+      "duration_ms": 0.253,
+      "script_sha256": "3d8654f144d21fb3a762d4deab6e9d31e18ed65579c26bc240f4ef9befe58b45",
+      "policy_version": "1",
+      "redacted": true,
+      "scanned_at": "2026-07-25T16:17:46.212158+00:00",
+      "sample": "12_dynamic_command.sh"
+    }
+  ]
+}

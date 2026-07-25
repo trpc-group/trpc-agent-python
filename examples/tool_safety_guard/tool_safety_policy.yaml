@@ -1,0 +1,40 @@
+version: "1"
+
+# Exact hostnames are matched directly. Wildcards such as *.example.org match
+# subdomains only, not the bare parent domain.
+allowed_domains:
+  - api.example.com
+
+# Unknown Bash executables require human review. Builtins such as cd and export
+# are recognized separately.
+allowed_commands:
+  - echo
+  - printf
+  - pwd
+
+# Both absolute path prefixes and sensitive basenames are supported.
+denied_paths:
+  - /etc
+  - /root
+  - /proc
+  - /sys
+  - ~/.ssh
+  - ~/.aws
+  - ~/.config/gcloud
+  - .env
+  - credentials.json
+
+max_timeout_seconds: 30
+max_output_bytes: 1000000
+max_script_bytes: 1000000
+max_file_write_bytes: 10000000
+max_sleep_seconds: 10
+max_concurrent_tasks: 20
+max_evidence_chars: 240
+review_unknown_commands: true
+
+# False-positive handling is explicit and auditable. Prefer a decision downgrade
+# over disabling a rule entirely.
+disabled_rules: []
+rule_decisions: {}
+rule_risk_levels: {}
