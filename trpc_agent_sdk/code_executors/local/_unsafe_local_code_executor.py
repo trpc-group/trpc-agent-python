@@ -17,6 +17,9 @@ from pathlib import Path
 from typing_extensions import override
 
 from pydantic import Field
+from typing import Any
+from typing import Optional
+
 from trpc_agent_sdk.context import InvocationContext
 from trpc_agent_sdk.utils import async_execute_command
 
@@ -47,6 +50,28 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
     clean_temp_files: bool = Field(default=True,
                                    description="Whether to clean temporary files after the code execution.")
 
+    enable_safety_guard: bool = Field(
+        default=False,
+        description="Whether to run Tool Script Safety Guard before code execution.",
+    )
+
+    safety_scanner: Any = Field(
+        default=None,
+        exclude=True,
+        description="Optional SafetyScanner used when enable_safety_guard is True.",
+    )
+
+    safety_audit_log_path: str = Field(
+        default="",
+        exclude=True,
+        description="Optional JSONL audit log path for safety decisions.",
+    )
+
+    block_on_review: bool = Field(
+        default=False,
+        description="Whether NEEDS_HUMAN_REVIEW decisions should block execution.",
+    )
+
     def __init__(self, **data):
         """Initialize the UnsafeLocalCodeExecutor."""
         if "stateful" in data and data["stateful"]:
@@ -54,6 +79,10 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         if "optimize_data_file" in data and data["optimize_data_file"]:
             raise ValueError("Cannot set `optimize_data_file=True` in UnsafeLocalCodeExecutor.")
         super().__init__(**data)
+        if self.enable_safety_guard and self.safety_scanner is None:
+            from trpc_agent_sdk.tools.safety import PolicyConfig
+            from trpc_agent_sdk.tools.safety import SafetyScanner
+            self.safety_scanner = SafetyScanner(PolicyConfig.default())
 
     @override
     async def execute_code(self, invocation_context: InvocationContext,
@@ -80,6 +109,11 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             # Execute each code block
             for i, block in enumerate(input_data.code_blocks):
                 try:
+                    blocked_report = self._scan_code_block(block)
+                    if blocked_report:
+                        error_parts.append(
+                            f"Execution block {i} blocked by safety guard: {blocked_report.summary}")
+                        continue
                     block_output = await self._execute_code_block(work_dir, block, i)
                     if block_output:
                         output_parts.append(block_output)
@@ -117,6 +151,34 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             # Create temporary directory
             temp_dir = tempfile.mkdtemp(prefix=f"codeexec_{execution_id}_")
             return Path(temp_dir), self.clean_temp_files
+
+    def _scan_code_block(self, block: CodeBlock) -> Optional[Any]:
+        """Scan a single code block before execution.
+
+        Returns a SafetyReport if execution should be blocked, None otherwise.
+        """
+        if not self.enable_safety_guard or self.safety_scanner is None:
+            return None
+        from trpc_agent_sdk.tools.safety import AuditLogger
+        from trpc_agent_sdk.tools.safety import Decision
+        from trpc_agent_sdk.tools.safety import ScanRequest
+        from trpc_agent_sdk.tools.safety import ScanTarget
+        from trpc_agent_sdk.tools.safety import normalize_language
+        from trpc_agent_sdk.tools.safety import set_safety_telemetry
+        req = ScanRequest(
+            script=block.code,
+            language=normalize_language(block.language or ""),
+            tool_name="UnsafeLocalCodeExecutor",
+            target=ScanTarget.CODE_EXECUTOR,
+        )
+        report = self.safety_scanner.scan(req)
+        if self.safety_audit_log_path:
+            AuditLogger(self.safety_audit_log_path).record(report)
+        set_safety_telemetry(report)
+        should_block = (report.decision == Decision.DENY
+                        or (self.block_on_review and report.decision == Decision.NEEDS_HUMAN_REVIEW))
+        report.set_blocked(should_block)
+        return report if should_block else None
 
     async def _execute_code_block(self, work_dir: Path, block: CodeBlock, block_index: int) -> str:
         """Execute a single code block.

@@ -29,7 +29,15 @@ class BashTool(BaseTool):
     # Whitelist of commands allowed outside working directory
     ALLOWED_COMMANDS_OUTSIDE_WORKDIR = ["ls", "pwd", "cat", "grep", "find", "head", "tail", "wc", "echo"]
 
-    def __init__(self, cwd: Optional[str] = None, whitelist_commands: Optional[list[str]] = None):
+    def __init__(
+        self,
+        cwd: Optional[str] = None,
+        whitelist_commands: Optional[list[str]] = None,
+        enable_safety_guard: bool = False,
+        safety_scanner: Optional[Any] = None,
+        safety_audit_log_path: Optional[str] = None,
+        block_on_review: bool = False,
+    ):
         super().__init__(
             name="Bash",
             description=("Execute bash command in shell. Returns stdout, stderr, return_code. "
@@ -38,6 +46,14 @@ class BashTool(BaseTool):
         )
         self.cwd = cwd or os.getcwd()
         self.whitelist_commands = whitelist_commands
+        self._enable_safety_guard = enable_safety_guard
+        if enable_safety_guard and safety_scanner is None:
+            from trpc_agent_sdk.tools.safety import PolicyConfig
+            from trpc_agent_sdk.tools.safety import SafetyScanner
+            safety_scanner = SafetyScanner(PolicyConfig.default())
+        self._safety_scanner = safety_scanner
+        self._safety_audit_log_path = safety_audit_log_path
+        self._block_on_review = block_on_review
 
     def _get_declaration(self) -> Optional[FunctionDeclaration]:
         return FunctionDeclaration(
@@ -152,6 +168,35 @@ class BashTool(BaseTool):
 
         try:
             execution_dir = self._resolve_execution_directory(cwd)
+
+            if self._enable_safety_guard and self._safety_scanner:
+                from trpc_agent_sdk.tools.safety import AuditLogger
+                from trpc_agent_sdk.tools.safety import Decision
+                from trpc_agent_sdk.tools.safety import ScanRequest
+                from trpc_agent_sdk.tools.safety import ScriptLanguage
+                from trpc_agent_sdk.tools.safety import set_safety_telemetry
+                report = self._safety_scanner.scan(
+                    ScanRequest(
+                        script=command,
+                        language=ScriptLanguage.BASH,
+                        tool_name=self.name,
+                        cwd=execution_dir,
+                        env=os.environ.copy(),
+                        tool_metadata={"timeout": timeout},
+                    ))
+                should_block = (report.decision == Decision.DENY
+                                or (self._block_on_review and report.decision == Decision.NEEDS_HUMAN_REVIEW))
+                report.set_blocked(should_block)
+                if self._safety_audit_log_path:
+                    AuditLogger(self._safety_audit_log_path).record(report)
+                set_safety_telemetry(report)
+                if should_block:
+                    return {
+                        "success": False,
+                        "error": f"TOOL_SAFETY_BLOCKED: {report.summary}",
+                        "command": command,
+                        "return_code": -1,
+                    }
 
             if not self._is_command_safe(command, execution_dir):
                 if self.whitelist_commands is not None:

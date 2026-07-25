@@ -1,0 +1,93 @@
+# Tool Script Safety Guard — Example Policy Configuration
+# ========================================================
+# All keys are optional; omitted keys use PolicyConfig.default() built-in values.
+
+# Commands explicitly permitted regardless of other rules.
+allowed_commands:
+  - python
+  - python3
+  - pytest
+  - echo
+  - cat
+  - ls
+
+# Commands that trigger NEEDS_HUMAN_REVIEW instead of immediate DENY.
+review_commands:
+  - pip install
+  - pip3 install
+  - npm install
+  - yarn add
+  - poetry install
+  - poetry add
+  - gem install
+  - cargo install
+  - go install
+
+# Commands that are unconditionally denied.
+denied_commands:
+  - rm -rf /
+  - rm -rf /*
+  - rm -rf ~
+  - sudo rm
+  - sudo
+  - shutdown
+  - reboot
+  - halt
+  - poweroff
+  - mkfs
+  - dd if=
+  - ":(){ :|:& };:"
+
+# File system paths that must not be accessed.
+denied_paths:
+  - /etc
+  - /root
+  - ~/.ssh
+  - ~/.aws
+  - ~/.kube
+  - ~/.config
+  - /var/run/docker.sock
+  - /proc
+  - /sys
+
+# Domains permitted for network egress. All other domains are denied.
+network_allowlist:
+  - github.com
+  - api.github.com
+  - pypi.org
+  - files.pythonhosted.org
+  - pypi.python.org
+
+# Environment variables allowed to be read.
+env_allowlist:
+  - PATH
+  - HOME
+  - USER
+  - LANG
+  - LC_ALL
+  - PYTHONPATH
+  - PYTHONUNBUFFERED
+  - VIRTUAL_ENV
+
+# Resource limits
+max_timeout_seconds: 30
+max_output_bytes: 10485760      # 10 MB
+max_file_write_bytes: 52428800  # 50 MB
+
+# Review triggers
+review_shell_pipelines: true
+review_package_install: true
+
+# Regex patterns for detecting secrets in script content (case-insensitive).
+secret_patterns:
+  - (?i)api[_-]?key\s*[:=]\s*['\"]?\w+
+  - (?i)secret[_-]?key\s*[:=]\s*['\"]?\w+
+  - (?i)access[_-]?token\s*[:=]\s*['\"]?\w+
+  - (?i)auth[_-]?token\s*[:=]\s*['\"]?\w+
+  - (?i)bearer\s+['\"]?[\w\-\.]+
+  - (?i)password\s*[:=]\s*['\"]?\S+
+  - (?i)passwd\s*[:=]\s*['\"]?\S+
+  - (?i)private[_-]?key
+  - "-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----"
+  - (?i)connection[_-]?string\s*[:=]\s*['\"]?\S+
+  - (?i)client[_-]?secret\s*[:=]\s*['\"]?\S+
