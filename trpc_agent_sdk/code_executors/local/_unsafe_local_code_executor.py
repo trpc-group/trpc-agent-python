@@ -109,9 +109,14 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             # Scan all blocks first, then aggregate decision (consistent with SafeCodeExecutor)
             all_findings = []
             for i, block in enumerate(input_data.code_blocks):
-                report = self._scan_code_block(block)
-                if report:
-                    all_findings.extend(report.findings)
+                try:
+                    report = self._scan_code_block(block)
+                    if report:
+                        all_findings.extend(report.findings)
+                except Exception:  # pylint: disable=broad-except
+                    # fail-closed: scanner error blocks execution
+                    return create_code_execution_result(
+                        stderr="Safety scanner error — execution blocked.")
 
             if all_findings:
                 from trpc_agent_sdk.tools.safety import Decision

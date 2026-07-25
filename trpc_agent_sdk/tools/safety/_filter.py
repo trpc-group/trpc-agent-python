@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict
 from typing import Any
 from typing import Dict
@@ -17,6 +18,8 @@ from trpc_agent_sdk.abc import FilterType
 from trpc_agent_sdk.filter import BaseFilter
 from trpc_agent_sdk.filter import FilterResult
 from trpc_agent_sdk.tools import get_tool_var
+
+_logger = logging.getLogger(__name__)
 
 from ._audit import AuditLogger
 from ._extractors import extract_tool_safety_context
@@ -54,6 +57,7 @@ class ToolSafetyFilter(BaseFilter):
     async def _before(self, ctx: Any, req: Dict[str, Any], rsp: FilterResult) -> None:
         tool = get_tool_var()
         if tool is None:
+            _logger.debug("No tool context available, skipping safety scan")
             return
 
         scan_req = extract_tool_safety_context(tool, req, target=ScanTarget.TOOL)
@@ -87,9 +91,10 @@ class ToolSafetyFilter(BaseFilter):
         if should_block:
             rsp.rsp = {
                 "success": False,
+                "error": f"TOOL_SAFETY_BLOCKED: {report.summary}",
                 "blocked": True,
                 "decision": report.decision.value,
-                "message": report.summary,
+                "return_code": -1,
                 "report": asdict(report),
             }
             rsp.is_continue = False

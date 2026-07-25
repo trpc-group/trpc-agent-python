@@ -133,13 +133,14 @@ policy = PolicyConfig.from_yaml("path/to/my_policy.yaml")
 | 14 | `from subprocess import run; run(['whoami'])` | DENY |
 | 15 | `echo ... \| base64 -d \| sh` | NEEDS_HUMAN_REVIEW |
 | 16 | `Path.home() / '.ssh' / 'id_rsa'` | DENY |
-| 17 | `requests.Session().get(...)` | NEEDS_HUMAN_REVIEW |
+| 17 | `requests.Session().get(...)` | DENY |
 | 18 | `os.getenv('API_KEY'); print(secret)` | ALLOW |
 | 19 | `getattr(__builtins__, 'eval')` | DENY |
 | 20 | `eval + exec` | DENY |
 | 21 | `find /tmp -name '*.log' -delete` | DENY |
 | 22 | `find . -name '*.tmp' \| xargs rm` | DENY |
 | 23 | `:(){ :\|:& };:` | DENY |
+| 24 | `__builtins__.eval('print("pwned")')` | DENY |
 
 ## 与其他组件的关系
 

@@ -202,18 +202,23 @@ class _PythonVisitor(ast.NodeVisitor):
                 ))
 
     def _check_dynamic_exec(self, func_path: str, node: ast.Call) -> None:
-        if func_path in PYTHON_DYNAMIC_EXEC_CALLS:
-            rule_id = PYTHON_DYNAMIC_EXEC_CALLS[func_path]
-            self.findings.append(
-                SafetyFinding(
-                    rule_id=rule_id,
-                    rule_name="Dynamic Code Execution",
-                    risk_type=RiskType.SYSTEM_COMMAND,
-                    risk_level=RiskLevel.HIGH,
-                    evidence=sanitize_text(f"{func_path}(...)", self._secret_patterns),
-                    line=node.lineno,
-                    recommendation="Avoid dynamic code execution. Use safe alternatives.",
-                ))
+        # Match full path, e.g. "eval" or "__builtins__.eval" or "builtins.eval"
+        rule_id = PYTHON_DYNAMIC_EXEC_CALLS.get(func_path)
+        if rule_id is None:
+            last_segment = func_path.rsplit(".", 1)[-1]
+            rule_id = PYTHON_DYNAMIC_EXEC_CALLS.get(last_segment)
+        if rule_id is None:
+            return
+        self.findings.append(
+            SafetyFinding(
+                rule_id=rule_id,
+                rule_name="Dynamic Code Execution",
+                risk_type=RiskType.SYSTEM_COMMAND,
+                risk_level=RiskLevel.HIGH,
+                evidence=sanitize_text(f"{func_path}(...)", self._secret_patterns),
+                line=node.lineno,
+                recommendation="Avoid dynamic code execution. Use safe alternatives.",
+            ))
 
     def _check_shell_true(self, node: ast.Call) -> None:
         for kw in node.keywords:

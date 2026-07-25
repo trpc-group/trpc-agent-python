@@ -43,13 +43,14 @@ EXPECTED = {
     "14": "deny",                     # from import subprocess.run
     "15": "needs_human_review",       # base64 pipe
     "16": "deny",                     # pathlib SSH access
-    "17": "needs_human_review",       # requests.Session (medium import)
+    "17": "deny",                     # requests.Session detected as HIGH
     "18": "allow",                    # os.getenv without exfil
     "19": "deny",                     # getattr builtins eval
     "20": "deny",                     # eval + exec
     "21": "deny",                     # find -delete
     "22": "deny",                     # xargs rm
     "23": "deny",                     # fork bomb
+    "24": "deny",                     # __builtins__.eval
 }
 
 

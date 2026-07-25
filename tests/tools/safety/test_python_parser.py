@@ -138,6 +138,18 @@ class TestGetattrEvasionCoverage:
         rule_ids = {f.rule_id for f in findings}
         assert "R003_DYNAMIC_CODE_EXECUTION" in rule_ids
 
+    def test_builtins_eval(self, parser):
+        """__builtins__.eval('1+1') → detected via last-segment matching"""
+        findings = parser.parse("__builtins__.eval('1+1')")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R003_DYNAMIC_CODE_EXECUTION" in rule_ids
+
+    def test_builtins_exec(self, parser):
+        """builtins.exec('x=1') → detected via last-segment matching"""
+        findings = parser.parse("builtins.exec('x=1')")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R003_DYNAMIC_CODE_EXECUTION" in rule_ids
+
 
 class TestRawDottedNameCoverage:
 

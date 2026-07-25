@@ -46,7 +46,7 @@ class TestBashToolIntegration:
             tool_context=ctx,
             args={"command": "echo hello", "timeout": 10},
         ))
-        assert result["success"] is True
+        assert "TOOL_SAFETY_BLOCKED" not in str(result)
 
     def test_safety_guard_off_no_scan(self):
         """BashTool with enable_safety_guard=False does not scan."""

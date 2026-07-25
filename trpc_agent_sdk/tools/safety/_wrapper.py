@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-from typing import Any
 from typing import List
 from typing import Optional
 
@@ -47,7 +46,7 @@ class SafeCodeExecutor(BaseCodeExecutor):
     model_config = {"arbitrary_types_allowed": True}
 
     inner_executor: BaseCodeExecutor = Field(description="Wrapped executor for post-scan delegation.")
-    scanner_policy: Any = Field(default=None, description="PolicyConfig for the scanner.")
+    scanner_policy: Optional[PolicyConfig] = Field(default=None, description="PolicyConfig for the scanner.")
     tool_name: str = Field(default="CodeExecutor", description="Name in scan reports.")
     audit_path: Optional[str] = Field(default=None, description="Audit log JSONL path.")
     block_on_review: bool = Field(default=False, description="If True, NEEDS_HUMAN_REVIEW also blocks.")

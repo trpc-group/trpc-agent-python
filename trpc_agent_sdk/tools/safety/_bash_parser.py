@@ -268,6 +268,7 @@ class BashParser:
                 return findings
 
         # Check if command is in review list via token-prefix match
+        hit_review = False
         for review_cmd in self._policy.review_commands:
             try:
                 review_tokens = shlex.split(review_cmd)
@@ -283,7 +284,10 @@ class BashParser:
                         evidence=sanitize_text(script.strip(), self._policy.secret_patterns),
                         recommendation=f"Command '{review_cmd}' requires human review per safety policy.",
                     ))
+                hit_review = True
                 break
+        if hit_review:
+            return findings
 
         # Check if command is in allowed list (only if allowed list is non-empty)
         if self._policy.allowed_commands and base_cmd not in self._policy.allowed_commands:

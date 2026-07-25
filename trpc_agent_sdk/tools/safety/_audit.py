@@ -57,13 +57,18 @@ class AuditLogger:
     """
 
     _path_locks: dict[str, threading.Lock] = {}
+    _locks_guard = threading.Lock()
 
     def __init__(self, path: str) -> None:
         self._path = Path(path)
-        key = str(self._path.resolve())
-        if key not in AuditLogger._path_locks:
-            AuditLogger._path_locks[key] = threading.Lock()
-        self._lock = AuditLogger._path_locks[key]
+        try:
+            key = str(self._path.resolve())
+        except (OSError, FileNotFoundError):
+            key = str(self._path.absolute())
+        with AuditLogger._locks_guard:
+            if key not in AuditLogger._path_locks:
+                AuditLogger._path_locks[key] = threading.Lock()
+            self._lock = AuditLogger._path_locks[key]
 
     @classmethod
     def from_report(cls, report: SafetyReport) -> AuditEvent:
