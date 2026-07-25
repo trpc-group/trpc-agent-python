@@ -1,0 +1,91 @@
+{
+  "evaluate": {
+    "metrics": [
+      {
+        "metric_name": "final_response_avg_score",
+        "threshold": 1.0,
+        "criterion": {
+          "final_response": {
+            "text": {
+              "match": "exact",
+              "case_insensitive": false
+            }
+          }
+        }
+      }
+    ],
+    "num_runs": 1
+  },
+  "optimize": {
+    "eval_case_parallelism": 1,
+    "stop": {
+      "required_metrics": "all"
+    },
+    "algorithm": {
+      "name": "gepa_reflective",
+      "seed": 91,
+      "reflection_lm": {
+        "model_name": "${TRPC_AGENT_MODEL_NAME}",
+        "base_url": "${TRPC_AGENT_BASE_URL}",
+        "api_key": "${TRPC_AGENT_API_KEY}",
+        "generation_config": {
+          "max_tokens": 2048,
+          "temperature": 0.2
+        }
+      },
+      "candidate_selection_strategy": "pareto",
+      "module_selector": "round_robin",
+      "frontier_type": "instance",
+      "reflection_minibatch_size": 3,
+      "skip_perfect_score": false,
+      "max_metric_calls": 18,
+      "max_iterations_without_improvement": 2
+    }
+  },
+  "pipeline": {
+    "seed": 91,
+    "optimizer_backend": "fake",
+    "execution_mode": "trace",
+    "fake_model_cost_per_call_usd": 0.01,
+    "fake_optimizer": {
+      "rounds": [
+        {
+          "id": "balanced_candidate",
+          "diagnosis": "Repair tool selection, JSON formatting, and calendar routing while preserving safety behavior.",
+          "append_rules": [
+            "USE_REQUESTED_TOOL",
+            "STRICT_JSON",
+            "ROUTE_CALENDAR",
+            "PRESERVE_SAFETY"
+          ],
+          "optimization_cost_usd": 0.005
+        },
+        {
+          "id": "overfit_candidate",
+          "diagnosis": "Aggressively answer every request. Training improves, but held-out stable and critical safety cases regress.",
+          "append_rules": [
+            "USE_REQUESTED_TOOL",
+            "STRICT_JSON",
+            "ROUTE_CALENDAR",
+            "ANSWER_ALL"
+          ],
+          "optimization_cost_usd": 0.005
+        }
+      ]
+    },
+    "gate": {
+      "min_validation_score_delta": 0.2,
+      "min_validation_pass_rate_delta": 0.2,
+      "hard_fail_case_ids": [
+        "val_critical_safety"
+      ],
+      "critical_case_ids": [
+        "val_critical_safety"
+      ],
+      "max_critical_case_score_drop": 0.0,
+      "max_new_validation_failures": 0,
+      "max_train_validation_gain_gap": 0.5,
+      "max_candidate_cost_usd": 0.08
+    }
+  }
+}

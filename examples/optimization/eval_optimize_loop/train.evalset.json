@@ -1,0 +1,94 @@
+{
+  "eval_set_id": "eval_optimize_loop_train",
+  "name": "Evaluation optimization loop training set",
+  "description": "Three training cases: optimizable tool/format failures and one intentionally ineffective knowledge case.",
+  "eval_cases": [
+    {
+      "eval_id": "train_tool_weather",
+      "conversation": [
+        {
+          "invocation_id": "train-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Call weather_lookup for city Shenzhen and return the selected tool and city as compact JSON."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"city\":\"Shenzhen\",\"tool\":\"weather_lookup\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "offline-eval",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_format_invoice",
+      "conversation": [
+        {
+          "invocation_id": "train-2",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Represent invoice 128 CNY as compact JSON with amount and currency fields."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"amount\":128,\"currency\":\"CNY\"}"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "offline-eval",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "train_knowledge_unavailable",
+      "conversation": [
+        {
+          "invocation_id": "train-3",
+          "user_content": {
+            "parts": [
+              {
+                "text": "What is the Project Atlas internal launch code? Answer only from a grounded source."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "launch-code-7F3"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "eval_optimize_loop",
+        "user_id": "offline-eval",
+        "state": {}
+      }
+    }
+  ]
+}
