@@ -125,16 +125,16 @@ async def main():
                 sys.exit(75)
             if not args.quiet:
                 print(f"Cleaning stale lock from dead PID {old_pid}", file=sys.stderr)
-            # Atomic takeover: each process writes its own tmp file (PID-suffixed),
-            # then os.replace() atomically swaps it in.  os.replace is atomic
-            # rename on both POSIX and Windows -- no TOCTOU window.
+            # Atomic takeover: each process writes a PID-suffixed tmp file,
+            # then os.replace() (atomic rename on POSIX and Windows) swaps it
+            # into place.  No TOCTOU window between write and activation.
             tmp = f"{LOCK_FILE}.{my_pid}.tmp"  # PID suffix prevents concurrent overwrite
             with open(tmp, "w", encoding="utf-8") as tf:
                 tf.write(f"{my_pid} {started_at}")
                 tf.flush()
                 _os.fsync(tf.fileno())
             _os.replace(tmp, LOCK_FILE)
-            # Lock is ours after atomic replace.  Mark acquired=True immediately
+            # Lock is ours after atomic replace. Mark acquired=True immediately
             # so that finally-block cleanup works even if we crash during the
             # verification read below (prevents permanent lock residue).
             acquired = True
