@@ -115,8 +115,7 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
                         all_findings.extend(report.findings)
                 except Exception:  # pylint: disable=broad-except
                     # fail-closed: scanner error blocks execution
-                    return create_code_execution_result(
-                        stderr="Safety scanner error — execution blocked.")
+                    return create_code_execution_result(stderr="Safety scanner error — execution blocked.")
 
             if all_findings:
                 from trpc_agent_sdk.tools.safety import Decision
