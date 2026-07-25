@@ -231,11 +231,20 @@ async def main():
             critical_case_ids=critical_case_ids,
         )
         if _critical_read_failed:
-            # Override: evalset unreadable → cannot verify critical cases → reject
+            # Override: evalset unreadable -> cannot verify critical cases -> reject.
+            # Also add an explicit failed check so the gate report shows WHY.
+            override_checks = list(decision.checks) + [
+                GateCheck(
+                    name="critical_case_no_regress",
+                    passed=False,
+                    description="关键 case 检查失败",
+                    detail="无法读取 evalset 文件，无法验证关键 case 是否退步",
+                )
+            ]
             decision = GateDecision(
                 accepted=False,
                 reason="CRITICAL: cannot read evalset for critical case verification",
-                checks=list(decision.checks),
+                checks=override_checks,
             )
         gate_dict = {
             "accepted": decision.accepted,
