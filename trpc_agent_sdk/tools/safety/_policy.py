@@ -174,9 +174,15 @@ class PolicyConfig:
         return command in self.allowed_commands
 
     def is_path_denied(self, path_text: str) -> bool:
-        """Return True if path_text starts with any denied_paths entry."""
+        """Return True if path_text is a proper sub-path of any denied entry.
+
+        A path that equals a denied directory exactly (e.g. cwd="/root")
+        is not denied — only paths inside it (e.g. "/root/.ssh") are.
+        """
         for denied in self.denied_paths:
-            if path_text.startswith(denied):
+            if path_text == denied:
+                continue
+            if path_text.startswith(denied + "/") or path_text.startswith(denied + "\\"):
                 return True
         return False
 

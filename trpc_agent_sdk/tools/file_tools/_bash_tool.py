@@ -54,6 +54,10 @@ class BashTool(BaseTool):
         self._safety_scanner = safety_scanner
         self._safety_audit_log_path = safety_audit_log_path
         self._block_on_review = block_on_review
+        self._safety_audit = None
+        if enable_safety_guard and safety_audit_log_path:
+            from trpc_agent_sdk.tools.safety import AuditLogger
+            self._safety_audit = AuditLogger(safety_audit_log_path)
 
     def _get_declaration(self) -> Optional[FunctionDeclaration]:
         return FunctionDeclaration(
@@ -170,7 +174,6 @@ class BashTool(BaseTool):
             execution_dir = self._resolve_execution_directory(cwd)
 
             if self._enable_safety_guard and self._safety_scanner:
-                from trpc_agent_sdk.tools.safety import AuditLogger
                 from trpc_agent_sdk.tools.safety import Decision
                 from trpc_agent_sdk.tools.safety import ScanRequest
                 from trpc_agent_sdk.tools.safety import ScriptLanguage
@@ -187,8 +190,8 @@ class BashTool(BaseTool):
                 should_block = (report.decision == Decision.DENY
                                 or (self._block_on_review and report.decision == Decision.NEEDS_HUMAN_REVIEW))
                 report.set_blocked(should_block)
-                if self._safety_audit_log_path:
-                    AuditLogger(self._safety_audit_log_path).record(report)
+                if self._safety_audit:
+                    self._safety_audit.record(report)
                 set_safety_telemetry(report)
                 if should_block:
                     return {

@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict
 from typing import Any
 from typing import Dict
 from typing import List
@@ -19,8 +18,6 @@ from trpc_agent_sdk.filter import BaseFilter
 from trpc_agent_sdk.filter import FilterResult
 from trpc_agent_sdk.tools import get_tool_var
 
-_logger = logging.getLogger(__name__)
-
 from ._audit import AuditLogger
 from ._extractors import extract_tool_safety_context
 from ._policy import PolicyConfig
@@ -30,6 +27,8 @@ from ._types import Decision
 from ._types import RiskLevel
 from ._types import SafetyReport
 from ._types import ScanTarget
+
+_logger = logging.getLogger(__name__)
 
 
 class ToolSafetyFilter(BaseFilter):
@@ -95,7 +94,7 @@ class ToolSafetyFilter(BaseFilter):
                 "blocked": True,
                 "decision": report.decision.value,
                 "return_code": -1,
-                "report": asdict(report),
+                "rule_ids": report.rule_ids,
             }
             rsp.is_continue = False
 

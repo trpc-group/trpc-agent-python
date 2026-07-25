@@ -136,6 +136,38 @@ class TestBashParserCoverage:
         assert any(f.risk_level.value == "medium" and "Requires Review" in f.rule_name for f in findings)
 
 
+class TestShellKeywordExemption:
+
+    def test_for_loop_not_flagged(self, parser):
+        """Shell control-flow keywords skip allowed_commands check."""
+        findings = parser.parse("for i in *; do echo $i; done")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R003_SHELL_PIPE_EXECUTION" in rule_ids  # ; triggers pipeline
+        # but should NOT have "Command Not Allowed" for "for"
+        assert not any("Command Not Allowed" in f.rule_name for f in findings)
+
+    def test_if_statement_not_flagged(self, parser):
+        """'if' keyword not flagged as disallowed command."""
+        findings = parser.parse("if true; then echo yes; fi")
+        # ; triggers pipeline but "if" keyword itself is exempt
+        assert not any("Command Not Allowed" in f.rule_name for f in findings)
+
+
+class TestPipelineQuoteFalsePositive:
+
+    def test_quoted_pipe_not_flagged(self, parser):
+        """echo \"a|b;c\" should not trigger pipeline review."""
+        findings = parser.parse('echo "a|b;c"')
+        rule_ids = {f.rule_id for f in findings}
+        assert "R003_SHELL_PIPE_EXECUTION" not in rule_ids
+
+    def test_comment_line_not_flagged(self, parser):
+        """Comment lines with | or ; should not trigger pipeline."""
+        findings = parser.parse("# this is a comment with | and ;")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R003_SHELL_PIPE_EXECUTION" not in rule_ids
+
+
 class TestBashParserSecretExfiltration:
 
     def test_echo_token(self, parser):

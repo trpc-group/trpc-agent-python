@@ -79,10 +79,15 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         if "optimize_data_file" in data and data["optimize_data_file"]:
             raise ValueError("Cannot set `optimize_data_file=True` in UnsafeLocalCodeExecutor.")
         super().__init__(**data)
-        if self.enable_safety_guard and self.safety_scanner is None:
-            from trpc_agent_sdk.tools.safety import PolicyConfig
-            from trpc_agent_sdk.tools.safety import SafetyScanner
-            self.safety_scanner = SafetyScanner(PolicyConfig.default())
+        self._safety_audit = None
+        if self.enable_safety_guard:
+            if self.safety_scanner is None:
+                from trpc_agent_sdk.tools.safety import PolicyConfig
+                from trpc_agent_sdk.tools.safety import SafetyScanner
+                self.safety_scanner = SafetyScanner(PolicyConfig.default())
+            if self.safety_audit_log_path:
+                from trpc_agent_sdk.tools.safety import AuditLogger
+                self._safety_audit = AuditLogger(self.safety_audit_log_path)
 
     @override
     async def execute_code(self, invocation_context: InvocationContext,
@@ -176,7 +181,6 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         """
         if not self.enable_safety_guard or self.safety_scanner is None:
             return None
-        from trpc_agent_sdk.tools.safety import AuditLogger
         from trpc_agent_sdk.tools.safety import ScanRequest
         from trpc_agent_sdk.tools.safety import ScanTarget
         from trpc_agent_sdk.tools.safety import normalize_language
@@ -188,8 +192,8 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             target=ScanTarget.CODE_EXECUTOR,
         )
         report = self.safety_scanner.scan(req)
-        if self.safety_audit_log_path:
-            AuditLogger(self.safety_audit_log_path).record(report)
+        if self._safety_audit:
+            self._safety_audit.record(report)
         set_safety_telemetry(report)
         return report
 

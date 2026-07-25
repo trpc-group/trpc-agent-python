@@ -91,7 +91,7 @@ class TestIsEnvContainsSensitiveKeys:
 class TestScanContextSafety:
 
     def test_cwd_denied(self, scanner):
-        req = ScanRequest(script="echo hi", language=ScriptLanguage.BASH, tool_name="t", cwd="/etc")
+        req = ScanRequest(script="echo hi", language=ScriptLanguage.BASH, tool_name="t", cwd="/etc/nginx")
         findings = scanner._scan_context_safety(req)
         rule_ids = {f.rule_id for f in findings}
         assert "R001_SYSTEM_PATH_OVERWRITE" in rule_ids

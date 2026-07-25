@@ -235,6 +235,19 @@ class BashParser:
                     ))
         return findings
 
+    @staticmethod
+    def _strip_comments_and_quotes(text: str) -> str:
+        """Remove comment lines and quoted content to reduce false positives."""
+        lines = []
+        for line in text.split("\n"):
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+            cleaned = re.sub(r"'[^']*'", "''", stripped)
+            cleaned = re.sub(r'"[^"]*"', '""', cleaned)
+            lines.append(cleaned)
+        return "\n".join(lines)
+
     def _check_command_policy(self, script: str) -> List[SafetyFinding]:
         findings: List[SafetyFinding] = []
         try:
@@ -248,6 +261,24 @@ class BashParser:
             return findings
 
         base_cmd = tokens[0]
+
+        # Shell control-flow keywords are not real commands — skip whitelist check
+        _SHELL_KEYWORDS = {
+            "for",
+            "if",
+            "while",
+            "case",
+            "then",
+            "do",
+            "done",
+            "fi",
+            "esac",
+            "else",
+            "elif",
+            "in",
+            "function",
+        }
+        skip_allowed_check = base_cmd in _SHELL_KEYWORDS
 
         # Check denied commands via token-prefix match (not startswith)
         for denied in self._policy.denied_commands:
@@ -289,8 +320,9 @@ class BashParser:
         if hit_review:
             return findings
 
-        # Check if command is in allowed list (only if allowed list is non-empty)
-        if self._policy.allowed_commands and base_cmd not in self._policy.allowed_commands:
+        # Check if command is in allowed list (only if allowed list is non-empty
+        # and not a shell control-flow keyword)
+        if (self._policy.allowed_commands and not skip_allowed_check and base_cmd not in self._policy.allowed_commands):
             findings.append(
                 SafetyFinding(
                     rule_id="R003_SYSTEM_COMMAND",
@@ -302,15 +334,18 @@ class BashParser:
                 ))
 
         # Check for shell pipelines requiring review
-        if self._policy.review_shell_pipelines and ("|" in script or ";" in script):
-            findings.append(
-                SafetyFinding(
-                    rule_id="R003_SHELL_PIPE_EXECUTION",
-                    rule_name="Shell Pipeline",
-                    risk_type=RiskType.SYSTEM_COMMAND,
-                    risk_level=RiskLevel.MEDIUM,
-                    evidence=sanitize_text(script.strip(), self._policy.secret_patterns),
-                    recommendation="Shell pipelines require human review.",
-                ))
+        # Strip comments and quoted strings to reduce false positives
+        if self._policy.review_shell_pipelines:
+            cleaned = self._strip_comments_and_quotes(script)
+            if "|" in cleaned or ";" in cleaned:
+                findings.append(
+                    SafetyFinding(
+                        rule_id="R003_SHELL_PIPE_EXECUTION",
+                        rule_name="Shell Pipeline",
+                        risk_type=RiskType.SYSTEM_COMMAND,
+                        risk_level=RiskLevel.MEDIUM,
+                        evidence=sanitize_text(script.strip(), self._policy.secret_patterns),
+                        recommendation="Shell pipelines require human review.",
+                    ))
 
         return findings

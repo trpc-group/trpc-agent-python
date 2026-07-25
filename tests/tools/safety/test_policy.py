@@ -180,6 +180,16 @@ class TestPolicyConfigQueryMethods:
     def test_is_path_denied_false(self, cfg):
         assert cfg.is_path_denied("/home/user/file.txt") is False
 
+    def test_is_path_denied_exact_match_not_denied(self, cfg):
+        """cwd="/root" should not be denied — it IS the denied dir, not a sub-path."""
+        assert cfg.is_path_denied("/root") is False
+        assert cfg.is_path_denied("/etc") is False
+
+    def test_is_path_denied_sub_path_is_denied(self, cfg):
+        """cwd="/root/.ssh" should be denied (sub-path of /root)."""
+        assert cfg.is_path_denied("/root/.ssh") is True
+        assert cfg.is_path_denied("/etc/passwd") is True
+
     def test_is_domain_allowed_true(self, cfg):
         assert cfg.is_domain_allowed("github.com") is True
 
