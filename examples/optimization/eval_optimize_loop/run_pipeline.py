@@ -134,7 +134,7 @@ async def main():
                 tf.flush()
                 _os.fsync(tf.fileno())
             _os.replace(tmp, LOCK_FILE)
-            # Lock is ours after atomic replace.  Set acquired=True immediately
+            # Lock is ours after atomic replace.  Mark acquired=True immediately
             # so that finally-block cleanup works even if we crash during the
             # verification read below (prevents permanent lock residue).
             acquired = True
