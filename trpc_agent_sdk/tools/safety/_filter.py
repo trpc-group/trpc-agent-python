@@ -76,7 +76,13 @@ class ToolSafetyFilter(BaseFilter):
                 duration_ms=0,
                 language=scan_req.language,
                 target=scan_req.target,
+                rule_ids=["SAFETY_SCANNER_ERROR"],
                 summary="Safety scanner error — execution blocked.",
+                telemetry_attributes={
+                    "tool.safety.decision": "deny",
+                    "tool.safety.risk_level": "critical",
+                    "tool.safety.rule_id": "SAFETY_SCANNER_ERROR",
+                },
             )
 
         # Record audit + telemetry

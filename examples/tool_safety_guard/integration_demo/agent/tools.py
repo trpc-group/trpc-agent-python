@@ -65,8 +65,7 @@ def create_code_executor(
 ):
     """Create a local code executor with safety guard before code blocks run."""
     from trpc_agent_sdk.code_executors.local._unsafe_local_code_executor import (
-        UnsafeLocalCodeExecutor,
-    )
+        UnsafeLocalCodeExecutor, )
     return UnsafeLocalCodeExecutor(
         timeout=10,
         enable_safety_guard=True,
@@ -77,27 +76,35 @@ def create_code_executor(
 
 
 def create_skill_toolset(safety_filter: ToolSafetyFilter):
-    """Create a Skill toolset with safety filter on skill_run commands."""
+    """Create a Skill toolset with safety filter on skill_run commands.
+
+    SkillToolSet does not accept BaseFilter directly, so we wrap it
+    with SafetyWrappedToolSet which injects the filter via
+    add_tool_safety_filter when get_tools() is called.
+    """
     from trpc_agent_sdk.skills import SkillToolSet
-    return SkillToolSet(
-        paths=[str(SKILL_ROOT)],
-        filters=[safety_filter],
-        allowed_cmds=["python", "python3", "echo", "cat"],
+    from trpc_agent_sdk.tools.safety import SafetyWrappedToolSet
+    inner = SkillToolSet(paths=[str(SKILL_ROOT)])
+    return SafetyWrappedToolSet(
+        inner=inner,
+        audit_path=str(AUDIT_LOG),
+        block_on_review=safety_filter._block_on_review,
     )
 
 
 def create_mcp_toolset(safety_filter: ToolSafetyFilter):
     """Create a local stdio MCP toolset with safety filter.
 
-    The MCP server is intentionally a dry-run endpoint to demonstrate
-    that denied commands are blocked at the MCPTool filter layer
-    before reaching the server.
+    MCPToolset accepts filters=[BaseFilter] natively. The MCP server
+    is intentionally a dry-run endpoint to demonstrate that denied
+    commands are blocked before reaching the server.
     """
     from trpc_agent_sdk.tools import MCPToolset
     from trpc_agent_sdk.tools import StdioConnectionParams
     return MCPToolset(
-        connection_params=StdioConnectionParams(
-            server_params={"command": sys.executable, "args": [str(MCP_SERVER)]},
-        ),
-        tool_filter=safety_filter,
+        connection_params=StdioConnectionParams(server_params={
+            "command": sys.executable,
+            "args": [str(MCP_SERVER)]
+        }, ),
+        filters=[safety_filter],
     )

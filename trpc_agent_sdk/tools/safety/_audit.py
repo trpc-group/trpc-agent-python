@@ -5,7 +5,9 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Audit logging for the Tool Script Safety Guard.
 
-Writes JSON-lines audit events to a configurable file path.
+Writes JSON-lines audit events to a configurable file path.  Thread-safe
+via a module-level lock.  I/O failures are swallowed — audit plumbing
+never blocks tool execution.
 """
 
 from __future__ import annotations
@@ -29,6 +31,8 @@ from ._types import SafetyReport
 from ._types import ScanTarget
 from ._types import ScriptLanguage
 
+_AUDIT_LOCK = threading.Lock()
+
 
 @dataclass
 class AuditEvent:
@@ -51,24 +55,12 @@ class AuditEvent:
 class AuditLogger:
     """Records safety scan results as JSON-lines audit events.
 
-    Uses a class-level lock cache keyed by resolved path so that multiple
-    instances writing to the same file share the same lock, preventing
-    line interleaving under concurrent access.
+    Thread-safe via a module-level lock.  When *path* is None, ``record()``
+    is a no-op (no file written).
     """
 
-    _path_locks: dict[str, threading.Lock] = {}
-    _locks_guard = threading.Lock()
-
-    def __init__(self, path: str) -> None:
-        self._path = Path(path)
-        try:
-            key = str(self._path.resolve())
-        except (OSError, FileNotFoundError):
-            key = str(self._path.absolute())
-        with AuditLogger._locks_guard:
-            if key not in AuditLogger._path_locks:
-                AuditLogger._path_locks[key] = threading.Lock()
-            self._lock = AuditLogger._path_locks[key]
+    def __init__(self, path: Optional[str] = None) -> None:
+        self.path = Path(path) if path else None
 
     @classmethod
     def from_report(cls, report: SafetyReport) -> AuditEvent:
@@ -88,15 +80,19 @@ class AuditLogger:
         )
 
     def record(self, report: SafetyReport) -> AuditEvent:
-        """Create an audit event from a report and append it as a JSON line.
+        """Create an audit event and append it as a JSON line (if path is set).
 
-        Creates parent directories if they do not exist.
-        Thread-safe: uses an instance-level lock to prevent line interleaving.
+        Audit I/O failures are swallowed — they never block tool execution.
         """
         event = self.from_report(report)
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        with self._lock:
-            with open(self._path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(asdict(event), ensure_ascii=False, default=str) + "\n")
-                f.flush()
+        if self.path is not None:
+            try:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                line = json.dumps(asdict(event), ensure_ascii=False, default=str) + "\n"
+                with _AUDIT_LOCK:
+                    with self.path.open("a", encoding="utf-8") as fh:
+                        fh.write(line)
+                        fh.flush()
+            except OSError:
+                pass
         return event

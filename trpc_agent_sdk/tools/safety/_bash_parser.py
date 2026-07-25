@@ -92,7 +92,7 @@ class BashParser:
                 return findings
         # Check for sensitive file suffixes (e.g. cat server.pem)
         for token in line.split():
-            base = token.rstrip(";|&\"'")
+            base = token.strip(";|&\"'")
             for suffix in _SENSITIVE_SUFFIXES:
                 if base.endswith(suffix):
                     findings.append(
@@ -267,19 +267,7 @@ class BashParser:
 
     def _check_command_policy(self, script: str) -> List[SafetyFinding]:
         findings: List[SafetyFinding] = []
-        try:
-            lexer = shlex.shlex(script, posix=True, punctuation_chars="|;&")
-            lexer.whitespace_split = True
-            tokens = list(lexer)
-        except Exception:
-            tokens = script.split()
 
-        if not tokens:
-            return findings
-
-        base_cmd = tokens[0]
-
-        # Shell control-flow keywords are not real commands — skip whitelist check
         _SHELL_KEYWORDS = {
             "for",
             "if",
@@ -295,63 +283,76 @@ class BashParser:
             "in",
             "function",
         }
-        skip_allowed_check = base_cmd in _SHELL_KEYWORDS
 
-        # Check denied commands via token-prefix match (not startswith)
-        for denied in self._policy.denied_commands:
+        # Check each line individually (multi-line scripts can have
+        # dangerous commands on non-first lines)
+        for raw_line in script.split("\n"):
+            stripped = raw_line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
             try:
-                denied_tokens = shlex.split(denied)
+                lexer = shlex.shlex(stripped, posix=True, punctuation_chars="|;&")
+                lexer.whitespace_split = True
+                tokens = list(lexer)
             except Exception:
-                denied_tokens = denied.split()
-            if tokens[:len(denied_tokens)] == denied_tokens:
+                tokens = stripped.split()
+            if not tokens:
+                continue
+
+            base_cmd = tokens[0]
+            if base_cmd in _SHELL_KEYWORDS:
+                continue
+
+            # Denied commands via token-prefix match
+            for denied in self._policy.denied_commands:
+                try:
+                    denied_tokens = shlex.split(denied)
+                except Exception:
+                    denied_tokens = denied.split()
+                if tokens[:len(denied_tokens)] == denied_tokens:
+                    findings.append(
+                        SafetyFinding(
+                            rule_id="R003_SYSTEM_COMMAND",
+                            rule_name="Denied Command",
+                            risk_type=RiskType.SYSTEM_COMMAND,
+                            risk_level=RiskLevel.CRITICAL,
+                            evidence=sanitize_text(stripped, self._policy.secret_patterns),
+                            recommendation=f"Command '{denied}' is denied by safety policy.",
+                        ))
+                    return findings
+
+            # Review commands via token-prefix match
+            for review_cmd in self._policy.review_commands:
+                try:
+                    review_tokens = shlex.split(review_cmd)
+                except Exception:
+                    review_tokens = review_cmd.split()
+                if tokens[:len(review_tokens)] == review_tokens:
+                    findings.append(
+                        SafetyFinding(
+                            rule_id="R003_SYSTEM_COMMAND",
+                            rule_name="Command Requires Review",
+                            risk_type=RiskType.SYSTEM_COMMAND,
+                            risk_level=RiskLevel.MEDIUM,
+                            evidence=sanitize_text(stripped, self._policy.secret_patterns),
+                            recommendation=f"Command '{review_cmd}' requires human review per safety policy.",
+                        ))
+                    return findings
+
+            # Allowed commands check for this line
+            if (self._policy.allowed_commands and base_cmd not in _SHELL_KEYWORDS
+                    and base_cmd not in self._policy.allowed_commands):
                 findings.append(
                     SafetyFinding(
                         rule_id="R003_SYSTEM_COMMAND",
-                        rule_name="Denied Command",
-                        risk_type=RiskType.SYSTEM_COMMAND,
-                        risk_level=RiskLevel.CRITICAL,
-                        evidence=sanitize_text(script.strip(), self._policy.secret_patterns),
-                        recommendation=f"Command '{denied}' is denied by safety policy.",
-                    ))
-                return findings
-
-        # Check if command is in review list via token-prefix match
-        hit_review = False
-        for review_cmd in self._policy.review_commands:
-            try:
-                review_tokens = shlex.split(review_cmd)
-            except Exception:
-                review_tokens = review_cmd.split()
-            if tokens[:len(review_tokens)] == review_tokens:
-                findings.append(
-                    SafetyFinding(
-                        rule_id="R003_SYSTEM_COMMAND",
-                        rule_name="Command Requires Review",
+                        rule_name="Command Not Allowed",
                         risk_type=RiskType.SYSTEM_COMMAND,
                         risk_level=RiskLevel.MEDIUM,
-                        evidence=sanitize_text(script.strip(), self._policy.secret_patterns),
-                        recommendation=f"Command '{review_cmd}' requires human review per safety policy.",
+                        evidence=sanitize_text(stripped, self._policy.secret_patterns),
+                        recommendation=f"Command '{base_cmd}' is not in the allowed commands list.",
                     ))
-                hit_review = True
-                break
-        if hit_review:
-            return findings
 
-        # Check if command is in allowed list (only if allowed list is non-empty
-        # and not a shell control-flow keyword)
-        if (self._policy.allowed_commands and not skip_allowed_check and base_cmd not in self._policy.allowed_commands):
-            findings.append(
-                SafetyFinding(
-                    rule_id="R003_SYSTEM_COMMAND",
-                    rule_name="Command Not Allowed",
-                    risk_type=RiskType.SYSTEM_COMMAND,
-                    risk_level=RiskLevel.MEDIUM,
-                    evidence=sanitize_text(script.strip(), self._policy.secret_patterns),
-                    recommendation=f"Command '{base_cmd}' is not in the allowed commands list.",
-                ))
-
-        # Check for shell pipelines requiring review
-        # Strip comments and quoted strings to reduce false positives
+        # Check for shell pipelines requiring review (whole-script check)
         if self._policy.review_shell_pipelines:
             cleaned = self._strip_comments_and_quotes(script)
             if "|" in cleaned or ";" in cleaned:

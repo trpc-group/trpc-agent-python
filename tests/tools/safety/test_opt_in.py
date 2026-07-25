@@ -51,7 +51,10 @@ class TestBashToolOptIn:
         ctx.branch = "main"
         result = asyncio.run(tool._run_async_impl(
             tool_context=ctx,
-            args={"command": "rm -rf /", "timeout": 10},
+            args={
+                "command": "rm -rf /",
+                "timeout": 10
+            },
         ))
         assert result["success"] is False
         assert "TOOL_SAFETY_BLOCKED" in result["error"]
@@ -67,7 +70,10 @@ class TestBashToolOptIn:
         ctx.branch = "main"
         result = asyncio.run(tool._run_async_impl(
             tool_context=ctx,
-            args={"command": "echo hello", "timeout": 10},
+            args={
+                "command": "echo hello",
+                "timeout": 10
+            },
         ))
         assert "TOOL_SAFETY_BLOCKED" not in str(result)
 
@@ -77,8 +83,7 @@ class TestUnsafeLocalCodeExecutorOptIn:
     def test_default_no_safety_guard(self):
         """enable_safety_guard=False (default) preserves existing behavior."""
         from trpc_agent_sdk.code_executors.local._unsafe_local_code_executor import (
-            UnsafeLocalCodeExecutor,
-        )
+            UnsafeLocalCodeExecutor, )
         executor = UnsafeLocalCodeExecutor()
         assert executor.enable_safety_guard is False
         assert executor.safety_scanner is None
@@ -86,8 +91,7 @@ class TestUnsafeLocalCodeExecutorOptIn:
     def test_enable_safety_guard_auto_creates_scanner(self):
         """enable_safety_guard=True auto-creates SafetyScanner."""
         from trpc_agent_sdk.code_executors.local._unsafe_local_code_executor import (
-            UnsafeLocalCodeExecutor,
-        )
+            UnsafeLocalCodeExecutor, )
         executor = UnsafeLocalCodeExecutor(enable_safety_guard=True)
         assert executor.enable_safety_guard is True
         assert executor.safety_scanner is not None
@@ -95,8 +99,7 @@ class TestUnsafeLocalCodeExecutorOptIn:
     def test_safe_code_passes_scan_and_executes(self):
         """Code block that passes safety scan executes normally."""
         from trpc_agent_sdk.code_executors.local._unsafe_local_code_executor import (
-            UnsafeLocalCodeExecutor,
-        )
+            UnsafeLocalCodeExecutor, )
         from trpc_agent_sdk.code_executors._types import CodeBlock
         from trpc_agent_sdk.code_executors._types import CodeExecutionInput
 
@@ -112,4 +115,4 @@ class TestUnsafeLocalCodeExecutorOptIn:
             return await executor.execute_code(MagicMock(), inp)
 
         result = asyncio.run(_run())
-        assert "hello" in getattr(result, 'output', '') or True
+        assert "hello" in getattr(result, 'output', '')
