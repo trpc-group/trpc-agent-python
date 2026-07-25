@@ -20,7 +20,7 @@ from src.optimizer import OptimizationRunner
 from src.validator import ValidationRunner
 from src.auditor import Auditor
 from src.reporter import generate_json_report, generate_markdown_report
-from src.gate import AcceptanceGate, GateDecision
+from src.gate import AcceptanceGate, GateCheck, GateDecision
 
 
 def load_config():
@@ -176,9 +176,8 @@ async def main():
         # Phase 3: Optimization
         if not args.quiet: print("[3/6] Optimization...")
         pipeline_cfg = config.get("pipeline", {})
-        # Propagate CLI --seed to pipeline config
-        if args.seed is not None:
-            pipeline_cfg["random_seed"] = args.seed
+        # Propagate CLI --seed to pipeline config (default=42, always set)
+        pipeline_cfg["random_seed"] = args.seed
         if args.max_iter is not None:  # user explicitly set --max-iter
             pipeline_cfg = dict(pipeline_cfg, max_iterations=args.max_iter)
         opt_runner = OptimizationRunner(mode=run_mode, config=pipeline_cfg)
@@ -249,7 +248,7 @@ async def main():
         gate_dict = {
             "accepted": decision.accepted,
             "reason": decision.reason,
-            "checks": [{"name": c.name, "passed": c.passed, "detail": c.detail} for c in decision.checks],
+            "checks": [{"name": c.name, "passed": c.passed, "detail": c.detail, "description": c.description} for c in decision.checks],
         }
         if not args.quiet:
             tag = " (FAKE MODE DEMO ONLY)" if args.mode == "fake" else ""
