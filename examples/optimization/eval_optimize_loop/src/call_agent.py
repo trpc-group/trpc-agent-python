@@ -42,9 +42,14 @@ def create_plate_call_agent(
     """
     import sys
     _plate_root = str(Path(plate_agent_root))
-    sys.path.insert(0, _plate_root)
-    try:
-        async def _call_agent(query: str) -> str:
+    if _plate_root not in sys.path:
+        sys.path.insert(0, _plate_root)
+    # NOTE: sys.path is NOT cleaned up after the factory returns.
+    # The import inside _call_agent happens at call time (lazy), so
+    # removing the path in a factory-level finally would break it.
+    # Since the module is cached in sys.modules after first import,
+    # path pollution is minimal and harmless.
+    async def _call_agent(query: str) -> str:
             try:
                 from trpc_agent_sdk.runners import Runner
                 from trpc_agent_sdk.sessions import InMemorySessionService
@@ -112,11 +117,6 @@ def create_plate_call_agent(
 
             return final_text.strip() or "recognition failed"
 
-    finally:
-        try:
-            sys.path.remove(_plate_root)
-        except ValueError:
-            pass
     return _call_agent
 
 
@@ -132,16 +132,29 @@ def _resolve_image_path(query: str, plate_agent_root: str) -> str:
 
 
 def _ensure_abs(path: str, plate_agent_root: str) -> str:
-    """Resolve relative image path against common plate-agent directories."""
+    """Resolve relative image path against plate-agent directories.
+
+    Raises ValueError if the resolved path escapes plate_agent_root
+    (prevents path traversal via ../../etc/passwd patterns).
+    """
     p = Path(path)
+    root = Path(plate_agent_root).resolve()
     if p.is_absolute():
-        return str(p)
+        resolved = p.resolve()
+        if not str(resolved).startswith(str(root)):
+            raise ValueError(f"Absolute path {path} is outside plate_agent_root")
+        return str(resolved)
     candidates = [
-        Path(plate_agent_root) / path,
-        Path(plate_agent_root) / "eval" / "dataset" / "test_plates" / path,
-        Path(plate_agent_root) / "test_images" / path,
+        root / path,
+        root / "eval" / "dataset" / "test_images" / path,
     ]
-    for cand in candidates:
-        if cand.exists():
-            return str(cand)
-    return str(Path(plate_agent_root) / path)
+    for c in candidates:
+        resolved = c.resolve()
+        if not str(resolved).startswith(str(root)):
+            continue
+        if resolved.exists():
+            return str(resolved)
+    primary = (root / path).resolve()
+    if not str(primary).startswith(str(root)):
+        raise ValueError(f"Resolved path {primary} is outside plate_agent_root")
+    return str(primary)
