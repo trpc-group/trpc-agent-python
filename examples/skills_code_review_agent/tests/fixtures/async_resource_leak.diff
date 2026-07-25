@@ -1,0 +1,14 @@
+diff --git a/app/worker.py b/app/worker.py
+index 1111111..2222222 100644
+--- a/app/worker.py
++++ b/app/worker.py
+@@ -1,3 +1,10 @@
++import asyncio
++
+ async def refresh(path):
+-    return await load(path)
++    asyncio.create_task(load(path))
++    handle = open(path, "r")
++    content = handle.read()
++    await publish(content)
++    return content

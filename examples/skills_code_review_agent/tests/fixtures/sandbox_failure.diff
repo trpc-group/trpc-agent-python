@@ -1,0 +1,11 @@
+diff --git a/app/health.py b/app/health.py
+index 1111111..2222222 100644
+--- a/app/health.py
++++ b/app/health.py
+@@ -1,2 +1,5 @@
+ def health():
+-    return "ok"
++    status = {
++        "state": "ok",
++    }
++    return status

@@ -1,0 +1,21 @@
+diff --git a/app/math_utils.py b/app/math_utils.py
+index 1111111..2222222 100644
+--- a/app/math_utils.py
++++ b/app/math_utils.py
+@@ -1,2 +1,6 @@
+ def add(left, right):
+-    return left + right
++    """Return the sum of two numbers."""
++    result = left + right
++    return result
+diff --git a/tests/test_math_utils.py b/tests/test_math_utils.py
+index 3333333..4444444 100644
+--- a/tests/test_math_utils.py
++++ b/tests/test_math_utils.py
+@@ -1,3 +1,6 @@
+ from app.math_utils import add
+ # Existing coverage for positive numbers.
+ assert add(1, 2) == 3
++
++def test_negative_numbers():
++    assert add(-1, -2) == -3

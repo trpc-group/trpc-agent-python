@@ -1,0 +1,112 @@
+{
+  "line_rules": [
+    {
+      "id": "SEC-001",
+      "category": "security",
+      "severity": "high",
+      "pattern": "\\b(?:eval|exec)\\s*\\(",
+      "title": "Dynamic code evaluation",
+      "recommendation": "Replace dynamic evaluation with a strict parser or an explicit operation allowlist.",
+      "confidence": 0.98
+    },
+    {
+      "id": "SEC-002",
+      "category": "security",
+      "severity": "critical",
+      "pattern": "\\bsubprocess\\.(?:run|Popen|call|check_call|check_output)\\s*\\([^\\n]*shell\\s*=\\s*True",
+      "title": "Shell-enabled subprocess execution",
+      "recommendation": "Disable shell execution and pass a fixed executable with a validated argument list.",
+      "confidence": 0.99
+    },
+    {
+      "id": "SEC-003",
+      "category": "security",
+      "severity": "high",
+      "pattern": "\\bshell\\s*=\\s*True\\b",
+      "title": "Untrusted shell interpretation",
+      "recommendation": "Use direct process execution with shell disabled and validate every argument.",
+      "confidence": 0.96
+    },
+    {
+      "id": "SEC-004",
+      "category": "security",
+      "severity": "high",
+      "pattern": "\\b(?:os\\.system|Runtime\\.getRuntime\\(\\)\\.exec|child_process\\.exec)\\s*\\(",
+      "title": "Command execution API",
+      "recommendation": "Use a fixed command allowlist and an argument-array API without a shell.",
+      "confidence": 0.96
+    },
+    {
+      "id": "SEC-005",
+      "category": "security",
+      "severity": "high",
+      "pattern": "\\.(?:execute|query)\\s*\\(\\s*(?:f[\"']|[\"'][^\"']*\\{|[^,]+\\+)",
+      "title": "Interpolated database query",
+      "recommendation": "Use a parameterized query and bind all untrusted values through the database driver.",
+      "confidence": 0.90
+    },
+    {
+      "id": "ASYNC-001",
+      "category": "async_error",
+      "severity": "high",
+      "pattern": "^\\s*(?:asyncio\\.)?(?:create_task|ensure_future)\\s*\\(",
+      "title": "Detached asynchronous task",
+      "recommendation": "Retain and await the task, use a task group, or attach explicit exception handling.",
+      "confidence": 0.94
+    },
+    {
+      "id": "ASYNC-002",
+      "category": "async_error",
+      "severity": "medium",
+      "pattern": "^\\s*except\\s+(?:Exception|BaseException)\\s*:\\s*(?:pass)?\\s*$",
+      "title": "Asynchronous failure may be swallowed",
+      "recommendation": "Handle expected exceptions explicitly and propagate or record unexpected failures.",
+      "confidence": 0.68
+    },
+    {
+      "id": "RES-001",
+      "category": "resource_leak",
+      "severity": "high",
+      "pattern": "^\\s*(?!with\\b)[A-Za-z_][A-Za-z0-9_]*\\s*=\\s*open\\s*\\(",
+      "title": "File handle may leak",
+      "recommendation": "Open the file with a context manager or close it in a guaranteed finally block.",
+      "confidence": 0.91
+    },
+    {
+      "id": "DATA-001",
+      "category": "sensitive_data",
+      "severity": "critical",
+      "pattern": "(?i)[\"']?\\b(?:[a-z0-9]+[_-])*(?:api[_-]?key|access[_-]?token|auth[_-]?token|secret|password|passwd|pwd)\\b[\"']?\\s*[:=]\\s*[\"'][^\"']{4,}[\"']",
+      "title": "Hard-coded credential",
+      "recommendation": "Remove the credential from source, rotate it, and load it from an approved secret manager.",
+      "confidence": 0.99
+    },
+    {
+      "id": "DATA-002",
+      "category": "sensitive_data",
+      "severity": "critical",
+      "pattern": "(?i)(?:Bearer\\s+[A-Za-z0-9._~+/=-]{8,}|\\bgh[pousr]_[A-Za-z0-9]{16,}|\\b(?:sk|rk)-(?:live|test|proj)-[A-Za-z0-9_-]{8,}|\\bAKIA[0-9A-Z]{16}\\b)",
+      "title": "Credential-like token in source",
+      "recommendation": "Remove and rotate the token, then retrieve it at runtime from an approved secret manager.",
+      "confidence": 0.99
+    },
+    {
+      "id": "DATA-003",
+      "category": "sensitive_data",
+      "severity": "critical",
+      "pattern": "-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",
+      "title": "Private key material in source",
+      "recommendation": "Remove and rotate the private key, then store it in an approved secret manager.",
+      "confidence": 0.99
+    },
+    {
+      "id": "DATA-004",
+      "category": "sensitive_data",
+      "severity": "critical",
+      "pattern": "(?i)\\b[a-z][a-z0-9+.-]*://[^:/\\s]+:[^@\\s/]+@",
+      "title": "Credential embedded in URL",
+      "recommendation": "Remove credentials from the URL, rotate them, and inject them from a secret manager.",
+      "confidence": 0.99
+    }
+  ]
+}

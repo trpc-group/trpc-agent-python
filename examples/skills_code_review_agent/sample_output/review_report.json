@@ -1,0 +1,72 @@
+{
+  "conclusion": "changes_requested",
+  "filter_decisions": [
+    {
+      "decision": "allow",
+      "network_hosts": [],
+      "reason": "Execution satisfies the sandbox policy.",
+      "rule_id": "policy_allow",
+      "script": "scripts/review_diff.py"
+    }
+  ],
+  "findings": [
+    {
+      "category": "security",
+      "confidence": 0.98,
+      "evidence": "result = eval(expression, {\"__builtins__\": {}}, namespace)",
+      "file": "app/template.py",
+      "line": 3,
+      "recommendation": "Replace dynamic evaluation with a strict parser or an explicit operation allowlist.",
+      "severity": "high",
+      "source": "skill:SEC-001",
+      "title": "Dynamic code evaluation"
+    }
+  ],
+  "generated_at": "2026-07-25T16:05:49.280390+00:00",
+  "input_summary": {
+    "byte_count": 375,
+    "changed_line_count": 6,
+    "diff_preview": "diff --git a/app/template.py b/app/template.py\nindex 1111111..2222222 100644\n--- a/app/template.py\n+++ b/app/template.py\n@@ -1,3 +1,8 @@\n def render_template(expression, values):\n-    return values.get(expression)\n+    namespace = dict(values)\n+    result = eval(expression, {\"__builtins__\": {}}, namespace)\n+    if result is None:\n+        return \"\"\n+    return str(result)\n",
+    "file_count": 1,
+    "files": [
+      "app/template.py"
+    ],
+    "hunk_count": 1,
+    "input_type": "fixture",
+    "sha256": "369b6ae47d5b7a5d8fb4a4f540e9aae78250ff8913b63cd4a8eef8baf581fd75"
+  },
+  "model_mode": "fake",
+  "monitoring": {
+    "exception_distribution": {},
+    "finding_count": 1,
+    "interception_count": 0,
+    "redaction_count": 0,
+    "sandbox_duration_ms": 442,
+    "severity_distribution": {
+      "high": 1
+    },
+    "tool_calls": 2,
+    "total_duration_ms": 615,
+    "warning_count": 0
+  },
+  "needs_human_review": [],
+  "operational_warnings": [],
+  "sandbox_runs": [
+    {
+      "command": "python3 scripts/review_diff.py",
+      "duration_ms": 442,
+      "error_type": "",
+      "exit_code": 0,
+      "output_truncated": false,
+      "runtime": "container",
+      "skill_loaded": true,
+      "status": "completed",
+      "stderr": "",
+      "stdout": "reviewed 1 files, found 1 candidates\n",
+      "timed_out": false
+    }
+  ],
+  "status": "completed",
+  "task_id": "cr_00000000000000000000000000000000",
+  "warnings": []
+}

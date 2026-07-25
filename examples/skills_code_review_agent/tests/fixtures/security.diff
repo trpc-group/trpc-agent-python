@@ -1,0 +1,12 @@
+diff --git a/app/template.py b/app/template.py
+index 1111111..2222222 100644
+--- a/app/template.py
++++ b/app/template.py
+@@ -1,3 +1,8 @@
+ def render_template(expression, values):
+-    return values.get(expression)
++    namespace = dict(values)
++    result = eval(expression, {"__builtins__": {}}, namespace)
++    if result is None:
++        return ""
++    return str(result)
