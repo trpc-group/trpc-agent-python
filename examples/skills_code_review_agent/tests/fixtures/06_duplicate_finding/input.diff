@@ -1,0 +1,6 @@
+diff --git a/demo/config.py b/demo/config.py
+--- a/demo/config.py
++++ b/demo/config.py
+@@ -0,0 +1,2 @@
++API_TOKEN = "sk-live-duplicate-secret-123456"
++API_TOKEN = "sk-live-duplicate-secret-123456"

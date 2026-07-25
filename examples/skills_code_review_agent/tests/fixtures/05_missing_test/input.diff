@@ -1,0 +1,8 @@
+diff --git a/demo/price.py b/demo/price.py
+--- a/demo/price.py
++++ b/demo/price.py
+@@ -1,2 +1,4 @@
++def discounted(price):
++    return price * 0.8
++
+ def full_price(price): return price

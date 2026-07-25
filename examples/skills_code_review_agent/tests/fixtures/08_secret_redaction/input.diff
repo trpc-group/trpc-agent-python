@@ -1,0 +1,7 @@
+diff --git a/demo/settings.py b/demo/settings.py
+--- a/demo/settings.py
++++ b/demo/settings.py
+@@ -0,0 +1,3 @@
++password = "open-sesame"
++API_TOKEN = "sk-live-redaction-123456"
++authorization = "Bearer private-token-123456"

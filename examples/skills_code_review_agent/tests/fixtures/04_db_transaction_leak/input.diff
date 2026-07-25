@@ -1,0 +1,12 @@
+diff --git a/demo/repository.py b/demo/repository.py
+--- a/demo/repository.py
++++ b/demo/repository.py
+@@ -0,0 +1,8 @@
++def create_user(engine, user):
++    conn = engine.connect()
++    tx = transaction.begin()
++    try:
++        conn.execute("INSERT INTO users VALUES (?)", [user])
++        tx.commit()
++    except Exception:
++        raise

@@ -1,0 +1,10 @@
+diff --git a/demo/fetch.py b/demo/fetch.py
+--- a/demo/fetch.py
++++ b/demo/fetch.py
+@@ -0,0 +1,6 @@
++import aiohttp
++
++async def fetch(url):
++    session = aiohttp.ClientSession()
++    response = await session.get(url)
++    return await response.text()

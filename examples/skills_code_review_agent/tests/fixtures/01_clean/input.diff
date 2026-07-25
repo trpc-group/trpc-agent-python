@@ -1,0 +1,20 @@
+diff --git a/demo/math_utils.py b/demo/math_utils.py
+index 1111111..2222222 100644
+--- a/demo/math_utils.py
++++ b/demo/math_utils.py
+@@ -1,2 +1,4 @@
+ def add(left, right):
+     return left + right
+
+def subtract(left, right):
+    return left - right
+diff --git a/tests/test_math_utils.py b/tests/test_math_utils.py
+index 1111111..2222222 100644
+--- a/tests/test_math_utils.py
++++ b/tests/test_math_utils.py
+@@ -1,2 +1,5 @@
+ def test_add():
+     assert add(1, 2) == 3
+
+def test_subtract():
+    assert subtract(3, 1) == 2

@@ -1,0 +1,6 @@
+diff --git a/demo/client.py b/demo/client.py
+--- a/demo/client.py
++++ b/demo/client.py
+@@ -0,0 +1,2 @@
++API_TOKEN = "sk-live-token-123456789"
++def call_model(): return API_TOKEN
