@@ -28,6 +28,7 @@ from ._types import RiskType
 from ._types import SafetyFinding
 
 _URL_RE = re.compile(r"https?://[^\s<>\"')\]]+")
+_HOSTNAME_RE = re.compile(r'\b(nc|netcat|socat)\s+([^\s;|&]+)')
 
 
 class BashParser:
@@ -123,7 +124,6 @@ class BashParser:
                 all_whitelisted = False
 
         # Check raw hostnames for nc/netcat/socat (no http:// prefix)
-        _HOSTNAME_RE = re.compile(r'\b(nc|netcat|socat)\s+([^\s;|&]+)')
         host_match = _HOSTNAME_RE.search(line)
         if host_match:
             hostname = host_match.group(2)

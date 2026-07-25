@@ -144,7 +144,7 @@ class TestSafetyFinding:
             rule_name="API Key Leak",
             risk_type=RiskType.SECRET_EXFILTRATION,
             risk_level=RiskLevel.HIGH,
-            evidence='api_key = "sk-abc123"',
+            evidence='api_key = "sk-xxx"',
             line=42,
             column=10,
             recommendation="Use environment variables instead of hardcoded keys.",

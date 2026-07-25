@@ -106,13 +106,26 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         work_dir, should_cleanup = self._prepare_work_dir(input_data.execution_id)
 
         try:
+            # Scan all blocks first, then aggregate decision (consistent with SafeCodeExecutor)
+            all_findings = []
+            for i, block in enumerate(input_data.code_blocks):
+                report = self._scan_code_block(block)
+                if report:
+                    all_findings.extend(report.findings)
+
+            if all_findings:
+                from trpc_agent_sdk.tools.safety import Decision
+                from trpc_agent_sdk.tools.safety import aggregate_decision
+                combined = aggregate_decision(all_findings)
+                should_block = (combined == Decision.DENY
+                                or (self.block_on_review and combined == Decision.NEEDS_HUMAN_REVIEW))
+                if should_block:
+                    return create_code_execution_result(
+                        stderr=f"Code execution blocked by safety guard: {combined.value}")
+
             # Execute each code block
             for i, block in enumerate(input_data.code_blocks):
                 try:
-                    blocked_report = self._scan_code_block(block)
-                    if blocked_report:
-                        error_parts.append(f"Execution block {i} blocked by safety guard: {blocked_report.summary}")
-                        continue
                     block_output = await self._execute_code_block(work_dir, block, i)
                     if block_output:
                         output_parts.append(block_output)
@@ -154,12 +167,12 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
     def _scan_code_block(self, block: CodeBlock) -> Optional[Any]:
         """Scan a single code block before execution.
 
-        Returns a SafetyReport if execution should be blocked, None otherwise.
+        Always returns a SafetyReport (never None when safety guard is enabled)
+        so the caller can aggregate findings across blocks.
         """
         if not self.enable_safety_guard or self.safety_scanner is None:
             return None
         from trpc_agent_sdk.tools.safety import AuditLogger
-        from trpc_agent_sdk.tools.safety import Decision
         from trpc_agent_sdk.tools.safety import ScanRequest
         from trpc_agent_sdk.tools.safety import ScanTarget
         from trpc_agent_sdk.tools.safety import normalize_language
@@ -174,10 +187,7 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         if self.safety_audit_log_path:
             AuditLogger(self.safety_audit_log_path).record(report)
         set_safety_telemetry(report)
-        should_block = (report.decision == Decision.DENY
-                        or (self.block_on_review and report.decision == Decision.NEEDS_HUMAN_REVIEW))
-        report.set_blocked(should_block)
-        return report if should_block else None
+        return report
 
     async def _execute_code_block(self, work_dir: Path, block: CodeBlock, block_index: int) -> str:
         """Execute a single code block.

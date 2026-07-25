@@ -254,9 +254,23 @@ class _PythonVisitor(ast.NodeVisitor):
             targets = [attr_arg.value]
         elif isinstance(attr_arg, ast.BinOp) and isinstance(attr_arg.op, ast.Add):
             # getattr(..., 'ev'+'al') concatenation evasion
-            left = getattr(attr_arg.left, 'value', '')
-            right = getattr(attr_arg.right, 'value', '')
-            targets = [f"{left}{right}"]
+            left_val = getattr(attr_arg.left, 'value', None)
+            right_val = getattr(attr_arg.right, 'value', None)
+            if left_val is not None and right_val is not None:
+                targets = [f"{left_val}{right_val}"]
+            else:
+                # Variable concatenation — can't resolve statically, flag for review
+                self.findings.append(
+                    SafetyFinding(
+                        rule_id="R003_DYNAMIC_CODE_EXECUTION",
+                        rule_name="Dynamic Code Execution via getattr (variable args)",
+                        risk_type=RiskType.SYSTEM_COMMAND,
+                        risk_level=RiskLevel.MEDIUM,
+                        evidence=sanitize_text("getattr(..., <expr>)", self._secret_patterns),
+                        line=node.lineno,
+                        recommendation="getattr with non-constant arguments requires human review.",
+                    ))
+                return
         for t in targets:
             if t in ('eval', 'exec', 'system', 'popen'):
                 self.findings.append(

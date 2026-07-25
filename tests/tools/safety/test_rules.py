@@ -13,12 +13,12 @@ from trpc_agent_sdk.tools.safety._rules import sanitize_text
 class TestSanitizeText:
 
     def test_sanitize_openai_key(self):
-        result = sanitize_text("api_key=sk-proj1234567890abcdefg")
+        result = sanitize_text("api_key=sk-xxxxxxxxxxxx")
         assert "sk-" not in result
         assert "[SANITIZED]" in result
 
     def test_sanitize_github_token(self):
-        result = sanitize_text("token=ghp_abcdefghijklmnop12345")
+        result = sanitize_text("token=ghp_xxxxxxxxxxxx")
         assert "ghp_" not in result
         assert "[SANITIZED]" in result
 
@@ -37,7 +37,7 @@ class TestSanitizeText:
         assert sanitize_text(text) == text
 
     def test_multiple_secrets(self):
-        text = "TOKEN=ghp_abc123 and api_key=sk-xyz789"
+        text = "TOKEN=ghp_xxxxxxxxxxxx and api_key=sk-xxxxxxxxxxxx"
         result = sanitize_text(text)
         assert "ghp_" not in result
         assert "sk-" not in result

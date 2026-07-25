@@ -42,7 +42,7 @@ class TestSafetyScannerScan:
 
     def test_sanitized_flag_with_secret(self, scanner):
         req = ScanRequest(
-            script="export API_KEY=sk-abc1234567890",
+            script="export MY_VAR=sk-xxxxxxxxxxxx",
             language=ScriptLanguage.BASH,
             tool_name="leak",
         )
@@ -77,7 +77,7 @@ class TestSafetyScannerScan:
 class TestIsEnvContainsSensitiveKeys:
 
     def test_sensitive_key_detected(self, scanner):
-        env = {"AWS_SECRET_ACCESS_KEY": "xxx", "PATH": "/usr/bin"}
+        env = {"SECRET_VAR": "xxx", "PATH": "/usr/bin"}
         assert scanner._is_env_contains_sensitive_keys(env) is True
 
     def test_no_sensitive_key(self, scanner):
@@ -143,10 +143,10 @@ class TestEnvAllowlistCoverage:
     def test_env_allowlist_excludes_key(self, scanner):
         """Sensitive key in env_allowlist is not flagged."""
         policy = PolicyConfig.from_dict({
-            "env_allowlist": ["AWS_SECRET_ACCESS_KEY"],
+            "env_allowlist": ["SECRET_VAR"],
         })
         scanner2 = SafetyScanner(policy)
-        env = {"AWS_SECRET_ACCESS_KEY": "xxx", "PATH": "/usr/bin"}
+        env = {"SECRET_VAR": "xxx", "PATH": "/usr/bin"}
         assert scanner2._is_env_contains_sensitive_keys(env) is False
 
     def test_max_output_bytes_exceeded(self, scanner):

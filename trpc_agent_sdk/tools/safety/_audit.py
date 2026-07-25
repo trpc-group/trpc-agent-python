@@ -49,11 +49,21 @@ class AuditEvent:
 
 
 class AuditLogger:
-    """Records safety scan results as JSON-lines audit events."""
+    """Records safety scan results as JSON-lines audit events.
+
+    Uses a class-level lock cache keyed by resolved path so that multiple
+    instances writing to the same file share the same lock, preventing
+    line interleaving under concurrent access.
+    """
+
+    _path_locks: dict[str, threading.Lock] = {}
 
     def __init__(self, path: str) -> None:
         self._path = Path(path)
-        self._lock = threading.Lock()
+        key = str(self._path.resolve())
+        if key not in AuditLogger._path_locks:
+            AuditLogger._path_locks[key] = threading.Lock()
+        self._lock = AuditLogger._path_locks[key]
 
     @classmethod
     def from_report(cls, report: SafetyReport) -> AuditEvent:

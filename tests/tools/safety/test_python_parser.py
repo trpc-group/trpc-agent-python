@@ -108,7 +108,7 @@ class TestPythonParserResourceAbuse:
 class TestPythonParserSecretExfiltration:
 
     def test_api_key_in_string(self, parser):
-        findings = parser.parse('api_key = "sk-abc1234567890"')
+        findings = parser.parse('api_key = "sk-xxx"')
         # Evidence should be sanitized
         for f in findings:
             assert "sk-" not in f.evidence or "[SANITIZED]" in f.evidence
