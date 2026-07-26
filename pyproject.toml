@@ -206,3 +206,6 @@ minversion = "6.0"
 addopts = "-ra -q"
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "integration: opt-in tests that require an external backend (Redis / MySQL). Skipped unless the corresponding environment variable is set.",
+]

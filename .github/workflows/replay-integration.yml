@@ -1,0 +1,115 @@
+name: replay-integration
+
+# Replay consistency integration tests — opt-in only.
+#
+# The default CI workflow (ci.yml) runs the lightweight InMemory ⇄ SQLite
+# replay suite unconditionally. This companion workflow boots Redis / MySQL
+# service containers and re-runs the same 10 replay cases against the real
+# integration backends. It is intended to be triggered:
+#
+#   * Manually via workflow_dispatch, or
+#   * Automatically when a repo-level secret (``TRPC_REPLAY_REDIS_URL`` /
+#     ``TRPC_REPLAY_SQL_URL``) is configured and the workflow is enabled.
+#
+# When neither secret is set the integration tests are skipped cleanly via
+# the integration_runtime fixture in tests/sessions/conftest.py, so the
+# workflow stays green for forks that opt out of running external services.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Sundays at 03:00 UTC — weekly integration regression check.
+    - cron: '0 3 * * 0'
+
+permissions:
+  contents: read
+
+jobs:
+  redis:
+    name: Replay consistency (InMemory ⇄ Redis)
+    runs-on: [self-hosted, trpc-agent-python-ci]
+    timeout-minutes: 30
+    # Skip is handled at the test level by the ``integration_runtime`` fixture
+    # in tests/sessions/conftest.py: when the operator has not configured
+    # ``TRPC_REPLAY_REDIS_URL``, the redis_integration tests are skipped
+    # cleanly. We deliberately do NOT gate this job on a job-level ``if:``
+    # because the ``secrets`` context is unavailable in job-level ``if:``
+    # expressions and ``env`` is read in declaration order.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TRPC_REPLAY_REDIS_URL: redis://localhost:6379/0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install package and dependencies
+        run: pip install -r requirements-test.txt
+
+      - name: Run replay integration tests (Redis)
+        run: |
+          pytest -m integration --no-header -ra \
+            tests/sessions/test_replay_consistency.py \
+            -k "redis_integration" \
+            -v
+
+      - name: Upload replay diff report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: replay-diff-report-redis
+          path: tests/sessions/replay_diff_report.json
+          if-no-files-found: ignore
+
+  sql:
+    name: Replay consistency (InMemory ⇄ MySQL)
+    runs-on: [self-hosted, trpc-agent-python-ci]
+    timeout-minutes: 30
+    # Skip is handled at the test level by the ``integration_runtime`` fixture
+    # in tests/sessions/conftest.py: when the operator has not configured
+    # ``TRPC_REPLAY_SQL_URL``, the sql_integration tests are skipped cleanly.
+    # See the redis job above for why we do not use a job-level ``if:``.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: replay
+          MYSQL_DATABASE: replay
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -preplay"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 10
+    env:
+      TRPC_REPLAY_SQL_URL: mysql+aiomysql://root:replay@127.0.0.1:3306/replay
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install package and dependencies
+        run: pip install -r requirements-test.txt
+
+      - name: Run replay integration tests (MySQL)
+        run: |
+          pytest -m integration --no-header -ra \
+            tests/sessions/test_replay_consistency.py \
+            -k "sql_integration" \
+            -v
+
+      - name: Upload replay diff report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: replay-diff-report-mysql
+          path: tests/sessions/replay_diff_report.json
+          if-no-files-found: ignore

@@ -1,0 +1,4396 @@
+{
+  "allowed_diff_rules": [
+    {
+      "path": "$.memory.*",
+      "reason": "Keyword-memory ranking order is backend-specific; entry content and count must still match.",
+      "scope": "order_only"
+    },
+    {
+      "path": "$.recovery_raw[*].mechanism",
+      "reason": "A backend may reject a duplicate transactionally or require compensating cleanup.",
+      "scope": "mechanism_only"
+    }
+  ],
+  "backends": [
+    "inmemory",
+    "sqlite"
+  ],
+  "cases": [
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 2,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Hi there"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Hello, how can I help?"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {
+              "topic": "weather"
+            },
+            "summary": {
+              "anchor_count": 0,
+              "current": null,
+              "revisions": []
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 2,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Hi there"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Hello, how can I help?"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {
+              "topic": "weather"
+            },
+            "summary": {
+              "anchor_count": 0,
+              "current": null,
+              "revisions": []
+            }
+          }
+        }
+      },
+      "case_id": "single_turn",
+      "description": "Single user → agent exchange; sanity check baseline.",
+      "differences": [],
+      "session_id": "session-single-turn",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 6,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "What is 2+2?"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "4"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "And 3+3?"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "6"
+                    }
+                  ]
+                },
+                "id": "event-3",
+                "invocation_id": "invocation-e4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "And 4+5?"
+                    }
+                  ]
+                },
+                "id": "event-4",
+                "invocation_id": "invocation-e5",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "9"
+                    }
+                  ]
+                },
+                "id": "event-5",
+                "invocation_id": "invocation-e6",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "anchor_count": 0,
+              "current": null,
+              "revisions": []
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 6,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "What is 2+2?"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "4"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "And 3+3?"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "6"
+                    }
+                  ]
+                },
+                "id": "event-3",
+                "invocation_id": "invocation-e4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "And 4+5?"
+                    }
+                  ]
+                },
+                "id": "event-4",
+                "invocation_id": "invocation-e5",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "9"
+                    }
+                  ]
+                },
+                "id": "event-5",
+                "invocation_id": "invocation-e6",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "anchor_count": 0,
+              "current": null,
+              "revisions": []
+            }
+          }
+        }
+      },
+      "case_id": "multi_turn",
+      "description": "3 alternating user/assistant turns.",
+      "differences": [],
+      "session_id": "session-multi-turn",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 4,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Weather in Tokyo?"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "function_call": {
+                        "args": {
+                          "city": "Tokyo"
+                        },
+                        "id": "fc-1",
+                        "name": "get_weather"
+                      }
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "tool",
+                "content": {
+                  "parts": [
+                    {
+                      "function_response": {
+                        "id": "fc-1",
+                        "name": "get_weather",
+                        "response": {
+                          "temperature": 22
+                        }
+                      }
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Tokyo is 22°C."
+                    }
+                  ]
+                },
+                "id": "event-3",
+                "invocation_id": "invocation-e4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "anchor_count": 0,
+              "current": null,
+              "revisions": []
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 4,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Weather in Tokyo?"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "function_call": {
+                        "args": {
+                          "city": "Tokyo"
+                        },
+                        "id": "fc-1",
+                        "name": "get_weather"
+                      }
+                    }
+                  ],
+                  "role": "model"
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "tool",
+                "content": {
+                  "parts": [
+                    {
+                      "function_response": {
+                        "id": "fc-1",
+                        "name": "get_weather",
+                        "response": {
+                          "temperature": 22
+                        }
+                      }
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Tokyo is 22°C."
+                    }
+                  ]
+                },
+                "id": "event-3",
+                "invocation_id": "invocation-e4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "anchor_count": 0,
+              "current": null,
+              "revisions": []
+            }
+          }
+        }
+      },
+      "case_id": "tool_call",
+      "description": "function_call + function_response pair to validate tool part preservation.",
+      "differences": [],
+      "session_id": "session-tool-call",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 5,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {
+                    "counter": 1
+                  }
+                },
+                "author": "system",
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {
+                    "counter": 2
+                  }
+                },
+                "author": "system",
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {
+                    "counter": 3
+                  }
+                },
+                "author": "system",
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {
+                    "tags": [
+                      "v2"
+                    ]
+                  }
+                },
+                "author": "system",
+                "id": "event-3",
+                "invocation_id": "invocation-e4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "final value?"
+                    }
+                  ]
+                },
+                "id": "event-4",
+                "invocation_id": "invocation-e5",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {
+              "counter": 3,
+              "tags": [
+                "v2"
+              ]
+            },
+            "summary": {
+              "anchor_count": 0,
+              "current": null,
+              "revisions": []
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 5,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {
+                    "counter": 1
+                  }
+                },
+                "author": "system",
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {
+                    "counter": 2
+                  }
+                },
+                "author": "system",
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {
+                    "counter": 3
+                  }
+                },
+                "author": "system",
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {
+                    "tags": [
+                      "v2"
+                    ]
+                  }
+                },
+                "author": "system",
+                "id": "event-3",
+                "invocation_id": "invocation-e4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "final value?"
+                    }
+                  ]
+                },
+                "id": "event-4",
+                "invocation_id": "invocation-e5",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {
+              "counter": 3,
+              "tags": [
+                "v2"
+              ]
+            },
+            "summary": {
+              "anchor_count": 0,
+              "current": null,
+              "revisions": []
+            }
+          }
+        }
+      },
+      "case_id": "state_update",
+      "description": "Sequential state_delta writes including overwrite semantics.",
+      "differences": [],
+      "session_id": "session-state-update",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 7,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "I love hiking in the Alps"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Sounds adventurous."
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "But the Pacific coast is nice too"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {
+              "alpine": [
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "text": "I love hiking in the Alps"
+                      }
+                    ]
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ],
+              "noise": [],
+              "pacific": [
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "text": "But the Pacific coast is nice too"
+                      }
+                    ]
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "anchor_count": 0,
+              "current": null,
+              "revisions": []
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 7,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "I love hiking in the Alps"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Sounds adventurous."
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "But the Pacific coast is nice too"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {
+              "alpine": [
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "text": "I love hiking in the Alps"
+                      }
+                    ]
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ],
+              "noise": [],
+              "pacific": [
+                {
+                  "author": "user",
+                  "content": {
+                    "parts": [
+                      {
+                        "text": "But the Pacific coast is nice too"
+                      }
+                    ]
+                  },
+                  "timestamp": "<timestamp>"
+                }
+              ]
+            },
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "anchor_count": 0,
+              "current": null,
+              "revisions": []
+            }
+          }
+        }
+      },
+      "case_id": "memory_rw",
+      "description": "Persist events then search by keyword to validate memory parity.",
+      "differences": [],
+      "session_id": "session-memory-rw",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 23,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "replay_session_id": "session-summary-gen",
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "summary of turns 1..20"
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "summary-001",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 1,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 21"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e21",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 22"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e22",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 1"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 2"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 3"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 4"
+                    }
+                  ]
+                },
+                "id": "event-3",
+                "invocation_id": "invocation-e4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 5"
+                    }
+                  ]
+                },
+                "id": "event-4",
+                "invocation_id": "invocation-e5",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 6"
+                    }
+                  ]
+                },
+                "id": "event-5",
+                "invocation_id": "invocation-e6",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 7"
+                    }
+                  ]
+                },
+                "id": "event-6",
+                "invocation_id": "invocation-e7",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 8"
+                    }
+                  ]
+                },
+                "id": "event-7",
+                "invocation_id": "invocation-e8",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 9"
+                    }
+                  ]
+                },
+                "id": "event-8",
+                "invocation_id": "invocation-e9",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 10"
+                    }
+                  ]
+                },
+                "id": "event-9",
+                "invocation_id": "invocation-e10",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 11"
+                    }
+                  ]
+                },
+                "id": "event-10",
+                "invocation_id": "invocation-e11",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 12"
+                    }
+                  ]
+                },
+                "id": "event-11",
+                "invocation_id": "invocation-e12",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 13"
+                    }
+                  ]
+                },
+                "id": "event-12",
+                "invocation_id": "invocation-e13",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 14"
+                    }
+                  ]
+                },
+                "id": "event-13",
+                "invocation_id": "invocation-e14",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 15"
+                    }
+                  ]
+                },
+                "id": "event-14",
+                "invocation_id": "invocation-e15",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 16"
+                    }
+                  ]
+                },
+                "id": "event-15",
+                "invocation_id": "invocation-e16",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 17"
+                    }
+                  ]
+                },
+                "id": "event-16",
+                "invocation_id": "invocation-e17",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 18"
+                    }
+                  ]
+                },
+                "id": "event-17",
+                "invocation_id": "invocation-e18",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 19"
+                    }
+                  ]
+                },
+                "id": "event-18",
+                "invocation_id": "invocation-e19",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 20"
+                    }
+                  ]
+                },
+                "id": "event-19",
+                "invocation_id": "invocation-e20",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "anchor_count": 1,
+              "current": {
+                "anchor_count": 1,
+                "anchor_text": "summary of turns 1..20",
+                "compressed_event_count": 3,
+                "original_event_count": 22,
+                "session_id": "session-summary-gen",
+                "summary_id": "summary-001",
+                "supersedes": null,
+                "text": "summary of turns 1..20",
+                "updated_at": "<timestamp>",
+                "version": 1
+              },
+              "revisions": [
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "summary of turns 1..20",
+                  "compressed_event_count": 3,
+                  "original_event_count": 22,
+                  "session_id": "session-summary-gen",
+                  "summary_id": "summary-001",
+                  "supersedes": null,
+                  "text": "summary of turns 1..20",
+                  "updated_at": "<timestamp>",
+                  "version": 1
+                }
+              ]
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 23,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "replay_session_id": "session-summary-gen",
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "summary of turns 1..20"
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "summary-001",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 1,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 21"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e21",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 22"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e22",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 1"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 2"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 3"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 4"
+                    }
+                  ]
+                },
+                "id": "event-3",
+                "invocation_id": "invocation-e4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 5"
+                    }
+                  ]
+                },
+                "id": "event-4",
+                "invocation_id": "invocation-e5",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 6"
+                    }
+                  ]
+                },
+                "id": "event-5",
+                "invocation_id": "invocation-e6",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 7"
+                    }
+                  ]
+                },
+                "id": "event-6",
+                "invocation_id": "invocation-e7",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 8"
+                    }
+                  ]
+                },
+                "id": "event-7",
+                "invocation_id": "invocation-e8",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 9"
+                    }
+                  ]
+                },
+                "id": "event-8",
+                "invocation_id": "invocation-e9",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 10"
+                    }
+                  ]
+                },
+                "id": "event-9",
+                "invocation_id": "invocation-e10",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 11"
+                    }
+                  ]
+                },
+                "id": "event-10",
+                "invocation_id": "invocation-e11",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 12"
+                    }
+                  ]
+                },
+                "id": "event-11",
+                "invocation_id": "invocation-e12",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 13"
+                    }
+                  ]
+                },
+                "id": "event-12",
+                "invocation_id": "invocation-e13",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 14"
+                    }
+                  ]
+                },
+                "id": "event-13",
+                "invocation_id": "invocation-e14",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 15"
+                    }
+                  ]
+                },
+                "id": "event-14",
+                "invocation_id": "invocation-e15",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 16"
+                    }
+                  ]
+                },
+                "id": "event-15",
+                "invocation_id": "invocation-e16",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 17"
+                    }
+                  ]
+                },
+                "id": "event-16",
+                "invocation_id": "invocation-e17",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 18"
+                    }
+                  ]
+                },
+                "id": "event-17",
+                "invocation_id": "invocation-e18",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 19"
+                    }
+                  ]
+                },
+                "id": "event-18",
+                "invocation_id": "invocation-e19",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 20"
+                    }
+                  ]
+                },
+                "id": "event-19",
+                "invocation_id": "invocation-e20",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "anchor_count": 1,
+              "current": {
+                "anchor_count": 1,
+                "anchor_text": "summary of turns 1..20",
+                "compressed_event_count": 3,
+                "original_event_count": 22,
+                "session_id": "session-summary-gen",
+                "summary_id": "summary-001",
+                "supersedes": null,
+                "text": "summary of turns 1..20",
+                "updated_at": "<timestamp>",
+                "version": 1
+              },
+              "revisions": [
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "summary of turns 1..20",
+                  "compressed_event_count": 3,
+                  "original_event_count": 22,
+                  "session_id": "session-summary-gen",
+                  "summary_id": "summary-001",
+                  "supersedes": null,
+                  "text": "summary of turns 1..20",
+                  "updated_at": "<timestamp>",
+                  "version": 1
+                }
+              ]
+            }
+          }
+        }
+      },
+      "case_id": "summary_gen",
+      "description": "22 turns triggers a single summary with keep_recent_count=2.",
+      "differences": [],
+      "session_id": "session-summary-gen",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 23,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "replay_session_id": "session-summary-truncate",
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "compressed conversation snapshot."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "summary-002",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 1,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 21"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e21",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 22"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e22",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 1"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 2"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 3"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 4"
+                    }
+                  ]
+                },
+                "id": "event-3",
+                "invocation_id": "invocation-e4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 5"
+                    }
+                  ]
+                },
+                "id": "event-4",
+                "invocation_id": "invocation-e5",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 6"
+                    }
+                  ]
+                },
+                "id": "event-5",
+                "invocation_id": "invocation-e6",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 7"
+                    }
+                  ]
+                },
+                "id": "event-6",
+                "invocation_id": "invocation-e7",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 8"
+                    }
+                  ]
+                },
+                "id": "event-7",
+                "invocation_id": "invocation-e8",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 9"
+                    }
+                  ]
+                },
+                "id": "event-8",
+                "invocation_id": "invocation-e9",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 10"
+                    }
+                  ]
+                },
+                "id": "event-9",
+                "invocation_id": "invocation-e10",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 11"
+                    }
+                  ]
+                },
+                "id": "event-10",
+                "invocation_id": "invocation-e11",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 12"
+                    }
+                  ]
+                },
+                "id": "event-11",
+                "invocation_id": "invocation-e12",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 13"
+                    }
+                  ]
+                },
+                "id": "event-12",
+                "invocation_id": "invocation-e13",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 14"
+                    }
+                  ]
+                },
+                "id": "event-13",
+                "invocation_id": "invocation-e14",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 15"
+                    }
+                  ]
+                },
+                "id": "event-14",
+                "invocation_id": "invocation-e15",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 16"
+                    }
+                  ]
+                },
+                "id": "event-15",
+                "invocation_id": "invocation-e16",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 17"
+                    }
+                  ]
+                },
+                "id": "event-16",
+                "invocation_id": "invocation-e17",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 18"
+                    }
+                  ]
+                },
+                "id": "event-17",
+                "invocation_id": "invocation-e18",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 19"
+                    }
+                  ]
+                },
+                "id": "event-18",
+                "invocation_id": "invocation-e19",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 20"
+                    }
+                  ]
+                },
+                "id": "event-19",
+                "invocation_id": "invocation-e20",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "anchor_count": 1,
+              "current": {
+                "anchor_count": 1,
+                "anchor_text": "compressed conversation snapshot.",
+                "compressed_event_count": 3,
+                "original_event_count": 22,
+                "session_id": "session-summary-truncate",
+                "summary_id": "summary-002",
+                "supersedes": null,
+                "text": "compressed conversation snapshot.",
+                "updated_at": "<timestamp>",
+                "version": 1
+              },
+              "revisions": [
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "compressed conversation snapshot.",
+                  "compressed_event_count": 3,
+                  "original_event_count": 22,
+                  "session_id": "session-summary-truncate",
+                  "summary_id": "summary-002",
+                  "supersedes": null,
+                  "text": "compressed conversation snapshot.",
+                  "updated_at": "<timestamp>",
+                  "version": 1
+                }
+              ]
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 23,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "replay_session_id": "session-summary-truncate",
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "compressed conversation snapshot."
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "summary-002",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 1,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 21"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e21",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 22"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e22",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 1"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 2"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 3"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 4"
+                    }
+                  ]
+                },
+                "id": "event-3",
+                "invocation_id": "invocation-e4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 5"
+                    }
+                  ]
+                },
+                "id": "event-4",
+                "invocation_id": "invocation-e5",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 6"
+                    }
+                  ]
+                },
+                "id": "event-5",
+                "invocation_id": "invocation-e6",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 7"
+                    }
+                  ]
+                },
+                "id": "event-6",
+                "invocation_id": "invocation-e7",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 8"
+                    }
+                  ]
+                },
+                "id": "event-7",
+                "invocation_id": "invocation-e8",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 9"
+                    }
+                  ]
+                },
+                "id": "event-8",
+                "invocation_id": "invocation-e9",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 10"
+                    }
+                  ]
+                },
+                "id": "event-9",
+                "invocation_id": "invocation-e10",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 11"
+                    }
+                  ]
+                },
+                "id": "event-10",
+                "invocation_id": "invocation-e11",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 12"
+                    }
+                  ]
+                },
+                "id": "event-11",
+                "invocation_id": "invocation-e12",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 13"
+                    }
+                  ]
+                },
+                "id": "event-12",
+                "invocation_id": "invocation-e13",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 14"
+                    }
+                  ]
+                },
+                "id": "event-13",
+                "invocation_id": "invocation-e14",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 15"
+                    }
+                  ]
+                },
+                "id": "event-14",
+                "invocation_id": "invocation-e15",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 16"
+                    }
+                  ]
+                },
+                "id": "event-15",
+                "invocation_id": "invocation-e16",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 17"
+                    }
+                  ]
+                },
+                "id": "event-16",
+                "invocation_id": "invocation-e17",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 18"
+                    }
+                  ]
+                },
+                "id": "event-17",
+                "invocation_id": "invocation-e18",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 19"
+                    }
+                  ]
+                },
+                "id": "event-18",
+                "invocation_id": "invocation-e19",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 20"
+                    }
+                  ]
+                },
+                "id": "event-19",
+                "invocation_id": "invocation-e20",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "anchor_count": 1,
+              "current": {
+                "anchor_count": 1,
+                "anchor_text": "compressed conversation snapshot.",
+                "compressed_event_count": 3,
+                "original_event_count": 22,
+                "session_id": "session-summary-truncate",
+                "summary_id": "summary-002",
+                "supersedes": null,
+                "text": "compressed conversation snapshot.",
+                "updated_at": "<timestamp>",
+                "version": 1
+              },
+              "revisions": [
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "compressed conversation snapshot.",
+                  "compressed_event_count": 3,
+                  "original_event_count": 22,
+                  "session_id": "session-summary-truncate",
+                  "summary_id": "summary-002",
+                  "supersedes": null,
+                  "text": "compressed conversation snapshot.",
+                  "updated_at": "<timestamp>",
+                  "version": 1
+                }
+              ]
+            }
+          }
+        }
+      },
+      "case_id": "summary_truncate",
+      "description": "Same 22-turn input as summary_gen but invokes a second summary so the boundary between retained events and summary text is exercised. Metadata must match exactly across backends; the active event count may legitimately differ when SQL keeps raw events in historical_events.",
+      "differences": [],
+      "session_id": "session-summary-truncate",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [
+        {
+          "allowed": true,
+          "backend": "sqlite",
+          "backend_value": [
+            {
+              "append_error": "IntegrityError",
+              "kind": "duplicate_append",
+              "mechanism": "transactional_rejection",
+              "observed_duplicate_count": 1
+            }
+          ],
+          "case_id": "exception_recovery",
+          "domain": "recovery",
+          "event_index": null,
+          "explanation": "A backend may reject a duplicate transactionally or require compensating cleanup.",
+          "path": "$.recovery_raw",
+          "reference_backend": "inmemory",
+          "reference_value": [
+            {
+              "append_error": null,
+              "kind": "duplicate_append",
+              "mechanism": "compensating_deduplication",
+              "observed_duplicate_count": 2
+            }
+          ],
+          "session_id": "session-exception-recovery",
+          "summary_id": null
+        }
+      ],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 3,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "first request"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "second request"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [
+              {
+                "final_event_count": 1,
+                "kind": "duplicate_append",
+                "recovered": true
+              }
+            ],
+            "state": {},
+            "summary": {
+              "anchor_count": 0,
+              "current": null,
+              "revisions": []
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 3,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "first request"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "second request"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [
+              {
+                "final_event_count": 1,
+                "kind": "duplicate_append",
+                "recovered": true
+              }
+            ],
+            "state": {},
+            "summary": {
+              "anchor_count": 0,
+              "current": null,
+              "revisions": []
+            }
+          }
+        }
+      },
+      "case_id": "exception_recovery",
+      "description": "Duplicate append simulates a write failure; recovery kind may differ.",
+      "differences": [],
+      "session_id": "session-exception-recovery",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 5,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "step 1"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "step 2"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "step 3"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "step 4"
+                    }
+                  ]
+                },
+                "id": "event-3",
+                "invocation_id": "invocation-e4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "step 5"
+                    }
+                  ]
+                },
+                "id": "event-4",
+                "invocation_id": "invocation-e5",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "anchor_count": 0,
+              "current": null,
+              "revisions": []
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 5,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "step 1"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "step 2"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "step 3"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "step 4"
+                    }
+                  ]
+                },
+                "id": "event-3",
+                "invocation_id": "invocation-e4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "step 5"
+                    }
+                  ]
+                },
+                "id": "event-4",
+                "invocation_id": "invocation-e5",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "anchor_count": 0,
+              "current": null,
+              "revisions": []
+            }
+          }
+        }
+      },
+      "case_id": "injected_event_order",
+      "description": "5 events to exercise ordering; diff report must flag any reorder.",
+      "differences": [],
+      "session_id": "session-injected-event-order",
+      "status": "passed"
+    },
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 13,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "replay_session_id": "session-injected-summary-session",
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "ownership-check summary"
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "summary-003",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 1,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "turn 11"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e11",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "reply 12"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e12",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "turn 1"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "reply 2"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "turn 3"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "reply 4"
+                    }
+                  ]
+                },
+                "id": "event-3",
+                "invocation_id": "invocation-e4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "turn 5"
+                    }
+                  ]
+                },
+                "id": "event-4",
+                "invocation_id": "invocation-e5",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "reply 6"
+                    }
+                  ]
+                },
+                "id": "event-5",
+                "invocation_id": "invocation-e6",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "turn 7"
+                    }
+                  ]
+                },
+                "id": "event-6",
+                "invocation_id": "invocation-e7",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "reply 8"
+                    }
+                  ]
+                },
+                "id": "event-7",
+                "invocation_id": "invocation-e8",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "turn 9"
+                    }
+                  ]
+                },
+                "id": "event-8",
+                "invocation_id": "invocation-e9",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "reply 10"
+                    }
+                  ]
+                },
+                "id": "event-9",
+                "invocation_id": "invocation-e10",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "anchor_count": 1,
+              "current": {
+                "anchor_count": 1,
+                "anchor_text": "ownership-check summary",
+                "compressed_event_count": 3,
+                "original_event_count": 12,
+                "session_id": "session-injected-summary-session",
+                "summary_id": "summary-003",
+                "supersedes": null,
+                "text": "ownership-check summary",
+                "updated_at": "<timestamp>",
+                "version": 1
+              },
+              "revisions": [
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "ownership-check summary",
+                  "compressed_event_count": 3,
+                  "original_event_count": 12,
+                  "session_id": "session-injected-summary-session",
+                  "summary_id": "summary-003",
+                  "supersedes": null,
+                  "text": "ownership-check summary",
+                  "updated_at": "<timestamp>",
+                  "version": 1
+                }
+              ]
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 13,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "replay_session_id": "session-injected-summary-session",
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "ownership-check summary"
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "summary-003",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 1,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "turn 11"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e11",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "reply 12"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e12",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "turn 1"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "reply 2"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "turn 3"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "reply 4"
+                    }
+                  ]
+                },
+                "id": "event-3",
+                "invocation_id": "invocation-e4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "turn 5"
+                    }
+                  ]
+                },
+                "id": "event-4",
+                "invocation_id": "invocation-e5",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "reply 6"
+                    }
+                  ]
+                },
+                "id": "event-5",
+                "invocation_id": "invocation-e6",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "turn 7"
+                    }
+                  ]
+                },
+                "id": "event-6",
+                "invocation_id": "invocation-e7",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "reply 8"
+                    }
+                  ]
+                },
+                "id": "event-7",
+                "invocation_id": "invocation-e8",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "turn 9"
+                    }
+                  ]
+                },
+                "id": "event-8",
+                "invocation_id": "invocation-e9",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "reply 10"
+                    }
+                  ]
+                },
+                "id": "event-9",
+                "invocation_id": "invocation-e10",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "memory": {},
+            "operation_audit": [],
+            "state": {},
+            "summary": {
+              "anchor_count": 1,
+              "current": {
+                "anchor_count": 1,
+                "anchor_text": "ownership-check summary",
+                "compressed_event_count": 3,
+                "original_event_count": 12,
+                "session_id": "session-injected-summary-session",
+                "summary_id": "summary-003",
+                "supersedes": null,
+                "text": "ownership-check summary",
+                "updated_at": "<timestamp>",
+                "version": 1
+              },
+              "revisions": [
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "ownership-check summary",
+                  "compressed_event_count": 3,
+                  "original_event_count": 12,
+                  "session_id": "session-injected-summary-session",
+                  "summary_id": "summary-003",
+                  "supersedes": null,
+                  "text": "ownership-check summary",
+                  "updated_at": "<timestamp>",
+                  "version": 1
+                }
+              ]
+            }
+          }
+        }
+      },
+      "case_id": "injected_summary_session",
+      "description": "Summary id/version must match across backends; the harness checks summary_text and anchor_count are equal even though the underlying summary anchor timestamp varies.",
+      "differences": [],
+      "session_id": "session-injected-summary-session",
+      "status": "passed"
+    }
+  ],
+  "generated_at": "2026-07-26T07:51:21.820138+00:00",
+  "mode": "lightweight-persistent",
+  "normalization_rules": [
+    {
+      "path": "$.events[*].timestamp",
+      "reason": "Wall-clock timestamps are non-business metadata.",
+      "strategy": "replace_with_placeholder"
+    },
+    {
+      "path": "$.events[*].id",
+      "reason": "Backends and summary generation may allocate different physical IDs.",
+      "strategy": "logical_replay_id_or_stable_index"
+    },
+    {
+      "path": "$.summary.*.text",
+      "reason": "Summary content is compared semantically for formatting-only differences.",
+      "strategy": "unicode_nfkc_casefold_and_whitespace_collapse"
+    },
+    {
+      "path": "$.memory.*",
+      "reason": "MemoryService does not define result ordering for equal keyword matches.",
+      "strategy": "sort_by_normalized_content_author"
+    },
+    {
+      "path": "$.*",
+      "reason": "Serialized object key order is not business data.",
+      "strategy": "structural_json_comparison"
+    }
+  ],
+  "reference_backend": "inmemory",
+  "report_sha256": "eb4a4af47a198c5e10430b7854892b7f917a8976625ae4f788826f093b87be4f",
+  "schema_version": 1,
+  "summary": {
+    "allowed_diff_count": 1,
+    "backend_count": 2,
+    "case_count": 10,
+    "elapsed_seconds": 2.243221,
+    "invariant_failure_count": 0,
+    "passed_case_count": 10,
+    "unexpected_diff_count": 0
+  }
+}
