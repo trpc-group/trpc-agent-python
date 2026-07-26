@@ -86,7 +86,6 @@ class RedisSessionService(BaseSessionService):
             # Default to store historical events for persistent backends.
             self._session_config.store_historical_events = True
         # Redis needs default TTL configuration
-        kwargs.setdefault("decode_responses", True)
         self._redis_storage = self._create_storage(db_url=db_url, is_async=is_async, **kwargs)
 
     def _create_storage(self, db_url: str, is_async: bool, **kwargs: Any) -> RedisStorage:
@@ -95,6 +94,7 @@ class RedisSessionService(BaseSessionService):
         Subclasses override this factory to retain the session semantics while
         selecting a different Redis deployment client, such as Redis Cluster.
         """
+        kwargs.setdefault("decode_responses", True)
         return RedisStorage(is_async=is_async, redis_url=db_url, **kwargs)
 
     @override
