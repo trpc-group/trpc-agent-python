@@ -150,11 +150,15 @@ def _ensure_abs(path: str, plate_agent_root: str) -> str:
     ]
     for c in candidates:
         resolved = c.resolve()
-        if not str(resolved).startswith(str(root)):
-            continue
-        if resolved.exists():
+        try:
+                resolved.relative_to(root)
+            except ValueError:
+                continue
+            if resolved.exists():
             return str(resolved)
     primary = (root / path).resolve()
-    if not str(primary).startswith(str(root)):
+    try:
+        primary.relative_to(root)
+    except ValueError:
         raise ValueError(f"Resolved path {primary} is outside plate_agent_root")
     return str(primary)
