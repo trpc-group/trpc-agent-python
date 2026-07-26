@@ -218,7 +218,7 @@ class FakeOptimizer:
                 attribution_summary={"note": "no failures to optimize"},
             )
 
-        # primary_failure, total_failures, optimization_priority???????
+        # Append strategy lines to change_log?????
         priority_queue = self._build_priority_queue(attribution_report)
 
         for iteration, target in enumerate(priority_queue[:max_iterations]):
@@ -311,25 +311,25 @@ class FakeOptimizer:
             (prompt_after, change_log)
         """
         hints = CATEGORY_OPTIMIZATION_HINTS.get(category, {})
-        strategy = hints.get("strategy", "????")
+        strategy = hints.get("strategy", "unknown")
 
         change_log = [
             f"[{category}] confidence={confidence:.2f}",
-            f"target: {prompt_type} ? {hints.get('target_section', 'general')}",
+            f"target: {prompt_type} -> {hints.get('target_section', 'general')}",
         ]
 
         # Fake-mode placeholder: appends optimization hints as an HTML comment
         # block.  Real mode would use AgentOptimizer.optimize() for semantic
         # prompt rewriting instead of comment-annotation.
         optimization_header = (
-            f"\n\n<!-- ???? {self._iteration + 1} -->\n"
-            f"## primary_failure, total_failures, optimization_priority????????{category}?\n"
+            f"\n\n<!-- Optimization Round {self._iteration + 1} -->\n"
+            f"## Failure Category: {category}\n"
             f"{strategy}\n"
         )
 
         prompt_after = prompt_before + optimization_header
 
-        # primary_failure, total_failures, optimization_priority??
+        # Append strategy lines to change_log
         for line in strategy.strip().split("\n"):
             line = line.strip().lstrip("- ")
             if line and not line.startswith("#"):

@@ -144,8 +144,16 @@ async def main():
                 lock_owner = int(vf.read().strip().split()[0])
             if lock_owner != my_pid:
                 acquired = False  # not our lock; don't clean up in finally
-        except (FileNotFoundError, ValueError, FileExistsError):
+        except FileExistsError:
+            # Another process created the lock between our read and takeover
             pass
+        except (FileNotFoundError, ValueError):
+            # Corrupted or missing lock file: clean it up so the next run
+            # does not hit the same permanent deadlock.
+            try:
+                _os.remove(LOCK_FILE)
+            except FileNotFoundError:
+                pass
 
     if not acquired:
         print("cannot acquire pipeline lock, aborting", file=sys.stderr)
@@ -232,7 +240,8 @@ async def main():
         if _critical_read_failed:
             # Override: evalset unreadable -> cannot verify critical cases -> reject.
             # Also add an explicit failed check so the gate report shows WHY.
-            override_checks = list(decision.checks) + [
+            # Replace the skipped critical_case check (from empty ids) with a failed one
+            override_checks = [c for c in decision.checks if c.name != "critical_case_no_regress"] + [
                 GateCheck(
                     name="critical_case_no_regress",
                     passed=False,
