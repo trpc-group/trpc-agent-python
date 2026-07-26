@@ -61,6 +61,7 @@ from .storage import ReviewStore
 
 MILLISECONDS_PER_SECOND = 1_000
 FAKE_MODEL_NAME = "fake-code-review-model"
+SKILL_WORKSPACE_LINK_NAMES = ("out", "work", "inputs")
 REVIEW_INSTRUCTION = """
 Review the staged input. Call skill_load for code-review first, then call
 review_skill_run exactly once. Never call another tool. Summarize completion
@@ -169,7 +170,7 @@ class ReviewAgentExecutor:
     def _create_agent(self) -> LlmAgent:
         repository = create_default_skill_repository(
             str(self._skill_root),
-            workspace_runtime=self._runtime.runtime,
+            workspace_runtime=self._runtime.require_runtime(),
         )
         skill_tools = _LoadOnlySkillToolSet(
             repository=repository,
@@ -241,7 +242,7 @@ class ReviewAgentExecutor:
                 failures.append(f"{label}:{type(exc).__name__}")
 
     async def _cleanup_skill_workspace(self, task_id: str) -> None:
-        manager = self._runtime.runtime.manager()
+        manager = self._runtime.require_runtime().manager()
         if self._runtime.kind == "local":
             workspace = await manager.create_workspace(task_id)
             _make_workspace_removable(Path(workspace.path))
@@ -528,22 +529,38 @@ def _tool_succeeded(response: Any) -> bool:
 
 
 def _make_workspace_removable(root: Path) -> None:
-    link_names = ("out", "work", "inputs")
     skill_dir = root / "skills" / "code-review"
-    for name in link_names:
-        target = skill_dir / name
-        if os.path.lexists(target):
-            try:
-                os.unlink(target)
-            except PermissionError:
-                os.rmdir(target)
     for path in [root, *root.rglob("*")]:
-        if path.is_symlink():
+        if _is_workspace_link(path):
             continue
         try:
             path.chmod(path.stat().st_mode | stat.S_IWRITE)
         except FileNotFoundError:
             continue
+    for name in SKILL_WORKSPACE_LINK_NAMES:
+        target = skill_dir / name
+        if os.path.lexists(target) and _is_workspace_link(target):
+            _remove_workspace_link(target)
+
+
+def _is_workspace_link(path: Path) -> bool:
+    if path.is_symlink():
+        return True
+    is_junction = getattr(path, "is_junction", None)
+    if is_junction and is_junction():
+        return True
+    try:
+        attributes = path.lstat().st_file_attributes
+    except (AttributeError, FileNotFoundError):
+        return False
+    return bool(attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT)
+
+
+def _remove_workspace_link(path: Path) -> None:
+    if path.is_symlink():
+        path.unlink()
+    else:
+        path.rmdir()
 
 
 def datetime_now() -> datetime:

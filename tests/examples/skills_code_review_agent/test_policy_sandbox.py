@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 from pathlib import Path
+import stat
 
 import pytest
 from pydantic import ValidationError
@@ -21,6 +22,7 @@ from examples.skills_code_review_agent.agent.policy import SecretRedactor
 from examples.skills_code_review_agent.agent.policy import build_execution_plan
 from examples.skills_code_review_agent.agent.policy import calculate_plan_digest
 from examples.skills_code_review_agent.agent.policy import run_guarded
+from examples.skills_code_review_agent.agent import pipeline
 from examples.skills_code_review_agent.agent.sandbox import RuntimeHandle
 from examples.skills_code_review_agent.agent.sandbox import SandboxExecutor
 
@@ -170,6 +172,35 @@ def test_execution_plan_is_frozen():
 
     with pytest.raises(ValidationError):
         plan.argv = ("python", "other.py")
+
+
+def test_workspace_is_writable_before_links_are_removed(tmp_path, monkeypatch):
+    skill_dir = tmp_path / "skills" / "code-review"
+    skill_dir.mkdir(parents=True)
+    skill_dir.chmod(skill_dir.stat().st_mode & ~stat.S_IWRITE)
+    removed = []
+
+    monkeypatch.setattr(
+        pipeline,
+        "_is_workspace_link",
+        lambda path: path.name in pipeline.SKILL_WORKSPACE_LINK_NAMES,
+    )
+
+    def remove_link(path):
+        assert skill_dir.stat().st_mode & stat.S_IWRITE
+        removed.append(Path(path).name)
+
+    monkeypatch.setattr(pipeline, "_remove_workspace_link", remove_link)
+
+    pipeline._make_workspace_removable(tmp_path)
+
+    assert removed == []
+
+    for name in pipeline.SKILL_WORKSPACE_LINK_NAMES:
+        (skill_dir / name).mkdir()
+    pipeline._make_workspace_removable(tmp_path)
+
+    assert removed == list(pipeline.SKILL_WORKSPACE_LINK_NAMES)
 
 
 def test_filter_denies_posix_absolute_path_with_valid_digest():

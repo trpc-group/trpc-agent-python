@@ -12,9 +12,13 @@ CLI_PATH = Path("examples/skills_code_review_agent/run_agent.py")
 CLI_TIMEOUT_SECONDS = 30
 
 
-def _run_cli(arguments: list[str]) -> subprocess.CompletedProcess[str]:
+def _run_cli(
+    arguments: list[str],
+    environment_updates: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["PYTHONUTF8"] = "1"
+    environment.update(environment_updates or {})
     return subprocess.run(
         [sys.executable, str(CLI_PATH), *arguments],
         check=False,
@@ -30,16 +34,19 @@ def _run_cli(arguments: list[str]) -> subprocess.CompletedProcess[str]:
 def test_dry_run_can_be_queried_by_task_id(tmp_path) -> None:
     database_url = f"sqlite:///{(tmp_path / 'cli.db').as_posix()}"
     output_dir = tmp_path / "reports"
-    result = _run_cli([
-        "run",
-        "--fixture",
-        "clean",
-        "--dry-run",
-        "--db-url",
-        database_url,
-        "--output-dir",
-        str(output_dir),
-    ])
+    result = _run_cli(
+        [
+            "run",
+            "--fixture",
+            "clean",
+            "--dry-run",
+            "--db-url",
+            database_url,
+            "--output-dir",
+            str(output_dir),
+        ],
+        {"DOCKER_HOST": "tcp://127.0.0.1:1"},
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     task_line = next(line for line in result.stdout.splitlines() if line.startswith("task_id="))
     task_id = task_line.partition("=")[2]

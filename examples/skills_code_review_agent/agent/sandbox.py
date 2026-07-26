@@ -38,15 +38,22 @@ SKILL_ASSET_PATHS = (
     "references/rules.md",
     "scripts/scan_rules.py",
 )
+SUPPORTED_RUNTIME_KINDS = frozenset({"container", "local"})
 
 
 @dataclass(frozen=True)
 class RuntimeHandle:
     """Runtime plus capabilities guaranteed by its factory."""
 
-    runtime: BaseWorkspaceRuntime
+    runtime: BaseWorkspaceRuntime | None
     kind: str
     network_disabled: bool
+
+    def require_runtime(self) -> BaseWorkspaceRuntime:
+        """Return the initialized runtime or reject execution."""
+        if self.runtime is None:
+            raise RuntimeError("sandbox runtime is not initialized")
+        return self.runtime
 
 
 @dataclass(frozen=True)
@@ -91,6 +98,17 @@ def create_runtime(kind: str, work_root: Path | None = None) -> RuntimeHandle:
         enable_provider_env=False,
     )
     return RuntimeHandle(runtime=runtime, kind=kind, network_disabled=False)
+
+
+def create_plan_runtime(kind: str) -> RuntimeHandle:
+    """Create a capability-only handle for dry-run policy evaluation."""
+    if kind not in SUPPORTED_RUNTIME_KINDS:
+        raise ValueError(f"unsupported runtime: {kind}")
+    return RuntimeHandle(
+        runtime=None,
+        kind=kind,
+        network_disabled=kind == "container",
+    )
 
 
 def _truncate(value: str, limit: int) -> str:
@@ -169,7 +187,7 @@ class SandboxExecutor:
         execution: SandboxExecution | None = None
         try:
             state.workspace = await self._within_budget(
-                self._handle.runtime.manager().create_workspace(state.exec_id),
+                self._handle.require_runtime().manager().create_workspace(state.exec_id),
                 context,
             )
             result, output = await self._run_steps(state, input_bytes)
@@ -233,7 +251,7 @@ class SandboxExecutor:
         )
         files = [*self._skill_assets, input_file]
         await self._within_budget(
-            self._handle.runtime.fs().put_files(state.workspace, files),
+            self._handle.require_runtime().fs().put_files(state.workspace, files),
             state.context,
         )
         result = await self._within_budget(
@@ -268,12 +286,12 @@ class SandboxExecutor:
                 max_pids=PROCESS_LIMIT,
             ),
         )
-        return await self._handle.runtime.runner().run_program(workspace, spec)
+        return await self._handle.require_runtime().runner().run_program(workspace, spec)
 
     async def _collect(self, workspace, plan: ExecutionPlan) -> str:
         if self._handle.kind == "local":
             return self._collect_local(workspace.path, plan)
-        files = await self._handle.runtime.fs().collect(
+        files = await self._handle.require_runtime().fs().collect(
             workspace,
             [plan.output_path],
         )
@@ -355,7 +373,7 @@ class SandboxExecutor:
             return None
         try:
             await asyncio.wait_for(
-                self._handle.runtime.manager().cleanup(state.exec_id),
+                self._handle.require_runtime().manager().cleanup(state.exec_id),
                 timeout=CLEANUP_TIMEOUT_SECONDS,
             )
         except Exception as exc:  # pylint: disable=broad-except

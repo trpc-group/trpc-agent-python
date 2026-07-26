@@ -26,6 +26,7 @@ from agent.pipeline import PipelineDependencies
 from agent.pipeline import ReviewPipeline
 from agent.policy import SecretRedactor
 from agent.sandbox import create_runtime
+from agent.sandbox import create_plan_runtime
 from agent.storage import ReviewStore
 
 EXAMPLE_ROOT = Path(__file__).resolve().parent
@@ -119,7 +120,7 @@ async def _run(args: argparse.Namespace) -> int:
     try:
         dependencies = PipelineDependencies(
             store=store,
-            runtime=create_runtime(args.runtime),
+            runtime=(create_plan_runtime(args.runtime) if args.dry_run else create_runtime(args.runtime)),
             skill_root=SKILL_ROOT,
             output_dir=args.output_dir,
             model=_create_model(args),
