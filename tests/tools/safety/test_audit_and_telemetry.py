@@ -93,6 +93,14 @@ def test_jsonl_audit_rejects_symlink(tmp_path):
     assert target.read_text(encoding="utf-8") == "unchanged"
 
 
+def test_jsonl_audit_closes_descriptor_when_identity_check_fails(tmp_path):
+    path = tmp_path / "audit.jsonl"
+    event = create_audit_event(_report(), "Bash", True)
+    with patch("trpc_agent_sdk.tools.safety._audit.os.path.samestat", return_value=False):
+        with pytest.raises(SafetyAuditError):
+            JsonlAuditSink(path).emit(event)
+
+
 def test_composite_uses_fallback():
     fallback = _MemorySink()
     sink = CompositeAuditSink(_FailingSink(), fallback)

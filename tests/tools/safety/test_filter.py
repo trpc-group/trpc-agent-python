@@ -57,6 +57,13 @@ def _filter(sink, max_output=100):
     return ToolSafetyFilter(ToolScriptSafetyGuard(policy), sink)
 
 
+def test_filter_from_policy(tmp_path):
+    path = tmp_path / "policy.yaml"
+    path.write_text("version: 1\nallowed_commands: [echo]\n", encoding="utf-8")
+    safety_filter = ToolSafetyFilter.from_policy(str(path), _MemorySink())
+    assert safety_filter._guard.policy.allowed_commands == ["echo"]
+
+
 async def _run_filter(safety_filter, args, handler, tool_name="Bash"):
     tool = SimpleNamespace(name=tool_name, description="shell")
     token = set_tool_var(tool)

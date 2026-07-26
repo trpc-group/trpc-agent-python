@@ -206,9 +206,16 @@ def _print_event(event) -> None:
         return
     for part in event.content.parts:
         if part.function_call:
-            print(f"CALL {part.function_call.name}: {part.function_call.args}")
+            print(f"CALL {part.function_call.name}")
         elif part.function_response:
-            print(f"RESULT {part.function_response.name}: {part.function_response.response}")
+            response = part.function_response.response
+            if isinstance(response, dict):
+                response = {
+                    "decision": response.get("decision"),
+                    "execution_blocked": response.get("execution_blocked"),
+                    "return_code": response.get("return_code"),
+                }
+            print(f"RESULT {part.function_response.name}: {response}")
         elif part.text and not part.thought:
             print(part.text, end="" if event.partial else "\n")
 

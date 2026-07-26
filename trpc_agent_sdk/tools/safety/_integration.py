@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 from pathlib import Path
 from typing import Any
@@ -69,6 +70,8 @@ def _timeout(args: dict[str, Any], name: str, policy: ToolSafetyPolicy) -> tuple
         arg_name = "timeout_sec" if "timeout_sec" in args else ("timeout" if "timeout" in args else None)
     raw = args.get(arg_name) if arg_name else None
     requested = float(raw) if isinstance(raw, (int, float)) else None
+    if requested is not None and not math.isfinite(requested):
+        return requested, float(policy.max_timeout_seconds), arg_name
     if requested is None or requested <= 0:
         return requested, float(policy.max_timeout_seconds), arg_name
     return requested, min(requested, float(policy.max_timeout_seconds)), arg_name
@@ -288,7 +291,14 @@ class SafetyGuardedCodeExecutor(BaseCodeExecutor):
             report = self.guard.scan(request)
         except Exception as error:  # pylint: disable=broad-except
             report = self.guard.error_report(error)
-        emit_report(self.audit_sink, report, metadata.name)
+        try:
+            emit_report(self.audit_sink, report, metadata.name)
+        except SafetyAuditError as error:
+            # Audit failure is a safety failure: never execute without a durable
+            # record, and expose the same structured review result as scan errors.
+            report = self.guard.error_report(error)
+            set_safety_span_attributes(report)
+            raise ToolSafetyViolation(report) from error
         set_safety_span_attributes(report)
         if report.decision != SafetyDecision.ALLOW:
             raise ToolSafetyViolation(report)

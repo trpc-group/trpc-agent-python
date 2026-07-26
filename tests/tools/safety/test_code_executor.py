@@ -14,9 +14,12 @@ from trpc_agent_sdk.code_executors import BaseCodeExecutor
 from trpc_agent_sdk.code_executors import CodeExecutionInput
 from trpc_agent_sdk.code_executors import create_code_execution_result
 from trpc_agent_sdk.tools.safety import SafetyGuardedCodeExecutor
+from trpc_agent_sdk.tools.safety import adapt_code_execution_input
+from trpc_agent_sdk.tools.safety import ToolMetadata
 from trpc_agent_sdk.tools.safety import ToolSafetyViolation
 from trpc_agent_sdk.tools.safety import ToolScriptSafetyGuard
 from trpc_agent_sdk.tools.safety import ToolSafetyPolicy
+from trpc_agent_sdk.tools.safety import SafetyDecision
 
 
 class _MemorySink:
@@ -108,3 +111,24 @@ async def test_wrapper_limits_output():
 def test_wrapper_mirrors_execute_once_capability():
     delegate = _Executor(execute_once_per_invocation=True)
     assert _wrapper(delegate).execute_once_per_invocation is True
+
+
+@pytest.mark.asyncio
+async def test_adapter_error_cannot_continue_without_request(monkeypatch):
+    wrapper = _wrapper(_Executor())
+    allow_report = wrapper.guard.scan(
+        adapt_code_execution_input(
+            CodeExecutionInput(code="print('ok')"),
+            ToolMetadata(name="executor"),
+            wrapper.guard.policy,
+        ))
+
+    def fail_adapter(*args, **kwargs):
+        del args, kwargs
+        raise RuntimeError("adapter failed")
+
+    monkeypatch.setattr("trpc_agent_sdk.tools.safety._integration.adapt_code_execution_input", fail_adapter)
+    monkeypatch.setattr(wrapper.guard, "error_report", lambda error: allow_report)
+    with pytest.raises(ToolSafetyViolation) as captured:
+        await wrapper.execute_code(MagicMock(), CodeExecutionInput(code="print('ok')"))
+    assert captured.value.report.decision == SafetyDecision.ALLOW

@@ -5,6 +5,8 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Scanner acceptance-oriented unit tests."""
 
+import ast
+
 import pytest
 
 from trpc_agent_sdk.tools.safety import RiskCategory
@@ -20,6 +22,10 @@ from trpc_agent_sdk.tools.safety._bash_rules import _ssh_target
 from trpc_agent_sdk.tools.safety._bash_rules import stdin_language
 from trpc_agent_sdk.tools.safety._sanitizer import SafetySanitizer
 from trpc_agent_sdk.tools.safety._sanitizer import truncate_output
+from trpc_agent_sdk.tools.safety._common_rules import path_is_system_location
+from trpc_agent_sdk.tools.safety._python_rules import _PythonScanContext
+from trpc_agent_sdk.tools.safety._python_rules import PythonRuleVisitor
+from trpc_agent_sdk.tools.safety._scanner import MAX_NESTED_PAYLOAD_DEPTH
 
 
 @pytest.fixture
@@ -277,10 +283,43 @@ def test_safety_edge_helpers_cover_invalid_and_dynamic_inputs():
     assert _sleep_seconds("not-a-duration") == float("inf")
     assert stdin_language("") is None
     assert stdin_language("python -c code") is None
+    assert stdin_language("python script.py") is None
+    assert path_is_system_location("/") is True
     assert truncate_output("hello", 3) == "hel"
     assert truncate_output(42, 3) == 42
     with pytest.raises(ValueError, match="evidence_chars"):
         SafetySanitizer(0)
+
+
+def test_python_rule_fallback_helpers_are_bounded(guard):
+    request = _request("")
+    visitor = PythonRuleVisitor(_PythonScanContext("", request, guard.policy, guard.sanitizer))
+    assert visitor._name(ast.Constant(value=1)) == ""
+    visitor._invalidate_target(ast.Tuple(elts=[ast.Name(id="left"), ast.Name(id="right")]))
+    assert visitor._receiver_path(ast.Name(id="open")) == (False, None)
+    assert visitor._receiver_path(ast.Attribute(value=ast.Name(id="unknown"), attr="read_text")) == (False, None)
+    assert visitor._path_constructor_value(ast.Call(func=ast.Name(id="unknown"), args=[], keywords=[])) is None
+    assert visitor._estimated_size(ast.Name(id="dynamic")) == 0
+    gather = ast.Call(
+        func=ast.Attribute(value=ast.Name(id="asyncio"), attr="gather"),
+        args=[ast.Name(id=f"value_{index}") for index in range(guard.policy.max_concurrency + 1)],
+        keywords=[],
+    )
+    assert visitor._gather_is_large(gather) is True
+
+
+def test_nested_payload_depth_returns_policy_finding(guard):
+    payload = ScriptPayload(language=ScriptLanguage.BASH, content="bash -c 'echo ok'")
+    findings, redacted = guard._scan_nested(payload, _request(payload.content), MAX_NESTED_PAYLOAD_DEPTH)
+    assert [finding.rule_id for finding in findings] == ["POLICY004"]
+    assert redacted is False
+
+
+def test_large_write_and_python_syntax_error_are_reported(guard):
+    large_write = guard.scan(_request("writer.write('x' * 20000000)"))
+    syntax_error = guard.scan(_request("def broken(:\n    pass"))
+    assert "RES002" in _rule_ids(large_write)
+    assert "PY001" in _rule_ids(syntax_error)
 
 
 @pytest.mark.parametrize(
