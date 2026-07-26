@@ -1,0 +1,56 @@
+{
+  "case_id": "real_agent_tool_memory",
+  "clean_comparison": {
+    "diffs": [],
+    "unexpected_diff_count": 0
+  },
+  "injected_anomalies": {
+    "memory_single_character_drift": {
+      "detected": true,
+      "diffs": [
+        {
+          "allowed": false,
+          "backend_pair": [
+            "in_memory",
+            "sqlite"
+          ],
+          "case_id": "real_agent_tool_memory",
+          "category": "memory",
+          "event_index": null,
+          "field_path": "/memory/Chinese/memories/0/content/parts/0/text",
+          "left": "Here are the preferences for **replay-user**:\n\n- **Preferred Language:** Chinese\n- **Notification Channel:** email",
+          "reason": null,
+          "right": "Here are the preferences for **replay-user**:\n\n- **Preferred Language:** Chinese\n- **Notification Channel:** emaiX",
+          "session_id": "replay-session",
+          "summary_id": null
+        }
+      ],
+      "unexpected_diff_count": 1
+    },
+    "tool_response_single_character_drift": {
+      "detected": true,
+      "diffs": [
+        {
+          "allowed": false,
+          "backend_pair": [
+            "in_memory",
+            "sqlite"
+          ],
+          "case_id": "real_agent_tool_memory",
+          "category": "events",
+          "event_index": 2,
+          "field_path": "/events/2/content/parts/0/function_response/response/preferred_language",
+          "left": "Chinese",
+          "reason": null,
+          "right": "ChinesX",
+          "session_id": "replay-session",
+          "summary_id": null
+        }
+      ],
+      "unexpected_diff_count": 1
+    }
+  },
+  "model": "deepseek-v4-flash",
+  "schema_version": 1,
+  "tool_round_trip": true
+}
