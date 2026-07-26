@@ -1,58 +1,23 @@
 # Skills Code Review Agent
 
-This example combines an Agent, a code-review Skill, a policy Filter, an
-isolated workspace runtime, and SQL persistence. It accepts a unified diff,
-file list, Git workspace, or one of the eight included fixtures. Every run
-produces queryable JSON and Markdown reports.
+This example implements Issue #92 as a standalone, policy-gated code review
+workflow. It accepts a unified diff, a file list, a Git workspace, or one of
+eight fixtures and writes queryable JSON/Markdown reports plus SQLite audit
+records. It does not change framework production APIs.
 
-The example does not modify framework production APIs. It reuses:
+## What it includes
 
-- `LlmAgent` and `Runner`;
-- `SkillToolSet` and the filesystem Skill repository;
-- Container and local workspace runtimes;
-- `BaseFilter`;
-- `SqlStorage` and SQLAlchemy metadata.
+- a `code-review` Skill with deterministic rules and a sandbox script;
+- unified diff, file-list, fixture, and Git input adapters;
+- structured findings with deduplication and confidence routing;
+- a Filter for command, path, environment, network, and budget policy;
+- Container execution by default and an explicit local development fallback;
+- SQLite-backed task, Filter, sandbox, finding, and report records;
+- fake-model and dry-run modes that require no model API key.
 
-## Security model
+## Quick start
 
-Container is the default runtime and is created with `network_mode=none`.
-The Agent can load the `code-review` Skill but cannot access generic
-`skill_run`; execution goes through the fixed `review_skill_run` tool.
-
-Before execution, the tool freezes and hashes:
-
-- the exact Python argv;
-- workspace-relative input, output, and working-directory paths;
-- the environment allowlist;
-- runtime and network policy;
-- timeout and output budgets;
-- normalized input bytes;
-- the three staged Skill files.
-
-The Filter commits its decisions before the sandbox handler is called.
-`DENY` and `NEEDS_HUMAN_REVIEW` never execute. Filter failures fail closed.
-All persisted text, reports, exception text, tool output, and structured
-values pass through the same secret redactor.
-
-Local execution is an unsafe development fallback. It is rejected unless:
-
-```powershell
-$env:TRPC_CODE_REVIEW_ALLOW_UNSAFE_LOCAL = "1"
-```
-
-Do not enable local runtime in production.
-
-## Fake model
-
-Fake mode is deterministic and requires no API key. It still runs a real
-`LlmAgent` loop with these tool calls:
-
-```text
-skill_load(code-review)
-review_skill_run()
-```
-
-Container:
+Docker must be available for the default Container runtime:
 
 ```powershell
 uv run python examples/skills_code_review_agent/run_agent.py run `
@@ -61,7 +26,60 @@ uv run python examples/skills_code_review_agent/run_agent.py run `
   --fake-model
 ```
 
-Explicit local development fallback:
+The command prints the task ID and the two report paths:
+
+```text
+reports/<task-id>/review_report.json
+reports/<task-id>/review_report.md
+```
+
+Use `--dry-run` to parse, filter, audit, and generate a report without invoking
+the sandbox:
+
+```powershell
+uv run python examples/skills_code_review_agent/run_agent.py run `
+  --fixture clean `
+  --dry-run
+```
+
+## Input modes
+
+Exactly one input option is required:
+
+```powershell
+# Unified diff
+uv run python examples/skills_code_review_agent/run_agent.py run `
+  --diff-file change.diff --fake-model
+
+# UTF-8 file list; paths are relative to the list file's directory
+uv run python examples/skills_code_review_agent/run_agent.py run `
+  --file-list changed-files.txt --fake-model
+
+# Staged Git changes
+uv run python examples/skills_code_review_agent/run_agent.py run `
+  --repo-path . --staged --fake-model
+
+# Worktree-only Git changes
+uv run python examples/skills_code_review_agent/run_agent.py run `
+  --repo-path . --worktree --fake-model
+
+# Revision range
+uv run python examples/skills_code_review_agent/run_agent.py run `
+  --repo-path . --base main --head HEAD --fake-model
+```
+
+With `--repo-path` and no range option, the input is `git diff HEAD`. Untracked
+files are not included.
+
+## Runtime security
+
+Container is the production default and starts with Docker
+`network_mode=none`. Only the fixed Skill files and normalized review input are
+staged. The Filter audits the immutable execution plan before the sandbox is
+called; denied or human-review decisions do not execute.
+
+Local execution is an unsafe development fallback and is rejected unless it is
+explicitly enabled:
 
 ```powershell
 $env:TRPC_CODE_REVIEW_ALLOW_UNSAFE_LOCAL = "1"
@@ -71,10 +89,12 @@ uv run python examples/skills_code_review_agent/run_agent.py run `
   --fake-model
 ```
 
+Do not enable the local runtime in production.
+
 ## Real model
 
-The real-model path uses the same tools, Filter, sandbox, and report
-contracts. Any OpenAI-compatible endpoint can be supplied:
+The real-model path uses the same Skill, Filter, sandbox, storage, and report
+contracts. Configure an OpenAI-compatible endpoint:
 
 ```powershell
 $env:OPENAI_API_KEY = "<your-key>"
@@ -86,109 +106,61 @@ uv run python examples/skills_code_review_agent/run_agent.py run `
   --runtime container
 ```
 
-Credentials are never passed to the sandbox environment.
+Model credentials are not included in the sandbox environment.
 
-## Inputs
+## Database and query
 
-Unified diff:
-
-```powershell
-uv run python examples/skills_code_review_agent/run_agent.py run `
-  --diff-file change.diff --fake-model
-```
-
-File list, one repository-relative UTF-8 path per line:
-
-```powershell
-uv run python examples/skills_code_review_agent/run_agent.py run `
-  --file-list changed-files.txt --fake-model
-```
-
-Git workspace, staged changes only:
-
-```powershell
-uv run python examples/skills_code_review_agent/run_agent.py run `
-  --repo-path . --staged --fake-model
-```
-
-Worktree changes only:
-
-```powershell
-uv run python examples/skills_code_review_agent/run_agent.py run `
-  --repo-path . --worktree --fake-model
-```
-
-Revision range:
-
-```powershell
-uv run python examples/skills_code_review_agent/run_agent.py run `
-  --repo-path . --base main --head HEAD --fake-model
-```
-
-`--dry-run` parses input, creates and audits the immutable plan, and writes a
-report without calling the sandbox.
-
-## Database
-
-SQLite is the default:
+The default database is:
 
 ```text
 sqlite:///skills_code_review.db
 ```
 
-Override it with `--db-url` or `TRPC_CODE_REVIEW_DB_URL`. Async SQLAlchemy
-drivers are selected when the URL contains `+aiosqlite`, `+asyncpg`, or
-`+aiomysql`; missing drivers fail immediately.
-
-Initialize tables explicitly:
+Override it with `--db-url` or `TRPC_CODE_REVIEW_DB_URL`. Initialize tables
+without running a review:
 
 ```powershell
 uv run python examples/skills_code_review_agent/scripts/init_db.py `
   --db-url sqlite:///skills_code_review.db
 ```
 
-Query a completed task:
+Query a task and its persisted report:
 
 ```powershell
 uv run python examples/skills_code_review_agent/run_agent.py show `
   --task-id <task-id>
 ```
 
-## Reports
-
-Each task writes isolated files:
-
-```text
-reports/<task-id>/review_report.json
-reports/<task-id>/review_report.md
-```
-
-Reports contain task summary, findings, human-review warnings, Filter
-decisions, sandbox records, exceptions, metrics, and final conclusion.
+The report contains findings, warnings requiring human review, Filter
+decisions, sandbox summaries, exceptions, metrics, and the final conclusion.
+Sensitive text is redacted before report or database persistence.
 
 ## Tests
 
-Lightweight suite:
+Run the lightweight suite:
 
 ```powershell
 uv run pytest tests/examples/skills_code_review_agent -q
 ```
 
-Coverage:
+Run the coverage gate:
 
 ```powershell
 uv run pytest tests/examples/skills_code_review_agent `
-  --cov=examples/skills_code_review_agent/agent `
-  --cov-fail-under=85
+  --cov=examples.skills_code_review_agent `
+  --cov-report=term-missing `
+  --cov-fail-under=90
 ```
 
-Optional real Container integration:
+Run the optional real Container integration:
 
 ```powershell
 $env:TRPC_CODE_REVIEW_CONTAINER_TEST = "1"
-uv run pytest tests/examples/skills_code_review_agent/test_acceptance.py -q
+uv run pytest `
+  tests/examples/skills_code_review_agent/test_acceptance.py `
+  -k container -q
 ```
 
-Python has no Go-style race detector. The storage tests use a thread barrier,
-concurrent writes, and uniqueness-conflict merging as the race-equivalent
-acceptance.
+Without that environment variable, only the Container integration test is
+skipped. SQLite concurrency tests use simultaneous writes and unique-key merge
+handling; Python has no Go-style race detector.
