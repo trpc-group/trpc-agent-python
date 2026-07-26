@@ -210,6 +210,28 @@ async def test_after_limits_output():
 
 
 @pytest.mark.asyncio
+async def test_after_limits_list_output():
+
+    async def handler():
+        return ["x" * 20, "y" * 20]
+
+    result = await _run_filter(_filter(_MemorySink(), max_output=10), {"command": "echo ok"}, handler)
+    assert result == ["x" * 10, ""]
+
+
+@pytest.mark.asyncio
+async def test_non_applicable_timeout_is_not_injected():
+    args = {"timeout": 3}
+
+    async def handler():
+        return {"ok": True}
+
+    result = await _run_filter(_filter(_MemorySink()), args, handler, tool_name="unrelated")
+    assert result == {"ok": True}
+    assert args["timeout"] == 3
+
+
+@pytest.mark.asyncio
 async def test_final_limit_runs_after_outer_filter():
     runner = _Runner(filters=[_filter(_MemorySink(), max_output=10), _ExpandingAfterFilter()])
     tool = SimpleNamespace(name="Bash", description="shell")

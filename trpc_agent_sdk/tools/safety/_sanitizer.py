@@ -31,8 +31,8 @@ _JSON_SECRET_RE = re.compile(
 )
 _NAMED_SECRET_RE = re.compile(
     r"(?i)\b(api[_-]?key|token|password|passwd|authorization|secret)"
-    r"(\s*[=:]\s*|[\"']\s*:\s*[\"'])"
-    r"([\"']?)[^\s,\"'};]+", )
+    r"(\s*[=:]\s*)"
+    r"[A-Za-z0-9_./+=-]{12,}\b", )
 _BEARER_RE = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+")
 _COMMON_TOKEN_RE = re.compile(r"\b(?:sk|ghp|xox[baprs])[-_][A-Za-z0-9_-]{12,}\b")
 _URL_USERINFO_RE = re.compile(r"(?i)(https?://[^/\s:@]+:)[^@/\s]+@")
@@ -89,6 +89,16 @@ def truncate_output(value: Any, max_bytes: int) -> Any:
     """Limit common Tool output fields without changing unrelated data."""
     if isinstance(value, str):
         return truncate_text(value, max_bytes)[0]
+    if isinstance(value, list):
+        result = list(value)
+        remaining = max_bytes
+        for index, item in enumerate(result):
+            if not isinstance(item, str):
+                continue
+            limited, _ = truncate_text(item, max(remaining, 0))
+            result[index] = limited
+            remaining -= len(limited.encode("utf-8"))
+        return result
     if not isinstance(value, dict):
         return value
     result = dict(value)

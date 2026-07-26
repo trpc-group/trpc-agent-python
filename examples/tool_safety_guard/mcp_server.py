@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import shlex
 from pathlib import Path
 
@@ -27,8 +28,21 @@ MAX_OUTPUT_CHARS = 4096
 
 
 @APP.tool()
-async def execute_command(command: str) -> dict:
+async def execute_command(command: str, timeout: float | None = None) -> dict:
     """Execute an approved shell command in the disposable example directory."""
+    requested_timeout = float(timeout) if isinstance(timeout, (int, float)) else None
+    if requested_timeout is not None and not math.isfinite(requested_timeout):
+        return {
+            "decision": SafetyDecision.NEEDS_HUMAN_REVIEW.value,
+            "summary": "needs_human_review: timeout must be finite.",
+            "execution_blocked": True,
+        }
+    if requested_timeout is not None and requested_timeout <= 0:
+        requested_timeout = None
+    effective_timeout = min(
+        requested_timeout or float(GUARD.policy.max_timeout_seconds),
+        float(GUARD.policy.max_timeout_seconds),
+    )
     request = ScriptScanRequest(
         payloads=[ScriptPayload(
             language=ScriptLanguage.BASH,
@@ -38,7 +52,8 @@ async def execute_command(command: str) -> dict:
         cwd=str(WORK_DIR),
         execution_root=str(WORK_DIR.anchor),
         metadata=ToolMetadata(name="execute_command"),
-        effective_timeout_seconds=float(GUARD.policy.max_timeout_seconds),
+        requested_timeout_seconds=requested_timeout,
+        effective_timeout_seconds=effective_timeout,
         max_output_bytes=GUARD.policy.max_output_bytes,
     )
     report = GUARD.scan(request)

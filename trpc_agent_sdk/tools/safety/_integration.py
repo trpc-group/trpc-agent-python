@@ -229,7 +229,7 @@ class ToolSafetyFilter(BaseFilter):
             rsp.rsp = report.as_dict()
             rsp.is_continue = False
             return
-        if request and request.timeout_arg_name:
+        if request and request.applicable and request.timeout_arg_name:
             req[request.timeout_arg_name] = request.effective_timeout_seconds
 
     async def _after(self, ctx: AgentContext, req: Any, rsp: FilterResult):
