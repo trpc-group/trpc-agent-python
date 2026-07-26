@@ -1,0 +1,27 @@
+{
+  "name": "async_resource",
+  "expected_findings": [
+    {
+      "category": "async_error",
+      "file": "app/worker.py",
+      "line": 2
+    },
+    {
+      "category": "resource_leak",
+      "file": "app/worker.py",
+      "line": 3
+    },
+    {
+      "category": "async_error",
+      "file": "app/worker.py",
+      "line": 4
+    },
+    {
+      "category": "missing_test",
+      "file": "app/worker.py",
+      "line": 2
+    }
+  ],
+  "expected_sandbox_status": "succeeded",
+  "max_false_positives": 0
+}

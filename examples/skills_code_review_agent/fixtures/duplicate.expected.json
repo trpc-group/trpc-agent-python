@@ -1,0 +1,17 @@
+{
+  "name": "duplicate",
+  "expected_findings": [
+    {
+      "category": "security",
+      "file": "app/template.py",
+      "line": 2
+    },
+    {
+      "category": "missing_test",
+      "file": "app/template.py",
+      "line": 2
+    }
+  ],
+  "expected_sandbox_status": "succeeded",
+  "max_false_positives": 0
+}

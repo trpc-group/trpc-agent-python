@@ -1,0 +1,10 @@
+diff --git a/app/template.py b/app/template.py
+index 1111111..2222222 100644
+--- a/app/template.py
++++ b/app/template.py
+@@ -1,2 +1,4 @@
+ def render(expression):
+-    return expression
++    result = eval(expression); subprocess.run(expression, shell=True)
++    return result
++

@@ -1,0 +1,32 @@
+diff --git a/app/math_utils.py b/app/math_utils.py
+index 1111111..2222222 100644
+--- a/app/math_utils.py
++++ b/app/math_utils.py
+@@ -1,2 +1,5 @@
+ def add(left, right):
+-    return left + right
++    result = left + right
++    return result
++
++
+diff --git a/tests/test_math_utils.py b/tests/test_math_utils.py
+index 3333333..4444444 100644
+--- a/tests/test_math_utils.py
++++ b/tests/test_math_utils.py
+@@ -1,2 +1,5 @@
+ def test_add():
+-    assert add(1, 2) == 3
++    result = add(1, 2)
++
++    assert result == 3
++
+diff --git a/app/storage.py b/app/storage.py
+new file mode 100644
+index 0000000..5555555
+--- /dev/null
++++ b/app/storage.py
+@@ -0,0 +1,4 @@
++def load(db, path):
++    api_key = os.getenv("API_KEY")
++    with open(path) as handle:
++        return db.execute("SELECT * FROM users WHERE id = ?", (handle.read(),))

@@ -1,0 +1,11 @@
+diff --git a/app/pricing.py b/app/pricing.py
+index 1111111..2222222 100644
+--- a/app/pricing.py
++++ b/app/pricing.py
+@@ -1,2 +1,5 @@
+ def total(price, quantity):
+-    return price * quantity
++    if quantity < 0:
++        raise ValueError("quantity must be non-negative")
++    return round(price * quantity, 2)
++

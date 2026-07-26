@@ -1,0 +1,6 @@
+{
+  "name": "clean",
+  "expected_findings": [],
+  "expected_sandbox_status": "succeeded",
+  "max_false_positives": 0
+}
