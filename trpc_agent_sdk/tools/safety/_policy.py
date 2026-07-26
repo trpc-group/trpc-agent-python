@@ -123,6 +123,13 @@ class SafetyPolicy:
     # When set, scripts above this many lines are flagged for review
     large_script_threshold: int = 1000
 
+    # Commands that are treated as "reading file content" (used by
+    # BashDangerousFileOpsRule to detect credential file access).
+    credential_read_commands: list[str] = field(default_factory=lambda: [
+        "cat", "less", "more", "head", "tail", "cp", "mv", "scp", "rsync",
+        "base64", "xargs", "awk", "sed", "grep", "type",
+    ])
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "SafetyPolicy":
         """Build a policy from a plain dictionary (parsed YAML)."""
@@ -148,6 +155,8 @@ class SafetyPolicy:
             policy.redact_secrets_in_evidence = bool(data["redact_secrets_in_evidence"])
         if "large_script_threshold" in data:
             policy.large_script_threshold = int(data["large_script_threshold"])
+        if "credential_read_commands" in data:
+            policy.credential_read_commands = list(data["credential_read_commands"])
 
         # Parse per-rule overrides
         rules_data = data.get("rules", {})
@@ -245,6 +254,7 @@ class SafetyPolicy:
             "secret_patterns": list(self.secret_patterns),
             "redact_secrets_in_evidence": self.redact_secrets_in_evidence,
             "large_script_threshold": self.large_script_threshold,
+            "credential_read_commands": list(self.credential_read_commands),
             "rules": {
                 rid: {
                     "enabled": ov.enabled,

@@ -103,13 +103,14 @@ class BashDangerousFileOpsRule(Rule):
                 ))
                 continue
 
-            # Accessing credential files
+            # Accessing credential files — uses configurable command list from policy.
+            read_cmds_pattern = r"\b(" + "|".join(
+                re.escape(c) for c in ctx.policy.credential_read_commands
+            ) + r")\b"
             for forbidden in ctx.policy.forbidden_paths:
                 expanded = forbidden.replace("~", "")
                 if expanded and expanded in stripped:
-                    # Only flag reads of credential files (cat, less, head, cp, etc.)
-                    if re.search(r"\b(cat|less|more|head|tail|cp|mv|scp|rsync|"
-                                 r"base64|xargs|awk|sed|grep)\b", stripped):
+                    if re.search(read_cmds_pattern, stripped):
                         findings.append(self._make_finding(
                             stripped[:200],
                             idx,
@@ -365,6 +366,13 @@ class BashSecretLeakRule(Rule):
         r"\b(echo|printf|cat|tee|curl|wget)\b", re.IGNORECASE
     )
 
+    # Environment variable names that strongly suggest a secret when echoed.
+    _SECRET_ENV_VARS = re.compile(
+        r"%\w*(API[_-]?KEY|SECRET|TOKEN|PASSWD|PASSWORD)\w*%|"
+        r"\$\w*(API[_-]?KEY|SECRET|TOKEN|PASSWD|PASSWORD)\w*",
+        re.IGNORECASE,
+    )
+
     def check(self, ctx: ScanContext) -> list[Finding]:
         findings: list[Finding] = []
         compiled = ctx.compiled_secrets
@@ -377,6 +385,8 @@ class BashSecretLeakRule(Rule):
                 continue
             if not self._OUTPUT_CMDS.search(stripped):
                 continue
+
+            # Check for hardcoded secrets via regex patterns
             for pattern in compiled:
                 if pattern.search(stripped):
                     findings.append(self._make_finding(
@@ -386,6 +396,17 @@ class BashSecretLeakRule(Rule):
                         "load secrets from environment variables instead.",
                     ))
                     break
+            else:
+                # Also flag echoing of secret-looking env vars (e.g. %API_KEY%, $SECRET)
+                if self._SECRET_ENV_VARS.search(stripped):
+                    findings.append(self._make_finding(
+                        _redact(stripped[:200]),
+                        idx,
+                        "Echoing environment variable that looks like a secret "
+                        "(API key, token, password); redact before output.",
+                        risk_level=RiskLevel.HIGH,
+                        decision=Decision.DENY,
+                    ))
         return findings
 
 

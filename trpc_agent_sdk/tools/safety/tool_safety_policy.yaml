@@ -115,6 +115,27 @@ secret_patterns:
 # Whether to redact sensitive values in evidence snippets (recommended).
 redact_secrets_in_evidence: true
 
+# Commands treated as "file read" operations for credential access detection.
+# Add new file-reading commands here instead of modifying code.
+credential_read_commands:
+  - cat
+  - less
+  - more
+  - head
+  - tail
+  - cp
+  - mv
+  - scp
+  - rsync
+  - base64
+  - xargs
+  - awk
+  - sed
+  - grep
+  - type
+  - strings
+  - tee
+
 # ---------------------------------------------------------------------------
 # Per-rule overrides
 # ---------------------------------------------------------------------------

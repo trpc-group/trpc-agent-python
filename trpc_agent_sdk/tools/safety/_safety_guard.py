@@ -68,7 +68,7 @@ _BASH_INDICATORS = re.compile(
     r"\b(echo|cd|ls|cat|grep|sed|awk|curl|wget|export|source|"
     r"rm|cp|mv|mkdir|chmod|chown|sudo|su\b|pip\d?|npm|apt|"
     r"kill|ps|tar|gzip|gunzip|base64|nc|netcat|telnet|"
-    r"head|tail|wc|sort|uniq|tr|cut|tee|xargs|find)\s|"
+    r"head|tail|wc|sort|uniq|tr|cut|tee|xargs|find|type)\s|"
     r"\$\w+|\$\{|\|\||&&|;\s*\w|"
     r"\brm\s+-[a-zA-Z]*r|"
     r"\bfor\s+\w+\s+in\s.*;\s*do\b|"
