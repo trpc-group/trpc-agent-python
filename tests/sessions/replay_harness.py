@@ -121,6 +121,8 @@ class BackendBundle:
         )
         if session is not None:
             key = f"memory:{session.save_key}:{session.id}"
+            # RedisMemoryService has no public delete API. Keep this test cleanup
+            # coupled to its storage contract so isolated integration keys do not leak.
             async with self.memory_service._redis_storage.create_db_session() as connection:
                 await self.memory_service._redis_storage.delete(connection, key)
         await self.session_service.delete_session(
@@ -398,6 +400,11 @@ class ReplayRunner:
 
     async def reload_snapshot(self, replay_case: ReplayCase) -> dict[str, Any]:
         """Read a persisted backend after service reconstruction."""
+        self.memory_results.clear()
+        self.memory_query_by_key.clear()
+        self.summary_checkpoints.clear()
+        self.failures.clear()
+        self.summary_generation = 0
         self.session = await asyncio.wait_for(self._read_session(), OPERATION_TIMEOUT_SECONDS)
         if self.session is None:
             raise AssertionError("persisted session is missing")

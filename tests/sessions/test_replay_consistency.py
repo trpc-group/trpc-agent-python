@@ -76,6 +76,8 @@ MAX_FUNCTION_PARAMETERS = 4
 MAX_FILE_LINES = 1000
 STRUCTURAL_NUMBERS = {-1, 0, 1}
 REDIS_ENVIRONMENT_VARIABLE = "TRPC_REPLAY_REDIS_URL"
+BACKEND_MODE_ENVIRONMENT_VARIABLE = "TRPC_REPLAY_BACKENDS"
+IN_MEMORY_BACKEND_MODE = "in_memory"
 QUALITY_FILES = (
     "replay_harness.py",
     "replay_report.py",
@@ -154,6 +156,23 @@ def test_each_backend_matches_independent_expectation(replay_matrix, case_id):
 def test_public_case_count_and_lightweight_runtime(replay_matrix):
     assert len(REPLAY_CASES) >= MINIMUM_CASE_COUNT
     assert replay_matrix["_duration"]["seconds"] < LIGHTWEIGHT_TIMEOUT_SECONDS
+
+
+async def test_in_memory_only_lightweight_mode():
+    if os.getenv(BACKEND_MODE_ENVIRONMENT_VARIABLE) != IN_MEMORY_BACKEND_MODE:
+        pytest.skip(f"set {BACKEND_MODE_ENVIRONMENT_VARIABLE}={IN_MEMORY_BACKEND_MODE} to run the InMemory-only replay")
+    started = time.perf_counter()
+    failures = []
+    for replay_case in REPLAY_CASES:
+        backend = await create_in_memory_backend()
+        try:
+            snapshot = await ReplayRunner(backend).run(replay_case)
+            failures.extend(f"{replay_case.case_id}: {error}"
+                            for error in validate_snapshot(replay_case.expected, snapshot))
+        finally:
+            await backend.close()
+    assert failures == []
+    assert time.perf_counter() - started < LIGHTWEIGHT_TIMEOUT_SECONDS
 
 
 def test_duplicate_replay_case_ids_are_rejected():
@@ -613,16 +632,49 @@ async def test_sqlite_summary_commit_failure_exposes_cache_storage_mismatch(tmp_
         await reopened.close()
 
 
+async def test_reload_snapshot_clears_reused_runner_state(tmp_path):
+    source = next(case for case in REPLAY_CASES if case.case_id == "write_recovery")
+    summary_source = next(case for case in REPLAY_CASES if case.case_id == "summary_create")
+    summary_events = tuple(operation for operation in summary_source.operations
+                           if operation.kind == OperationKind.APPEND)
+    replay_case = ReplayCase(
+        "reload-reused-runner",
+        source.operations + summary_events + (ReplayOperation(OperationKind.SUMMARY), ),
+        source.expected,
+    )
+    backend = await create_sqlite_backend(tmp_path / "reused-runner.db")
+    try:
+        runner = ReplayRunner(backend)
+        live = await runner.run(replay_case)
+        assert live["memory"]
+        assert live["summary_checkpoints"]
+        assert live["failures"]
+        reloaded = await runner.reload_snapshot(replay_case)
+    finally:
+        await backend.close()
+    assert live["memory"]
+    assert live["summary_checkpoints"]
+    assert live["failures"]
+    assert reloaded["memory"] == {}
+    assert reloaded["memory_final"]
+    assert reloaded["summary_checkpoints"] == []
+    assert reloaded["failures"] == []
+    assert reloaded["summary"]["generation"] == 0
+
+
 async def test_unknown_outcome_retry_writes_event_once(tmp_path):
     replay_case = next(case for case in REPLAY_CASES if case.case_id == "duplicate_retry")
     backend = await create_sqlite_backend(tmp_path / "unknown.db")
     try:
+        append_event = AsyncMock(wraps=backend.session_service.append_event)
+        backend.session_service.append_event = append_event
         runner = ReplayRunner(backend)
         snapshot = await runner.run(replay_case)
         memory = await backend.memory_service.search_memory(runner.session.save_key, "Write")
     finally:
         await backend.close()
     ids = [event["id"] for event in [*snapshot["events"], *snapshot["historical_events"]]]
+    assert append_event.await_count == 1
     assert ids.count("retry-event") == 1
     assert snapshot["summary"]["anchor_count"] == 1
     assert len(memory.memories) == 1
