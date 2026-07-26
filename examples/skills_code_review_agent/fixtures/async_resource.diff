@@ -1,0 +1,12 @@
+diff --git a/app/worker.py b/app/worker.py
+index 1111111..2222222 100644
+--- a/app/worker.py
++++ b/app/worker.py
+@@ -1,2 +1,6 @@
+ async def run_job(path):
+-    return await execute_async(path)
++    time.sleep(1)
++    handle = open(path)
++    result = execute_async(handle.read())
++    return result
++

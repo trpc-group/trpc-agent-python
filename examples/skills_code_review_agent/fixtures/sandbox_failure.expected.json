@@ -1,0 +1,6 @@
+{
+  "name": "sandbox_failure",
+  "expected_findings": [],
+  "expected_sandbox_status": "timed_out",
+  "max_false_positives": 0
+}

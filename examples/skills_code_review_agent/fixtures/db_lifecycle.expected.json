@@ -1,0 +1,22 @@
+{
+  "name": "db_lifecycle",
+  "expected_findings": [
+    {
+      "category": "db_lifecycle",
+      "file": "app/repository.py",
+      "line": 2
+    },
+    {
+      "category": "db_lifecycle",
+      "file": "app/repository.py",
+      "line": 3
+    },
+    {
+      "category": "missing_test",
+      "file": "app/repository.py",
+      "line": 2
+    }
+  ],
+  "expected_sandbox_status": "succeeded",
+  "max_false_positives": 0
+}

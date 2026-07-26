@@ -1,0 +1,11 @@
+diff --git a/app/repository.py b/app/repository.py
+index 1111111..2222222 100644
+--- a/app/repository.py
++++ b/app/repository.py
+@@ -1,2 +1,5 @@
+ def load_user(engine, user_id):
+-    return engine.execute(QUERY, {"id": user_id}).one()
++    connection = engine.connect()
++    cursor = connection.cursor()
++    cursor.execute(QUERY, {"id": user_id})
++    return cursor.fetchone()

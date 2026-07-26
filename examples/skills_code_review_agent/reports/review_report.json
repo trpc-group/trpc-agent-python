@@ -1,0 +1,112 @@
+{
+  "conclusion": "2 actionable findings and 0 warnings.",
+  "created_at": "2026-07-26T13:25:53.702830Z",
+  "failures": [],
+  "filter_decisions": [
+    {
+      "action": "allow",
+      "created_at": "2026-07-26T13:25:53.532555Z",
+      "plan_digest": "ff6e18b8ee75bdf21791076f077401a7307981737e2ca2b97a614e01f8a633ff",
+      "reason": "plan digest verified",
+      "rule_id": "plan.integrity"
+    },
+    {
+      "action": "allow",
+      "created_at": "2026-07-26T13:25:53.532568Z",
+      "plan_digest": "ff6e18b8ee75bdf21791076f077401a7307981737e2ca2b97a614e01f8a633ff",
+      "reason": "fixed scanner argv",
+      "rule_id": "command.allowlist"
+    },
+    {
+      "action": "allow",
+      "created_at": "2026-07-26T13:25:53.532632Z",
+      "plan_digest": "ff6e18b8ee75bdf21791076f077401a7307981737e2ca2b97a614e01f8a633ff",
+      "reason": "workspace-relative paths",
+      "rule_id": "path.workspace"
+    },
+    {
+      "action": "allow",
+      "created_at": "2026-07-26T13:25:53.532637Z",
+      "plan_digest": "ff6e18b8ee75bdf21791076f077401a7307981737e2ca2b97a614e01f8a633ff",
+      "reason": "environment allowlist",
+      "rule_id": "environment.allowlist"
+    },
+    {
+      "action": "allow",
+      "created_at": "2026-07-26T13:25:53.532645Z",
+      "plan_digest": "ff6e18b8ee75bdf21791076f077401a7307981737e2ca2b97a614e01f8a633ff",
+      "reason": "unsafe local runtime explicitly enabled for development",
+      "rule_id": "runtime.isolation"
+    },
+    {
+      "action": "allow",
+      "created_at": "2026-07-26T13:25:53.532650Z",
+      "plan_digest": "ff6e18b8ee75bdf21791076f077401a7307981737e2ca2b97a614e01f8a633ff",
+      "reason": "execution budget accepted",
+      "rule_id": "budget.limit"
+    }
+  ],
+  "findings": [
+    {
+      "category": "missing_test",
+      "confidence": 0.76,
+      "evidence": "app/runner.py",
+      "file": "app/runner.py",
+      "line": 4,
+      "recommendation": "Add a focused test covering the changed behavior and failure path.",
+      "severity": "medium",
+      "source": "skill:code-review/tests.missing",
+      "title": "Production change has no test update"
+    },
+    {
+      "category": "security",
+      "confidence": 0.98,
+      "evidence": "    return subprocess.run(command, shell=True, check=True)",
+      "file": "app/runner.py",
+      "line": 4,
+      "recommendation": "Pass a fixed argv list and keep shell execution disabled.",
+      "severity": "critical",
+      "source": "skill:code-review/security.shell-true",
+      "title": "Shell execution enabled"
+    }
+  ],
+  "input_summary": {
+    "digest": "ac238e8ec4fb5fbdfecbae29d6a723b56da9bb179abc078823727291d3428abb",
+    "file_count": 1,
+    "kind": "fixture"
+  },
+  "metrics": {
+    "blocked_count": 0,
+    "exceptions_by_type": {},
+    "filter_actions": {
+      "allow": 6
+    },
+    "finding_count": 2,
+    "findings_by_category": {
+      "missing_test": 1,
+      "security": 1
+    },
+    "findings_by_severity": {
+      "critical": 1,
+      "medium": 1
+    },
+    "sandbox_duration_ms": 150,
+    "tool_calls": 2,
+    "total_duration_ms": 2789
+  },
+  "needs_human_review": [],
+  "sandbox_runs": [
+    {
+      "duration_ms": 150,
+      "error_type": null,
+      "exit_code": 0,
+      "status": "succeeded",
+      "stderr": "",
+      "stdout": "findings_written=2\r\n",
+      "timed_out": false
+    }
+  ],
+  "status": "complete",
+  "task_id": "3f0730ca180f4ff2abd8472a871fb369",
+  "warnings": []
+}

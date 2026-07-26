@@ -1,0 +1,17 @@
+{
+  "name": "security",
+  "expected_findings": [
+    {
+      "category": "security",
+      "file": "app/runner.py",
+      "line": 4
+    },
+    {
+      "category": "missing_test",
+      "file": "app/runner.py",
+      "line": 4
+    }
+  ],
+  "expected_sandbox_status": "succeeded",
+  "max_false_positives": 0
+}

@@ -1,0 +1,10 @@
+diff --git a/app/status.py b/app/status.py
+index 1111111..2222222 100644
+--- a/app/status.py
++++ b/app/status.py
+@@ -1,2 +1,4 @@
+ def status():
+-    return "unknown"
++    # REVIEW_FIXTURE:TIMEOUT
++    return "ready"
++

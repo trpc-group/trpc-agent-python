@@ -1,0 +1,12 @@
+{
+  "name": "missing_tests",
+  "expected_findings": [
+    {
+      "category": "missing_test",
+      "file": "app/pricing.py",
+      "line": 2
+    }
+  ],
+  "expected_sandbox_status": "succeeded",
+  "max_false_positives": 0
+}
