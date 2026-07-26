@@ -113,11 +113,18 @@ def test_adapt_skill_run_command():
     assert request.timeout_arg_name == "timeout"
 
 
-def test_unknown_tool_with_code_field_is_not_inferred_as_executor():
+def test_unknown_tool_with_code_field_is_scanned_conservatively():
     tool = SimpleNamespace(name="code_formatter", description="formats text")
     request = adapt_tool_request(tool, {"code": "open('/etc/shadow').read()"}, _policy())
-    assert request.applicable is False
-    assert request.payloads == []
+    assert request.applicable is True
+    assert request.payloads[0].language == ScriptLanguage.PYTHON
+
+
+def test_unknown_tool_with_command_field_is_scanned_as_bash():
+    tool = SimpleNamespace(name="custom_exec", description="custom executor")
+    request = adapt_tool_request(tool, {"command": "rm -rf /"}, _policy())
+    assert request.applicable is True
+    assert request.payloads[0].language == ScriptLanguage.BASH
 
 
 def test_local_bash_resolves_relative_cwd():

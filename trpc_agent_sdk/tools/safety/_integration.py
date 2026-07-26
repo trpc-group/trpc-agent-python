@@ -82,11 +82,13 @@ def adapt_tool_request(tool: Any, args: dict[str, Any], policy: ToolSafetyPolicy
         description=str(getattr(tool, "description", "")),
     )
     requested, effective, timeout_arg = _timeout(args, name, policy)
-    applicable = name in _BASH_TOOL_NAMES or name in _GENERIC_EXECUTION_FIELDS
+    supported_fields = _GENERIC_EXECUTION_FIELDS.get(name)
+    if name in _BASH_TOOL_NAMES:
+        supported_fields = ("command", "code", "script")
+    inferred_fields = supported_fields or ("command", "code", "script")
     payloads = []
     for field_name in ("command", "code", "script"):
-        supported_fields = _GENERIC_EXECUTION_FIELDS.get(name)
-        if name not in _BASH_TOOL_NAMES and (not supported_fields or field_name not in supported_fields):
+        if field_name not in inferred_fields:
             continue
         content = args.get(field_name)
         if not isinstance(content, str) or not content.strip():
@@ -102,6 +104,7 @@ def adapt_tool_request(tool: Any, args: dict[str, Any], policy: ToolSafetyPolicy
                 argv=[str(item) for item in argv] if isinstance(argv, list) else [],
                 stdin=str(args.get("stdin", "")) if field_name == "command" else "",
             ))
+    applicable = bool(payloads) or name in _BASH_TOOL_NAMES or name in _GENERIC_EXECUTION_FIELDS
     tool_cwd = str(getattr(tool, "cwd", "") or "")
     requested_cwd = str(args.get("cwd") or "")
     cwd = requested_cwd or tool_cwd

@@ -61,6 +61,8 @@ def test_recursive_delete_denied_python_alias(guard):
         "open('~/.ssh/id_rsa').read()",
         "from pathlib import Path\nPath('.env').read_text()",
         "open('/etc/shadow').read()",
+        "import builtins\nbuiltins.open('/etc/shadow').read()",
+        "from builtins import open as read_file\nread_file('.env').read()",
     ],
 )
 def test_sensitive_path_always_denied(guard, code):
@@ -92,6 +94,48 @@ def test_dynamic_network_requires_review(guard):
     report = guard.scan(_request("import requests\nrequests.get(target)"))
     assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
     assert "NET002" in _rule_ids(report)
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        ("url = 'https://api.example.com'\n"
+         "url = input()\n"
+         "import requests\n"
+         "requests.get(url)"),
+        ("url = 'https://api.example.com'\n"
+         "(url := input())\n"
+         "import requests\n"
+         "requests.get(url)"),
+        ("url = 'https://api.example.com'\n"
+         "url += input()\n"
+         "import requests\n"
+         "requests.get(url)"),
+        ("url = 'https://api.example.com'\n"
+         "for url in targets:\n"
+         "    pass\n"
+         "import requests\n"
+         "requests.get(url)"),
+        ("url = 'https://api.example.com'\n"
+         "import requests\n"
+         "def fetch(url):\n"
+         "    return requests.get(url)"),
+        ("url = 'https://api.example.com'\n"
+         "import requests\n"
+         "[requests.get(url) for url in targets]"),
+    ],
+)
+def test_rebound_network_target_requires_review(guard, code):
+    report = guard.scan(_request(code))
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert "NET002" in _rule_ids(report)
+
+
+def test_rebound_file_path_requires_review(guard):
+    code = "path = '/tmp/safe'\npath = input()\nopen(path).read()"
+    report = guard.scan(_request(code))
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert "FILE003" in _rule_ids(report)
 
 
 def test_subprocess_requires_review(guard):

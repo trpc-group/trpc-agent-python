@@ -31,7 +31,7 @@ from ._sanitizer import SafetySanitizer
 _NETWORK_ROOTS = frozenset({"requests", "aiohttp", "socket", "urllib", "httpx"})
 _PROCESS_CALLS = frozenset({"subprocess.run", "subprocess.call", "subprocess.Popen", "os.system", "os.popen"})
 _DELETE_CALLS = frozenset({"shutil.rmtree"})
-_DIRECT_FILE_CALLS = frozenset({"open", "io.open", "os.open", "os.remove", "os.unlink", "os.rmdir"})
+_DIRECT_FILE_CALLS = frozenset({"open", "builtins.open", "io.open", "os.open", "os.remove", "os.unlink", "os.rmdir"})
 _PATH_METHODS = frozenset({"open", "read_text", "read_bytes", "write_text", "write_bytes", "unlink", "rmdir"})
 _OUTPUT_CALLS = frozenset(
     {"print", "logging.info", "logging.warning", "logging.error", "logger.info", "logger.warning", "logger.error"})
@@ -117,6 +117,8 @@ class PythonRuleVisitor(ast.NodeVisitor):
         self._constants: dict[str, str] = {}
         self._path_values: dict[str, str | None] = {}
         self._secret_names: set[str] = set()
+        self._assigned_names: set[str] = set()
+        self._uncertain_names: set[str] = set()
         self.findings: list[SafetyFinding] = []
         self.redacted = False
 
@@ -157,28 +159,149 @@ class PythonRuleVisitor(ast.NodeVisitor):
 
     def visit_Import(self, node: ast.Import) -> Any:
         for item in node.names:
-            self._aliases[item.asname or item.name] = item.name
+            name = item.asname or item.name
+            if self._invalidate_binding(name):
+                self._aliases[name] = item.name
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> Any:
         module = node.module or ""
         for item in node.names:
-            self._aliases[item.asname or item.name] = f"{module}.{item.name}".strip(".")
+            name = item.asname or item.name
+            if self._invalidate_binding(name):
+                self._aliases[name] = f"{module}.{item.name}".strip(".")
 
     def visit_Assign(self, node: ast.Assign) -> Any:
-        value = self._string(node.value)
-        symbolic = self._symbolic_value(node.value)
         for target in node.targets:
-            if not isinstance(target, ast.Name):
-                continue
-            if value is not None:
-                self._constants[target.id] = value
-            if symbolic:
-                self._aliases[target.id] = symbolic
-            if self._is_path_constructor(node.value):
-                self._path_values[target.id] = self._path_constructor_value(node.value)
-            if _SECRET_NAME_RE.search(target.id) or self._contains_secret(node.value):
-                self._secret_names.add(target.id)
+            self._bind_target(target, node.value)
         self.generic_visit(node)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> Any:
+        self._bind_target(node.target, node.value)
+        self.generic_visit(node)
+
+    def visit_NamedExpr(self, node: ast.NamedExpr) -> Any:
+        self._bind_target(node.target, node.value)
+        self.generic_visit(node)
+
+    def visit_AugAssign(self, node: ast.AugAssign) -> Any:
+        self._invalidate_target(node.target)
+        self.generic_visit(node)
+
+    def visit_For(self, node: ast.For) -> Any:
+        self._invalidate_target(node.target)
+        self.generic_visit(node)
+
+    visit_AsyncFor = visit_For
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> Any:
+        for item in [*node.decorator_list, *node.args.defaults, *node.args.kw_defaults]:
+            if item is not None:
+                self.visit(item)
+        self._invalidate_binding(node.name)
+        outer = self._binding_state()
+        arguments = [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]
+        arguments.extend(item for item in (node.args.vararg, node.args.kwarg) if item)
+        for argument in arguments:
+            self._invalidate_binding(argument.arg)
+        for statement in node.body:
+            self.visit(statement)
+        self._restore_binding_state(outer)
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_Lambda(self, node: ast.Lambda) -> Any:
+        for item in [*node.args.defaults, *node.args.kw_defaults]:
+            if item is not None:
+                self.visit(item)
+        outer = self._binding_state()
+        arguments = [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]
+        arguments.extend(item for item in (node.args.vararg, node.args.kwarg) if item)
+        for argument in arguments:
+            self._invalidate_binding(argument.arg)
+        self.visit(node.body)
+        self._restore_binding_state(outer)
+
+    def visit_ListComp(self, node: ast.ListComp) -> Any:
+        self._visit_comprehension(node.generators, [node.elt])
+
+    visit_SetComp = visit_ListComp
+    visit_GeneratorExp = visit_ListComp
+
+    def visit_DictComp(self, node: ast.DictComp) -> Any:
+        self._visit_comprehension(node.generators, [node.key, node.value])
+
+    def _visit_comprehension(self, generators: list[ast.comprehension], outputs: list[ast.AST]) -> None:
+        outer = self._binding_state()
+        for generator in generators:
+            self.visit(generator.iter)
+            self._invalidate_target(generator.target)
+            for condition in generator.ifs:
+                self.visit(condition)
+        for output in outputs:
+            self.visit(output)
+        self._restore_binding_state(outer)
+
+    def visit_ExceptHandler(self, node: ast.ExceptHandler) -> Any:
+        if node.name:
+            self._invalidate_binding(node.name)
+        self.generic_visit(node)
+
+    def _bind_target(self, target: ast.AST, value_node: ast.AST | None) -> None:
+        if not isinstance(target, ast.Name):
+            self._invalidate_target(target)
+            return
+        was_secret = target.id in self._secret_names
+        can_track = self._invalidate_binding(target.id)
+        is_secret = bool(_SECRET_NAME_RE.search(target.id))
+        is_secret = is_secret or (value_node is not None and self._contains_secret(value_node))
+        if was_secret or is_secret:
+            self._secret_names.add(target.id)
+        else:
+            self._secret_names.discard(target.id)
+        if not can_track or value_node is None:
+            return
+        value = self._string(value_node)
+        symbolic = self._symbolic_value(value_node)
+        if value is not None:
+            self._constants[target.id] = value
+        if symbolic:
+            self._aliases[target.id] = symbolic
+        if self._is_path_constructor(value_node):
+            self._path_values[target.id] = self._path_constructor_value(value_node)
+
+    def _invalidate_target(self, target: ast.AST) -> None:
+        for item in ast.walk(target):
+            if isinstance(item, ast.Name):
+                self._invalidate_binding(item.id)
+
+    def _invalidate_binding(self, name: str) -> bool:
+        self._constants.pop(name, None)
+        self._aliases.pop(name, None)
+        self._path_values.pop(name, None)
+        if name in self._assigned_names:
+            self._uncertain_names.add(name)
+        self._assigned_names.add(name)
+        return name not in self._uncertain_names
+
+    def _binding_state(self) -> tuple:
+        return (
+            dict(self._aliases),
+            dict(self._constants),
+            dict(self._path_values),
+            set(self._secret_names),
+            set(self._assigned_names),
+            set(self._uncertain_names),
+        )
+
+    def _restore_binding_state(self, state: tuple) -> None:
+        (
+            self._aliases,
+            self._constants,
+            self._path_values,
+            self._secret_names,
+            self._assigned_names,
+            self._uncertain_names,
+        ) = state
 
     def _symbolic_value(self, node: ast.AST) -> str:
         if isinstance(node, (ast.Name, ast.Attribute)):

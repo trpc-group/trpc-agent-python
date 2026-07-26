@@ -3,6 +3,15 @@
 该示例展示 Python/Bash 静态扫描、Tool Filter、CodeExecutor wrapper、策略、
 报告、审计和 OpenTelemetry 接入。
 
+## 交付物
+
+- `README.md`：规则、接入、扩展方式和安全边界。
+- `tool_safety_policy.yaml`：可修改的策略示例。
+- `tool_safety_report.json`：结构化扫描报告示例。
+- `tool_safety_audit.jsonl`：审计事件示例。
+- `manifest.yaml` 与 `samples/`：12 个公开验收样本及预期决策。
+- `real_agent.py`、`mcp_server.py` 与 `skills/`：真实 Agent 执行示例。
+
 ## CLI
 
 ```bash
@@ -36,6 +45,8 @@ Filter 在 `_run_async_impl()` 前扫描。`deny` 和 `needs_human_review` 不�
 handler；`allow` 把有效 timeout 注入 Tool 参数，并在 `_after` 阶段限制返回给
 Agent 的 output 大小。安全 Filter 应放在所有参数改写 Filter 之后，后续 Filter
 也不应扩展其已截断的输出。CodeExecutor wrapper 另外使用协作式 deadline。
+已知 Tool 使用固定 adapter；未知 Tool 只要提供非空 `command`、`code` 或
+`script` 字段，也会按 Bash/Python 保守扫描，避免自定义执行 Tool 静默绕过。
 
 ## CodeExecutor
 

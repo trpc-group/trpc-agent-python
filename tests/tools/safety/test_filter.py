@@ -57,8 +57,8 @@ def _filter(sink, max_output=100):
     return ToolSafetyFilter(ToolScriptSafetyGuard(policy), sink)
 
 
-async def _run_filter(safety_filter, args, handler):
-    tool = SimpleNamespace(name="Bash", description="shell")
+async def _run_filter(safety_filter, args, handler, tool_name="Bash"):
+    tool = SimpleNamespace(name=tool_name, description="shell")
     token = set_tool_var(tool)
     try:
         return await run_filters(SimpleNamespace(), args, [safety_filter], handler)
@@ -99,6 +99,21 @@ async def test_deny_stops_handler_and_returns_report():
     assert called is False
     assert result["decision"] == "deny"
     assert sink.events[0].execution_blocked is True
+
+
+@pytest.mark.asyncio
+async def test_unknown_execution_tool_does_not_fail_open():
+
+    async def handler():
+        raise AssertionError("handler must not run")
+
+    result = await _run_filter(
+        _filter(_MemorySink()),
+        {"command": "rm -rf /"},
+        handler,
+        tool_name="custom_exec",
+    )
+    assert result["decision"] == "deny"
 
 
 @pytest.mark.asyncio
@@ -202,4 +217,3 @@ async def test_final_limit_runs_after_outer_filter():
         reset_tool_var(token)
     assert result["truncated"] is True
     assert len(result["stdout"].encode()) <= 10
-
