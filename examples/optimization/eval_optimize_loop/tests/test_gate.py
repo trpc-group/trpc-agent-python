@@ -212,7 +212,7 @@ class TestGateNewHardFailCaseLevel:
 
 
 
-import subprocess, os
+import pytest, subprocess, os
 from pathlib import Path
 
 PIPELINE_SCRIPT = Path(__file__).resolve().parent.parent / 'run_pipeline.py'

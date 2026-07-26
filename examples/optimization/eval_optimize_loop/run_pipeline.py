@@ -212,11 +212,9 @@ async def main():
             print("Done. 6 phases completed.")
 
     finally:
-        # Release lock: on POSIX closing fd releases kernel flock
+        # Release lock: on POSIX closes fd (releases kernel flock)
         # and removes the lock file; on Windows removes PID lock file.
-        release_pipeline_lock(lock_token)
-        # On Windows (PID lock), the lock file persists and must be
-        # removed by the owner.
+        release_pipeline_lock(lock_token, LOCK_FILE)
         if sys.platform == "win32" and lock_token is not None:
             try:
                 _os.remove(LOCK_FILE)

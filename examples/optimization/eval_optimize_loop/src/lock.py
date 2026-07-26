@@ -28,12 +28,17 @@ def acquire_pipeline_lock(lock_path: str, pid: int | None = None,
     return _acquire_pid_lock_win32(lock_path, pid, started_at)
 
 
-def release_pipeline_lock(token: int | None) -> None:
-    """Release a previously acquired pipeline lock."""
+def release_pipeline_lock(token: int | None, lock_path: str = "") -> None:
+    """Release a previously acquired pipeline lock.
+
+    Args:
+        token: Lock token from acquire_pipeline_lock.
+        lock_path: Path to the lock file (needed for POSIX cleanup).
+    """
     if token is None:
         return
     if sys.platform != "win32":
-        _release_flock(token)
+        _release_flock(token, lock_path)
     else:
         _release_pid_lock_win32(token)
 
@@ -45,7 +50,7 @@ def _acquire_flock(lock_path: str, pid: int, started_at: str) -> int | None:
     """Acquire kernel-level flock. Returns fd on success, None if locked."""
     import fcntl
 
-    fd = _os.open(lock_path, _os.O_CREAT | _os.O_RDWR, 0o644)
+    fd = _os.open(lock_path, _os.O_CREAT | _os.O_RDWR | _os.O_TRUNC, 0o644)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except (IOError, OSError):
@@ -57,8 +62,18 @@ def _acquire_flock(lock_path: str, pid: int, started_at: str) -> int | None:
     return fd
 
 
-def _release_flock(fd: int) -> None:
-    """Close fd, releasing the kernel flock."""
+def _release_flock(fd: int, lock_path: str = "") -> None:
+    """Close fd (releases kernel flock) and remove the lock file.
+
+    The lock file is removed so the next run starts clean.  fcntl.flock
+    is tied to the open fd, so the file can be safely removed while the
+    fd is still open (on Unix, the inode persists until close).
+    """
+    if lock_path:
+        try:
+            _os.remove(lock_path)
+        except FileNotFoundError:
+            pass
     _os.close(fd)
 
 

@@ -25,7 +25,7 @@ from src.attribution import AttributionReport
 
 
 # ============================================================================
-# ?? Prompt ????? PlateAgent ??? prompt ???
+# Base prompts for PlateAgent recognition pipeline
 # ============================================================================
 
 BASE_PROMPTS: dict[str, str] = {
@@ -219,7 +219,7 @@ class FakeOptimizer:
                 attribution_summary={"note": "no failures to optimize"},
             )
 
-        # Append strategy lines to change_log?????
+                # Append strategy lines to change_log
         priority_queue = self._build_priority_queue(attribution_report)
 
         for iteration, target in enumerate(priority_queue[:max_iterations]):
@@ -251,7 +251,7 @@ class FakeOptimizer:
                 change_log=change_log,
                 failure_category=category,
                 attribution_confidence=confidence,
-                estimated_cost=0.0005,  # fake ????????
+                estimated_cost=0.0005,  # fake mode estimate
             )
             candidates.append(candidate)
 
@@ -269,14 +269,14 @@ class FakeOptimizer:
             attribution_summary=attr_summary,
         )
 
-    # ?? ???? ????????????????????????????????????????
+    # ---- Priority queue builder ----
 
     def _build_priority_queue(
         self, report: AttributionReport
     ) -> list[dict]:
-        """??????????
+        """构建优化优先级队列
 
-        ?????????????????? prompt_target?
+        按失败集群排序，确定优化目标和 prompt_target。
         """
         queue = []
         for cluster in sorted(report.clusters, key=lambda c: (-c.count, c.category)):
@@ -291,7 +291,7 @@ class FakeOptimizer:
         return queue
 
     def _get_base_prompt(self, prompt_type: str) -> str:
-        """????????? prompt?"""
+        """获取指定类型的 base prompt。"""
         return BASE_PROMPTS.get(prompt_type, f"# {prompt_type} prompt placeholder")
 
     def _generate_optimization(
@@ -340,22 +340,22 @@ class FakeOptimizer:
 
     @staticmethod
     def _make_candidate_id(prompt_text: str, iteration: int) -> str:
-        """???? ID????? + ????"""
+        """Generate candidate ID from prompt hash + iteration."""
         content_hash = hashlib.sha256(prompt_text.encode()).hexdigest()[:12]
         # deterministic: removed time.time() for reproducibility
         return f"cand_{iteration}_{content_hash}"
 
 
 # ============================================================================
-# OptimizationRunner?????
+# OptimizationRunner wrapper
 # ============================================================================
 
 class OptimizationRunner:
-    """????????
+    """Optimization runner.
 
-    ?? fake ? real ?????
+    Supports fake and real modes.
 
-    ????:
+    Example:
         runner = OptimizationRunner(mode="fake")
         result = runner.run(attribution_report)
         print(result.optimized_prompt)
@@ -381,10 +381,10 @@ class OptimizationRunner:
         self,
         attribution_report: AttributionReport,
     ) -> OptimizationResult:
-        """?????
+        """Run optimization.
 
         Args:
-            attribution_report: Phase 2 ????
+            attribution_report: Phase 2 attribution result
 
         Returns:
             OptimizationResult
@@ -400,7 +400,7 @@ class OptimizationRunner:
     def _run_real(
         self, attribution_report: AttributionReport
     ) -> OptimizationResult:
-        """Real ????? trpc_agent.optimization.AgentOptimizer?"""
+        """Real mode: integrate with trpc_agent.optimization.AgentOptimizer."""
         try:
             from trpc_agent.optimization import AgentOptimizer
         except ImportError:
@@ -408,7 +408,7 @@ class OptimizationRunner:
                 "Real mode requires trpc_agent.optimization. "
                 "Install trpc-agent package or use mode='fake'."
             )
-        # TODO: AgentOptimizer ???? tRPC-Agent SDK?
+        # TODO: AgentOptimizer integration pending in tRPC-Agent SDK
         raise NotImplementedError(
             "Real mode AgentOptimizer integration pending. Use fake mode."
         )
@@ -423,12 +423,12 @@ def run_optimization(
     mode: str = "fake",
     config_path: Optional[str | Path] = None,
 ) -> OptimizationResult:
-    """???????
+    """Convenience function for one-shot optimization.
 
     Args:
         attribution_report: Phase 2 ????
         mode: "fake" | "real"
-        config_path: optimizer.json ??
+        config_path: path to optimizer.json config
 
     Returns:
         OptimizationResult
