@@ -101,7 +101,7 @@ def test_attribution_prefers_tool_argument_category():
             }])],
         })
 
-    result = attribute_case(case)
+    result = attribute_case(case, "final_response_avg_score")
 
     assert isinstance(result, Attribution)
     assert result.category == FailureCategory.TOOL_ARGUMENT

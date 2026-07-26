@@ -55,7 +55,12 @@ async def run_pipeline(options: PipelineOptions) -> PipelineResult:
 
 async def _run_pipeline(options: PipelineOptions, started: float) -> PipelineResult:
     """Run the complete evaluation and optimization loop."""
-    bundle, _, gate_config = validate_inputs(options.paths)
+    bundle, optimizer_config, gate_config = validate_inputs(options.paths)
+    options = options.model_copy(
+        update={
+            "num_runs": optimizer_config.evaluate.num_runs,
+            "case_parallelism": optimizer_config.optimize.eval_case_parallelism,
+        })
     workspace = _prepare_workspace(bundle, options.output_dir)
     baseline = await _evaluate_pair(workspace, bundle, options, "baseline")
     optimization, candidate_prompts = await _optimize(
@@ -106,15 +111,32 @@ async def _run_pipeline(options: PipelineOptions, started: float) -> PipelineRes
         duration,
         False,
     )
-    json_path, markdown_path = write_reports(report, options.output_dir)
-    source_updated = await _maybe_write_back(
+    json_path, markdown_path = await _write_back_and_report(
+        report,
         bundle,
         candidate_prompts,
-        decision.accepted,
-        options.write_back,
+        options,
     )
-    report.source_updated = source_updated
     return PipelineResult(report=report, json_path=json_path, markdown_path=markdown_path)
+
+
+async def _write_back_and_report(
+    report: OptimizationReport,
+    bundle: InputBundle,
+    prompts: dict[str, str],
+    options: PipelineOptions,
+) -> tuple[Path, Path]:
+    if not report.gate.accepted or not options.write_back:
+        return write_reports(report, options.output_dir)
+    original = bundle.prompt_path.read_text(encoding="utf-8")
+    try:
+        await _maybe_write_back(bundle, prompts, report.gate.accepted, options.write_back)
+        report.source_updated = True
+        return write_reports(report, options.output_dir)
+    except Exception:
+        bundle.prompt_path.write_text(original, encoding="utf-8")
+        report.source_updated = False
+        raise
 
 
 def _failure_result(options: PipelineOptions, started: float, error: Exception) -> PipelineResult:
@@ -341,7 +363,7 @@ def _build_report(
             **bundle.hashes, "candidate_prompt": _prompt_hash(optimization.best_prompts)
         },
         model_name=options.model_name,
-        num_runs=1,
+        num_runs=options.num_runs,
         case_parallelism=options.case_parallelism,
         python_version=platform.python_version(),
         sdk_version=_sdk_version(),

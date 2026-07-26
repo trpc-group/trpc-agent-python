@@ -54,7 +54,7 @@ def main() -> int:
             )))
     print(f"{result.report.status}: {result.json_path}")
     print(result.markdown_path)
-    return 0 if result.report.status in {"ACCEPTED", "REJECTED"} else 1
+    return 1 if result.report.failures else 0
 
 
 if __name__ == "__main__":

@@ -48,9 +48,9 @@ async def real_call_agent(prompt_path: Path, query: str) -> str:
 
 
 def _create_agent(prompt_path: Path) -> LlmAgent:
-    api_key = os.environ["TRPC_AGENT_API_KEY"]
-    base_url = os.environ["TRPC_AGENT_BASE_URL"]
-    model_name = os.environ["TRPC_AGENT_MODEL_NAME"]
+    api_key = _required_env("TRPC_AGENT_API_KEY")
+    base_url = _required_env("TRPC_AGENT_BASE_URL")
+    model_name = _required_env("TRPC_AGENT_MODEL_NAME")
     model = OpenAIModel(model_name=model_name, api_key=api_key, base_url=base_url)
     return LlmAgent(
         name=APP_NAME,
@@ -58,6 +58,13 @@ def _create_agent(prompt_path: Path) -> LlmAgent:
         model=model,
         instruction=prompt_path.read_text(encoding="utf-8"),
     )
+
+
+def _required_env(name: str) -> str:
+    value = os.getenv(name)
+    if not value:
+        raise RuntimeError(f"required environment variable is missing: {name}")
+    return value
 
 
 async def _consume_final_text(runner: Runner, session_id: str, message: Content) -> str:

@@ -42,11 +42,12 @@ def test_fake_pipeline_writes_auditable_json_and_markdown(tmp_path):
 
 
 def test_candidate_prompt_is_restored_after_replay(tmp_path):
+    work_prompt = tmp_path / "work/prompts/system.md"
     source = (ROOT / "agent/prompts/system.md").read_text(encoding="utf-8")
 
     asyncio.run(run_pipeline(_options(tmp_path)))
 
-    assert (ROOT / "agent/prompts/system.md").read_text(encoding="utf-8") == source
+    assert work_prompt.read_text(encoding="utf-8") == source
 
 
 def test_trace_mode_replays_recorded_cases(tmp_path):
@@ -81,3 +82,35 @@ def test_pipeline_failure_is_reported_without_prompt_write(tmp_path):
     assert result.report.status == "REJECTED"
     assert result.report.failures
     assert result.json_path.is_file()
+
+
+def test_write_back_report_matches_updated_prompt(tmp_path):
+    prompt_path = tmp_path / "system.md"
+    prompt_path.write_text((ROOT / "agent/prompts/system.md").read_text(encoding="utf-8"), encoding="utf-8")
+    options = _options(
+        tmp_path / "output",
+        paths=_options(tmp_path).paths.model_copy(update={"prompt_path": prompt_path}),
+        write_back=True,
+    )
+
+    result = asyncio.run(run_pipeline(options))
+    payload = json.loads(result.json_path.read_text(encoding="utf-8"))
+
+    assert result.report.gate.accepted is True
+    assert payload["source_updated"] is True
+    assert "OPTIMIZED_CANDIDATE" in prompt_path.read_text(encoding="utf-8")
+
+
+def test_report_audit_uses_configured_num_runs(tmp_path):
+    optimizer = json.loads((ROOT / "optimizer.json").read_text(encoding="utf-8"))
+    optimizer["evaluate"]["num_runs"] = 2
+    optimizer_path = tmp_path / "optimizer.json"
+    optimizer_path.write_text(json.dumps(optimizer), encoding="utf-8")
+    options = _options(
+        tmp_path / "output",
+        paths=_options(tmp_path).paths.model_copy(update={"optimizer_path": optimizer_path}),
+    )
+
+    result = asyncio.run(run_pipeline(options))
+
+    assert result.report.audit.num_runs == 2

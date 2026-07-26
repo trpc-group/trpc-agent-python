@@ -87,8 +87,8 @@ async def evaluate_split(request: EvaluationRequest) -> EvaluationSnapshot:
     """Run AgentEvaluator and retain results even when cases fail."""
     config = load_optimize_config(str(request.optimizer_path))
     started = time.monotonic()
-    with tempfile.TemporaryDirectory(prefix="eval-optimize-") as temp_dir:
-        dataset_path, cleanup = _dataset_for_sdk(request.dataset_path)
+    with tempfile.TemporaryDirectory(prefix="eval-optimize-", dir=Path.cwd()) as temp_dir:
+        dataset_path = _dataset_for_sdk(request.dataset_path, Path(temp_dir))
         metrics_path = Path(temp_dir) / "eval_config.json"
         metrics_path.write_text(
             config.evaluate.model_dump_json(by_alias=True),
@@ -106,11 +106,11 @@ async def evaluate_split(request: EvaluationRequest) -> EvaluationSnapshot:
         try:
             await executor.evaluate()
         except AssertionError:
+            # AgentEvaluator uses AssertionError for partial case failures:
+            # get_result() remains available and contains the failed cases.
             if executor.get_result() is None:
                 raise
         result = executor.get_result()
-        if cleanup is not None:
-            cleanup()
     if result is None:
         raise RuntimeError("AgentEvaluator completed without a result")
     return _snapshot_result(
@@ -329,11 +329,11 @@ def _portable_dataset_path(path: Path) -> str:
     return os.path.relpath(path, Path.cwd())
 
 
-def _dataset_for_sdk(path: Path) -> tuple[str, Callable[[], None] | None]:
+def _dataset_for_sdk(path: Path, temp_dir: Path) -> str:
     try:
-        return _portable_dataset_path(path), None
+        return _portable_dataset_path(path)
     except (OSError, ValueError):
         pass
-    local = Path.cwd() / f".eval-optimize-{path.name}"
+    local = temp_dir / path.name
     shutil.copyfile(path, local)
-    return str(local.relative_to(Path.cwd())), lambda: local.unlink(missing_ok=True)
+    return _portable_dataset_path(local)

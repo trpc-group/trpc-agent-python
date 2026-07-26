@@ -242,6 +242,7 @@ class PipelineOptions(StrictModel):
     write_back: bool = False
     model_name: str = "fake-model"
     case_parallelism: int = 1
+    num_runs: int = 1
 
 
 class PipelineResult(StrictModel):

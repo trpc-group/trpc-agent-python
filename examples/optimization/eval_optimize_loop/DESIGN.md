@@ -31,6 +31,10 @@ gate 接受时才写回。
 `data/fake_trace.json`、`optimizer.json`、`gate.json`、
 `optimization_report.json`、`README.md`。
 
+`optimization_report.json` 是 Issue #91 要求的示例输出，不是稳定契约。
+其中时间戳、Git SHA、Python 版本和耗时仅展示审计字段，实际运行由 pipeline
+在输出目录重新生成，测试不依赖这些环境相关值。
+
 测试：`tests/evaluation/test_eval_optimize_loop_*.py`。
 
 ## 验收

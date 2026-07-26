@@ -25,14 +25,14 @@ KNOWLEDGE_MARKERS = ("knowledge", "recall", "retriev")
 
 def attribute_cases(snapshot: EvaluationSnapshot) -> tuple[list[Attribution], dict[FailureCategory, int]]:
     """Attribute all failed cases with one deterministic primary rule."""
-    attributions = [attribute_case(case) for case in snapshot.cases if not case.passed]
+    attributions = [attribute_case(case, snapshot.primary_metric) for case in snapshot.cases if not case.passed]
     counts: dict[FailureCategory, int] = {}
     for attribution in attributions:
         counts[attribution.category] = counts.get(attribution.category, 0) + 1
     return attributions, counts
 
 
-def attribute_case(case: CaseSnapshot) -> Attribution:
+def attribute_case(case: CaseSnapshot, primary_metric: str) -> Attribution:
     """Return an explainable category and evidence for one failed case."""
     if case.hard_failure or case.error_message:
         return Attribution(
@@ -62,7 +62,7 @@ def attribute_case(case: CaseSnapshot) -> Attribution:
         return Attribution(case.case_id, FailureCategory.KNOWLEDGE, "metric.knowledge", reason_text)
     if _contains_any(reason_text, FORMAT_MARKERS):
         return Attribution(case.case_id, FailureCategory.FORMAT, "response.format", reason_text)
-    if case.metric_statuses.get("final_response_avg_score") == "FAILED":
+    if case.metric_statuses.get(primary_metric) == "FAILED":
         return Attribution(
             case_id=case.case_id,
             category=FailureCategory.RESPONSE,
