@@ -22,6 +22,7 @@ from typing import Callable
 from unittest.mock import AsyncMock
 
 import pytest
+import pytest_asyncio
 
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.sessions import InMemorySessionService
@@ -87,7 +88,7 @@ QUALITY_FILES = (
 )
 
 
-@pytest.fixture(scope="module")
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def replay_matrix(tmp_path_factory):
     """Run all public cases once and retain detached snapshots."""
     validate_replay_cases(REPLAY_CASES)
