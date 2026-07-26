@@ -1,4 +1,4 @@
-﻿"""Phase 5 Gate 单元测试"""
+"""Phase 5 Gate 单元测试"""
 
 import pytest
 from src.gate import AcceptanceGate, GateDecision
@@ -153,3 +153,60 @@ class TestGateEdgeCases:
         )
         assert decision.accepted
         assert decision.strategy == "majority"
+
+class TestGateNewHardFailCaseLevel:
+    """Verify no_new_hard_fail uses case-level comparison, not net count."""
+
+    def test_rejects_swapped_failures(self, gate_config):
+        """Baseline fails on A, candidate fixes A but fails on B -> new fail detected."""
+        gate = AcceptanceGate(gate_config)
+        # baseline: only case_A fails (0.40 < 0.6), case_B passes (0.90)
+        # candidate: case_A fixed (0.85), but case_B now fails (0.35)
+        # Net count: 1 fail -> 1 fail, old logic says new_fails=0.
+        # Case-level: case_B is a new hard fail (0.35 < 0.6, was 0.90 >= 0.6).
+        decision = gate.decide(
+            baseline_scores={"case_A": 0.40, "case_B": 0.90},
+            candidate_scores={"case_A": 0.85, "case_B": 0.35},
+        )
+        hard_fail_check = next(
+            (c for c in decision.checks if c.name == "no_new_hard_fail"), None
+        )
+        assert hard_fail_check is not None
+        assert not hard_fail_check.passed, (
+            f"Swapped failure should be detected as new hard fail: {hard_fail_check.detail}"
+        )
+
+    def test_rejects_new_case_failing(self, gate_config):
+        """Candidate introduces a new failing case absent from baseline."""
+        gate = AcceptanceGate(gate_config)
+        # baseline: only case_A, both pass
+        # candidate: adds case_B that hard-fails
+        decision = gate.decide(
+            baseline_scores={"case_A": 0.90},
+            candidate_scores={"case_A": 0.85, "case_B": 0.35},
+        )
+        hard_fail_check = next(
+            (c for c in decision.checks if c.name == "no_new_hard_fail"), None
+        )
+        assert hard_fail_check is not None
+        assert not hard_fail_check.passed, (
+            f"New case failing should be detected: {hard_fail_check.detail}"
+        )
+
+    def test_accepts_improved_failures(self, gate_config):
+        """Candidate fixes old failures without introducing new ones -> pass."""
+        gate = AcceptanceGate(gate_config)
+        # baseline: case_A fails (0.40)
+        # candidate: case_A improved (0.70), no new failures
+        decision = gate.decide(
+            baseline_scores={"case_A": 0.40, "case_B": 0.85},
+            candidate_scores={"case_A": 0.70, "case_B": 0.90},
+        )
+        hard_fail_check = next(
+            (c for c in decision.checks if c.name == "no_new_hard_fail"), None
+        )
+        assert hard_fail_check is not None
+        assert hard_fail_check.passed, (
+            f"Improved failures without new ones should pass: {hard_fail_check.detail}"
+        )
+

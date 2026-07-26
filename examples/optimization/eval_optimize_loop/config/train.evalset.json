@@ -1,11 +1,11 @@
 {
-  "_description": "???",
+  "_description": "Training evalset: 3 representative cases for baseline measurement",
   "version": "1.0.0",
   "cases": [
     {
       "case_id": "train_001",
       "image": "plate_001.jpg",
-      "ground_truth": "\u4eacA12345",
+      "ground_truth": "京A12345",
       "conditions": {
         "type": "clear"
       },
@@ -15,7 +15,7 @@
     {
       "case_id": "train_002",
       "image": "plate_028.jpg",
-      "ground_truth": "\u4eacA12345",
+      "ground_truth": "京A12345",
       "conditions": {
         "type": "noise",
         "noise_level": 0.15
@@ -26,7 +26,7 @@
     {
       "case_id": "train_003",
       "image": "plate_012.jpg",
-      "ground_truth": "\u82cfA88U88",
+      "ground_truth": "苏A88U88",
       "conditions": {
         "type": "blur",
         "blur_kernel": 5

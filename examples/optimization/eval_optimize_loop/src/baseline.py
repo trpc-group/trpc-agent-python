@@ -126,30 +126,30 @@ class BaselineResult:
 # 模拟不同图像在不同场景下的识别结果
 # 用于构造 pass / fail / 边界三类 case
 FAKE_PREDICTIONS: dict[str, dict[str, str]] = {
-    # ???
+    # standard plate (baseline pass case)
     "train_001": {
-        "predicted": "京A12345",     # ?? ? ????
+        "predicted": "京A12345",     # Beijing plate, standard pass case
         "trajectory": "preprocess→locate→segment→recognize(conf=0.92)→format_output",
     },
     "train_002": {
-        "predicted": "京B12345",     # ?? ? 1?????A?B?????????????
+        "predicted": "京B12345",     # Beijing plate, 1 char diff from A (attribution test)
         "trajectory": "preprocess(noise_reduction)→locate→segment→recognize(conf=0.45)→llm_verify→format_output",
     },
     "train_003": {
-        "predicted": "苏X8U88",      # ?? ? ???+???????
+        "predicted": "苏X8U88",      # Jiangsu plate, letter+number mix
         "trajectory": "preprocess(deblur_failed)→locate(partial)→segment(missing_char)→recognize(conf=0.38)→human_review→format_output",
     },
-    # ???
+    # val case plates
     "val_001": {
-        "predicted": "粤B54321",      # ?? case ? ????
+        "predicted": "粤B54321",      # Guangdong plate, val pass case
         "trajectory": "preprocess→locate→segment→recognize(conf=0.95)→format_output",
     },
     "val_002": {
-        "predicted": "粤B1XS79",      # ??+??? ? ?????????
+        "predicted": "粤B1XS79",      # Guangdong plate, province+letter mix, low conf
         "trajectory": "preprocess→locate→segment→recognize(conf=0.42)→knowledge_search(miss)→format_output",
     },
     "val_003": {
-        "predicted": "浙X36X1Z",      # ???? ? ?????????
+        "predicted": "浙X36X1Z",      # Zhejiang plate, multi-letter mix, deblur fail
         "trajectory": "preprocess(deblur_failed)→locate(shifted)→segment→recognize(conf=0.25)→human_review→format_output",
     },
 }
@@ -357,11 +357,11 @@ class BaselineRunner:
         memory_service = create_memory_service(use_redis=False)
 
         evaluator = PlateEvaluator(
-            gt_path=None,  # ?????????
+            gt_path=None,  # ground truth loaded separately via evaluator
             session_service=session_service,
             memory_service=memory_service,
         )
-        # ???? ground_truth ??
+        # Assign ground_truth items to evaluator
         evaluator.ground_truth = gt_items  # NOTE: relies on PlateEvaluator internal attr; fragile if field renamed
         assert evaluator.ground_truth is gt_items, "ground_truth assignment failed: PlateEvaluator may have changed internal API"
 
@@ -392,7 +392,7 @@ class BaselineRunner:
                 judge_recognition=r.judge_recognition,
                 judge_blacklist=r.judge_blacklist,
                 judge_response=r.judge_response,
-                cost=0.0,  # real ?????? token_tracker ??
+                cost=0.0,  # real mode: requires token_tracker integration
                 latency_ms=r.pipeline_time_ms,
                 conditions=r.conditions,
             )

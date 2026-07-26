@@ -127,7 +127,12 @@ async def main():
                 print(f"Cleaning stale lock from dead PID {old_pid}", file=sys.stderr)
             # Atomic takeover: each process writes a PID-suffixed tmp file,
             # then os.replace() (atomic rename on POSIX and Windows) swaps it
-            # into place.  No TOCTOU window between write and activation.
+            # into place.  NOTE: a narrow TOCTOU window remains if two
+            # processes simultaneously take over the same stale lock: after
+            # A verifies ownership, B may overwrite before A enters its
+            # critical section.  Both would then run concurrently.  This is
+            # acceptable for a pipeline lock (at worst, duplicate output).
+            # For strict mutual exclusion, use fcntl.flock / msvcrt.locking.
             tmp = f"{LOCK_FILE}.{my_pid}.tmp"  # PID suffix prevents concurrent overwrite
             with open(tmp, "w", encoding="utf-8") as tf:
                 tf.write(f"{my_pid} {started_at}")
@@ -144,9 +149,6 @@ async def main():
                 lock_owner = int(vf.read().strip().split()[0])
             if lock_owner != my_pid:
                 acquired = False  # not our lock; don't clean up in finally
-        except FileExistsError:
-            # Another process created the lock between our read and takeover
-            pass
         except (FileNotFoundError, ValueError):
             # Corrupted or missing lock file: clean it up so the next run
             # does not hit the same permanent deadlock.

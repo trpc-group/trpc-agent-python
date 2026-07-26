@@ -1,11 +1,11 @@
 {
-  "_description": "???",
+  "_description": "Validation evalset: 3 cases for optimization validation",
   "version": "1.0.0",
   "cases": [
     {
       "case_id": "val_001",
       "image": "plate_005.jpg",
-      "ground_truth": "\u7ca4B54321",
+      "ground_truth": "粤B54321",
       "conditions": {
         "type": "clear"
       },
@@ -16,7 +16,7 @@
     {
       "case_id": "val_002",
       "image": "plate_029.jpg",
-      "ground_truth": "\u82cfD13579",
+      "ground_truth": "苏D13579",
       "conditions": {
         "type": "noise",
         "noise_level": 0.2
@@ -28,7 +28,7 @@
     {
       "case_id": "val_003",
       "image": "plate_018.jpg",
-      "ground_truth": "\u6d59C36912",
+      "ground_truth": "浙C36912",
       "conditions": {
         "type": "blur",
         "blur_kernel": 7

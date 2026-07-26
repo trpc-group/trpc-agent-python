@@ -151,15 +151,23 @@ class AcceptanceGate:
         candidate: dict[str, float],
     ) -> "Optional[GateCheck]":
         max_new = self.rules["no_new_hard_fail"].get("max_new_fails", 0)
+        # Case-level comparison: a case is a "new hard fail" iff it scores
+        # below PASS_THRESHOLD in candidate AND was at/above PASS_THRESHOLD
+        # (or absent) in baseline.  Net count (cand_fails - base_fails) is
+        # incorrect: swapping N fixed old-fails for N different new-fails
+        # would yield new_fails=0 and silently pass.
+        new_fails = sum(
+            1 for cid, score in candidate.items()
+            if score < PASS_THRESHOLD and baseline.get(cid, 1.0) >= PASS_THRESHOLD
+        )
         base_fails = sum(1 for s in baseline.values() if s < PASS_THRESHOLD)
         cand_fails = sum(1 for s in candidate.values() if s < PASS_THRESHOLD)
-        new_fails = max(0, cand_fails - base_fails)
         passed = new_fails <= max_new
         return GateCheck(
             name="no_new_hard_fail",
             passed=passed,
             description=f"新增 hard fail ≤ {max_new}",
-            detail=f"baseline fails={base_fails}, candidate fails={cand_fails}, new={new_fails}",
+            detail=f"baseline fails={base_fails}, candidate fails={cand_fails}, new(case-level)={new_fails}",
         )
 
     def _check_critical_cases(
