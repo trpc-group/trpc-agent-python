@@ -141,7 +141,9 @@ def _ensure_abs(path: str, plate_agent_root: str) -> str:
     root = Path(plate_agent_root).resolve()
     if p.is_absolute():
         resolved = p.resolve()
-        if not str(resolved).startswith(str(root)):
+        try:
+            resolved.relative_to(root)
+        except ValueError:
             raise ValueError(f"Absolute path {path} is outside plate_agent_root")
         return str(resolved)
     candidates = [
@@ -151,10 +153,10 @@ def _ensure_abs(path: str, plate_agent_root: str) -> str:
     for c in candidates:
         resolved = c.resolve()
         try:
-                resolved.relative_to(root)
-            except ValueError:
-                continue
-            if resolved.exists():
+            resolved.relative_to(root)
+        except ValueError:
+            continue
+        if resolved.exists():
             return str(resolved)
     primary = (root / path).resolve()
     try:
