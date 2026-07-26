@@ -174,6 +174,7 @@ async def main():
                 accepted=False,
                 reason="CRITICAL: cannot read evalset for critical case verification",
                 checks=override_checks,
+                strategy=gate.strategy,
             )
         gate_dict = {
             "accepted": decision.accepted,
