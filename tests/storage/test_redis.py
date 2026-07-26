@@ -516,6 +516,27 @@ class TestRedisStorage:
         mock_conn.execute_command.assert_called_once_with('HSET', 'key', 'field1', 'value1', 'field2', 'value2')
 
     @pytest.mark.asyncio
+    async def test_execute_command_variadic_hset_derives_expire_key(self, sync_storage):
+        """Multi-field HSET still applies TTL to its first Redis key argument."""
+        mock_conn = MagicMock()
+        mock_conn.hset = MagicMock()
+        mock_conn.execute_command = MagicMock(return_value=2)
+        mock_conn.expire = MagicMock()
+        expire = RedisExpire(ttl=Ttl(enable=True, ttl_seconds=30, cleanup_interval_seconds=1))
+        command = RedisCommand(
+            method='hset',
+            args=('key', 'field1', 'value1', 'field2', 'value2'),
+            expire=expire,
+        )
+
+        result = await sync_storage.execute_command(mock_conn, command)
+
+        assert result == 2
+        assert command.expire.key == 'key'
+        mock_conn.execute_command.assert_called_once_with('HSET', 'key', 'field1', 'value1', 'field2', 'value2')
+        mock_conn.expire.assert_called_once_with('key', 30)
+
+    @pytest.mark.asyncio
     async def test_execute_command_single_field_hset_uses_helper(self, sync_storage):
         """Keep Redis-py's normal single-field HSET path covered."""
         mock_conn = MagicMock()

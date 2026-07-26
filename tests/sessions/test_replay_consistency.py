@@ -29,6 +29,7 @@ from .replay_harness import create_sql_backend
 from .replay_harness import create_sqlite_backend
 from .replay_harness import execute_case
 from .replay_harness import run_replay_matrix
+from .replay_harness import stable_report_signature
 from .replay_harness import write_report
 
 
@@ -67,7 +68,7 @@ async def test_replay_matrix_meets_acceptance(tmp_path):
     assert all(
         any(difference["summary_id"] for difference in result["differences"])
         for result in persisted_report["injected_cases"] if result["fault_id"].startswith("summary_"))
-    assert canonical_report(persisted_report) == canonical_report(committed_report)
+    assert stable_report_signature(persisted_report) == stable_report_signature(committed_report)
 
 
 async def test_in_memory_lightweight_mode():

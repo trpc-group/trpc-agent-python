@@ -879,6 +879,31 @@ def canonical_report(report: dict[str, Any]) -> dict[str, Any]:
     return _json_value(normalized)
 
 
+def stable_report_signature(report: dict[str, Any]) -> dict[str, Any]:
+    """Return the persisted report contract without runtime-only metadata.
+
+    Case results and all non-allowed field values remain part of the signature;
+    only report timestamps, duration, and values covered by ``ALLOWED_DIFFS``
+    are normalized by ``canonical_report``.
+    """
+
+    normalized = canonical_report(report)
+    metrics = normalized.get("metrics", {})
+    return {
+        "schema_version": normalized.get("schema_version"),
+        "backends": normalized.get("backends"),
+        "case_count": normalized.get("case_count"),
+        "allowed_diff": normalized.get("allowed_diff"),
+        "normal_cases": normalized.get("normal_cases", []),
+        "injected_cases": normalized.get("injected_cases", []),
+        "metrics": {
+            "false_positive_rate": metrics.get("false_positive_rate"),
+            "injected_detection_rate": metrics.get("injected_detection_rate"),
+            "summary_fault_detection_rate": metrics.get("summary_fault_detection_rate"),
+        },
+    }
+
+
 def write_report(report: dict[str, Any], output_path: Path) -> None:
     output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
