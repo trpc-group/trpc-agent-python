@@ -1,0 +1,54 @@
+{
+  "baseline": {
+    "train": [
+      {
+        "eval_id": "trace_train_1",
+        "eval_mode": "trace",
+        "conversation": [
+          {
+            "user_content": {"role": "user", "parts": [{"text": "trace invoice"}]},
+            "final_response": {"role": "model", "parts": [{"text": "{\"queue\":\"billing\"}"}]}
+          }
+        ]
+      }
+    ],
+    "validation": [
+      {
+        "eval_id": "trace_validation_1",
+        "eval_mode": "trace",
+        "conversation": [
+          {
+            "user_content": {"role": "user", "parts": [{"text": "trace password"}]},
+            "final_response": {"role": "model", "parts": [{"text": "{\"queue\":\"account\"}"}]}
+          }
+        ]
+      }
+    ]
+  },
+  "candidate": {
+    "train": [
+      {
+        "eval_id": "trace_train_1",
+        "eval_mode": "trace",
+        "conversation": [
+          {
+            "user_content": {"role": "user", "parts": [{"text": "trace invoice"}]},
+            "final_response": {"role": "model", "parts": [{"text": "{\"queue\":\"billing\"}"}]}
+          }
+        ]
+      }
+    ],
+    "validation": [
+      {
+        "eval_id": "trace_validation_1",
+        "eval_mode": "trace",
+        "conversation": [
+          {
+            "user_content": {"role": "user", "parts": [{"text": "trace password"}]},
+            "final_response": {"role": "model", "parts": [{"text": "{\"queue\":\"account\"}"}]}
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "primary_metric": "final_response_avg_score",
+  "min_score_delta": 0.1,
+  "critical_case_ids": [],
+  "max_critical_regression": 0.0,
+  "hard_case_ids": [],
+  "hard_metric_names": [],
+  "max_total_cost": null,
+  "max_duration_seconds": 180.0,
+  "train_epsilon": 0.000001,
+  "validation_epsilon": 0.000001
+}

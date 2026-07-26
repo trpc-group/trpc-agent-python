@@ -1,0 +1,54 @@
+{
+  "eval_set_id": "eval_optimize_validation",
+  "name": "Evaluation optimization loop validation cases",
+  "eval_cases": [
+    {
+      "eval_id": "val_candidate_improves",
+      "conversation": [
+        {
+          "invocation_id": "validation-1",
+          "user_content": {
+            "role": "user",
+            "parts": [{"text": "Please refund the duplicate subscription payment."}]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [{"text": "{\"queue\":\"billing\"}"}]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "val_candidate_no_effect",
+      "conversation": [
+        {
+          "invocation_id": "validation-2",
+          "user_content": {
+            "role": "user",
+            "parts": [{"text": "Where can I download last year's invoices?"}]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [{"text": "{\"queue\":\"billing\"}"}]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "val_candidate_regresses",
+      "conversation": [
+        {
+          "invocation_id": "validation-3",
+          "user_content": {
+            "role": "user",
+            "parts": [{"text": "My API connection closes with error 1006."}]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [{"text": "{\"queue\":\"technical\"}"}]
+          }
+        }
+      ]
+    }
+  ]
+}

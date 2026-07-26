@@ -1,0 +1,46 @@
+{
+  "evaluate": {
+    "metrics": [
+      {
+        "metric_name": "final_response_avg_score",
+        "threshold": 1.0,
+        "criterion": {
+          "final_response": {
+            "text": {
+              "match": "exact",
+              "case_insensitive": false
+            }
+          }
+        }
+      }
+    ],
+    "num_runs": 1
+  },
+  "optimize": {
+    "eval_case_parallelism": 1,
+    "stop": {
+      "required_metrics": []
+    },
+    "algorithm": {
+      "name": "gepa_reflective",
+      "seed": 91,
+      "reflection_lm": {
+        "model_name": "${TRPC_AGENT_MODEL_NAME}",
+        "base_url": "${TRPC_AGENT_BASE_URL}",
+        "api_key": "${TRPC_AGENT_API_KEY}",
+        "generation_config": {
+          "max_tokens": 1024,
+          "temperature": 0.0
+        }
+      },
+      "module_selector": "round_robin",
+      "reflection_minibatch_size": 2,
+      "skip_perfect_score": false,
+      "max_metric_calls": 12,
+      "max_iterations_without_improvement": 2,
+      "timeout_seconds": 120.0,
+      "max_candidate_proposals": 4,
+      "max_tracked_candidates": 4
+    }
+  }
+}

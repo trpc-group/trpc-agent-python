@@ -1,0 +1,545 @@
+{
+  "schema_version": "v1",
+  "status": "ACCEPTED",
+  "baseline": {
+    "train": {
+      "split": "train",
+      "primary_metric": "final_response_avg_score",
+      "primary_score": 1.0,
+      "pass_rate": 1.0,
+      "metric_scores": {
+        "final_response_avg_score": 1.0
+      },
+      "cases": [
+        {
+          "case_id": "train_account_recall",
+          "split": "train",
+          "passed": true,
+          "hard_failure": false,
+          "metric_scores": {
+            "final_response_avg_score": 1.0
+          },
+          "metric_statuses": {
+            "final_response_avg_score": "PASSED"
+          },
+          "reasons": {},
+          "error_message": "",
+          "actual": [
+            {
+              "final_text": "{\"queue\":\"account\"}",
+              "tool_calls": []
+            }
+          ],
+          "expected": [
+            {
+              "final_text": "{\"queue\":\"account\"}",
+              "tool_calls": []
+            }
+          ]
+        },
+        {
+          "case_id": "train_billing_format",
+          "split": "train",
+          "passed": true,
+          "hard_failure": false,
+          "metric_scores": {
+            "final_response_avg_score": 1.0
+          },
+          "metric_statuses": {
+            "final_response_avg_score": "PASSED"
+          },
+          "reasons": {},
+          "error_message": "",
+          "actual": [
+            {
+              "final_text": "{\"queue\":\"billing\"}",
+              "tool_calls": []
+            }
+          ],
+          "expected": [
+            {
+              "final_text": "{\"queue\":\"billing\"}",
+              "tool_calls": []
+            }
+          ]
+        },
+        {
+          "case_id": "train_technical_router",
+          "split": "train",
+          "passed": true,
+          "hard_failure": false,
+          "metric_scores": {
+            "final_response_avg_score": 1.0
+          },
+          "metric_statuses": {
+            "final_response_avg_score": "PASSED"
+          },
+          "reasons": {},
+          "error_message": "",
+          "actual": [
+            {
+              "final_text": "{\"queue\":\"technical\"}",
+              "tool_calls": []
+            }
+          ],
+          "expected": [
+            {
+              "final_text": "{\"queue\":\"technical\"}",
+              "tool_calls": []
+            }
+          ]
+        }
+      ],
+      "duration_seconds": 0.010187200001382735
+    },
+    "validation": {
+      "split": "validation",
+      "primary_metric": "final_response_avg_score",
+      "primary_score": 0.3333333333333333,
+      "pass_rate": 0.3333333333333333,
+      "metric_scores": {
+        "final_response_avg_score": 0.3333333333333333
+      },
+      "cases": [
+        {
+          "case_id": "val_candidate_improves",
+          "split": "validation",
+          "passed": false,
+          "hard_failure": false,
+          "metric_scores": {
+            "final_response_avg_score": 0.0
+          },
+          "metric_statuses": {
+            "final_response_avg_score": "FAILED"
+          },
+          "reasons": {},
+          "error_message": "",
+          "actual": [
+            {
+              "final_text": "{\"queue\":\"unknown\"}",
+              "tool_calls": []
+            }
+          ],
+          "expected": [
+            {
+              "final_text": "{\"queue\":\"billing\"}",
+              "tool_calls": []
+            }
+          ]
+        },
+        {
+          "case_id": "val_candidate_no_effect",
+          "split": "validation",
+          "passed": false,
+          "hard_failure": false,
+          "metric_scores": {
+            "final_response_avg_score": 0.0
+          },
+          "metric_statuses": {
+            "final_response_avg_score": "FAILED"
+          },
+          "reasons": {},
+          "error_message": "",
+          "actual": [
+            {
+              "final_text": "{\"queue\":\"unknown\"}",
+              "tool_calls": []
+            }
+          ],
+          "expected": [
+            {
+              "final_text": "{\"queue\":\"billing\"}",
+              "tool_calls": []
+            }
+          ]
+        },
+        {
+          "case_id": "val_candidate_regresses",
+          "split": "validation",
+          "passed": true,
+          "hard_failure": false,
+          "metric_scores": {
+            "final_response_avg_score": 1.0
+          },
+          "metric_statuses": {
+            "final_response_avg_score": "PASSED"
+          },
+          "reasons": {},
+          "error_message": "",
+          "actual": [
+            {
+              "final_text": "{\"queue\":\"technical\"}",
+              "tool_calls": []
+            }
+          ],
+          "expected": [
+            {
+              "final_text": "{\"queue\":\"technical\"}",
+              "tool_calls": []
+            }
+          ]
+        }
+      ],
+      "duration_seconds": 0.005737899999076035
+    }
+  },
+  "candidate": {
+    "train": {
+      "split": "train",
+      "primary_metric": "final_response_avg_score",
+      "primary_score": 1.0,
+      "pass_rate": 1.0,
+      "metric_scores": {
+        "final_response_avg_score": 1.0
+      },
+      "cases": [
+        {
+          "case_id": "train_account_recall",
+          "split": "train",
+          "passed": true,
+          "hard_failure": false,
+          "metric_scores": {
+            "final_response_avg_score": 1.0
+          },
+          "metric_statuses": {
+            "final_response_avg_score": "PASSED"
+          },
+          "reasons": {},
+          "error_message": "",
+          "actual": [
+            {
+              "final_text": "{\"queue\":\"account\"}",
+              "tool_calls": []
+            }
+          ],
+          "expected": [
+            {
+              "final_text": "{\"queue\":\"account\"}",
+              "tool_calls": []
+            }
+          ]
+        },
+        {
+          "case_id": "train_billing_format",
+          "split": "train",
+          "passed": true,
+          "hard_failure": false,
+          "metric_scores": {
+            "final_response_avg_score": 1.0
+          },
+          "metric_statuses": {
+            "final_response_avg_score": "PASSED"
+          },
+          "reasons": {},
+          "error_message": "",
+          "actual": [
+            {
+              "final_text": "{\"queue\":\"billing\"}",
+              "tool_calls": []
+            }
+          ],
+          "expected": [
+            {
+              "final_text": "{\"queue\":\"billing\"}",
+              "tool_calls": []
+            }
+          ]
+        },
+        {
+          "case_id": "train_technical_router",
+          "split": "train",
+          "passed": true,
+          "hard_failure": false,
+          "metric_scores": {
+            "final_response_avg_score": 1.0
+          },
+          "metric_statuses": {
+            "final_response_avg_score": "PASSED"
+          },
+          "reasons": {},
+          "error_message": "",
+          "actual": [
+            {
+              "final_text": "{\"queue\":\"technical\"}",
+              "tool_calls": []
+            }
+          ],
+          "expected": [
+            {
+              "final_text": "{\"queue\":\"technical\"}",
+              "tool_calls": []
+            }
+          ]
+        }
+      ],
+      "duration_seconds": 0.00834469999972498
+    },
+    "validation": {
+      "split": "validation",
+      "primary_metric": "final_response_avg_score",
+      "primary_score": 0.6666666666666666,
+      "pass_rate": 0.6666666666666666,
+      "metric_scores": {
+        "final_response_avg_score": 0.6666666666666666
+      },
+      "cases": [
+        {
+          "case_id": "val_candidate_improves",
+          "split": "validation",
+          "passed": true,
+          "hard_failure": false,
+          "metric_scores": {
+            "final_response_avg_score": 1.0
+          },
+          "metric_statuses": {
+            "final_response_avg_score": "PASSED"
+          },
+          "reasons": {},
+          "error_message": "",
+          "actual": [
+            {
+              "final_text": "{\"queue\":\"billing\"}",
+              "tool_calls": []
+            }
+          ],
+          "expected": [
+            {
+              "final_text": "{\"queue\":\"billing\"}",
+              "tool_calls": []
+            }
+          ]
+        },
+        {
+          "case_id": "val_candidate_no_effect",
+          "split": "validation",
+          "passed": true,
+          "hard_failure": false,
+          "metric_scores": {
+            "final_response_avg_score": 1.0
+          },
+          "metric_statuses": {
+            "final_response_avg_score": "PASSED"
+          },
+          "reasons": {},
+          "error_message": "",
+          "actual": [
+            {
+              "final_text": "{\"queue\":\"billing\"}",
+              "tool_calls": []
+            }
+          ],
+          "expected": [
+            {
+              "final_text": "{\"queue\":\"billing\"}",
+              "tool_calls": []
+            }
+          ]
+        },
+        {
+          "case_id": "val_candidate_regresses",
+          "split": "validation",
+          "passed": false,
+          "hard_failure": false,
+          "metric_scores": {
+            "final_response_avg_score": 0.0
+          },
+          "metric_statuses": {
+            "final_response_avg_score": "FAILED"
+          },
+          "reasons": {},
+          "error_message": "",
+          "actual": [
+            {
+              "final_text": "{\"queue\":\"billing\"}",
+              "tool_calls": []
+            }
+          ],
+          "expected": [
+            {
+              "final_text": "{\"queue\":\"technical\"}",
+              "tool_calls": []
+            }
+          ]
+        }
+      ],
+      "duration_seconds": 0.00605869999708375
+    }
+  },
+  "delta": {
+    "train": {
+      "split": "train",
+      "baseline_score": 1.0,
+      "candidate_score": 1.0,
+      "score_delta": 0.0,
+      "cases": [
+        {
+          "case_id": "train_account_recall",
+          "baseline_passed": true,
+          "candidate_passed": true,
+          "baseline_score": 1.0,
+          "candidate_score": 1.0,
+          "score_delta": 0.0,
+          "change": "unchanged",
+          "hard_failure_added": false
+        },
+        {
+          "case_id": "train_billing_format",
+          "baseline_passed": true,
+          "candidate_passed": true,
+          "baseline_score": 1.0,
+          "candidate_score": 1.0,
+          "score_delta": 0.0,
+          "change": "unchanged",
+          "hard_failure_added": false
+        },
+        {
+          "case_id": "train_technical_router",
+          "baseline_passed": true,
+          "candidate_passed": true,
+          "baseline_score": 1.0,
+          "candidate_score": 1.0,
+          "score_delta": 0.0,
+          "change": "unchanged",
+          "hard_failure_added": false
+        }
+      ]
+    },
+    "validation": {
+      "split": "validation",
+      "baseline_score": 0.3333333333333333,
+      "candidate_score": 0.6666666666666666,
+      "score_delta": 0.3333333333333333,
+      "cases": [
+        {
+          "case_id": "val_candidate_improves",
+          "baseline_passed": false,
+          "candidate_passed": true,
+          "baseline_score": 0.0,
+          "candidate_score": 1.0,
+          "score_delta": 1.0,
+          "change": "new_pass",
+          "hard_failure_added": false
+        },
+        {
+          "case_id": "val_candidate_no_effect",
+          "baseline_passed": false,
+          "candidate_passed": true,
+          "baseline_score": 0.0,
+          "candidate_score": 1.0,
+          "score_delta": 1.0,
+          "change": "new_pass",
+          "hard_failure_added": false
+        },
+        {
+          "case_id": "val_candidate_regresses",
+          "baseline_passed": true,
+          "candidate_passed": false,
+          "baseline_score": 1.0,
+          "candidate_score": 0.0,
+          "score_delta": -1.0,
+          "change": "new_fail",
+          "hard_failure_added": false
+        }
+      ]
+    }
+  },
+  "attributions": [
+    {
+      "case_id": "val_candidate_improves",
+      "category": "final_response_mismatch",
+      "rule_id": "response.mismatch",
+      "evidence": "final response metric did not meet threshold"
+    },
+    {
+      "case_id": "val_candidate_no_effect",
+      "category": "final_response_mismatch",
+      "rule_id": "response.mismatch",
+      "evidence": "final response metric did not meet threshold"
+    }
+  ],
+  "attribution_counts": {
+    "final_response_mismatch": 2
+  },
+  "optimization": {
+    "status": "SUCCEEDED",
+    "finish_reason": "fake_candidate",
+    "best_prompts": {
+      "system_prompt": "Classify support requests.\n\nReturn a short answer containing the selected queue.\n\n\nOPTIMIZED_CANDIDATE\n"
+    },
+    "rounds": [],
+    "total_cost": 0.0,
+    "error_message": ""
+  },
+  "gate": {
+    "accepted": true,
+    "overfitting": false,
+    "checks": [
+      {
+        "name": "validation_score",
+        "passed": true,
+        "reason": "validation delta=0.3333333333333333, required>=0.1"
+      },
+      {
+        "name": "validation_regression",
+        "passed": true,
+        "reason": "validation did not regress"
+      },
+      {
+        "name": "hard_failures",
+        "passed": true,
+        "reason": "no hard failures"
+      },
+      {
+        "name": "critical_cases",
+        "passed": true,
+        "reason": "critical cases preserved"
+      },
+      {
+        "name": "cost",
+        "passed": true,
+        "reason": "cost budget disabled"
+      },
+      {
+        "name": "duration",
+        "passed": true,
+        "reason": "duration=0.155s, limit=180.0s"
+      },
+      {
+        "name": "overfitting",
+        "passed": true,
+        "reason": "no overfitting signal"
+      }
+    ],
+    "reasons": []
+  },
+  "cost": {
+    "optimizer_cost": 0.0,
+    "external_cost": 0.0,
+    "total_cost": 0.0,
+    "cost_complete": true
+  },
+  "audit": {
+    "seed": 91,
+    "input_hashes": {
+      "system.md": "ba0381d590139a9ac700c0b232e7aa71133419cbba1a26e53e2ad4f0fa5a70c8",
+      "train.evalset.json": "7731436db1444b2b606069724fb1ad0829f2894f733b85488782049254215ead",
+      "val.evalset.json": "fca00392951499c1314b4096f45d31d46be4de155bccf8f7c3ffc4f1527494bc",
+      "optimizer.json": "9399c11247f0dc8c983d83df3d9078bdc87ffa22c37e96bb11a618eece9fdd50",
+      "gate.json": "70fc2ca79c30a2c7e87d4eaaae1e99e093891220b8d339bec78885664e1f217b",
+      "candidate_prompt": "e545989315f5f7ad3b1bed61161cd9118565699f3228fc2976cd454039dd89b5"
+    },
+    "model_name": "fake-model",
+    "num_runs": 1,
+    "case_parallelism": 1,
+    "python_version": "3.14.5",
+    "sdk_version": "unknown",
+    "git_sha": "6a2f7f9bdbe8c697990a6198d1cc28ddcc2552c2",
+    "started_at": "2026-07-27T00:58:58.991468+08:00",
+    "finished_at": "2026-07-27T00:58:59.145985+08:00",
+    "stage_durations": {
+      "pipeline": 0.1545168000011472
+    }
+  },
+  "source_updated": false,
+  "failures": []
+}

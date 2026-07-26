@@ -1,0 +1,54 @@
+{
+  "eval_set_id": "eval_optimize_train",
+  "name": "Evaluation optimization loop training cases",
+  "eval_cases": [
+    {
+      "eval_id": "train_billing_format",
+      "conversation": [
+        {
+          "invocation_id": "train-1",
+          "user_content": {
+            "role": "user",
+            "parts": [{"text": "I was charged twice for invoice 42."}]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [{"text": "{\"queue\":\"billing\"}"}]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "train_account_recall",
+      "conversation": [
+        {
+          "invocation_id": "train-2",
+          "user_content": {
+            "role": "user",
+            "parts": [{"text": "I cannot reset my account password."}]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [{"text": "{\"queue\":\"account\"}"}]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "train_technical_router",
+      "conversation": [
+        {
+          "invocation_id": "train-3",
+          "user_content": {
+            "role": "user",
+            "parts": [{"text": "The SDK times out while opening a stream."}]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [{"text": "{\"queue\":\"technical\"}"}]
+          }
+        }
+      ]
+    }
+  ]
+}
