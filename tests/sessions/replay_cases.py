@@ -160,7 +160,10 @@ REPLAY_CASES: tuple[ReplayCase, ...] = (
                 "unfinished",
                 event_id="retry-event",
                 partial=True,
-                state_delta={"recovery_status": "dirty"},
+                state_delta={
+                    "recovery_status": "dirty",
+                    "temp:retry_buffer": "unfinished",
+                },
             ),
             _text(
                 "assistant",
