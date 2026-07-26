@@ -110,21 +110,21 @@ CATEGORY_OPTIMIZATION_HINTS: dict[str, dict] = {
 
 
 # ============================================================================
-# ????
+# primary_failure, total_failures, optimization_priority
 # ============================================================================
 
 @dataclass
 class PromptCandidate:
-    """??????? prompt?"""
-    candidate_id: str                    # ????????? hash + ????
-    iteration: int                       # ??????0-based?
+    """A single prompt optimization candidate (one iteration)."""
+    candidate_id: str                    # unique id: hash of iteration + category
+    iteration: int                       # iteration index (0-based)
     target_prompt_type: str              # "system_prompt" | "skill_prompt" | "router_prompt"
-    prompt_before: str                   # ?????
-    prompt_after: str                    # ?????
-    change_log: list[str] = field(default_factory=list)  # ??????
-    failure_category: str = ""           # ?????????
-    attribution_confidence: float = 0.0  # ?????
-    estimated_cost: float = 0.0          # ??????
+    prompt_before: str                   # prompt content before optimization
+    prompt_after: str                    # prompt content after optimization
+    change_log: list[str] = field(default_factory=list)  # list of changes made
+    failure_category: str = ""           # failure category this candidate targets
+    attribution_confidence: float = 0.0  # confidence score from attribution
+    estimated_cost: float = 0.0          # estimated token cost (fake: placeholder)
 
     def to_dict(self) -> dict:
         return {
@@ -142,11 +142,11 @@ class PromptCandidate:
 
 @dataclass
 class OptimizationResult:
-    """???????"""
+    """Collection of prompt candidates from an optimization run."""
     candidates: list[PromptCandidate] = field(default_factory=list)
     total_iterations: int = 0
     strategy: str = "failure_driven"
-    attribution_summary: dict = field(default_factory=dict)  # ????
+    attribution_summary: dict = field(default_factory=dict)  # primary_failure, total_failures, optimization_priority
 
     @property
     def latest_candidate(self) -> Optional[PromptCandidate]:
@@ -154,7 +154,7 @@ class OptimizationResult:
 
     @property
     def optimized_prompt(self) -> Optional[str]:
-        """???????? prompt?? validator ??????"""
+        """Return the optimized prompts for the validator to use."""
         c = self.latest_candidate
         return c.prompt_after if c else None
 
@@ -177,12 +177,15 @@ class OptimizationResult:
 # ============================================================================
 
 class FakeOptimizer:
-    """????????? Prompt ????
+    """Rule-driven prompt optimizer (fake mode).
 
-    ???????????????????? prompt ?????????
-    ??? API ?????????????????
+    Uses hardcoded CATEGORY_OPTIMIZATION_HINTS to append optimization
+    markers to prompts without calling any LLM API.
 
-    ????:
+    FAKE MODE ONLY: prompts are patched with <!-- --> HTML comments.
+    Do NOT use for production optimization.
+
+    Args:
         opt = FakeOptimizer()
         result = opt.optimize(attribution_report)
         print(result.latest_candidate.prompt_after)
@@ -197,14 +200,14 @@ class FakeOptimizer:
         attribution_report: AttributionReport,
         max_iterations: int = 3,
     ) -> OptimizationResult:
-        """???????? prompt ???
+        """Generate optimized prompt candidates based on attribution.
 
         Args:
-            attribution_report: Phase 2 ????
-            max_iterations: ??????
+            attribution_report: Phase 2 attribution analysis result
+            max_iterations: Maximum number of optimization iterations
 
         Returns:
-            OptimizationResult: ?????? prompt ?????
+            OptimizationResult: Collection of prompt candidates
         """
         candidates: list[PromptCandidate] = []
 
@@ -215,7 +218,7 @@ class FakeOptimizer:
                 attribution_summary={"note": "no failures to optimize"},
             )
 
-        # ???????????
+        # primary_failure, total_failures, optimization_priority???????
         priority_queue = self._build_priority_queue(attribution_report)
 
         for iteration, target in enumerate(priority_queue[:max_iterations]):
@@ -235,7 +238,7 @@ class FakeOptimizer:
                 prompt_type, category, prompt_before, confidence
             )
 
-            # ???? ID
+            # primary_failure, total_failures, optimization_priority ID
             candidate_id = self._make_candidate_id(prompt_after, iteration)
 
             candidate = PromptCandidate(
@@ -320,13 +323,13 @@ class FakeOptimizer:
         # prompt rewriting instead of comment-annotation.
         optimization_header = (
             f"\n\n<!-- ???? {self._iteration + 1} -->\n"
-            f"## ????????????{category}?\n"
+            f"## primary_failure, total_failures, optimization_priority????????{category}?\n"
             f"{strategy}\n"
         )
 
         prompt_after = prompt_before + optimization_header
 
-        # ??????
+        # primary_failure, total_failures, optimization_priority??
         for line in strategy.strip().split("\n"):
             line = line.strip().lstrip("- ")
             if line and not line.startswith("#"):
@@ -410,7 +413,7 @@ class OptimizationRunner:
 
 
 # ============================================================================
-# ????
+# primary_failure, total_failures, optimization_priority
 # ============================================================================
 
 def run_optimization(
