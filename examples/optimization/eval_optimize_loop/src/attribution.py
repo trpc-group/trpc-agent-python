@@ -194,13 +194,13 @@ class AttributionRunner:
         # Rule 3: Judge scores
         if case.judge_recognition >= 0 and case.judge_recognition < PASS_THRESHOLD:
             candidates.append(("llm_rubric_fail", 0.80))
-            evidence.append(f"judge_recognition={case.judge_recognition:.2f} < 0.6")
+            evidence.append(f"judge_recognition={case.judge_recognition:.2f} < {PASS_THRESHOLD}")
         if case.judge_blacklist >= 0 and case.judge_blacklist < PASS_THRESHOLD:
             candidates.append(("knowledge_recall_insufficient", 0.75))
-            evidence.append(f"judge_blacklist={case.judge_blacklist:.2f} < 0.6")
+            evidence.append(f"judge_blacklist={case.judge_blacklist:.2f} < {PASS_THRESHOLD}")
         if case.judge_response >= 0 and case.judge_response < PASS_THRESHOLD:
             candidates.append(("llm_rubric_fail", 0.65))
-            evidence.append(f"judge_response={case.judge_response:.2f} < 0.6")
+            evidence.append(f"judge_response={case.judge_response:.2f} < {PASS_THRESHOLD}")
 
         # Rule 4: char match fallback
         char_rate = case.char_correct / max(case.char_total, 1)

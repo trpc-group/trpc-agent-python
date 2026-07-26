@@ -242,9 +242,10 @@ class TestFullPipelineWithGate:
         opt = FakeOptimizer()
         opt_result = opt.optimize(attr)
 
-        # Phase 4: validator
+        # Phase 4: validator (val + train to produce distinct sets for overfit detection)
         vr = ValidationRunner(mode="fake")
         val_result = vr.run(results["val"], opt_result)
+        train_val_result = vr.run(results["train"], opt_result)
 
         # Phase 5: gate
         with open(base / "optimizer.json", "r", encoding="utf-8") as f:
@@ -255,7 +256,7 @@ class TestFullPipelineWithGate:
             baseline_scores=results["val"].score_map,
             candidate_scores=val_result.score_map,
             baseline_train_scores=results["train"].score_map,
-            candidate_train_scores=val_result.score_map,
+            candidate_train_scores=train_val_result.score_map,
             baseline_cost=results["val"].summary.avg_cost * results["val"].summary.total,
             candidate_cost=val_result.summary.total_cost_candidate,
         )

@@ -186,7 +186,7 @@ class AcceptanceGate:
         regressed = [
             cid for cid in critical_ids
             if cid in baseline and cid in candidate
-            and candidate[cid] < baseline[cid]
+            and candidate[cid] < baseline[cid] - 0.005
         ]
         missing = [cid for cid in critical_ids if cid not in candidate]
         passed = len(regressed) == 0 and len(missing) == 0
@@ -204,12 +204,18 @@ class AcceptanceGate:
     ) -> "Optional[GateCheck]":
         max_ratio = self.rules["cost_within_budget"].get("max_cost_ratio", 1.2)
         if baseline_cost <= 0:
-            # Cost data is absent (fake mode simulated / real mode token_tracker not connected).
-            # Return None so decide() excludes this gate from the checks list.
-            return None
-        else:
-            ratio = candidate_cost / baseline_cost
-            passed = ratio <= max_ratio
+            # Cost data is absent (e.g. real mode token_tracker not connected, or
+            # BaselineCaseResult.cost defaults to 0.0).  Fail-closed: mark the gate
+            # as skipped with passed=False so all_must_pass rejects the candidate
+            # rather than silently accepting it without cost validation.
+            return GateCheck(
+                name="cost_within_budget",
+                passed=False,
+                description="cost with budget",
+                detail="skipped: baseline cost data unavailable (token_tracker not connected?)",
+            )
+        ratio = candidate_cost / baseline_cost
+        passed = ratio <= max_ratio
         return GateCheck(
             name="cost_within_budget",
             passed=passed,

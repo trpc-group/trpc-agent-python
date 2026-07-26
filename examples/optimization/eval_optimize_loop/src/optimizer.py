@@ -279,7 +279,7 @@ class FakeOptimizer:
         ?????????????????? prompt_target?
         """
         queue = []
-        for cluster in sorted(report.clusters, key=lambda c: -c.count):
+        for cluster in sorted(report.clusters, key=lambda c: (-c.count, c.category)):
             if cluster.count == 0:
                 continue
             queue.append({
@@ -365,8 +365,9 @@ class OptimizationRunner:
         if mode not in ("fake", "real"):
             raise ValueError(f"Unknown mode: {mode}. Must be 'fake' or 'real'.")
         if mode == "real":
-            import warnings
-            warnings.warn("OptimizationRunner real mode is not yet implemented. Use fake mode.", FutureWarning, stacklevel=2)
+            raise NotImplementedError(
+                "OptimizationRunner real mode is not yet implemented. Use mode='fake'."
+            )
         self.mode = mode
         self.config = config or {}
         self.kwargs = kwargs

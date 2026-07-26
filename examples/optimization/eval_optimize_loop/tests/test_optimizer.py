@@ -216,10 +216,9 @@ class TestOptimizationRunner:
             OptimizationRunner(mode="production")
 
     def test_real_mode_not_implemented(self, fake_attr_report):
-        """Real ??????? NotImplementedError ? ImportError?"""
-        runner = OptimizationRunner(mode="real")
-        with pytest.raises((NotImplementedError, ImportError)):
-            runner.run(fake_attr_report)
+        """Real mode raises NotImplementedError immediately in __init__ (fail-fast)."""
+        with pytest.raises(NotImplementedError, match="not yet implemented"):
+            OptimizationRunner(mode="real")
 
 
 # ?? ?????? ????????????????????????????????????????

@@ -119,7 +119,11 @@ async def main():
         # Lock exists -- check if owner is alive
         try:
             with open(LOCK_FILE, "r", encoding="utf-8") as lf:
-                old_pid = int(lf.read().strip().split()[0])
+                raw = lf.read().strip()
+                parts = raw.split()
+                if not parts:
+                    raise ValueError(f"empty lock file: {LOCK_FILE}")
+                old_pid = int(parts[0])
             if _pid_alive(old_pid):
                 print("another pipeline instance is running, aborting", file=sys.stderr)
                 sys.exit(75)
@@ -146,10 +150,14 @@ async def main():
             # Verify ownership: if another process somehow raced us, the file
             # contains their PID, not ours.  In that case, back off.
             with open(LOCK_FILE, "r", encoding="utf-8") as vf:
-                lock_owner = int(vf.read().strip().split()[0])
+                raw = vf.read().strip()
+                parts = raw.split()
+                if not parts:
+                    raise ValueError(f"empty lock file: {LOCK_FILE}")
+                lock_owner = int(parts[0])
             if lock_owner != my_pid:
                 acquired = False  # not our lock; don't clean up in finally
-        except (FileNotFoundError, ValueError):
+        except (FileNotFoundError, ValueError, IndexError):
             # Corrupted or missing lock file: clean it up so the next run
             # does not hit the same permanent deadlock.
             try:
