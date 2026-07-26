@@ -239,15 +239,20 @@ class TestEndToEndRedisInjection:
         # 读回 app_state(Redis 存的是 hash,需要 HGETALL)
         got = await backend.session_service.get_session(app_name="replay-state", user_id="u1", session_id="sess-state")
         before = normalize_snapshot(
-            ReplaySnapshot(backend_name="redis", session_id="sess-state", events=[e.model_dump() for e in got.events]))
+            ReplaySnapshot(backend_name="redis",
+                           session_id="sess-state",
+                           events=[e.model_dump() for e in got.events],
+                           state=dict(got.state)))
         assert inject_redis_diff(redis_url, "replay-state", "u1", "sess-state", "state_value")
         # 注入后重新读回 app_state
         after = await backend.session_service.get_session(app_name="replay-state",
                                                           user_id="u1",
                                                           session_id="sess-state")
         after = normalize_snapshot(
-            ReplaySnapshot(backend_name="redis", session_id="sess-state",
-                           events=[e.model_dump() for e in after.events]))
+            ReplaySnapshot(backend_name="redis",
+                           session_id="sess-state",
+                           events=[e.model_dump() for e in after.events],
+                           state=dict(after.state)))
 
         diffs = compare_snapshots(
             before,
