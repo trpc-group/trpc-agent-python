@@ -15,6 +15,7 @@ from typing import Awaitable
 from typing import Callable
 
 from trpc_agent_sdk.evaluation import AgentEvaluator
+from trpc_agent_sdk.evaluation._agent_evaluator import _EvaluationCasesFailed
 from trpc_agent_sdk.evaluation import EvalSet
 from trpc_agent_sdk.evaluation import EvalStatus
 from trpc_agent_sdk.evaluation import OptimizeConfigFile
@@ -105,9 +106,9 @@ async def evaluate_split(request: EvaluationRequest) -> EvaluationSnapshot:
         )
         try:
             await executor.evaluate()
-        except AssertionError:
-            # AgentEvaluator uses AssertionError for partial case failures:
-            # get_result() remains available and contains the failed cases.
+        except _EvaluationCasesFailed:
+            # SDK reserves this subclass for partial case failures; unrelated
+            # AssertionError instances must propagate to the pipeline failure.
             if executor.get_result() is None:
                 raise
         result = executor.get_result()

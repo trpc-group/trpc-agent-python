@@ -18,6 +18,7 @@ from examples.optimization.eval_optimize_loop.loop.evaluation import evaluate_sp
 from examples.optimization.eval_optimize_loop.loop.evaluation import load_eval_set
 from examples.optimization.eval_optimize_loop.loop.evaluation import _snapshot_case
 from examples.optimization.eval_optimize_loop.loop.evaluation import validate_inputs
+from examples.optimization.eval_optimize_loop.loop import evaluation as evaluation_module
 from examples.optimization.eval_optimize_loop.loop.models import InputPaths
 from examples.optimization.eval_optimize_loop.loop.models import SplitName
 
@@ -104,6 +105,27 @@ async def test_evaluate_split_keeps_failed_case_result():
     assert snapshot.pass_rate == pytest.approx(0.0)
     assert all(not case.passed for case in snapshot.cases)
     assert all(not case.hard_failure for case in snapshot.cases)
+
+
+@pytest.mark.asyncio
+async def test_evaluate_split_reraises_unrelated_assertion(monkeypatch):
+
+    class _BuggyExecutor:
+
+        async def evaluate(self):
+            raise AssertionError("unexpected SDK assertion")
+
+        def get_result(self):
+            return object()
+
+    monkeypatch.setattr(
+        evaluation_module.AgentEvaluator,
+        "get_executer",
+        lambda *args, **kwargs: _BuggyExecutor(),
+    )
+
+    with pytest.raises(AssertionError, match="unexpected SDK assertion"):
+        await evaluate_split(EvaluationRequest(TRAIN, OPTIMIZER, SplitName.TRAIN, _passing_agent))
 
 
 def test_validate_inputs_rejects_unknown_critical_case(tmp_path):

@@ -15,6 +15,7 @@ from typing import Any
 
 from trpc_agent_sdk.evaluation import AgentOptimizer
 from trpc_agent_sdk.evaluation import TargetPrompt
+from trpc_agent_sdk.evaluation._target_prompt import _RollbackError
 
 from ..agent.agent import fake_call_agent
 from ..agent.agent import real_call_agent
@@ -136,6 +137,8 @@ async def _write_back_and_report(
         report.source_updated = True
         return write_reports(report, options.output_dir)
     except Exception:
+        # TargetPrompt.write_all provides atomic rollback; this extra restore
+        # protects callers if failure occurs after the SDK write completes.
         bundle.prompt_path.write_text(original, encoding="utf-8")
         report.source_updated = False
         raise
@@ -144,7 +147,7 @@ async def _write_back_and_report(
 def _failure_result(options: PipelineOptions, started: float, error: Exception) -> PipelineResult:
     finished = datetime.now().astimezone()
     started_wall = finished - timedelta(seconds=time.monotonic() - started)
-    reason = f"{type(error).__name__}: pipeline stage failed"
+    reason = _failure_reason(error)
     decision = GateDecision(accepted=False, overfitting=False, reasons=[reason])
     report = OptimizationReport(
         status="REJECTED",
@@ -175,6 +178,14 @@ def _failure_result(options: PipelineOptions, started: float, error: Exception) 
     )
     json_path, markdown_path = write_reports(report, options.output_dir)
     return PipelineResult(report=report, json_path=json_path, markdown_path=markdown_path)
+
+
+def _failure_reason(error: Exception) -> str:
+    """Keep SDK rollback details in the audit failure reason."""
+    reason = f"{type(error).__name__}: pipeline stage failed"
+    if isinstance(error, _RollbackError):
+        return f"{reason}: {error}"
+    return reason
 
 
 async def _evaluate_pair(

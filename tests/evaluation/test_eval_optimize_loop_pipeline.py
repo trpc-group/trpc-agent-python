@@ -2,11 +2,15 @@
 
 import asyncio
 import json
+import time
 from pathlib import Path
+
+from trpc_agent_sdk.evaluation._target_prompt import _RollbackError
 
 from examples.optimization.eval_optimize_loop.loop.models import InputPaths
 from examples.optimization.eval_optimize_loop.loop.models import PipelineOptions
 from examples.optimization.eval_optimize_loop.loop.pipeline import _write_back_and_report
+from examples.optimization.eval_optimize_loop.loop.pipeline import _failure_result
 from examples.optimization.eval_optimize_loop.loop.pipeline import run_pipeline
 from examples.optimization.eval_optimize_loop.loop.evaluation import validate_inputs
 
@@ -84,6 +88,14 @@ def test_pipeline_failure_is_reported_without_prompt_write(tmp_path):
     assert result.report.status == "REJECTED"
     assert result.report.failures
     assert result.json_path.is_file()
+
+
+def test_rollback_failure_details_are_audited(tmp_path):
+    error = _RollbackError([("system_prompt", RuntimeError("rollback failed"))])
+
+    result = _failure_result(_options(tmp_path), time.monotonic(), error)
+
+    assert "rollback failed" in result.report.failures[0]
 
 
 def test_write_back_report_matches_updated_prompt(tmp_path):
