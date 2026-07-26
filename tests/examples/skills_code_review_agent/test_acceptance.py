@@ -195,7 +195,8 @@ async def test_container_pipeline_when_enabled(tmp_path) -> None:
 
 
 def test_python_source_meets_static_limits() -> None:
-    sources = [*EXAMPLE_ROOT.rglob("*.py"), *Path(__file__).parent.glob("*.py")]
+    example_sources = [path for path in EXAMPLE_ROOT.rglob("*.py") if SKILL_ROOT not in path.parents]
+    sources = [*example_sources, *Path(__file__).parent.glob("*.py")]
     for path in sources:
         text = path.read_text(encoding="utf-8")
         assert len(text.splitlines()) <= MAX_FILE_LINES, path

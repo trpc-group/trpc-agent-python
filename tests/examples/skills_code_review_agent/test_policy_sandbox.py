@@ -312,6 +312,21 @@ async def test_sandbox_stages_only_fixed_files_and_cleans_up():
 
 
 @pytest.mark.asyncio
+async def test_success_redaction_preserves_combined_output_limit():
+    secret = 'api_key="abcdefgh"'
+    executor, _ = _executor(FakeRuntime(runner=FakeRunner(stdout=secret)))
+    limit = len(secret.encode("utf-8"))
+    plan = _plan(executor).model_copy(update={"output_limit_bytes": limit, "digest": "pending"})
+    plan = plan.model_copy(update={"digest": calculate_plan_digest(plan)})
+
+    result = await executor.execute(plan, INPUT_BYTES)
+
+    combined = result.run.stdout + result.run.stderr + result.output
+    assert "abcdefgh" not in combined
+    assert len(combined.encode("utf-8")) <= limit
+
+
+@pytest.mark.asyncio
 async def test_sandbox_timeout_cleans_up():
     runtime = FakeRuntime(runner=FakeRunner(delay=0.05))
     executor, runtime = _executor(runtime)

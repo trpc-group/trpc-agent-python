@@ -266,11 +266,6 @@ class SandboxExecutor:
 
     async def _within_budget(self, operation, context: _RunContext):
         remaining = context.deadline - time.monotonic()
-        if remaining <= 0:
-            close = getattr(operation, "close", None)
-            if close:
-                close()
-            raise asyncio.TimeoutError
         return await asyncio.wait_for(operation, timeout=remaining)
 
     async def _run(self, workspace, plan: ExecutionPlan):
@@ -321,9 +316,9 @@ class SandboxExecutor:
             status = SandboxStatus.FAILED
         limit = min(context.plan.output_limit_bytes, MAX_OUTPUT_BYTES)
         stdout, stderr, output = self._bounded_outputs(
-            result.stdout,
-            result.stderr,
-            output,
+            self._redactor.redact_text(result.stdout),
+            self._redactor.redact_text(result.stderr),
+            self._redactor.redact_text(output),
             limit,
         )
         run = SandboxRun(
@@ -331,11 +326,11 @@ class SandboxExecutor:
             exit_code=result.exit_code,
             timed_out=result.timed_out,
             duration_ms=int((time.monotonic() - context.started) * MILLISECONDS_PER_SECOND),
-            stdout=self._redactor.redact_text(stdout),
-            stderr=self._redactor.redact_text(stderr),
+            stdout=stdout,
+            stderr=stderr,
             error_type=None if status == SandboxStatus.SUCCEEDED else "ProgramError",
         )
-        return SandboxExecution(run=run, output=self._redactor.redact_text(output))
+        return SandboxExecution(run=run, output=output)
 
     @staticmethod
     def _bounded_outputs(
