@@ -516,6 +516,21 @@ class TestRedisStorage:
         mock_conn.execute_command.assert_called_once_with('HSET', 'key', 'field1', 'value1', 'field2', 'value2')
 
     @pytest.mark.asyncio
+    async def test_execute_command_single_field_hset_uses_helper(self, sync_storage):
+        """Keep Redis-py's normal single-field HSET path covered."""
+        mock_conn = MagicMock()
+        mock_conn.hset = MagicMock(return_value=1)
+        mock_conn.execute_command = MagicMock()
+
+        command = RedisCommand(method='hset', args=('key', 'field', 'value'))
+
+        result = await sync_storage.execute_command(mock_conn, command)
+
+        assert result == 1
+        mock_conn.hset.assert_called_once_with('key', 'field', 'value')
+        mock_conn.execute_command.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_execute_command_without_method(self, async_storage):
         """Test executing command without existing method."""
         mock_conn = AsyncMock()

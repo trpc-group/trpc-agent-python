@@ -102,6 +102,16 @@ class TestRedisInit:
         assert MockRedisStorage.call_args.kwargs["decode_responses"] is True
 
     @patch("trpc_agent_sdk.memory._redis_memory_service.RedisStorage")
+    def test_explicit_bytes_responses_are_preserved(self, MockRedisStorage):
+        MockRedisStorage.return_value = MagicMock()
+        RedisMemoryService(
+            db_url="redis://localhost",
+            decode_responses=False,
+            memory_service_config=_make_config_no_ttl(),
+        )
+        assert MockRedisStorage.call_args.kwargs["decode_responses"] is False
+
+    @patch("trpc_agent_sdk.memory._redis_memory_service.RedisStorage")
     def test_passes_is_async(self, MockRedisStorage):
         MockRedisStorage.return_value = MagicMock()
         RedisMemoryService(db_url="redis://localhost", is_async=True, memory_service_config=_make_config_no_ttl())

@@ -90,6 +90,10 @@ class _FakeRedisStorage(RedisStorage):
         return self._client
 
     async def close(self) -> None:
+        # The injected fakeredis client owns the connection; the base class has
+        # no pool to disconnect, but keeping its close contract makes this fake
+        # safe if pool setup changes in the future.
+        await super().close()
         self._client.close()
         self.closed = True
 
@@ -272,8 +276,18 @@ async def create_mock_redis_backend(enable_ttl: bool = False) -> BackendBundle:
     model, manager = _summary_components()
     server = fakeredis.FakeServer()
 
-    def storage_factory(*_args: Any, **_kwargs: Any) -> _FakeRedisStorage:
-        client = fakeredis.FakeRedis(server=server, decode_responses=True)
+    def storage_factory(*args: Any, **kwargs: Any) -> _FakeRedisStorage:
+        if args:
+            raise TypeError(f"Unexpected positional RedisStorage arguments: {args}")
+        unexpected = set(kwargs) - {"redis_url", "is_async", "decode_responses"}
+        if unexpected:
+            raise TypeError(f"Unsupported RedisStorage arguments in fakeredis fallback: {sorted(unexpected)}")
+        if kwargs.get("is_async", False):
+            raise ValueError("The replay fakeredis fallback only supports synchronous RedisStorage")
+        client = fakeredis.FakeRedis(
+            server=server,
+            decode_responses=kwargs.get("decode_responses", True),
+        )
         return _FakeRedisStorage(client)
 
     session_service: Optional[RedisSessionService] = None

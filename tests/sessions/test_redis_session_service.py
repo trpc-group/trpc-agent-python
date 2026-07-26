@@ -118,6 +118,14 @@ def test_default_redis_service_decodes_text_responses():
     assert mock_storage.call_args.kwargs["decode_responses"] is True
 
 
+def test_explicit_redis_service_bytes_responses_are_preserved():
+    """Callers can opt back into raw Redis byte responses."""
+    with patch("trpc_agent_sdk.sessions._redis_session_service.RedisStorage") as mock_storage:
+        RedisSessionService(db_url="redis://localhost:6379", decode_responses=False)
+
+    assert mock_storage.call_args.kwargs["decode_responses"] is False
+
+
 class TestRedisCreateSession:
 
     async def test_create_basic(self):
