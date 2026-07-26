@@ -888,7 +888,25 @@ def stable_report_signature(report: dict[str, Any]) -> dict[str, Any]:
     """
 
     normalized = canonical_report(report)
+    expected_keys = {
+        "schema_version",
+        "backends",
+        "case_count",
+        "allowed_diff",
+        "normal_cases",
+        "injected_cases",
+        "metrics",
+    }
+    if set(normalized) != expected_keys:
+        raise ValueError(f"Unexpected replay report fields: {sorted(set(normalized) ^ expected_keys)}")
     metrics = normalized.get("metrics", {})
+    expected_metric_keys = {
+        "false_positive_rate",
+        "injected_detection_rate",
+        "summary_fault_detection_rate",
+    }
+    if set(metrics) != expected_metric_keys:
+        raise ValueError(f"Unexpected replay report metrics: {sorted(set(metrics) ^ expected_metric_keys)}")
     return {
         "schema_version": normalized.get("schema_version"),
         "backends": normalized.get("backends"),
