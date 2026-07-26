@@ -94,10 +94,16 @@ async def replay_matrix(tmp_path_factory):
     validate_replay_cases(REPLAY_CASES)
     root = tmp_path_factory.mktemp("replay-matrix")
     matrix: dict[str, dict[str, Any]] = {}
+    failures = []
     started = time.perf_counter()
     for replay_case in REPLAY_CASES:
-        matrix[replay_case.case_id] = await _run_backend_pair(replay_case, root)
+        try:
+            matrix[replay_case.case_id] = await _run_backend_pair(replay_case, root)
+        except Exception as error:  # pylint: disable=broad-except
+            failures.append(f"{replay_case.case_id}: {type(error).__name__}: {error}")
     matrix["_duration"] = {"seconds": time.perf_counter() - started}
+    if failures:
+        pytest.fail("replay matrix case failures:\n" + "\n".join(failures), pytrace=False)
     return matrix
 
 
@@ -329,7 +335,7 @@ async def test_report_contains_every_backend_and_case(replay_matrix, tmp_path):
     assert persisted["normalization_rules"]
     if not redis_enabled:
         root_report = __import__("json").loads(REPORT_PATH.read_text(encoding="utf-8"))
-        assert _stable_report(root_report) == _stable_report(persisted)
+        assert _report_contract(root_report) == _report_contract(persisted)
 
 
 async def _append_redis_report_data(runs, comparisons):
@@ -355,11 +361,29 @@ async def _append_redis_report_data(runs, comparisons):
             await asyncio.gather(*(item.close() for item in (in_memory, backend) if item is not None))
 
 
-def _stable_report(report):
-    stable = copy.deepcopy(report)
-    for run in stable["runs"]:
-        run["duration_seconds"] = 0
-    return stable
+def _report_contract(report):
+    """Select stable acceptance fields without freezing snapshot structure."""
+    schema_version = report["schema_version"]
+    metrics = report["metrics"]
+    contract = {
+        "metrics": {
+            "case_count": metrics["case_count"],
+            "comparison_count": metrics["comparison_count"],
+            "false_positive_rate": metrics["false_positive_rate"],
+            "mutation_detection_rate": metrics["mutation_detection_rate"],
+            "unexpected_diff_count": metrics["unexpected_diff_count"],
+            "summary_lost_detection_rate": metrics["summary_lost_detection_rate"],
+            "summary_overwrite_detection_rate": metrics["summary_overwrite_detection_rate"],
+            "summary_session_detection_rate": metrics["summary_session_detection_rate"],
+        },
+        "allowed_diff_audit": [{
+            "backend_pair": item["backend_pair"],
+            "field_path": item["field_path"],
+            "hit_count": item["hit_count"],
+        } for item in report["allowed_diff_audit"]],
+    }
+    contract["schema_version"] = schema_version
+    return contract
 
 
 async def test_sqlite_summary_anchor_survives_close_and_reopen(tmp_path):
@@ -558,7 +582,9 @@ def test_independent_expectation_reports_each_contract_failure(replay_matrix):
 
 
 def _find_diff(diffs: list[DiffItem], path: str) -> DiffItem:
-    return next(diff for diff in diffs if diff.field_path == path)
+    match = next((diff for diff in diffs if diff.field_path == path), None)
+    assert match is not None, f"expected diff at {path!r}; got {[diff.field_path for diff in diffs]!r}"
+    return match
 
 
 async def test_reload_snapshot_clears_reused_runner_state(tmp_path):

@@ -240,7 +240,6 @@ def _write_real_report(replay_case: ReplayCase, clean_diffs: list[Any], injected
     write_report(report, Path(report_path))
 
 
-@pytest.mark.asyncio
 async def test_subtle_realistic_drift_is_detected(tmp_path: Path) -> None:
     left, right = await _replay_pair(_tool_memory_case(), tmp_path / "mock-drift.db")
     assert compare_snapshots(left, right) == []
@@ -253,7 +252,6 @@ async def test_subtle_realistic_drift_is_detected(tmp_path: Path) -> None:
     assert all(not diff.allowed for diff in tool_diffs + memory_diffs)
 
 
-@pytest.mark.asyncio
 async def test_real_agent_tool_trace_replays_consistently(tmp_path: Path) -> None:
     replay_case = await _capture_real_case()
     left, right = await _replay_pair(replay_case, tmp_path / "real-agent.db")
