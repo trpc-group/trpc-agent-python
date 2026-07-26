@@ -77,9 +77,10 @@ jobs:
         # run: pytest --cov=trpc_agent_sdk --cov-report=xml --cov-report=term tests/
         run: pytest --cov=trpc_agent_sdk --cov-report=xml --cov-report=term --cov-fail-under=80 tests/
 
-      - name: Run InMemory-only replay tests
+      - name: Run InMemory-only replay smoke test (not full matrix)
         env:
           TRPC_REPLAY_BACKENDS: in_memory
+        # The full cross-backend replay matrix runs in the coverage step above.
         run: pytest -q tests/sessions/test_replay_consistency.py tests/sessions/test_replay_real_agent.py
 
       - name: Upload coverage reports to Codecov

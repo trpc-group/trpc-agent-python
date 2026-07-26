@@ -14,6 +14,7 @@ import pytest
 BACKEND_MODE_ENVIRONMENT_VARIABLE = "TRPC_REPLAY_BACKENDS"
 IN_MEMORY_BACKEND_MODE = "in_memory"
 IN_MEMORY_TEST_NAME = "test_in_memory_only_lightweight_mode"
+IN_MEMORY_REAL_AGENT_SAFE_TEST_NAME = "test_subtle_realistic_drift_is_detected"
 REPLAY_TEST_FILES = frozenset({
     "test_replay_consistency.py",
     "test_replay_real_agent.py",
@@ -27,5 +28,7 @@ def pytest_collection_modifyitems(items):
         return
     skip = pytest.mark.skip(reason=IN_MEMORY_SKIP_REASON)
     for item in items:
-        if item.path.name in REPLAY_TEST_FILES and item.name != IN_MEMORY_TEST_NAME:
+        if (item.path.name == "test_replay_consistency.py" and item.name != IN_MEMORY_TEST_NAME) or (
+                item.path.name == "test_replay_real_agent.py"
+                and item.name != IN_MEMORY_REAL_AGENT_SAFE_TEST_NAME):
             item.add_marker(skip)
