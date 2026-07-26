@@ -28,7 +28,7 @@ JSONL cases  →  harness  →  normalizer  →  diff  →  report
 `__init__.py` 统一导出公开 API）。新增后端**只改** `_backends.py`
 里的 `_build_backend` 一个分支。
 
-## 10 条 case 都在一张 JSONL
+## 11 条 case 都在一张 JSONL
 
 [`tests/sessions/replay_cases/session_memory_summary.jsonl`](../../../tests/sessions/replay_cases/session_memory_summary.jsonl)
 每行一个 case，行顺序和下表一致：
@@ -45,8 +45,9 @@ JSONL cases  →  harness  →  normalizer  →  diff  →  report
 | 8 | `exception_recovery` | 重复 append + 摘要失败 | 缺补偿逻辑 |
 | 9 | `injected_event_order` | 注入事件顺序 | diff 引擎丢了顺序感知 |
 | 10 | `injected_summary_session` | 注入摘要 session_id | 跨 session 摘要泄漏 |
+| 11 | `fail_summary_recovery` | 摘要失败 + 事务回滚 | 失败摘要 id 泄漏、cache 状态错位 |
 
-> 9 / 10 是**人为注入**的失败，用来证明 diff 引擎能抓它宣称能抓的 bug。
+> 9 / 10 / 11 是**人为注入**的失败，用来证明 diff 引擎能抓它宣称能抓的 bug。
 > 改了引擎让它们开始通过 = 丢检测能力，先修引擎别动 case。
 
 ## 归一化与允许差异
@@ -84,10 +85,13 @@ TRPC_REPLAY_SQL_URL=mysql+...      pytest -m integration # 启用 MySQL
 
 - `ci.yml` — 每个 PR 跑轻量套件，30 秒预算内
 - `.github/workflows/replay-integration.yml` — 每周 + 手动触发，用
-  `redis:7-alpine` / `mysql:8.0` service container 跑集成测试，每个
-  集成 job 用 `if: env.TRPC_REPLAY_*_URL != ''` 守卫，未配 secret 的
-  fork 看到的是 "job skipped" 而不是 "job failed"。diff 报告每次都
-  作为 workflow artifact 上传。
+  `redis:7-alpine` / `mysql:8.0` service container 跑集成测试。**没
+  配 secret 的 fork 不会被 hard-fail**: workflow 注释里明确说"故意不
+  用 job-level `if:` 守卫",`secrets` 在 job-level `if:` 表达式里不可
+  用,改为在 `tests/sessions/conftest.py` 的 `integration_runtime`
+  fixture 里 **测试级 skip**——所以无 secret 的 fork 看到的是一串
+  "skipped" 而不是 "job failed"。diff 报告每次都作为 workflow
+  artifact 上传。
 
 ## 常见失败模式
 

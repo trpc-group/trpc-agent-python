@@ -362,6 +362,49 @@ CASES.append({
 
 
 # ---------------------------------------------------------------------------
+# 11. fail_summary_recovery – forced partial-commit failure mid summary update
+# ---------------------------------------------------------------------------
+
+OPS = []
+for i in range(1, 23):
+    if i % 2 == 1:
+        OPS.append({"op": "append_event", "event": ev(i, "user", f"user turn {i}")})
+    else:
+        OPS.append({"op": "append_event", "event": ev(i, "assistant", f"assistant turn {i}")})
+OPS.append({
+    "op": "summarize",
+    "text": "Pre-failure summary",
+    "summary_id": "summary-fail-pre",
+    "version": 1,
+})
+OPS.append({
+    "op": "fail_summary",
+    "text": "This should not be persisted",
+    "summary_id": "summary-fail-attempted",
+    "version": 1,
+})
+
+CASES.append({
+    "case_id": "fail_summary_recovery",
+    "description": (
+        "Forces a partial-commit failure mid-summary-update. The "
+        "operation_audit must record ``recovered=True`` and the recovered "
+        "snapshot must surface the pre-failure summary id; the attempted "
+        "summary id must not leak into the canonical events list."
+    ),
+    "session_id": "session-fail-summary",
+    "operations": OPS,
+    "expect": {
+        "summary_present": True,
+        "summary_id": "summary-fail-pre",
+        "summary_version": 1,
+        "summary_anchor_count": 1,
+        "unique_event_ids": True,
+    },
+})
+
+
+# ---------------------------------------------------------------------------
 # Write JSONL
 # ---------------------------------------------------------------------------
 

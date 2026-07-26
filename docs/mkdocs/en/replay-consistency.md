@@ -33,7 +33,7 @@ The harness is five modules under `trpc_agent_sdk/replay/` (plus an
 exactly one branch in
 `trpc_agent_sdk/replay/_backends.py::_build_backend`.
 
-## The 10 replay cases
+## The 11 replay cases
 
 All live in
 [`tests/sessions/replay_cases/session_memory_summary.jsonl`](../../../tests/sessions/replay_cases/session_memory_summary.jsonl),
@@ -51,10 +51,11 @@ one case per line, in the same order as the table below:
 | 8 | `exception_recovery` | duplicate append + summary failure | missing compensating logic |
 | 9 | `injected_event_order` | two events swapped on one backend | diff engine lost order awareness |
 | 10 | `injected_summary_session` | summary `session_id` tampered | cross-session summary leak |
+| 11 | `fail_summary_recovery` | summary failure + compensating rollback | failed summary id leaks into cache |
 
-> 9 and 10 are **injected failures**, not realistic data. They exist to
-> prove the diff engine catches the bug class it claims to catch. If a
-> change to the engine makes either of them pass, you've lost detection
+> 9, 10, and 11 are **injected failures**, not realistic data. They exist
+> to prove the diff engine catches the bug class it claims to catch. If
+> a change to the engine makes any of them pass, you've lost detection
 > coverage — fix the engine before relaxing the case.
 
 ## Normalization & allowed-diff rules
@@ -100,10 +101,13 @@ reason; never a hard failure.
 
 - `ci.yml` — runs the lightweight suite on every PR, ≤ 30s budget.
 - `.github/workflows/replay-integration.yml` — weekly + manual trigger,
-  uses `redis:7-alpine` / `mysql:8.0` service containers. Each
-  integration job is guarded with `if: env.TRPC_REPLAY_*_URL != ''`,
-  so forks without the secret see "job skipped" rather than "job
-  failed". Diff reports upload as workflow artifacts on every run.
+  uses `redis:7-alpine` / `mysql:8.0` service containers. **Forks without
+  the secret are not hard-failed**: the workflow comments explicitly call
+  out that no job-level `if:` guard is used (the `secrets` context is
+  unavailable in job-level `if:` expressions), so skipping is handled by
+  the `integration_runtime` fixture in `tests/sessions/conftest.py` at
+  the test level — those forks see a stream of "skipped" entries instead
+  of "job failed". Diff reports upload as workflow artifacts on every run.
 
 ## Common failure modes
 

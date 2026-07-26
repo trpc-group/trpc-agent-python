@@ -4350,9 +4350,1087 @@
       "differences": [],
       "session_id": "session-injected-summary-session",
       "status": "passed"
+    },
+    {
+      "allowed_diffs": [],
+      "backend_results": {
+        "inmemory": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 24,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "replay_session_id": "session-fail-summary",
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "pre-failure summary"
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "summary-fail-pre",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 1,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 21"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e21",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 22"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e22",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 1"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 2"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 3"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 4"
+                    }
+                  ]
+                },
+                "id": "event-3",
+                "invocation_id": "invocation-e4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 5"
+                    }
+                  ]
+                },
+                "id": "event-4",
+                "invocation_id": "invocation-e5",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 6"
+                    }
+                  ]
+                },
+                "id": "event-5",
+                "invocation_id": "invocation-e6",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 7"
+                    }
+                  ]
+                },
+                "id": "event-6",
+                "invocation_id": "invocation-e7",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 8"
+                    }
+                  ]
+                },
+                "id": "event-7",
+                "invocation_id": "invocation-e8",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 9"
+                    }
+                  ]
+                },
+                "id": "event-8",
+                "invocation_id": "invocation-e9",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 10"
+                    }
+                  ]
+                },
+                "id": "event-9",
+                "invocation_id": "invocation-e10",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 11"
+                    }
+                  ]
+                },
+                "id": "event-10",
+                "invocation_id": "invocation-e11",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 12"
+                    }
+                  ]
+                },
+                "id": "event-11",
+                "invocation_id": "invocation-e12",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 13"
+                    }
+                  ]
+                },
+                "id": "event-12",
+                "invocation_id": "invocation-e13",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 14"
+                    }
+                  ]
+                },
+                "id": "event-13",
+                "invocation_id": "invocation-e14",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 15"
+                    }
+                  ]
+                },
+                "id": "event-14",
+                "invocation_id": "invocation-e15",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 16"
+                    }
+                  ]
+                },
+                "id": "event-15",
+                "invocation_id": "invocation-e16",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 17"
+                    }
+                  ]
+                },
+                "id": "event-16",
+                "invocation_id": "invocation-e17",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 18"
+                    }
+                  ]
+                },
+                "id": "event-17",
+                "invocation_id": "invocation-e18",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 19"
+                    }
+                  ]
+                },
+                "id": "event-18",
+                "invocation_id": "invocation-e19",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 20"
+                    }
+                  ]
+                },
+                "id": "event-19",
+                "invocation_id": "invocation-e20",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "memory": {},
+            "operation_audit": [
+              {
+                "final_event_count": 3,
+                "kind": "summary_update",
+                "recovered": true
+              }
+            ],
+            "state": {},
+            "summary": {
+              "anchor_count": 1,
+              "current": {
+                "anchor_count": 1,
+                "anchor_text": "pre-failure summary",
+                "compressed_event_count": 3,
+                "original_event_count": 22,
+                "session_id": "session-fail-summary",
+                "summary_id": "summary-fail-pre",
+                "supersedes": null,
+                "text": "pre-failure summary",
+                "updated_at": "<timestamp>",
+                "version": 1
+              },
+              "revisions": [
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "pre-failure summary",
+                  "compressed_event_count": 3,
+                  "original_event_count": 22,
+                  "session_id": "session-fail-summary",
+                  "summary_id": "summary-fail-pre",
+                  "supersedes": null,
+                  "text": "pre-failure summary",
+                  "updated_at": "<timestamp>",
+                  "version": 1
+                }
+              ]
+            }
+          }
+        },
+        "sqlite": {
+          "error": null,
+          "invariant_failures": [],
+          "operation_count": 24,
+          "snapshot": {
+            "events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "replay_session_id": "session-fail-summary",
+                  "state_delta": {}
+                },
+                "author": "system",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "pre-failure summary"
+                    }
+                  ],
+                  "role": "user"
+                },
+                "id": "summary-fail-pre",
+                "invocation_id": "summary",
+                "model_flags": 3,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 1,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 21"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e21",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 22"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e22",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "historical_events": [
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 1"
+                    }
+                  ]
+                },
+                "id": "event-0",
+                "invocation_id": "invocation-e1",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 2"
+                    }
+                  ]
+                },
+                "id": "event-1",
+                "invocation_id": "invocation-e2",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 3"
+                    }
+                  ]
+                },
+                "id": "event-2",
+                "invocation_id": "invocation-e3",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 4"
+                    }
+                  ]
+                },
+                "id": "event-3",
+                "invocation_id": "invocation-e4",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 5"
+                    }
+                  ]
+                },
+                "id": "event-4",
+                "invocation_id": "invocation-e5",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 6"
+                    }
+                  ]
+                },
+                "id": "event-5",
+                "invocation_id": "invocation-e6",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 7"
+                    }
+                  ]
+                },
+                "id": "event-6",
+                "invocation_id": "invocation-e7",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 8"
+                    }
+                  ]
+                },
+                "id": "event-7",
+                "invocation_id": "invocation-e8",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 9"
+                    }
+                  ]
+                },
+                "id": "event-8",
+                "invocation_id": "invocation-e9",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 10"
+                    }
+                  ]
+                },
+                "id": "event-9",
+                "invocation_id": "invocation-e10",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 11"
+                    }
+                  ]
+                },
+                "id": "event-10",
+                "invocation_id": "invocation-e11",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 12"
+                    }
+                  ]
+                },
+                "id": "event-11",
+                "invocation_id": "invocation-e12",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 13"
+                    }
+                  ]
+                },
+                "id": "event-12",
+                "invocation_id": "invocation-e13",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 14"
+                    }
+                  ]
+                },
+                "id": "event-13",
+                "invocation_id": "invocation-e14",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 15"
+                    }
+                  ]
+                },
+                "id": "event-14",
+                "invocation_id": "invocation-e15",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 16"
+                    }
+                  ]
+                },
+                "id": "event-15",
+                "invocation_id": "invocation-e16",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 17"
+                    }
+                  ]
+                },
+                "id": "event-16",
+                "invocation_id": "invocation-e17",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 18"
+                    }
+                  ]
+                },
+                "id": "event-17",
+                "invocation_id": "invocation-e18",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "user",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "user turn 19"
+                    }
+                  ]
+                },
+                "id": "event-18",
+                "invocation_id": "invocation-e19",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              },
+              {
+                "actions": {
+                  "artifact_delta": {},
+                  "state_delta": {}
+                },
+                "author": "assistant",
+                "content": {
+                  "parts": [
+                    {
+                      "text": "assistant turn 20"
+                    }
+                  ]
+                },
+                "id": "event-19",
+                "invocation_id": "invocation-e20",
+                "model_flags": 1,
+                "requires_completion": false,
+                "timestamp": "<timestamp>",
+                "version": 0,
+                "visible": true
+              }
+            ],
+            "memory": {},
+            "operation_audit": [
+              {
+                "final_event_count": 3,
+                "kind": "summary_update",
+                "recovered": true
+              }
+            ],
+            "state": {},
+            "summary": {
+              "anchor_count": 1,
+              "current": {
+                "anchor_count": 1,
+                "anchor_text": "pre-failure summary",
+                "compressed_event_count": 3,
+                "original_event_count": 22,
+                "session_id": "session-fail-summary",
+                "summary_id": "summary-fail-pre",
+                "supersedes": null,
+                "text": "pre-failure summary",
+                "updated_at": "<timestamp>",
+                "version": 1
+              },
+              "revisions": [
+                {
+                  "anchor_count": 1,
+                  "anchor_text": "pre-failure summary",
+                  "compressed_event_count": 3,
+                  "original_event_count": 22,
+                  "session_id": "session-fail-summary",
+                  "summary_id": "summary-fail-pre",
+                  "supersedes": null,
+                  "text": "pre-failure summary",
+                  "updated_at": "<timestamp>",
+                  "version": 1
+                }
+              ]
+            }
+          }
+        }
+      },
+      "case_id": "fail_summary_recovery",
+      "description": "Forces a partial-commit failure mid-summary-update. The operation_audit must record ``recovered=True`` and the recovered snapshot must surface the pre-failure summary id; the attempted summary id must not leak into the canonical events list.",
+      "differences": [],
+      "session_id": "session-fail-summary",
+      "status": "passed"
     }
   ],
-  "generated_at": "2026-07-26T07:51:21.820138+00:00",
+  "generated_at": "2026-07-26T16:04:20.475252+00:00",
   "mode": "lightweight-persistent",
   "normalization_rules": [
     {
@@ -4382,15 +5460,15 @@
     }
   ],
   "reference_backend": "inmemory",
-  "report_sha256": "eb4a4af47a198c5e10430b7854892b7f917a8976625ae4f788826f093b87be4f",
+  "report_sha256": "60769549ebde5a9142fdc177169e62d505dc19f063c4d0943292c1a6d7677757",
   "schema_version": 1,
   "summary": {
     "allowed_diff_count": 1,
     "backend_count": 2,
-    "case_count": 10,
-    "elapsed_seconds": 2.243221,
+    "case_count": 11,
+    "elapsed_seconds": 1.491419,
     "invariant_failure_count": 0,
-    "passed_case_count": 10,
+    "passed_case_count": 11,
     "unexpected_diff_count": 0
   }
 }

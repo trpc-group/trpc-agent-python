@@ -26,11 +26,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--work-dir", type=Path, default=Path(".replay-work"))
     parser.add_argument("--backends", help="Comma-separated override: inmemory,sqlite,sql,redis")
     args = parser.parse_args(argv)
-    backend_names = None
     if args.backends:
-        backend_names = [name.strip() for name in args.backends.split(",") if name.strip()]
+        # Normalize once through ``resolve_backend_names`` so casing and
+        # whitespace variants collapse to the canonical names and unknown
+        # values still raise ``ValueError`` exactly once, instead of bubbling
+        # up later from ``_build_backend`` as a less informative
+        # ``Unsupported replay backend: <original>`` error.
+        backend_names = resolve_backend_names({"TRPC_REPLAY_BACKENDS": args.backends})
     else:
-        backend_names = resolve_backend_names()
+        backend_names = None
 
     run = asyncio.run(run_replay_harness(
         work_dir=args.work_dir,

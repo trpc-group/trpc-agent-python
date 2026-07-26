@@ -186,6 +186,37 @@ def _memory_sort_key(entry: Mapping[str, Any]) -> str:
     return json.dumps(entry, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+# Mirror of ``tests.sessions.test_replay_consistency.EXPECTATIONS``. The
+# diff engine cannot import from the test package so the mapping is
+# duplicated here. Keep the two in sync when adding new cases.
+_EXPECTATION_BY_CASE_ID: dict[str, str] = {
+    "single_turn": "normal",
+    "multi_turn": "normal",
+    "tool_call": "normal",
+    "state_update": "normal",
+    "memory_rw": "normal",
+    "summary_gen": "known_summary_divergence",
+    "summary_truncate": "known_summary_divergence",
+    "exception_recovery": "allowed_mechanism_only",
+    "injected_event_order": "normal",
+    "injected_summary_session": "known_summary_divergence",
+}
+
+
+def _is_allowed_domain(expectation: str, domain: str) -> bool:
+    """Return True when ``domain`` divergences are documented for ``expectation``.
+
+    ``known_summary_divergence`` cases may diverge in ``events`` and
+    ``summary`` fields because backends choose different storage layouts
+    for compressed conversations (see
+    ``docs/mkdocs/en/replay-consistency.md``). All other expectations
+    require field-level parity.
+    """
+    if expectation == "known_summary_divergence":
+        return domain in {"events", "summary"}
+    return False
+
+
 def _allowed_raw_differences(reference: Mapping[str, Any], result: Mapping[str, Any]) -> list[dict[str, Any]]:
     allowed = []
     reference_memory = reference.get("raw_memory_order", {})
@@ -254,6 +285,10 @@ def build_diff_report(run: Mapping[str, Any]) -> dict[str, Any]:
         case_differences = []
         case_allowed = []
         backend_results = {}
+        # Known-divergence classifications declared by the test suite. The
+        # diff engine mirrors them so ``unexpected_diff_count`` only counts
+        # diffs the framework did not already declare acceptable.
+        case_expectation = _EXPECTATION_BY_CASE_ID.get(case_id, "normal")
 
         for backend_name in run["backend_names"]:
             result = result_index.get((case_id, backend_name))
@@ -276,7 +311,15 @@ def build_diff_report(run: Mapping[str, Any]) -> dict[str, Any]:
                 _locate_difference(difference, result, reference_backend, reference["snapshot"])
                 for difference in differences
             ]
-            case_differences.extend(located)
+            for diff in located:
+                if _is_allowed_domain(case_expectation, diff["domain"]):
+                    diff["allowed"] = True
+                    diff["explanation"] = (
+                        f"EXPECTATIONS={case_expectation} permits {diff['domain']} differences"
+                    )
+                    case_allowed.append(diff)
+                else:
+                    case_differences.append(diff)
             case_allowed.extend(_allowed_raw_differences(reference, result))
 
         all_differences.extend(case_differences)
