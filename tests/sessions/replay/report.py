@@ -58,14 +58,19 @@ def _roll_up_status(comparisons: list[Comparison]) -> CaseStatus:
     return "match"
 
 
-def _compared_backends(statuses: list[BackendStatus], case_results: list[CaseResult]) -> list[str]:
-    compared = [b.name for b in statuses if b.status != "skipped"]
+def _compared_backends(
+    statuses: list[BackendStatus],
+    case_results: list[CaseResult],
+    reference_backend: str,
+) -> list[str]:
+    # 参考后端是基准,不应出现在「已比较的候选」里(设计 §4.8)。
+    compared = [b.name for b in statuses if b.status != "skipped" and b.name != reference_backend]
     if compared:
         return compared
     seen: list[str] = []
     for cr in case_results:
         for c in cr.comparisons:
-            if c.candidate_backend not in seen:
+            if c.candidate_backend not in seen and c.candidate_backend != reference_backend:
                 seen.append(c.candidate_backend)
     return seen
 
@@ -120,7 +125,7 @@ def build_diff_report(
     return {
         "schema_version": 3,
         "reference_backend": reference_backend,
-        "compared_backends": _compared_backends(statuses, case_results),
+        "compared_backends": _compared_backends(statuses, case_results, reference_backend),
         "backend_statuses": [b.model_dump() for b in statuses],
         "totals": totals,
         "false_positive_rate": fpr,
