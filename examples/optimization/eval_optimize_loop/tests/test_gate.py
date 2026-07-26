@@ -237,3 +237,21 @@ class TestLockRobustness:
     def test_non_numeric_lock_cleaned_not_crash(self, tmp_path):
         rc = self._run_with_lock('not-a-pid', tmp_path)
         assert rc == 75, f'Expected exit 75, got {rc}'
+
+
+# ============================================================================
+# Lock module smoke test (R24 — ensure new src/lock.py imports cleanly)
+# ============================================================================
+
+class TestLockModule:
+    def test_import(self):
+        from src.lock import acquire_pipeline_lock, release_pipeline_lock
+        assert callable(acquire_pipeline_lock)
+        assert callable(release_pipeline_lock)
+
+    def test_acquire_release_lifecycle(self, tmp_path):
+        from src.lock import acquire_pipeline_lock, release_pipeline_lock
+        lock_path = str(tmp_path / '.pipeline.lock')
+        token = acquire_pipeline_lock(lock_path)
+        assert token is not None, 'Should acquire lock on empty dir'
+        release_pipeline_lock(token)
