@@ -21,6 +21,7 @@ from src.validator import ValidationRunner
 from src.auditor import Auditor
 from src.reporter import generate_json_report, generate_markdown_report
 from src.gate import AcceptanceGate, GateCheck, GateDecision
+from src.lock import acquire_pipeline_lock, release_pipeline_lock
 
 
 def load_config():
@@ -68,103 +69,13 @@ async def main():
     started_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     run_mode = args.mode
 
-    # ---- PID-based lock in output directory ----
+    # ---- Pipeline lock (mutual exclusion) ----
+    # POSIX: fcntl.flock -- kernel auto-releases on process death.
+    # Windows: PID-based lock with documented PID-reuse limitation.
     LOCK_FILE = _os.path.join(str(output_dir), ".pipeline.lock")
     _os.makedirs(str(output_dir), exist_ok=True)
-
-    def _pid_alive(pid):
-        """Check if a process is running. Returns False for dead/invalid PIDs.
-
-        Platform strategy:
-        - Windows: use kernel32.OpenProcess (PROCESS_QUERY_LIMITED_INFORMATION).
-          We avoid os.kill(pid, 0) on Windows because CPython maps it to
-          TerminateProcess(handle, 0) which kills the target, not probes it.
-        - Unix: os.kill(pid, 0) sends signal 0 (null signal) which is a
-          pure liveness probe per POSIX.
-        """
-        if sys.platform == "win32":
-            # Windows first: avoid os.kill which terminates the process
-            try:
-                import ctypes
-                h = ctypes.windll.kernel32.OpenProcess(0x0400, False, pid)
-                if h:
-                    ctypes.windll.kernel32.CloseHandle(h)
-                    return True
-                return False
-            except Exception:
-                return False  # cannot verify; assume dead to allow lock cleanup
-
-        # Unix: signal 0 is a pure liveness probe
-        try:
-            _os.kill(pid, 0)
-        except ProcessLookupError:
-            return False
-        except PermissionError:
-            return True  # exists but we cannot signal it
-        except OSError:
-            return False  # cannot verify; assume dead
-        return True
-    my_pid = _os.getpid()
-
-    # Atomic acquire: O_CREAT|O_EXCL fails if file exists (cross-platform)
-    acquired = False
-    try:
-        fd = _os.open(LOCK_FILE, _os.O_CREAT | _os.O_EXCL | _os.O_WRONLY, 0o644)
-        with _os.fdopen(fd, "w", encoding="utf-8") as lf:
-            lf.write(f"{my_pid} {started_at}")
-            lf.flush()
-            _os.fsync(lf.fileno())
-        acquired = True
-    except FileExistsError:
-        # Lock exists -- check if owner is alive
-        try:
-            with open(LOCK_FILE, "r", encoding="utf-8") as lf:
-                raw = lf.read().strip()
-                parts = raw.split()
-                if not parts:
-                    raise ValueError(f"empty lock file: {LOCK_FILE}")
-                old_pid = int(parts[0])
-            if _pid_alive(old_pid):
-                print("another pipeline instance is running, aborting", file=sys.stderr)
-                sys.exit(75)
-            if not args.quiet:
-                print(f"Cleaning stale lock from dead PID {old_pid}", file=sys.stderr)
-            # Atomic takeover: each process writes a PID-suffixed tmp file,
-            # then os.replace() (atomic rename on POSIX and Windows) swaps it
-            # into place.  NOTE: a narrow TOCTOU window remains if two
-            # processes simultaneously take over the same stale lock: after
-            # A verifies ownership, B may overwrite before A enters its
-            # critical section.  Both would then run concurrently.  This is
-            # acceptable for a pipeline lock (at worst, duplicate output).
-            # For strict mutual exclusion, use fcntl.flock / msvcrt.locking.
-            tmp = f"{LOCK_FILE}.{my_pid}.tmp"  # PID suffix prevents concurrent overwrite
-            with open(tmp, "w", encoding="utf-8") as tf:
-                tf.write(f"{my_pid} {started_at}")
-                tf.flush()
-                _os.fsync(tf.fileno())
-            _os.replace(tmp, LOCK_FILE)
-            # Lock is ours after atomic replace. Mark acquired=True immediately
-            # so that finally-block cleanup works even if we crash during the
-            # verification read below (prevents permanent lock residue).
-            acquired = True
-            # Verify ownership: if another process somehow raced us, the file
-            # contains their PID, not ours.  In that case, back off.
-            with open(LOCK_FILE, "r", encoding="utf-8") as vf:
-                raw = vf.read().strip()
-                parts = raw.split()
-                if not parts:
-                    raise ValueError(f"empty lock file: {LOCK_FILE}")
-                lock_owner = int(parts[0])
-            if lock_owner != my_pid:
-                acquired = False  # not our lock; don't clean up in finally
-        except (FileNotFoundError, ValueError, IndexError):
-            # Corrupted or missing lock file: clean it up so the next run
-            # does not hit the same permanent deadlock.
-            try:
-                _os.remove(LOCK_FILE)
-            except FileNotFoundError:
-                pass
-
+    lock_token = acquire_pipeline_lock(LOCK_FILE, pid=_os.getpid(), started_at=started_at)
+    acquired = lock_token is not None
     if not acquired:
         print("cannot acquire pipeline lock, aborting", file=sys.stderr)
         sys.exit(75)
@@ -301,15 +212,16 @@ async def main():
             print("Done. 6 phases completed.")
 
     finally:
-        # release lock — only if we still own it (avoid removing another process's lock)
-        try:
-            with open(LOCK_FILE, "r", encoding="utf-8") as lf:
-                lock_pid = int(lf.read().strip().split()[0])
-            if lock_pid == my_pid:
+        # Release lock: on POSIX closing fd releases kernel flock
+        # and removes the lock file; on Windows removes PID lock file.
+        release_pipeline_lock(lock_token)
+        # On Windows (PID lock), the lock file persists and must be
+        # removed by the owner.
+        if sys.platform == "win32" and lock_token is not None:
+            try:
                 _os.remove(LOCK_FILE)
-        except Exception:
-            pass
-
+            except FileNotFoundError:
+                pass
 
 if __name__ == "__main__":
     asyncio.run(main())

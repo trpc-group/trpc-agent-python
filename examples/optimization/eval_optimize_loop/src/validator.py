@@ -1,9 +1,6 @@
 """Phase 4: 候选验证引擎。"""
 from __future__ import annotations
-from pathlib import Path
-import json
 from dataclasses import dataclass, field
-from typing import Optional
 from fake.fake_judge import FakeJudge
 from src.baseline import BaselineResult
 from src.optimizer import OptimizationResult

@@ -4,7 +4,7 @@
 失败原因和关键轨迹，作为后续优化流水线的基准线。
 
 支持两种模式：
-- fake: 无 API Key，使用 FakeLLM + FakeJudge 模拟评测
+- fake: 无 API Key，使用 FakeJudge 模拟评测
 - real: 对接 PlateAgent 的 PlateEvaluator 真实评测
 
 使用示例:
@@ -21,7 +21,6 @@ import hashlib
 from pathlib import Path
 from typing import Optional
 
-from fake.fake_model import FakeLLM
 from fake.fake_judge import FakeJudge, JudgeResult
 
 
@@ -177,7 +176,6 @@ class BaselineRunner:
         self.kwargs = kwargs
 
         if mode == "fake":
-            self._fake_llm = FakeLLM()
             self._fake_judge = FakeJudge()
 
     # ── 公共接口 ────────────────────────────────────────
@@ -234,7 +232,7 @@ class BaselineRunner:
         cases_data: list[dict],
         dataset_name: str,
     ) -> BaselineResult:
-        """Fake 模式：使用 FakeLLM + FakeJudge 模拟评测。"""
+        """Fake 模式：使用 FakeJudge 模拟评测。"""
         case_results: list[BaselineCaseResult] = []
 
         for case in cases_data:
