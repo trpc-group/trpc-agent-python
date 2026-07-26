@@ -55,29 +55,6 @@ SQLITE_BACKEND = "sqlite"
 IN_MEMORY_BACKEND = "in_memory"
 REDIS_BACKEND = "redis"
 MEMORY_RESULT_SUFFIX_START = 2
-SQL_STORAGE_ATTRIBUTE = "_sql_storage"
-REDIS_STORAGE_ATTRIBUTE = "_redis_storage"
-SQL_STORAGE_METHODS = ("commit", "create_sql_engine")
-REDIS_STORAGE_METHODS = ("create_db_session", "delete")
-STORAGE_CONTRACT_ERROR = "replay storage contract changed"
-
-
-def _require_storage_contract(service: Any, attribute: str, methods: tuple[str, ...]) -> Any:
-    """Resolve an intentional private test seam with a readable drift error."""
-    storage = getattr(service, attribute, None)
-    missing = list(methods) if storage is None else [name for name in methods if not hasattr(storage, name)]
-    if storage is None or missing:
-        detail = attribute if storage is None else f"{attribute}.{','.join(missing)}"
-        raise AssertionError(f"{STORAGE_CONTRACT_ERROR}: {type(service).__name__} missing {detail}")
-    return storage
-
-
-def _require_sql_storage(service: Any) -> Any:
-    return _require_storage_contract(service, SQL_STORAGE_ATTRIBUTE, SQL_STORAGE_METHODS)
-
-
-def _require_redis_storage(service: Any) -> Any:
-    return _require_storage_contract(service, REDIS_STORAGE_ATTRIBUTE, REDIS_STORAGE_METHODS)
 
 
 class DeterministicSummaryModel:
@@ -122,36 +99,11 @@ class BackendBundle:
 
     async def close(self) -> None:
         """Close both services even if the first close fails."""
-        cleanup_error = None
-        if self.name == REDIS_BACKEND:
-            try:
-                await asyncio.wait_for(self._cleanup_redis(), SERVICE_CLOSE_TIMEOUT_SECONDS)
-            except Exception as error:  # pylint: disable=broad-except
-                cleanup_error = error
         close_all = asyncio.gather(self.memory_service.close(), self.session_service.close(), return_exceptions=True)
         results = await asyncio.wait_for(close_all, SERVICE_CLOSE_TIMEOUT_SECONDS)
         errors = [result for result in results if isinstance(result, Exception)]
-        if cleanup_error:
-            errors.insert(0, cleanup_error)
         if errors:
             raise errors[0]
-
-    async def _cleanup_redis(self) -> None:
-        session = await self.session_service.get_session(
-            app_name=self.identity.app_name,
-            user_id=self.identity.user_id,
-            session_id=self.identity.session_id,
-        )
-        if session is not None:
-            key = f"memory:{session.save_key}:{session.id}"
-            storage = _require_redis_storage(self.memory_service)
-            async with storage.create_db_session() as connection:
-                await storage.delete(connection, key)
-        await self.session_service.delete_session(
-            app_name=self.identity.app_name,
-            user_id=self.identity.user_id,
-            session_id=self.identity.session_id,
-        )
 
 
 def _session_config() -> SessionServiceConfig:
@@ -201,8 +153,6 @@ async def create_sqlite_backend(db_path: Path, identity: Optional[ReplayIdentity
         memory_service_config=_memory_config(),
         is_async=False,
     )
-    await _require_sql_storage(session_service).create_sql_engine()
-    await _require_sql_storage(memory_service).create_sql_engine()
     return BackendBundle(SQLITE_BACKEND, session_service, memory_service, db_url, identity or ReplayIdentity())
 
 

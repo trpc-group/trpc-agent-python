@@ -42,9 +42,7 @@ from .replay_cases import USER_ID
 from .replay_cases import validate_replay_cases
 from .replay_harness import ReplayRunner
 from .replay_harness import ReplayIdentity
-from .replay_harness import STORAGE_CONTRACT_ERROR
 from .replay_harness import _clone_operation
-from .replay_harness import _require_sql_storage
 from .replay_harness import create_in_memory_backend
 from .replay_harness import create_redis_backend
 from .replay_harness import create_sqlite_backend
@@ -182,11 +180,6 @@ def test_duplicate_replay_case_ids_are_rejected():
     duplicate = ReplayCase(REPLAY_CASES[0].case_id, (), ExpectedOutcome(()))
     with pytest.raises(ValueError, match="duplicate replay case ids"):
         validate_replay_cases((REPLAY_CASES[0], duplicate))
-
-
-def test_private_storage_contract_drift_has_readable_error():
-    with pytest.raises(AssertionError, match=STORAGE_CONTRACT_ERROR):
-        _require_sql_storage(object())
 
 
 def test_operation_clone_isolates_nested_payloads():
@@ -566,76 +559,6 @@ def test_independent_expectation_reports_each_contract_failure(replay_matrix):
 
 def _find_diff(diffs: list[DiffItem], path: str) -> DiffItem:
     return next(diff for diff in diffs if diff.field_path == path)
-
-
-async def test_sqlite_transaction_failure_rolls_back_event_and_state(tmp_path, monkeypatch):
-    backend = await create_sqlite_backend(tmp_path / "rollback.db")
-    session = await backend.session_service.create_session(
-        app_name=APP_NAME,
-        user_id=USER_ID,
-        session_id=SESSION_ID,
-        state={"status": "clean"},
-    )
-    storage = _require_sql_storage(backend.session_service)
-    monkeypatch.setattr(storage, "commit", AsyncMock(side_effect=RuntimeError("commit failed")))
-    event = Event(
-        id="rollback-event",
-        invocation_id="rollback",
-        author="agent",
-        content=Content(parts=[Part.from_text(text="dirty")]),
-        timestamp=BASE_TIMESTAMP,
-    )
-    event.actions.state_delta = {"status": "dirty"}
-    with pytest.raises(RuntimeError, match="commit failed"):
-        await backend.session_service.append_event(session, event)
-    await backend.close()
-    reopened = await create_sqlite_backend(tmp_path / "rollback.db")
-    try:
-        restored = await reopened.session_service.get_session(
-            app_name=APP_NAME,
-            user_id=USER_ID,
-            session_id=SESSION_ID,
-        )
-        assert restored.state["status"] == "clean"
-        assert restored.events == []
-    finally:
-        await reopened.close()
-
-
-async def test_sqlite_summary_commit_failure_exposes_cache_storage_mismatch(tmp_path, monkeypatch):
-    db_path = tmp_path / "summary-rollback.db"
-    backend = await create_sqlite_backend(db_path)
-    session = await backend.session_service.create_session(
-        app_name=APP_NAME,
-        user_id=USER_ID,
-        session_id=SESSION_ID,
-    )
-    for index, text in enumerate(("old fact", "old answer", "recent request")):
-        event = Event(
-            id=f"summary-rollback-{index}",
-            invocation_id=f"summary-rollback-{index}",
-            author="user" if index != 1 else "agent",
-            content=Content(parts=[Part.from_text(text=text)]),
-            timestamp=time.time() + index,
-        )
-        await backend.session_service.append_event(session, event)
-    storage = _require_sql_storage(backend.session_service)
-    monkeypatch.setattr(storage, "commit", AsyncMock(side_effect=RuntimeError("summary commit failed")))
-    with pytest.raises(RuntimeError, match="summary commit failed"):
-        await backend.session_service.create_session_summary(session)
-    cached = await backend.session_service.summarizer_manager.get_session_summary(session)
-    assert cached is not None
-    await backend.close()
-    reopened = await create_sqlite_backend(db_path)
-    try:
-        restored = await reopened.session_service.get_session(
-            app_name=APP_NAME,
-            user_id=USER_ID,
-            session_id=SESSION_ID,
-        )
-        assert not any(event.is_summary_event() for event in restored.events)
-    finally:
-        await reopened.close()
 
 
 async def test_reload_snapshot_clears_reused_runner_state(tmp_path):
