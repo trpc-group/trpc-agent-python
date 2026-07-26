@@ -212,7 +212,7 @@ class TestGateNewHardFailCaseLevel:
 
 
 
-import pytest, subprocess, os
+import pytest, subprocess, os, sys
 from pathlib import Path
 
 PIPELINE_SCRIPT = Path(__file__).resolve().parent.parent / 'run_pipeline.py'
@@ -230,9 +230,11 @@ class TestLockRobustness:
         )
         return result.returncode
 
+    @pytest.mark.skipif(sys.platform != "win32", reason="PID lock semantics; POSIX uses flock (file content irrelevant)")
     def test_empty_lock_cleaned_not_crash(self, tmp_path):
         rc = self._run_with_lock('', tmp_path)
         assert rc == 75, f'Expected exit 75, got {rc}'
+    @pytest.mark.skipif(sys.platform != "win32", reason="PID lock semantics; POSIX uses flock (file content irrelevant)")
 
     def test_non_numeric_lock_cleaned_not_crash(self, tmp_path):
         rc = self._run_with_lock('not-a-pid', tmp_path)

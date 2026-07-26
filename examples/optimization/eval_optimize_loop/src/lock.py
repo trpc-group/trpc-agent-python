@@ -63,18 +63,19 @@ def _acquire_flock(lock_path: str, pid: int, started_at: str) -> int | None:
 
 
 def _release_flock(fd: int, lock_path: str = "") -> None:
-    """Close fd (releases kernel flock) and remove the lock file.
+    """Close fd (releases kernel flock), then remove the lock file.
 
-    The lock file is removed so the next run starts clean.  fcntl.flock
-    is tied to the open fd, so the file can be safely removed while the
-    fd is still open (on Unix, the inode persists until close).
+    Close before remove: deleting the file while the fd is still open
+    frees the name for a new inode, creating a window where another
+    process can acquire an independent flock on a different inode at
+    the same path.  Closing first prevents this race.
     """
+    _os.close(fd)
     if lock_path:
         try:
             _os.remove(lock_path)
         except FileNotFoundError:
             pass
-    _os.close(fd)
 
 
 # ---- Windows: PID-based lock ----
