@@ -210,3 +210,30 @@ class TestGateNewHardFailCaseLevel:
             f"Improved failures without new ones should pass: {hard_fail_check.detail}"
         )
 
+
+
+import subprocess, os
+from pathlib import Path
+
+PIPELINE_SCRIPT = Path(__file__).resolve().parent.parent / 'run_pipeline.py'
+
+class TestLockRobustness:
+    def _run_with_lock(self, lock_content, tmp_path):
+        output_dir = tmp_path / 'output'
+        output_dir.mkdir()
+        lock_file = output_dir / '.pipeline.lock'
+        lock_file.write_text(lock_content, encoding='utf-8')
+        result = subprocess.run(
+            ['python', str(PIPELINE_SCRIPT), '--output', str(output_dir), '--quiet'],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(PIPELINE_SCRIPT.parent),
+        )
+        return result.returncode
+
+    def test_empty_lock_cleaned_not_crash(self, tmp_path):
+        rc = self._run_with_lock('', tmp_path)
+        assert rc == 75, f'Expected exit 75, got {rc}'
+
+    def test_non_numeric_lock_cleaned_not_crash(self, tmp_path):
+        rc = self._run_with_lock('not-a-pid', tmp_path)
+        assert rc == 75, f'Expected exit 75, got {rc}'
