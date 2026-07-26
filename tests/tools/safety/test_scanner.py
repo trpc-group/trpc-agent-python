@@ -15,6 +15,11 @@ from trpc_agent_sdk.tools.safety import ScriptScanRequest
 from trpc_agent_sdk.tools.safety import ToolMetadata
 from trpc_agent_sdk.tools.safety import ToolScriptSafetyGuard
 from trpc_agent_sdk.tools.safety import ToolSafetyPolicy
+from trpc_agent_sdk.tools.safety._bash_rules import _sleep_seconds
+from trpc_agent_sdk.tools.safety._bash_rules import _ssh_target
+from trpc_agent_sdk.tools.safety._bash_rules import stdin_language
+from trpc_agent_sdk.tools.safety._sanitizer import SafetySanitizer
+from trpc_agent_sdk.tools.safety._sanitizer import truncate_output
 
 
 @pytest.fixture
@@ -216,6 +221,82 @@ def test_500_line_script_scans_under_one_second(guard):
     request = _request("\n".join(f"value_{index} = {index}" for index in range(500)))
     report = guard.scan(request)
     assert report.duration_ms < 1000
+
+
+def test_python_visitor_tracks_bindings_and_resource_shapes(guard):
+    code = """
+import asyncio as aio
+from pathlib import Path as P
+from requests import get as fetch
+import subprocess
+
+BASE: str = "/tmp"
+path = P(BASE)
+path.write_text("x")
+value = "safe" + "-value"
+value = input()
+value += "changed"
+(alias := fetch)
+for item in values:
+    alias = item
+items = {key: value for key, value in pairs if key}
+callback = lambda target="https://example.test": fetch(target)
+try:
+    subprocess.run()
+except RuntimeError as error:
+    print(error)
+
+async def work(default="x", *args, **kwargs):
+    await aio.sleep(60)
+
+aio.sleep(60)
+aio.gather(*tasks)
+aio.ThreadPoolExecutor(max_workers=20)
+open("/tmp/out", "w").write("x" * 1000000)
+subprocess.run(["echo", "ok"])
+subprocess.run(command)
+fetch(url="https://example.test")
+os.open("/tmp/out", os.O_WRONLY | os.O_CREAT)
+(left, right) = pair
+subprocess.run("echo ok")
+aio.sleep(delay)
+aio.ThreadPoolExecutor(20)
+aio.ThreadPoolExecutor(max_workers=workers)
+aio.gather(one, two, three, four, five)
+P().write_text("x")
+writer.write("x" * 2000000)
+"""
+    report = guard.scan(_request(code))
+    assert report.findings
+
+
+def test_safety_edge_helpers_cover_invalid_and_dynamic_inputs():
+    assert _ssh_target(["ssh", "-p", "22", "--"]) is None
+    assert _ssh_target(["ssh", "-o"]) is None
+    assert _sleep_seconds("") == float("inf")
+    assert _sleep_seconds("not-a-duration") == float("inf")
+    assert stdin_language("") is None
+    assert stdin_language("python -c code") is None
+    assert truncate_output("hello", 3) == "hel"
+    assert truncate_output(42, 3) == 42
+    with pytest.raises(ValueError, match="evidence_chars"):
+        SafetySanitizer(0)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "env -i TOKEN=value echo ok",
+        "ssh $HOST",
+        "python script.py",
+        "python -c",
+        "echo $PASSWORD",
+        "bash -c \"bash -c 'bash -c \\\"echo ok\\\"'\"",
+    ],
+)
+def test_bash_edge_shapes_are_scanned_without_fail_open(guard, command):
+    report = guard.scan(_request(command, ScriptLanguage.BASH))
+    assert report.summary
 
 
 def test_categories_are_structured(guard):

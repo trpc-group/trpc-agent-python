@@ -15,6 +15,7 @@ import pytest
 
 from trpc_agent_sdk.tools.safety import CompositeAuditSink
 from trpc_agent_sdk.tools.safety import JsonlAuditSink
+from trpc_agent_sdk.tools.safety import LoggingAuditSink
 from trpc_agent_sdk.tools.safety import RiskCategory
 from trpc_agent_sdk.tools.safety import RiskLevel
 from trpc_agent_sdk.tools.safety import SafetyAuditError
@@ -24,6 +25,7 @@ from trpc_agent_sdk.tools.safety import SafetyFinding
 from trpc_agent_sdk.tools.safety import SafetyReport
 from trpc_agent_sdk.tools.safety._audit import create_audit_event
 from trpc_agent_sdk.tools.safety._audit import emit_report
+from trpc_agent_sdk.tools.safety._audit import _shared_sink_lock
 from trpc_agent_sdk.tools.safety._audit import set_safety_span_attributes
 
 
@@ -107,6 +109,20 @@ def test_composite_fails_closed_when_both_sinks_fail():
     sink = CompositeAuditSink(_FailingSink(), _FailingSink())
     with pytest.raises(SafetyAuditError, match="all tool safety audit sinks failed"):
         sink.emit(create_audit_event(_report(), "Bash", True))
+
+
+def test_composite_primary_success_and_logging_failure():
+    primary = _MemorySink()
+    event = create_audit_event(_report(), "Bash", True)
+    CompositeAuditSink(primary).emit(event)
+    assert primary.events == [event]
+    with patch("trpc_agent_sdk.tools.safety._audit.logger.warning", side_effect=RuntimeError):
+        with pytest.raises(SafetyAuditError, match="fallback audit failed"):
+            LoggingAuditSink().emit(event)
+
+
+def test_unhashable_audit_sink_uses_fallback_lock():
+    assert _shared_sink_lock([]) is _shared_sink_lock([])
 
 
 def test_telemetry_sets_required_attributes():

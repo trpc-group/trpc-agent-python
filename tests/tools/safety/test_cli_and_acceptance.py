@@ -15,6 +15,8 @@ from trpc_agent_sdk.tools.safety import ScriptPayload
 from trpc_agent_sdk.tools.safety import ToolMetadata
 from trpc_agent_sdk.tools.safety import ToolScriptSafetyGuard
 from trpc_agent_sdk.tools.safety._cli import main
+from trpc_agent_sdk.tools.safety._cli import _exit_code
+from trpc_agent_sdk.tools.safety import SafetyDecision
 
 EXAMPLE_DIR = Path("examples/tool_safety_guard")
 
@@ -117,3 +119,8 @@ def test_cli_error_redacts_secret_path(tmp_path, capsys):
     assert exit_code == 1
     assert "top secret phrase" not in output
     assert "[REDACTED_SECRET]" in output
+
+
+def test_cli_exit_codes_cover_allow_and_review():
+    assert _exit_code(SafetyDecision.ALLOW) == 0
+    assert _exit_code(SafetyDecision.NEEDS_HUMAN_REVIEW) == 2

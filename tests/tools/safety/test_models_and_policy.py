@@ -109,3 +109,12 @@ def test_policy_rejects_duplicate_fields(tmp_path):
 
     with pytest.raises(ValueError, match="unable to load tool safety policy"):
         ToolSafetyPolicy.from_yaml(path)
+
+
+def test_policy_rejects_empty_list_entries_and_non_mapping_yaml(tmp_path):
+    with pytest.raises(ValueError, match="must not be empty"):
+        ToolSafetyPolicy(allowed_domains=[" "])
+    path = tmp_path / "policy.yaml"
+    path.write_text("- not\n- a\n- mapping\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="must be a YAML mapping"):
+        ToolSafetyPolicy.from_yaml(path)
