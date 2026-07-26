@@ -132,7 +132,7 @@ class AcceptanceGate:
         self,
         baseline: dict[str, float],
         candidate: dict[str, float],
-    ) -> "Optional[GateCheck]":
+    ) -> "GateCheck":
         threshold = self.rules["total_score_improvement"].get("threshold", 0.03)
         base_avg = sum(baseline.values()) / len(baseline) if baseline else 0
         cand_avg = sum(candidate.values()) / len(candidate) if candidate else 0
@@ -149,7 +149,7 @@ class AcceptanceGate:
         self,
         baseline: dict[str, float],
         candidate: dict[str, float],
-    ) -> "Optional[GateCheck]":
+    ) -> "GateCheck":
         max_new = self.rules["no_new_hard_fail"].get("max_new_fails", 0)
         # Case-level comparison: a case is a "new hard fail" iff it scores
         # below PASS_THRESHOLD in candidate AND was at/above PASS_THRESHOLD
@@ -175,7 +175,7 @@ class AcceptanceGate:
         baseline: dict[str, float],
         candidate: dict[str, float],
         critical_ids: list[str],
-    ) -> "Optional[GateCheck]":
+    ) -> "GateCheck":
         if not critical_ids:
             return GateCheck(
                 name="critical_case_no_regress",
@@ -223,7 +223,7 @@ class AcceptanceGate:
         candidate_train: dict[str, float],
         baseline_val: dict[str, float],
         candidate_val: dict[str, float],
-    ) -> "Optional[GateCheck]":
+    ) -> "GateCheck":
         train_avg_base = sum(baseline_train.values()) / len(baseline_train) if baseline_train else 0
         train_avg_cand = sum(candidate_train.values()) / len(candidate_train) if candidate_train else 0
         val_avg_base = sum(baseline_val.values()) / len(baseline_val) if baseline_val else 0
