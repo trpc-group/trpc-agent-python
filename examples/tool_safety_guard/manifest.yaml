@@ -1,0 +1,13 @@
+samples:
+  - {file: samples/safe_python.py, language: python, expected: allow, safe: true}
+  - {file: samples/safe_allowed_request.py, language: python, expected: allow, safe: true}
+  - {file: samples/danger_delete.py, language: python, expected: deny, category: file}
+  - {file: samples/danger_ssh.py, language: python, expected: deny, category: file}
+  - {file: samples/danger_network.py, language: python, expected: deny, category: network}
+  - {file: samples/review_dynamic_network.py, language: python, expected: needs_human_review, category: network}
+  - {file: samples/review_subprocess.py, language: python, expected: needs_human_review, category: process}
+  - {file: samples/danger_shell_injection.sh, language: bash, expected: deny, category: process}
+  - {file: samples/review_dependency.sh, language: bash, expected: needs_human_review, category: dependency}
+  - {file: samples/danger_loop.py, language: python, expected: deny, category: resource}
+  - {file: samples/danger_secret.py, language: python, expected: deny, category: secret}
+  - {file: samples/review_pipeline.sh, language: bash, expected: needs_human_review, category: process}

@@ -1,0 +1,20 @@
+{
+  "decision": "deny",
+  "risk_level": "critical",
+  "findings": [
+    {
+      "category": "file",
+      "risk_level": "critical",
+      "rule_id": "FILE001",
+      "evidence": "rm -rf ",
+      "recommendation": "Remove recursive deletion or constrain it to an approved workspace.",
+      "decision": "deny"
+    }
+  ],
+  "duration_ms": 0.5,
+  "redacted": false,
+  "summary": "deny: 1 safety finding(s).",
+  "applicable": true,
+  "effective_timeout_seconds": 300.0,
+  "max_output_bytes": 1048576
+}

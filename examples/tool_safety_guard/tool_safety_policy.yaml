@@ -1,0 +1,19 @@
+version: 1
+allowed_domains:
+  - api.example.com
+allowed_commands:
+  - bash
+  - cat
+  - curl
+  - echo
+  - pytest
+  - python
+forbidden_paths:
+  - ~/.ssh
+  - .env
+  - /etc/shadow
+max_timeout_seconds: 300
+max_output_bytes: 1048576
+long_sleep_seconds: 60
+large_write_bytes: 10485760
+max_concurrency: 32

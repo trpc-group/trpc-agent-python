@@ -1,0 +1,175 @@
+# Tencent is pleased to support the open source community by making tRPC-Agent-Python available.
+#
+# Copyright (C) 2026 Tencent. All rights reserved.
+#
+# tRPC-Agent-Python is licensed under Apache-2.0.
+"""Audit and telemetry tests."""
+
+import json
+import os
+import stat
+from unittest.mock import MagicMock
+from unittest.mock import patch
+
+import pytest
+
+from trpc_agent_sdk.tools.safety import CompositeAuditSink
+from trpc_agent_sdk.tools.safety import JsonlAuditSink
+from trpc_agent_sdk.tools.safety import RiskCategory
+from trpc_agent_sdk.tools.safety import RiskLevel
+from trpc_agent_sdk.tools.safety import SafetyAuditError
+from trpc_agent_sdk.tools.safety import SafetyAuditDegradedError
+from trpc_agent_sdk.tools.safety import SafetyDecision
+from trpc_agent_sdk.tools.safety import SafetyFinding
+from trpc_agent_sdk.tools.safety import SafetyReport
+from trpc_agent_sdk.tools.safety._audit import create_audit_event
+from trpc_agent_sdk.tools.safety._audit import emit_report
+from trpc_agent_sdk.tools.safety._audit import set_safety_span_attributes
+
+
+def _report():
+    return SafetyReport(
+        decision=SafetyDecision.DENY,
+        risk_level=RiskLevel.HIGH,
+        duration_ms=1.5,
+        redacted=True,
+        summary="blocked",
+        max_output_bytes=100,
+    )
+
+
+class _FailingSink:
+
+    def emit(self, event):
+        del event
+        raise OSError("secret failure detail")
+
+
+class _MemorySink:
+
+    def __init__(self):
+        self.events = []
+
+    def emit(self, event):
+        self.events.append(event)
+
+
+def test_jsonl_audit_has_required_fields(tmp_path):
+    path = tmp_path / "audit.jsonl"
+    sink = JsonlAuditSink(path)
+    event = create_audit_event(_report(), "Bash", True)
+
+    sink.emit(event)
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["tool_name"] == "Bash"
+    assert data["execution_blocked"] is True
+    assert data["redacted"] is True
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission contract")
+def test_jsonl_audit_secures_existing_file(tmp_path):
+    path = tmp_path / "audit.jsonl"
+    path.write_text("", encoding="utf-8")
+    path.chmod(0o644)
+
+    JsonlAuditSink(path).emit(create_audit_event(_report(), "Bash", True))
+
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlink contract")
+def test_jsonl_audit_rejects_symlink(tmp_path):
+    target = tmp_path / "target.txt"
+    target.write_text("unchanged", encoding="utf-8")
+    audit = tmp_path / "audit.jsonl"
+    audit.symlink_to(target)
+
+    with pytest.raises(SafetyAuditError):
+        JsonlAuditSink(audit).emit(create_audit_event(_report(), "Bash", True))
+
+    assert target.read_text(encoding="utf-8") == "unchanged"
+
+
+def test_composite_uses_fallback():
+    fallback = _MemorySink()
+    sink = CompositeAuditSink(_FailingSink(), fallback)
+    event = create_audit_event(_report(), "Bash", True)
+
+    with pytest.raises(SafetyAuditDegradedError):
+        sink.emit(event)
+
+    assert fallback.events[0].execution_blocked is True
+    assert fallback.events[0].decision == SafetyDecision.DENY
+
+
+def test_composite_fails_closed_when_both_sinks_fail():
+    sink = CompositeAuditSink(_FailingSink(), _FailingSink())
+    with pytest.raises(SafetyAuditError, match="all tool safety audit sinks failed"):
+        sink.emit(create_audit_event(_report(), "Bash", True))
+
+
+def test_telemetry_sets_required_attributes():
+    span = MagicMock()
+    with patch("trpc_agent_sdk.tools.safety._audit.trace.get_current_span", return_value=span):
+        set_safety_span_attributes(_report())
+
+    attributes = {call.args[0]: call.args[1] for call in span.set_attribute.call_args_list}
+    assert attributes["tool.safety.decision"] == "deny"
+    assert attributes["tool.safety.risk_level"] == "high"
+    assert attributes["tool.safety.execution_blocked"] is True
+
+
+def test_telemetry_failure_does_not_raise():
+    span = MagicMock()
+    span.set_attribute.side_effect = RuntimeError("telemetry unavailable")
+    with patch("trpc_agent_sdk.tools.safety._audit.trace.get_current_span", return_value=span):
+        set_safety_span_attributes(_report())
+
+
+def test_audit_boundary_redacts_tool_name():
+    event = create_audit_event(
+        _report(),
+        "tool password='top secret phrase'",
+        True,
+    )
+    assert "top secret phrase" not in event.model_dump_json()
+    assert event.redacted is True
+
+
+def test_audit_boundary_discards_secret_exception_chain():
+
+    class _SecretFailingSink:
+
+        def emit(self, event):
+            del event
+            raise RuntimeError("password='top secret phrase'")
+
+    with pytest.raises(SafetyAuditError) as captured:
+        emit_report(_SecretFailingSink(), _report(), "Bash")
+    assert captured.value.__cause__ is None
+    assert "top secret phrase" not in str(captured.value)
+
+
+def test_telemetry_marks_sanitized_rule_id_as_redacted():
+    report = _report().model_copy(
+        update={
+            "redacted":
+            False,
+            "findings": [
+                SafetyFinding(
+                    category=RiskCategory.POLICY,
+                    risk_level=RiskLevel.HIGH,
+                    rule_id="password='top secret phrase'",
+                    evidence="blocked",
+                    recommendation="remove secret",
+                    decision=SafetyDecision.DENY,
+                )
+            ],
+        })
+    span = MagicMock()
+    with patch("trpc_agent_sdk.tools.safety._audit.trace.get_current_span", return_value=span):
+        set_safety_span_attributes(report)
+    attributes = {call.args[0]: call.args[1] for call in span.set_attribute.call_args_list}
+    assert attributes["tool.safety.redacted"] is True
+    assert "top secret phrase" not in attributes["tool.safety.rule_id"]
