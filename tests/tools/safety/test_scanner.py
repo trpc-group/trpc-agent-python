@@ -286,7 +286,7 @@ def test_safety_edge_helpers_cover_invalid_and_dynamic_inputs():
     assert stdin_language("python script.py") is None
     assert path_is_system_location("/") is True
     assert truncate_output("hello", 3) == "hel"
-    assert truncate_output(["hello", "world"], 6) == ["hello", "w"]
+    assert truncate_output(["hello", 42, "world"], 6) == ["hello", 42, "w"]
     assert truncate_output(42, 3) == 42
     with pytest.raises(ValueError, match="evidence_chars"):
         SafetySanitizer(0)
@@ -378,6 +378,11 @@ def test_payload_argv_is_scanned(guard):
     [
         "echo ok\nrm -f -r /",
         "echo ok\nrm --recursive --force /",
+        "rm -R /",
+        "rm -Rf /",
+        "FOO=bar rm -rf /",
+        "FOO=bar rm -Rf /",
+        "FOO=bar command rm --recursive /",
     ],
 )
 def test_recursive_rm_variants_denied(guard, command):

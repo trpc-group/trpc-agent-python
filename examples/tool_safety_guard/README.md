@@ -75,6 +75,10 @@ wrapper 统一执行扫描、审计、阻断、wall-clock timeout 和返回 outp
 - 本地 stdio MCP Tool `execute_command`
 - `SafetyGuardedCodeExecutor`
 
+MCP 示例使用 argv-only 的 `create_subprocess_exec`，不提供 Shell 管道、重定向或
+命令拼接语义；此类输入会在执行前进入人工审核。`mcp-review` 使用未加入命令
+白名单的 `uname -a` 演示审核路径。
+
 每个入口都提供 `allow`、`review`、`deny` 场景：
 
 ```bash

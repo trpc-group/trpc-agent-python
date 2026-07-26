@@ -42,6 +42,14 @@ def test_adapt_bash_tool_clamps_timeout_and_hides_env_values():
     assert "must-not-leak" not in request.model_dump_json()
 
 
+def test_adapt_non_finite_timeout_falls_back_to_policy_limit():
+    tool = SimpleNamespace(name="execute_command", description="MCP command")
+
+    request = adapt_tool_request(tool, {"command": "echo ok", "timeout": float("nan")}, _policy())
+
+    assert request.effective_timeout_seconds == 30
+
+
 def test_adapt_unknown_tool_is_not_applicable():
     tool = SimpleNamespace(name="calculator", description="")
 

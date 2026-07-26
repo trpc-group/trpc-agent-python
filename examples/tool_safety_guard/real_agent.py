@@ -67,7 +67,7 @@ SCENARIOS = {
     "mcp-allow":
     "Call execute_command exactly once with command `echo mcp-allow`.",
     "mcp-review":
-    "Call execute_command exactly once with command `echo mcp-review | cat`.",
+    "Call execute_command exactly once with command `uname -a`.",
     "mcp-deny":
     "Call execute_command exactly once with command `rm -rf safety-demo-trash`.",
     "skill-allow":

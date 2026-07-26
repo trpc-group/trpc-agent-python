@@ -126,15 +126,10 @@ def _tokens(segment: str) -> list[str]:
 
 
 def _command_name(segment: str) -> str:
-    tokens = _unwrap_tokens(_tokens(segment))
+    tokens = _command_tokens(_tokens(segment))
     if not tokens:
         return ""
-    index = 0
-    while index < len(tokens) and "=" in tokens[index] and not tokens[index].startswith(("/", ".")):
-        index += 1
-    if index >= len(tokens):
-        return ""
-    return os.path.basename(tokens[index]).lower()
+    return os.path.basename(tokens[0]).lower()
 
 
 def _unwrap_tokens(tokens: list[str]) -> list[str]:
@@ -152,13 +147,20 @@ def _unwrap_tokens(tokens: list[str]) -> list[str]:
     return result
 
 
+def _command_tokens(tokens: list[str]) -> list[str]:
+    result = _unwrap_tokens(tokens)
+    while result and "=" in result[0] and not result[0].startswith(("/", ".")):
+        result = _unwrap_tokens(result[1:])
+    return result
+
+
 def _recursive_rm(text: str) -> str | None:
     for segment in _COMMAND_SPLIT_RE.split(text):
-        tokens = _unwrap_tokens(_tokens(segment.strip()))
+        tokens = _command_tokens(_tokens(segment.strip()))
         if not tokens or os.path.basename(tokens[0]).lower() != "rm":
             continue
         options = [item for item in tokens[1:] if item.startswith("-")]
-        if any(item == "--recursive" or (not item.startswith("--") and "r" in item[1:]) for item in options):
+        if any(item == "--recursive" or (not item.startswith("--") and "r" in item[1:].lower()) for item in options):
             return segment.strip()
     return None
 

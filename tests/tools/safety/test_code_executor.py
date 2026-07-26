@@ -14,6 +14,7 @@ from trpc_agent_sdk.code_executors import BaseCodeExecutor
 from trpc_agent_sdk.code_executors import CodeExecutionInput
 from trpc_agent_sdk.code_executors import create_code_execution_result
 from trpc_agent_sdk.tools.safety import SafetyGuardedCodeExecutor
+from trpc_agent_sdk.tools.safety import SafetyAuditError
 from trpc_agent_sdk.tools.safety import adapt_code_execution_input
 from trpc_agent_sdk.tools.safety import ToolMetadata
 from trpc_agent_sdk.tools.safety import ToolSafetyViolation
@@ -29,6 +30,13 @@ class _MemorySink:
 
     def emit(self, event):
         self.events.append(event)
+
+
+class _FailingSink:
+
+    def emit(self, event):
+        del event
+        raise SafetyAuditError("audit unavailable")
 
 
 class _Executor(BaseCodeExecutor):
@@ -81,6 +89,19 @@ async def test_dangerous_code_is_blocked():
 
     assert delegate.calls == 0
     assert error.value.report.decision.value == "deny"
+
+
+@pytest.mark.asyncio
+async def test_audit_failure_blocks_code_execution():
+    delegate = _Executor()
+    wrapper = _wrapper(delegate)
+    wrapper.audit_sink = _FailingSink()
+
+    with pytest.raises(ToolSafetyViolation) as error:
+        await wrapper.execute_code(MagicMock(), CodeExecutionInput(code="print('ok')"))
+
+    assert delegate.calls == 0
+    assert error.value.report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
 
 
 @pytest.mark.asyncio
