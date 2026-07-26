@@ -16,16 +16,14 @@ from __future__ import annotations
 
 import time
 from contextlib import asynccontextmanager
-from typing import Any, Optional
+from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from trpc_agent_sdk.abc import MemoryServiceConfig
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.memory._redis_memory_service import RedisMemoryService
 from trpc_agent_sdk.sessions import Session
-from trpc_agent_sdk.types import Content, Part, SearchMemoryResponse, Ttl
+from trpc_agent_sdk.types import Content, Part, SearchMemoryResponse
 
 
 # ---------------------------------------------------------------------------
@@ -101,6 +99,7 @@ class TestRedisInit:
         svc = RedisMemoryService(db_url="redis://localhost", memory_service_config=_make_config_no_ttl())
         assert svc.enabled is True
         MockRedisStorage.assert_called_once()
+        assert MockRedisStorage.call_args.kwargs["decode_responses"] is True
 
     @patch("trpc_agent_sdk.memory._redis_memory_service.RedisStorage")
     def test_passes_is_async(self, MockRedisStorage):

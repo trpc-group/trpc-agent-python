@@ -11,6 +11,8 @@ import json
 import os
 import time
 from pathlib import Path
+from unittest.mock import AsyncMock
+from unittest.mock import patch
 
 import pytest
 
@@ -19,6 +21,7 @@ from trpc_agent_sdk.storage import RedisCondition
 
 from .replay_cases import REPLAY_CASES
 from .replay_harness import INJECTED_FAULTS
+from .replay_harness import canonical_report
 from .replay_harness import create_in_memory_backend
 from .replay_harness import create_mock_redis_backend
 from .replay_harness import create_redis_backend
@@ -35,15 +38,15 @@ async def test_replay_matrix_meets_acceptance(tmp_path):
     report = await run_replay_matrix([
         await create_in_memory_backend(),
         await create_sqlite_backend(),
-        await create_sqlite_backend(name="sql_fallback"),
-        await create_mock_redis_backend(),
     ])
     report_path = tmp_path / "session_memory_summary_diff_report.json"
     write_report(report, report_path)
     persisted_report = json.loads(report_path.read_text(encoding="utf-8"))
+    committed_report_path = Path(__file__).with_name("session_memory_summary_diff_report.json")
+    committed_report = json.loads(committed_report_path.read_text(encoding="utf-8"))
 
     assert persisted_report["case_count"] == 10
-    assert persisted_report["backends"] == ["in_memory", "sqlite", "sql_fallback", "redis_mock"]
+    assert persisted_report["backends"] == ["in_memory", "sqlite"]
     assert len(persisted_report["normal_cases"]) == 10
     assert len(persisted_report["injected_cases"]) == 10
     assert persisted_report["metrics"]["false_positive_rate"] <= 0.05
@@ -64,6 +67,7 @@ async def test_replay_matrix_meets_acceptance(tmp_path):
     assert all(
         any(difference["summary_id"] for difference in result["differences"])
         for result in persisted_report["injected_cases"] if result["fault_id"].startswith("summary_"))
+    assert canonical_report(persisted_report) == canonical_report(committed_report)
 
 
 async def test_in_memory_lightweight_mode():
@@ -112,9 +116,11 @@ async def test_in_memory_lightweight_mode():
 
 
 async def test_redis_integration_or_mock_fallback():
-    """Use configured Redis or exercise Redis services with in-process storage."""
+    """Use configured Redis or exercise Redis services with fakeredis."""
 
     redis_url = os.getenv("TRPC_REPLAY_REDIS_URL")
+    if not redis_url:
+        pytest.importorskip("fakeredis")
     redis_backend = await create_redis_backend(redis_url) if redis_url else await create_mock_redis_backend()
     report = await run_replay_matrix([await create_in_memory_backend(), redis_backend])
     assert all(result["passed"] for result in report["normal_cases"])
@@ -125,6 +131,7 @@ async def test_redis_integration_or_mock_fallback():
 async def test_redis_mock_uses_storage_query_and_ttl_paths():
     """The network-free Redis backend still exercises RedisStorage behavior."""
 
+    pytest.importorskip("fakeredis")
     backend = await create_mock_redis_backend(enable_ttl=True)
     memory_case = next(case for case in REPLAY_CASES if case.case_id == "memory_roundtrip")
     session_storage = backend.session_service._redis_storage  # pylint: disable=protected-access
@@ -132,8 +139,10 @@ async def test_redis_mock_uses_storage_query_and_ttl_paths():
     try:
         snapshot = await execute_case(backend, memory_case)
         assert snapshot["memory"]["preference-token-oolong"]
-        assert {"type", "lrange", "expire"}.issubset(memory_storage.command_names)
-        assert memory_storage._server.expirations  # pylint: disable=protected-access
+        async with memory_storage.create_db_session() as redis_session:
+            keys = redis_session.keys("*")
+            assert keys
+            assert any(redis_session.ttl(key) >= 0 for key in keys)
     finally:
         await backend.close()
     assert session_storage.closed
@@ -143,6 +152,7 @@ async def test_redis_mock_uses_storage_query_and_ttl_paths():
 async def test_redis_mock_supports_storage_query_types():
     """RedisStorage query dispatch remains valid for every supported data type."""
 
+    pytest.importorskip("fakeredis")
     backend = await create_mock_redis_backend()
     storage = backend.memory_service._redis_storage  # pylint: disable=protected-access
     try:
@@ -158,14 +168,16 @@ async def test_redis_mock_supports_storage_query_types():
             )
             for command in commands:
                 await storage.execute_command(redis_session, command)
-            result = dict(await storage.query(redis_session, "probe:*", RedisCondition()))
+        result = dict(await storage.query(redis_session, "probe:*", RedisCondition()))
+        result = {key.decode() if isinstance(key, bytes) else key: value for key, value in result.items()}
+        result["probe:zset"] = [(member.decode() if isinstance(member, bytes) else member, score)
+                                for member, score in result["probe:zset"]]
 
         assert result["probe:string"] == "value"
         assert result["probe:hash"] == {"field": "value"}
         assert result["probe:list"] == ["first", "second"]
         assert result["probe:set"] == {"member"}
         assert result["probe:zset"] == [("member", 1.0)]
-        assert {"type", "get", "hgetall", "lrange", "smembers", "zrange"}.issubset(storage.command_names)
     finally:
         await backend.close()
 
@@ -178,8 +190,14 @@ async def test_replay_matrix_rejects_empty_inputs():
             "cases": ()
         }, "At least one replay case"),
         ({
+            "cases": (REPLAY_CASES[0], REPLAY_CASES[0])
+        }, "Replay case IDs must be unique"),
+        ({
             "injected_faults": ()
         }, "At least one injected fault"),
+        ({
+            "injected_faults": (INJECTED_FAULTS[0], INJECTED_FAULTS[0])
+        }, "Injected fault IDs must be unique"),
         ({
             "injected_faults": (INJECTED_FAULTS[0], )
         }, "At least one summary fault"),
@@ -191,6 +209,45 @@ async def test_replay_matrix_rejects_empty_inputs():
                 await run_replay_matrix([backend], **kwargs)
         finally:
             await backend.close()
+
+
+async def test_replay_matrix_closes_backends_on_validation_error():
+    """Input validation must not leak already-created service resources."""
+
+    backend = await create_in_memory_backend()
+    memory_close = AsyncMock(wraps=backend.memory_service.close)
+    session_close = AsyncMock(wraps=backend.session_service.close)
+    with patch.object(backend.memory_service, "close", memory_close), patch.object(backend.session_service, "close",
+                                                                                   session_close):
+        with pytest.raises(ValueError, match="At least one replay case"):
+            await run_replay_matrix([backend], cases=())
+    memory_close.assert_awaited_once()
+    session_close.assert_awaited_once()
+
+
+async def test_canonical_report_does_not_hide_dynamic_named_business_fields():
+    """Only snapshot-level runtime fields may be normalized in a report."""
+
+    report = {
+        "normal_cases": [{
+            "differences": [{
+                "path": "$.session.state",
+                "allowed": False,
+                "left_value": {
+                    "summary_timestamp": 1
+                },
+                "right_value": {
+                    "summary_timestamp": 2
+                },
+            }]
+        }],
+        "injected_cases": [],
+        "metrics": {},
+    }
+
+    normalized = canonical_report(report)
+    difference = normalized["normal_cases"][0]["differences"][0]
+    assert difference["left_value"] != difference["right_value"]
 
 
 async def test_sqlite_fallbacks_use_isolated_database_files():

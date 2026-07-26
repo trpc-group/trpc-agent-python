@@ -17,7 +17,6 @@ import re
 import time
 from dataclasses import asdict
 from dataclasses import dataclass
-from fnmatch import fnmatchcase
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -50,8 +49,8 @@ from .replay_cases import ReplayCase
 from .replay_cases import ReplayOperation
 
 APP_NAME = "replay-consistency"
-# A stable future timestamp avoids accidentally exercising SQL's stale-writer
-# recovery branch while still making ordinary event timestamps comparable.
+# Fixed event timestamps keep replay snapshots deterministic. TTL is disabled in
+# the standard replay configuration, so this is not a storage commit timestamp.
 BASE_TIMESTAMP = 4102444800.0
 
 
@@ -63,184 +62,36 @@ class DeterministicSummaryModel:
     def __init__(self) -> None:
         self.next_summary = ""
         self.fail_next = False
+        self.failure_count = 0
 
     async def generate_async(self, _request: Any, stream: bool = False, ctx: Any = None):
         del stream, ctx
         if self.fail_next:
             self.fail_next = False
-            return
+            self.failure_count += 1
+            raise RuntimeError("deterministic summary failure")
         yield LlmResponse(content=Content(parts=[Part.from_text(text=self.next_summary)]))
 
 
-class _InProcessRedisServer:
-    """Shared Redis data and command history for in-process clients."""
+class _FakeRedisStorage(RedisStorage):
+    """Use the SDK RedisStorage with a fakeredis client and no connection pool."""
 
-    def __init__(self) -> None:
-        self._strings: dict[str, Any] = {}
-        self._hashes: dict[str, dict[str, Any]] = {}
-        self._lists: dict[str, list[Any]] = {}
-        self._sets: dict[str, set[Any]] = {}
-        self._sorted_sets: dict[str, dict[Any, float]] = {}
-        self.expirations: dict[str, int] = {}
-        self.commands: list[str] = []
-
-    def keys(self) -> set[str]:
-        return set(self._strings) | set(self._hashes) | set(self._lists) | set(self._sets) | set(self._sorted_sets)
-
-
-class _InProcessRedisClient:
-    """Redis-py compatible client used below the real RedisStorage layer."""
-
-    def __init__(self, server: _InProcessRedisServer) -> None:
-        self._server = server
-        self.closed = False
-
-    def __enter__(self) -> "_InProcessRedisClient":
-        if self.closed:
-            raise RuntimeError("In-process Redis client is closed")
-        return self
-
-    def __exit__(self, _exc_type: Any, _exc_value: Any, _traceback: Any) -> None:
-        return None
-
-    def _record(self, method: str) -> None:
-        self._server.commands.append(method)
-
-    def set(self, key: str, value: Any) -> bool:
-        self._record("set")
-        self._server._strings[key] = value
-        return True
-
-    def get(self, key: str) -> Any:
-        self._record("get")
-        return self._server._strings.get(key)
-
-    def keys(self, pattern: str) -> list[str]:
-        self._record("keys")
-        return sorted(key for key in self._server.keys() if fnmatchcase(key, pattern))
-
-    def hset(self, key: str, *field_values: Any, **kwargs: Any) -> int:
-        self._record("hset")
-        values = self._server._hashes.setdefault(key, {})
-        mapping = kwargs.get("mapping", {})
-        pairs = list(zip(field_values[::2], field_values[1::2]))
-        pairs.extend(mapping.items())
-        added = 0
-        for field, value in pairs:
-            added += field not in values
-            values[field] = value
-        return added
-
-    def hgetall(self, key: str) -> dict[str, Any]:
-        self._record("hgetall")
-        return copy.deepcopy(self._server._hashes.get(key, {}))
-
-    def rpush(self, key: str, *values: Any) -> int:
-        self._record("rpush")
-        self._server._lists.setdefault(key, []).extend(values)
-        return len(self._server._lists[key])
-
-    def type(self, key: str) -> bytes:
-        self._record("type")
-        if key in self._server._strings:
-            return b"string"
-        if key in self._server._hashes:
-            return b"hash"
-        if key in self._server._lists:
-            return b"list"
-        if key in self._server._sets:
-            return b"set"
-        if key in self._server._sorted_sets:
-            return b"zset"
-        return b"none"
-
-    def lrange(self, key: str, start: int, stop: int) -> list[Any]:
-        self._record("lrange")
-        values = self._server._lists.get(key, [])
-        length = len(values)
-        normalized_start = max(length + start, 0) if start < 0 else start
-        normalized_stop = length + stop if stop < 0 else stop
-        if normalized_start >= length or normalized_stop < normalized_start:
-            return []
-        return copy.deepcopy(values[normalized_start:normalized_stop + 1])
-
-    def sadd(self, key: str, *values: Any) -> int:
-        self._record("sadd")
-        stored = self._server._sets.setdefault(key, set())
-        old_size = len(stored)
-        stored.update(values)
-        return len(stored) - old_size
-
-    def smembers(self, key: str) -> set[Any]:
-        self._record("smembers")
-        return set(self._server._sets.get(key, set()))
-
-    def zadd(self, key: str, mapping: dict[Any, float]) -> int:
-        self._record("zadd")
-        stored = self._server._sorted_sets.setdefault(key, {})
-        added = sum(member not in stored for member in mapping)
-        stored.update(mapping)
-        return added
-
-    def zrange(self, key: str, start: int, stop: int, withscores: bool = False) -> list[Any]:
-        self._record("zrange")
-        values = sorted(self._server._sorted_sets.get(key, {}).items(), key=lambda item: (item[1], str(item[0])))
-        normalized_stop = len(values) + stop if stop < 0 else stop
-        selected = values[start:normalized_stop + 1]
-        return selected if withscores else [member for member, _score in selected]
-
-    def expire(self, key: str, ttl_seconds: int) -> bool:
-        self._record("expire")
-        if key not in self._server.keys():
-            return False
-        self._server.expirations[key] = ttl_seconds
-        return True
-
-    def delete(self, key: str) -> int:
-        self._record("delete")
-        existed = key in self._server.keys()
-        self._server._strings.pop(key, None)
-        self._server._hashes.pop(key, None)
-        self._server._lists.pop(key, None)
-        self._server._sets.pop(key, None)
-        self._server._sorted_sets.pop(key, None)
-        self._server.expirations.pop(key, None)
-        return int(existed)
-
-    def execute_command(self, method: str, *args: Any, **kwargs: Any) -> Any:
-        command = getattr(self, method.lower(), None)
-        if command is None:
-            raise ValueError(f"Unsupported in-process Redis command: {method.lower()}")
-        return command(*args, **kwargs)
-
-    def close(self) -> None:
-        self.closed = True
-
-
-class _InProcessRedisStorage(RedisStorage):
-    """Real RedisStorage behavior backed by an in-process Redis client."""
-
-    def __init__(self, server: _InProcessRedisServer) -> None:
+    def __init__(self, client: Any) -> None:
         super().__init__(redis_url="redis://replay-mock", is_async=False)
-        self._server = server
-        self._client = _InProcessRedisClient(server)
+        self._client = client
         self.closed = False
 
     async def create_redis_engine(self) -> None:
-        """The in-process client needs no network connection pool."""
+        """The injected fakeredis client does not need a connection pool."""
 
-    async def create_redis_session(self) -> _InProcessRedisClient:
+    async def create_redis_session(self) -> Any:
         if self.closed:
-            raise RuntimeError("In-process Redis storage is closed")
+            raise RuntimeError("fakeredis storage is closed")
         return self._client
 
     async def close(self) -> None:
         self._client.close()
         self.closed = True
-
-    @property
-    def command_names(self) -> tuple[str, ...]:
-        return tuple(self._server.commands)
 
 
 @dataclass
@@ -264,6 +115,13 @@ class BackendBundle:
         finally:
             if self.cleanup:
                 self.cleanup()
+
+
+async def _close_backends(backends: list[BackendBundle]) -> None:
+    """Close backend bundles in reverse construction order."""
+
+    for backend in reversed(backends):
+        await backend.close()
 
 
 @dataclass(frozen=True)
@@ -351,21 +209,37 @@ async def create_sql_backend(db_url: str, name: str = "sql") -> BackendBundle:
     """Create a SQL persistence backend from a sync SQLAlchemy URL."""
 
     model, manager = _summary_components()
-    session_service = SqlSessionService(
-        db_url=db_url,
-        summarizer_manager=manager,
-        session_config=_session_config(),
-        is_async=False,
-    )
-    memory_service = SqlMemoryService(
-        db_url=db_url,
-        enabled=True,
-        memory_service_config=_memory_config(),
-        is_async=False,
-    )
-    await session_service._sql_storage.create_sql_engine()  # pylint: disable=protected-access
-    await memory_service._sql_storage.create_sql_engine()  # pylint: disable=protected-access
-    return BackendBundle(name, session_service, memory_service, manager, model, {})
+    session_service: Optional[SqlSessionService] = None
+    memory_service: Optional[SqlMemoryService] = None
+    try:
+        session_service = SqlSessionService(
+            db_url=db_url,
+            summarizer_manager=manager,
+            session_config=_session_config(),
+            is_async=False,
+        )
+        memory_service = SqlMemoryService(
+            db_url=db_url,
+            enabled=True,
+            memory_service_config=_memory_config(),
+            is_async=False,
+        )
+        await session_service._sql_storage.create_sql_engine()  # pylint: disable=protected-access
+        await memory_service._sql_storage.create_sql_engine()  # pylint: disable=protected-access
+        return BackendBundle(name, session_service, memory_service, manager, model, {})
+    except Exception:
+        # A factory failure must not leak an already-created SQL engine.
+        if memory_service is not None:
+            try:
+                await memory_service.close()
+            except Exception:  # pylint: disable=broad-except
+                pass
+        if session_service is not None:
+            try:
+                await session_service.close()
+            except Exception:  # pylint: disable=broad-except
+                pass
+        raise
 
 
 async def create_redis_backend(redis_url: str) -> BackendBundle:
@@ -388,29 +262,51 @@ async def create_redis_backend(redis_url: str) -> BackendBundle:
 
 
 async def create_mock_redis_backend(enable_ttl: bool = False) -> BackendBundle:
-    """Create Redis services using real RedisStorage with an in-process client."""
+    """Create Redis services with real RedisStorage backed by fakeredis."""
+
+    try:
+        import fakeredis
+    except ImportError as exc:  # pragma: no cover - exercised by an optional integration
+        raise RuntimeError("fakeredis is required for the Redis replay fallback") from exc
 
     model, manager = _summary_components()
-    server = _InProcessRedisServer()
+    server = fakeredis.FakeServer()
 
-    def storage_factory(*_args: Any, **_kwargs: Any) -> _InProcessRedisStorage:
-        return _InProcessRedisStorage(server)
+    def storage_factory(*_args: Any, **_kwargs: Any) -> _FakeRedisStorage:
+        client = fakeredis.FakeRedis(server=server, decode_responses=True)
+        return _FakeRedisStorage(client)
 
-    with patch("trpc_agent_sdk.sessions._redis_session_service.RedisStorage",
-               side_effect=storage_factory), patch("trpc_agent_sdk.memory._redis_memory_service.RedisStorage",
-                                                   side_effect=storage_factory):
-        session_service = RedisSessionService(
-            db_url="redis://replay-mock",
-            summarizer_manager=manager,
-            session_config=_session_config(enable_ttl),
-            is_async=False,
-        )
-        memory_service = RedisMemoryService(
-            db_url="redis://replay-mock",
-            enabled=True,
-            memory_service_config=_memory_config(enable_ttl),
-            is_async=False,
-        )
+    session_service: Optional[RedisSessionService] = None
+    memory_service: Optional[RedisMemoryService] = None
+    try:
+        with patch("trpc_agent_sdk.sessions._redis_session_service.RedisStorage",
+                   side_effect=storage_factory), patch("trpc_agent_sdk.memory._redis_memory_service.RedisStorage",
+                                                       side_effect=storage_factory):
+            session_service = RedisSessionService(
+                db_url="redis://replay-mock",
+                summarizer_manager=manager,
+                session_config=_session_config(enable_ttl),
+                is_async=False,
+            )
+            memory_service = RedisMemoryService(
+                db_url="redis://replay-mock",
+                enabled=True,
+                memory_service_config=_memory_config(enable_ttl),
+                is_async=False,
+            )
+    except Exception:
+        if memory_service is not None:
+            try:
+                await memory_service.close()
+            except Exception:  # pylint: disable=broad-except
+                pass
+        if session_service is not None:
+            try:
+                await session_service.close()
+            except Exception:  # pylint: disable=broad-except
+                pass
+        raise
+    assert session_service is not None and memory_service is not None
     return BackendBundle("redis_mock", session_service, memory_service, manager, model, {})
 
 
@@ -527,10 +423,12 @@ async def execute_case(bundle: BackendBundle, case: ReplayCase) -> dict[str, Any
             session = await _get_session(bundle, app_name, user_id, session_id)
             before_projection = _recovery_projection(session)
             before_summary = await bundle.session_service.get_session_summary(session)
+            failures_before = bundle.summary_model.failure_count
             bundle.summary_model.fail_next = True
             await bundle.session_service.create_session_summary(session)
             session = await _get_session(bundle, app_name, user_id, session_id)
             after_summary = await bundle.session_service.get_session_summary(session)
+            checks["summary_model_failed"] = bundle.summary_model.failure_count == failures_before + 1
             checks["failed_summary_preserves_session"] = _recovery_projection(session) == before_projection
             checks["failed_summary_preserves_summary"] = after_summary == before_summary
         else:
@@ -807,28 +705,51 @@ INJECTED_FAULTS: tuple[InjectedFault, ...] = (
 )
 
 
-async def run_replay_matrix(
+def _validate_replay_inputs(
     backends: list[BackendBundle],
-    cases: tuple[ReplayCase, ...] = REPLAY_CASES,
-    injected_faults: tuple[InjectedFault, ...] = INJECTED_FAULTS,
-) -> dict[str, Any]:
-    """Run normal comparisons and the public ten-fault detection matrix."""
+    cases: tuple[ReplayCase, ...],
+    injected_faults: tuple[InjectedFault, ...],
+) -> None:
+    """Validate matrix identity constraints before mutating any backend."""
 
+    backend_names = [backend.name for backend in backends]
     if not backends:
         raise ValueError("At least one replay backend is required")
+    if len(set(backend_names)) != len(backend_names):
+        raise ValueError("Replay backend names must be unique")
     if not cases:
         raise ValueError("At least one replay case is required")
+    case_id_list = [case.case_id for case in cases]
+    if len(set(case_id_list)) != len(case_id_list):
+        raise ValueError("Replay case IDs must be unique")
     if not injected_faults:
         raise ValueError("At least one injected fault is required")
-    case_ids = {case.case_id for case in cases}
+    fault_id_list = [fault_id for fault_id, _case_id, _inject in injected_faults]
+    if len(set(fault_id_list)) != len(fault_id_list):
+        raise ValueError("Injected fault IDs must be unique")
+    case_ids = set(case_id_list)
     missing_case_ids = sorted(case_id for _fault_id, case_id, _inject in injected_faults if case_id not in case_ids)
     if missing_case_ids:
         raise ValueError(f"Injected faults reference unknown replay cases: {missing_case_ids}")
     if not any(fault_id.startswith("summary_") for fault_id, _case_id, _inject in injected_faults):
         raise ValueError("At least one summary fault is required")
+
+
+async def run_replay_matrix(
+    backends: list[BackendBundle],
+    cases: tuple[ReplayCase, ...] = REPLAY_CASES,
+    injected_faults: tuple[InjectedFault, ...] = INJECTED_FAULTS,
+) -> dict[str, Any]:
+    """Run normal comparisons and the public ten-fault detection matrix.
+
+    The matrix takes ownership of ``backends`` and closes them even when input
+    validation or a replay operation fails.
+    """
+
     started = time.perf_counter()
     snapshots: dict[str, dict[str, dict[str, Any]]] = {backend.name: {} for backend in backends}
     try:
+        _validate_replay_inputs(backends, cases, injected_faults)
         for case in cases:
             for backend in backends:
                 snapshots[backend.name][case.case_id] = await execute_case(backend, case)
@@ -904,8 +825,44 @@ async def run_replay_matrix(
             },
         }
     finally:
-        for backend in reversed(backends):
-            await backend.close()
+        await _close_backends(backends)
+
+
+def canonical_report(report: dict[str, Any]) -> dict[str, Any]:
+    """Remove runtime-only report values while retaining semantic differences."""
+
+    def normalize_dynamic_value(path: str, value: Any) -> Any:
+        if isinstance(value, dict):
+            if path == "$.session":
+                normalized = copy.deepcopy(value)
+                if "last_update_time" in normalized:
+                    normalized["last_update_time"] = "<allowed-value>"
+                return normalized
+            if path == "$.summary":
+                normalized = copy.deepcopy(value)
+                if "summary_timestamp" in normalized:
+                    normalized["summary_timestamp"] = "<allowed-value>"
+                return normalized
+        if isinstance(value, list):
+            return [normalize_dynamic_value(path, item) for item in value]
+        return value
+
+    normalized = copy.deepcopy(report)
+    normalized.pop("generated_at", None)
+    normalized.get("metrics", {}).pop("duration_seconds", None)
+    dynamic_paths = {item.path for item in ALLOWED_DIFFS}
+    for section in ("normal_cases", "injected_cases"):
+        for result in normalized.get(section, []):
+            for difference in result.get("differences", []):
+                if difference.get("allowed") or difference.get("path") in dynamic_paths:
+                    difference["left_value"] = "<allowed-value>"
+                    difference["right_value"] = "<allowed-value>"
+                else:
+                    difference["left_value"] = normalize_dynamic_value(difference.get("path", ""),
+                                                                       difference.get("left_value"))
+                    difference["right_value"] = normalize_dynamic_value(difference.get("path", ""),
+                                                                        difference.get("right_value"))
+    return _json_value(normalized)
 
 
 def write_report(report: dict[str, Any], output_path: Path) -> None:
@@ -913,22 +870,32 @@ def write_report(report: dict[str, Any], output_path: Path) -> None:
 
 
 async def _generate_default_report(
-    output_path: Path,
+    output_path: Optional[Path] = None,
     lightweight: bool = False,
     include_integrations: bool = False,
 ) -> dict[str, Any]:
-    backends = [await create_in_memory_backend()]
-    if not lightweight:
-        backends.append(await create_sqlite_backend())
-    if include_integrations:
-        sql_url = os.getenv("TRPC_REPLAY_SQL_URL")
-        redis_url = os.getenv("TRPC_REPLAY_REDIS_URL")
-        backends.append(await create_sql_backend(sql_url, name="sql") if sql_url else await create_sqlite_backend(
-            name="sql_fallback"))
-        backends.append(await create_redis_backend(redis_url) if redis_url else await create_mock_redis_backend())
-    report = await run_replay_matrix(backends)
-    write_report(report, output_path)
-    return report
+    if lightweight and include_integrations:
+        raise ValueError("--light and --integration are mutually exclusive")
+    backends: list[BackendBundle] = []
+    matrix_started = False
+    try:
+        backends.append(await create_in_memory_backend())
+        if include_integrations:
+            sql_url = os.getenv("TRPC_REPLAY_SQL_URL")
+            redis_url = os.getenv("TRPC_REPLAY_REDIS_URL")
+            backends.append(await create_sql_backend(sql_url, name="sql") if sql_url else await create_sqlite_backend(
+                name="sql_fallback"))
+            backends.append(await create_redis_backend(redis_url) if redis_url else await create_mock_redis_backend())
+        elif not lightweight:
+            backends.append(await create_sqlite_backend())
+        matrix_started = True
+        report = await run_replay_matrix(backends)
+        if output_path is not None:
+            write_report(report, output_path)
+        return report
+    finally:
+        if not matrix_started:
+            await _close_backends(backends)
 
 
 def main() -> None:
@@ -936,7 +903,7 @@ def main() -> None:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path(__file__).with_name("session_memory_summary_diff_report.json"),
+        help="write the generated report to this path; omit to avoid changing repository files",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--light", action="store_true", help="run only the dependency-free InMemory backend")

@@ -17,6 +17,7 @@ rich>=13.0.0
 greenlet
 aiosqlite
 redis>=6.2.0
+fakeredis>=2.31.0
 langgraph
 google-genai>=1.24.0
 

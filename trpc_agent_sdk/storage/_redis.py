@@ -134,21 +134,24 @@ class RedisStorage(BaseStorage):
             return str(value)
         return json.dumps(value, default=str)
 
-    def _deserialize_value(self, value: Optional[bytes]) -> Any:
-        """Deserialize value from Redis bytes."""
+    def _deserialize_value(self, value: Optional[Union[bytes, str]]) -> Any:
+        """Deserialize a Redis byte or text response."""
         if value is None:
             return None
 
-        try:
-            value_str = value.decode('utf-8')
-            # Try to parse as JSON first
+        if isinstance(value, str):
+            value_str = value
+        else:
             try:
-                return json.loads(value_str)
-            except json.JSONDecodeError:
-                # If not JSON, return as string
-                return value_str
-        except UnicodeDecodeError:
-            return value
+                value_str = value.decode('utf-8')
+            except UnicodeDecodeError:
+                return value
+
+        # Try to parse as JSON first; plain Redis strings remain text.
+        try:
+            return json.loads(value_str)
+        except json.JSONDecodeError:
+            return value_str
 
     @override
     async def add(self, conn: RedisSession, data: RedisCommand) -> None:
@@ -266,7 +269,11 @@ class RedisStorage(BaseStorage):
         lower_method = command.method.lower()
         upper_method = command.method.upper()
         method = getattr(conn, lower_method, None)
-        if method:
+        # redis-py exposes HSET as a single-pair helper while Redis itself
+        # accepts multiple field/value pairs. The session services use the
+        # native variadic form, so route it through execute_command().
+        use_raw_hset = lower_method == 'hset' and len(command.args) > 3 and not command.kwargs
+        if method and not use_raw_hset:
             ret = method(*command.args, **command.kwargs)
         else:
             ret = conn.execute_command(upper_method, *command.args, **command.kwargs)

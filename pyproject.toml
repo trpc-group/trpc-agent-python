@@ -123,6 +123,7 @@ dev = [
     "numpy>=2.2.5",
     "pytest",
     "pytest-asyncio",
+    "fakeredis>=2.31.0",
     "black",
     "flake8",
     "yapf",

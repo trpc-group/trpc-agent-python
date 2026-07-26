@@ -165,6 +165,11 @@ class TestRedisStorage:
         result = sync_storage._deserialize_value(b"simple string")
         assert result == "simple string"
 
+    def test_deserialize_value_text_response(self, sync_storage):
+        """Decode responses from pools configured with decode_responses=True."""
+        result = sync_storage._deserialize_value('{"key": "value"}')
+        assert result == {"key": "value"}
+
     def test_deserialize_value_unicode_error(self, sync_storage):
         """Test deserializing with unicode error."""
         # Invalid UTF-8 bytes
@@ -494,6 +499,21 @@ class TestRedisStorage:
 
         assert result == "OK"
         mock_conn.set.assert_called_once_with('key', 'value')
+
+    @pytest.mark.asyncio
+    async def test_execute_command_variadic_hset_uses_raw_command(self, sync_storage):
+        """Route Redis's multi-field HSET form around redis-py's single-pair helper."""
+        mock_conn = MagicMock()
+        mock_conn.hset = MagicMock()
+        mock_conn.execute_command = MagicMock(return_value=2)
+
+        command = RedisCommand(method='hset', args=('key', 'field1', 'value1', 'field2', 'value2'))
+
+        result = await sync_storage.execute_command(mock_conn, command)
+
+        assert result == 2
+        mock_conn.hset.assert_not_called()
+        mock_conn.execute_command.assert_called_once_with('HSET', 'key', 'field1', 'value1', 'field2', 'value2')
 
     @pytest.mark.asyncio
     async def test_execute_command_without_method(self, async_storage):

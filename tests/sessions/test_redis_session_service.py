@@ -13,12 +13,9 @@ All Redis I/O is mocked via RedisStorage.
 
 from __future__ import annotations
 
-import json
 import time
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.sessions._redis_session_service import RedisSessionService
@@ -111,6 +108,14 @@ def _create_service(config=None):
         svc = RedisSessionService(db_url="redis://localhost:6379", session_config=config)
     svc._redis_storage = _MockRedisStorage()
     return svc
+
+
+def test_default_redis_service_decodes_text_responses():
+    """Redis session state is read as text by default, not raw bytes."""
+    with patch("trpc_agent_sdk.sessions._redis_session_service.RedisStorage") as mock_storage:
+        RedisSessionService(db_url="redis://localhost:6379")
+
+    assert mock_storage.call_args.kwargs["decode_responses"] is True
 
 
 class TestRedisCreateSession:

@@ -43,6 +43,7 @@ class RedisMemoryService(BaseMemoryService):
     ):
         super().__init__(memory_service_config=memory_service_config, enabled=enabled)
         # Redis needs default TTL configuration
+        kwargs.setdefault("decode_responses", True)
         self._redis_storage = self._create_storage(db_url=db_url, is_async=is_async, **kwargs)
 
     def _create_storage(self, db_url: str, is_async: bool, **kwargs: Any) -> RedisStorage:

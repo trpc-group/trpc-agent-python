@@ -1,3 +1,3 @@
 # Replay 一致性设计说明
 
-框架以同一标准轨迹驱动 InMemory、SQLite、Redis；真实 SQL/Redis 由环境变量接入。无外部服务时 SQL 使用独立临时库，Redis 以内存客户端替代网络，但复用 RedisStorage 的命令、查询和 TTL 路径。快照仅归一化自动摘要 ID、文本空白、字典键序和时间；事件保序，记忆按条目排序。SessionSummary 暂无 version，故按成功写入计数并经公共 API 核对；归属、覆盖、失败恢复严格比较。差异按精确路径列入 allowed_diff，报告保留 session、事件/摘要位置、字段路径和两侧值。仓库 JSON 是静态基线，测试会重建并校验。
+框架用同一轨迹驱动 InMemory 和 SQLite 基线，真实 SQL/Redis 由环境变量接入。Redis 无服务时以 fakeredis 客户端注入正式 RedisStorage，不在 harness 内重写语义。快照只归一化自动 ID、动态时间、文本空白和字典顺序；事件、state、memory 及 summary 的 session 归属、覆盖关系、回放版本严格比较。SDK 没有 summary version，harness 按成功写入次数计数。allowed_diff 只匹配精确路径。测试重建并读取仓库 JSON 基线，CLI 仅显式 `--output` 写文件。
