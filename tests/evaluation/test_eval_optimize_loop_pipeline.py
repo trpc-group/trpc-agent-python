@@ -6,7 +6,9 @@ from pathlib import Path
 
 from examples.optimization.eval_optimize_loop.loop.models import InputPaths
 from examples.optimization.eval_optimize_loop.loop.models import PipelineOptions
+from examples.optimization.eval_optimize_loop.loop.pipeline import _write_back_and_report
 from examples.optimization.eval_optimize_loop.loop.pipeline import run_pipeline
+from examples.optimization.eval_optimize_loop.loop.evaluation import validate_inputs
 
 ROOT = Path("examples/optimization/eval_optimize_loop")
 
@@ -86,7 +88,36 @@ def test_pipeline_failure_is_reported_without_prompt_write(tmp_path):
 
 def test_write_back_report_matches_updated_prompt(tmp_path):
     prompt_path = tmp_path / "system.md"
-    prompt_path.write_text((ROOT / "agent/prompts/system.md").read_text(encoding="utf-8"), encoding="utf-8")
+    original = (ROOT / "agent/prompts/system.md").read_text(encoding="utf-8")
+    prompt_path.write_text(original, encoding="utf-8")
+    options = _options(
+        tmp_path / "output",
+        paths=_options(tmp_path).paths.model_copy(update={"prompt_path": prompt_path}),
+    )
+
+    result = asyncio.run(run_pipeline(options))
+    bundle, _, _ = validate_inputs(options.paths)
+    asyncio.run(
+        _write_back_and_report(
+            result.report,
+            bundle,
+            {"system_prompt": original + "\n\nOPTIMIZED_CANDIDATE\n"},
+            options.model_copy(update={
+                "write_back": True,
+                "mode": "real"
+            }),
+        ))
+    payload = json.loads(result.json_path.read_text(encoding="utf-8"))
+
+    assert result.report.gate.accepted is True
+    assert payload["source_updated"] is True
+    assert "OPTIMIZED_CANDIDATE" in prompt_path.read_text(encoding="utf-8")
+
+
+def test_fake_mode_write_back_does_not_touch_prompt(tmp_path):
+    prompt_path = tmp_path / "system.md"
+    original = (ROOT / "agent/prompts/system.md").read_text(encoding="utf-8")
+    prompt_path.write_text(original, encoding="utf-8")
     options = _options(
         tmp_path / "output",
         paths=_options(tmp_path).paths.model_copy(update={"prompt_path": prompt_path}),
@@ -94,11 +125,10 @@ def test_write_back_report_matches_updated_prompt(tmp_path):
     )
 
     result = asyncio.run(run_pipeline(options))
-    payload = json.loads(result.json_path.read_text(encoding="utf-8"))
 
-    assert result.report.gate.accepted is True
-    assert payload["source_updated"] is True
-    assert "OPTIMIZED_CANDIDATE" in prompt_path.read_text(encoding="utf-8")
+    assert result.report.status == "REJECTED"
+    assert result.report.failures[0].startswith("ValueError:")
+    assert prompt_path.read_text(encoding="utf-8") == original
 
 
 def test_report_audit_uses_configured_num_runs(tmp_path):

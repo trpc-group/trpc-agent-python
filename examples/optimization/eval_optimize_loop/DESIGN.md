@@ -11,8 +11,8 @@ train/validation 回放后，按 case 输出新增通过、新增失败、分数
 验证集退化和成本/耗时预算；训练提升而验证退化直接判定过拟合。fake-model、
 fake-judge 和 trace mode 使用同一比较与 gate 链路，保证无 API Key 也能复现。
 报告 JSON/Markdown 保存输入 hash、候选、逐 case delta、归因、成本、耗时和理由；
-默认不回写源 prompt，只有显式 `--write-back` 且
-gate 接受时才写回。
+默认不回写源 prompt；仅 `real` 模式显式 `--write-back` 且 gate 接受时才写回，
+fake/trace 模式拒绝回写，避免合成候选污染检入文件。
 
 ## 阶段与 Review
 

@@ -11,4 +11,5 @@ uv run python examples/optimization/eval_optimize_loop/run_pipeline.py
 ```
 
 输出目录包含 `optimization_report.json`、`optimization_report.md` 和临时工作副本。
-只有显式传入 `--write-back` 且 gate 接受时才会更新 prompt 源文件。
+只有 `real` 模式显式传入 `--write-back` 且 gate 接受时才会更新 prompt 源文件；
+fake/trace 模式会拒绝回写，避免合成候选污染源文件。

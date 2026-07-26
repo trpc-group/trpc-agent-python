@@ -56,6 +56,8 @@ async def run_pipeline(options: PipelineOptions) -> PipelineResult:
 async def _run_pipeline(options: PipelineOptions, started: float) -> PipelineResult:
     """Run the complete evaluation and optimization loop."""
     bundle, optimizer_config, gate_config = validate_inputs(options.paths)
+    if options.write_back and options.mode != REAL_MODE:
+        raise ValueError("write-back requires real mode")
     options = options.model_copy(
         update={
             "num_runs": optimizer_config.evaluate.num_runs,
