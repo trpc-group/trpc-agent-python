@@ -21,6 +21,14 @@ on:
     # Sundays at 03:00 UTC — weekly integration regression check.
     - cron: '0 3 * * 0'
 
+# Some third-party actions still pin Node 20, and GitHub has announced
+# Node 20 deprecation on hosted runners (2025-09-19). This Python-only
+# workflow does not need Node at all, but we opt in to suppress the
+# deprecation warning emitted by the runner. Remove once all transitive
+# actions have moved off Node 20.
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+
 permissions:
   contents: read
 

@@ -14,6 +14,14 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+# Some third-party actions (e.g. contributor-assistant/github-action) still
+# pin Node 20; GitHub has announced Node 20 deprecation on hosted runners
+# (2025-09-19). We don't need Node at all in this Python-only workflow,
+# but we opt in to suppress the noisy deprecation warning on the running
+# Action. Remove once all transitive actions move off Node 20.
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+
 permissions:
   contents: read
   pull-requests: read
