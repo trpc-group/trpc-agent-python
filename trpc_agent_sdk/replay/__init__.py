@@ -9,12 +9,19 @@ Provides a deterministic harness that drives multiple Session/Memory backends
 (InMemory, SQLite, MySQL, Redis) through the same JSONL-defined trajectories,
 then emits a structured DiffReport that pinpoints every inconsistent field.
 
-Public surface:
-    - :class:`ReplayHarness`  – the main runner.
-    - :class:`DiffEngine`     – four-dimension snapshot comparator.
-    - :func:`load_replay_cases` – parse JSONL cases.
-    - :func:`run_replay_harness` / :func:`build_diff_report` – CLI-friendly entry.
+Public surface (see ``__all__`` for the canonical list):
+    - :func:`run_replay_harness` – the main runner; orchestrates case playback
+      across the requested backends and collects per-backend snapshots.
+    - :func:`build_diff_report`   – four-dimension snapshot comparator;
+      produces the structured DiffReport dict.
+    - :func:`load_replay_cases`   – parse JSONL cases.
+    - :func:`write_diff_report`   – serialize the report to disk.
+    - :func:`validate_expectations` – per-backend invariant checker used
+      by ``InMemory``-only mode.
+    - :func:`resolve_backend_names` / :class:`ReplayBackend` – backend
+      registry helpers.
     - Module constants: :data:`NORMALIZATION_RULES`, :data:`ALLOWED_DIFF_RULES`.
+    - :func:`main`                – CLI entry point.
 """
 from __future__ import annotations
 

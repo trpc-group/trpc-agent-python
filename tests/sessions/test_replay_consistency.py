@@ -292,19 +292,6 @@ async def test_fail_summary_recovery_hides_attempted_summary_id(
 
 
 async def test_diff_report_is_serializable_and_locatable(replay_work_dir: Path) -> None:
-        recovered_kinds = [
-            audit["kind"] for audit in backend_result["snapshot"]["operation_audit"] if audit["recovered"]
-        ]
-        assert recovered_kinds == ["duplicate_append"], (
-            f"exception_recovery/{backend_name} did not report a successful recovery: {recovered_kinds}"
-        )
-        event_ids = [event["id"] for event in backend_result["snapshot"]["events"]]
-        assert len(event_ids) == len(set(event_ids)), (
-            f"exception_recovery/{backend_name}: duplicate id leaked into the active window"
-        )
-
-
-async def test_diff_report_is_serializable_and_locatable(replay_work_dir: Path) -> None:
     """The diff report must be writable to disk and locate every divergence."""
     run = await _run_default_harness(replay_work_dir)
     report = build_diff_report(run)

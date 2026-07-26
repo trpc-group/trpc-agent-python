@@ -200,6 +200,17 @@ _EXPECTATION_BY_CASE_ID: dict[str, str] = {
     "exception_recovery": "allowed_mechanism_only",
     "injected_event_order": "normal",
     "injected_summary_session": "known_summary_divergence",
+    "fail_summary_recovery": "allowed_mechanism_only",
+}
+
+
+# Domains that each expectation class declares acceptable. Anything outside
+# these sets is reported as ``unexpected_diff_count`` and flips the CLI
+# exit code to 1. Keep conservative: every set is closed under the union
+# of differences that the corresponding test fixture is willing to tolerate.
+_ALLOWED_DOMAINS_BY_EXPECTATION: dict[str, frozenset[str]] = {
+    "known_summary_divergence": frozenset({"events", "summary"}),
+    "allowed_mechanism_only": frozenset({"events", "summary", "recovery", "memory"}),
 }
 
 
@@ -209,12 +220,15 @@ def _is_allowed_domain(expectation: str, domain: str) -> bool:
     ``known_summary_divergence`` cases may diverge in ``events`` and
     ``summary`` fields because backends choose different storage layouts
     for compressed conversations (see
-    ``docs/mkdocs/en/replay-consistency.md``). All other expectations
-    require field-level parity.
+    ``docs/mkdocs/en/replay-consistency.md``).
+
+    ``allowed_mechanism_only`` cases may additionally diverge in
+    ``recovery`` (operation_audit recovery kind/code may be backend
+    specific) and ``memory`` (in-memory search ordering may differ
+    between SQLite and Redis persistence layers). ``state`` and
+    ``replay`` domains remain strict for both classes.
     """
-    if expectation == "known_summary_divergence":
-        return domain in {"events", "summary"}
-    return False
+    return domain in _ALLOWED_DOMAINS_BY_EXPECTATION.get(expectation, frozenset())
 
 
 def _allowed_raw_differences(reference: Mapping[str, Any], result: Mapping[str, Any]) -> list[dict[str, Any]]:

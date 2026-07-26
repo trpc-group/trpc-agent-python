@@ -370,3 +370,196 @@ def test_cli_exit_code_one_on_invariant_failure(
         ])
 
     assert exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# TDD loop 5: EXPECTATIONS / _EXPECTATION_BY_CASE_ID must stay in sync,
+# and ``allowed_mechanism_only`` must accept recovery-domain diffs so the
+# CLI does not falsely fail fail_summary_recovery / exception_recovery
+# under the integration backends.
+# ---------------------------------------------------------------------------
+
+
+def test_cli_expectation_mapping_matches_test_suite() -> None:
+    """The diff engine mirror must list every case the test suite knows about."""
+    from trpc_agent_sdk.replay._diff import _EXPECTATION_BY_CASE_ID
+    from tests.sessions.test_replay_consistency import EXPECTATIONS
+
+    assert _EXPECTATION_BY_CASE_ID == EXPECTATIONS, (
+        "_EXPECTATION_BY_CASE_ID drifted from tests.sessions.test_replay_consistency."
+        "EXPECTATIONS. Keep the two in sync when adding new cases "
+        "(see the comment above _EXPECTATION_BY_CASE_ID)."
+    )
+
+
+def test_cli_allowed_mechanism_only_accepts_recovery_domain_diff(
+    tmp_path, monkeypatch
+):
+    """Cross-backend ``$.operation_audit`` divergence must not flip the exit
+    code for an ``allowed_mechanism_only`` case.
+    """
+    shared_state = {"state": {}, "memory": {}}
+    inmemory_snapshot = {
+        **shared_state,
+        "events": [],
+        "historical_events": [],
+        "summary": {"current": None, "revisions": [], "anchor_count": 0},
+        "operation_audit": [
+            {"kind": "duplicate_append", "recovered": True, "code": "dup_id"},
+        ],
+    }
+    sqlite_snapshot = {
+        **shared_state,
+        "events": [],
+        "historical_events": [],
+        "summary": {"current": None, "revisions": [], "anchor_count": 0},
+        "operation_audit": [
+            {"kind": "duplicate_append", "recovered": True, "code": "ON_CONFLICT"},
+        ],
+    }
+
+    async def _fake_run_replay_harness(**_kwargs):
+        return {
+            "cases": [
+                {
+                    "case_id": "fail_summary_recovery",
+                    "description": "",
+                    "session_id": "session-fail-summary",
+                    "expect": {"summary_present": True},
+                }
+            ],
+            "backend_names": ["inmemory", "sqlite"],
+            "results": [
+                {
+                    "backend": "inmemory",
+                    "case_id": "fail_summary_recovery",
+                    "session_id": "session-fail-summary",
+                    "operation_count": 2,
+                    "snapshot": inmemory_snapshot,
+                    "raw_memory_order": {},
+                    "recovery_raw": [],
+                    "replay_metadata": [],
+                    "invariant_failures": [],
+                    "error": None,
+                },
+                {
+                    "backend": "sqlite",
+                    "case_id": "fail_summary_recovery",
+                    "session_id": "session-fail-summary",
+                    "operation_count": 2,
+                    "snapshot": sqlite_snapshot,
+                    "raw_memory_order": {},
+                    "recovery_raw": [],
+                    "replay_metadata": [],
+                    "invariant_failures": [],
+                    "error": None,
+                },
+            ],
+            "elapsed_seconds": 0.0,
+        }
+
+    monkeypatch.setattr(
+        "trpc_agent_sdk.replay._main.run_replay_harness",
+        _fake_run_replay_harness,
+    )
+    monkeypatch.setattr(
+        "trpc_agent_sdk.replay._main.write_diff_report",
+        lambda _r, _p: None,
+    )
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        exit_code = cli_main([
+            "--backends", "inmemory,sqlite",
+            "--work-dir", str(tmp_path),
+            "--output", str(tmp_path / "report.json"),
+        ])
+
+    assert exit_code == 0, (
+        "Recovery-domain divergence under fail_summary_recovery must be "
+        "classified as allowed_mechanism_only, not unexpected"
+    )
+
+
+def test_cli_normal_expectation_rejects_recovery_domain_diff(
+    tmp_path, monkeypatch
+):
+    """A ``normal`` expectation case must fail the CLI when
+    ``$.operation_audit`` differs between backends — sanity check that the
+    new allow-rule is scoped to ``allowed_mechanism_only``.
+    """
+
+    async def _fake_run_replay_harness(**_kwargs):
+        shared_state = {"state": {}, "memory": {}}
+        return {
+            "cases": [
+                {
+                    "case_id": "single_turn",
+                    "description": "",
+                    "session_id": "session-single-turn",
+                    "expect": {"active_event_count": 0},
+                }
+            ],
+            "backend_names": ["inmemory", "sqlite"],
+            "results": [
+                {
+                    "backend": "inmemory",
+                    "case_id": "single_turn",
+                    "session_id": "session-single-turn",
+                    "operation_count": 0,
+                    "snapshot": {
+                        **shared_state,
+                        "events": [],
+                        "historical_events": [],
+                        "summary": {"current": None, "revisions": [], "anchor_count": 0},
+                        "operation_audit": [{"kind": "x", "recovered": True, "code": "A"}],
+                    },
+                    "raw_memory_order": {},
+                    "recovery_raw": [],
+                    "replay_metadata": [],
+                    "invariant_failures": [],
+                    "error": None,
+                },
+                {
+                    "backend": "sqlite",
+                    "case_id": "single_turn",
+                    "session_id": "session-single-turn",
+                    "operation_count": 0,
+                    "snapshot": {
+                        **shared_state,
+                        "events": [],
+                        "historical_events": [],
+                        "summary": {"current": None, "revisions": [], "anchor_count": 0},
+                        "operation_audit": [{"kind": "x", "recovered": True, "code": "B"}],
+                    },
+                    "raw_memory_order": {},
+                    "recovery_raw": [],
+                    "replay_metadata": [],
+                    "invariant_failures": [],
+                    "error": None,
+                },
+            ],
+            "elapsed_seconds": 0.0,
+        }
+
+    monkeypatch.setattr(
+        "trpc_agent_sdk.replay._main.run_replay_harness",
+        _fake_run_replay_harness,
+    )
+    monkeypatch.setattr(
+        "trpc_agent_sdk.replay._main.write_diff_report",
+        lambda _r, _p: None,
+    )
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        exit_code = cli_main([
+            "--backends", "inmemory,sqlite",
+            "--work-dir", str(tmp_path),
+            "--output", str(tmp_path / "report.json"),
+        ])
+
+    assert exit_code == 1, (
+        "Recovery-domain divergence under a normal case must still fail; "
+        "the allow-rule is scoped to allowed_mechanism_only and known_summary_divergence"
+    )
