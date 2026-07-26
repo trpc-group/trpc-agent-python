@@ -1,7 +1,7 @@
 # Test framework
 pytest
 pytest-mock
-pytest-asyncio
+pytest-asyncio>=0.24.0
 pyparsing>=2.4.2
 pytest-cov
 unittest-xml-reporting
