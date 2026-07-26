@@ -26,6 +26,40 @@ def test_parse_review_input_returns_redacted_hunks_and_changed_lines():
     assert result["hunks"][0]["file"] == "a.py"
 
 
+def test_transaction_rollback_rule_is_scoped_to_the_changed_file():
+    from examples.skills_code_review_agent.agent.parser import ChangedLine
+    from examples.skills_code_review_agent.agent.rules import scan
+
+    findings = scan([
+        ChangedLine("src/a.py", 10, "tx.begin()"),
+        ChangedLine("src/b.py", 4, "transaction.rollback()"),
+    ])
+
+    assert any(item.file == "src/a.py" and item.title == "Transaction has no rollback path" for item in findings)
+
+
+def test_rule_deduplication_preserves_identical_findings_on_different_lines():
+    from examples.skills_code_review_agent.agent.parser import ChangedLine
+    from examples.skills_code_review_agent.agent.rules import scan
+
+    findings = scan([
+        ChangedLine("src/client.py", 1, 'token = "same-secret"'),
+        ChangedLine("src/client.py", 2, 'token = "same-secret"'),
+    ])
+
+    assert {item.line for item in findings if item.category == "secret"} == {1, 2}
+
+
+def test_diff_no_newline_marker_does_not_advance_new_file_line_number():
+    from examples.skills_code_review_agent.agent.parser import parse_unified_diff
+
+    changed = parse_unified_diff(
+        "+++ b/a.py\n@@ -1,2 +1,2 @@\n unchanged\n\\ No newline at end of file\n+added = True\n"
+    )
+
+    assert [(item.line, item.content) for item in changed] == [(2, "added = True")]
+
+
 def test_task_id_is_timestamped_readable_and_collision_safe():
     task_id = create_task_id(
         diff_file=str(FIXTURES / "02_hardcoded_token" / "input.diff"),
@@ -43,8 +77,8 @@ async def test_cli_fake_model_uses_runner_without_model_api_key(tmp_path, monkey
     fake_model = object()
     captured: dict = {}
 
-    async def fake_run(payload, runtime, model):
-        captured.update(payload=payload, runtime=runtime, model=model)
+    async def fake_run(payload, runtime, model, workspace_inputs):
+        captured.update(payload=payload, runtime=runtime, model=model, workspace_inputs=workspace_inputs)
 
     monkeypatch.setattr(review_agent, "create_fake_model", lambda: fake_model)
     monkeypatch.setattr(run_review, "_run_sdk_agent", fake_run)
@@ -58,6 +92,7 @@ async def test_cli_fake_model_uses_runner_without_model_api_key(tmp_path, monkey
     assert captured["model"] is fake_model
     assert captured["runtime"] == "docker"
     assert captured["payload"]["task_id"].startswith("cr-")
+    assert all("src" not in item for item in captured["payload"]["workspace_inputs"])
 
 
 def test_cli_rejects_dry_run_and_fake_model_together():
@@ -82,6 +117,33 @@ def test_parse_review_input_stages_diff_and_changed_files(tmp_path):
         diff_file=str(patch), repo_path=str(repo), staging_dir=str(tmp_path / "staging")
     )
     assert [item["dst"] for item in result["workspace_inputs"]] == ["work/inputs/input.diff", "work/inputs/src/example.py"]
+
+
+def test_parse_review_input_skips_diff_paths_outside_repository_root(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    outside = tmp_path / "outside.py"
+    outside.write_text("secret = 'outside'\n", encoding="utf-8")
+    patch = tmp_path / "input.diff"
+    patch.write_text("+++ b/../../outside.py\n@@ -0,0 +1 @@\n+secret = 'outside'\n", encoding="utf-8")
+
+    result = parse_review_input(
+        diff_file=str(patch),
+        repo_path=str(repo),
+    )
+
+    assert all(item["dst"] != "work/inputs/outside.py" for item in result["workspace_inputs"])
+    assert all("outside.py" not in item["src"] for item in result["_execution_workspace_inputs"])
+
+
+def test_parse_review_input_exposes_only_sandbox_paths_to_model_payload(tmp_path):
+    patch = tmp_path / "input.diff"
+    patch.write_text("+++ b/a.py\n@@ -0,0 +1 @@\n+value = 1\n", encoding="utf-8")
+
+    result = parse_review_input(diff_file=str(patch))
+
+    assert all("src" not in item for item in result["workspace_inputs"])
+    assert any(item["src"].startswith("host://") for item in result["_execution_workspace_inputs"])
 
 
 def test_parse_review_input_stages_generated_repo_diff(tmp_path):
@@ -128,8 +190,12 @@ def test_public_fixtures_generate_redacted_persisted_reports(tmp_path, fixture_n
 def test_filter_denies_network_and_escalates_dynamic_python():
     assert evaluate_command(["curl", "https://example.invalid"], 30).decision == "deny"
     assert evaluate_command(["python", "-c", "import socket"], 30).decision == "needs_human_review"
+    assert evaluate_command('python -c"import socket"', 30).decision == "needs_human_review"
+    assert evaluate_command("python scripts/check.py; curl https://example.invalid", 30).decision == "deny"
+    assert evaluate_command(["python", "check.py\npytest"], 30).decision == "deny"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="SDK skills import may load python-magic unsafely on Windows")
 def test_sdk_agent_import_is_safe_without_loading_libmagic():
     from trpc_agent_sdk.agents import LlmAgent
 
@@ -160,6 +226,32 @@ async def test_skill_run_filter_injects_workspace_inputs_from_context():
     assert args["inputs"] == context.metadata["code_review_workspace_inputs"]
 
 
+def test_model_audit_uses_trusted_inputs_without_persisting_host_paths():
+    from types import SimpleNamespace
+    from examples.skills_code_review_agent.agent.filter import before_model_audit
+
+    host_path = "host://C:/private/repository/input.diff"
+    agent = SimpleNamespace(
+        model=SimpleNamespace(_model_name="test-model"),
+        _code_review_workspace_inputs=[{"src": host_path, "dst": "work/inputs/input.diff", "mode": "copy"}],
+    )
+    context = SimpleNamespace(agent=agent, agent_context=SimpleNamespace(metadata={}))
+    class Request:
+        contents = [SimpleNamespace(parts=[SimpleNamespace(text=json.dumps({
+            "workspace_inputs": [{"dst": "work/inputs/input.diff", "mode": "copy"}],
+        }))])]
+
+        def model_dump(self):
+            return {"contents": [{"workspace_inputs": [{"dst": "work/inputs/input.diff", "mode": "copy"}]}]}
+
+    request = Request()
+
+    before_model_audit(context, request)
+
+    assert context.agent_context.metadata["code_review_workspace_inputs"][0]["src"] == host_path
+    assert host_path not in json.dumps(context.agent_context.metadata["code_review_model_pending"]["input"])
+
+
 async def test_skill_run_filter_rejects_interactive_stdin():
     from trpc_agent_sdk.context import AgentContext
     from trpc_agent_sdk.filter import FilterResult
@@ -177,6 +269,20 @@ async def test_skill_run_filter_rejects_interactive_stdin():
     assert "needs_human_review" in str(result.error)
     assert args["command"] == "python"
     assert args["stdin"] == "print('unsafe')"
+
+
+async def test_skill_run_filter_blocks_non_integer_timeout_without_raising():
+    from trpc_agent_sdk.context import AgentContext
+    from trpc_agent_sdk.filter import FilterResult
+    from examples.skills_code_review_agent.agent.filter import CodeReviewSkillRunFilter
+
+    result = FilterResult()
+    await CodeReviewSkillRunFilter()._before(
+        AgentContext(), {"command": "python scripts/check.py", "timeout": "30s"}, result
+    )
+
+    assert "needs_human_review" in str(result.error)
+    assert "timeout" in str(result.error)
 
 
 async def test_skill_run_filter_escalates_ruff_without_staged_source():
@@ -223,6 +329,54 @@ def test_sqlite_task_query_reads_report(tmp_path):
     assert task["metrics"]["finding_count"] == 0
 
 
+def test_sqlite_task_query_tolerates_missing_legacy_metrics_row(tmp_path):
+    report = save_review_report(task_id="legacy-metrics", findings=[], evidence={"changed_lines": []}, output_dir=str(tmp_path))
+    with sqlite3.connect(tmp_path / "reviews.sqlite") as db:
+        db.execute("DELETE FROM review_metrics WHERE task_id = ?", (report["task_id"],))
+
+    task = ReviewStorage(tmp_path / "reviews.sqlite").get_task(report["task_id"])
+
+    assert task["metrics"] == {"finding_count": 0, "sandbox_run_count": 0, "blocked_count": 0}
+
+
+def test_sqlite_connections_are_closed_after_each_storage_operation(tmp_path, monkeypatch):
+    import examples.skills_code_review_agent.agent.storage as storage_module
+
+    real_connect = sqlite3.connect
+    connections = []
+
+    class TrackingConnection:
+        def __init__(self, connection):
+            self.connection = connection
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+            self.connection.close()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def __getattr__(self, name):
+            return getattr(self.connection, name)
+
+    def connect(path):
+        connection = TrackingConnection(real_connect(path))
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(storage_module.sqlite3, "connect", connect)
+    storage = ReviewStorage(tmp_path / "audit.sqlite")
+    storage.save_native("task", {"status": "completed", "metrics": {"finding_count": 0, "sandbox_run_count": 0, "blocked_count": 0},
+                                 "findings": [], "filter_decisions": [], "skill_runs": [], "model_runs": []}, "digest")
+    storage.get_task("task")
+
+    assert connections and all(connection.closed for connection in connections)
+
+
 def test_report_persists_complete_skill_and_model_audit(tmp_path):
     report = save_review_report(
         task_id="audit-runs", findings=[], output_dir=str(tmp_path),
@@ -237,6 +391,26 @@ def test_report_persists_complete_skill_and_model_audit(tmp_path):
     assert task["skill_runs"][0]["stderr"] == ""
     assert task["skill_runs"][0]["output_files"][0]["name"] == "out/result.txt"
     assert task["model_runs"][0]["model"] == "test-model"
+
+
+def test_report_and_sqlite_audit_redact_host_workspace_paths(tmp_path):
+    host_path = "host://C:/private/repository/input.diff"
+    report = save_review_report(
+        task_id="audit-host-path", findings=[], output_dir=str(tmp_path),
+        evidence={
+            "changed_lines": [],
+            "skill_runs": [{"runtime": "docker", "command": "python check.py", "stdout": host_path, "stderr": "",
+                            "exit_code": 0, "timed_out": False, "duration_seconds": 0, "output_files": []}],
+            "model_runs": [{"model": "test-model", "input": {"input": host_path}, "output": {},
+                            "duration_seconds": 0, "exception": host_path}],
+            "filter_decisions": [],
+        },
+    )
+
+    report_text = Path(report["json_path"]).read_text(encoding="utf-8")
+    task_text = json.dumps(ReviewStorage(tmp_path / "reviews.sqlite").get_task("audit-host-path"))
+    assert host_path not in report_text
+    assert host_path not in task_text
 
 
 def test_report_compacts_audit_and_emits_monitoring_sections(tmp_path, monkeypatch):

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 import hashlib
 import re
 
@@ -20,7 +19,7 @@ def _finding(line: ChangedLine, *, severity: str, category: str, title: str, rec
 
 def scan(lines: list[ChangedLine]) -> list[Finding]:
     findings: list[Finding] = []
-    all_content = "\n".join(line.content for line in lines)
+    rollback_files = {line.file for line in lines if "rollback" in line.content.lower()}
     for line in lines:
         content = line.content
         if re.search(r"sk-[A-Za-z0-9_-]{8,}|(?:api[_-]?key|token|password)\s*=\s*[\"']", content, re.I):
@@ -32,7 +31,7 @@ def scan(lines: list[ChangedLine]) -> list[Finding]:
         if re.search(r"\b(?:engine|conn|connection)\.connect\(", content):
             findings.append(_finding(line, severity="high", category="database", title="Database connection lifecycle is unsafe",
                                      recommendation="Use a context manager so connections close on both success and failure paths."))
-        if re.search(r"\b(?:tx|transaction)\.begin\(", content) and "rollback" not in all_content:
+        if re.search(r"\b(?:tx|transaction)\.begin\(", content) and line.file not in rollback_files:
             findings.append(_finding(line, severity="high", category="database", title="Transaction has no rollback path",
                                      recommendation="Rollback in the exception path, or use an atomic transaction context manager."))
     changed_code = any(not line.file.startswith("tests/") and line.file.endswith(".py") for line in lines)
@@ -45,9 +44,8 @@ def scan(lines: list[ChangedLine]) -> list[Finding]:
 
 
 def deduplicate(findings: list[Finding]) -> list[Finding]:
-    unique: dict[tuple[str, str, str], Finding] = {}
+    unique: dict[tuple[str, str, int], Finding] = {}
     for finding in findings:
-        # One secret printed twice in the same changed file is one remediation task.
-        # Evidence has already been redacted, so it is safe to use as the stable key.
-        unique.setdefault((finding.category, finding.file, finding.evidence), finding)
+        # Match report-level deduplication: one category per changed source line.
+        unique.setdefault((finding.category, finding.file, finding.line), finding)
     return list(unique.values())

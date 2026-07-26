@@ -84,27 +84,27 @@ docker build -t trpc-code-review:latest -f examples/skills_code_review_agent/Doc
 
 ### `.env`
 
-编辑仓库提供的 `examples/skills_code_review_agent/.env` 模板，或通过 shell 环境变量覆盖配置。提交前必须确保其中没有真实密钥；若密钥曾进入 Git 历史，应立即在服务商侧轮换。
+本示例与仓库其他示例一样，提供受版本控制的 `examples/skills_code_review_agent/.env` 占位模板。先将其中所有 `your-xxx` 值替换为本地配置，或通过 shell 环境变量覆盖；该文件不得写入真实密钥。若密钥曾进入 Git 历史，应立即在服务商侧轮换。
 
 ```dotenv
 # 真实模型；--fake-model 和 --dry-run 不需要 API Key。
 OPENAI_API_KEY=your-api-key
-OPENAI_BASE_URL=https://your-openai-compatible-endpoint/v1
+OPENAI_BASE_URL=your-base-url
 OPENAI_MODEL=your-model-name
 
-# 镜像已手动构建时保持 BUILD_CONTEXT 为空，避免每次运行重建。
-CODE_REVIEW_DOCKER_IMAGE=trpc-code-review:latest
-CODE_REVIEW_DOCKER_BUILD_CONTEXT=
+# 填写非默认镜像/构建上下文；保留 your-xxx 时自动使用示例默认值。
+CODE_REVIEW_DOCKER_IMAGE=your-code-review-docker-image
+CODE_REVIEW_DOCKER_BUILD_CONTEXT=your-code-review-docker-build-context
 
 # 单位 KiB；MODEL_RUN_MAX_COUNT 为条数。
-CODE_REVIEW_TOOL_OUTPUT_MAX_KIB=8
-CODE_REVIEW_MODEL_AUDIT_MAX_KIB=16
-CODE_REVIEW_MODEL_RUN_MAX_COUNT=20
+CODE_REVIEW_TOOL_OUTPUT_MAX_KIB=your-tool-output-max-kib
+CODE_REVIEW_MODEL_AUDIT_MAX_KIB=your-model-audit-max-kib
+CODE_REVIEW_MODEL_RUN_MAX_COUNT=your-model-run-max-count
 
 # Cube/E2B 预留配置。
-CUBE_TEMPLATE_ID=
-E2B_API_URL=
-E2B_API_KEY=
+CUBE_TEMPLATE_ID=your-cube-template-id
+E2B_API_URL=your-e2b-api-url
+E2B_API_KEY=your-e2b-api-key
 ```
 
 ## 运行命令

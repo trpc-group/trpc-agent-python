@@ -39,7 +39,7 @@ def create_task_id(*, diff_file: str = "", repo_path: str = "", files: list[str]
     return f"cr-{timestamp}-{label}-{short_suffix}"
 
 
-async def _run_sdk_agent(payload: dict, runtime: str, model: object) -> None:
+async def _run_sdk_agent(payload: dict, runtime: str, model: object, workspace_inputs: list[dict]) -> None:
     """Use the repository Runner in a supported (normally Linux) SDK environment."""
     from trpc_agent_sdk.runners import Runner
     from trpc_agent_sdk.sessions import InMemorySessionService
@@ -47,7 +47,7 @@ async def _run_sdk_agent(payload: dict, runtime: str, model: object) -> None:
     from examples.skills_code_review_agent.agent.agent import create_agent_async
 
     session_service = InMemorySessionService()
-    agent = await create_agent_async(runtime=runtime, model=model)
+    agent = await create_agent_async(runtime=runtime, model=model, workspace_inputs=workspace_inputs)
     runner = Runner(app_name="skills_code_review_agent", agent=agent, session_service=session_service)
     await session_service.create_session(app_name="skills_code_review_agent", user_id="reviewer", session_id=payload["task_id"])
     async for _ in runner.run_async(user_id="reviewer", session_id=payload["task_id"],
@@ -78,6 +78,7 @@ async def main() -> None:
             diff_file=args.diff_file or "", repo_path=args.repo_path or "", files=args.files,
             staging_dir=str(staging_dir),
         )
+        workspace_inputs = review_input.pop("_execution_workspace_inputs", [])
         payload = {**review_input, "task_id": task_id, "output_dir": args.output_dir}
         if args.dry_run:
             # Windows-safe fallback: same deterministic parse/report FunctionTool boundary,
@@ -90,14 +91,14 @@ async def main() -> None:
             model = create_fake_model()
         else:
             api_key = os.environ.get(args.model_api_key_env, "")
-            if not api_key:
+            if not api_key or api_key.startswith("your-"):
                 raise SystemExit(f"missing model API key: set {args.model_api_key_env} in .env or the environment")
             from examples.skills_code_review_agent.agent.agent import OpenAIReviewModel
             model = OpenAIReviewModel(
                 api_key, args.model_base_url or os.getenv("OPENAI_BASE_URL", ""),
                 args.model or os.getenv("OPENAI_MODEL", ""),
             ).create()
-        await _run_sdk_agent(payload, args.runtime, model)
+        await _run_sdk_agent(payload, args.runtime, model, workspace_inputs)
         print(f"submitted: {Path(args.output_dir) / payload['task_id'] / 'review_report.json'}")
     finally:
         shutil.rmtree(staging_dir, ignore_errors=True)

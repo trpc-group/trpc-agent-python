@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import time
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from typing import Any
 
 REVIEW_SKILL_TOOL_NAMES = ["skill_load", "skill_select_docs", "skill_list_docs"]
 _ANALYZE_PR_COMMAND = "python scripts/pr-analyzer.py --diff-file ../../work/inputs/input.diff"
+_HOST_PATH = re.compile(r"host://[^\s\"']+")
 
 
 def plan_review_actions(action_ids: list[str], workspace_inputs: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -32,11 +34,38 @@ class WorkspaceInputSpec:
     mode: str = "copy"
 
     def model_dump(self) -> dict[str, str]:
+        """Return the model-visible sandbox destination only."""
+        return {"dst": self.dst, "mode": self.mode}
+
+    def execution_dump(self) -> dict[str, str]:
+        """Return the trusted host-to-sandbox mapping for the workspace runtime."""
         return {"src": self.src, "dst": self.dst, "mode": self.mode}
 
 
 def _stage(path: Path, dst: str) -> WorkspaceInputSpec:
     return WorkspaceInputSpec(f"host://{path.resolve().as_posix()}", dst)
+
+
+def _redact_audit_text(value: Any) -> str:
+    """Redact secrets and execution-only host paths from persisted audit data."""
+    from .redactor import redact
+    return _HOST_PATH.sub("[HOST_PATH]", redact(str(value or "")))
+
+
+def _redact_audit_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return _redact_audit_text(value)
+    if isinstance(value, dict):
+        return {str(key): _redact_audit_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_audit_value(item) for item in value]
+    return value
+
+
+def _env_value_or_default(name: str, default: str) -> str:
+    """Treat committed ``your-...`` template values as unset configuration."""
+    value = os.getenv(name, "").strip()
+    return default if not value or value.startswith("your-") else value
 
 
 def _env_positive_int(name: str, default: int) -> int:
@@ -73,7 +102,7 @@ def _audit_summary(value: Any, limit_bytes: int, redact_text: Any) -> dict[str, 
 def _compact_skill_runs(runs: list[dict], limit_bytes: int, redact_text: Any) -> list[dict]:
     compact: list[dict] = []
     for run in runs:
-        item = dict(run)
+        item = _redact_audit_value(dict(run))
         for field in ("stdout", "stderr"):
             value, truncated, original_bytes = _truncate_text(redact_text(item.get(field, "")), limit_bytes)
             item[field] = value
@@ -103,7 +132,7 @@ def _review_metrics(findings: list[dict], human: list[dict], skill_runs: list[di
         statuses[run.get("status", "unknown")] = statuses.get(run.get("status", "unknown"), 0) + 1
     exceptions: dict[str, int] = {}
     for run in model_runs:
-        exception = str(run.get("exception", "")).strip()
+        exception = _redact_audit_text(run.get("exception", "")).strip()
         if exception:
             exceptions[exception] = exceptions.get(exception, 0) + 1
     return {
@@ -176,27 +205,34 @@ def parse_review_input(*, diff: str = "", diff_file: str = "", repo_path: str = 
     if root:
         for line in parsed.changed_lines:
             candidate = (root / line.file).resolve()
-            if candidate.is_file():
+            # Diff paths are untrusted. Only stage files that remain inside the
+            # declared repository root after resolving ``..`` and symlinks.
+            if candidate.is_relative_to(root) and candidate.is_file():
                 sources.add(candidate)
     for source in sorted(sources):
         relative = source.relative_to(root).as_posix() if root and source.is_relative_to(root) else source.name
         staged.append(_stage(source, f"work/inputs/{relative}"))
     unique = {item.dst: item for item in staged}
     changed = [{"file": item.file, "line": item.line, "content": redact(item.content)} for item in parsed.changed_lines]
+    execution_inputs = [item.execution_dump() for item in unique.values()]
     result = {
         "diff": redacted_diff, "changed_files": sorted({item["file"] for item in changed if item["file"]}),
         "changed_lines": changed,
         "hunks": [{"file": item.file, "header": item.header, "context": [redact(text) for text in item.context]} for item in parsed.hunks],
         "workspace_inputs": [item.model_dump() for item in unique.values()],
+        # This private value is removed by the CLI before constructing the
+        # model message. It is retained only long enough to seed the SDK
+        # workspace runtime with its host-to-sandbox copy mappings.
+        "_execution_workspace_inputs": execution_inputs,
     }
     if tool_context is not None:
         state = tool_context.agent_context.metadata
         # A model often calls this tool with inline diff text. Such a call has
         # no host file to stage, so retain the input mappings pre-seeded from
         # the original CLI payload instead of accidentally discarding them.
-        if not result["workspace_inputs"] and state.get("code_review_workspace_inputs"):
-            result["workspace_inputs"] = state["code_review_workspace_inputs"]
-        state["code_review_workspace_inputs"] = result["workspace_inputs"]
+        if not execution_inputs and state.get("code_review_workspace_inputs"):
+            execution_inputs = state["code_review_workspace_inputs"]
+        state["code_review_workspace_inputs"] = execution_inputs
         state["code_review_changed_lines"] = changed
     return result
 
@@ -221,6 +257,7 @@ def save_review_report(*, task_id: str, findings: list[dict], evidence: dict, ou
         }
     changed = {(item.get("file"), item.get("line")) for item in evidence.get("changed_lines", [])}
     evidence_text = "\n".join(str(item.get("content", "")) for item in evidence.get("changed_lines", []))
+    redacted_evidence_text = redact(evidence_text)
     deterministic = [item.as_dict() for item in scan([ChangedLine(str(item.get("file", "")), int(item.get("line", 0)), str(item.get("content", ""))) for item in evidence.get("changed_lines", [])])]
     accepted, human, seen = [], [], set()
     for raw in [*deterministic, *findings]:
@@ -231,7 +268,7 @@ def save_review_report(*, task_id: str, findings: list[dict], evidence: dict, ou
             continue
         item["evidence"] = redact(str(item["evidence"]))
         key = (item["category"], item["file"], item["line"])
-        if key in seen or (item["file"], item["line"]) not in changed or (item["evidence"] and item["evidence"] not in redact(evidence_text)):
+        if key in seen or (item["file"], item["line"]) not in changed or (item["evidence"] and item["evidence"] not in redacted_evidence_text):
             continue
         seen.add(key)
         (human if item["confidence"] < 0.7 else accepted).append(item)
@@ -242,9 +279,9 @@ def save_review_report(*, task_id: str, findings: list[dict], evidence: dict, ou
     model_limit = _env_positive_int("CODE_REVIEW_MODEL_AUDIT_MAX_KIB", 16) * 1024
     model_count = _env_positive_int("CODE_REVIEW_MODEL_RUN_MAX_COUNT", 20)
     raw_model_runs = evidence.get("model_runs", [])
-    skill_runs = _compact_skill_runs(evidence.get("skill_runs", []), tool_limit, redact)
-    model_runs = _compact_model_runs(raw_model_runs, model_count, model_limit, redact)
-    decisions = evidence.get("filter_decisions", [])
+    skill_runs = _compact_skill_runs(evidence.get("skill_runs", []), tool_limit, _redact_audit_text)
+    model_runs = _compact_model_runs(raw_model_runs, model_count, model_limit, _redact_audit_text)
+    decisions = _redact_audit_value(evidence.get("filter_decisions", []))
     metrics = _review_metrics(accepted, human, skill_runs, raw_model_runs, decisions, time.monotonic() - review_started)
     report = {"task_id": task_id, "status": "completed", "findings": accepted, "needs_human_review": human,
               "skill_runs": skill_runs, "model_runs": model_runs, "filter_decisions": decisions,
@@ -287,8 +324,8 @@ def create_review_tools(runtime: str = "docker") -> tuple[Any, list[Any], Any]:
         from trpc_agent_sdk.code_executors.container import ContainerConfig
         example_root = Path(__file__).parents[1]
         workspace = create_container_workspace_runtime(container_config=ContainerConfig(
-            image=os.getenv("CODE_REVIEW_DOCKER_IMAGE", "trpc-code-review:latest"),
-            docker_path=os.getenv("CODE_REVIEW_DOCKER_BUILD_CONTEXT", str(example_root)),
+            image=_env_value_or_default("CODE_REVIEW_DOCKER_IMAGE", "trpc-code-review:latest"),
+            docker_path=_env_value_or_default("CODE_REVIEW_DOCKER_BUILD_CONTEXT", str(example_root)),
         ))
     else:
         raise RuntimeError("Cube/E2B runtime must be constructed asynchronously by the SDK deployment entry point")

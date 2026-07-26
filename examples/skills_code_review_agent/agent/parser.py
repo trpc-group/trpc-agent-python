@@ -60,6 +60,8 @@ def parse_unified_diff(diff: str) -> list[ChangedLine]:
         elif raw_line.startswith("+") and not raw_line.startswith("+++"):
             lines.append(ChangedLine(file_name, new_line, raw_line[1:]))
             new_line += 1
+        elif raw_line.startswith("\\ No newline at end of file"):
+            continue
         elif raw_line.startswith(" ") or (raw_line and not raw_line.startswith("-")):
             new_line += 1
     return lines

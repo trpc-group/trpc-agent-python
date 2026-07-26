@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sqlite3
+from contextlib import contextmanager
 
 
 class ReviewStorage:
@@ -28,8 +29,18 @@ class ReviewStorage:
             if "metrics_json" not in columns:
                 db.execute("ALTER TABLE review_metrics ADD COLUMN metrics_json TEXT")
 
+    @contextmanager
     def _connect(self):
-        return sqlite3.connect(self.path)
+        """Commit/rollback and close each short-lived SQLite connection."""
+        db = sqlite3.connect(self.path)
+        try:
+            yield db
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
     def save_native(self, task_id: str, report: dict, input_digest: str) -> None:
         """Persist the FunctionTool-owned report without depending on legacy models."""
@@ -88,7 +99,11 @@ class ReviewStorage:
             "sandbox_runs": [dict(zip(("runtime", "status", "exit_code", "output"), row)) for row in runs],
             "filter_decisions": [dict(zip(("decision", "reason"), row)) for row in decisions],
             "findings": [dict(zip(("severity", "category", "file", "line", "evidence", "recommendation", "confidence"), row)) for row in findings],
-            "metrics": json.loads(metric[3]) if metric[3] else dict(zip(("finding_count", "sandbox_run_count", "blocked_count"), metric[:3])),
+            "metrics": (
+                json.loads(metric[3]) if metric and metric[3]
+                else dict(zip(("finding_count", "sandbox_run_count", "blocked_count"), metric[:3]))
+                if metric else {"finding_count": 0, "sandbox_run_count": 0, "blocked_count": 0}
+            ),
             "skill_loads": [{"operation": row[0], "documents": json.loads(row[1]), "result": json.loads(row[2])} for row in skill_loads],
             "skill_runs": [{"runtime": row[0], "command": json.loads(row[1]), "status": row[2], "exit_code": row[3], "output": row[4], "stderr": row[5], "timed_out": bool(row[6]), "duration_seconds": row[7], "output_files": json.loads(row[8])} for row in skill_runs],
             "model_runs": [{"model": row[0], "duration_seconds": row[1], "result": json.loads(row[2])} for row in model_runs],

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 import json
+import re
 import time
 
 from trpc_agent_sdk.context import AgentContext
@@ -11,12 +12,14 @@ from trpc_agent_sdk.filter import BaseFilter, FilterResult, register_agent_filte
 from .policy import FilterDecision, evaluate_command
 from .redactor import redact
 
+_HOST_PATH = re.compile(r"host://[^\s\"']+")
+
 def _safe(value: Any) -> Any:
     """Serialize SDK values for audit without storing credentials."""
     if hasattr(value, "model_dump"):
         value = value.model_dump()
     if isinstance(value, str):
-        return redact(value)
+        return _HOST_PATH.sub("[HOST_PATH]", redact(value))
     if isinstance(value, dict):
         return {str(key): _safe(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
@@ -40,7 +43,13 @@ class CodeReviewSkillRunFilter(BaseFilter):
     async def _before(self, ctx: AgentContext, req: Any, rsp: FilterResult) -> None:
         args = getattr(req, "args", req if isinstance(req, dict) else {})
         command = args.get("command", "") if isinstance(args, dict) else ""
-        timeout = int(args.get("timeout", 30)) if isinstance(args, dict) else 30
+        timeout = 30
+        decision: FilterDecision | None = None
+        if isinstance(args, dict):
+            try:
+                timeout = int(args.get("timeout", 30))
+            except (TypeError, ValueError):
+                decision = FilterDecision("needs_human_review", "timeout must be a whole number of seconds")
         if isinstance(args, dict) and not args.get("inputs"):
             args["inputs"] = ctx.metadata.get("code_review_workspace_inputs", [])
         if isinstance(args, dict) and str(args.get("stdin", "")).strip():
@@ -48,9 +57,9 @@ class CodeReviewSkillRunFilter(BaseFilter):
                 "needs_human_review",
                 "stdin is not permitted; use the staged diff file path instead",
             )
-        else:
-            decision = evaluate_command(command.split(), timeout)
-        if decision.decision == "allow" and command.split()[:1] == ["ruff"]:
+        elif decision is None:
+            decision = evaluate_command(command, timeout)
+        if decision.decision == "allow" and command.lstrip().startswith("ruff "):
             staged = {item.get("dst", "") for item in args.get("inputs", []) if isinstance(item, dict)}
             if not any(path != "work/inputs/input.diff" for path in staged):
                 decision = type(decision)("needs_human_review", "ruff requires a staged source file, not only a diff")
@@ -88,21 +97,22 @@ class CodeReviewSkillRunFilter(BaseFilter):
 def before_model_audit(invocation_context: Any, request: Any) -> None:
     """Record the redacted model input and start time in InvocationContext state."""
     state = invocation_context.agent_context.metadata
-    # The first user message already contains the host-backed input mappings.
-    # Capture them before the model requests a selected review action.
+    # The Agent receives trusted host-to-sandbox mappings out of band. The
+    # user/model message deliberately contains only sandbox-relative paths.
     if not state.get("code_review_workspace_inputs"):
+        trusted_inputs = getattr(invocation_context.agent, "_code_review_workspace_inputs", [])
+        if trusted_inputs:
+            state["code_review_workspace_inputs"] = trusted_inputs
         for content in getattr(request, "contents", []):
             for part in getattr(content, "parts", []):
                 try:
                     payload = json.loads(getattr(part, "text", ""))
                 except (TypeError, json.JSONDecodeError):
                     continue
-                inputs = payload.get("workspace_inputs") if isinstance(payload, dict) else None
-                if isinstance(inputs, list) and inputs:
-                    state["code_review_workspace_inputs"] = inputs
+                if isinstance(payload, dict):
                     state["code_review_changed_lines"] = payload.get("changed_lines", [])
                     break
-            if state.get("code_review_workspace_inputs"):
+            if state.get("code_review_changed_lines"):
                 break
     state["code_review_model_pending"] = {
         "model": getattr(invocation_context.agent.model, "_model_name", type(invocation_context.agent.model).__name__),

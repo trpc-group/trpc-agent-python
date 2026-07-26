@@ -65,14 +65,14 @@ def create_fake_model() -> Any:
     return FakeReviewModel()
 
 
-def create_agent(*, runtime: str = "docker", model: Any = None) -> Any:
+def create_agent(*, runtime: str = "docker", model: Any = None, workspace_inputs: list[dict[str, str]] | None = None) -> Any:
     """Create the SDK-native Agent; call only in a supported SDK runtime."""
     from trpc_agent_sdk.agents import LlmAgent
     from .tools import create_review_tools
     from .filter import before_model_audit, after_model_audit
 
     skill_tool_set, review_tools, repository = create_review_tools(runtime)
-    return LlmAgent(
+    agent = LlmAgent(
         name="code_review_agent",
         description="A policy-governed code review agent powered by loaded Skills.",
         model=model or create_fake_model(), instruction=INSTRUCTION,
@@ -80,18 +80,25 @@ def create_agent(*, runtime: str = "docker", model: Any = None) -> Any:
         filters_name=["code_review_agent_filter"],
         before_model_callback=before_model_audit, after_model_callback=after_model_audit,
     )
+    # Host paths are execution-only data. Never put them in the model message,
+    # session transcript, report, or audit payload.
+    agent._code_review_workspace_inputs = list(workspace_inputs or [])
+    return agent
 
 
-async def create_agent_async(*, runtime: str = "docker", model: Any = None) -> Any:
+async def create_agent_async(*, runtime: str = "docker", model: Any = None,
+                             workspace_inputs: list[dict[str, str]] | None = None) -> Any:
     """Async variant used by Cube/E2B, whose SDK workspace starts asynchronously."""
     if runtime not in {"cube", "e2b"}:
-        return create_agent(runtime=runtime, model=model)
+        return create_agent(runtime=runtime, model=model, workspace_inputs=workspace_inputs)
     from trpc_agent_sdk.agents import LlmAgent
     from .tools import create_review_tools_async
     from .filter import before_model_audit, after_model_audit
 
     skill_tool_set, review_tools, repository = await create_review_tools_async(runtime)
-    return LlmAgent(name="code_review_agent", description="A policy-governed code review agent powered by loaded Skills.",
-                    model=model or create_fake_model(), instruction=INSTRUCTION, tools=[skill_tool_set, *review_tools],
-                    skill_repository=repository, filters_name=["code_review_agent_filter"],
-                    before_model_callback=before_model_audit, after_model_callback=after_model_audit)
+    agent = LlmAgent(name="code_review_agent", description="A policy-governed code review agent powered by loaded Skills.",
+                     model=model or create_fake_model(), instruction=INSTRUCTION, tools=[skill_tool_set, *review_tools],
+                     skill_repository=repository, filters_name=["code_review_agent_filter"],
+                     before_model_callback=before_model_audit, after_model_callback=after_model_audit)
+    agent._code_review_workspace_inputs = list(workspace_inputs or [])
+    return agent
