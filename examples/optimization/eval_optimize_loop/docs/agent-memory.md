@@ -11,8 +11,8 @@
 - 根目录：D:/codex_prorject/ai_project/tencent-issue/examples/optimization/eval_optimize_loop/
 - PR：https://github.com/trpc-group/trpc-agent-python/pull/104
 - 竞争 PR：~5 个活跃（#99 Adonis-a233 已失活, #104 你, #161 16yunH 代码最完整, #217 tianyouyiwang 新, #221 guocfu 新），约 13 个已沉底
-- AI Code Review：CongkeChen（AI bot），截至 7/23 共 21 轮，所有问题已修复回复；人类 reviewer helloopenworld 也参与审查
-- 最新 commit：213faf6（7/26），累计 20 次 push，99 tests pass，pipeline 6 phase E2E OK
+- AI Code Review：CongkeChen（AI bot），截至 7/23 共 22 轮，所有问题已修复回复；人类 reviewer helloopenworld 也参与审查
+- 最新 commit：a9d89bc（7/26），累计 21 次 push，102 tests pass，pipeline 6 phase E2E OK
 
 ## 6 阶段流水线
 
@@ -158,6 +158,7 @@ bc1f8d4  fix:  4项修复：call_agent工厂finally时序 + _ensure_abs路径穿
 a608613  fix:  _ensure_abs路径穿越加固：startswith→relative_to（第19轮）
 35a0d5c  fix:  _ensure_abs缩进修复——字符串替换破坏缩进，重写整个函数体（第20轮）
 213faf6  fix:  3项修复：output乱码 + 重复GateCheck替换 + 损坏锁清理（第21轮，首次零Critical！）
+a9d89bc  fix:  4项修复：gate case级新增判定 + 死代码清理 + gitignore BOM + 中文乱码清理（第22轮，1 Critical + 2 Warnings + 3 Suggestions）
 ```
 
 ### 各轮核心问题与修复
