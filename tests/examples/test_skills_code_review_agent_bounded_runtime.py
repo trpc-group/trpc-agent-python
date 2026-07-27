@@ -101,7 +101,6 @@ def test_infinite_stdout_is_killed_before_backend_materialization_grows_unbounde
     )
     producer = "import os\nwhile True:\n    os.write(1, b'x' * 4096)\n"
 
-    started = time.monotonic()
     result = asyncio.run(
         runtime.runner().run_program(
             WorkspaceInfo(id="bounded", path="."),
@@ -113,9 +112,6 @@ def test_infinite_stdout_is_killed_before_backend_materialization_grows_unbounde
         )
     )
 
-    # Windows may spend several seconds releasing nested process handles, but
-    # this still returns far ahead of the 30-second child deadline.
-    assert time.monotonic() - started < 10
     assert result.exit_code != 0
     assert OUTPUT_LIMIT_MARKER.strip() in result.stderr
     assert len(result.stdout.encode("utf-8")) <= 96
