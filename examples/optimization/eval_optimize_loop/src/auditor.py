@@ -29,7 +29,17 @@ class AuditTrail:
     entries: list = field(default_factory=list)
     total_cost: float = 0.0; avg_latency_ms: float = 0.0  # per-entry average (renamed from total_latency_ms)
     def to_dict(self):
-        return {"pipeline_name":self.pipeline_name,"run_id":self.run_id,"started_at":self.started_at,"completed_at":self.completed_at,"mode":self.mode,"random_seed":self.random_seed,"entries":[e.to_dict() for e in self.entries],"total_cost":self.total_cost,"avg_latency_ms":self.avg_latency_ms}
+        return {
+            "pipeline_name": self.pipeline_name,
+            "run_id": self.run_id,
+            "started_at": self.started_at,
+            "completed_at": self.completed_at,
+            "mode": self.mode,
+            "random_seed": self.random_seed,
+            "entries": [e.to_dict() for e in self.entries],
+            "total_cost": self.total_cost,
+            "avg_latency_ms": self.avg_latency_ms,
+        }
 
 class Auditor:
     def __init__(self, output_dir="output"):
