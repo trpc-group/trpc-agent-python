@@ -38,6 +38,7 @@ nav:
           - Goal: en/goal.md
           - Code Executor: en/code_executor.md
           - Skills: en/skill.md
+          - Safety Guard: en/tool_safety_guard.md
       - Session & Memory:
           - Session: en/session.md
           - SQL Session: en/session_sql.md
@@ -84,6 +85,7 @@ nav:
           - Goal 工具: zh/goal.md
           - 代码执行器: zh/code_executor.md
           - Skills: zh/skill.md
+          - 安全卫士: zh/tool_safety_guard.md
       - Session 与 Memory:
           - Session: zh/session.md
           - SQL Session: zh/session_sql.md
