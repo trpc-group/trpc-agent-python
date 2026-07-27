@@ -116,9 +116,7 @@ class AcceptanceGate:
 
         # 4. 成本不超预算
         if self._rule_enabled("cost_within_budget"):
-            cost_check = self._check_cost(baseline_cost, candidate_cost)
-            if cost_check is not None:
-                checks.append(cost_check)
+            checks.append(self._check_cost(baseline_cost, candidate_cost))
 
         # 5. 过拟合检测
         if self._rule_enabled("overfit_detection") and baseline_train_scores and candidate_train_scores:
@@ -230,7 +228,7 @@ class AcceptanceGate:
         self,
         baseline_cost: float,
         candidate_cost: float,
-    ) -> "Optional[GateCheck]":
+    ) -> GateCheck:
         max_ratio = self.rules["cost_within_budget"].get("max_cost_ratio", 1.2)
         if baseline_cost <= 0:
             # Cost data is absent (e.g. real mode token_tracker not connected, or
