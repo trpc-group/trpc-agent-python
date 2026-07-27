@@ -28,6 +28,22 @@ MAX_OUTPUT_CHARS = 4096
 PROCESS_REAP_TIMEOUT_SECONDS = 1.0
 
 
+def _safe_response(response: dict) -> dict:
+    """Redact secret-looking output before returning it to the Agent."""
+    safe = dict(response)
+    redacted = bool(safe.get("redacted", False))
+    for key in ("stdout", "stderr", "output", "formatted_output"):
+        item = safe.get(key)
+        if not isinstance(item, str):
+            continue
+        safe_text, changed = GUARD.sanitizer.sanitize(item)
+        safe[key] = safe_text
+        redacted = redacted or changed
+    if redacted:
+        safe["redacted"] = True
+    return GUARD.limit_output(safe)
+
+
 @APP.tool()
 async def execute_command(command: str, timeout: float | None = None) -> dict:
     """Execute an approved shell command in the disposable example directory."""
@@ -111,13 +127,13 @@ async def execute_command(command: str, timeout: float | None = None) -> dict:
             "timed_out": True,
             "reap_timed_out": reap_timed_out,
         }
-        return GUARD.limit_output(response)
+        return _safe_response(response)
     response = {
         "return_code": process.returncode,
         "stdout": stdout.decode(errors="replace")[:MAX_OUTPUT_CHARS],
         "stderr": stderr.decode(errors="replace")[:MAX_OUTPUT_CHARS],
     }
-    return GUARD.limit_output(response)
+    return _safe_response(response)
 
 
 if __name__ == "__main__":

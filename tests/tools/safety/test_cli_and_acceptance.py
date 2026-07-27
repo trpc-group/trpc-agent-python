@@ -249,3 +249,29 @@ async def test_mcp_timeout_reaps_real_subprocess(monkeypatch):
     assert result["reap_timed_out"] is False
     assert len(processes) == 1
     assert processes[0].returncode is not None
+
+
+@pytest.mark.asyncio
+async def test_mcp_output_redacts_secret_values(monkeypatch):
+
+    class _SecretProcess:
+        returncode = 0
+
+        async def communicate(self):
+            return (
+                b"token=abcdefghijklmnopqrstuvwxyz",
+                b"password='top secret phrase'",
+            )
+
+    async def create_process(*args, **kwargs):
+        del args, kwargs
+        return _SecretProcess()
+
+    monkeypatch.setattr(mcp_server.asyncio, "create_subprocess_exec", create_process)
+    result = await mcp_server.execute_command("echo ok")
+
+    assert result["redacted"] is True
+    assert "abcdefghijklmnopqrstuvwxyz" not in result["stdout"]
+    assert "top secret phrase" not in result["stderr"]
+    assert "[REDACTED_SECRET]" in result["stdout"]
+    assert "[REDACTED_SECRET]" in result["stderr"]
