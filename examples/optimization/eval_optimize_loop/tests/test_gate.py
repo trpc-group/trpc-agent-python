@@ -219,55 +219,38 @@ class TestGateNewHardFailCaseLevel:
 
 
     def test_critical_read_failure_rejects(self, gate_config, tmp_path):
-        """When _read_critical_case_ids returns None (evalset unreadable),
-        the fail-closed logic in run_pipeline should produce a GateDecision
-        with accepted=False and a failed critical_case_no_regress check.
+        """fail_closed_for_unreadable_evalset forces reject with root cause.
 
-        This test verifies the override behaviour without depending on
-        the full run_pipeline integration: it directly exercises the
-        pattern used in run_pipeline.py lines 826-863.
+        Exercises the same AcceptanceGate.fail_closed_for_unreadable_evalset
+        method that run_pipeline.py calls in production, so the test and
+        production code stay in sync.
         """
-        from src.gate import AcceptanceGate, GateDecision, GateCheck
+        from src.gate import AcceptanceGate
 
         gate = AcceptanceGate(gate_config)
-        # Simulate: evalset read failed -> critical_case_ids=[]
-        # (gate sees empty list -> skipped), then pipeline overrides
-        critical_case_ids = []
 
+        # Step 1: gate sees empty critical ids → skipped
         decision = gate.decide(
             baseline_scores={"case_A": 0.90},
             candidate_scores={"case_A": 0.85},
-            critical_case_ids=critical_case_ids,
+            critical_case_ids=[],
         )
 
-        # Simulate the override logic from run_pipeline.py: when evalset
-        # is unreadable, replace the skipped critical check with a failed one.
-        override_checks = [
-            c for c in decision.checks
-            if c.name != "critical_case_no_regress"
-        ] + [
-            GateCheck(
-                name="critical_case_no_regress",
-                passed=False,
-                description="关键 case 检查失败",
-                detail="无法读取 evalset 文件，无法验证关键 case 是否退步",
-            )
-        ]
-        final_decision = GateDecision(
-            accepted=False,
-            reason="CRITICAL: cannot read evalset for critical case verification",
-            checks=override_checks,
-            strategy=gate.strategy,
+        # Step 2: fail-closed override (same call as run_pipeline.py)
+        final = AcceptanceGate.fail_closed_for_unreadable_evalset(
+            decision, gate.strategy,
+            error_detail="FileNotFoundError: val.evalset.json",
         )
 
-        assert final_decision.accepted is False
+        assert final.accepted is False
         critical_check = next(
-            (c for c in final_decision.checks if c.name == "critical_case_no_regress"),
+            (c for c in final.checks if c.name == "critical_case_no_regress"),
             None,
         )
         assert critical_check is not None
         assert critical_check.passed is False
         assert "evalset" in critical_check.detail
+        assert "FileNotFoundError" in critical_check.detail
 
 import pytest, subprocess, os, sys
 from pathlib import Path
@@ -314,3 +297,62 @@ class TestLockModule:
         token = acquire_pipeline_lock(lock_path)
         assert token is not None, 'Should acquire lock on empty dir'
         release_pipeline_lock(token, lock_path)
+
+
+class TestPipelineFakeE2E:
+    """End-to-end smoke test: run_pipeline.py fake mode exits 0 and produces output files."""
+
+    def test_fake_pipeline_exits_zero(self):
+        """run_pipeline.py --quiet exits 0 in fake mode."""
+        import subprocess
+        result = subprocess.run(
+            ["python", str(PIPELINE_SCRIPT), "--quiet"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(PIPELINE_SCRIPT.parent),
+        )
+        assert result.returncode == 0, (
+            f"Pipeline failed: stderr={result.stderr[:200]}"
+        )
+
+    def test_fake_pipeline_produces_report_json(self):
+        """run_pipeline.py produces output/reports/optimization_report.json."""
+        import subprocess, json
+        result = subprocess.run(
+            ["python", str(PIPELINE_SCRIPT), "--quiet"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(PIPELINE_SCRIPT.parent),
+        )
+        assert result.returncode == 0
+        report_path = PIPELINE_SCRIPT.parent / "output" / "reports" / "optimization_report.json"
+        assert report_path.exists(), f"Missing report: {report_path}"
+        with open(report_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        assert "gate_decision" in data
+        assert "baseline" in data
+
+    def test_fake_pipeline_produces_audit_dir(self):
+        """run_pipeline.py produces output/audit/<timestamp>/ directory."""
+        import subprocess
+        result = subprocess.run(
+            ["python", str(PIPELINE_SCRIPT), "--quiet"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(PIPELINE_SCRIPT.parent),
+        )
+        assert result.returncode == 0
+        audit_dir = PIPELINE_SCRIPT.parent / "output" / "audit"
+        assert audit_dir.exists()
+        subdirs = [d for d in audit_dir.iterdir() if d.is_dir()]
+        assert len(subdirs) >= 1, f"No audit subdirectories in {audit_dir}"
+
+    def test_fake_pipeline_rejects_broken_evalset(self):
+        """run_pipeline.py with non-existent evalset exits non-zero."""
+        import subprocess
+        result = subprocess.run(
+            ["python", str(PIPELINE_SCRIPT), "--quiet", "--val", "nonexistent.json"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(PIPELINE_SCRIPT.parent),
+        )
+        # Should fail when evalset is missing
+        assert result.returncode != 0, (
+            f"Expected non-zero exit for broken evalset, got {result.returncode}"
+        )

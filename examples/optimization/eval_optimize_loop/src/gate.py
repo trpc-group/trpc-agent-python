@@ -285,6 +285,51 @@ class AcceptanceGate:
         return rule.get("enabled", False)
 
     @staticmethod
+    def fail_closed_for_unreadable_evalset(
+        original_decision: GateDecision,
+        gate_strategy: str,
+        error_detail: str = "",
+    ) -> GateDecision:
+        """Override gate decision when evalset is unreadable.
+
+        Replaces the skipped critical_case_no_regress check (from empty
+        critical_case_ids) with a failed one and forces accepted=False.
+        This ensures the fail-closed path is exercised by the same code
+        in both production and tests.
+
+        Args:
+            original_decision: GateDecision from gate.decide() with empty ids.
+            gate_strategy: Original gate strategy string.
+            error_detail: Root-cause exception info from the failed read.
+
+        Returns:
+            GateDecision with accepted=False and a failed critical check.
+        """
+        detail = (
+            "无法读取 evalset 文件，"
+            "无法验证关键 case 是否退步"
+        )
+        if error_detail:
+            detail += f"; root cause: {error_detail}"
+        override_checks = [
+            c for c in original_decision.checks
+            if c.name != "critical_case_no_regress"
+        ] + [
+            GateCheck(
+                name="critical_case_no_regress",
+                passed=False,
+                description="关键 case 检查失败",
+                detail=detail,
+            )
+        ]
+        return GateDecision(
+            accepted=False,
+            reason="CRITICAL: cannot read evalset for critical case verification",
+            checks=override_checks,
+            strategy=gate_strategy,
+        )
+
+    @staticmethod
     def _build_reason(accepted: bool, checks: list[GateCheck]) -> str:
         if accepted:
             return "所有 gate 检查通过，接受此候选 prompt"

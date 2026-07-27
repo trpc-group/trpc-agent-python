@@ -431,7 +431,7 @@ def run_optimization(
     """Convenience function for one-shot optimization.
 
     Args:
-        attribution_report: Phase 2 ????
+        attribution_report: Phase 2 attribution report
         mode: "fake" | "real"
         config_path: path to optimizer.json config
 

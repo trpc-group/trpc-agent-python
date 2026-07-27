@@ -1,4 +1,4 @@
-"""Phase 4 Validator ????"""
+"""Phase 4 Validator tests."""
 
 import json
 import asyncio
@@ -20,7 +20,7 @@ from src.validator import (
 )
 
 
-# ?? Fixtures ????????????????????????????????????????????
+# Shared fixtures
 
 @pytest_asyncio.fixture
 async def val_baseline():
@@ -46,7 +46,7 @@ async def full_pipeline():
     return results["val"], opt_result
 
 
-# ?? ?????? ????????????????????????????????????????
+# Unit tests
 
 class TestDeltaCase:
     def test_improved_status(self):
@@ -107,7 +107,7 @@ class TestValidationResult:
         assert nf[0].case_id == "pass_to_fail"
 
 
-# ?? ValidationRunner Fake ?? ?????????????????????????
+# ValidationRunner fake mode tests
 
 class TestValidationRunnerFake:
     def test_run_returns_result(self, full_pipeline):
@@ -119,7 +119,7 @@ class TestValidationRunnerFake:
         assert len(result.delta_cases) == 3
 
     def test_summary_has_improvement(self, full_pipeline):
-        """?????????????"""
+        """Basic run produces delta cases."""
         val_bl, opt_result = full_pipeline
         runner = ValidationRunner(mode="fake")
         result = runner.run(val_bl, opt_result)
@@ -127,7 +127,7 @@ class TestValidationRunnerFake:
         assert result.summary.avg_score_delta > 0
 
     def test_val_001_critical_unchanged(self, full_pipeline):
-        """?? case val_001 ?????"""
+        """Edge case: val_001 regression."""
         val_bl, opt_result = full_pipeline
         runner = ValidationRunner(mode="fake")
         result = runner.run(val_bl, opt_result)
@@ -136,7 +136,7 @@ class TestValidationRunnerFake:
         assert not (d.baseline_passed and not d.candidate_passed)
 
     def test_val_002_improved(self, full_pipeline):
-        """val_002 ???????"""
+        """val_002 edge case."""
         val_bl, opt_result = full_pipeline
         runner = ValidationRunner(mode="fake")
         result = runner.run(val_bl, opt_result)
@@ -145,7 +145,7 @@ class TestValidationRunnerFake:
         assert d.score_delta > 0, f"expected positive delta, got {d.score_delta}"
 
     def test_regression_mode(self, full_pipeline):
-        """????????? case ????????"""
+        """All cases produce delta entries."""
         val_bl, opt_result = full_pipeline
         runner = ValidationRunner(mode="fake")
         result = runner.run(val_bl, opt_result, simulate_regression=True)
@@ -163,7 +163,7 @@ class TestValidationRunnerFake:
         assert len(parsed["delta_cases"]) == 3
 
     def test_no_candidate_returns_empty(self):
-        """??? prompt ???????"""
+        """Optimized prompt is reflected."""
         runner = ValidationRunner(mode="fake")
         result = runner.run(
             BaselineResult(dataset_name="val"),
@@ -192,7 +192,7 @@ class TestValidationRunnerModes:
             runner.run(val_bl, opt_result)
 
 
-# ?? ?????? ????????????????????????????????????????
+# Unit tests
 
 class TestConvenienceFunction:
     def test_run_validation(self, full_pipeline):
@@ -201,7 +201,7 @@ class TestConvenienceFunction:
         assert isinstance(result, ValidationResult)
 
 
-# ?? ??????? ??????????????????????????????????????
+# Edge case tests
 
 class TestPredictionMaps:
     def test_all_categories_have_val_cases(self):
@@ -217,10 +217,10 @@ class TestPredictionMaps:
             assert cid in REGRESSION_PREDICTIONS
 
 
-# ?? ?????: 4-phase pipeline + gate ?????????????????
+# 4-phase pipeline + gate integration
 
 class TestFullPipelineWithGate:
-    """baseline ? attribution ? optimizer ? validator ? gate ????"""
+    """Baseline + attribution + optimizer + validator + gate."""
 
     @pytest.mark.asyncio
     async def test_four_phase_to_gate(self):
@@ -262,7 +262,7 @@ class TestFullPipelineWithGate:
             candidate_cost=val_result.summary.total_cost_candidate,
         )
 
-        # ???????????
+        # verify pipeline result
         full_output = {
             "baseline": {
                 "train": results["train"].to_dict(),

@@ -33,16 +33,18 @@ def _read_critical_case_ids(val_path: Path):
     """Dynamically read critical case ids from evalset.
 
     Returns:
-        list[str] on success (may be empty if no critical cases configured).
-        None on read/parse failure — caller should fail-close the gate.
+        (list[str], None) on success.
+        (None, str) on failure — caller should fail-close the gate
+        and include the error detail in the gate decision.
     """
     try:
         with open(val_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return [c["case_id"] for c in data.get("cases", []) if c.get("critical", False)]
+        return [c["case_id"] for c in data.get("cases", []) if c.get("critical", False)], None
     except Exception as e:
-        print(f"ERROR: cannot read critical case ids from {val_path}: {e}", file=sys.stderr)
-        return None  # read failed: gate should reject, not silently skip
+        error_msg = f"{type(e).__name__}: {e}"
+        print(f"ERROR: cannot read critical case ids from {val_path}: {error_msg}", file=sys.stderr)
+        return None, error_msg
 
 
 async def main():
@@ -138,16 +140,12 @@ async def main():
             cid: min(1.0, score + 0.05) for cid, score in train_bl.score_map.items()
         }
 
-        critical_case_ids = _read_critical_case_ids(val_path)
+        critical_case_ids, critical_read_error = _read_critical_case_ids(val_path)
         if critical_case_ids is None:
             # evalset read failed: reject rather than silently skip critical-case gate
             if not args.quiet:
                 print("  WARNING: critical case check FAILED (evalset unreadable), rejecting", file=sys.stderr)
-            critical_case_ids = []  # gate will see empty → skip, but we handle below
-            # Mark gate as rejected due to unreadable critical cases
-            _critical_read_failed = True
-        else:
-            _critical_read_failed = False
+            critical_case_ids = []
 
         decision = gate.decide(
             baseline_scores=val_bl.score_map,
@@ -158,23 +156,9 @@ async def main():
             candidate_cost=val_result.summary.total_cost_candidate,
             critical_case_ids=critical_case_ids,
         )
-        if _critical_read_failed:
-            # Override: evalset unreadable -> cannot verify critical cases -> reject.
-            # Also add an explicit failed check so the gate report shows WHY.
-            # Replace the skipped critical_case check (from empty ids) with a failed one
-            override_checks = [c for c in decision.checks if c.name != "critical_case_no_regress"] + [
-                GateCheck(
-                    name="critical_case_no_regress",
-                    passed=False,
-                    description="关键 case 检查失败",
-                    detail="无法读取 evalset 文件，无法验证关键 case 是否退步",
-                )
-            ]
-            decision = GateDecision(
-                accepted=False,
-                reason="CRITICAL: cannot read evalset for critical case verification",
-                checks=override_checks,
-                strategy=gate.strategy,
+        if critical_read_error is not None:
+            decision = AcceptanceGate.fail_closed_for_unreadable_evalset(
+                decision, gate.strategy, critical_read_error
             )
         gate_dict = {
             "accepted": decision.accepted,

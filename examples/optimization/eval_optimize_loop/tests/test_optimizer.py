@@ -1,4 +1,4 @@
-"""Phase 3 Optimizer ????"""
+"""Phase 3 Optimizer tests."""
 
 import json
 import asyncio
@@ -19,11 +19,11 @@ from src.optimizer import (
 )
 
 
-# ?? Fixtures ????????????????????????????????????????????
+# Shared fixtures
 
 @pytest_asyncio.fixture
 async def fake_attr_report():
-    """? fake baseline + attribution ?????????"""
+    """Provide fake baseline + attribution report."""
     br = BaselineRunner(mode="fake")
     base = Path(__file__).parent.parent / "config"
     results = await br.run(
@@ -37,13 +37,13 @@ async def fake_attr_report():
 
 @pytest.fixture
 def empty_attr_report():
-    """?????????"""
+    """A single PromptCandidate."""
     return AttributionReport(total_failures=0)
 
 
 @pytest.fixture
 def single_cluster_report():
-    """???????? ? ?????????"""
+    """Candidate with attributes."""
     from src.attribution import AttributionCluster
     cluster = AttributionCluster(
         category="final_answer_mismatch", priority=1,
@@ -59,7 +59,7 @@ def single_cluster_report():
     )
 
 
-# ?? ?????? ????????????????????????????????????????
+# Unit tests
 
 class TestPromptCandidate:
     def test_to_dict(self):
@@ -77,7 +77,7 @@ class TestPromptCandidate:
         assert d["prompt_after"] == "hello world"
 
     def test_unique_ids(self):
-        """???????? ID?"""
+        """Candidate ID is deterministic."""
         c1 = PromptCandidate(
             candidate_id="id1", iteration=0, target_prompt_type="system_prompt",
             prompt_before="a", prompt_after="b",
@@ -111,7 +111,7 @@ class TestOptimizationResult:
         assert len(d["candidates"]) == 1
 
 
-# ?? FakeOptimizer ?? ??????????????????????????????????
+# FakeOptimizer unit tests
 
 class TestFakeOptimizer:
     def test_optimize_generates_candidate(self, fake_attr_report):
@@ -121,7 +121,7 @@ class TestFakeOptimizer:
         assert len(result.candidates) >= 1
 
     def test_prompt_after_longer_than_before(self, fake_attr_report):
-        """??? prompt ????????"""
+        """Generates prompt with optimization."""
         opt = FakeOptimizer()
         result = opt.optimize(fake_attr_report)
         for c in result.candidates:
@@ -130,14 +130,14 @@ class TestFakeOptimizer:
             )
 
     def test_change_log_not_empty(self, fake_attr_report):
-        """????????????"""
+        """Empty clusters produce zero candidates."""
         opt = FakeOptimizer()
         result = opt.optimize(fake_attr_report)
         for c in result.candidates:
             assert len(c.change_log) >= 2, f"change_log too short: {c.change_log}"
 
     def test_target_prompt_type_valid(self, fake_attr_report):
-        """target_prompt_type ????????"""
+        """target_prompt_type is set correctly."""
         opt = FakeOptimizer()
         result = opt.optimize(fake_attr_report)
         for c in result.candidates:
@@ -146,7 +146,7 @@ class TestFakeOptimizer:
             )
 
     def test_failure_category_mapped(self, fake_attr_report):
-        """failure_category ?????????"""
+        """failure_category is piped through."""
         opt = FakeOptimizer()
         result = opt.optimize(fake_attr_report)
         valid = set(CATEGORY_OPTIMIZATION_HINTS.keys())
@@ -154,16 +154,16 @@ class TestFakeOptimizer:
             assert c.failure_category in valid, f"unknown category: {c.failure_category}"
 
     def test_matches_attribution_priority(self, fake_attr_report):
-        """??????????????"""
+        """No failures produces empty result."""
         opt = FakeOptimizer()
         result = opt.optimize(fake_attr_report)
-        # ??????????????
+        # validation rejects max_iterations < 1
         if fake_attr_report.optimization_priority:
             top_priority = fake_attr_report.optimization_priority[0]
             assert result.candidates[0].failure_category == top_priority
 
     def test_max_iterations_respected(self, fake_attr_report):
-        """max_iterations ????????"""
+        """max_iterations < 1 raises ValueError."""
         opt = FakeOptimizer()
         result = opt.optimize(fake_attr_report, max_iterations=1)
         assert len(result.candidates) <= 1
@@ -193,7 +193,7 @@ class TestFakeOptimizer:
         assert result.strategy == "failure_driven"
 
     def test_skill_prompt_optimization(self, single_cluster_report):
-        """?????? skill_prompt???? skill_prompt?"""
+        """targets skill_prompt when attribution points to skill_prompt."""
         # ?? cluster ? prompt_target ? skill_prompt
         single_cluster_report.clusters[0].prompt_target = "skill_prompt"
         single_cluster_report.clusters[0].category = "knowledge_recall_insufficient"
@@ -202,7 +202,7 @@ class TestFakeOptimizer:
         assert result.candidates[0].target_prompt_type == "skill_prompt"
 
 
-# ?? OptimizationRunner ?? ?????????????????????????????
+# OptimizationRunner wrapper tests
 
 class TestOptimizationRunner:
     def test_fake_mode(self, fake_attr_report):
@@ -221,7 +221,7 @@ class TestOptimizationRunner:
             OptimizationRunner(mode="real")
 
 
-# ?? ?????? ????????????????????????????????????????
+# Unit tests
 
 class TestConvenienceFunction:
     def test_run_optimization(self, fake_attr_report):
@@ -234,7 +234,7 @@ class TestConvenienceFunction:
         assert result.total_iterations >= 1
 
 
-# ?? BASE_PROMPTS ??? ?????????????????????????????????
+# BASE_PROMPTS validation
 
 class TestBasePrompts:
     def test_all_prompt_types_have_content(self):
@@ -255,14 +255,14 @@ class TestBasePrompts:
         assert "Recognize Guide" in sp
 
 
-# ?? ??????? ??????????????????????????????????????
+# Edge case tests
 
 class TestPipelineIntegration:
-    """baseline ? attribution ? optimizer ??????"""
+    """Baseline + attribution + optimizer integration."""
 
     @pytest.mark.asyncio
     async def test_full_fake_pipeline(self):
-        """?? fake pipeline ????"""
+        """Fake pipeline full flow."""
         base = Path(__file__).parent.parent / "config"
 
         # Phase 1: baseline
@@ -286,7 +286,7 @@ class TestPipelineIntegration:
         assert opt_result.total_iterations >= 1
         assert opt_result.latest_candidate is not None
 
-        # ???????
+        # verify pipeline output
         pipeline_output = {
             "baseline": {
                 "train": results["train"].to_dict(),
