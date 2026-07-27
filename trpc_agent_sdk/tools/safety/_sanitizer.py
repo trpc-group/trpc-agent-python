@@ -13,7 +13,7 @@ from typing import Any
 DEFAULT_EVIDENCE_CHARS = 240
 REDACTED_SECRET = "[REDACTED_SECRET]"
 REDACTED_PRIVATE_KEY = "[REDACTED_PRIVATE_KEY]"
-_OUTPUT_KEYS = ("stdout", "stderr", "output")
+_OUTPUT_KEYS = ("formatted_output", "stdout", "stderr", "output")
 _TRUNCATION_MARKER = "[TRUNCATED]"
 
 _PRIVATE_KEY_RE = re.compile(

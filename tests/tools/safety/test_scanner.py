@@ -127,6 +127,13 @@ def test_truncation_with_zero_budget_is_visible():
     assert truncate_output("x" * 20, 1) == "!"
 
 
+def test_formatted_output_is_truncated():
+    result = truncate_output({"stdout": "y" * 20, "formatted_output": "x" * 20}, 10)
+    assert result["formatted_output"] == "x" * 10
+    assert result["stdout"] == ""
+    assert result["truncated"] is True
+
+
 @pytest.mark.parametrize(
     "code",
     [
