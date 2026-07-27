@@ -18,7 +18,7 @@ def set_safety_telemetry(report: SafetyReport) -> None:
     No-op when no span is active. None values are skipped.
     """
     span = trace.get_current_span()
-    if not span or not span.is_recording():
+    if not span.is_recording():
         return
 
     for key, value in report.telemetry_attributes.items():

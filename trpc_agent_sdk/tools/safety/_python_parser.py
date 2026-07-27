@@ -20,6 +20,7 @@ from ._rules import (
     PYTHON_INSTALL_PATTERNS,
     PYTHON_NETWORK_CALLS,
     PYTHON_NETWORK_IMPORTS,
+    PYTHON_PARSE_FAILURE_RULE_ID,
     PYTHON_RESOURCE_PATTERNS,
     PYTHON_SYSTEM_CALLS,
     SENSITIVE_ENV_KEYS,
@@ -397,8 +398,8 @@ class PythonParser:
         # Also add a top-level finding about the parse failure
         findings.append(
             SafetyFinding(
-                rule_id="R003_SHELL_PIPE_EXECUTION",
-                rule_name="Parse Failure",
+                rule_id=PYTHON_PARSE_FAILURE_RULE_ID,
+                rule_name="Python Parse Failure",
                 risk_type=RiskType.SYSTEM_COMMAND,
                 risk_level=RiskLevel.MEDIUM,
                 evidence=sanitize_text(script[:200], self._policy.secret_patterns),

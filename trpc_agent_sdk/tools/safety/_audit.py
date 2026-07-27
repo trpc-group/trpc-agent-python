@@ -23,7 +23,6 @@ from pathlib import Path
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Optional
 
 from ._types import Decision
 from ._types import RiskLevel
@@ -48,7 +47,6 @@ class AuditEvent:
     language: ScriptLanguage
     timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     rule_ids: List[str] = field(default_factory=list)
-    script_path: Optional[str] = None
     trace_attributes: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -59,7 +57,7 @@ class AuditLogger:
     is a no-op (no file written).
     """
 
-    def __init__(self, path: Optional[str] = None) -> None:
+    def __init__(self, path: str | None = None) -> None:
         self.path = Path(path) if path else None
 
     @classmethod

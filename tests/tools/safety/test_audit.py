@@ -49,11 +49,9 @@ class TestAuditEvent:
             sanitized=False,
             target=ScanTarget.TOOL,
             language=ScriptLanguage.BASH,
-            script_path="/tmp/script.sh",
             trace_attributes={"trace_id": "abc123"},
         )
         assert len(event.rule_ids) == 2
-        assert event.script_path == "/tmp/script.sh"
         assert event.trace_attributes["trace_id"] == "abc123"
 
 

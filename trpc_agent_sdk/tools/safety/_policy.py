@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
+import re
 from typing import Any
 from typing import Dict
 from typing import List
@@ -23,6 +24,13 @@ class PolicyConfig:
 
     All fields have conservative defaults. Policies can be loaded from
     a YAML file so operators can tune rules without code changes.
+
+    Note on ``allowed_commands``:
+        When non-empty, EVERY command whose base token is not in this list
+        generates a MEDIUM-risk finding (R003_SYSTEM_COMMAND, "Command Not
+        Allowed").  This acts as a positive allowlist: unlisted commands
+        are flagged for review, not blocked.  Shell keywords (for, if,
+        while, case, etc.) are exempt from this check.
     """
 
     allowed_commands: List[str] = field(default_factory=list)
@@ -129,6 +137,13 @@ class PolicyConfig:
                 for i, item in enumerate(value):
                     if not isinstance(item, str):
                         raise ValueError(f"{key}[{i}] must be a str, got {type(item).__name__}")
+                    # Pre-compile secret_patterns to catch invalid/unbounded
+                    # regex at policy-load time (prevents ReDoS at runtime).
+                    if key == "secret_patterns":
+                        try:
+                            re.compile(item)
+                        except re.error as exc:
+                            raise ValueError(f"secret_patterns[{i}] is not a valid regex: {exc}") from exc
             elif key in bool_fields:
                 if not isinstance(value, bool):
                     raise ValueError(f"{key} must be a bool, got {type(value).__name__}")
@@ -173,14 +188,31 @@ class PolicyConfig:
         """Return True if command is in allowed_commands."""
         return command in self.allowed_commands
 
+    @staticmethod
+    def _path_has_extension(path: str) -> bool:
+        """Return True if the path basename contains a dot after position 0.
+
+        Hidden directories like .ssh, .aws, .kube return False (dot at
+        position 0). File entries like docker.sock, cert.pem return True.
+        """
+        basename = path.rstrip("/").rsplit("/", 1)[-1]
+        return "." in basename[1:]
+
     def is_path_denied(self, path_text: str) -> bool:
         """Return True if path_text is a proper sub-path of any denied entry.
 
         A path that equals a denied directory exactly (e.g. cwd="/root")
         is not denied — only paths inside it (e.g. "/root/.ssh") are.
+        File-like entries (e.g. /var/run/docker.sock) are denied on
+        exact match as well as sub-path match.
         """
         for denied in self.denied_paths:
             if path_text == denied:
+                # Exact match: deny if the entry looks like a file
+                # (e.g. /var/run/docker.sock), but allow if directory-like
+                # (e.g. cwd="/etc" — being IN the denied dir is allowed).
+                if self._path_has_extension(denied):
+                    return True
                 continue
             if path_text.startswith(denied + "/") or path_text.startswith(denied + "\\"):
                 return True

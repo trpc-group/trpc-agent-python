@@ -194,6 +194,8 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             language=normalize_language(block.language or ""),
             tool_name="UnsafeLocalCodeExecutor",
             target=ScanTarget.CODE_EXECUTOR,
+            cwd=self.work_dir,
+            tool_metadata={"timeout": self.timeout},
         )
         report = self.safety_scanner.scan(req)
         if self._safety_audit:

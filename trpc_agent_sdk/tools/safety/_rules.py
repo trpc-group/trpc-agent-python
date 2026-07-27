@@ -168,6 +168,9 @@ PYTHON_INSTALL_PATTERNS = [
     (re.compile(r"yum\s+install"), "R004_YUM_INSTALL"),
 ]
 
+# Rule ID for Python AST parse failures (regex fallback path)
+PYTHON_PARSE_FAILURE_RULE_ID = "R007_PARSE_FAILURE"
+
 PYTHON_RESOURCE_PATTERNS = [
     (re.compile(r"while\s+True\s*:"), "R005_INFINITE_LOOP", "medium"),
     (re.compile(r"while\s+1\s*:"), "R005_INFINITE_LOOP", "medium"),
@@ -235,8 +238,14 @@ def sanitize_text(text: str, extra_patterns: list[str] | None = None) -> str:
         text: The text to sanitize.
         extra_patterns: Additional regex patterns from PolicyConfig.secret_patterns.
     """
-    text = SECRET_VALUE_RE.sub("[SANITIZED]", text)
-    text = SECRET_KEY_VALUE_RE.sub(r"\1=[SANITIZED]", text)
+    try:
+        text = SECRET_VALUE_RE.sub("[SANITIZED]", text)
+    except re.error:
+        pass
+    try:
+        text = SECRET_KEY_VALUE_RE.sub(r"\1=[SANITIZED]", text)
+    except re.error:
+        pass
     if extra_patterns:
         for pat in extra_patterns:
             try:

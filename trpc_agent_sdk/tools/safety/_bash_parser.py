@@ -320,6 +320,7 @@ class BashParser:
                 continue
 
             # Denied commands via token-prefix match
+            found_denied = False
             for denied in self._policy.denied_commands:
                 try:
                     denied_tokens = shlex.split(denied)
@@ -335,9 +336,13 @@ class BashParser:
                             evidence=sanitize_text(stripped, self._policy.secret_patterns),
                             recommendation=f"Command '{denied}' is denied by safety policy.",
                         ))
-                    return findings
+                    found_denied = True
+                    break  # Break inner loop; continue scanning remaining lines
+            if found_denied:
+                continue
 
             # Review commands via token-prefix match
+            found_review = False
             for review_cmd in self._policy.review_commands:
                 try:
                     review_tokens = shlex.split(review_cmd)
@@ -353,7 +358,10 @@ class BashParser:
                             evidence=sanitize_text(stripped, self._policy.secret_patterns),
                             recommendation=f"Command '{review_cmd}' requires human review per safety policy.",
                         ))
-                    return findings
+                    found_review = True
+                    break  # Break inner loop; continue scanning remaining lines
+            if found_review:
+                continue
 
             # Allowed commands check for this line
             if (self._policy.allowed_commands and base_cmd not in _SHELL_KEYWORDS
@@ -371,6 +379,10 @@ class BashParser:
         # Check for shell pipelines requiring review (whole-script check)
         if self._policy.review_shell_pipelines:
             cleaned = self._strip_comments_and_quotes(script)
+            # Strip shell case-block terminators (;;) and fallthrough
+            # markers (;;&, ;&) to prevent false pipeline detection on
+            # legitimate control structures like case...esac blocks.
+            cleaned = cleaned.replace(";;&", "").replace(";;", "").replace(";&", "")
             if "|" in cleaned or ";" in cleaned:
                 findings.append(
                     SafetyFinding(

@@ -107,6 +107,12 @@ class ToolSafetyFilter(BaseFilter):
             }
             rsp.is_continue = False
 
+        # Return None explicitly to document the mutation contract:
+        # BaseFilter.run() checks the mutated rsp object, not the return value.
+        # If the framework ever changes to use the return value, the blocking
+        # logic would silently break. This explicit None makes the contract visible.
+        return None
+
 
 def add_tool_safety_filter(tools: List[Any],
                            policy: Optional[PolicyConfig] = None,

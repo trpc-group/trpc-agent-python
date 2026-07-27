@@ -175,18 +175,44 @@ class BashTool(BaseTool):
 
             if self._enable_safety_guard and self._safety_scanner:
                 from trpc_agent_sdk.tools.safety import Decision
+                from trpc_agent_sdk.tools.safety import RiskLevel
+                from trpc_agent_sdk.tools.safety import SafetyReport
                 from trpc_agent_sdk.tools.safety import ScanRequest
+                from trpc_agent_sdk.tools.safety import ScanTarget
                 from trpc_agent_sdk.tools.safety import ScriptLanguage
                 from trpc_agent_sdk.tools.safety import set_safety_telemetry
-                report = self._safety_scanner.scan(
-                    ScanRequest(
-                        script=command,
-                        language=ScriptLanguage.BASH,
+
+                # Fail-closed: scanner exception → DENY with audit + telemetry
+                try:
+                    report = self._safety_scanner.scan(
+                        ScanRequest(
+                            script=command,
+                            language=ScriptLanguage.BASH,
+                            tool_name=self.name,
+                            target=ScanTarget.TOOL,
+                            cwd=execution_dir,
+                            env=os.environ.copy(),
+                            tool_metadata={"timeout": timeout},
+                        ))
+                except Exception:
+                    report = SafetyReport(
                         tool_name=self.name,
-                        cwd=execution_dir,
-                        env=os.environ.copy(),
-                        tool_metadata={"timeout": timeout},
-                    ))
+                        decision=Decision.DENY,
+                        risk_level=RiskLevel.CRITICAL,
+                        blocked=True,
+                        sanitized=False,
+                        duration_ms=0,
+                        language=ScriptLanguage.BASH,
+                        target=ScanTarget.TOOL,
+                        rule_ids=["SAFETY_SCANNER_ERROR"],
+                        summary="Safety scanner error — execution blocked.",
+                        telemetry_attributes={
+                            "tool.safety.decision": "deny",
+                            "tool.safety.risk_level": "critical",
+                            "tool.safety.rule_id": "SAFETY_SCANNER_ERROR",
+                        },
+                    )
+
                 should_block = (report.decision == Decision.DENY
                                 or (self._block_on_review and report.decision == Decision.NEEDS_HUMAN_REVIEW))
                 report.set_blocked(should_block)
