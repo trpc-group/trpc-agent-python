@@ -71,6 +71,15 @@ def test_jsonl_audit_has_required_fields(tmp_path):
     assert data["redacted"] is True
 
 
+def test_jsonl_audit_fsyncs_written_record(monkeypatch, tmp_path):
+    fsync = MagicMock()
+    monkeypatch.setattr("trpc_agent_sdk.tools.safety._audit.os.fsync", fsync)
+
+    JsonlAuditSink(tmp_path / "audit.jsonl").emit(create_audit_event(_report(), "Bash", True))
+
+    fsync.assert_called_once()
+
+
 def test_path_lock_is_weakly_held(tmp_path):
     sink = JsonlAuditSink(tmp_path / "audit.jsonl")
     key = str((tmp_path / "audit.jsonl").resolve())
@@ -133,8 +142,8 @@ def test_jsonl_audit_applies_posix_fchmod(monkeypatch, tmp_path):
     )
     monkeypatch.setattr("trpc_agent_sdk.tools.safety._audit.os.fchmod", fchmod)
 
-    with _open_secure_file(path) as stream:
-        stream.write("audit\n")
+    descriptor = _open_secure_file(path)
+    os.close(descriptor)
 
     fchmod.assert_called_once()
 

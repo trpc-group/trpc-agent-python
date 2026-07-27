@@ -13,7 +13,6 @@ import os
 from pathlib import Path
 import stat
 import threading
-from typing import IO
 from typing import Protocol
 import weakref
 
@@ -69,15 +68,15 @@ class AuditSink(Protocol):
 
 
 class JsonlAuditSink:
-    """Single-process, thread-safe JSONL audit sink."""
+    """Thread-safe JSONL audit sink using single-write append records."""
 
     def __init__(self, path: str | Path):
         self._path = Path(path)
         self._lock = _shared_path_lock(self._path)
 
     def emit(self, event: SafetyAuditEvent) -> None:
-        """Append and flush one JSON event."""
-        line = event.model_dump_json() + "\n"
+        """Append and fsync one JSON event."""
+        line = (event.model_dump_json() + "\n").encode("utf-8")
         try:
             with self._lock:
                 missing_parents = []
@@ -88,9 +87,12 @@ class JsonlAuditSink:
                 self._path.parent.mkdir(parents=True, exist_ok=True)
                 for directory in missing_parents:
                     directory.chmod(0o700)
-                with _open_secure_file(self._path) as stream:
-                    stream.write(line)
-                    stream.flush()
+                descriptor = _open_secure_file(self._path)
+                try:
+                    os.write(descriptor, line)
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
         except OSError as error:
             del error
             raise SafetyAuditError("tool safety audit write failed") from None
@@ -151,7 +153,7 @@ def _shared_path_lock(path: Path) -> _PathLock:
         return lock
 
 
-def _open_secure_file(path: Path) -> IO[str]:
+def _open_secure_file(path: Path) -> int:
     flags = os.O_APPEND | os.O_CREAT | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(path, flags, _AUDIT_FILE_MODE)
     try:
@@ -161,7 +163,7 @@ def _open_secure_file(path: Path) -> IO[str]:
             raise OSError("audit path must be a regular non-symlink file")
         if os.name == "posix":
             os.fchmod(descriptor, _AUDIT_FILE_MODE)
-        return os.fdopen(descriptor, "a", encoding="utf-8", newline="\n")
+        return descriptor
     except Exception:
         os.close(descriptor)
         raise
