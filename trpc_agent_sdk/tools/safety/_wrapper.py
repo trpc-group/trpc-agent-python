@@ -31,7 +31,6 @@ from ._types import SafetyFinding
 from ._types import SafetyReport
 from ._types import ScanRequest
 from ._types import ScanTarget
-from ._types import ScriptLanguage
 from ._types import aggregate_decision
 from ._types import normalize_language
 
