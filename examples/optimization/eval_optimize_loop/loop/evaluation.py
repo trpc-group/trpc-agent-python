@@ -228,7 +228,7 @@ def _metric_reasons(runs: list[EvalCaseResult]) -> dict[str, str]:
     return {name: "; ".join(dict.fromkeys(values)) for name, values in reasons.items()}
 
 
-def _invocation_snapshots(runs: list[EvalCaseResult], ) -> tuple[list[InvocationSnapshot], list[InvocationSnapshot]]:
+def _invocation_snapshots(runs: list[EvalCaseResult]) -> tuple[list[InvocationSnapshot], list[InvocationSnapshot]]:
     actual: list[InvocationSnapshot] = []
     expected: list[InvocationSnapshot] = []
     for run in runs:

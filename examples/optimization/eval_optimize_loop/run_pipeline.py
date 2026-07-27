@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-if __package__ in (None, ""):
+if __package__ in (None, ""):  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from examples.optimization.eval_optimize_loop.loop.models import InputPaths
@@ -67,8 +67,8 @@ def main() -> int:
             )))
     print(f"{result.report.status}: {result.json_path}")
     print(result.markdown_path)
-    return 1 if result.report.failures else 0
+    return 0 if result.report.gate.accepted and not result.report.failures else 1
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())

@@ -11,6 +11,7 @@ from examples.optimization.eval_optimize_loop.loop.models import InputPaths
 from examples.optimization.eval_optimize_loop.loop.models import PipelineOptions
 from examples.optimization.eval_optimize_loop.loop.pipeline import _write_back_and_report
 from examples.optimization.eval_optimize_loop.loop.pipeline import _failure_result
+from examples.optimization.eval_optimize_loop.loop.pipeline import _sdk_version
 from examples.optimization.eval_optimize_loop.loop.pipeline import run_pipeline
 from examples.optimization.eval_optimize_loop.loop import pipeline as pipeline_module
 from examples.optimization.eval_optimize_loop.loop.evaluation import validate_inputs
@@ -120,6 +121,10 @@ def test_rollback_failure_details_are_audited(tmp_path):
     result = _failure_result(_options(tmp_path), time.monotonic(), error)
 
     assert "rollback failed" in result.report.failures[0]
+
+
+def test_sdk_version_is_available():
+    assert _sdk_version() != "unknown"
 
 
 def test_write_back_report_matches_updated_prompt(tmp_path):

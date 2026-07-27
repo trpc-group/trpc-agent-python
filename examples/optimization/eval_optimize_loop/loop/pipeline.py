@@ -447,5 +447,5 @@ def _git_sha() -> str:
 
 
 def _sdk_version() -> str:
-    import trpc_agent_sdk
-    return str(getattr(trpc_agent_sdk, "__version__", "unknown"))
+    from trpc_agent_sdk.version import __version__
+    return str(__version__)
