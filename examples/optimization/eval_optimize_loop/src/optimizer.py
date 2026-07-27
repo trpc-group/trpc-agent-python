@@ -219,7 +219,7 @@ class FakeOptimizer:
                 attribution_summary={"note": "no failures to optimize"},
             )
 
-                # Append strategy lines to change_log
+        # Build priority queue from attribution clusters
         priority_queue = self._build_priority_queue(attribution_report)
 
         for iteration, target in enumerate(priority_queue[:max_iterations]):
