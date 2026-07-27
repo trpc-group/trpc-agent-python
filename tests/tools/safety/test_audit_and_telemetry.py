@@ -102,6 +102,27 @@ def test_jsonl_audit_secures_new_parent_directories(tmp_path):
         assert stat.S_IMODE(path.parent.parent.stat().st_mode) == 0o700
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission contract")
+def test_jsonl_audit_secures_existing_parent_directory(tmp_path):
+    parent = tmp_path / "audit"
+    parent.mkdir()
+    parent.chmod(0o755)
+
+    JsonlAuditSink(parent / "audit.jsonl").emit(create_audit_event(_report(), "Bash", True))
+
+    assert stat.S_IMODE(parent.stat().st_mode) == 0o700
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission contract")
+def test_jsonl_audit_does_not_chmod_cwd_for_plain_relative_path(monkeypatch, tmp_path):
+    tmp_path.chmod(0o755)
+    monkeypatch.chdir(tmp_path)
+
+    JsonlAuditSink("audit.jsonl").emit(create_audit_event(_report(), "Bash", True))
+
+    assert stat.S_IMODE(tmp_path.stat().st_mode) == 0o755
+
+
 def test_jsonl_audit_applies_posix_fchmod(monkeypatch, tmp_path):
     path = tmp_path / "audit.jsonl"
     fchmod = MagicMock()

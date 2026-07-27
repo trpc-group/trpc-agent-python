@@ -85,6 +85,8 @@ class JsonlAuditSink:
                 missing_parents.append(parent)
                 parent = parent.parent
             self._path.parent.mkdir(parents=True, exist_ok=True)
+            if self._path.parent != Path("."):
+                self._path.parent.chmod(0o700)
             for directory in missing_parents:
                 directory.chmod(0o700)
             with self._lock:

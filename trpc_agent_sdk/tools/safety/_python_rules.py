@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
+import math
 import operator
 import re
 import shlex
@@ -78,12 +79,22 @@ def _static_truthiness(node: ast.AST) -> bool | None:
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mult):
         left = _static_value(node.left)
         right = _static_value(node.right)
+        if _finite_number(left) and _finite_number(right):
+            return bool(left * right)
         if isinstance(left, (str, bytes, list, tuple)) and isinstance(right, int) and not isinstance(right, bool):
             return bool(left) and right != 0
         if isinstance(right, (str, bytes, list, tuple)) and isinstance(left, int) and not isinstance(left, bool):
             return bool(right) and left != 0
         return None
     return None
+
+
+def _finite_number(value: object) -> bool:
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    return isinstance(value, float) and math.isfinite(value)
 
 
 def _static_value(node: ast.AST) -> object:

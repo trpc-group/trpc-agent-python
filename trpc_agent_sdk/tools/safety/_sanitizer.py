@@ -123,7 +123,9 @@ def truncate_output(value: Any, max_bytes: int) -> Any:
     result = dict(value)
     was_truncated = False
     remaining = max_bytes
-    for key in _OUTPUT_KEYS:
+    keys = list(_OUTPUT_KEYS)
+    keys.extend(key for key in result if key not in _OUTPUT_KEYS)
+    for key in keys:
         item = result.get(key)
         if not isinstance(item, str):
             continue

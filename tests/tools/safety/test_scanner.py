@@ -134,6 +134,13 @@ def test_formatted_output_is_truncated():
     assert result["truncated"] is True
 
 
+def test_dict_string_fields_share_output_budget():
+    result = truncate_output({"data": "x" * 20, "metadata": 42}, 10)
+    assert result["data"] == "x" * 10
+    assert result["metadata"] == 42
+    assert result["truncated"] is True
+
+
 @pytest.mark.parametrize(
     "code",
     [
@@ -466,6 +473,8 @@ def test_large_write_and_python_syntax_error_are_reported(guard):
         "while not 0:\n    pass",
         "while [0] * 100000000:\n    pass",
         "while \"x\" * 100000000:\n    pass",
+        "while 1 * 2:\n    pass",
+        "while 2 * 3:\n    pass",
     ],
 )
 def test_python_truthy_constant_loops_are_denied(guard, code):
@@ -478,7 +487,11 @@ def test_static_truthiness_handles_mult_without_materializing():
     assert _static_truthiness(ast.parse("[] * 100000000", mode="eval").body) is False
     assert _static_truthiness(ast.parse('"x" * 100000000', mode="eval").body) is True
     assert _static_truthiness(ast.parse("3 * \"x\"", mode="eval").body) is True
-    assert _static_truthiness(ast.parse("1 * 2", mode="eval").body) is None
+    assert _static_truthiness(ast.parse("1 * 2", mode="eval").body) is True
+    assert _static_truthiness(ast.parse("1 * 0", mode="eval").body) is False
+    assert _static_truthiness(ast.parse("True * 2", mode="eval").body) is None
+    assert _static_truthiness(ast.parse(f"{10 ** 400} * 1", mode="eval").body) is True
+    assert _static_truthiness(ast.parse("dynamic * 2", mode="eval").body) is None
     assert _static_truthiness(ast.parse("1 + 1", mode="eval").body) is None
 
 
