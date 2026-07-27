@@ -115,7 +115,13 @@ def test_string_output_truncation_is_visible():
     original = "x" * 20
     result = truncate_output(original, 10)
     assert result != original
-    assert result == "x" * 10
+    assert result == "x" * 7 + "[T]"
+
+
+def test_truncation_with_zero_budget_is_visible():
+    assert truncate_output("x" * 20, 0) == ""
+    assert truncate_output(["x" * 20], 0) == [""]
+    assert truncate_output("x" * 20, 1) == "!"
 
 
 @pytest.mark.parametrize(
@@ -366,12 +372,32 @@ def test_safety_edge_helpers_cover_invalid_and_dynamic_inputs():
     assert stdin_language("python -c code") is None
     assert stdin_language("python script.py") is None
     assert path_is_system_location("/") is True
-    assert truncate_output("hello", 3) == "hel"
+    assert truncate_output("hello", 3) == "[T]"
     assert truncate_output(["hello", 42, "world"], 6) == ["hel", 42, "", "[T]"]
     assert truncate_output(["x" * 5, "y" * 20], 20)[-1] == "[TRUNCATED]"
     assert truncate_output(42, 3) == 42
     with pytest.raises(ValueError, match="evidence_chars"):
         SafetySanitizer(0)
+
+
+def test_os_open_source_segment_unicode_error_fails_closed(monkeypatch, guard):
+    request = _request("import os\nos.open('/etc/tool-safety', flags)")
+    visitor = PythonRuleVisitor(
+        _PythonScanContext(
+            "import os\nos.open('/etc/tool-safety', flags)",
+            request,
+            guard.policy,
+            guard.sanitizer,
+        ))
+    call = ast.parse("os.open(path, flags)").body[0].value
+
+    def _raise_unicode_error(*args, **kwargs):
+        del args, kwargs
+        raise UnicodeError("bad source")
+
+    monkeypatch.setattr(ast, "get_source_segment", _raise_unicode_error)
+
+    assert visitor._is_write_call(call, "os.open") is True
 
 
 def test_python_rule_fallback_helpers_are_bounded(guard):

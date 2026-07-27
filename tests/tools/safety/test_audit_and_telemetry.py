@@ -25,6 +25,7 @@ from trpc_agent_sdk.tools.safety import SafetyFinding
 from trpc_agent_sdk.tools.safety import SafetyReport
 from trpc_agent_sdk.tools.safety._audit import create_audit_event
 from trpc_agent_sdk.tools.safety._audit import emit_report
+from trpc_agent_sdk.tools.safety._audit import _open_secure_file
 from trpc_agent_sdk.tools.safety._audit import _shared_sink_lock
 from trpc_agent_sdk.tools.safety._audit import set_safety_span_attributes
 from trpc_agent_sdk.tools.safety._audit import _PATH_LOCKS
@@ -77,25 +78,44 @@ def test_path_lock_is_weakly_held(tmp_path):
     del sink
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX permission contract")
 def test_jsonl_audit_secures_existing_file(tmp_path):
     path = tmp_path / "audit.jsonl"
-    path.write_text("", encoding="utf-8")
-    path.chmod(0o644)
+    if os.name == "posix":
+        path.write_text("", encoding="utf-8")
+        path.chmod(0o644)
 
     JsonlAuditSink(path).emit(create_audit_event(_report(), "Bash", True))
 
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    if os.name == "posix":
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX permission contract")
 def test_jsonl_audit_secures_new_parent_directories(tmp_path):
     path = tmp_path / "nested" / "deeper" / "audit.jsonl"
 
     JsonlAuditSink(path).emit(create_audit_event(_report(), "Bash", True))
 
-    assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
-    assert stat.S_IMODE(path.parent.parent.stat().st_mode) == 0o700
+    assert path.parent.exists()
+    assert path.parent.parent.exists()
+    if os.name == "posix":
+        assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+        assert stat.S_IMODE(path.parent.parent.stat().st_mode) == 0o700
+
+
+def test_jsonl_audit_applies_posix_fchmod(monkeypatch, tmp_path):
+    path = tmp_path / "audit.jsonl"
+    fchmod = MagicMock()
+    monkeypatch.setattr(
+        "trpc_agent_sdk.tools.safety._audit.os.name",
+        "posix",
+        raising=False,
+    )
+    monkeypatch.setattr("trpc_agent_sdk.tools.safety._audit.os.fchmod", fchmod)
+
+    with _open_secure_file(path) as stream:
+        stream.write("audit\n")
+
+    fchmod.assert_called_once()
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX symlink contract")

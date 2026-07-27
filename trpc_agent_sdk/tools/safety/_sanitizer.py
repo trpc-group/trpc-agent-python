@@ -14,6 +14,7 @@ DEFAULT_EVIDENCE_CHARS = 240
 REDACTED_SECRET = "[REDACTED_SECRET]"
 REDACTED_PRIVATE_KEY = "[REDACTED_PRIVATE_KEY]"
 _OUTPUT_KEYS = ("stdout", "stderr", "output")
+_TRUNCATION_MARKER = "[TRUNCATED]"
 
 _PRIVATE_KEY_RE = re.compile(
     r"-----BEGIN [^-]*PRIVATE KEY-----.*?-----END [^-]*PRIVATE KEY-----",
@@ -78,6 +79,8 @@ class SafetySanitizer:
 
 def truncate_text(value: str, max_bytes: int) -> tuple[str, bool]:
     """Truncate text at a valid UTF-8 boundary."""
+    if max_bytes <= 0:
+        return "", bool(value)
     encoded = value.encode("utf-8")
     if len(encoded) <= max_bytes:
         return value, False
@@ -88,11 +91,17 @@ def truncate_text(value: str, max_bytes: int) -> tuple[str, bool]:
 def truncate_output(value: Any, max_bytes: int) -> Any:
     """Limit common Tool output fields without changing unrelated data."""
     if isinstance(value, str):
-        return truncate_text(value, max_bytes)[0]
+        limited, changed = truncate_text(value, max_bytes)
+        if not changed or max_bytes <= 0:
+            return limited
+        marker = _truncation_marker(max_bytes)
+        marker_bytes = len(marker.encode("utf-8"))
+        content, _ = truncate_text(value, max(max_bytes - marker_bytes, 0))
+        return content + marker
     if isinstance(value, list):
         result = list(value)
         remaining = max_bytes
-        marker = "[TRUNCATED]" if max_bytes >= len("[TRUNCATED]") else ("[T]" if max_bytes >= 3 else "!")
+        marker = _truncation_marker(max_bytes)
         marker_bytes = len(marker.encode("utf-8"))
         string_bytes = sum(len(item.encode("utf-8")) for item in result if isinstance(item, str))
         reserve_marker = max_bytes > 0 and string_bytes > max_bytes
@@ -125,3 +134,13 @@ def truncate_output(value: Any, max_bytes: int) -> Any:
     if was_truncated:
         result["truncated"] = True
     return result
+
+
+def _truncation_marker(max_bytes: int) -> str:
+    if max_bytes >= len(_TRUNCATION_MARKER):
+        return _TRUNCATION_MARKER
+    if max_bytes >= 3:
+        return "[T]"
+    if max_bytes > 0:
+        return "!"
+    return ""
