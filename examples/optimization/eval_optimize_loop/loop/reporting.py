@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from pathlib import Path
 
 from .models import OptimizationReport
@@ -18,11 +19,65 @@ def write_reports(report: OptimizationReport, output_dir: Path) -> tuple[Path, P
     json_path = output_dir / REPORT_JSON_NAME
     markdown_path = output_dir / REPORT_MARKDOWN_NAME
     payload = report.model_dump(mode="json")
-    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    markdown_path.write_text(render_markdown(report), encoding="utf-8")
-    _restrict_permissions(json_path)
-    _restrict_permissions(markdown_path)
+    contents = {
+        json_path: json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        markdown_path: render_markdown(report),
+    }
+    _publish_reports(contents)
     return json_path, markdown_path
+
+
+def _publish_reports(contents: dict[Path, str]) -> None:
+    staged: dict[Path, Path] = {}
+    try:
+        for path, content in contents.items():
+            staged[path] = _stage_report(path, content)
+    except Exception:
+        for staged_path in staged.values():
+            staged_path.unlink(missing_ok=True)
+        raise
+    previous = {path: path.read_bytes() if path.exists() else None for path in contents}
+    replaced: list[Path] = []
+    try:
+        for path, staged_path in staged.items():
+            os.replace(staged_path, path)
+            replaced.append(path)
+    except Exception:
+        _restore_reports(replaced, previous)
+        raise
+    finally:
+        for staged_path in staged.values():
+            staged_path.unlink(missing_ok=True)
+
+
+def _stage_report(path: Path, content: str) -> Path:
+    return _stage_bytes(path, content.encode("utf-8"))
+
+
+def _stage_bytes(path: Path, content: bytes) -> Path:
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+    )
+    os.close(descriptor)
+    staged_path = Path(temporary_name)
+    staged_path.write_bytes(content)
+    _restrict_permissions(staged_path)
+    return staged_path
+
+
+def _restore_reports(replaced: list[Path], previous: dict[Path, bytes | None]) -> None:
+    for path in reversed(replaced):
+        content = previous[path]
+        if content is None:
+            path.unlink(missing_ok=True)
+            continue
+        staged_path = _stage_bytes(path, content)
+        try:
+            os.replace(staged_path, path)
+        finally:
+            staged_path.unlink(missing_ok=True)
 
 
 def render_markdown(report: OptimizationReport) -> str:

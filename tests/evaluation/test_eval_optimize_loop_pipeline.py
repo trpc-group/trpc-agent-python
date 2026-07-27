@@ -2,9 +2,11 @@
 
 import asyncio
 import json
+import os
 import time
 from pathlib import Path
 
+import pytest
 from trpc_agent_sdk.evaluation._target_prompt import _RollbackError
 
 from examples.optimization.eval_optimize_loop.loop.models import InputPaths
@@ -14,7 +16,9 @@ from examples.optimization.eval_optimize_loop.loop.pipeline import _failure_resu
 from examples.optimization.eval_optimize_loop.loop.pipeline import _sdk_version
 from examples.optimization.eval_optimize_loop.loop.pipeline import run_pipeline
 from examples.optimization.eval_optimize_loop.loop import pipeline as pipeline_module
+from examples.optimization.eval_optimize_loop.loop import reporting as reporting_module
 from examples.optimization.eval_optimize_loop.loop.evaluation import validate_inputs
+from examples.optimization.eval_optimize_loop.loop.reporting import write_reports
 
 ROOT = Path("examples/optimization/eval_optimize_loop")
 
@@ -115,6 +119,29 @@ def test_failure_report_keeps_validated_audit_context(tmp_path, monkeypatch):
     assert result.report.audit.case_parallelism == 1
 
 
+def test_pipeline_timeout_is_reported(tmp_path, monkeypatch):
+
+    async def stall_evaluation(*args, **kwargs):
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr(pipeline_module, "_evaluate_pair", stall_evaluation)
+    gate = json.loads((ROOT / "gate.json").read_text(encoding="utf-8"))
+    gate["max_duration_seconds"] = 0.01
+    gate_path = tmp_path / "gate.json"
+    gate_path.write_text(json.dumps(gate), encoding="utf-8")
+    options = _options(
+        tmp_path,
+        paths=_options(tmp_path).paths.model_copy(update={"gate_path": gate_path}),
+    )
+
+    started = time.monotonic()
+    result = asyncio.run(run_pipeline(options))
+
+    assert time.monotonic() - started < 1
+    assert result.report.status == "REJECTED"
+    assert result.report.failures[0].startswith("TimeoutError:")
+
+
 def test_rollback_failure_details_are_audited(tmp_path):
     error = _RollbackError([("system_prompt", RuntimeError("rollback failed"))])
 
@@ -185,3 +212,27 @@ def test_report_audit_uses_configured_num_runs(tmp_path):
     result = asyncio.run(run_pipeline(options))
 
     assert result.report.audit.num_runs == 2
+
+
+def test_report_pair_is_rolled_back_when_publish_fails(tmp_path, monkeypatch):
+    result = asyncio.run(run_pipeline(_options(tmp_path, fake_judge=True)))
+    json_before = result.json_path.read_text(encoding="utf-8")
+    markdown_before = result.markdown_path.read_text(encoding="utf-8")
+    real_replace = os.replace
+    failed = False
+
+    def fail_markdown_once(source, destination):
+        nonlocal failed
+        if Path(destination) == result.markdown_path and not failed:
+            failed = True
+            raise OSError("markdown publish failed")
+        real_replace(source, destination)
+
+    monkeypatch.setattr(reporting_module.os, "replace", fail_markdown_once)
+    result.report.status = "REJECTED"
+
+    with pytest.raises(OSError, match="markdown publish failed"):
+        write_reports(result.report, tmp_path)
+
+    assert result.json_path.read_text(encoding="utf-8") == json_before
+    assert result.markdown_path.read_text(encoding="utf-8") == markdown_before

@@ -59,8 +59,14 @@ def load_eval_set(path: Path) -> EvalSet:
 
 def validate_inputs(paths: InputPaths) -> tuple[InputBundle, OptimizeConfigFile, GateConfig]:
     """Validate paths, schemas, metric references, and split leakage."""
-    input_paths = tuple(paths.model_dump().values())
-    for path in input_paths:
+    input_paths = {
+        "prompt": paths.prompt_path,
+        "train": paths.train_path,
+        "validation": paths.validation_path,
+        "optimizer": paths.optimizer_path,
+        "gate": paths.gate_path,
+    }
+    for path in input_paths.values():
         if not path.is_file():
             raise FileNotFoundError(path)
     if paths.train_path.resolve() == paths.validation_path.resolve():
@@ -72,7 +78,7 @@ def validate_inputs(paths: InputPaths) -> tuple[InputBundle, OptimizeConfigFile,
     gate = load_gate_config(paths.gate_path)
     _validate_split_leakage(train_set, validation_set)
     _validate_gate_references(gate, optimizer, validation_set)
-    hashes = {path.name: _file_hash(path) for path in input_paths}
+    hashes = {name: _file_hash(path) for name, path in input_paths.items()}
     bundle = InputBundle(
         prompt_path=paths.prompt_path.resolve(),
         train_path=paths.train_path.resolve(),

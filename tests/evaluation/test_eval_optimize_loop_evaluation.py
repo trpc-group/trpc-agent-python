@@ -80,11 +80,11 @@ def test_validate_inputs_returns_hashes_and_gate():
 
     assert bundle.prompt_path == PROMPT.resolve()
     assert set(bundle.hashes) == {
-        PROMPT.name,
-        TRAIN.name,
-        VALIDATION.name,
-        OPTIMIZER.name,
-        GATE.name,
+        "prompt",
+        "train",
+        "validation",
+        "optimizer",
+        "gate",
     }
     assert optimizer.evaluate.get_eval_metrics()[0].metric_name == gate.primary_metric
 

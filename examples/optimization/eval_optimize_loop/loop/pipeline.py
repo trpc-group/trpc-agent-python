@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import platform
@@ -79,6 +80,21 @@ async def _run_pipeline(
             "num_runs": optimizer_config.evaluate.num_runs,
             "case_parallelism": optimizer_config.optimize.eval_case_parallelism,
         })
+    execution = _execute_pipeline(options, started, bundle, gate_config)
+    if gate_config.max_duration_seconds is None:
+        return await execution
+    return await asyncio.wait_for(
+        execution,
+        timeout=gate_config.max_duration_seconds,
+    )
+
+
+async def _execute_pipeline(
+    options: PipelineOptions,
+    started: float,
+    bundle: InputBundle,
+    gate_config,
+) -> PipelineResult:
     workspace = _prepare_workspace(bundle, options.output_dir)
     baseline = await _evaluate_pair(workspace, bundle, options, "baseline")
     optimization, candidate_prompts = await _optimize(
