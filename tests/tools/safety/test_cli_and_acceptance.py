@@ -212,7 +212,7 @@ async def test_mcp_timeout_handles_reap_communicate_error(monkeypatch):
             self.communicate_calls += 1
             if self.communicate_calls == 1:
                 await asyncio.sleep(60)
-            raise RuntimeError("pipe already closing")
+            raise OSError("pipe already closing")
 
         def kill(self):
             self.killed = True

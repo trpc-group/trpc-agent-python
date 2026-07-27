@@ -102,7 +102,7 @@ async def execute_command(command: str, timeout: float | None = None) -> dict:
                 process.communicate(),
                 timeout=PROCESS_REAP_TIMEOUT_SECONDS,
             )
-        except (asyncio.TimeoutError, ProcessLookupError, RuntimeError, ValueError):
+        except Exception:
             reap_timed_out = True
         response = {
             "return_code": None,
