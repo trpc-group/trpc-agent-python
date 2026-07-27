@@ -14,6 +14,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+from tests.sessions.replay.allowed_diff import check_governance
 from tests.sessions.replay.backends import enabled_backends
 from tests.sessions.replay.backends import in_memory_backend
 from tests.sessions.replay.backends import sqlite_backend
@@ -85,10 +86,10 @@ class TestReplaySmoke:
 
 class TestReplayConsistencyE2E:
 
-    async def test_all_cases_cross_backend(self):
+    async def test_all_cases_cross_backend(self, tmp_path):
         start = time.time()
         cases = load_cases(CASES_DIR)
-        backends, statuses = enabled_backends()
+        backends, statuses = enabled_backends(str(tmp_path))
         reference = backends[0]
         candidates = backends[1:]
 
@@ -96,6 +97,7 @@ class TestReplayConsistencyE2E:
         for case in cases:
             snap_ref = normalize_snapshot(await replay_case(reference, case))
             comparisons: list[Comparison] = []
+            all_diffs: list[object] = []
             for cand in candidates:
                 snap_cand = normalize_snapshot(await replay_case(cand, case))
                 diffs = compare_snapshots(
@@ -105,6 +107,9 @@ class TestReplayConsistencyE2E:
                     candidate_backend=cand.name,
                     allowed_diff=case.allowed_diff,
                 )
+                all_diffs.extend(diffs)
+                # 治理检查:防 allowed_diff 规则越界(超条数/超占比/无 reason)
+                check_governance(case, total_fields=len(all_diffs), used_allowed=sum(1 for d in all_diffs if d.allowed))
                 issues = check_summary_issues(
                     snap_ref.summary,
                     snap_cand.summary,

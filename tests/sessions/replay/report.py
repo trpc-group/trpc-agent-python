@@ -51,6 +51,11 @@ def _roll_up_status(comparisons: list[Comparison]) -> CaseStatus:
     statuses = {c.status for c in comparisons}
     if "mismatch" in statuses:
         return "mismatch"
+    # 混合态:同时有 skipped 和 match → 无法完全判断一致性 → 保守返回 mismatch
+    has_skipped = "skipped" in statuses
+    has_non_skipped = any(s in {"match", "not_applicable"} for s in statuses)
+    if has_skipped and has_non_skipped:
+        return "mismatch"
     if statuses == {"skipped"}:
         return "skipped"
     if statuses <= {"not_applicable"}:
