@@ -26,6 +26,9 @@ from trpc_agent_sdk.tools.safety._common_rules import path_is_system_location
 from trpc_agent_sdk.tools.safety._python_rules import _PythonScanContext
 from trpc_agent_sdk.tools.safety._python_rules import PythonRuleVisitor
 from trpc_agent_sdk.tools.safety._python_rules import _static_truthy
+from trpc_agent_sdk.tools.safety._python_rules import _static_truthiness
+from trpc_agent_sdk.tools.safety._python_rules import _static_value
+from trpc_agent_sdk.tools.safety._python_rules import _UNKNOWN_VALUE
 from trpc_agent_sdk.tools.safety._scanner import MAX_NESTED_PAYLOAD_DEPTH
 
 
@@ -448,11 +451,53 @@ def test_large_write_and_python_syntax_error_are_reported(guard):
     assert "PY001" in _rule_ids(syntax_error)
 
 
-@pytest.mark.parametrize("code", ["while 1:\n    pass", "while 1 == 1:\n    pass", "while not 0:\n    pass"])
+@pytest.mark.parametrize(
+    "code",
+    [
+        "while 1:\n    pass",
+        "while 1 == 1:\n    pass",
+        "while not 0:\n    pass",
+        "while [0] * 100000000:\n    pass",
+        "while \"x\" * 100000000:\n    pass",
+    ],
+)
 def test_python_truthy_constant_loops_are_denied(guard, code):
     report = guard.scan(_request(code))
     assert report.decision == SafetyDecision.DENY
     assert "RES001" in _rule_ids(report)
+
+
+def test_static_truthiness_handles_mult_without_materializing():
+    assert _static_truthiness(ast.parse("[] * 100000000", mode="eval").body) is False
+    assert _static_truthiness(ast.parse('"x" * 100000000', mode="eval").body) is True
+    assert _static_truthiness(ast.parse("3 * \"x\"", mode="eval").body) is True
+    assert _static_truthiness(ast.parse("1 * 2", mode="eval").body) is None
+    assert _static_truthiness(ast.parse("1 + 1", mode="eval").body) is None
+
+
+def test_static_value_handles_literal_containers_and_rejects_unhashable():
+    assert _static_value(ast.parse("(1, 'x')", mode="eval").body) == (1, "x")
+    assert _static_value(ast.parse("[1, 'x']", mode="eval").body) == [1, "x"]
+    assert _static_value(ast.parse("{1, 'x'}", mode="eval").body) == {1, "x"}
+    assert _static_value(ast.parse("{'k': 1}", mode="eval").body) == {"k": 1}
+
+    bad_set = ast.Set(elts=[ast.Tuple(elts=[ast.List(elts=[ast.Constant(1)])], ctx=ast.Load())])
+    bad_dict = ast.Dict(
+        keys=[ast.Tuple(elts=[ast.List(elts=[ast.Constant(1)])], ctx=ast.Load())],
+        values=[ast.Constant(1)],
+    )
+    unknown_call = ast.Call(func=ast.Name(id="dynamic", ctx=ast.Load()), args=[], keywords=[])
+    unknown_tuple = ast.Tuple(elts=[unknown_call], ctx=ast.Load())
+    unknown_list = ast.List(elts=[unknown_call], ctx=ast.Load())
+    unknown_set = ast.Set(elts=[unknown_call])
+    unknown_dict = ast.Dict(keys=[None], values=[ast.Constant(1)])
+
+    assert _static_value(bad_set) is _UNKNOWN_VALUE
+    assert _static_value(bad_dict) is _UNKNOWN_VALUE
+    assert _static_value(unknown_tuple) is _UNKNOWN_VALUE
+    assert _static_value(unknown_list) is _UNKNOWN_VALUE
+    assert _static_value(unknown_set) is _UNKNOWN_VALUE
+    assert _static_value(unknown_dict) is _UNKNOWN_VALUE
 
 
 @pytest.mark.parametrize(

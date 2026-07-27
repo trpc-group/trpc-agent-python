@@ -38,24 +38,21 @@ _OUTPUT_CALLS = frozenset(
     {"print", "logging.info", "logging.warning", "logging.error", "logger.info", "logger.warning", "logger.error"})
 _SECRET_NAME_RE = re.compile(
     r"(?i)(api[_-]?key|access[_-]?key|authorization|credential|token|password|passwd|secret|private[_-]?key)")
+_UNKNOWN_VALUE = object()
 
 
 def _static_truthy(node: ast.AST) -> bool:
     """Return whether a literal loop condition is statically true."""
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
-        try:
-            return not bool(ast.literal_eval(node.operand))
-        except (ValueError, TypeError, SyntaxError):
-            return False
-    try:
-        return bool(ast.literal_eval(node))
-    except (ValueError, TypeError, SyntaxError):
-        pass
+        truthiness = _static_truthiness(node.operand)
+        return False if truthiness is None else not truthiness
+    truthiness = _static_truthiness(node)
+    if truthiness is not None:
+        return truthiness
     if isinstance(node, ast.Compare) and len(node.ops) == 1 and len(node.comparators) == 1:
-        try:
-            left = ast.literal_eval(node.left)
-            right = ast.literal_eval(node.comparators[0])
-        except (ValueError, TypeError, SyntaxError):
+        left = _static_value(node.left)
+        right = _static_value(node.comparators[0])
+        if left is _UNKNOWN_VALUE or right is _UNKNOWN_VALUE:
             return False
         comparisons = {
             ast.Eq: operator.eq,
@@ -72,6 +69,68 @@ def _static_truthy(node: ast.AST) -> bool:
                 except (TypeError, ValueError):
                     return False
     return False
+
+
+def _static_truthiness(node: ast.AST) -> bool | None:
+    value = _static_value(node)
+    if value is not _UNKNOWN_VALUE:
+        return bool(value)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mult):
+        left = _static_value(node.left)
+        right = _static_value(node.right)
+        if isinstance(left, (str, bytes, list, tuple)) and isinstance(right, int) and not isinstance(right, bool):
+            return bool(left) and right != 0
+        if isinstance(right, (str, bytes, list, tuple)) and isinstance(left, int) and not isinstance(left, bool):
+            return bool(right) and left != 0
+        return None
+    return None
+
+
+def _static_value(node: ast.AST) -> object:
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.Tuple):
+        values = []
+        for element in node.elts:
+            value = _static_value(element)
+            if value is _UNKNOWN_VALUE:
+                return _UNKNOWN_VALUE
+            values.append(value)
+        return tuple(values)
+    if isinstance(node, ast.List):
+        values = []
+        for element in node.elts:
+            value = _static_value(element)
+            if value is _UNKNOWN_VALUE:
+                return _UNKNOWN_VALUE
+            values.append(value)
+        return values
+    if isinstance(node, ast.Set):
+        values = []
+        for element in node.elts:
+            value = _static_value(element)
+            if value is _UNKNOWN_VALUE:
+                return _UNKNOWN_VALUE
+            values.append(value)
+        try:
+            return set(values)
+        except TypeError:
+            return _UNKNOWN_VALUE
+    if isinstance(node, ast.Dict):
+        keys = []
+        values = []
+        for key, value in zip(node.keys, node.values):
+            key_value = _static_value(key) if key is not None else _UNKNOWN_VALUE
+            value_value = _static_value(value)
+            if key_value is _UNKNOWN_VALUE or value_value is _UNKNOWN_VALUE:
+                return _UNKNOWN_VALUE
+            keys.append(key_value)
+            values.append(value_value)
+        try:
+            return dict(zip(keys, values))
+        except TypeError:
+            return _UNKNOWN_VALUE
+    return _UNKNOWN_VALUE
 
 
 FILE_DELETE = RuleSpec(

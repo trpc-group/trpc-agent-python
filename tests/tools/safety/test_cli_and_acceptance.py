@@ -6,9 +6,10 @@
 """Public sample corpus and CLI acceptance tests."""
 
 import asyncio
+import importlib
+import sys
 from pathlib import Path
 
-import examples.tool_safety_guard.mcp_server as mcp_server
 import pytest
 import yaml
 
@@ -24,6 +25,9 @@ from trpc_agent_sdk.tools.safety import SafetyDecision
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXAMPLE_DIR = REPO_ROOT / "examples/tool_safety_guard"
+sys.path.insert(0, str(REPO_ROOT))
+
+mcp_server = importlib.import_module("examples.tool_safety_guard.mcp_server")
 
 
 def _results():
