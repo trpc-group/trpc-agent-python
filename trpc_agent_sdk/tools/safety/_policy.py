@@ -198,20 +198,21 @@ class PolicyConfig:
         basename = path.rstrip("/").rsplit("/", 1)[-1]
         return "." in basename[1:]
 
+    # Credential directories: exact match should also be denied
+    # (being IN the credential dir is already dangerous).
+    _CREDENTIAL_DIRS = frozenset({"~/.ssh", "~/.aws", "~/.kube"})
+
     def is_path_denied(self, path_text: str) -> bool:
         """Return True if path_text is a proper sub-path of any denied entry.
 
         A path that equals a denied directory exactly (e.g. cwd="/root")
         is not denied — only paths inside it (e.g. "/root/.ssh") are.
-        File-like entries (e.g. /var/run/docker.sock) are denied on
-        exact match as well as sub-path match.
+        File-like entries (e.g. /var/run/docker.sock) and credential
+        directories (~/.ssh, ~/.aws, ~/.kube) are denied on exact match.
         """
         for denied in self.denied_paths:
             if path_text == denied:
-                # Exact match: deny if the entry looks like a file
-                # (e.g. /var/run/docker.sock), but allow if directory-like
-                # (e.g. cwd="/etc" — being IN the denied dir is allowed).
-                if self._path_has_extension(denied):
+                if self._path_has_extension(denied) or denied in self._CREDENTIAL_DIRS:
                     return True
                 continue
             if path_text.startswith(denied + "/") or path_text.startswith(denied + "\\"):

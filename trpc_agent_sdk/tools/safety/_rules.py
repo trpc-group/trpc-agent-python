@@ -184,6 +184,7 @@ PYTHON_RESOURCE_PATTERNS = [
 
 BASH_DANGEROUS_DELETE_PATTERNS = [
     (re.compile(r"rm\s+-rf?\s"), "R001_BASH_RECURSIVE_DELETE", "critical"),
+    (re.compile(r"rm\s+--(recursive|force|-[rRf]+)\s"), "R001_BASH_RECURSIVE_DELETE", "critical"),
     (re.compile(r"find\s+.*-delete\b"), "R001_FILE_DANGEROUS_DELETE", "high"),
     (re.compile(r"xargs\s+rm\b"), "R001_FILE_DANGEROUS_DELETE", "high"),
 ]

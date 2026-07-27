@@ -157,9 +157,10 @@ class BashParser:
                 all_whitelisted = False
 
         # Check raw hostnames for nc/netcat/socat (no http:// prefix)
+        # Use _extract_bare_hostname which skips option tokens (e.g. "-l").
         host_match = _HOSTNAME_RE.search(line)
         if host_match:
-            hostname = host_match.group(2)
+            hostname = self._extract_bare_hostname(line)
             if hostname and not self._policy.is_domain_allowed(hostname):
                 all_whitelisted = False
                 findings.append(
@@ -180,18 +181,21 @@ class BashParser:
         # HIGH+DENY, allowing detection bypass.
         if has_network_tool and not urls_found and not host_match:
             bare_host = self._extract_bare_hostname(line)
-            if bare_host and not self._policy.is_domain_allowed(bare_host):
-                all_whitelisted = False
-                findings.append(
-                    SafetyFinding(
-                        rule_id="R002_NON_WHITELIST_DOMAIN_ACCESS",
-                        rule_name="Non-Whitelisted Domain Access",
-                        risk_type=RiskType.NETWORK_EGRESS,
-                        risk_level=RiskLevel.HIGH,
-                        evidence=sanitize_text(line, self._policy.secret_patterns),
-                        line=line_num,
-                        recommendation=f"Domain '{bare_host}' is not in the network allowlist.",
-                    ))
+            if bare_host:
+                if not self._policy.is_domain_allowed(bare_host):
+                    all_whitelisted = False
+                    findings.append(
+                        SafetyFinding(
+                            rule_id="R002_NON_WHITELIST_DOMAIN_ACCESS",
+                            rule_name="Non-Whitelisted Domain Access",
+                            risk_type=RiskType.NETWORK_EGRESS,
+                            risk_level=RiskLevel.HIGH,
+                            evidence=sanitize_text(line, self._policy.secret_patterns),
+                            line=line_num,
+                            recommendation=f"Domain '{bare_host}' is not in the network allowlist.",
+                        ))
+                else:
+                    all_whitelisted = True
 
         # Add network tool finding only if domains are not all whitelisted
         if has_network_tool and not all_whitelisted:

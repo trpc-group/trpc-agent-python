@@ -54,6 +54,8 @@ EXPECTED = {
     "25": "deny",  # cat server.pem
     "26": "deny",  # open('cert.key', 'w')
     "27": "deny",  # curl evil.com (bare domain, no scheme)
+    "28": "allow",  # curl github.com (bare domain, whitelisted)
+    "29": "deny",  # rm --recursive --force / (long options)
 }
 
 

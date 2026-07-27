@@ -372,7 +372,7 @@ class PythonParser:
         """Scan a Python script and return safety findings."""
         try:
             return self._ast_scan(script)
-        except SyntaxError:
+        except (SyntaxError, ValueError):
             return self._regex_fallback(script)
 
     def _ast_scan(self, script: str) -> List[SafetyFinding]:
