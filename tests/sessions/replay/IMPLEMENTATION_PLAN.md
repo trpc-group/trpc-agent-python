@@ -4,7 +4,7 @@
 
 **Goal:** 实现一个后端中立的 replay harness,用 10 条标准化轨迹驱动 InMemory/SQLite/Redis,产出可定位的差异报告,并通过快照层 + 端到端后端注入验证检出率/误报率。
 
-**Architecture:** 四段管线 `load JSONL → replay_case → 后端中立快照 → compare → report`。详见[设计文档](2026-07-13-session-memory-replay-consistency-design.md)(与本计划同置于 `tests/sessions/replay/`)。
+**Architecture:** 四段管线 `load JSONL → replay_case → 后端中立快照 → compare → report`。详见[设计文档](session-memory-replay-consistency-design.md)(与本计划同置于 `tests/sessions/replay/`)。
 
 **Tech Stack:** Python 3.10+、pytest、pydantic v2、SQLAlchemy(SQLite)、redis-py(mock)。
 
