@@ -8,12 +8,14 @@ import platform
 import shutil
 import subprocess
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 from trpc_agent_sdk.evaluation import AgentOptimizer
+from trpc_agent_sdk.evaluation import OptimizeConfigFile
 from trpc_agent_sdk.evaluation import TargetPrompt
 from trpc_agent_sdk.evaluation._target_prompt import _RollbackError
 
@@ -45,18 +47,31 @@ FAKE_MODEL_MODE = "fake-model"
 TRACE_MODE = "trace"
 
 
+@dataclass
+class _FailureContext:
+    bundle: InputBundle | None = None
+    optimizer_config: OptimizeConfigFile | None = None
+
+
 async def run_pipeline(options: PipelineOptions) -> PipelineResult:
     """Run the loop and convert unexpected failures into an audit report."""
     started = time.monotonic()
+    context = _FailureContext()
     try:
-        return await _run_pipeline(options, started)
+        return await _run_pipeline(options, started, context)
     except Exception as exc:
-        return _failure_result(options, started, exc)
+        return _failure_result(options, started, exc, context)
 
 
-async def _run_pipeline(options: PipelineOptions, started: float) -> PipelineResult:
+async def _run_pipeline(
+    options: PipelineOptions,
+    started: float,
+    context: _FailureContext,
+) -> PipelineResult:
     """Run the complete evaluation and optimization loop."""
     bundle, optimizer_config, gate_config = validate_inputs(options.paths)
+    context.bundle = bundle
+    context.optimizer_config = optimizer_config
     if options.write_back and options.mode != REAL_MODE:
         raise ValueError("write-back requires real mode")
     options = options.model_copy(
@@ -139,16 +154,28 @@ async def _write_back_and_report(
     except Exception:
         # TargetPrompt.write_all provides atomic rollback; this extra restore
         # protects callers if failure occurs after the SDK write completes.
-        bundle.prompt_path.write_text(original, encoding="utf-8")
+        await _restore_prompt(bundle.prompt_path, original)
         report.source_updated = False
         raise
 
 
-def _failure_result(options: PipelineOptions, started: float, error: Exception) -> PipelineResult:
+async def _restore_prompt(path: Path, content: str) -> None:
+    target = TargetPrompt().add_path(PROMPT_KEY, str(path))
+    await target.write_all({PROMPT_KEY: content})
+
+
+def _failure_result(
+    options: PipelineOptions,
+    started: float,
+    error: Exception,
+    context: _FailureContext | None = None,
+) -> PipelineResult:
     finished = datetime.now().astimezone()
     started_wall = finished - timedelta(seconds=time.monotonic() - started)
     reason = _failure_reason(error)
     decision = GateDecision(accepted=False, overfitting=False, reasons=[reason])
+    input_hashes = context.bundle.hashes if context and context.bundle else {}
+    optimizer_config = context.optimizer_config if context else None
     report = OptimizationReport(
         status="REJECTED",
         baseline={},
@@ -163,10 +190,11 @@ def _failure_result(options: PipelineOptions, started: float, error: Exception) 
         cost=CostSummary(cost_complete=False),
         audit=AuditInfo(
             seed=91,
-            input_hashes={},
+            input_hashes=input_hashes,
             model_name=options.model_name,
-            num_runs=1,
-            case_parallelism=options.case_parallelism,
+            num_runs=optimizer_config.evaluate.num_runs if optimizer_config else 1,
+            case_parallelism=(optimizer_config.optimize.eval_case_parallelism
+                              if optimizer_config else options.case_parallelism),
             python_version=platform.python_version(),
             sdk_version=_sdk_version(),
             git_sha=_git_sha(),

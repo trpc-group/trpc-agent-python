@@ -12,6 +12,7 @@ from examples.optimization.eval_optimize_loop.loop.models import PipelineOptions
 from examples.optimization.eval_optimize_loop.loop.pipeline import _write_back_and_report
 from examples.optimization.eval_optimize_loop.loop.pipeline import _failure_result
 from examples.optimization.eval_optimize_loop.loop.pipeline import run_pipeline
+from examples.optimization.eval_optimize_loop.loop import pipeline as pipeline_module
 from examples.optimization.eval_optimize_loop.loop.evaluation import validate_inputs
 
 ROOT = Path("examples/optimization/eval_optimize_loop")
@@ -88,6 +89,29 @@ def test_pipeline_failure_is_reported_without_prompt_write(tmp_path):
     assert result.report.status == "REJECTED"
     assert result.report.failures
     assert result.json_path.is_file()
+
+
+def test_failure_report_keeps_validated_audit_context(tmp_path, monkeypatch):
+
+    async def fail_after_validation(*args, **kwargs):
+        raise RuntimeError("evaluation failed")
+
+    monkeypatch.setattr(pipeline_module, "_evaluate_pair", fail_after_validation)
+    optimizer = json.loads((ROOT / "optimizer.json").read_text(encoding="utf-8"))
+    optimizer["evaluate"]["num_runs"] = 2
+    optimizer_path = tmp_path / "optimizer.json"
+    optimizer_path.write_text(json.dumps(optimizer), encoding="utf-8")
+    options = _options(
+        tmp_path,
+        paths=_options(tmp_path).paths.model_copy(update={"optimizer_path": optimizer_path}),
+    )
+
+    result = asyncio.run(run_pipeline(options))
+
+    assert result.report.status == "REJECTED"
+    assert result.report.audit.input_hashes
+    assert result.report.audit.num_runs == 2
+    assert result.report.audit.case_parallelism == 1
 
 
 def test_rollback_failure_details_are_audited(tmp_path):
