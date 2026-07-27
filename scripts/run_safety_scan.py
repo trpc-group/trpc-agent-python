@@ -4,7 +4,7 @@
 # Copyright (C) 2026 Tencent. All rights reserved.
 #
 # tRPC-Agent-Python is licensed under Apache-2.0.
-"""Batch scan 12 safety samples and produce report + audit artifacts.
+"""Batch scan 26 safety samples and produce report + audit artifacts.
 
 Usage: python scripts/run_safety_scan.py [samples_dir]
 """

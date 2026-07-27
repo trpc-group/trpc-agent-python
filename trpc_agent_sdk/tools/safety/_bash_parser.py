@@ -302,7 +302,7 @@ class BashParser:
 
         # Check each line individually (multi-line scripts can have
         # dangerous commands on non-first lines)
-        for raw_line in script.split("\n"):
+        for line_num, raw_line in enumerate(script.split("\n"), 1):
             stripped = raw_line.strip()
             if not stripped or stripped.startswith("#"):
                 continue
@@ -334,6 +334,7 @@ class BashParser:
                             risk_type=RiskType.SYSTEM_COMMAND,
                             risk_level=RiskLevel.CRITICAL,
                             evidence=sanitize_text(stripped, self._policy.secret_patterns),
+                            line=line_num,
                             recommendation=f"Command '{denied}' is denied by safety policy.",
                         ))
                     found_denied = True
@@ -356,6 +357,7 @@ class BashParser:
                             risk_type=RiskType.SYSTEM_COMMAND,
                             risk_level=RiskLevel.MEDIUM,
                             evidence=sanitize_text(stripped, self._policy.secret_patterns),
+                            line=line_num,
                             recommendation=f"Command '{review_cmd}' requires human review per safety policy.",
                         ))
                     found_review = True
@@ -373,6 +375,7 @@ class BashParser:
                         risk_type=RiskType.SYSTEM_COMMAND,
                         risk_level=RiskLevel.MEDIUM,
                         evidence=sanitize_text(stripped, self._policy.secret_patterns),
+                        line=line_num,
                         recommendation=f"Command '{base_cmd}' is not in the allowed commands list.",
                     ))
 

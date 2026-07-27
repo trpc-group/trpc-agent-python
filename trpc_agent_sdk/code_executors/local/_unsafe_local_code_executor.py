@@ -116,10 +116,12 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         try:
             # Scan all blocks first, then aggregate decision (consistent with SafeCodeExecutor)
             all_findings = []
+            reports = []
             for i, block in enumerate(input_data.code_blocks):
                 try:
                     report = self._scan_code_block(block)
                     if report:
+                        reports.append(report)
                         all_findings.extend(report.findings)
                 except Exception:  # pylint: disable=broad-except
                     # fail-closed: scanner error blocks execution
@@ -129,9 +131,21 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             if all_findings:
                 from trpc_agent_sdk.tools.safety import Decision
                 from trpc_agent_sdk.tools.safety import aggregate_decision
+                from trpc_agent_sdk.tools.safety import set_safety_telemetry
                 combined = aggregate_decision(all_findings)
                 should_block = (combined == Decision.DENY
                                 or (self.block_on_review and combined == Decision.NEEDS_HUMAN_REVIEW))
+
+                # Set blocked flag BEFORE audit/telemetry so they record actual block status
+                if should_block:
+                    for report in reports:
+                        report.set_blocked(True)
+
+                for report in reports:
+                    if self._safety_audit:
+                        self._safety_audit.record(report)
+                    set_safety_telemetry(report)
+
                 if should_block:
                     return create_code_execution_result(
                         stderr=f"Code execution blocked by safety guard: {combined.value}")
@@ -188,7 +202,6 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         from trpc_agent_sdk.tools.safety import ScanRequest
         from trpc_agent_sdk.tools.safety import ScanTarget
         from trpc_agent_sdk.tools.safety import normalize_language
-        from trpc_agent_sdk.tools.safety import set_safety_telemetry
         req = ScanRequest(
             script=block.code,
             language=normalize_language(block.language or ""),
@@ -197,11 +210,7 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             cwd=self.work_dir,
             tool_metadata={"timeout": self.timeout},
         )
-        report = self.safety_scanner.scan(req)
-        if self._safety_audit:
-            self._safety_audit.record(report)
-        set_safety_telemetry(report)
-        return report
+        return self.safety_scanner.scan(req)
 
     async def _execute_code_block(self, work_dir: Path, block: CodeBlock, block_index: int) -> str:
         """Execute a single code block.
