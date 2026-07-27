@@ -57,7 +57,7 @@ def create_fake_model() -> Any:
                     args={"task_id": self.payload.get("task_id", "dry-run"), "findings": finding,
                           "evidence": {"changed_lines": [{"file": item.file, "line": item.line, "content": item.content} for item in changed],
                                        "skill_runs": [], "filter_decisions": []},
-                          "output_dir": self.payload.get("output_dir", "")},
+                         },
                 ))]))
                 return
             yield LlmResponse(content=Content(role="model", parts=[Part(text="Review report saved.")]))
@@ -65,7 +65,8 @@ def create_fake_model() -> Any:
     return FakeReviewModel()
 
 
-def create_agent(*, runtime: str = "docker", model: Any = None, workspace_inputs: list[dict[str, str]] | None = None) -> Any:
+def create_agent(*, runtime: str = "docker", model: Any = None, workspace_inputs: list[dict[str, str]] | None = None,
+                 task_id: str = "", output_dir: str = "") -> Any:
     """Create the SDK-native Agent; call only in a supported SDK runtime."""
     from trpc_agent_sdk.agents import LlmAgent
     from .tools import create_review_tools
@@ -83,14 +84,18 @@ def create_agent(*, runtime: str = "docker", model: Any = None, workspace_inputs
     # Host paths are execution-only data. Never put them in the model message,
     # session transcript, report, or audit payload.
     agent._code_review_workspace_inputs = list(workspace_inputs or [])
+    agent._code_review_task_id = task_id
+    agent._code_review_output_dir = output_dir
     return agent
 
 
 async def create_agent_async(*, runtime: str = "docker", model: Any = None,
-                             workspace_inputs: list[dict[str, str]] | None = None) -> Any:
+                             workspace_inputs: list[dict[str, str]] | None = None, task_id: str = "",
+                             output_dir: str = "") -> Any:
     """Async variant used by Cube/E2B, whose SDK workspace starts asynchronously."""
     if runtime not in {"cube", "e2b"}:
-        return create_agent(runtime=runtime, model=model, workspace_inputs=workspace_inputs)
+        return create_agent(runtime=runtime, model=model, workspace_inputs=workspace_inputs,
+                            task_id=task_id, output_dir=output_dir)
     from trpc_agent_sdk.agents import LlmAgent
     from .tools import create_review_tools_async
     from .filter import before_model_audit, after_model_audit
@@ -101,4 +106,6 @@ async def create_agent_async(*, runtime: str = "docker", model: Any = None,
                      skill_repository=repository, filters_name=["code_review_agent_filter"],
                      before_model_callback=before_model_audit, after_model_callback=after_model_audit)
     agent._code_review_workspace_inputs = list(workspace_inputs or [])
+    agent._code_review_task_id = task_id
+    agent._code_review_output_dir = output_dir
     return agent

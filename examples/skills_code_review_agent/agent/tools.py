@@ -14,6 +14,7 @@ from typing import Any
 REVIEW_SKILL_TOOL_NAMES = ["skill_load", "skill_select_docs", "skill_list_docs"]
 _ANALYZE_PR_COMMAND = "python scripts/pr-analyzer.py --diff-file ../../work/inputs/input.diff"
 _HOST_PATH = re.compile(r"host://[^\s\"']+")
+_TASK_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 def plan_review_actions(action_ids: list[str], workspace_inputs: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -74,6 +75,17 @@ def _env_positive_int(name: str, default: int) -> int:
         return max(1, int(os.getenv(name, str(default))))
     except ValueError:
         return default
+
+
+def _resolve_report_task_root(task_id: str, output_dir: str) -> tuple[Path, Path]:
+    """Validate a task id and keep the report directory below its output root."""
+    if not isinstance(task_id, str) or not _TASK_ID.fullmatch(task_id) or ".." in task_id:
+        raise ValueError("task_id must contain only safe letters, digits, dots, underscores, and hyphens")
+    root = Path(output_dir or Path(__file__).parents[1] / "review-output").resolve()
+    task_root = (root / task_id).resolve()
+    if not task_root.is_relative_to(root):
+        raise ValueError("task output path escapes the trusted output directory")
+    return root, task_root
 
 
 def _truncate_text(text: Any, limit_bytes: int) -> tuple[str, bool, int]:
@@ -247,6 +259,13 @@ def save_review_report(*, task_id: str, findings: list[dict], evidence: dict, ou
     review_started = time.monotonic()
     if tool_context is not None:
         state = tool_context.agent_context.metadata
+        trusted_task_id = state.get("code_review_task_id")
+        trusted_output_dir = state.get("code_review_output_dir")
+        if not trusted_task_id or not trusted_output_dir:
+            raise ValueError("trusted task configuration is required for model report persistence")
+        if task_id != trusted_task_id:
+            raise ValueError("model report task_id does not match the trusted task")
+        task_id, output_dir = trusted_task_id, trusted_output_dir
         review_started = state.get("code_review_started_at", review_started)
         evidence = {
             **evidence,
@@ -272,8 +291,7 @@ def save_review_report(*, task_id: str, findings: list[dict], evidence: dict, ou
             continue
         seen.add(key)
         (human if item["confidence"] < 0.7 else accepted).append(item)
-    root, task_root = Path(output_dir or Path(__file__).parents[1] / "review-output"), None
-    task_root = root / task_id
+    root, task_root = _resolve_report_task_root(task_id, output_dir)
     task_root.mkdir(parents=True, exist_ok=True)
     tool_limit = _env_positive_int("CODE_REVIEW_TOOL_OUTPUT_MAX_KIB", 8) * 1024
     model_limit = _env_positive_int("CODE_REVIEW_MODEL_AUDIT_MAX_KIB", 16) * 1024
@@ -290,6 +308,17 @@ def save_review_report(*, task_id: str, findings: list[dict], evidence: dict, ou
     json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     markdown_path.write_text(_markdown_report(task_id, accepted, human, metrics, skill_runs, decisions, model_runs), encoding="utf-8")
     ReviewStorage(root / "reviews.sqlite").save_native(task_id, report, hashlib.sha256(redact(evidence_text).encode()).hexdigest())
+    if tool_context is not None:
+        # FunctionTool results are added to the next model turn. Return only
+        # repository-independent completion data, never host output paths or
+        # the full persisted audit payload.
+        return {
+            "task_id": task_id,
+            "status": report["status"],
+            "finding_count": len(accepted),
+            "needs_human_review_count": len(human),
+            "report_files": ["review_report.json", "review_report.md"],
+        }
     return {**report, "json_path": str(json_path), "markdown_path": str(markdown_path)}
 
 

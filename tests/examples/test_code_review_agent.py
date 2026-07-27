@@ -77,8 +77,9 @@ async def test_cli_fake_model_uses_runner_without_model_api_key(tmp_path, monkey
     fake_model = object()
     captured: dict = {}
 
-    async def fake_run(payload, runtime, model, workspace_inputs):
-        captured.update(payload=payload, runtime=runtime, model=model, workspace_inputs=workspace_inputs)
+    async def fake_run(payload, runtime, model, workspace_inputs, task_id, output_dir):
+        captured.update(payload=payload, runtime=runtime, model=model, workspace_inputs=workspace_inputs,
+                        task_id=task_id, output_dir=output_dir)
 
     monkeypatch.setattr(review_agent, "create_fake_model", lambda: fake_model)
     monkeypatch.setattr(run_review, "_run_sdk_agent", fake_run)
@@ -92,7 +93,9 @@ async def test_cli_fake_model_uses_runner_without_model_api_key(tmp_path, monkey
     assert captured["model"] is fake_model
     assert captured["runtime"] == "docker"
     assert captured["payload"]["task_id"].startswith("cr-")
+    assert captured["task_id"] == captured["payload"]["task_id"]
     assert all("src" not in item for item in captured["payload"]["workspace_inputs"])
+    assert "output_dir" not in captured["payload"]
 
 
 def test_cli_rejects_dry_run_and_fake_model_together():
@@ -173,6 +176,56 @@ def test_save_review_report_moves_low_confidence_to_human_review(tmp_path):
     assert Path(report["json_path"]).exists()
 
 
+@pytest.mark.parametrize("task_id", ["../escape", "nested/task", "nested\\task", "/absolute", ".."])
+def test_save_review_report_rejects_unsafe_task_ids(tmp_path, task_id):
+    with pytest.raises(ValueError, match="task_id"):
+        save_review_report(
+            task_id=task_id, findings=[], evidence={"changed_lines": []}, output_dir=str(tmp_path)
+        )
+
+
+def test_save_review_report_rejects_model_forged_task_or_output_dir(tmp_path):
+    from types import SimpleNamespace
+
+    context = SimpleNamespace(agent_context=SimpleNamespace(metadata={
+        "code_review_task_id": "cr-trusted-task",
+        "code_review_output_dir": str(tmp_path / "trusted-output"),
+    }))
+
+    with pytest.raises(ValueError, match="trusted task"):
+        save_review_report(
+            task_id="cr-forged-task", findings=[], evidence={"changed_lines": []},
+            output_dir=str(tmp_path / "forged-output"), tool_context=context,
+        )
+
+
+def test_save_review_report_returns_safe_summary_to_model_tool_context(tmp_path):
+    from types import SimpleNamespace
+
+    output_dir = tmp_path / "trusted-output"
+    context = SimpleNamespace(agent_context=SimpleNamespace(metadata={
+        "code_review_task_id": "cr-trusted-task",
+        "code_review_output_dir": str(output_dir),
+        "code_review_changed_lines": [],
+        "code_review_skill_runs": [],
+        "code_review_model_runs": [],
+        "code_review_filter_decisions": [],
+    }))
+
+    result = save_review_report(
+        task_id="cr-trusted-task", findings=[], evidence={"changed_lines": []}, tool_context=context,
+    )
+
+    assert result == {
+        "task_id": "cr-trusted-task",
+        "status": "completed",
+        "finding_count": 0,
+        "needs_human_review_count": 0,
+        "report_files": ["review_report.json", "review_report.md"],
+    }
+    assert str(output_dir) not in json.dumps(result)
+
+
 @pytest.mark.parametrize("fixture_name,category", [
     ("01_clean", None), ("02_hardcoded_token", "secret"), ("03_async_leak", "async"),
     ("04_db_transaction_leak", "database"), ("05_missing_test", "tests"),
@@ -250,6 +303,25 @@ def test_model_audit_uses_trusted_inputs_without_persisting_host_paths():
 
     assert context.agent_context.metadata["code_review_workspace_inputs"][0]["src"] == host_path
     assert host_path not in json.dumps(context.agent_context.metadata["code_review_model_pending"]["input"])
+
+
+def test_model_audit_seeds_trusted_task_output_configuration():
+    from types import SimpleNamespace
+    from examples.skills_code_review_agent.agent.filter import before_model_audit
+
+    agent = SimpleNamespace(
+        model=SimpleNamespace(_model_name="test-model"),
+        _code_review_workspace_inputs=[],
+        _code_review_task_id="cr-trusted-task",
+        _code_review_output_dir="C:/trusted/output",
+    )
+    context = SimpleNamespace(agent=agent, agent_context=SimpleNamespace(metadata={}))
+    request = SimpleNamespace(contents=[])
+
+    before_model_audit(context, request)
+
+    assert context.agent_context.metadata["code_review_task_id"] == "cr-trusted-task"
+    assert context.agent_context.metadata["code_review_output_dir"] == "C:/trusted/output"
 
 
 async def test_skill_run_filter_rejects_interactive_stdin():

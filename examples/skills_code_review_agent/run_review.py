@@ -39,7 +39,8 @@ def create_task_id(*, diff_file: str = "", repo_path: str = "", files: list[str]
     return f"cr-{timestamp}-{label}-{short_suffix}"
 
 
-async def _run_sdk_agent(payload: dict, runtime: str, model: object, workspace_inputs: list[dict]) -> None:
+async def _run_sdk_agent(payload: dict, runtime: str, model: object, workspace_inputs: list[dict],
+                         task_id: str, output_dir: str) -> None:
     """Use the repository Runner in a supported (normally Linux) SDK environment."""
     from trpc_agent_sdk.runners import Runner
     from trpc_agent_sdk.sessions import InMemorySessionService
@@ -47,7 +48,8 @@ async def _run_sdk_agent(payload: dict, runtime: str, model: object, workspace_i
     from examples.skills_code_review_agent.agent.agent import create_agent_async
 
     session_service = InMemorySessionService()
-    agent = await create_agent_async(runtime=runtime, model=model, workspace_inputs=workspace_inputs)
+    agent = await create_agent_async(runtime=runtime, model=model, workspace_inputs=workspace_inputs,
+                                     task_id=task_id, output_dir=output_dir)
     runner = Runner(app_name="skills_code_review_agent", agent=agent, session_service=session_service)
     await session_service.create_session(app_name="skills_code_review_agent", user_id="reviewer", session_id=payload["task_id"])
     async for _ in runner.run_async(user_id="reviewer", session_id=payload["task_id"],
@@ -79,7 +81,7 @@ async def main() -> None:
             staging_dir=str(staging_dir),
         )
         workspace_inputs = review_input.pop("_execution_workspace_inputs", [])
-        payload = {**review_input, "task_id": task_id, "output_dir": args.output_dir}
+        payload = {**review_input, "task_id": task_id}
         if args.dry_run:
             # Windows-safe fallback: same deterministic parse/report FunctionTool boundary,
             # without importing the SDK path that currently loads python-magic.
@@ -98,7 +100,7 @@ async def main() -> None:
                 api_key, args.model_base_url or os.getenv("OPENAI_BASE_URL", ""),
                 args.model or os.getenv("OPENAI_MODEL", ""),
             ).create()
-        await _run_sdk_agent(payload, args.runtime, model, workspace_inputs)
+        await _run_sdk_agent(payload, args.runtime, model, workspace_inputs, task_id, args.output_dir)
         print(f"submitted: {Path(args.output_dir) / payload['task_id'] / 'review_report.json'}")
     finally:
         shutil.rmtree(staging_dir, ignore_errors=True)

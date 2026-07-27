@@ -114,6 +114,12 @@ def before_model_audit(invocation_context: Any, request: Any) -> None:
                     break
             if state.get("code_review_changed_lines"):
                 break
+    trusted_task_id = getattr(invocation_context.agent, "_code_review_task_id", "")
+    trusted_output_dir = getattr(invocation_context.agent, "_code_review_output_dir", "")
+    if trusted_task_id:
+        state["code_review_task_id"] = trusted_task_id
+    if trusted_output_dir:
+        state["code_review_output_dir"] = trusted_output_dir
     state["code_review_model_pending"] = {
         "model": getattr(invocation_context.agent.model, "_model_name", type(invocation_context.agent.model).__name__),
         "input": _safe(request), "started": time.monotonic(),
