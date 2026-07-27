@@ -78,6 +78,8 @@ def _timeout(args: dict[str, Any], name: str, policy: ToolSafetyPolicy) -> tuple
 
 def _timeout_value(tool_name: str, request: ScriptScanRequest, original: Any) -> int | float:
     value = request.effective_timeout_seconds
+    if request.timeout_arg_name == "timeout_sec":
+        return value
     if isinstance(original, int) and not isinstance(original, bool):
         return int(value)
     if original is None and tool_name.lower() in _BASH_TOOL_NAMES:

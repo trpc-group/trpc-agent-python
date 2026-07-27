@@ -90,22 +90,24 @@ async def execute_command(command: str, timeout: float | None = None) -> dict:
             timeout=request.effective_timeout_seconds,
         )
     except asyncio.TimeoutError:
+        reap_timed_out = False
         try:
             process.kill()
         except ProcessLookupError:
             pass
         try:
             await asyncio.wait_for(
-                process.wait(),
+                process.communicate(),
                 timeout=PROCESS_REAP_TIMEOUT_SECONDS,
             )
-        except (asyncio.TimeoutError, ProcessLookupError):
-            pass
+        except (asyncio.TimeoutError, ProcessLookupError, RuntimeError, ValueError):
+            reap_timed_out = True
         response = {
             "return_code": None,
             "stdout": "",
             "stderr": "Command exceeded the tool safety timeout.",
             "timed_out": True,
+            "reap_timed_out": reap_timed_out,
         }
         return GUARD.limit_output(response)
     response = {

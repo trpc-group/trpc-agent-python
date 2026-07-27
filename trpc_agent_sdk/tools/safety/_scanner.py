@@ -85,13 +85,14 @@ class ToolScriptSafetyGuard:
 
     def error_report(self, error: Exception) -> SafetyReport:
         """Convert scan/adapter failures into a sanitized blocking report."""
-        finding, redacted = make_finding("POLICY005", error, SCAN_ERROR_SPEC, self.sanitizer)
+        del error
+        finding, _ = make_finding("POLICY005", "safety scan failed", SCAN_ERROR_SPEC, self.sanitizer)
         return SafetyReport(
             decision=SafetyDecision.NEEDS_HUMAN_REVIEW,
             risk_level=RiskLevel.MEDIUM,
             findings=[finding],
             duration_ms=0,
-            redacted=redacted,
+            redacted=True,
             summary="needs_human_review: safety scan failed.",
             max_output_bytes=self.policy.max_output_bytes,
             effective_timeout_seconds=float(self.policy.max_timeout_seconds),

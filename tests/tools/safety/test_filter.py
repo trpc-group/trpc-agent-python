@@ -115,6 +115,18 @@ async def test_allow_injects_integer_timeout_when_omitted():
 
 
 @pytest.mark.asyncio
+async def test_workspace_exec_injects_float_timeout_sec_when_omitted():
+    args = {"command": "echo ok"}
+
+    async def handler():
+        assert isinstance(args["timeout_sec"], float)
+        assert "timeout" not in args
+        return {"stdout": "ok"}
+
+    await _run_filter(_filter(_MemorySink()), args, handler, tool_name="workspace_exec")
+
+
+@pytest.mark.asyncio
 async def test_allow_preserves_float_timeout_type():
     args = {"command": "echo ok", "timeout": 3.5}
 

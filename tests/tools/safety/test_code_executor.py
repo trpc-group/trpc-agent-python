@@ -39,6 +39,13 @@ class _FailingSink:
         raise SafetyAuditError("audit unavailable")
 
 
+class _SensitiveFailingSink:
+
+    def emit(self, event):
+        del event
+        raise SafetyAuditError("audit failed token=very-secret-token")
+
+
 class _Executor(BaseCodeExecutor):
     calls: int = 0
     delay: float = 0
@@ -102,6 +109,20 @@ async def test_audit_failure_blocks_code_execution():
 
     assert delegate.calls == 0
     assert error.value.report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+
+
+@pytest.mark.asyncio
+async def test_audit_failure_report_does_not_leak_exception_text():
+    wrapper = _wrapper(_Executor())
+    wrapper.audit_sink = _SensitiveFailingSink()
+
+    with pytest.raises(ToolSafetyViolation) as error:
+        await wrapper.execute_code(MagicMock(), CodeExecutionInput(code="print('ok')"))
+
+    serialized = error.value.report.model_dump_json()
+    assert "very-secret-token" not in serialized
+    assert "audit failed" not in serialized
+    assert "safety scan failed" in serialized
 
 
 @pytest.mark.asyncio

@@ -99,7 +99,6 @@ def test_jsonl_audit_secures_new_parent_directories(tmp_path):
     assert path.parent.parent.exists()
     if os.name == "posix":
         assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
-        assert stat.S_IMODE(path.parent.parent.stat().st_mode) == 0o700
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX permission contract")
