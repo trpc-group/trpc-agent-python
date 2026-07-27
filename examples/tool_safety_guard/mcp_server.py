@@ -40,9 +40,11 @@ async def execute_command(command: str, timeout: float | None = None) -> dict:
         }
     if requested_timeout is not None and requested_timeout <= 0:
         requested_timeout = None
+    timeout_limit = float(GUARD.policy.max_timeout_seconds)
+    requested_or_default = requested_timeout if requested_timeout is not None else timeout_limit
     effective_timeout = min(
-        requested_timeout or float(GUARD.policy.max_timeout_seconds),
-        float(GUARD.policy.max_timeout_seconds),
+        requested_or_default,
+        timeout_limit,
     )
     request = ScriptScanRequest(
         payloads=[ScriptPayload(

@@ -74,6 +74,9 @@ def _static_truthy(node: ast.AST) -> bool:
 
 
 def _static_truthiness(node: ast.AST) -> bool | None:
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+        truthiness = _static_truthiness(node.operand)
+        return None if truthiness is None else not truthiness
     if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
         return bool(node.elts)
     if isinstance(node, ast.Dict):

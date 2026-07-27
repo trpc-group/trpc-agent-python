@@ -484,6 +484,8 @@ def test_large_write_and_python_syntax_error_are_reported(guard):
         "while 1:\n    pass",
         "while 1 == 1:\n    pass",
         "while not 0:\n    pass",
+        "while not not 1:\n    pass",
+        "while not not True:\n    pass",
         "while [0] * 100000000:\n    pass",
         "while \"x\" * 100000000:\n    pass",
         "while 1 * 2:\n    pass",
