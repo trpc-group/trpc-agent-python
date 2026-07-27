@@ -128,11 +128,11 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
                     logger.warning("Safety scanner error in _scan_code_block — execution blocked.", exc_info=True)
                     return create_code_execution_result(stderr="Safety scanner error — execution blocked.")
 
-            if all_findings:
+            if all_findings or reports:
                 from trpc_agent_sdk.tools.safety import Decision
                 from trpc_agent_sdk.tools.safety import aggregate_decision
                 from trpc_agent_sdk.tools.safety import set_safety_telemetry
-                combined = aggregate_decision(all_findings)
+                combined = aggregate_decision(all_findings) if all_findings else Decision.ALLOW
                 should_block = (combined == Decision.DENY
                                 or (self.block_on_review and combined == Decision.NEEDS_HUMAN_REVIEW))
 
@@ -141,6 +141,8 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
                     for report in reports:
                         report.set_blocked(True)
 
+                # Always audit every report — including ALLOW decisions — so every
+                # scan leaves a trace, consistent with BashTool and SafeCodeExecutor.
                 for report in reports:
                     if self._safety_audit:
                         self._safety_audit.record(report)

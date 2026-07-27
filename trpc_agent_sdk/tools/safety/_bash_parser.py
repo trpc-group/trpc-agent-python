@@ -173,6 +173,26 @@ class BashParser:
                         recommendation=f"Domain '{hostname}' is not in the network allowlist.",
                     ))
 
+        # Fallback: curl/wget with bare domain (no http:// scheme).
+        # Extract the first non-option argument as a bare hostname and
+        # check it against the allowlist. Without this, "curl evil.com"
+        # produces only MEDIUM (R002_CURL_EXTERNAL_REQUEST) instead of
+        # HIGH+DENY, allowing detection bypass.
+        if has_network_tool and not urls_found and not host_match:
+            bare_host = self._extract_bare_hostname(line)
+            if bare_host and not self._policy.is_domain_allowed(bare_host):
+                all_whitelisted = False
+                findings.append(
+                    SafetyFinding(
+                        rule_id="R002_NON_WHITELIST_DOMAIN_ACCESS",
+                        rule_name="Non-Whitelisted Domain Access",
+                        risk_type=RiskType.NETWORK_EGRESS,
+                        risk_level=RiskLevel.HIGH,
+                        evidence=sanitize_text(line, self._policy.secret_patterns),
+                        line=line_num,
+                        recommendation=f"Domain '{bare_host}' is not in the network allowlist.",
+                    ))
+
         # Add network tool finding only if domains are not all whitelisted
         if has_network_tool and not all_whitelisted:
             for pattern, rule_id, risk in BASH_NETWORK_PATTERNS:
@@ -280,6 +300,29 @@ class BashParser:
             cleaned = re.sub(r'"[^"]*"', '""', cleaned)
             lines.append(cleaned)
         return "\n".join(lines)
+
+    @staticmethod
+    def _extract_bare_hostname(line: str) -> str | None:
+        """Extract a bare hostname from curl/wget command without scheme.
+
+        Skips the command name and any option-like tokens (starting with
+        ``-``), then takes the first remaining token.  Returns the
+        hostname portion (before any ``/`` or ``:``) or None.
+        """
+        tokens = line.split()
+        if len(tokens) < 2:
+            return None
+        # Skip the command name (tokens[0]) and option flags
+        for token in tokens[1:]:
+            if token.startswith("-"):
+                continue
+            # Extract hostname: strip path and port
+            host = token.split("/")[0].split(":")[0]
+            # Basic validation: must look like a domain (contains a dot)
+            if "." in host and not host.startswith("."):
+                return host
+            break  # Only try the first non-option token
+        return None
 
     def _check_command_policy(self, script: str) -> List[SafetyFinding]:
         findings: List[SafetyFinding] = []

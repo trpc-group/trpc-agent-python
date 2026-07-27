@@ -12,6 +12,16 @@ from opentelemetry import trace
 from ._types import SafetyReport
 
 
+def _safe_attr_value(value):
+    """Return value preserving int/float/bool for OTel aggregation.
+
+    Only convert to str for non-primitive types.
+    """
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
 def set_safety_telemetry(report: SafetyReport) -> None:
     """Set all entries from report.telemetry_attributes on the current span.
 
@@ -23,4 +33,4 @@ def set_safety_telemetry(report: SafetyReport) -> None:
 
     for key, value in report.telemetry_attributes.items():
         if value is not None:
-            span.set_attribute(str(key), str(value))
+            span.set_attribute(str(key), _safe_attr_value(value))

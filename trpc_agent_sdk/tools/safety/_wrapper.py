@@ -67,6 +67,12 @@ class SafeCodeExecutor(BaseCodeExecutor):
         all_findings: List[SafetyFinding] = []
         reports: List[SafetyReport] = []
 
+        # Forward cwd and tool_metadata from the inner executor (if available)
+        # so context-safety checks (denied paths, timeout) can run.
+        inner_cwd = getattr(self.inner_executor, 'work_dir', '')
+        inner_timeout = getattr(self.inner_executor, 'timeout', 0)
+        tool_metadata = {"timeout": inner_timeout} if inner_timeout else {}
+
         for block in code_execution_input.code_blocks:
             lang = normalize_language(block.language or "")
             req = ScanRequest(
@@ -74,6 +80,8 @@ class SafeCodeExecutor(BaseCodeExecutor):
                 language=lang,
                 tool_name=self.tool_name,
                 target=ScanTarget.CODE_EXECUTOR,
+                cwd=inner_cwd,
+                tool_metadata=tool_metadata,
             )
             # Fail-closed: scanner exception → DENY report, block execution
             try:

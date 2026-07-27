@@ -53,6 +53,7 @@ EXPECTED = {
     "24": "deny",  # __builtins__.eval
     "25": "deny",  # cat server.pem
     "26": "deny",  # open('cert.key', 'w')
+    "27": "deny",  # curl evil.com (bare domain, no scheme)
 }
 
 
@@ -101,6 +102,8 @@ def main() -> None:
     print(f"\nReport: {report_path}")
     print(f"Audit:  {audit_path}")
     print(f"Passed: {passed}/{len(results)}")
+    if passed != len(results):
+        sys.exit(1)
 
 
 if __name__ == "__main__":

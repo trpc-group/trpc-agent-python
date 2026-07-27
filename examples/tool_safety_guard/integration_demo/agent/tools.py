@@ -80,9 +80,7 @@ def create_code_executor(
     )
 
 
-def create_skill_toolset(safety_filter: ToolSafetyFilter,
-                         policy: Optional[PolicyConfig] = None,
-                         block_on_review: bool = False):
+def create_skill_toolset(policy: Optional[PolicyConfig] = None, block_on_review: bool = False):
     """Create a Skill toolset with safety filter on skill_run commands.
 
     SkillToolSet does not accept BaseFilter directly, so we wrap it
