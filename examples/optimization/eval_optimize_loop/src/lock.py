@@ -52,15 +52,22 @@ def _acquire_flock(lock_path: str, pid: int, started_at: str) -> int | None:
     """Acquire kernel-level flock. Returns fd on success, None if locked."""
     import fcntl
 
-    fd = _os.open(lock_path, _os.O_CREAT | _os.O_RDWR | _os.O_TRUNC, 0o644)
+    fd = _os.open(lock_path, _os.O_CREAT | _os.O_RDWR, 0o644)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except (IOError, OSError):
         _os.close(fd)
         return None
-    # Write PID + timestamp for diagnostic purposes only
-    _os.write(fd, f"{pid} {started_at}\n".encode())
-    _os.fsync(fd)
+    # Truncate + write PID/timestamp for diagnostics (only after flock succeeds,
+    # so a contended process never truncates the holder is diagnostic info).
+    try:
+        _os.ftruncate(fd, 0)
+        _os.lseek(fd, 0, 0)  # SEEK_SET
+        _os.write(fd, f"{pid} {started_at}\n".encode())
+        _os.fsync(fd)
+    except Exception:
+        _os.close(fd)
+        raise
     return fd
 
 
@@ -81,7 +88,7 @@ def _release_flock(fd: int, lock_path: str = "") -> None:
 
 
 def _acquire_pid_lock_win32(lock_path: str, pid: int,
-                            started_at: str) -> int | None:
+                            started_at: str, _retry: int = 0) -> int | None:
     """Acquire PID-based lock on Windows.
 
     NOTE: PID reuse on shared hosts can cause false "alive" detection,
@@ -110,10 +117,11 @@ def _acquire_pid_lock_win32(lock_path: str, pid: int,
             old_pid = int(parts[0])
     except (FileNotFoundError, ValueError, IndexError):
         _cleanup_lock_file(lock_path)
-        # Retry once after cleanup instead of failing immediately.
-        # Avoids blocking CI on a single corrupt lock file that was
-        # just repaired.
-        return _acquire_pid_lock_win32(lock_path, pid, started_at)
+        # Retry up to 2 more times after cleanup (bounded to prevent
+        # infinite recursion on persistent corruption).
+        if _retry < 2:
+            return _acquire_pid_lock_win32(lock_path, pid, started_at, _retry + 1)
+        return None
 
     if _pid_alive(old_pid):
         return None  # another instance is running
@@ -138,10 +146,11 @@ def _acquire_pid_lock_win32(lock_path: str, pid: int,
             return None
     except (FileNotFoundError, ValueError, IndexError):
         _cleanup_lock_file(lock_path)
-        # Retry once after cleanup instead of failing immediately.
-        # Avoids blocking CI on a single corrupt lock file that was
-        # just repaired.
-        return _acquire_pid_lock_win32(lock_path, pid, started_at)
+        # Retry up to 2 more times after cleanup (bounded to prevent
+        # infinite recursion on persistent corruption).
+        if _retry < 2:
+            return _acquire_pid_lock_win32(lock_path, pid, started_at, _retry + 1)
+        return None
 
     return pid
 

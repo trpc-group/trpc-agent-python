@@ -104,7 +104,7 @@ async def main():
 
         # Phase 3: Optimization
         if not args.quiet: print("[3/6] Optimization...")
-        pipeline_cfg = config.get("pipeline", {})
+        pipeline_cfg = dict(config.get("pipeline", {}))
         # Propagate CLI --seed to pipeline config (default=42, always set)
         pipeline_cfg["random_seed"] = args.seed
         if args.max_iter is not None:  # user explicitly set --max-iter
