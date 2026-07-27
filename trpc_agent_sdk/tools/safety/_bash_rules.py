@@ -54,6 +54,7 @@ _SHELL_KEYWORDS = frozenset({
     "until",
     "while",
 })
+_COMMAND_PREFIX_KEYWORDS = frozenset({"do", "else", "then"})
 _PROCESS_RUNNERS = frozenset({"chrt", "ionice", "nice", "setsid", "stdbuf", "taskset", "timeout", "xargs"})
 _NETWORK_COMMANDS = frozenset({"curl", "ssh", "wget"})
 _CURL_REMAP_OPTIONS = ("--config", "--connect-to", "--proxy", "--resolve", "-K", "-x")
@@ -146,6 +147,13 @@ def _command_name(segment: str) -> str:
     if not tokens:
         return ""
     return os.path.basename(tokens[0]).lower()
+
+
+def _policy_command_name(segment: str) -> str:
+    tokens = _command_tokens(_tokens(segment))
+    while tokens and os.path.basename(tokens[0]).lower() in _COMMAND_PREFIX_KEYWORDS:
+        tokens = _command_tokens(tokens[1:])
+    return os.path.basename(tokens[0]).lower() if tokens else ""
 
 
 def _unwrap_tokens(tokens: list[str]) -> list[str]:
@@ -336,7 +344,7 @@ def _check_commands(text: str, policy: ToolSafetyPolicy,
     allowed = {os.path.basename(item).lower() for item in policy.allowed_commands}
     redacted = False
     for segment in _COMMAND_SPLIT_RE.split(text):
-        name = _command_name(segment.strip())
+        name = _policy_command_name(segment.strip())
         if name and name not in allowed and name not in _SHELL_KEYWORDS:
             finding, changed = make_finding("POLICY002", name, COMMAND_REVIEW, sanitizer)
             findings.append(finding)

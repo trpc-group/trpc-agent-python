@@ -111,6 +111,13 @@ def test_list_output_truncation_is_visible_with_small_budget():
     assert result[-1] == "[T]"
 
 
+def test_string_output_truncation_is_visible():
+    original = "x" * 20
+    result = truncate_output(original, 10)
+    assert result != original
+    assert result == "x" * 10
+
+
 @pytest.mark.parametrize(
     "code",
     [
@@ -258,6 +265,21 @@ def test_unallowed_command_requires_review(guard):
 def test_shell_keywords_do_not_create_command_policy_noise(guard, command):
     report = guard.scan(_request(command, ScriptLanguage.BASH))
     assert "POLICY002" not in _rule_ids(report)
+
+
+def test_non_whitelisted_command_after_shell_keyword_is_reviewed(guard):
+    report = guard.scan(
+        _request(
+            "for value in ok\n"
+            "do whoami\n"
+            "done\n"
+            "if echo ok\n"
+            "then whoami\n"
+            "else whoami\n"
+            "fi",
+            ScriptLanguage.BASH,
+        ))
+    assert "POLICY002" in _rule_ids(report)
 
 
 def test_timeout_over_policy_requires_review(guard):

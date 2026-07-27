@@ -88,6 +88,16 @@ def test_jsonl_audit_secures_existing_file(tmp_path):
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission contract")
+def test_jsonl_audit_secures_new_parent_directories(tmp_path):
+    path = tmp_path / "nested" / "deeper" / "audit.jsonl"
+
+    JsonlAuditSink(path).emit(create_audit_event(_report(), "Bash", True))
+
+    assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(path.parent.parent.stat().st_mode) == 0o700
+
+
 @pytest.mark.skipif(os.name != "posix", reason="POSIX symlink contract")
 def test_jsonl_audit_rejects_symlink(tmp_path):
     target = tmp_path / "target.txt"

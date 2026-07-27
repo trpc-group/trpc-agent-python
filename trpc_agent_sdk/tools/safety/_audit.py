@@ -79,7 +79,14 @@ class JsonlAuditSink:
         """Append and flush one JSON event."""
         line = event.model_dump_json() + "\n"
         try:
+            missing_parents = []
+            parent = self._path.parent
+            while not parent.exists():
+                missing_parents.append(parent)
+                parent = parent.parent
             self._path.parent.mkdir(parents=True, exist_ok=True)
+            for directory in missing_parents:
+                directory.chmod(0o700)
             with self._lock:
                 with _open_secure_file(self._path) as stream:
                     stream.write(line)
