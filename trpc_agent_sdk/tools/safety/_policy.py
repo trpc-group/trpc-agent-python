@@ -39,7 +39,7 @@ class PolicyConfig:
     denied_paths: List[str] = field(default_factory=list)
     network_allowlist: List[str] = field(default_factory=list)
     env_allowlist: List[str] = field(default_factory=list)
-    max_timeout_seconds: int = 30
+    max_timeout_seconds: int = 300
     max_output_bytes: int = 10 * 1024 * 1024
     max_file_write_bytes: int = 50 * 1024 * 1024
     review_shell_pipelines: bool = True

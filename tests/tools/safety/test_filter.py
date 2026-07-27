@@ -149,9 +149,29 @@ class TestToolSafetyFilterBefore:
 class TestAddToolSafetyFilter:
 
     def test_each_tool_gets_own_instance(self):
+        """add_tool_safety_filter calls add_one_filter on each tool."""
         t1, t2 = MagicMock(), MagicMock()
-        t1.filters, t2.filters = [], []
         add_tool_safety_filter([t1, t2], block_on_review=True)
-        assert len(t1.filters) == 1
-        assert len(t2.filters) == 1
-        assert t1.filters[0] is not t2.filters[0]
+        t1.add_one_filter.assert_called_once()
+        t2.add_one_filter.assert_called_once()
+        # Each tool receives a distinct filter instance
+        f1 = t1.add_one_filter.call_args[0][0]
+        f2 = t2.add_one_filter.call_args[0][0]
+        assert f1 is not f2
+
+    def test_real_bash_tool_accepts_filter(self):
+        """add_tool_safety_filter on real BashTool must not raise AttributeError."""
+        from trpc_agent_sdk.tools import BashTool
+        tool = BashTool(enable_safety_guard=False)
+        add_tool_safety_filter([tool], block_on_review=True)
+        assert any(f.name == "tool_safety" for f in tool.filters)
+
+    def test_real_bash_tool_dedup_second_call(self):
+        """Second call to add_tool_safety_filter is a no-op via name dedup."""
+        from trpc_agent_sdk.tools import BashTool
+        tool = BashTool(enable_safety_guard=False)
+        add_tool_safety_filter([tool])
+        count = len([f for f in tool.filters if f.name == "tool_safety"])
+        add_tool_safety_filter([tool])
+        count2 = len([f for f in tool.filters if f.name == "tool_safety"])
+        assert count == count2 == 1

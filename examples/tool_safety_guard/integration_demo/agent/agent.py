@@ -40,7 +40,7 @@ def create_agent(*, block_on_review: bool = False) -> LlmAgent:
         instruction=INSTRUCTION,
         tools=[
             create_bash_tool(scanner, block_on_review=block_on_review),
-            create_skill_toolset(safety_filter, policy=policy),
+            create_skill_toolset(safety_filter, policy=policy, block_on_review=block_on_review),
             create_mcp_toolset(safety_filter),
         ],
         code_executor=create_code_executor(scanner, block_on_review=block_on_review),

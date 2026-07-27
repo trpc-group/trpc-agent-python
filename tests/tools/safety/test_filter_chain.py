@@ -30,10 +30,12 @@ class TestFilterBlocksAndStops:
         f = ToolSafetyFilter()
         rsp = FilterResult()
         critical_finding = SafetyFinding(
-            rule_id="R001_TEST", rule_name="T",
+            rule_id="R001_TEST",
+            rule_name="T",
             risk_type=RiskType.DANGEROUS_FILE_OPERATION,
             risk_level=RiskLevel.CRITICAL,
-            evidence="rm -rf /", recommendation="block",
+            evidence="rm -rf /",
+            recommendation="block",
         )
         with patch("trpc_agent_sdk.tools.safety._filter.get_tool_var") as mock_tool:
             mock_tool.return_value = MagicMock(name="Bash")
@@ -60,10 +62,12 @@ class TestFilterBlocksAndStops:
         f = ToolSafetyFilter(block_on_review=True)
         rsp = FilterResult()
         medium_finding = SafetyFinding(
-            rule_id="R004_TEST", rule_name="T",
+            rule_id="R004_TEST",
+            rule_name="T",
             risk_type=RiskType.DEPENDENCY_INSTALL,
             risk_level=RiskLevel.MEDIUM,
-            evidence="pip install x", recommendation="review",
+            evidence="pip install x",
+            recommendation="review",
         )
         with patch("trpc_agent_sdk.tools.safety._filter.get_tool_var") as mock_tool:
             mock_tool.return_value = MagicMock(name="Bash")
@@ -112,11 +116,12 @@ class TestFilterInstancesAreIndependent:
         """add_tool_safety_filter creates independent instances per tool."""
         t1 = MagicMock()
         t2 = MagicMock()
-        t1.filters = []
-        t2.filters = []
         add_tool_safety_filter([t1, t2], block_on_review=True)
-        assert len(t1.filters) == 1
-        assert len(t2.filters) == 1
-        assert t1.filters[0] is not t2.filters[0]
-        assert isinstance(t1.filters[0], ToolSafetyFilter)
-        assert isinstance(t2.filters[0], ToolSafetyFilter)
+        t1.add_one_filter.assert_called_once()
+        t2.add_one_filter.assert_called_once()
+        # Each tool gets independent filter instances
+        f1 = t1.add_one_filter.call_args[0][0]
+        f2 = t2.add_one_filter.call_args[0][0]
+        assert f1 is not f2
+        assert isinstance(f1, ToolSafetyFilter)
+        assert isinstance(f2, ToolSafetyFilter)

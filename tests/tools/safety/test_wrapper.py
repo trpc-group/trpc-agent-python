@@ -210,25 +210,25 @@ class TestSafeCodeExecutorErrors:
 class TestSafetyWrappedToolSet:
 
     def test_injects_filter_into_each_tool(self):
-        """SafetyWrappedToolSet adds ToolSafetyFilter to each tool from inner toolset."""
+        """SafetyWrappedToolSet adds ToolSafetyFilter via add_one_filter."""
         from unittest.mock import AsyncMock
         from trpc_agent_sdk.tools.safety._wrapper import SafetyWrappedToolSet
 
         inner = MagicMock()
         inner.name = "test_ts"
         mock_tool_a, mock_tool_b = MagicMock(), MagicMock()
-        mock_tool_a.filters = []
-        mock_tool_b.filters = []
         inner.get_tools = AsyncMock(return_value=[mock_tool_a, mock_tool_b])
 
         wrapped = SafetyWrappedToolSet(inner=inner, block_on_review=True)
         tools = asyncio.run(wrapped.get_tools())
 
         assert len(tools) == 2
-        assert len(mock_tool_a.filters) == 1
-        assert len(mock_tool_b.filters) == 1
-        # Each tool gets independent filter
-        assert mock_tool_a.filters[0] is not mock_tool_b.filters[0]
+        mock_tool_a.add_one_filter.assert_called_once()
+        mock_tool_b.add_one_filter.assert_called_once()
+        # Each tool gets independent filter instance
+        f1 = mock_tool_a.add_one_filter.call_args[0][0]
+        f2 = mock_tool_b.add_one_filter.call_args[0][0]
+        assert f1 is not f2
 
     def test_close_delegates_to_inner(self):
         """SafetyWrappedToolSet.close() delegates to inner toolset."""
@@ -243,24 +243,27 @@ class TestSafetyWrappedToolSet:
         inner.close.assert_called_once()
 
     def test_double_get_tools_no_duplicate_filters(self):
-        """Calling get_tools twice does not accumulate duplicate filters."""
+        """Calling get_tools twice does not accumulate duplicate filters.
+
+        Uses a real BashTool: FilterRunner.add_one_filter deduplicates by
+        filter name, so the second get_tools() call is a no-op.
+        """
         from unittest.mock import AsyncMock
+        from trpc_agent_sdk.tools import BashTool
         from trpc_agent_sdk.tools.safety._wrapper import SafetyWrappedToolSet
 
+        tool = BashTool(enable_safety_guard=False)
         inner = MagicMock()
         inner.name = "test_ts"
-        mock_tool = MagicMock()
-        mock_tool.filters = []
-        inner.get_tools = AsyncMock(return_value=[mock_tool])
+        inner.get_tools = AsyncMock(return_value=[tool])
 
         wrapped = SafetyWrappedToolSet(inner=inner)
-        tools1 = asyncio.run(wrapped.get_tools())
-        tools2 = asyncio.run(wrapped.get_tools())
+        asyncio.run(wrapped.get_tools())
+        asyncio.run(wrapped.get_tools())
 
-        assert len(tools1) == 1
-        assert len(tools2) == 1
-        # Only one filter instance after two calls
-        assert len(mock_tool.filters) == 1
+        # Only one ToolSafetyFilter after two calls (name-based dedup)
+        safety_filters = [f for f in tool.filters if f.name == "tool_safety"]
+        assert len(safety_filters) == 1
 
     def test_custom_policy_passed_through(self):
         """SafetyWrappedToolSet should use the provided policy, not default."""

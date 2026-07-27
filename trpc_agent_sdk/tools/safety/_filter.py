@@ -120,10 +120,8 @@ def add_tool_safety_filter(tools: List[Any],
                            block_on_review: bool = False) -> None:
     """Attach a fresh ToolSafetyFilter instance to each tool.
 
-    Existing ToolSafetyFilter instances are removed first to prevent
-    duplicate filters when called repeatedly (e.g. from SafetyWrappedToolSet).
-    Each tool gets its own filter instance to avoid state leakage.
+    Uses add_one_filter which deduplicates by filter name, so repeated
+    calls are safe — a second call with the same parameters is a no-op.
     """
     for tool in tools:
-        tool.filters = [f for f in tool.filters if not isinstance(f, ToolSafetyFilter)]
-        tool.filters.append(ToolSafetyFilter(policy=policy, audit_path=audit_path, block_on_review=block_on_review))
+        tool.add_one_filter(ToolSafetyFilter(policy=policy, audit_path=audit_path, block_on_review=block_on_review))
