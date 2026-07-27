@@ -21,7 +21,9 @@ def acquire_pipeline_lock(lock_path: str, pid: int | None = None,
     """
     if pid is None:
         pid = _os.getpid()
-    _os.makedirs(_os.path.dirname(lock_path), exist_ok=True)
+    dirname = _os.path.dirname(lock_path)
+    if dirname:
+        _os.makedirs(dirname, exist_ok=True)
 
     if sys.platform != "win32":
         return _acquire_flock(lock_path, pid, started_at)
