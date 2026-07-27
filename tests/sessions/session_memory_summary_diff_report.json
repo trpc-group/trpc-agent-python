@@ -2,7 +2,6 @@
   "schema_version": 3,
   "reference_backend": "in_memory",
   "compared_backends": [
-    "in_memory",
     "sqlite"
   ],
   "backend_statuses": [
