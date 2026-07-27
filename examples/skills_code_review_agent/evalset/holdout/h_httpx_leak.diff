@@ -1,0 +1,14 @@
+diff --git a/svc/webhook.py b/svc/webhook.py
+index 1111111..2222222 100644
+--- a/svc/webhook.py
++++ b/svc/webhook.py
+@@ -1,5 +1,9 @@
+ import httpx
+
+
+ async def notify(url, payload):
+-    return None
++    client = httpx.AsyncClient(timeout=5.0)
++    response = await client.post(url, json=payload)
++    response.raise_for_status()
++    return response.status_code

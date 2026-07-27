@@ -5,9 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-from .models import Finding
-from .models import ReviewMetrics
-from .models import SandboxRun
+from .models import Finding, ReviewMetrics, SandboxRun
 from .redaction import redact_obj
 
 
@@ -50,6 +48,7 @@ def build_metrics(
     findings: list[Finding],
     sandbox_runs: list[SandboxRun],
     redaction_count: int,
+    suppressions: list[Any] | None = None,
 ) -> ReviewMetrics:
     confident, warnings, needs_human_review = split_findings(findings)
     severity_counts = Counter(f.severity for f in findings)
@@ -67,6 +66,8 @@ def build_metrics(
         redaction_count=redaction_count,
         changed_file_count=changed_file_count,
         changed_line_count=changed_line_count,
+        suppression_count=len(suppressions or []),
+        suppression_rule_distribution=dict(sorted(Counter(item.rule_id for item in (suppressions or [])).items())),
     )
 
 
@@ -79,6 +80,7 @@ def build_report(
     sandbox_runs: list[SandboxRun],
     metrics: ReviewMetrics,
     final_conclusion: str,
+    suppressions: list[Any] | None = None,
 ) -> dict[str, Any]:
     confident, warnings, needs_human_review = split_findings(findings)
     report = {
@@ -102,6 +104,7 @@ def build_report(
             if run.filter_decision and run.filter_decision.action != "allow"
         ],
         "monitoring": metrics.to_dict(),
+        "suppressions": [item.to_dict() for item in (suppressions or [])],
         "sandbox_runs": [run.to_dict() for run in sandbox_runs],
         "fix_recommendations": _fix_recommendations(confident + warnings + needs_human_review),
     }
@@ -151,6 +154,14 @@ def render_markdown(report: dict[str, Any]) -> str:
             lines.append(f"- `{item['action']}` `{item['rule_id']}`: {item['reason']}")
     else:
         lines.append("No filter intercepts.")
+    lines.extend(["", "## Context Suppressions", ""])
+    if report.get("suppressions"):
+        for item in report["suppressions"]:
+            lines.append(f"- `{item['action']}` `{item['rule_id']}` {item['file']}:{item['line'] or '?'} "
+                         f"({item['category']}) - {item['reason']} [evidence: {item['evidence_tier']}]")
+    else:
+        lines.append("No findings were suppressed by context analysis.")
+
     lines.extend(["", "## Monitoring", ""])
     for key, value in report["monitoring"].items():
         lines.append(f"- {key}: `{value}`")

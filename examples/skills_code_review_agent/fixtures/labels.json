@@ -1,0 +1,80 @@
+{
+  "description": "Expected findings for the eight public fixtures (issue #92 acceptance criterion 1). Scored with the same harness as the hold-out set: python evaluate.py --labels fixtures/labels.json --diffs fixtures --skip-redaction",
+  "line_tolerance": 2,
+  "cases": [
+    {
+      "diff": "no_issue.diff",
+      "kind": "negative",
+      "expected": [],
+      "note": "benign change shipped together with its tests; nothing may be reported"
+    },
+    {
+      "diff": "security_issue.diff",
+      "kind": "positive",
+      "expected": [
+        {"file": "app/search.py", "line": 5, "category": "security", "severity": "high",
+         "note": "subprocess.check_output with shell=True on an interpolated query"},
+        {"file": "app/search.py", "line": 8, "category": "security", "severity": "high",
+         "note": "eval() on a caller-supplied expression"}
+      ]
+    },
+    {
+      "diff": "async_resource_leak.diff",
+      "kind": "positive",
+      "expected": [
+        {"file": "app/client.py", "line": 5, "category": "async_resource", "severity": "high",
+         "note": "ClientSession is never closed"},
+        {"file": "app/client.py", "line": 10, "category": "async_error", "severity": "medium",
+         "note": "create_task result is discarded, so failures are swallowed; low confidence by design"}
+      ]
+    },
+    {
+      "diff": "db_lifecycle_issue.diff",
+      "kind": "positive",
+      "expected": [
+        {"file": "app/repository.py", "line": 4, "category": "db_lifecycle", "severity": "high",
+         "note": "connection is never closed and the transaction is never resolved"},
+        {"file": "app/repository.py", "line": 6, "category": "security", "severity": "high",
+         "note": "SQL built with string interpolation"}
+      ]
+    },
+    {
+      "diff": "missing_tests.diff",
+      "kind": "positive",
+      "expected": [
+        {"file": "app/billing.py", "line": 3, "category": "testing", "severity": "low",
+         "note": "production change with no accompanying test; routed to manual review by design"}
+      ]
+    },
+    {
+      "diff": "duplicate_finding.diff",
+      "kind": "positive",
+      "expected": [
+        {"file": "app/config.py", "line": 2, "category": "sensitive_info", "severity": "critical",
+         "note": "hardcoded key; both the sandbox script and the in-process engine find it, and dedupe must collapse them to one"},
+        {"file": "app/config.py", "line": 3, "category": "sensitive_info", "severity": "critical",
+         "note": "the same key on a second line is a distinct finding, not a duplicate"}
+      ]
+    },
+    {
+      "diff": "sandbox_failure.diff",
+      "kind": "negative",
+      "expected": [],
+      "note": "forces the sandbox script to fail; the run must degrade to a manual-review item rather than crash, and must not invent confident findings"
+    },
+    {
+      "diff": "secret_redaction.diff",
+      "kind": "positive",
+      "expected": [
+        {"file": "app/secrets.py", "line": 2, "category": "sensitive_info", "severity": "critical",
+         "note": "hardcoded password"},
+        {"file": "app/secrets.py", "line": 3, "category": "sensitive_info", "severity": "critical",
+         "note": "GitHub personal access token"},
+        {"file": "app/secrets.py", "line": 4, "category": "sensitive_info", "severity": "critical",
+         "note": "AWS access key id"},
+        {"file": "app/secrets.py", "line": 5, "category": "sensitive_info", "severity": "critical",
+         "note": "bearer JWT in a header literal"}
+      ]
+    }
+  ]
+}

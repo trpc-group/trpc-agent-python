@@ -1,0 +1,17 @@
+diff --git a/store/orders.py b/store/orders.py
+index 1111111..2222222 100644
+--- a/store/orders.py
++++ b/store/orders.py
+@@ -1,6 +1,10 @@
+ class OrderRepo:
+     def __init__(self, cursor):
+         self.cursor = cursor
+
+     def find(self, order_id):
+-        raise NotImplementedError
++        self.cursor.execute("SELECT * FROM orders WHERE id = %s", (order_id,))
++        return self.cursor.fetchone()
++
++    def by_status(self, status):
++        self.cursor.execute("SELECT * FROM orders WHERE status = ?", (status,))
++        return self.cursor.fetchall()

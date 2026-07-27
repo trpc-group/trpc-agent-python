@@ -1,0 +1,16 @@
+diff --git a/app/runner.py b/app/runner.py
+index 1111111..2222222 100644
+--- a/app/runner.py
++++ b/app/runner.py
+@@ -1,5 +1,10 @@
+ import subprocess
+
+
+ def list_files(path):
+-    return []
++    return subprocess.run(f"ls {path}", shell=True, capture_output=True)
++
++
++def grep(pattern, path):
++    cmd = "grep -R " + pattern + " " + path
++    return subprocess.check_output(cmd, shell=True)

@@ -1,0 +1,15 @@
+diff --git a/app/report_writer.py b/app/report_writer.py
+index 1111111..2222222 100644
+--- a/app/report_writer.py
++++ b/app/report_writer.py
+@@ -1,5 +1,9 @@
+ import json
+
+
+ def dump_report(path, report):
+-    return None
++    handle = open(path, "w", encoding="utf-8")
++    handle.write(json.dumps(report))
++    return path
++
++

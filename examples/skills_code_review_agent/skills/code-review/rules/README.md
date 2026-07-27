@@ -1,17 +1,14 @@
-# Code Review Rules
+# Code Review Rule Catalogue
 
-This skill ships deterministic checks that are intentionally explainable and easy to audit.
+The deterministic rules are deliberately small, explainable, and auditable. Each finding carries its rule ID in `source`; sandbox-script equivalents use the `skill-script:` prefix. The host deduplicates `(file, line, category)`, applies AST or hunk-context suppressions, and records every suppression in the report.
 
-## Covered Categories
+| Category | Documentation | Typical disposition |
+| --- | --- | --- |
+| Security | [security.md](security.md) | High-confidence finding |
+| Async errors and clients | [async_error.md](async_error.md) | Finding or manual review |
+| Resource leaks | [resource_leak.md](resource_leak.md) | Finding, warning, or suppression |
+| Database lifecycle | [db_lifecycle.md](db_lifecycle.md) | Finding or suppression |
+| Sensitive information | [sensitive_info.md](sensitive_info.md) | Critical finding, always redacted |
+| Testing gaps | [testing.md](testing.md) | Manual review |
 
-- Security risks: dynamic `eval` or `exec`, `subprocess(..., shell=True)`, string-built SQL, unsafe YAML loading and pickle deserialization.
-- Asynchronous errors: unscoped `aiohttp.ClientSession` and unobserved `asyncio.create_task`.
-- Resource leaks: `open()` without a context manager and predictable temporary files.
-- Testing gaps: production Python changes without a corresponding test diff.
-- Sensitive information leakage: API keys, tokens, passwords, private keys, bearer credentials and common provider key formats.
-- Database lifecycle: raw DB connections or ORM sessions created without scoped close, commit or rollback.
-
-## Noise Control
-
-The agent deduplicates on `(file, line, category)`. Findings below confidence 0.8 become warnings or manual-review items. The test-gap rule is advisory because a hidden test suite or generated tests can exist outside the patch.
-
+Confidence determines presentation, not truth. Signals below the confident threshold belong in `warnings` or `needs_human_review`; a context rule may drop or demote a line-level match when the surrounding code proves it safe.

@@ -1,0 +1,15 @@
+diff --git a/app/auth.py b/app/auth.py
+index 1111111..2222222 100644
+--- a/app/auth.py
++++ b/app/auth.py
+@@ -1,6 +1,10 @@
+ import hashlib
+
+
+ def hash_password(password):
+-    raise NotImplementedError
++    return hashlib.md5(password.encode("utf-8")).hexdigest()
++
++
++def fingerprint(token):
++    return hashlib.sha1(token.encode("utf-8")).hexdigest()

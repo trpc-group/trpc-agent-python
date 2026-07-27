@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from dataclasses import field
 from datetime import datetime
 from pathlib import Path
+from pathlib import PurePosixPath
+from pathlib import PureWindowsPath
 from typing import Any
 from typing import Dict
 from typing import List
@@ -94,6 +96,44 @@ def _shell_quote(s: str) -> str:
     return "'" + s.replace("'", "'\\''") + "'"
 
 
+def _container_path(path: str) -> str:
+    """Normalize one complete path that is interpreted inside a container."""
+    return PurePosixPath(str(path).replace("\\", "/")).as_posix()
+
+
+def _container_relative_path(path: str, *, allow_current: bool = False) -> str:
+    """Normalize a workspace-relative container path without allowing escape."""
+    raw = str(path)
+    if not raw or not raw.strip():
+        if allow_current:
+            return ""
+        raise ValueError("container path must not be empty")
+
+    slash_path = raw.replace("\\", "/")
+    posix_path = PurePosixPath(slash_path)
+    if posix_path.is_absolute() or PureWindowsPath(raw).is_absolute():
+        raise ValueError(f"container path must be workspace-relative: {path!r}")
+    if ".." in posix_path.parts:
+        raise ValueError(f"container path escapes workspace: {path!r}")
+
+    normalized = posix_path.as_posix()
+    if normalized == ".":
+        if allow_current:
+            return ""
+        raise ValueError("container path must not be empty")
+    return normalized
+
+
+def _join_container_path(root: str, *relative_parts: str) -> str:
+    """Join validated relative parts below a normalized container path."""
+    result = _container_path(root)
+    for part in relative_parts:
+        relative = _container_relative_path(part, allow_current=True)
+        if relative:
+            result = PurePosixPath(result, relative).as_posix()
+    return result
+
+
 class ContainerWorkspaceManager(BaseWorkspaceManager):
     """
     Docker container-based workspace manager implementation.
@@ -133,17 +173,17 @@ class ContainerWorkspaceManager(BaseWorkspaceManager):
         safe_id = self._sanitize(exec_id)
         suffix = time.time_ns()
 
-        ws_path = str(Path(self.config.run_container_base) / f"ws_{safe_id}_{suffix}")
+        ws_path = _join_container_path(self.config.run_container_base, f"ws_{safe_id}_{suffix}")
 
         # Create standard directory layout
         cmd_str = ("set -e; "
                    f"mkdir -p {_shell_quote(ws_path)} "
-                   f"{_shell_quote(str(Path(ws_path) / DIR_SKILLS))} "
-                   f"{_shell_quote(str(Path(ws_path) / DIR_WORK))} "
-                   f"{_shell_quote(str(Path(ws_path) / DIR_RUNS))} "
-                   f"{_shell_quote(str(Path(ws_path) / DIR_OUT))}; "
-                   f"[ -f {_shell_quote(str(Path(ws_path) / META_FILE_NAME))} ] || "
-                   f"echo '{{}}' > {_shell_quote(str(Path(ws_path) / META_FILE_NAME))}")
+                   f"{_shell_quote(_join_container_path(ws_path, DIR_SKILLS))} "
+                   f"{_shell_quote(_join_container_path(ws_path, DIR_WORK))} "
+                   f"{_shell_quote(_join_container_path(ws_path, DIR_RUNS))} "
+                   f"{_shell_quote(_join_container_path(ws_path, DIR_OUT))}; "
+                   f"[ -f {_shell_quote(_join_container_path(ws_path, META_FILE_NAME))} ] || "
+                   f"echo '{{}}' > {_shell_quote(_join_container_path(ws_path, META_FILE_NAME))}")
         cmd = ["/bin/bash", "-lc", cmd_str]
 
         result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
@@ -157,7 +197,7 @@ class ContainerWorkspaceManager(BaseWorkspaceManager):
             logger.info("Auto-mapping inputs for workspace %s", exec_id)
             specs = [
                 WorkspaceInputSpec(src=f"host://{self.config.inputs_host_base}",
-                                   dst=str(Path("work") / "inputs"),
+                                   dst=_join_container_path("work", "inputs"),
                                    mode="link")
             ]
             await self.fs.stage_inputs(ws, specs, ctx)
@@ -178,7 +218,8 @@ class ContainerWorkspaceManager(BaseWorkspaceManager):
         if not ws or not ws.path:
             return
 
-        cmd = ["/bin/bash", "-lc", f"rm -rf '{ws.path}'"]
+        container_ws_path = _container_path(ws.path)
+        cmd = ["/bin/bash", "-lc", f"rm -rf {_shell_quote(container_ws_path)}"]
         result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
         if result.exit_code != 0:
             raise RuntimeError(f"Failed to clean up workspace: {result.stderr}")
@@ -242,7 +283,8 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
             return
 
         tar_stream = self._create_tar_from_files(files)
-        success = self.container.client.api.put_archive(self.container.container.id, ws.path, tar_stream)
+        container_ws_path = _container_path(ws.path)
+        success = self.container.client.api.put_archive(self.container.container.id, container_ws_path, tar_stream)
 
         if not success:
             raise RuntimeError("Failed to put files into container")
@@ -270,12 +312,12 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
             RuntimeError: If staging fails
         """
         src_abs_path = os.path.abspath(src)
-        container_dst = str(Path(ws.path) / dst) if dst else ws.path
+        container_dst = _join_container_path(ws.path, dst) if dst else _container_path(ws.path)
         # Fast path: within skills mount
         if opt.allow_mount and self.config.skills_host_base:
             rel_path = get_rel_path(self.config.skills_host_base, src_abs_path)
             if rel_path:
-                container_src = str(Path(self.config.skills_container_base) / rel_path)
+                container_src = _join_container_path(self.config.skills_container_base, rel_path)
                 cmd_str = f"mkdir -p '{container_dst}' && cp -a '{container_src}/.' '{container_dst}'"
                 if opt.read_only:
                     cmd_str += f" && chmod -R a-w '{container_dst}'"
@@ -320,7 +362,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
             resolve_symlinks=True,
             error_prefix="Failed to collect files",
         )
-        files = await self._build_code_files(ws.path, matches, self._fetch_bytes)
+        files = await self._build_code_files(_container_path(ws.path), matches, self._fetch_bytes)
         logger.info("Collected %s files from workspace", len(files))
         return files
 
@@ -343,8 +385,9 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         md = await self._load_workspace_metadata(ws)
         for spec in specs:
             mode = (spec.mode or "").lower().strip() or "copy"
-            dst_rel = (spec.dst or "").strip() or str(Path(DIR_WORK) / "inputs" / self._input_base(spec.src))
-            dst_abs = str(Path(ws.path) / dst_rel)
+            dst_rel = (spec.dst or "").strip() or _join_container_path(DIR_WORK, "inputs", self._input_base(spec.src))
+            dst_rel = _container_relative_path(dst_rel)
+            dst_abs = _join_container_path(ws.path, dst_rel)
 
             resolved = ""
             version: Optional[int] = None
@@ -367,12 +410,12 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
                 resolved = host_path
             elif spec.src.startswith("workspace://"):
                 rel = spec.src.removeprefix("workspace://")
-                src = str(Path(ws.path) / rel)
+                src = _join_container_path(ws.path, _container_relative_path(rel))
                 await self._stage_workspace_input(src, dst_abs, mode)
                 resolved = rel
             elif spec.src.startswith("skill://"):
                 rest = spec.src.removeprefix("skill://")
-                src = str(Path(ws.path) / DIR_SKILLS / rest)
+                src = _join_container_path(ws.path, DIR_SKILLS, _container_relative_path(rest))
                 await self._stage_workspace_input(src, dst_abs, mode)
                 resolved = src
             else:
@@ -420,7 +463,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         # Container refuses to persist a half-read artifact, preserving
         # the historical "never save a truncated binary" guarantee.
         manifest, _, _ = await self._build_manifest_output(
-            ws.path,
+            _container_path(ws.path),
             spec,
             matches,
             self._fetch_bytes,
@@ -457,7 +500,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
                     "|| echo \"$(pwd)/$f\")")
         else:
             emit = "echo \"$(pwd)/$f\""
-        cmd_str = (f"cd {_shell_quote(ws.path)} && "
+        cmd_str = (f"cd {_shell_quote(_container_path(ws.path))} && "
                    f"shopt -s globstar nullglob dotglob; "
                    f"patterns=({array_literal}); "
                    f"_saved_ifs=$IFS; IFS=; "
@@ -495,11 +538,11 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         if not src or not str(src).strip():
             raise ValueError("source path is empty")
         abs_src = os.path.abspath(src)
-        container_dst = str(Path(ws.path) / dst) if dst else ws.path
+        container_dst = _join_container_path(ws.path, dst) if dst else _container_path(ws.path)
         if self.config.skills_host_base:
             rel_path = get_rel_path(self.config.skills_host_base, abs_src)
             if rel_path:
-                container_src = str(Path(self.config.skills_container_base) / rel_path)
+                container_src = _join_container_path(self.config.skills_container_base, rel_path)
                 # Create destination directory
                 cmd = ["/bin/bash", "-lc", f"mkdir -p '{container_dst}' && cp -a '{container_src}/.' '{container_dst}'"]
                 result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
@@ -525,7 +568,8 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
     async def _put_bytes_tar(self, data: bytes, dest: str, mode: int = 0o644) -> None:
         """Copy bytes to container using tar."""
         # Create a tar with single file named as dest's base
-        base = Path(dest).name
+        container_dest = PurePosixPath(_container_path(dest))
+        base = container_dest.name
         tar_buffer = io.BytesIO()
         with tarfile.open(fileobj=tar_buffer, mode='w') as tar:
             tarinfo = tarfile.TarInfo(name=base)
@@ -538,28 +582,30 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         # Ensure parent directory exists. Parent can be a symlink (for example
         # work/inputs in container mode when auto_inputs is enabled), so avoid
         # running plain `mkdir -p <symlink>` which may return "File exists".
-        parent = Path(dest).parent
-        cmd = ["/bin/bash", "-lc", f"[ -e '{parent.as_posix()}' ] || mkdir -p '{parent.as_posix()}'"]
+        parent = container_dest.parent.as_posix()
+        cmd = ["/bin/bash", "-lc", f"[ -e '{parent}' ] || mkdir -p '{parent}'"]
         result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
         if result.exit_code:
             raise RuntimeError(f"Failed to stage directory: {result.stderr}")
-        success = self.container.client.api.put_archive(self.container.container.id, parent.as_posix(), tar_buffer)
+        success = self.container.client.api.put_archive(self.container.container.id, parent, tar_buffer)
         if not success:
             raise RuntimeError(f"Failed to copy bytes to {dest}")
 
     async def _stage_host_input(self, ws: WorkspaceInfo, host: str, dst: str, mode: str, dst_rel: str) -> None:
         """Stage input from host path."""
+        dst = _container_path(dst)
         if self.config.inputs_host_base:
             rel_path = get_rel_path(self.config.inputs_host_base, host)
             if rel_path:
-                container_src = str(Path(self.config.inputs_container_base) / rel_path)
+                container_src = _join_container_path(self.config.inputs_container_base, rel_path)
+                parent = PurePosixPath(_container_path(dst)).parent.as_posix()
 
                 if mode == "link":
-                    cmd_str = (f"parent='{Path(dst).parent}'; "
+                    cmd_str = (f"parent='{parent}'; "
                                f"[ -e \"$parent\" ] || mkdir -p \"$parent\"; "
                                f"ln -sfn '{container_src}' '{dst}'")
                 else:
-                    cmd_str = (f"parent='{Path(dst).parent}'; "
+                    cmd_str = (f"parent='{parent}'; "
                                f"[ -e \"$parent\" ] || mkdir -p \"$parent\"; "
                                f"cp -a '{container_src}' '{dst}'")
 
@@ -569,11 +615,13 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
                     raise RuntimeError(f"Failed to stage host input: {result.stderr}")
                 return
         # Fallback to tar copy
-        await self._put_directory(ws, host, str(Path(dst_rel).parent))
+        await self._put_directory(ws, host, PurePosixPath(_container_path(dst_rel)).parent.as_posix())
 
     async def _stage_workspace_input(self, src: str, dst: str, mode: str) -> None:
         """Stage input from workspace path."""
-        parent = Path(dst).parent
+        src = _container_path(src)
+        dst = _container_path(dst)
+        parent = PurePosixPath(dst).parent.as_posix()
         if mode == "link":
             cmd_str = (f"[ -e '{parent}' ] || mkdir -p '{parent}'; "
                        f"ln -sfn '{src}' '{dst}'")
@@ -602,6 +650,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         Raises:
             RuntimeError: If copy fails
         """
+        full_path = _container_path(full_path)
         try:
             stream, _ = self.container.client.api.get_archive(self.container.container.id, full_path)
             tar_stream = io.BytesIO(b''.join(stream))
@@ -627,7 +676,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
 
         with tarfile.open(fileobj=tar_stream, mode='w') as tar:
             for f in files:
-                tarinfo = tarfile.TarInfo(name=f.path)
+                tarinfo = tarfile.TarInfo(name=_container_relative_path(f.path))
                 tarinfo.size = len(f.content)
                 tarinfo.mode = f.mode
                 tarinfo.mtime = time.time()
@@ -649,12 +698,12 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
             ref = s.removeprefix("artifact://")
             try:
                 name, _ = parse_artifact_ref(ref)
-                base = Path(name.strip()).name
+                base = PurePosixPath(_container_path(name.strip())).name
                 if base and base not in (".", "..", "/"):
                     return base
             except Exception:  # pylint: disable=broad-except
                 pass
-        return Path(s).name
+        return PurePosixPath(_container_path(s)).name
 
     @staticmethod
     def _pinned_artifact_version(md: Any, artifact_name: str, dst: str) -> Optional[int]:
@@ -678,7 +727,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
 
     async def _load_workspace_metadata(self, ws: WorkspaceInfo):
         now = datetime.now()
-        cmd = ["/bin/bash", "-lc", f"cat {_shell_quote(str(Path(ws.path) / META_FILE_NAME))}"]
+        cmd = ["/bin/bash", "-lc", f"cat {_shell_quote(_join_container_path(ws.path, META_FILE_NAME))}"]
         result = await self.container.exec_run(cmd=cmd, command_args=self.config.command_args)
         if result.exit_code != 0 or not result.stdout.strip():
             return WorkspaceMetadata(version=1, created_at=now, updated_at=now, last_access=now, skills={})
@@ -707,7 +756,7 @@ class ContainerWorkspaceFS(BaseWorkspaceFS):
         if md.skills is None:
             md.skills = {}
         payload = json.dumps(md.model_dump(exclude_none=True, by_alias=True, mode="json"), ensure_ascii=False, indent=2)
-        await self._put_bytes_tar(payload.encode("utf-8"), str(Path(ws.path) / META_FILE_NAME), mode=0o600)
+        await self._put_bytes_tar(payload.encode("utf-8"), _join_container_path(ws.path, META_FILE_NAME), mode=0o600)
 
     @staticmethod
     def _detect_mime_type(data: bytes) -> str:
@@ -768,17 +817,18 @@ class ContainerProgramRunner(BaseProgramRunner):
             RuntimeError: If execution fails
         """
         spec = self._apply_provider_env(spec, ctx)
-        cwd = f"{ws.path}/{spec.cwd}" if spec.cwd else ws.path
+        workspace_dir = _container_path(ws.path)
+        cwd = _join_container_path(workspace_dir, spec.cwd) if spec.cwd else workspace_dir
 
         # Prepare directories
-        skills_dir = f"{ws.path}/{DIR_SKILLS}"
-        work_dir = f"{ws.path}/{DIR_WORK}"
-        out_dir = f"{ws.path}/{DIR_OUT}"
-        run_dir = f"{ws.path}/{DIR_RUNS}/run_{time.strftime('%Y%m%dT%H%M%S')}"
+        skills_dir = _join_container_path(workspace_dir, DIR_SKILLS)
+        work_dir = _join_container_path(workspace_dir, DIR_WORK)
+        out_dir = _join_container_path(workspace_dir, DIR_OUT)
+        run_dir = _join_container_path(workspace_dir, DIR_RUNS, f"run_{time.strftime('%Y%m%dT%H%M%S')}")
 
         # Build environment
         base_env = {
-            WORKSPACE_ENV_DIR_KEY: ws.path,
+            WORKSPACE_ENV_DIR_KEY: workspace_dir,
             ENV_SKILLS_DIR: skills_dir,
             ENV_WORK_DIR: work_dir,
             ENV_OUTPUT_DIR: out_dir,

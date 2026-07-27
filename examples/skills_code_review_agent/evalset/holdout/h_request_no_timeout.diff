@@ -1,0 +1,16 @@
+diff --git a/svc/upstream.py b/svc/upstream.py
+index 1111111..2222222 100644
+--- a/svc/upstream.py
++++ b/svc/upstream.py
+@@ -1,6 +1,10 @@
+ import requests
+
+
+ def get_profile(user_id):
+-    return None
++    response = requests.get(f"https://api.example.com/users/{user_id}")
++    return response.json()
++
++
++def push_event(payload):
++    return requests.post("https://api.example.com/events", json=payload)

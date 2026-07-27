@@ -1,0 +1,17 @@
+diff --git a/app/repo.py b/app/repo.py
+index 1111111..2222222 100644
+--- a/app/repo.py
++++ b/app/repo.py
+@@ -1,6 +1,10 @@
+ class UserRepo:
+     def __init__(self, cursor):
+         self.cursor = cursor
+
+     def find(self, user_id):
+-        raise NotImplementedError
++        self.cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")
++        return self.cursor.fetchone()
++
++    def search(self, name):
++        self.cursor.execute("SELECT * FROM users WHERE name = '" + name + "'")
++        return self.cursor.fetchall()

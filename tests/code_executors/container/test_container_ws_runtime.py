@@ -166,6 +166,20 @@ class TestCreateWorkspace:
         assert "exec-1" in mgr.ws_paths
         cc.exec_run.assert_called_once()
 
+    async def test_windows_shaped_run_base_stays_posix_in_container(self):
+        cc = _mock_container_client()
+        cfg = RuntimeConfig(run_container_base=r"\tmp\run")
+        mgr = ContainerWorkspaceManager(cc, cfg, MagicMock())
+
+        ws = await mgr.create_workspace("windows-client")
+
+        assert ws.path.startswith("/tmp/run/ws_windows-client_")
+        assert "\\" not in ws.path
+        command = cc.exec_run.await_args.kwargs["cmd"][2]
+        assert f"{ws.path}/runs" in command
+        assert f"{ws.path}/metadata.json" in command
+        assert "\\" not in command
+
     async def test_create_workspace_idempotent(self):
         cc = _mock_container_client()
         cfg = RuntimeConfig()
@@ -355,6 +369,27 @@ class TestCreateTarFromFiles:
         with tarfile.open(fileobj=tar_stream, mode='r') as tar:
             assert tar.getnames() == []
 
+    def test_windows_shaped_member_path_is_posix(self):
+        files = [WorkspacePutFileInfo(path=r"runs\review\script.py", content=b"pass", mode=0o644)]
+
+        tar_stream = ContainerWorkspaceFS._create_tar_from_files(files)
+
+        with tarfile.open(fileobj=tar_stream, mode='r') as tar:
+            assert tar.getnames() == ["runs/review/script.py"]
+
+    @pytest.mark.parametrize("path", [
+        "/outside.txt",
+        r"\outside.txt",
+        r"C:\outside.txt",
+        "../outside.txt",
+        r"..\outside.txt",
+    ])
+    def test_rejects_members_outside_workspace(self, path):
+        files = [WorkspacePutFileInfo(path=path, content=b"blocked")]
+
+        with pytest.raises(ValueError, match="workspace-relative|escapes workspace"):
+            ContainerWorkspaceFS._create_tar_from_files(files)
+
 
 # ---------------------------------------------------------------------------
 # ContainerWorkspaceFS.put_files
@@ -452,6 +487,51 @@ class TestStageDirectory:
 
         assert cc.exec_run.await_count >= 1
 
+    async def test_windows_shaped_container_paths_are_posix(self, tmp_path):
+        src_dir = tmp_path / "nested" / "skill1"
+        src_dir.mkdir(parents=True)
+        cc = _mock_container_client()
+        cfg = RuntimeConfig(
+            skills_host_base=str(tmp_path),
+            skills_container_base=r"\opt\trpc-agent\skills",
+        )
+        fs = ContainerWorkspaceFS(cc, cfg)
+        ws = _make_ws(path=r"\tmp\run\ws_test")
+        opt = WorkspaceStageOptions(allow_mount=True, read_only=False)
+
+        with patch(
+            "trpc_agent_sdk.code_executors.container._container_ws_runtime.get_rel_path",
+            return_value=r"nested\skill1",
+        ):
+            await fs.stage_directory(ws, str(src_dir), r"skills\review", opt)
+
+        command = cc.exec_run.await_args.kwargs["cmd"][2]
+        assert "/opt/trpc-agent/skills/nested/skill1/." in command
+        assert "/tmp/run/ws_test/skills/review" in command
+        assert "\\" not in command
+
+    @pytest.mark.parametrize("dst", [
+        "/outside",
+        r"\outside",
+        r"C:\outside",
+        "../outside",
+        r"..\outside",
+    ])
+    async def test_rejects_destination_outside_workspace(self, tmp_path, dst):
+        cc = _mock_container_client()
+        fs = ContainerWorkspaceFS(cc, RuntimeConfig())
+
+        with pytest.raises(ValueError, match="workspace-relative|escapes workspace"):
+            await fs.stage_directory(
+                _make_ws(),
+                str(tmp_path),
+                dst,
+                WorkspaceStageOptions(),
+            )
+
+        cc.exec_run.assert_not_awaited()
+        cc.client.api.put_archive.assert_not_called()
+
     async def test_stage_read_only_chmod_fails(self, tmp_path):
         src = tmp_path / "src"
         src.mkdir()
@@ -548,6 +628,37 @@ class TestCollect:
 
 
 class TestStageInputs:
+
+    @pytest.mark.parametrize("dst", [
+        "/outside",
+        r"\outside",
+        r"C:\outside",
+        "../outside",
+        r"..\outside",
+    ])
+    async def test_rejects_destination_outside_workspace(self, dst):
+        cc = _mock_container_client()
+        fs = ContainerWorkspaceFS(cc, RuntimeConfig())
+        specs = [WorkspaceInputSpec(src="workspace://work/data", dst=dst)]
+
+        with pytest.raises(ValueError, match="workspace-relative|escapes workspace"):
+            await fs.stage_inputs(_make_ws(), specs)
+
+    @pytest.mark.parametrize("src", [
+        "workspace:///outside",
+        r"workspace://\outside",
+        "workspace://../outside",
+        r"workspace://..\outside",
+        "skill:///outside",
+        r"skill://..\outside",
+    ])
+    async def test_rejects_workspace_source_outside_workspace(self, src):
+        cc = _mock_container_client()
+        fs = ContainerWorkspaceFS(cc, RuntimeConfig())
+        specs = [WorkspaceInputSpec(src=src, dst="work/data")]
+
+        with pytest.raises(ValueError, match="workspace-relative|escapes workspace"):
+            await fs.stage_inputs(_make_ws(), specs)
 
     async def test_stage_host_input(self):
         ws = _make_ws()
@@ -1180,6 +1291,40 @@ class TestRunProgram:
         result = await runner.run_program(ws, spec)
         assert result.exit_code == 0
 
+    async def test_windows_shaped_workspace_and_cwd_are_posix(self):
+        cc = _mock_container_client()
+        cc.exec_run = AsyncMock(return_value=CommandExecResult(
+            stdout="", stderr="", exit_code=0, is_timeout=False))
+        runner = ContainerProgramRunner(cc, RuntimeConfig())
+        ws = _make_ws(path=r"\tmp\run\ws_test")
+        spec = WorkspaceRunProgramSpec(cmd="python3", args=["script.py"], cwd=r"work\src")
+
+        await runner.run_program(ws, spec)
+
+        command = cc.exec_run.await_args.kwargs["cmd"][2]
+        assert "cd '/tmp/run/ws_test/work/src'" in command
+        assert "WORKSPACE_DIR='/tmp/run/ws_test'" in command
+        assert "\\" not in command
+
+    @pytest.mark.parametrize("cwd", [
+        "/etc",
+        r"\etc",
+        r"C:\Windows",
+        "../outside",
+        r"..\outside",
+    ])
+    async def test_rejects_cwd_outside_workspace(self, cwd):
+        cc = _mock_container_client()
+        runner = ContainerProgramRunner(cc, RuntimeConfig())
+
+        with pytest.raises(ValueError, match="workspace-relative|escapes workspace"):
+            await runner.run_program(
+                _make_ws(),
+                WorkspaceRunProgramSpec(cmd="pwd", cwd=cwd),
+            )
+
+        cc.exec_run.assert_not_awaited()
+
     async def test_run_with_custom_env(self):
         cc = _mock_container_client()
         cc.exec_run = AsyncMock(return_value=CommandExecResult(
@@ -1375,8 +1520,9 @@ class TestFindBindSource:
         result = ContainerWorkspaceRuntime._find_bind_source(binds, "/just/a/path")
         assert result == ""
 
-    def test_source_dir_not_exists(self):
-        binds = ["/nonexistent/path:/opt/skills:ro"]
+    def test_source_dir_not_exists(self, tmp_path):
+        missing = tmp_path / "missing"
+        binds = [f"{missing}:/opt/skills:ro"]
         result = ContainerWorkspaceRuntime._find_bind_source(binds, "/opt/skills")
         assert result == ""
 

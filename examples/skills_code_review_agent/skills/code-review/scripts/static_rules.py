@@ -8,30 +8,68 @@ import re
 import sys
 from pathlib import Path
 
-
 HUNK_RE = re.compile(r"@@ -\d+(?:,\d+)? \+(?P<new>\d+)(?:,\d+)? @@")
-SECRET_RE = re.compile(
-    r"(?i)\b(api[_-]?key|token|password|secret)\b(\s*[:=]\s*)(['\"]?)([^'\"()\s,;#]{8,})(\3)(?=$|[\s,;#])"
+# Kept deliberately in step with agent/redaction.py KEY_VALUE_RE: the keyword is
+# matched inside an identifier (DATABASE_PASSWORD, SENDGRID_API_KEY), the key may
+# be quoted as in JSON, and code references are excluded by CODE_REFERENCE_RE.
+_KEYWORD = (
+    r"api[_-]?key|access[_-]?key|secret[_-]?key|storage[_-]?key|signing[_-]?key|private[_-]?key|"
+    r"access[_-]?token|auth[_-]?token|refresh[_-]?token|id[_-]?token|bearer[_-]?token|"
+    r"client[_-]?secret|credential|passphrase|password|passwd|pwd|secret|token"
 )
+SECRET_RE = re.compile(
+    r"(?i)(?P<key>[A-Za-z0-9_.\-]*(?:" + _KEYWORD + r")[A-Za-z0-9_.\-]*)"
+    r"(?P<sep>[\"']?\s*[:=]\s*)"
+    r"(?P<quote>[\"']?)"
+    r"(?P<value>[^\"'()\[\]{}\s,;#]{6,})"
+    r"(?P=quote)"
+    r"(?=$|[\s,;#\]}])")
+CODE_REFERENCE_RE = re.compile(r"^([a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*)+|os\.(environ|getenv)\b.*)$")
+IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+PLACEHOLDER_RE = re.compile(
+    r"(?i)^(?:<[^>]*>|\{\{?[^}]*\}?\}|x{4,}|\*{4,}|\.{3,}"
+    r"|changeme|placeholder|example|sample|dummy|todo|tbd|fake|notreal)$"
+    r"|^[A-Z_]*(?:REPLACE|CHANGE|YOUR|PLACEHOLDER|EXAMPLE|SAMPLE|DUMMY|TODO|TBD|HERE|ME)[A-Z_]*$")
+
+
+def is_reference(value: str, quote: str, line: str) -> bool:
+    """Return whether a captured value is code or a documented placeholder."""
+    if "<REDACTED>" in value or CODE_REFERENCE_RE.match(value) or PLACEHOLDER_RE.match(value):
+        return True
+    if quote or not IDENTIFIER_RE.match(value):
+        return False
+    return "(" in line or "{" in line
+PROVIDER_RE = re.compile(
+    r"\bAKIA[0-9A-Z]{16}\b|\bgh[pousr]_[A-Za-z0-9_]{20,}\b|\bxox[baprs]-[A-Za-z0-9-]{16,}\b|"
+    r"\bAIza[0-9A-Za-z_-]{33,40}|\bsk-[A-Za-z0-9_-]{16,}\b|"
+    r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")
 
 
 def normalize(path: str) -> str:
     path = path.strip()
     if path in {"/dev/null", "dev/null"}:
         return ""
-    if path.startswith("a/") or path.startswith("b/"):
+    if path.startswith(("a/", "b/")):
         path = path[2:]
     return path
 
 
+def has_secret(text: str) -> bool:
+    """Return whether the line carries a live credential."""
+    if PROVIDER_RE.search(text):
+        return True
+    match = SECRET_RE.search(text)
+    return bool(match and not is_reference(match.group("value"), match.group("quote") or "", text))
+
+
 def redact(text: str) -> str:
     def repl(match: re.Match[str]) -> str:
-        if "<REDACTED>" in match.group(4):
+        quote = match.group("quote") or ""
+        if is_reference(match.group("value"), quote, text):
             return match.group(0)
-        quote = match.group(3) or ""
-        return match.group(1) + match.group(2) + quote + "<REDACTED>" + quote
+        return match.group("key") + match.group("sep") + quote + "<REDACTED>" + quote
 
-    return SECRET_RE.sub(repl, text)
+    return PROVIDER_RE.sub("<REDACTED>", SECRET_RE.sub(repl, text))
 
 
 def finding(severity, category, file, line, title, evidence, recommendation, confidence, source):
@@ -54,23 +92,42 @@ def analyze(diff_text: str) -> list[dict]:
     out = []
     current_file = ""
     new_line = 0
+    in_hunk = False
     for raw in diff_text.replace("\r\n", "\n").splitlines():
         if raw.startswith("+++ "):
             current_file = normalize(raw[4:].split("\t", 1)[0])
+            in_hunk = False
+            continue
+        if raw.startswith(("--- ", "diff --git ")):
+            in_hunk = False
             continue
         match = HUNK_RE.match(raw)
         if match:
             new_line = int(match.group("new"))
+            in_hunk = True
             continue
-        if not raw.startswith("+") or raw.startswith("+++ "):
-            if raw.startswith(" ") and new_line:
+        if not in_hunk:
+            continue
+        if not raw.startswith("+"):
+            # Removed lines do not advance the post-image counter; everything
+            # else in a hunk is context and does. Blank context lines reach us
+            # as "" whenever trailing whitespace has been stripped, so key off
+            # the "-" prefix rather than a leading space -- otherwise the line
+            # numbers drift away from agent/diff_parser.py.
+            if not raw.startswith("-"):
                 new_line += 1
             continue
         line = raw[1:].strip()
         candidate_line = new_line
         new_line += 1
-        if SECRET_RE.search(line) or "<REDACTED>" in line:
+        if has_secret(line):
             out.append(finding("critical", "sensitive_info", current_file, candidate_line, "Potential secret in diff", line, "Remove and rotate the credential.", 0.98, "skill-script:sensitive-info"))
+        elif "<REDACTED>" in line:
+            # The sandbox only ever receives the redacted diff, so a masking
+            # marker is corroborating evidence that the in-process engine found
+            # a credential here. Deliberately below the confident threshold: it
+            # locates the finding, it does not independently establish one.
+            out.append(finding("critical", "sensitive_info", current_file, candidate_line, "Credential masked upstream at this line", line, "Remove and rotate the credential.", 0.75, "skill-script:sensitive-info-marker"))
         if re.search(r"\b(eval|exec)\s*\(", line):
             out.append(finding("high", "security", current_file, candidate_line, "Dynamic code execution", line, "Replace dynamic execution with explicit parsing or dispatch.", 0.9, "skill-script:dangerous-exec"))
         if re.search(r"\bos\.(system|popen)\s*\(", line):

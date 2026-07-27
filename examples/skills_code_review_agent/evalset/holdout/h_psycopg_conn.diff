@@ -1,0 +1,14 @@
+diff --git a/store/pg.py b/store/pg.py
+index 1111111..2222222 100644
+--- a/store/pg.py
++++ b/store/pg.py
+@@ -1,6 +1,10 @@
+ import psycopg2
+
+
+ def count_orders(dsn):
+-    return 0
++    conn = psycopg2.connect(dsn)
++    cursor = conn.cursor()
++    cursor.execute("SELECT count(*) FROM orders")
++    return cursor.fetchone()[0]

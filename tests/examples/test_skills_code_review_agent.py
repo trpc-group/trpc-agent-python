@@ -5,18 +5,22 @@ from __future__ import annotations
 import json
 import sqlite3
 import subprocess
+import sys
 import time
 from pathlib import Path
 
+import pytest
+
+from examples.skills_code_review_agent.agent.diff_parser import parse_unified_diff
 from examples.skills_code_review_agent.agent.filtering import ReviewExecutionFilter
 from examples.skills_code_review_agent.agent.models import SandboxRequest
-from examples.skills_code_review_agent.agent.diff_parser import parse_unified_diff
-from examples.skills_code_review_agent.agent.review_engine import ReviewConfig
-from examples.skills_code_review_agent.agent.review_engine import run_review
+from examples.skills_code_review_agent.agent.review_engine import (
+    ReviewConfig,
+    run_review,
+)
 from examples.skills_code_review_agent.agent.rules_engine import RuleEngine
 from examples.skills_code_review_agent.agent.sandbox import SandboxRunner
-from examples.skills_code_review_agent.agent.storage import ReviewStore
-
+from examples.skills_code_review_agent.agent.storage import ReviewStore, TaskExistsError
 
 FIXTURES = [
     "no_issue",
@@ -38,8 +42,11 @@ SECRET_NEEDLES = [
     "eyJhbGciOiJIUzI1NiJ9.abcdefghijklmnop.qrstuvwxyz123456",
 ]
 
+# Number of distinct credentials in fixtures/secret_redaction.diff.
+SECRET_REDACTION_FIXTURE_SECRETS = 4
 
-def _run_fixture(tmp_path: Path, name: str):
+
+def _run_fixture(tmp_path: Path, name: str, *, include_high_risk_probe: bool = False):
     output_dir = tmp_path / name / "out"
     db_path = tmp_path / name / "review.sqlite3"
     return run_review(
@@ -52,6 +59,7 @@ def _run_fixture(tmp_path: Path, name: str):
             task_id=f"task-{name}",
             timeout_seconds=5,
             max_output_bytes=32768,
+            include_high_risk_probe=include_high_risk_probe,
         )
     )
 
@@ -79,6 +87,65 @@ def test_example_keeps_quickstart_style_layout():
     assert (agent_dir / "tools.py").is_file()
 
 
+def test_cli_rejects_ambiguous_or_incomplete_input_selectors():
+    script = Path("examples/skills_code_review_agent/run_agent.py").resolve()
+
+    ambiguous = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--fixture",
+            "no_issue",
+            "--diff-file",
+            "unused.diff",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert ambiguous.returncode == 2
+    assert "not allowed with argument" in ambiguous.stderr
+
+    missing_repo = subprocess.run(
+        [sys.executable, str(script), "--path-list-file", "paths.txt"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert missing_repo.returncode == 2
+    assert "--path-list-file requires --repo-path" in missing_repo.stderr
+
+    missing_source = subprocess.run(
+        [sys.executable, str(script)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert missing_source.returncode == 2
+    assert "one of --diff-file, --repo-path or --fixture is required" in missing_source.stderr
+
+
+def test_programmatic_input_selectors_fail_closed(tmp_path: Path):
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        run_review(
+            ReviewConfig(
+                fixture="no_issue",
+                diff_file=tmp_path / "unused.diff",
+                output_dir=tmp_path / "out",
+                db_path=tmp_path / "review.sqlite3",
+                dry_run=True,
+            ))
+
+    with pytest.raises(ValueError, match="path_list_file requires repo_path"):
+        run_review(
+            ReviewConfig(
+                path_list_file=tmp_path / "paths.txt",
+                output_dir=tmp_path / "out-2",
+                db_path=tmp_path / "review-2.sqlite3",
+                dry_run=True,
+            ))
+
+
 def test_high_risk_detection_rate_and_false_positive_guard(tmp_path: Path):
     expected_categories = {
         "security_issue": {"security"},
@@ -102,7 +169,7 @@ def test_high_risk_detection_rate_and_false_positive_guard(tmp_path: Path):
 
 
 def test_database_records_complete_task_bundle_by_task_id(tmp_path: Path):
-    result = _run_fixture(tmp_path, "security_issue")
+    result = _run_fixture(tmp_path, "security_issue", include_high_risk_probe=True)
     store = ReviewStore(result.db_path)
     try:
         bundle = store.get_task(result.task_id)
@@ -139,7 +206,64 @@ def test_secret_redaction_from_reports_and_database(tmp_path: Path):
         if item["category"] == "sensitive_info"
     ]
     assert len(sensitive_items) >= 4
-    assert result.report["monitoring"]["redaction_count"] >= len(SECRET_NEEDLES)
+    # The fixture carries four credentials; the fifth needle above belongs to
+    # duplicate_finding.diff. Each redacted credential is counted once, so this
+    # asserts coverage rather than how many patterns happened to overlap.
+    assert result.report["monitoring"]["redaction_count"] >= SECRET_REDACTION_FIXTURE_SECRETS
+
+
+def test_secret_redaction_covers_input_refs_and_diff_summary_paths(
+    tmp_path: Path,
+    monkeypatch,
+):
+    from examples.skills_code_review_agent.agent import review_engine
+
+    secret = "ghp_abcdefghijklmnopqrstuvwxyz123456"
+    captured_metadata = {}
+
+    class CapturingReviewStore(ReviewStore):
+        def create_task(self, **kwargs):
+            captured_metadata["input_ref"] = kwargs["input_ref"]
+            captured_metadata["diff_summary"] = json.dumps(
+                kwargs["diff_summary"],
+                ensure_ascii=False,
+            )
+            return super().create_task(**kwargs)
+
+    monkeypatch.setattr(review_engine, "ReviewStore", CapturingReviewStore)
+    diff_path = tmp_path / f"{secret}.diff"
+    diff_path.write_text(
+        f"""diff --git a/{secret}.py b/{secret}.py
+--- a/{secret}.py
++++ b/{secret}.py
+@@ -0,0 +1 @@
++value = 1
+""",
+        encoding="utf-8",
+    )
+    result = review_engine.run_review(
+        review_engine.ReviewConfig(
+            diff_file=diff_path,
+            output_dir=tmp_path / "metadata-out",
+            db_path=tmp_path / "metadata.sqlite3",
+            dry_run=True,
+            task_id="metadata-redaction",
+        )
+    )
+
+    store = ReviewStore(result.db_path)
+    try:
+        bundle = store.get_task(result.task_id)
+    finally:
+        store.close()
+
+    serialized = json.dumps(bundle, ensure_ascii=False)
+    assert secret not in json.dumps(captured_metadata, ensure_ascii=False)
+    assert secret not in serialized
+    assert "<REDACTED>" in captured_metadata["input_ref"]
+    assert "<REDACTED>.py" in captured_metadata["diff_summary"]
+    assert "<REDACTED>" in bundle["task"]["input_ref"]
+    assert bundle["task"]["diff_summary"]["files"][0]["path"] == "<REDACTED>.py"
 
 
 def test_dry_run_completes_under_two_minutes(tmp_path: Path):
@@ -149,13 +273,63 @@ def test_dry_run_completes_under_two_minutes(tmp_path: Path):
 
 
 def test_high_risk_script_filter_blocks_execution(tmp_path: Path):
-    result = _run_fixture(tmp_path, "security_issue")
+    result = _run_fixture(tmp_path, "security_issue", include_high_risk_probe=True)
     intercepts = result.report["filter_intercepts"]
     assert any(item["rule_id"] == "script.high_risk_command" for item in intercepts)
     high_risk_runs = [run for run in result.report["sandbox_runs"] if run["name"] == "high-risk-script-probe"]
     assert high_risk_runs
     assert high_risk_runs[0]["status"] == "filtered"
     assert high_risk_runs[0]["filter_decision"]["action"] == "needs_human_review"
+
+
+def test_normal_review_does_not_inject_a_fake_filter_intercept(tmp_path: Path):
+    result = _run_fixture(tmp_path, "security_issue")
+
+    assert result.report["filter_intercepts"] == []
+    assert not any(run["name"] == "high-risk-script-probe" for run in result.report["sandbox_runs"])
+
+
+def test_duplicate_task_id_preserves_history_unless_overwrite_is_explicit(tmp_path: Path):
+    output_dir = tmp_path / "stable" / "out"
+    db_path = tmp_path / "stable" / "review.sqlite3"
+    first = run_review(
+        ReviewConfig(
+            fixture="security_issue",
+            output_dir=output_dir,
+            db_path=db_path,
+            dry_run=True,
+            task_id="stable-task",
+        ))
+
+    with pytest.raises(TaskExistsError):
+        run_review(
+            ReviewConfig(
+                fixture="no_issue",
+                output_dir=output_dir,
+                db_path=db_path,
+                dry_run=True,
+                task_id="stable-task",
+            ))
+
+    store = ReviewStore(db_path)
+    try:
+        preserved = store.get_task("stable-task")
+    finally:
+        store.close()
+    assert preserved["task"]["status"] == "completed"
+    assert preserved["task"]["input_ref"] == "fixture:security_issue"
+    assert preserved["report"]["task_id"] == first.task_id
+
+    replaced = run_review(
+        ReviewConfig(
+            fixture="no_issue",
+            output_dir=output_dir,
+            db_path=db_path,
+            dry_run=True,
+            task_id="stable-task",
+            overwrite_task=True,
+        ))
+    assert replaced.report["input_ref"] == "fixture:no_issue"
 
 
 def test_report_contains_required_sections(tmp_path: Path):

@@ -1,0 +1,15 @@
+diff --git a/app/calc.py b/app/calc.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/app/calc.py
+@@ -0,0 +1,9 @@
++"""Expression helpers."""
++
++
++def evaluate(expr):
++    return eval(expr)
++
++
++def double(value):
++    return value * 2

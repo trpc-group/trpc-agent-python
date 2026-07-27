@@ -7,10 +7,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from .models import ChangedFile
-from .models import ChangedLine
-from .models import DiffHunk
-
+from .models import ChangedFile, ChangedLine, DiffHunk
 
 HUNK_RE = re.compile(r"@@ -(?P<old>\d+)(?:,(?P<old_count>\d+))? \+(?P<new>\d+)(?:,(?P<new_count>\d+))? @@(?P<section>.*)")
 
@@ -25,7 +22,7 @@ def normalize_diff_path(path: str) -> str:
     value = path.strip()
     if value in {"/dev/null", "dev/null"}:
         return ""
-    if value.startswith("a/") or value.startswith("b/"):
+    if value.startswith(("a/", "b/")):
         value = value[2:]
     return value
 
@@ -109,7 +106,7 @@ def parse_unified_diff(diff_text: str) -> list[ChangedFile]:
                 ))
             old_line = (old_line or 0) + 1
         else:
-            content = raw[1:] if raw.startswith(" ") else raw
+            content = raw.removeprefix(" ")
             current_hunk.lines.append(
                 ChangedLine(
                     file=current_file.path,
@@ -148,4 +145,3 @@ def read_path_list_diff(repo_path: Path, path_list_file: Path) -> str:
     if completed.returncode != 0:
         raise RuntimeError(f"git diff for path list failed: {completed.stderr.strip()}")
     return completed.stdout
-

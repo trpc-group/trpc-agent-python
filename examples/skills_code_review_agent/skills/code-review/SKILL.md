@@ -1,35 +1,87 @@
 ---
 name: code-review
-description: Structured code review skill with diff parsing, static checks, sandbox execution policy, redaction and report generation.
+description: Review unified diffs with deterministic rules, sandboxed scripts, explainable noise suppression, redaction, and structured audit output.
+allowed-tools:
+  - skill_run
 ---
 
 # Code Review Skill
 
-Use this skill to review unified diffs, PR patches or local git changes. The skill is designed for a sandboxed workspace:
+Use this Skill for a unified diff, PR patch, or a diff produced from a local Git worktree. The host is responsible for staging a **redacted** input diff at `$WORK_DIR/inputs/input.diff`; scripts must never receive an unredacted secret-bearing copy.
 
-1. Load the diff into `work/inputs/input.diff`.
-2. Run `scripts/parse_diff.py work/inputs/input.diff out/diff_summary.json`.
-3. Run `scripts/static_rules.py work/inputs/input.diff out/static_findings.json`.
-4. Merge deterministic rule findings with model review findings only after redaction and deduplication.
-5. Persist task, sandbox runs, filter intercepts, metrics, findings and final report.
+## Tools
 
-Tools:
-- skill_run
+- `skill_run`
 
-## Review Contract
+## Workspace environment contract
 
-Every finding must include:
+The workspace runtime supplies these absolute paths:
 
-- `severity`: critical, high, medium, low or info.
-- `category`: security, async_error, async_resource, resource_leak, testing, sensitive_info, db_lifecycle or sandbox.
-- `file` and `line`: changed file path and candidate new-line number.
-- `title`, `evidence`, `recommendation`, `confidence`, `source`.
+| Variable | Contract |
+| --- | --- |
+| `$WORKSPACE_DIR` | Root of the isolated review workspace |
+| `$SKILLS_DIR` | Read-only staged Skills root; this Skill is `$SKILLS_DIR/code-review` |
+| `$WORK_DIR` | Mutable working data; inputs belong under `$WORK_DIR/inputs` |
+| `$OUTPUT_DIR` | The only directory for declared, collectable outputs |
+| `$RUN_DIR` | Per-run scratch/log directory; do not treat it as durable output |
 
-Low-confidence items must be emitted as warnings or `needs_human_review`, not as high-confidence findings.
+Never read or write outside these roots. Do not resolve `..`, host-absolute paths, `.env`, SSH keys, or unrelated repository data. The host Filter is authoritative even if a requested command appears in this document.
 
-## Safety Rules
+## Deterministic workflow
 
-Do not run network, package installation, destructive filesystem, privilege escalation, SSH, Docker or curl-pipe-shell commands without an explicit Filter allow decision. Denied or `needs_human_review` commands must be recorded in the report and database instead of being executed.
+1. Confirm `$WORK_DIR/inputs/input.diff` exists and is redacted.
+2. Parse changed files, hunks, and line counts:
 
-Only pass whitelisted environment variables into the sandbox. Redact API keys, tokens, passwords, private keys and bearer credentials before writing logs, reports or database rows.
+   ```bash
+   python3 "$SKILLS_DIR/code-review/scripts/parse_diff.py" \
+     "$WORK_DIR/inputs/input.diff" \
+     "$OUTPUT_DIR/diff_summary.json"
+   ```
 
+3. Produce deterministic findings:
+
+   ```bash
+   python3 "$SKILLS_DIR/code-review/scripts/static_rules.py" \
+     "$WORK_DIR/inputs/input.diff" \
+     "$OUTPUT_DIR/static_findings.json"
+   ```
+
+4. Return only the two declared JSON outputs. The host merges them with in-process findings, applies AST/hunk context suppressions, deduplicates, buckets by confidence, redacts again, and persists the audit bundle.
+
+   Every model-driven `skill_run` must use the declarative `outputs` object
+   with explicit positive `max_files`, `max_file_bytes`, and
+   `max_total_bytes`, `inline: true`, and `save: false`. Legacy
+   `output_files`, implicit `out/**` export, and direct artifact saving are
+   disabled by the review runtime.
+
+Do not install packages or access the network. If `python3` is unavailable, the host may choose an already-allowlisted Python executable; the Skill must not download one.
+
+## Finding contract
+
+Every finding must contain:
+
+- `severity`: `critical`, `high`, `medium`, `low`, or `info`;
+- `category`: `security`, `async_error`, `async_resource`, `resource_leak`, `testing`, `sensitive_info`, `db_lifecycle`, or `sandbox`;
+- `file` and candidate new-file `line`;
+- `title`, redacted `evidence`, executable `recommendation`, `confidence`, and `source`;
+- `disposition`: confident finding, warning, or `needs_human_review`.
+
+The host deduplicates on `(file, line, category)`. Lower-confidence signals and test-coverage gaps must stay in warnings/manual review. Never raise confidence merely to cross a reporting threshold.
+
+## Safety and governance
+
+- Every command must receive a Filter `allow` decision before execution.
+- `deny` and `needs_human_review` decisions are audit results, not invitations to retry with alternate syntax.
+- Network, package installation, destructive filesystem operations, privilege escalation, SSH, Docker-in-Docker, and curl-pipe-shell are prohibited by default.
+- Respect the host timeout, output-byte limit, environment allowlist, and requested output manifest.
+- Never place a credential in evidence, stdout, stderr, artifacts, report text, telemetry attributes, or database fields. Use `<REDACTED>`.
+- A sandbox failure must become a structured manual-review item; it must not abort report generation.
+
+## Rule catalogue
+
+- [Security](rules/security.md)
+- [Async errors and clients](rules/async_error.md)
+- [Resource leaks](rules/resource_leak.md)
+- [Database lifecycle](rules/db_lifecycle.md)
+- [Sensitive information](rules/sensitive_info.md)
+- [Testing gaps](rules/testing.md)

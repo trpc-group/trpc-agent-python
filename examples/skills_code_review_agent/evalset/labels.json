@@ -1,0 +1,247 @@
+{
+  "description": "Hold-out evaluation set for issue #92 acceptance criterion 2 (high-risk detection rate >= 80%, false positive rate <= 15%). Positive cases carry the findings a reviewer must report; negative controls carry an empty expectation, so any confident finding on them counts as a false positive. Severity here is the label author's assessment of real-world risk and is deliberately independent of whatever severity the engine assigns - matching is on (file, category, line) only.",
+  "line_tolerance": 2,
+  "cases": [
+    {
+      "diff": "h_eval_exec.diff",
+      "kind": "positive",
+      "expected": [
+        {
+          "file": "app/calc.py",
+          "line": 5,
+          "category": "security",
+          "severity": "high",
+          "note": "eval() applied to a caller-supplied expression"
+        }
+      ]
+    },
+    {
+      "diff": "h_shell_true.diff",
+      "kind": "positive",
+      "expected": [
+        {
+          "file": "app/runner.py",
+          "line": 5,
+          "category": "security",
+          "severity": "high",
+          "note": "subprocess.run with shell=True on an interpolated path"
+        },
+        {
+          "file": "app/runner.py",
+          "line": 10,
+          "category": "security",
+          "severity": "high",
+          "note": "subprocess.check_output with shell=True on a concatenated command"
+        }
+      ]
+    },
+    {
+      "diff": "h_sql_fstring.diff",
+      "kind": "positive",
+      "expected": [
+        {
+          "file": "app/repo.py",
+          "line": 6,
+          "category": "security",
+          "severity": "high",
+          "note": "SQL built with an f-string carrying a runtime value"
+        },
+        {
+          "file": "app/repo.py",
+          "line": 10,
+          "category": "security",
+          "severity": "high",
+          "note": "SQL built with string concatenation"
+        }
+      ]
+    },
+    {
+      "diff": "h_pickle_loads.diff",
+      "kind": "positive",
+      "expected": [
+        {
+          "file": "app/cache.py",
+          "line": 5,
+          "category": "security",
+          "severity": "high",
+          "note": "pickle.loads on untrusted bytes"
+        },
+        {
+          "file": "app/cache.py",
+          "line": 9,
+          "category": "security",
+          "severity": "high",
+          "note": "pickle.loads inside a comprehension"
+        }
+      ]
+    },
+    {
+      "diff": "h_yaml_load.diff",
+      "kind": "positive",
+      "expected": [
+        {
+          "file": "app/settings.py",
+          "line": 5,
+          "category": "security",
+          "severity": "high",
+          "note": "yaml.load without a safe loader allows arbitrary object construction"
+        },
+        {
+          "file": "app/settings.py",
+          "line": 9,
+          "category": "security",
+          "severity": "high",
+          "note": "yaml.Loader is the unsafe loader; only SafeLoader is acceptable here"
+        }
+      ]
+    },
+    {
+      "diff": "h_aiohttp_leak.diff",
+      "kind": "positive",
+      "expected": [
+        {
+          "file": "svc/fetcher.py",
+          "line": 6,
+          "category": "async_resource",
+          "severity": "high",
+          "note": "ClientSession is never closed on any path"
+        }
+      ]
+    },
+    {
+      "diff": "h_httpx_leak.diff",
+      "kind": "positive",
+      "expected": [
+        {
+          "file": "svc/webhook.py",
+          "line": 5,
+          "category": "async_resource",
+          "severity": "high",
+          "note": "AsyncClient is never closed, and raise_for_status can exit early"
+        }
+      ]
+    },
+    {
+      "diff": "h_psycopg_conn.diff",
+      "kind": "positive",
+      "expected": [
+        {
+          "file": "store/pg.py",
+          "line": 5,
+          "category": "db_lifecycle",
+          "severity": "high",
+          "note": "connection is never closed and the transaction is never resolved"
+        }
+      ]
+    },
+    {
+      "diff": "h_secret_aws.diff",
+      "kind": "positive",
+      "expected": [
+        {
+          "file": "deploy/uploader.py",
+          "line": 5,
+          "category": "sensitive_info",
+          "severity": "critical",
+          "note": "hardcoded AWS access key id"
+        },
+        {
+          "file": "deploy/uploader.py",
+          "line": 6,
+          "category": "sensitive_info",
+          "severity": "critical",
+          "note": "hardcoded AWS secret access key; the secret_key identifier defeats a bare \\bsecret\\b keyword match"
+        }
+      ]
+    },
+    {
+      "diff": "h_weak_hash.diff",
+      "kind": "positive",
+      "expected": [
+        {
+          "file": "app/auth.py",
+          "line": 5,
+          "category": "security",
+          "severity": "high",
+          "note": "MD5 used to hash a password; unsalted and collision-prone"
+        },
+        {
+          "file": "app/auth.py",
+          "line": 9,
+          "category": "security",
+          "severity": "medium",
+          "note": "SHA-1 fingerprint; weak but not directly credential-bearing"
+        }
+      ]
+    },
+    {
+      "diff": "h_open_no_ctx.diff",
+      "kind": "positive",
+      "expected": [
+        {
+          "file": "app/report_writer.py",
+          "line": 5,
+          "category": "resource_leak",
+          "severity": "medium",
+          "note": "file handle opened without a context manager and never closed"
+        }
+      ]
+    },
+    {
+      "diff": "h_request_no_timeout.diff",
+      "kind": "positive",
+      "expected": [
+        {
+          "file": "svc/upstream.py",
+          "line": 5,
+          "category": "resource_leak",
+          "severity": "medium",
+          "note": "requests.get without timeout can hold the socket indefinitely"
+        },
+        {
+          "file": "svc/upstream.py",
+          "line": 10,
+          "category": "resource_leak",
+          "severity": "medium",
+          "note": "requests.post without timeout"
+        }
+      ]
+    },
+    {
+      "diff": "h_ok_session_closed.diff",
+      "kind": "negative",
+      "expected": [],
+      "note": "ClientSession is closed in a finally block; flagging it is a false positive"
+    },
+    {
+      "diff": "h_ok_param_sql.diff",
+      "kind": "negative",
+      "expected": [],
+      "note": "parameterised SQL with %s and ? placeholders; the literal % must not be read as interpolation"
+    },
+    {
+      "diff": "h_ok_sql_constant.diff",
+      "kind": "negative",
+      "expected": [],
+      "note": "f-strings with no interpolated values are constant SQL and carry no injection risk"
+    },
+    {
+      "diff": "h_ok_db_conn_closed.diff",
+      "kind": "negative",
+      "expected": [],
+      "note": "sqlite3 connection is closed in a finally block"
+    },
+    {
+      "diff": "h_ok_placeholder_token.diff",
+      "kind": "negative",
+      "expected": [],
+      "note": "documentation placeholders, not credentials; guards against over-eager secret patterns"
+    },
+    {
+      "diff": "h_ok_env_secret.diff",
+      "kind": "negative",
+      "expected": [],
+      "note": "credentials read from the environment; the identifier names must not trigger a secret finding"
+    }
+  ]
+}

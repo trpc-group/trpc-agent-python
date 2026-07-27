@@ -1,0 +1,15 @@
+diff --git a/docs/configuration_sample.py b/docs/configuration_sample.py
+index 1111111..2222222 100644
+--- a/docs/configuration_sample.py
++++ b/docs/configuration_sample.py
+@@ -1,5 +1,10 @@
+ """Documentation sample; values are placeholders, never real credentials."""
+
+
+ SETTINGS = {
+-    "endpoint": "https://api.example.com",
++    "endpoint": "https://api.example.com",
++    "token": "REPLACE_WITH_YOUR_TOKEN",
++    "api_key": "YOUR_API_KEY_HERE",
++    "password": "CHANGE_ME_BEFORE_DEPLOY",
+ }

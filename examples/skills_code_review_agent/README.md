@@ -1,91 +1,241 @@
 # Skills Code Review Agent
 
-This example implements Issue #92: a skills-based automatic code review agent with sandbox execution, SQLite persistence, Filter governance, redaction, deduplication and audit reports.
+[简体中文](README.zh_CN.md) | [Design note](DESIGN.md)
 
-## Quick Start
+This example implements [Issue #92](https://github.com/trpc-group/trpc-agent-python/issues/92): an automatic code-review agent that combines a reusable Skill, isolated workspace execution, deterministic rules, Filter governance, SQLite persistence, OpenTelemetry spans, redaction, and auditable reports. The acceptance path is deterministic and does not require an LLM API key.
 
-This example follows the same layout as `examples/quickstart`: keep the runnable
-entrypoint at the example root and put agent construction, prompts, config and
-tools under `agent/`.
+## Measured acceptance results
+
+Run the checked-in labelled corpus to reproduce the current result:
+
+```bash
+python examples/skills_code_review_agent/evaluate.py \
+  --markdown --fail-under \
+  --out tmp/code-review-eval.json
+```
+
+| Metric | Issue #92 threshold | Current measurement |
+| --- | ---: | ---: |
+| High-risk detection rate | >= 80% | **100.0% (15/15)** |
+| False-positive rate | <= 15% | **0.0% (0/18)** |
+| Secret-redaction recall | >= 95% | **100.0% (30/30)** |
+| False-redaction rate | informational | **0.0% (0/12)** |
+
+The holdout corpus contains 18 diffs: 12 positive cases and 6 negative controls. Detection and false positives are scored only in the high-confidence `findings` bucket; the evaluator reports recall including warnings separately so moving findings to manual review cannot inflate the score. Matching requires the same file and category within two lines. The redaction corpus contains 30 labelled secrets and 12 benign values.
+
+These numbers describe the committed deterministic corpus, not a claim about arbitrary repositories. Keep `--fail-under` in CI so a rule change cannot silently move below the acceptance thresholds.
+
+## Architecture
+
+```text
+unified diff / PR patch / git worktree / fixture
+                         |
+                         v
+                  input parser + hash
+                    /            \
+       unredacted in memory       redacted diff only
+              |                         |
+              v                         v
+   deterministic rules        Filter decision (pre-exec)
+              |                         |
+       AST/hunk context         SDK workspace runtime
+       suppression audit     container / cube / local fallback
+              |                         |
+              +------ sandbox script findings
+                         |
+                  dedupe + bucketing
+             findings / warnings / human review
+                         |
+                    output redaction
+                    /              \
+          JSON + Markdown       SQLite task bundle
+
+        OpenTelemetry spans wrap every pipeline stage.
+```
+
+The sandbox never receives the original secret-bearing diff. In-process rules inspect the original only in memory, immediately redact evidence, and redact the complete object graph again before reports or database rows are written.
+
+## Layout
 
 ```text
 examples/skills_code_review_agent/
-├── README.md
+├── README.md / README.zh_CN.md
+├── DESIGN.md
+├── .env.example
+├── Dockerfile
 ├── run_agent.py
-├── agent/
-│   ├── __init__.py
-│   ├── agent.py
-│   ├── config.py
-│   ├── prompts.py
-│   └── tools.py
-├── skills/
-│   └── code-review/
-│       ├── SKILL.md
-│       ├── rules/
-│       │   └── README.md
-│       └── scripts/
-│           ├── parse_diff.py
-│           └── static_rules.py
-├── fixtures/
-├── sample_outputs/
-└── schema.sql
+├── evaluate.py
+├── schema.sql
+├── agent/                       # orchestration, policy, runtimes, storage
+├── evalset/
+│   ├── holdout/                 # 18 labelled evaluation diffs
+│   ├── labels.json
+│   └── secrets_corpus.json
+├── fixtures/                    # 8 public acceptance fixtures
+├── scripts/                     # database initialization/query helpers
+└── skills/code-review/
+    ├── SKILL.md
+    ├── rules/                    # six rule-category documents
+    └── scripts/
+        ├── parse_diff.py
+        └── static_rules.py
 ```
 
-Run one public fixture in dry-run / fake-model mode:
+## Quick start
+
+From the repository root, install the development dependencies:
 
 ```bash
-python examples/skills_code_review_agent/run_agent.py --fixture security_issue --dry-run --output-dir tmp/code_review_security --db-path tmp/code_review_security/review.sqlite3
+pip install -e ".[dev]"
 ```
 
-Run all public fixtures:
+Run a public fixture without model credentials or Docker:
 
 ```bash
-python -m pytest tests/examples/test_skills_code_review_agent.py
+python examples/skills_code_review_agent/run_agent.py \
+  --fixture security_issue \
+  --dry-run \
+  --output-dir tmp/code-review-security \
+  --db-path tmp/code-review-security/review.sqlite3
 ```
 
-Query the database by task id:
+The command writes:
+
+- `review_report.json` and `review_report.md`;
+- the review task, sandbox runs, Filter intercepts, findings, metrics, and final report to SQLite;
+- the generated `task_id` to stdout.
+
+Query the complete persisted bundle:
 
 ```bash
-python examples/skills_code_review_agent/run_agent.py --db-path tmp/code_review_security/review.sqlite3 --query-task-id <task_id>
+python examples/skills_code_review_agent/run_agent.py \
+  --db-path tmp/code-review-security/review.sqlite3 \
+  --query-task-id <task_id>
 ```
 
-The CLI accepts:
+Supported inputs are mutually exclusive:
 
-- `--diff-file`: unified diff or PR patch.
-- `--repo-path`: local git worktree, reviewed via `git diff`.
-- `--path-list-file`: paths to review inside `--repo-path`.
-- `--fixture`: fixture name under `fixtures/`.
+- `--diff-file`: a unified diff or PR patch;
+- `--repo-path`: unstaged/staged changes in a local Git worktree;
+- `--path-list-file` together with `--repo-path`: only listed worktree paths;
+- `--fixture`: a checked-in fixture name without `.diff`.
 
-Outputs are always:
+## Runtime modes
 
-- `review_report.json`
-- `review_report.md`
-- SQLite rows for task, sandbox runs, filter intercepts, findings, metrics and report.
+| Mode | Intended use | Isolation and requirements |
+| --- | --- | --- |
+| `container` | Default production path | tRPC-Agent `BaseWorkspaceRuntime`, Docker, network disabled, read-only Skill mount |
+| `cube` | Remote production sandbox | Cube/E2B sandbox created with internet access disabled; fails closed if the installed client cannot enforce it |
+| `local` | Explicit development fallback | Runs on the host; never selected as the production default |
+| `dry-run-local` | Deterministic CI path | Selected by `--dry-run` or `--fake-model`; no model key required |
 
-The deterministic CLI executes the bundled `skills/code-review` scripts directly so it can run without a model key. `agent/tools.py` also exposes `create_review_skill_tool_set()` for wiring the same Skill into a regular `LlmAgent`.
-`agent/agent.py` provides that optional `LlmAgent` wrapper, and `agent/config.py` reads the same `TRPC_AGENT_API_KEY`, `TRPC_AGENT_BASE_URL` and `TRPC_AGENT_MODEL_NAME` environment variables used by the quickstart examples. `run_agent.py` remains the acceptance-test entrypoint because it is deterministic and does not need external model credentials.
+The workspace contract is identical across SDK runtimes: `skills/`, `work/inputs/`, `runs/`, and `out/`. Every command receives a timeout, an output-byte budget, and an allowlisted environment. A bounded capture process terminates the child as soon as stdout or stderr reaches its collection budget; only a size-checked, redacted envelope reaches the SDK. Timeout, startup, execution, output-limit, and artifact failures become recorded `sandbox_run` rows and manual-review items instead of crashing the whole review. Container and Cube runtimes must declare backend-enforced network isolation before a workspace is created.
 
-## Runtime Modes
+Build the optional pinned review image:
 
-Production mode is `--runtime container`, which runs skill scripts in a Docker workspace with network disabled and the same `skills/`, `work/` and `out/` layout used by the framework workspace tools. `--dry-run` and `--fake-model` use a deterministic local workspace fallback so the parsing, sandbox, Filter and database chain can be tested without model credentials.
+```bash
+docker build \
+  -t trpc-agent-code-review:local \
+  examples/skills_code_review_agent
+export CODE_REVIEW_IMAGE=trpc-agent-code-review:local
+```
 
-Sandbox execution has a timeout, output byte limit, environment allowlist and secret redaction. Timeouts and failures are recorded as sandbox runs and manual-review items; they do not crash the review.
+On PowerShell, set the last variable with `$env:CODE_REVIEW_IMAGE = "trpc-agent-code-review:local"`. The Dockerfile copies no source tree, `.env`, credentials, or build context into the image.
 
-## Public Fixtures
+Use `--allow-local-fallback` only for an explicitly accepted development fallback when Docker is unavailable. The recorded runtime remains visible in the report and database.
 
-- `no_issue`: benign change with tests.
-- `security_issue`: `shell=True` and `eval`.
-- `async_resource_leak`: unscoped `aiohttp.ClientSession` and unobserved background task.
-- `db_lifecycle_issue`: unscoped DB connection and string-built SQL.
-- `missing_tests`: production change without tests.
-- `duplicate_finding`: repeated secret finding used to verify deduplication.
-- `sandbox_failure`: used by tests to force script failure while keeping the task alive.
-- `secret_redaction`: API key, token, password and bearer credential redaction.
+## Filter governance
 
-## 300-500 字方案设计
+Two entry points enforce the same policy:
 
-本示例以 `examples/skills_code_review_agent` 形式交付，避免改动核心 SDK。`code-review` Skill 包含 `SKILL.md`、规则文档和两个脚本：`parse_diff.py` 负责抽取文件、hunk 与增删行统计，`static_rules.py` 负责在沙箱中产出高信号静态检查结果。Agent 入口支持 `--diff-file`、`--repo-path`、`--path-list-file` 和 `--fixture`，先解析 unified diff 得到变更文件、候选行号和上下文，再合并沙箱脚本与内置规则结果。dry-run / fake-model 模式不依赖真实模型 API Key，保证公开样本和 CI 中的链路可重复。
+- the deterministic CLI calls `ReviewExecutionFilter` before each sandbox request;
+- the optional `LlmAgent` path registers `CodeReviewSandboxPolicyFilter` on `SkillRunTool`, so a model-driven tool call is rejected before its handler executes.
 
-沙箱由 `SandboxRunner` 封装。生产默认使用 `--runtime container`，Docker 运行时禁用网络；dry-run 只作为开发 fallback，在临时 workspace 中执行同一套 Skill 脚本。每个沙箱请求都先经过 `ReviewExecutionFilter`：禁止敏感路径、路径穿越、非白名单网络访问、超时或输出超预算请求；对 curl 管道、包安装、破坏性命令和提权命令标记 `needs_human_review`，并直接写入报告和数据库，不能继续执行。
+The same filter instance is attached to the lower-level one-shot `workspace_exec` path. Interactive `skill_exec` / session tools and direct artifact saving are omitted from this tool set. Both remaining execution entries share a runtime facade that kills the child at the byte budget, redacts bounded stdout/stderr and inline file names/content before returning them, and exposes no `start_program` session API. A model therefore cannot bypass `skill_run` governance by dropping down to direct workspace execution.
 
-SQLite 默认 schema 包含 `review_task`、`sandbox_run`、`finding`、`filter_intercept`、`review_metric` 和 `review_report`，可通过 task id 查询完整任务、执行摘要、拦截记录、监控指标、findings 与最终报告。存储实现集中在 `ReviewStore`，后续可替换为其他 SQL 后端。去重以 `(file, line, category)` 为键，保留置信度和严重级别更高的结果；低置信度或测试缺失等弱信号进入 warnings / needs_human_review。脱敏覆盖输入 diff、沙箱 stdout/stderr、产物、findings、Markdown/JSON 报告和数据库行，避免 API Key、token、password、私钥等明文落盘。最终报告包含 findings 摘要、严重级别统计、人工复核项、Filter 拦截摘要、监控指标、沙箱执行摘要和可执行修复建议。
+The policy scans every real argv element, joined argv, and the caller-supplied display text. It recursively checks declarative inputs/outputs, rejects `host://` and absolute host paths, and enforces network, timeout, and output budgets. Model-driven `skill_run` calls must provide an explicit bounded `outputs` manifest; legacy `output_files`, implicit `out/**` export, and raw artifact persistence fail closed. This prevents a harmless display label or nested input object from hiding a hostile request.
+
+The deterministic review pipeline records every `deny` / `needs_human_review` decision in its report and SQLite task bundle. The optional `LlmAgent` helper has no report/task lifecycle of its own: pass a task-scoped `intercept_sink` to `create_agent(...)` (for example, one that calls `ReviewStore.add_filter_intercept`) when the embedding service needs the same persistence. The filter returns a structured refusal even when no sink is configured. Each tool set owns its filter instance, so concurrent reviews do not share a process-global event sink.
+
+Each `create_agent(...)` call owns its Container/Cube runtime. Use the returned `CodeReviewAgent` as an async context manager or call `await agent.close()` in `finally`; this stops the backing container or remote sandbox immediately and is idempotent. Applications using the lazy module-level `root_agent` can call `await close_root_agent()` during service shutdown.
+
+Inside an already-running event loop, create Cube agents with `await create_agent_async("cube")`. The synchronous lazy `root_agent` can use Cube only when initialized before that loop starts; an in-loop access fails closed with guidance instead of starting a partially managed remote sandbox.
+
+If the CLI exposes the demonstration probe, enable it explicitly with `--demo-filter-intercept`; it must not pollute normal review metrics.
+
+## Telemetry
+
+Pipeline stages emit spans through `trpc_agent_sdk.telemetry.tracer`. With no provider configured, tracing is a safe no-op. A configured OpenTelemetry provider can export the root `code_review.review` span and child spans for input loading, diff parsing, sandbox execution, rules, context suppression, persistence, and reporting. Attributes include task/input identity, runtime, status, duration, timeout state, finding counts, and error type; secret evidence is never attached.
+
+For a local demonstration, use `--telemetry-console` (the `opentelemetry-sdk` package is included in development dependencies):
+
+```bash
+python examples/skills_code_review_agent/run_agent.py \
+  --fixture security_issue --dry-run --telemetry-console \
+  --output-dir tmp/code-review-telemetry \
+  --db-path tmp/code-review-telemetry/review.sqlite3
+```
+
+## Storage and audit replay
+
+SQLite is the default backend behind the review-store interface. `schema.sql` is the single DDL source and contains:
+
+- `review_task`;
+- `sandbox_run`;
+- `finding`;
+- `filter_intercept`;
+- `review_metric`;
+- `review_report`;
+- `schema_version`.
+
+Initialize a fresh database and inspect it by task id:
+
+```bash
+python examples/skills_code_review_agent/scripts/init_db.py \
+  --db-path tmp/code-review.sqlite3
+
+python examples/skills_code_review_agent/scripts/query_review.py \
+  --db-path tmp/code-review.sqlite3 \
+  query <task_id> \
+  --format table
+```
+
+Use `--format json` for machine-readable replay. A stable task id must not silently erase earlier audit rows; use only the store/CLI's explicit overwrite or new-attempt mechanism when replacement is intentional.
+
+## Evaluation and tests
+
+Run the threshold suite and the original acceptance suite:
+
+```bash
+python -m pytest \
+  tests/examples/test_skills_code_review_agent.py \
+  tests/examples/test_skills_code_review_agent_eval.py \
+  tests/examples/test_skills_code_review_agent_filter.py \
+  -q -s
+```
+
+`-s` avoids a known Windows pytest stdin-capture handle issue in subprocess-based tests; the same tests can run without it on unaffected platforms.
+
+Score the public fixtures separately:
+
+```bash
+python examples/skills_code_review_agent/evaluate.py \
+  --labels examples/skills_code_review_agent/fixtures/labels.json \
+  --diffs examples/skills_code_review_agent/fixtures \
+  --skip-redaction --markdown --fail-under
+```
+
+The eight public fixtures cover a benign change, security issues, asynchronous resource leakage, database lifecycle, missing tests, deduplication, sandbox failure, and secret redaction.
+
+## Security notes
+
+- Never put real credentials in `.env.example`, fixtures, Docker build arguments, or documentation. Inject secrets at runtime from a secret manager or process environment.
+- The default container network is `none`; enabling network access requires an explicit policy decision.
+- Only allowlisted environment names cross the sandbox boundary.
+- Output caps apply to stdout, stderr, and collected artifacts. Truncation is recorded.
+- Redaction covers diff summaries, script output, artifacts, findings, reports, telemetry-safe attributes, and database values.
+- Local mode executes on the host and is therefore a development fallback, not an isolation boundary.
+
+## Rule documentation
+
+The rule catalogue is indexed at [`skills/code-review/rules/README.md`](skills/code-review/rules/README.md). Each category documents rule IDs, detection patterns, severity, confidence, remediation, and known false positives. Context suppressions are recorded in the report rather than silently discarded.

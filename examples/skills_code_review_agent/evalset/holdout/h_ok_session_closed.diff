@@ -1,0 +1,16 @@
+diff --git a/svc/poller.py b/svc/poller.py
+index 1111111..2222222 100644
+--- a/svc/poller.py
++++ b/svc/poller.py
+@@ -1,6 +1,12 @@
+ import aiohttp
+
+
+ async def poll(url):
+-    return None
++    session = aiohttp.ClientSession()
++    try:
++        response = await session.get(url)
++        return await response.text()
++    finally:
++        await session.close()

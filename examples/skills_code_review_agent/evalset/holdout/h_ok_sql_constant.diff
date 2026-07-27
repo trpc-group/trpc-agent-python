@@ -1,0 +1,17 @@
+diff --git a/store/health.py b/store/health.py
+index 1111111..2222222 100644
+--- a/store/health.py
++++ b/store/health.py
+@@ -1,6 +1,10 @@
+ class HealthRepo:
+     def __init__(self, cursor):
+         self.cursor = cursor
+
+     def ping(self):
+-        raise NotImplementedError
++        self.cursor.execute(f"SELECT 1")
++        return self.cursor.fetchone()
++
++    def version(self):
++        self.cursor.execute(f"SELECT version()")
++        return self.cursor.fetchone()

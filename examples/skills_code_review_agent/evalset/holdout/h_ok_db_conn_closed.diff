@@ -1,0 +1,17 @@
+diff --git a/store/local.py b/store/local.py
+index 1111111..2222222 100644
+--- a/store/local.py
++++ b/store/local.py
+@@ -1,6 +1,12 @@
+ import sqlite3
+
+
+ def count_rows(path):
+-    return 0
++    conn = sqlite3.connect(path)
++    try:
++        cursor = conn.cursor()
++        cursor.execute("SELECT count(*) FROM items")
++        return cursor.fetchone()[0]
++    finally:
++        conn.close()

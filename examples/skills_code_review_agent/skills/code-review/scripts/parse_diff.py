@@ -8,7 +8,6 @@ import re
 import sys
 from pathlib import Path
 
-
 HUNK_RE = re.compile(r"@@ -(?P<old>\d+)(?:,(?P<old_count>\d+))? \+(?P<new>\d+)(?:,(?P<new_count>\d+))? @@")
 
 
@@ -16,7 +15,7 @@ def normalize(path: str) -> str:
     path = path.strip()
     if path in {"/dev/null", "dev/null"}:
         return ""
-    if path.startswith("a/") or path.startswith("b/"):
+    if path.startswith(("a/", "b/")):
         path = path[2:]
     return path
 
@@ -74,4 +73,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

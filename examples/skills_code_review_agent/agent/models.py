@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
-from dataclasses import dataclass
-from dataclasses import field
-from datetime import UTC
-from datetime import datetime
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from typing import Any
-
 
 SEVERITY_RANK = {
     "critical": 5,
@@ -171,6 +167,8 @@ class ReviewMetrics:
     redaction_count: int = 0
     changed_file_count: int = 0
     changed_line_count: int = 0
+    suppression_count: int = 0
+    suppression_rule_distribution: dict[str, int] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

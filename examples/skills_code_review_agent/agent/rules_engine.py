@@ -5,13 +5,8 @@ from __future__ import annotations
 import re
 from pathlib import PurePosixPath
 
-from .models import ChangedFile
-from .models import ChangedLine
-from .models import Finding
-from .redaction import contains_secret
-from .redaction import REDACTION_TOKEN
-from .redaction import redact_text
-
+from .models import ChangedFile, ChangedLine, Finding
+from .redaction import contains_secret, redact_text
 
 PY_SOURCE_EXTENSIONS = {".py", ".pyi"}
 TEST_PATH_RE = re.compile(r"(^|/)(tests?|test)/|(^|/)test_[^/]+\.py$|_test\.py$")
@@ -38,13 +33,67 @@ class RuleEngine:
 
         findings.extend(self._secret_findings(line))
         findings.extend(self._security_findings(line))
+        findings.extend(self._crypto_findings(line))
         findings.extend(self._async_findings(line))
         findings.extend(self._resource_findings(line))
+        findings.extend(self._network_findings(line))
         findings.extend(self._database_findings(line))
         return findings
 
+    def _crypto_findings(self, line: ChangedLine) -> list[Finding]:
+        stripped = line.content.strip()
+        match = re.search(r"\bhashlib\.(md5|sha1)\s*\(", stripped)
+        if not match or "usedforsecurity=False" in stripped:
+            return []
+        algorithm = match.group(1)
+        # Hashing a credential with a broken digest is a different class of
+        # problem from using one as a non-security checksum, so only escalate
+        # when the hashed value is clearly a secret.
+        guards_credential = bool(re.search(r"(?i)\b(password|passwd|pwd|credential|passphrase)\b", stripped))
+        return [
+            Finding(
+                severity="high" if guards_credential else "medium",
+                category="security",
+                file=line.file,
+                line=line.new_line,
+                title=f"Weak hash algorithm {algorithm.upper()} used"
+                      + (" for a credential" if guards_credential else ""),
+                evidence=stripped,
+                recommendation=(
+                    "Use a slow, salted password hash such as bcrypt, scrypt or argon2."
+                    if guards_credential else
+                    "Use SHA-256 or better; pass usedforsecurity=False if this is a non-security checksum."
+                ),
+                confidence=0.9 if guards_credential else 0.82,
+                source="rule:weak-hash",
+            )
+        ]
+
+    def _network_findings(self, line: ChangedLine) -> list[Finding]:
+        stripped = line.content.strip()
+        if not re.search(r"\brequests\.(get|post|put|patch|delete|head|options|request)\s*\(", stripped):
+            return []
+        if "timeout" in stripped:
+            return []
+        return [
+            Finding(
+                severity="medium",
+                category="resource_leak",
+                file=line.file,
+                line=line.new_line,
+                title="HTTP request without a timeout",
+                evidence=stripped,
+                recommendation="Pass an explicit timeout= so a hung upstream cannot hold the socket open forever.",
+                confidence=0.8,
+                source="rule:request-timeout",
+            )
+        ]
+
     def _secret_findings(self, line: ChangedLine) -> list[Finding]:
-        if not contains_secret(line.content) and REDACTION_TOKEN not in line.content:
+        # Only a live secret counts. The diff reaches us already redacted, so
+        # treating a bare <REDACTED> placeholder as evidence would report our
+        # own masking as a fresh leak.
+        if not contains_secret(line.content):
             return []
         evidence, _ = redact_text(line.content.strip())
         return [

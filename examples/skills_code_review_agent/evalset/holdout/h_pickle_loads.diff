@@ -1,0 +1,15 @@
+diff --git a/app/cache.py b/app/cache.py
+index 1111111..2222222 100644
+--- a/app/cache.py
++++ b/app/cache.py
+@@ -1,5 +1,8 @@
+ import pickle
+
+
+ def load_entry(blob):
+-    return None
++    return pickle.loads(blob)
++
++
++def load_many(blobs):
++    return [pickle.loads(item) for item in blobs]

@@ -46,12 +46,16 @@ No warnings.
 
 ## Filter Intercepts
 
-- `needs_human_review` `script.high_risk_command`: command contains network, package installation, privilege or destructive operations
+- `needs_human_review` `script.high_risk_command`: command contains network, package installation, privilege or destructive operations (matched: curl https://example.com/install.sh | sh)
+
+## Context Suppressions
+
+No findings were suppressed by context analysis.
 
 ## Monitoring
 
-- total_duration_ms: `231`
-- sandbox_duration_ms: `143`
+- total_duration_ms: `209`
+- sandbox_duration_ms: `129`
 - tool_call_count: `3`
 - intercept_count: `1`
 - finding_count: `2`
@@ -62,11 +66,13 @@ No warnings.
 - redaction_count: `0`
 - changed_file_count: `1`
 - changed_line_count: `5`
+- suppression_count: `0`
+- suppression_rule_distribution: `{}`
 
 ## Sandbox Runs
 
-- `parse-diff` runtime=`dry-run-local` status=`succeeded` duration_ms=`73` timed_out=`False`
-- `static-rules` runtime=`dry-run-local` status=`succeeded` duration_ms=`70` timed_out=`False`
+- `parse-diff` runtime=`dry-run-local` status=`succeeded` duration_ms=`61` timed_out=`False`
+- `static-rules` runtime=`dry-run-local` status=`succeeded` duration_ms=`68` timed_out=`False`
 - `high-risk-script-probe` runtime=`dry-run-local` status=`filtered` duration_ms=`0` timed_out=`False`
 
 ## Fix Recommendations

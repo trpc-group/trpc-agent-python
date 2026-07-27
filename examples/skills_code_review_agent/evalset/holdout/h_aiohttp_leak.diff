@@ -1,0 +1,15 @@
+diff --git a/svc/fetcher.py b/svc/fetcher.py
+index 1111111..2222222 100644
+--- a/svc/fetcher.py
++++ b/svc/fetcher.py
+@@ -1,6 +1,10 @@
+ import aiohttp
+
+
+ class Fetcher:
+     async def fetch(self, url):
+-        return None
++        session = aiohttp.ClientSession()
++        response = await session.get(url)
++        payload = await response.json()
++        return payload

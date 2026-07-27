@@ -1,0 +1,15 @@
+diff --git a/app/settings.py b/app/settings.py
+index 1111111..2222222 100644
+--- a/app/settings.py
++++ b/app/settings.py
+@@ -1,5 +1,8 @@
+ import yaml
+
+
+ def load_config(text):
+-    return {}
++    return yaml.load(text)
++
++
++def load_profile(text):
++    return yaml.load(text, Loader=yaml.Loader)
