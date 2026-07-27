@@ -40,6 +40,7 @@ _OUTPUT_CALLS = frozenset(
 _SECRET_NAME_RE = re.compile(
     r"(?i)(api[_-]?key|access[_-]?key|authorization|credential|token|password|passwd|secret|private[_-]?key)")
 _UNKNOWN_VALUE = object()
+_MAX_STATIC_LITERAL_ITEMS = 256
 
 
 def _static_truthy(node: ast.AST) -> bool:
@@ -73,6 +74,10 @@ def _static_truthy(node: ast.AST) -> bool:
 
 
 def _static_truthiness(node: ast.AST) -> bool | None:
+    if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+        return bool(node.elts)
+    if isinstance(node, ast.Dict):
+        return bool(node.keys)
     value = _static_value(node)
     if value is not _UNKNOWN_VALUE:
         return bool(value)
@@ -101,6 +106,8 @@ def _static_value(node: ast.AST) -> object:
     if isinstance(node, ast.Constant):
         return node.value
     if isinstance(node, ast.Tuple):
+        if len(node.elts) > _MAX_STATIC_LITERAL_ITEMS:
+            return _UNKNOWN_VALUE
         values = []
         for element in node.elts:
             value = _static_value(element)
@@ -109,6 +116,8 @@ def _static_value(node: ast.AST) -> object:
             values.append(value)
         return tuple(values)
     if isinstance(node, ast.List):
+        if len(node.elts) > _MAX_STATIC_LITERAL_ITEMS:
+            return _UNKNOWN_VALUE
         values = []
         for element in node.elts:
             value = _static_value(element)
@@ -117,6 +126,8 @@ def _static_value(node: ast.AST) -> object:
             values.append(value)
         return values
     if isinstance(node, ast.Set):
+        if len(node.elts) > _MAX_STATIC_LITERAL_ITEMS:
+            return _UNKNOWN_VALUE
         values = []
         for element in node.elts:
             value = _static_value(element)
@@ -128,6 +139,8 @@ def _static_value(node: ast.AST) -> object:
         except TypeError:
             return _UNKNOWN_VALUE
     if isinstance(node, ast.Dict):
+        if len(node.keys) > _MAX_STATIC_LITERAL_ITEMS:
+            return _UNKNOWN_VALUE
         keys = []
         values = []
         for key, value in zip(node.keys, node.values):

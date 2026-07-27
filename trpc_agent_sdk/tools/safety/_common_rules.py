@@ -197,6 +197,14 @@ def scan_limits(request: ScriptScanRequest, policy: ToolSafetyPolicy,
                 sanitizer: SafetySanitizer) -> tuple[list[SafetyFinding], bool]:
     """Check request-level limits."""
     requested = request.requested_timeout_seconds
+    if request.timeout_arg_name == "timeout_sec" and requested is not None and not float(requested).is_integer():
+        finding, redacted = make_finding(
+            "POLICY001",
+            f"requested timeout_sec {requested}s is not an integer",
+            POLICY_REVIEW,
+            sanitizer,
+        )
+        return [finding], redacted
     if requested is None or 0 < requested <= policy.max_timeout_seconds:
         return [], False
     if not math.isfinite(requested):

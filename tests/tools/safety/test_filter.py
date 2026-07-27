@@ -19,6 +19,7 @@ from trpc_agent_sdk.tools.safety import SafetyAuditError
 from trpc_agent_sdk.tools.safety import ToolSafetyFilter
 from trpc_agent_sdk.tools.safety import ToolScriptSafetyGuard
 from trpc_agent_sdk.tools.safety import ToolSafetyPolicy
+from trpc_agent_sdk.skills.tools._workspace_exec import _ExecInput
 
 
 class _MemorySink:
@@ -115,12 +116,26 @@ async def test_allow_injects_integer_timeout_when_omitted():
 
 
 @pytest.mark.asyncio
-async def test_workspace_exec_injects_float_timeout_sec_when_omitted():
+async def test_workspace_exec_injects_integer_timeout_sec_when_omitted():
     args = {"command": "echo ok"}
 
     async def handler():
-        assert isinstance(args["timeout_sec"], float)
+        assert isinstance(args["timeout_sec"], int)
         assert "timeout" not in args
+        return {"stdout": "ok"}
+
+    await _run_filter(_filter(_MemorySink()), args, handler, tool_name="workspace_exec")
+
+
+@pytest.mark.asyncio
+async def test_workspace_exec_timeout_sec_matches_real_model_validate():
+    args = {"command": "echo ok"}
+
+    async def handler():
+        assert isinstance(args["timeout_sec"], int)
+        inputs = _ExecInput.model_validate(args)
+        assert inputs.timeout_sec == 10
+        assert isinstance(inputs.timeout_sec, int)
         return {"stdout": "ok"}
 
     await _run_filter(_filter(_MemorySink()), args, handler, tool_name="workspace_exec")

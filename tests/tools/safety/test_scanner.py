@@ -6,6 +6,8 @@
 """Scanner acceptance-oriented unit tests."""
 
 import ast
+import time
+import tracemalloc
 
 import pytest
 
@@ -100,6 +102,17 @@ def test_non_finite_scan_timeout_is_reviewed_as_invalid(guard):
     report = guard.scan(_request("echo ok", timeout=float("nan")))
     assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
     assert "not finite" in report.findings[0].evidence
+
+
+def test_fractional_timeout_sec_requires_review(guard):
+    request = _request("echo ok", ScriptLanguage.BASH, timeout=10.5)
+    request.timeout_arg_name = "timeout_sec"
+
+    report = guard.scan(request)
+
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert "POLICY001" in _rule_ids(report)
+    assert "not an integer" in report.findings[0].evidence
 
 
 def test_guard_limits_output_with_policy_budget():
@@ -493,6 +506,30 @@ def test_static_truthiness_handles_mult_without_materializing():
     assert _static_truthiness(ast.parse(f"{10 ** 400} * 1", mode="eval").body) is True
     assert _static_truthiness(ast.parse("dynamic * 2", mode="eval").body) is None
     assert _static_truthiness(ast.parse("1 + 1", mode="eval").body) is None
+
+
+@pytest.mark.parametrize(
+    "container_src",
+    [
+        "[" + ",".join("0" for _ in range(1000)) + "]",
+        "{" + ",".join(f"{i}:0" for i in range(1000)) + "}",
+    ],
+)
+def test_python_large_literal_containers_are_scanned_with_bounded_cost(guard, container_src):
+    report_code = f"while {container_src}:\n    pass"
+    tracemalloc.start()
+    started = time.perf_counter()
+    try:
+        report = guard.scan(_request(report_code))
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    elapsed = time.perf_counter() - started
+
+    assert report.decision == SafetyDecision.DENY
+    assert "RES001" in _rule_ids(report)
+    assert elapsed < 2.0
+    assert peak < 20 * 1024 * 1024
 
 
 def test_static_value_handles_literal_containers_and_rejects_unhashable():
