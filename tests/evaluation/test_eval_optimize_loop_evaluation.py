@@ -17,6 +17,7 @@ from examples.optimization.eval_optimize_loop.loop.evaluation import EvaluationR
 from examples.optimization.eval_optimize_loop.loop.evaluation import evaluate_split
 from examples.optimization.eval_optimize_loop.loop.evaluation import load_eval_set
 from examples.optimization.eval_optimize_loop.loop.evaluation import _snapshot_case
+from examples.optimization.eval_optimize_loop.loop.evaluation import _dataset_for_sdk
 from examples.optimization.eval_optimize_loop.loop.evaluation import validate_inputs
 from examples.optimization.eval_optimize_loop.loop import evaluation as evaluation_module
 from examples.optimization.eval_optimize_loop.loop.models import InputPaths
@@ -86,6 +87,18 @@ def test_validate_inputs_returns_hashes_and_gate():
         GATE.name,
     }
     assert optimizer.evaluate.get_eval_metrics()[0].metric_name == gate.primary_metric
+
+
+def test_dataset_outside_cwd_is_copied_to_managed_temp(tmp_path):
+    source = tmp_path / "outside.evalset.json"
+    source.write_text("{}", encoding="utf-8")
+    temp_dir = tmp_path / "temp"
+    temp_dir.mkdir()
+
+    dataset = _dataset_for_sdk(source, temp_dir)
+
+    assert Path(dataset).resolve() == (temp_dir / source.name).resolve()
+    assert (temp_dir / source.name).read_text(encoding="utf-8") == "{}"
 
 
 @pytest.mark.asyncio

@@ -3,7 +3,8 @@
 本示例把 `AgentEvaluator`、`AgentOptimizer` 和 `TargetPrompt` 组合成可审计的
 baseline → optimize → candidate → gate 闭环。默认 `fake-model` 不需要 API Key，
 运行时间通常小于 30 秒；`real` 模式读取 `TRPC_AGENT_API_KEY`、
-`TRPC_AGENT_BASE_URL` 和 `TRPC_AGENT_MODEL_NAME`。`trace` 模式读取预录制的
+`TRPC_AGENT_BASE_URL` 和 `TRPC_AGENT_MODEL_NAME`（也可用 `--model-name` 覆盖）。
+`trace` 模式读取预录制的
 baseline/candidate evalset，适合离线回归。
 
 ```bash

@@ -88,7 +88,7 @@ async def evaluate_split(request: EvaluationRequest) -> EvaluationSnapshot:
     """Run AgentEvaluator and retain results even when cases fail."""
     config = load_optimize_config(str(request.optimizer_path))
     started = time.monotonic()
-    with tempfile.TemporaryDirectory(prefix="eval-optimize-", dir=Path.cwd()) as temp_dir:
+    with tempfile.TemporaryDirectory(prefix="eval-optimize-") as temp_dir:
         dataset_path = _dataset_for_sdk(request.dataset_path, Path(temp_dir))
         metrics_path = Path(temp_dir) / "eval_config.json"
         metrics_path.write_text(
@@ -327,7 +327,12 @@ def _fake_judge_score(runs: list[EvalCaseResult]) -> float | None:
 
 def _portable_dataset_path(path: Path) -> str:
     """Avoid the SDK's colon-based case selector on Windows paths."""
-    return os.path.relpath(path, Path.cwd())
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(Path.cwd().resolve())
+    except ValueError as exc:
+        raise ValueError("dataset is outside the current workspace") from exc
+    return os.path.relpath(resolved, Path.cwd())
 
 
 def _dataset_for_sdk(path: Path, temp_dir: Path) -> str:
@@ -337,4 +342,7 @@ def _dataset_for_sdk(path: Path, temp_dir: Path) -> str:
         pass
     local = temp_dir / path.name
     shutil.copyfile(path, local)
-    return _portable_dataset_path(local)
+    try:
+        return os.path.relpath(local, Path.cwd())
+    except ValueError:
+        return str(local)
