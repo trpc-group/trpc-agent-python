@@ -5,8 +5,11 @@
 # tRPC-Agent-Python is licensed under Apache-2.0.
 """Public sample corpus and CLI acceptance tests."""
 
+import asyncio
 from pathlib import Path
 
+import examples.tool_safety_guard.mcp_server as mcp_server
+import pytest
 import yaml
 
 from trpc_agent_sdk.tools.safety import adapt_cli_request
@@ -149,3 +152,29 @@ def test_cli_audit_failure_returns_structured_error(monkeypatch, capsys):
 def test_cli_exit_codes_cover_allow_and_review():
     assert _exit_code(SafetyDecision.ALLOW) == 0
     assert _exit_code(SafetyDecision.NEEDS_HUMAN_REVIEW) == 2
+
+
+@pytest.mark.asyncio
+async def test_mcp_timeout_reap_is_bounded(monkeypatch):
+
+    class _HungProcess:
+        returncode = None
+        killed = False
+
+        async def communicate(self):
+            await asyncio.sleep(60)
+
+        def kill(self):
+            self.killed = True
+
+    process = _HungProcess()
+
+    async def create_process(*args, **kwargs):
+        del args, kwargs
+        return process
+
+    monkeypatch.setattr(mcp_server.asyncio, "create_subprocess_exec", create_process)
+    monkeypatch.setattr(mcp_server, "PROCESS_REAP_TIMEOUT_SECONDS", 0.01)
+    result = await mcp_server.execute_command("echo ok", timeout=0.01)
+    assert process.killed is True
+    assert result["timed_out"] is True

@@ -25,6 +25,7 @@ WORK_DIR = Path(__file__).resolve().parent
 POLICY_PATH = WORK_DIR / "tool_safety_policy.yaml"
 GUARD = ToolScriptSafetyGuard.from_policy(POLICY_PATH)
 MAX_OUTPUT_CHARS = 4096
+PROCESS_REAP_TIMEOUT_SECONDS = 1.0
 
 
 @APP.tool()
@@ -90,7 +91,13 @@ async def execute_command(command: str, timeout: float | None = None) -> dict:
         )
     except asyncio.TimeoutError:
         process.kill()
-        await process.communicate()
+        try:
+            await asyncio.wait_for(
+                process.communicate(),
+                timeout=PROCESS_REAP_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            pass
         return {
             "return_code": None,
             "stdout": "",

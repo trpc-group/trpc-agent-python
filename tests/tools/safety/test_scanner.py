@@ -67,6 +67,32 @@ def test_recursive_delete_denied_python_alias(guard):
     assert "FILE001" in _rule_ids(report)
 
 
+@pytest.mark.parametrize("call", ["os.remove", "os.unlink", "os.rmdir"])
+def test_python_delete_calls_are_denied(guard, call):
+    report = guard.scan(_request(f"import os\n{call}('/tmp/important')"))
+    assert report.decision == SafetyDecision.DENY
+    assert "FILE001" in _rule_ids(report)
+
+
+def test_os_open_dynamic_flags_are_treated_as_write(guard):
+    report = guard.scan(_request("import os\nflags = get_flags()\nos.open('/etc/tool-safety', flags)"))
+    assert report.decision == SafetyDecision.DENY
+    assert "FILE001" in _rule_ids(report)
+
+
+def test_os_open_missing_or_unavailable_flags_fail_closed(guard):
+    report = guard.scan(_request("import os\nos.open('/etc/tool-safety')"))
+    assert report.decision == SafetyDecision.DENY
+    visitor = PythonRuleVisitor(_PythonScanContext("", _request(""), guard.policy, guard.sanitizer))
+    call = ast.parse("os.open(path, flags)").body[0].value
+    assert visitor._is_write_call(call, "os.open") is True
+
+
+def test_os_open_explicit_read_only_flags_are_allowed(guard):
+    report = guard.scan(_request("import os\nos.open('/tmp/tool-safety', os.O_RDONLY)"))
+    assert report.decision == SafetyDecision.ALLOW
+
+
 @pytest.mark.parametrize(
     "code",
     [

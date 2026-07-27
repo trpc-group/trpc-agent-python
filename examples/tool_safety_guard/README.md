@@ -67,7 +67,7 @@ safe_executor = SafetyGuardedCodeExecutor(
 ```
 
 wrapper 统一执行扫描、审计、阻断、wall-clock timeout 和返回 output 截断；
-超时返回 `CodeExecutionResult(is_timed_out=True)`。
+超时返回 `outcome=DEADLINE_EXCEEDED`，并在 output 中包含超时提示。
 
 ## 真实模型 Agent
 

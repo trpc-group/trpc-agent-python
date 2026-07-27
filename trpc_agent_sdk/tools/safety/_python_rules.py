@@ -31,7 +31,7 @@ from ._sanitizer import SafetySanitizer
 
 _NETWORK_ROOTS = frozenset({"requests", "aiohttp", "socket", "urllib", "httpx"})
 _PROCESS_CALLS = frozenset({"subprocess.run", "subprocess.call", "subprocess.Popen", "os.system", "os.popen"})
-_DELETE_CALLS = frozenset({"shutil.rmtree"})
+_DELETE_CALLS = frozenset({"shutil.rmtree", "os.remove", "os.unlink", "os.rmdir"})
 _DIRECT_FILE_CALLS = frozenset({"open", "builtins.open", "io.open", "os.open", "os.remove", "os.unlink", "os.rmdir"})
 _PATH_METHODS = frozenset({"open", "read_text", "read_bytes", "write_text", "write_bytes", "unlink", "rmdir"})
 _OUTPUT_CALLS = frozenset(
@@ -468,8 +468,17 @@ class PythonRuleVisitor(ast.NodeVisitor):
         if tail in {"write_text", "write_bytes"}:
             return True
         if name == "os.open":
-            flag_text = ast.get_source_segment(self._context.source, node.args[1]) if len(node.args) > 1 else ""
-            return bool(flag_text and re.search(r"O_(?:WRONLY|RDWR|CREAT|TRUNC|APPEND)", flag_text))
+            if len(node.args) <= 1:
+                return True
+            try:
+                flag_text = ast.get_source_segment(self._context.source, node.args[1])
+            except (IndexError, UnicodeError):
+                flag_text = None
+            if not flag_text:
+                return True
+            if re.search(r"O_(?:WRONLY|RDWR|CREAT|TRUNC|APPEND)", flag_text):
+                return True
+            return not bool(re.fullmatch(r"\s*(?:(?:os\.)?O_RDONLY|0)\s*", flag_text))
         if tail != "open":
             return False
         mode_node = node.args[1] if len(node.args) > 1 else None
