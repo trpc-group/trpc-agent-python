@@ -175,7 +175,16 @@ class AttributionRunner:
             human_review = traj.get("human_review_triggered", False)
             conf_val = traj.get("confidence")
 
-            if "error" in search_text or "failed" in search_text:
+            # Match tool-call errors only: check individual steps for
+            # error/fail signals, but exclude preprocess-stage failures
+            # (e.g. "deblur_failed" in preprocess step is not a tool error).
+            if any(
+                ("error" in s.lower() or "fail" in s.lower())
+                and "preprocess" not in s.lower()
+                for s in raw_steps
+            ) if raw_steps else (
+                "error" in search_text or "failed" in search_text
+            ):
                 candidates.append(("tool_call_error", 0.75))
                 evidence.append("trajectory tool error")
 
