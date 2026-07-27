@@ -183,13 +183,10 @@ class TestAttributionClassificationLogic:
             trajectory={"nodes": ["preprocess","locate(shifted)","segment"], "human_review_triggered": False},
         )
         result = default_runner._attribute_case(case, "train")
-        # Should fallback to param_error (trajectory) or final_answer_mismatch (char fallback)
-        # param_error has higher priority (3 vs 1) — wait, final_answer_mismatch is priority 1 (highest)
-        # So: final_answer_mismatch wins over param_error because priority 1 < 3
-        # This is correct — mismatched answer takes precedence
-        # Rule 4 (char_match fallback) sets final_answer_mismatch (priority 1),
-        # which beats param_error (priority 3) from trajectory signals
-        assert result.category == "final_answer_mismatch", f"expected final_answer_mismatch (priority 1 beats param_error priority 3), got {result.category}"
+        # Trajectory has locate(shifted) → Rule 1 fires param_error
+        # Rule 4 is true fallback (only when Rules 1-3 find nothing),
+        # so param_error from trajectory wins over final_answer_mismatch
+        assert result.category == "param_error", f"expected param_error from trajectory, got {result.category}"
 
     def test_llm_rubric_fail_from_judge(self, default_runner):
         """judge_recognition < 0.6 → llm_rubric_fail"""
@@ -260,22 +257,21 @@ class TestAttributionEdgeCases:
         assert report.primary_failure_category is None
 
     def test_unattributed_case(self):
-        """无法归因的 case → unattributed"""
+        """correct=True but no trajectory/score signals → unattributed"""
         case = BaselineCaseResult(
-            case_id="ux", image="", ground_truth="", predicted="",
-            score=0.3, passed=False, correct=False, char_correct=0, char_total=1,
+            case_id="ux", image="", ground_truth="A", predicted="A",
+            score=1.0, passed=True, correct=True, char_correct=1, char_total=1,
             failure_reason="", judge_recognition=-1, judge_blacklist=-1, judge_response=-1,
             trajectory={},
         )
         runner = AttributionRunner()
         result = runner._attribute_case(case, "train")
-        # Even with empty everything, char fallback should fire because !correct
-        # But gt="" and pred="" → char_match ties at 1/1 = 1.0, and correct=False...
-        # Let me check: "".char_correct("", "") → 0, char_total=max(1,1)=1 → rate=0
-        # So !correct=True → final_answer_mismatch should fire
-        # Actually this depends on behavior: predicted="" vs ground_truth="" => correct=False but both empty
-        # The char_rate would be 0/1=0. So it should get final_answer_mismatch
-        assert result.category != ""
+        # correct=True → Rule 4 (fallback) not reached
+        # all judge scores are -1 → Rules 2/3 not reached
+        # trajectory is empty → Rule 1 not reached
+        # Should fall through to unattributed
+        assert result.category == "unattributed", f"expected unattributed, got {result.category}"
+        assert result.confidence == 0.0
 
 
 class TestConvenienceFunction:

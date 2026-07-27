@@ -202,9 +202,9 @@ class AttributionRunner:
             candidates.append(("llm_rubric_fail", 0.65))
             evidence.append(f"judge_response={case.judge_response:.2f} < {PASS_THRESHOLD}")
 
-        # Rule 4: char match fallback
+        # Rule 4: char match fallback (true fallback only when Rules 1-3 found nothing)
         char_rate = case.char_correct / max(case.char_total, 1)
-        if not case.correct:
+        if not case.correct and not candidates:
             candidates.append(("final_answer_mismatch", 0.85))
             evidence.append(f"pred != gt, char_match={char_rate:.2f}")
 

@@ -141,7 +141,8 @@ class TestValidationRunnerFake:
         runner = ValidationRunner(mode="fake")
         result = runner.run(val_bl, opt_result)
         d = next(c for c in result.delta_cases if c.case_id == "val_002")
-        assert d.status == "improved" or d.score_delta > 0
+        assert d.status == "improved", f"expected improved, got {d.status}"
+        assert d.score_delta > 0, f"expected positive delta, got {d.score_delta}"
 
     def test_regression_mode(self, full_pipeline):
         """????????? case ????????"""

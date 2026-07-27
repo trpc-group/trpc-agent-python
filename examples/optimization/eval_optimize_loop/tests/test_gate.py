@@ -224,7 +224,7 @@ class TestLockRobustness:
         lock_file = output_dir / '.pipeline.lock'
         lock_file.write_text(lock_content, encoding='utf-8')
         result = subprocess.run(
-            ['python', str(PIPELINE_SCRIPT), '--output', str(output_dir), '--quiet'],
+            [sys.executable, str(PIPELINE_SCRIPT), '--output', str(output_dir), '--quiet'],
             capture_output=True, text=True, timeout=30,
             cwd=str(PIPELINE_SCRIPT.parent),
         )
