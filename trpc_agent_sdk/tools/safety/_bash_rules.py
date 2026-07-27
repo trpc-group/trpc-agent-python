@@ -38,6 +38,22 @@ _SINK_RE = re.compile(r"(?i)(?:^|[;&|]\s*)(?:echo|printf|curl|wget)\b|(?:>|>>)")
 _INTERPRETERS = frozenset({"sh", "bash", "zsh", "python", "python3"})
 _SHELLS = frozenset({"sh", "bash", "zsh"})
 _COMMAND_WRAPPERS = frozenset({"command", "exec", "nohup"})
+_SHELL_KEYWORDS = frozenset({
+    "case",
+    "do",
+    "done",
+    "elif",
+    "else",
+    "esac",
+    "fi",
+    "for",
+    "if",
+    "in",
+    "select",
+    "then",
+    "until",
+    "while",
+})
 _PROCESS_RUNNERS = frozenset({"chrt", "ionice", "nice", "setsid", "stdbuf", "taskset", "timeout", "xargs"})
 _NETWORK_COMMANDS = frozenset({"curl", "ssh", "wget"})
 _CURL_REMAP_OPTIONS = ("--config", "--connect-to", "--proxy", "--resolve", "-K", "-x")
@@ -321,7 +337,7 @@ def _check_commands(text: str, policy: ToolSafetyPolicy,
     redacted = False
     for segment in _COMMAND_SPLIT_RE.split(text):
         name = _command_name(segment.strip())
-        if name and name not in allowed and name not in {"do", "done", "then", "fi"}:
+        if name and name not in allowed and name not in _SHELL_KEYWORDS:
             finding, changed = make_finding("POLICY002", name, COMMAND_REVIEW, sanitizer)
             findings.append(finding)
             redacted = redacted or changed

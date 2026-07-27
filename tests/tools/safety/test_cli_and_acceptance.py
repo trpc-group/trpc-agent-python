@@ -164,17 +164,49 @@ async def test_mcp_timeout_reap_is_bounded(monkeypatch):
         async def communicate(self):
             await asyncio.sleep(60)
 
+        async def wait(self):
+            await asyncio.sleep(60)
+
         def kill(self):
             self.killed = True
 
     process = _HungProcess()
+    limited = []
 
     async def create_process(*args, **kwargs):
         del args, kwargs
         return process
 
+    original_limit_output = mcp_server.GUARD.limit_output
+
+    def track_limit_output(response):
+        limited.append(response)
+        return original_limit_output(response)
+
     monkeypatch.setattr(mcp_server.asyncio, "create_subprocess_exec", create_process)
     monkeypatch.setattr(mcp_server, "PROCESS_REAP_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(mcp_server.GUARD, "limit_output", track_limit_output)
     result = await mcp_server.execute_command("echo ok", timeout=0.01)
     assert process.killed is True
     assert result["timed_out"] is True
+    assert limited == [result]
+
+
+@pytest.mark.asyncio
+async def test_mcp_timeout_reaps_real_subprocess(monkeypatch):
+    processes = []
+    create_subprocess_exec = mcp_server.asyncio.create_subprocess_exec
+
+    async def track_process(*args, **kwargs):
+        process = await create_subprocess_exec(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(mcp_server.asyncio, "create_subprocess_exec", track_process)
+    result = await mcp_server.execute_command(
+        'python -c "__import__(\'threading\').Event().wait(60)"',
+        timeout=0.05,
+    )
+    assert result["timed_out"] is True
+    assert len(processes) == 1
+    assert processes[0].returncode is not None

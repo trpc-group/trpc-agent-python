@@ -241,6 +241,20 @@ def test_unallowed_command_requires_review(guard):
     assert "POLICY002" in _rule_ids(report)
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        'for value in ok; do echo "$value"; done',
+        "if echo ok; then echo yes; else echo no; fi",
+        "while echo ok; do echo next; done",
+        "case ok in ok) echo yes;; esac",
+    ],
+)
+def test_shell_keywords_do_not_create_command_policy_noise(guard, command):
+    report = guard.scan(_request(command, ScriptLanguage.BASH))
+    assert "POLICY002" not in _rule_ids(report)
+
+
 def test_timeout_over_policy_requires_review(guard):
     report = guard.scan(_request("print('ok')", timeout=31))
     assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
