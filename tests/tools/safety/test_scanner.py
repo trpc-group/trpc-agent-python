@@ -106,6 +106,11 @@ def test_guard_limits_output_with_policy_budget():
     assert sum(len(item.encode("utf-8")) for item in result) <= 20
 
 
+def test_list_output_truncation_is_visible_with_small_budget():
+    result = truncate_output(["x" * 10, "y"], 10)
+    assert result[-1] == "[T]"
+
+
 @pytest.mark.parametrize(
     "code",
     [
@@ -340,7 +345,7 @@ def test_safety_edge_helpers_cover_invalid_and_dynamic_inputs():
     assert stdin_language("python script.py") is None
     assert path_is_system_location("/") is True
     assert truncate_output("hello", 3) == "hel"
-    assert truncate_output(["hello", 42, "world"], 6) == ["hello", 42, "w"]
+    assert truncate_output(["hello", 42, "world"], 6) == ["hel", 42, "", "[T]"]
     assert truncate_output(["x" * 5, "y" * 20], 20)[-1] == "[TRUNCATED]"
     assert truncate_output(42, 3) == 42
     with pytest.raises(ValueError, match="evidence_chars"):

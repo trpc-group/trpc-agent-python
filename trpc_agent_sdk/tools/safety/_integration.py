@@ -76,6 +76,15 @@ def _timeout(args: dict[str, Any], name: str, policy: ToolSafetyPolicy) -> tuple
     return requested, min(requested, float(policy.max_timeout_seconds)), arg_name
 
 
+def _timeout_value(tool_name: str, request: ScriptScanRequest, original: Any) -> int | float:
+    value = request.effective_timeout_seconds
+    if isinstance(original, int) and not isinstance(original, bool):
+        return int(value)
+    if original is None and tool_name.lower() in _BASH_TOOL_NAMES:
+        return int(value)
+    return value
+
+
 def adapt_tool_request(tool: Any, args: dict[str, Any], policy: ToolSafetyPolicy) -> ScriptScanRequest:
     """Adapt supported execution Tool arguments."""
     name = str(getattr(tool, "name", "")).lower()
@@ -229,11 +238,11 @@ class ToolSafetyFilter(BaseFilter):
             rsp.is_continue = False
             return
         if request and request.applicable and request.timeout_arg_name:
-            value = request.effective_timeout_seconds
-            original = req.get(request.timeout_arg_name)
-            if isinstance(original, int) and not isinstance(original, bool):
-                value = int(value)
-            req[request.timeout_arg_name] = value
+            req[request.timeout_arg_name] = _timeout_value(
+                tool_name,
+                request,
+                req.get(request.timeout_arg_name),
+            )
 
     async def _after(self, ctx: AgentContext, req: Any, rsp: FilterResult):
         """Limit returned output after an allowed execution."""

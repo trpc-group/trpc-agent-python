@@ -92,10 +92,10 @@ def truncate_output(value: Any, max_bytes: int) -> Any:
     if isinstance(value, list):
         result = list(value)
         remaining = max_bytes
-        marker = "[TRUNCATED]"
+        marker = "[TRUNCATED]" if max_bytes >= len("[TRUNCATED]") else ("[T]" if max_bytes >= 3 else "!")
         marker_bytes = len(marker.encode("utf-8"))
         string_bytes = sum(len(item.encode("utf-8")) for item in result if isinstance(item, str))
-        reserve_marker = max_bytes >= marker_bytes and string_bytes > max_bytes
+        reserve_marker = max_bytes > 0 and string_bytes > max_bytes
         if reserve_marker:
             remaining -= marker_bytes
         truncated = False

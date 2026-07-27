@@ -104,6 +104,28 @@ async def test_allow_preserves_integer_timeout_type():
 
 
 @pytest.mark.asyncio
+async def test_allow_injects_integer_timeout_when_omitted():
+    args = {"command": "echo ok"}
+
+    async def handler():
+        assert isinstance(args["timeout"], int)
+        return {"stdout": "ok"}
+
+    await _run_filter(_filter(_MemorySink()), args, handler)
+
+
+@pytest.mark.asyncio
+async def test_allow_preserves_float_timeout_type():
+    args = {"command": "echo ok", "timeout": 3.5}
+
+    async def handler():
+        assert isinstance(args["timeout"], float)
+        return {"stdout": "ok"}
+
+    await _run_filter(_filter(_MemorySink()), args, handler)
+
+
+@pytest.mark.asyncio
 async def test_deny_stops_handler_and_returns_report():
     sink = _MemorySink()
     called = False
@@ -227,7 +249,7 @@ async def test_after_limits_list_output():
         return ["x" * 20, "y" * 20]
 
     result = await _run_filter(_filter(_MemorySink(), max_output=10), {"command": "echo ok"}, handler)
-    assert result == ["x" * 10, ""]
+    assert result == ["x" * 7, "", "[T]"]
 
 
 @pytest.mark.asyncio
