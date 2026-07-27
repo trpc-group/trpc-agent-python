@@ -121,6 +121,8 @@ class CompositeAuditSink:
                     event.decision if event.decision == SafetyDecision.DENY else SafetyDecision.NEEDS_HUMAN_REVIEW),
                 "risk_level": (
                     event.risk_level if event.risk_level in {RiskLevel.HIGH, RiskLevel.CRITICAL} else RiskLevel.MEDIUM),
+                "redacted":
+                True,
                 "execution_blocked":
                 True,
             })
@@ -159,15 +161,14 @@ def _open_secure_file(path: Path) -> IO[str]:
 
 
 def _shared_sink_lock(sink: AuditSink) -> threading.RLock:
+    if not isinstance(sink, JsonlAuditSink):
+        return _FALLBACK_SINK_LOCK
     with _SINK_LOCKS_GUARD:
-        try:
-            lock = _SINK_LOCKS.get(sink)
-            if lock is None:
-                lock = threading.RLock()
-                _SINK_LOCKS[sink] = lock
-            return lock
-        except TypeError:
-            return _FALLBACK_SINK_LOCK
+        lock = _SINK_LOCKS.get(sink)
+        if lock is None:
+            lock = threading.RLock()
+            _SINK_LOCKS[sink] = lock
+        return lock
 
 
 def create_audit_event(report: SafetyReport, tool_name: str, execution_blocked: bool) -> SafetyAuditEvent:

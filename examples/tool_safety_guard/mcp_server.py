@@ -104,11 +104,12 @@ async def execute_command(command: str, timeout: float | None = None) -> dict:
             "stderr": "Command exceeded the tool safety timeout.",
             "timed_out": True,
         }
-    return {
+    response = {
         "return_code": process.returncode,
         "stdout": stdout.decode(errors="replace")[:MAX_OUTPUT_CHARS],
         "stderr": stderr.decode(errors="replace")[:MAX_OUTPUT_CHARS],
     }
+    return GUARD.limit_output(response)
 
 
 if __name__ == "__main__":

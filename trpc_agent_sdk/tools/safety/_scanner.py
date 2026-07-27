@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import time
+from typing import Any
 
 from ._bash_rules import nested_payloads
 from ._bash_rules import scan_bash
@@ -26,6 +27,7 @@ from ._models import ScriptScanRequest
 from ._models import ToolSafetyPolicy
 from ._python_rules import scan_python
 from ._sanitizer import SafetySanitizer
+from ._sanitizer import truncate_output
 from ._common_rules import make_finding
 from ._common_rules import RuleSpec
 from ._models import RiskCategory
@@ -95,6 +97,10 @@ class ToolScriptSafetyGuard:
             effective_timeout_seconds=float(self.policy.max_timeout_seconds),
         )
 
+    def limit_output(self, output: Any) -> Any:
+        """Limit tool output to the configured byte budget."""
+        return truncate_output(output, self.policy.max_output_bytes)
+
     def _scan_payload(
         self,
         payload: ScriptPayload,
@@ -140,9 +146,17 @@ class ToolScriptSafetyGuard:
         self,
         request: ScriptScanRequest,
     ) -> tuple[list[SafetyFinding], bool]:
-        text = " ".join(
-            [request.cwd, *request.env_keys, *(arg for payload in request.payloads for arg in payload.argv)])
-        findings, redacted = scan_paths(text, request, self.policy, self.sanitizer)
+        findings = []
+        redacted = False
+        context_values = [
+            request.cwd,
+            *request.env_keys,
+            *(arg for payload in request.payloads for arg in payload.argv),
+        ]
+        for value in context_values:
+            context_findings, changed = scan_paths(value, request, self.policy, self.sanitizer)
+            findings.extend(context_findings)
+            redacted = redacted or changed
         if request.background or request.tty:
             spec = RuleSpec(
                 RiskCategory.PROCESS,

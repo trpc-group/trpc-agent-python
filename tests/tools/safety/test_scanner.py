@@ -93,6 +93,19 @@ def test_os_open_explicit_read_only_flags_are_allowed(guard):
     assert report.decision == SafetyDecision.ALLOW
 
 
+def test_non_finite_scan_timeout_is_reviewed_as_invalid(guard):
+    report = guard.scan(_request("echo ok", timeout=float("nan")))
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert "not finite" in report.findings[0].evidence
+
+
+def test_guard_limits_output_with_policy_budget():
+    guard = ToolScriptSafetyGuard(ToolSafetyPolicy(max_output_bytes=20))
+    result = guard.limit_output(["x" * 5, "y" * 20])
+    assert result[-1] == "[TRUNCATED]"
+    assert sum(len(item.encode("utf-8")) for item in result) <= 20
+
+
 @pytest.mark.parametrize(
     "code",
     [
@@ -314,6 +327,7 @@ def test_safety_edge_helpers_cover_invalid_and_dynamic_inputs():
     assert path_is_system_location("/") is True
     assert truncate_output("hello", 3) == "hel"
     assert truncate_output(["hello", 42, "world"], 6) == ["hello", 42, "w"]
+    assert truncate_output(["x" * 5, "y" * 20], 20)[-1] == "[TRUNCATED]"
     assert truncate_output(42, 3) == 42
     with pytest.raises(ValueError, match="evidence_chars"):
         SafetySanitizer(0)

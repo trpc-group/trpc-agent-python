@@ -121,6 +121,22 @@ def test_composite_uses_fallback():
     assert fallback.events[0].decision == SafetyDecision.DENY
 
 
+def test_composite_fallback_marks_rewritten_event_redacted():
+    fallback = _MemorySink()
+    sink = CompositeAuditSink(_FailingSink(), fallback)
+    report = SafetyReport(
+        decision=SafetyDecision.ALLOW,
+        risk_level=RiskLevel.NONE,
+        duration_ms=1,
+        redacted=False,
+        summary="safe",
+        max_output_bytes=100,
+    )
+    with pytest.raises(SafetyAuditDegradedError):
+        sink.emit(create_audit_event(report, "Bash", False))
+    assert fallback.events[0].redacted is True
+
+
 def test_composite_fails_closed_when_both_sinks_fail():
     sink = CompositeAuditSink(_FailingSink(), _FailingSink())
     with pytest.raises(SafetyAuditError, match="all tool safety audit sinks failed"):

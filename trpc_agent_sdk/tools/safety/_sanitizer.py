@@ -92,12 +92,22 @@ def truncate_output(value: Any, max_bytes: int) -> Any:
     if isinstance(value, list):
         result = list(value)
         remaining = max_bytes
+        marker = "[TRUNCATED]"
+        marker_bytes = len(marker.encode("utf-8"))
+        string_bytes = sum(len(item.encode("utf-8")) for item in result if isinstance(item, str))
+        reserve_marker = max_bytes >= marker_bytes and string_bytes > max_bytes
+        if reserve_marker:
+            remaining -= marker_bytes
+        truncated = False
         for index, item in enumerate(result):
             if not isinstance(item, str):
                 continue
-            limited, _ = truncate_text(item, max(remaining, 0))
+            limited, changed = truncate_text(item, max(remaining, 0))
             result[index] = limited
             remaining -= len(limited.encode("utf-8"))
+            truncated = truncated or changed
+        if truncated and reserve_marker:
+            result.append(marker)
         return result
     if not isinstance(value, dict):
         return value

@@ -35,7 +35,6 @@ from ._models import ScriptPayload
 from ._models import ScriptScanRequest
 from ._models import ToolMetadata
 from ._models import ToolSafetyPolicy
-from ._sanitizer import truncate_output
 from ._sanitizer import truncate_text
 from ._scanner import ToolScriptSafetyGuard
 
@@ -71,7 +70,7 @@ def _timeout(args: dict[str, Any], name: str, policy: ToolSafetyPolicy) -> tuple
     raw = args.get(arg_name) if arg_name else None
     requested = float(raw) if isinstance(raw, (int, float)) else None
     if requested is not None and not math.isfinite(requested):
-        return requested, float(policy.max_timeout_seconds), arg_name
+        return None, float(policy.max_timeout_seconds), arg_name
     if requested is None or requested <= 0:
         return requested, float(policy.max_timeout_seconds), arg_name
     return requested, min(requested, float(policy.max_timeout_seconds)), arg_name
@@ -243,7 +242,7 @@ class ToolSafetyFilter(BaseFilter):
 
     def finalize_response(self, response: Any) -> Any:
         """Limit output after an allowed execution."""
-        return truncate_output(response, self._guard.policy.max_output_bytes)
+        return self._guard.limit_output(response)
 
     @classmethod
     def from_policy(

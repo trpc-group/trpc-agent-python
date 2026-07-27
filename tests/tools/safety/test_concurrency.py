@@ -92,16 +92,22 @@ def test_emit_report_serializes_custom_sink_calls():
     assert sink.overlapped is False
 
 
-def test_independent_audit_sinks_do_not_share_one_lock():
+def test_independent_audit_sinks_share_fallback_lock():
 
-    class BarrierSink:
+    class TrackingSink:
 
-        def __init__(self, barrier):
-            self.barrier = barrier
+        active = 0
+        overlapped = False
+        state_lock = threading.Lock()
 
         def emit(self, event):
             del event
-            self.barrier.wait(timeout=1)
+            with self.state_lock:
+                self.__class__.active += 1
+                self.__class__.overlapped = self.__class__.overlapped or self.__class__.active > 1
+            time.sleep(0.001)
+            with self.state_lock:
+                self.__class__.active -= 1
 
     report = SafetyReport(
         decision=SafetyDecision.ALLOW,
@@ -111,7 +117,7 @@ def test_independent_audit_sinks_do_not_share_one_lock():
         summary="safe",
         max_output_bytes=100,
     )
-    barrier = threading.Barrier(2)
-    sinks = [BarrierSink(barrier), BarrierSink(barrier)]
+    sinks = [TrackingSink(), TrackingSink()]
     with ThreadPoolExecutor(max_workers=2) as pool:
         list(pool.map(lambda sink: emit_report(sink, report, "tool"), sinks))
+    assert TrackingSink.overlapped is False

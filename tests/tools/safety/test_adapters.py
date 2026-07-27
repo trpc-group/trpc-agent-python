@@ -47,6 +47,7 @@ def test_adapt_non_finite_timeout_falls_back_to_policy_limit():
 
     request = adapt_tool_request(tool, {"command": "echo ok", "timeout": float("nan")}, _policy())
 
+    assert request.requested_timeout_seconds is None
     assert request.effective_timeout_seconds == 30
 
 

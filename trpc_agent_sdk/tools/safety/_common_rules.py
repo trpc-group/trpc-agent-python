@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import ntpath
 import posixpath
 import re
@@ -198,6 +199,14 @@ def scan_limits(request: ScriptScanRequest, policy: ToolSafetyPolicy,
     requested = request.requested_timeout_seconds
     if requested is None or 0 < requested <= policy.max_timeout_seconds:
         return [], False
+    if not math.isfinite(requested):
+        finding, redacted = make_finding(
+            "POLICY001",
+            f"requested timeout {requested}s is not finite",
+            POLICY_REVIEW,
+            sanitizer,
+        )
+        return [finding], redacted
     if requested <= 0:
         return [], False
     evidence = f"requested timeout {requested}s exceeds {policy.max_timeout_seconds}s"
