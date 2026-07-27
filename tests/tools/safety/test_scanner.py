@@ -388,9 +388,9 @@ aio.ThreadPoolExecutor(max_workers=workers)
 aio.gather(one, two, three, four, five)
 P().write_text("x")
 writer.write("x" * 2000000)
-"""
+    """
     report = guard.scan(_request(code))
-    assert report.findings
+    assert {"RES002", "PROC001", "FILE003"} <= _rule_ids(report)
 
 
 def test_safety_edge_helpers_cover_invalid_and_dynamic_inputs():

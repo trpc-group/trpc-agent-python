@@ -84,9 +84,11 @@ class JsonlAuditSink:
                 while not parent.exists():
                     missing_parents.append(parent)
                     parent = parent.parent
-                self._path.parent.mkdir(parents=True, exist_ok=True)
-                for directory in missing_parents:
-                    directory.chmod(0o700)
+                for directory in reversed(missing_parents):
+                    try:
+                        os.mkdir(directory, 0o700)
+                    except FileExistsError:
+                        pass
                 descriptor = _open_secure_file(self._path)
                 try:
                     os.write(descriptor, line)

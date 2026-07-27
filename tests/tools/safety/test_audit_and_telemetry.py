@@ -111,6 +111,42 @@ def test_jsonl_audit_secures_new_parent_directories(tmp_path):
         assert stat.S_IMODE(path.parent.parent.stat().st_mode) == 0o700
 
 
+def test_jsonl_audit_creates_parent_directories_with_private_mode(monkeypatch, tmp_path):
+    modes = []
+    mkdir = os.mkdir
+
+    def track_mkdir(path, mode=0o777):
+        modes.append(mode)
+        return mkdir(path, mode)
+
+    monkeypatch.setattr("trpc_agent_sdk.tools.safety._audit.os.mkdir", track_mkdir)
+
+    JsonlAuditSink(tmp_path / "nested" / "deeper" / "audit.jsonl").emit(create_audit_event(_report(), "Bash", True))
+
+    assert modes == [0o700, 0o700]
+
+
+def test_jsonl_audit_tolerates_concurrent_parent_creation(monkeypatch, tmp_path):
+    path = tmp_path / "nested" / "audit.jsonl"
+    mkdir = os.mkdir
+    raced = False
+
+    def racing_mkdir(target, mode=0o777):
+        nonlocal raced
+        if not raced and target == path.parent:
+            raced = True
+            mkdir(target, mode)
+            raise FileExistsError(str(target))
+        return mkdir(target, mode)
+
+    monkeypatch.setattr("trpc_agent_sdk.tools.safety._audit.os.mkdir", racing_mkdir)
+
+    JsonlAuditSink(path).emit(create_audit_event(_report(), "Bash", True))
+
+    assert raced is True
+    assert path.exists()
+
+
 @pytest.mark.skipif(os.name != "posix", reason="POSIX permission contract")
 def test_jsonl_audit_does_not_chmod_existing_parent_directory(tmp_path):
     parent = tmp_path / "audit"
