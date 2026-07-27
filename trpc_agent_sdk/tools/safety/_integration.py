@@ -230,7 +230,11 @@ class ToolSafetyFilter(BaseFilter):
             rsp.is_continue = False
             return
         if request and request.applicable and request.timeout_arg_name:
-            req[request.timeout_arg_name] = request.effective_timeout_seconds
+            value = request.effective_timeout_seconds
+            original = req.get(request.timeout_arg_name)
+            if isinstance(original, int) and not isinstance(original, bool):
+                value = int(value)
+            req[request.timeout_arg_name] = value
 
     async def _after(self, ctx: AgentContext, req: Any, rsp: FilterResult):
         """Limit returned output after an allowed execution."""

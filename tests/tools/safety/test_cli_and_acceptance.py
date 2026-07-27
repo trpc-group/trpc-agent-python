@@ -19,7 +19,8 @@ from trpc_agent_sdk.tools.safety._cli import _exit_code
 from trpc_agent_sdk.tools.safety._audit import SafetyAuditError
 from trpc_agent_sdk.tools.safety import SafetyDecision
 
-EXAMPLE_DIR = Path("examples/tool_safety_guard")
+REPO_ROOT = Path(__file__).resolve().parents[3]
+EXAMPLE_DIR = REPO_ROOT / "examples/tool_safety_guard"
 
 
 def _results():

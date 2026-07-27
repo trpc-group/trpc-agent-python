@@ -93,6 +93,17 @@ async def test_allow_invokes_handler_and_injects_timeout():
 
 
 @pytest.mark.asyncio
+async def test_allow_preserves_integer_timeout_type():
+    args = {"command": "echo ok", "timeout": 3}
+
+    async def handler():
+        assert isinstance(args["timeout"], int)
+        return {"stdout": "ok"}
+
+    await _run_filter(_filter(_MemorySink()), args, handler)
+
+
+@pytest.mark.asyncio
 async def test_deny_stops_handler_and_returns_report():
     sink = _MemorySink()
     called = False
