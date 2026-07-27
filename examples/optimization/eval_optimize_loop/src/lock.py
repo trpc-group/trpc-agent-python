@@ -126,7 +126,14 @@ def _acquire_pid_lock_win32(lock_path: str, pid: int,
     if _pid_alive(old_pid):
         return None  # another instance is running
 
-    # Stale lock — atomic takeover
+    # Stale lock — atomic takeover.
+    # NOTE: a TOCTOU window exists between _pid_alive returning False and
+    # os.replace below: another process may have created a fresh lock via
+    # O_CREAT|O_EXCL.  os.replace will then silently overwrite that valid
+    # lock, breaking mutual exclusion.  The owner-verification step below
+    # detects this post-facto, but the damage (overwriting a live lock) is
+    # already done.  This is an inherent limitation of PID locks without
+    # kernel primitives (flock/mutex); documented here for awareness.
     tmp = f"{lock_path}.{pid}.tmp"
     with open(tmp, "w", encoding="utf-8") as tf:
         tf.write(f"{pid} {started_at}")
@@ -134,7 +141,8 @@ def _acquire_pid_lock_win32(lock_path: str, pid: int,
         _os.fsync(tf.fileno())
     _os.replace(tmp, lock_path)
 
-    # Verify ownership
+    # Verify ownership.  If we overwrote a live lock (TOCTOU race), this
+    # will detect the mismatch and we back off.
     try:
         with open(lock_path, "r", encoding="utf-8") as vf:
             raw = vf.read().strip()
@@ -143,6 +151,8 @@ def _acquire_pid_lock_win32(lock_path: str, pid: int,
                 raise ValueError("empty lock file")
             owner = int(parts[0])
         if owner != pid:
+            # We may have overwritten a valid lock from another process.
+            # Back off and let the other process keep the lock.
             return None
     except (FileNotFoundError, ValueError, IndexError):
         _cleanup_lock_file(lock_path)

@@ -171,12 +171,18 @@ class AcceptanceGate:
         max_new = self.rules["no_new_hard_fail"].get("max_new_fails", 0)
         # Case-level comparison: a case is a "new hard fail" iff it scores
         # below PASS_THRESHOLD in candidate AND was at/above PASS_THRESHOLD
-        # (or absent) in baseline.  Net count (cand_fails - base_fails) is
-        # incorrect: swapping N fixed old-fails for N different new-fails
-        # would yield new_fails=0 and silently pass.
+        # in baseline.  Net count (cand_fails - base_fails) is incorrect:
+        # swapping N fixed old-fails for N different new-fails would yield
+        # new_fails=0 and silently pass.
+        #
+        # Cases NOT present in baseline (baseline.get returns None) are
+        # skipped for new-fail counting: a case that was never evaluated in
+        # baseline cannot be a "regression".  Callers that expand the evalset
+        # should first re-baseline so new cases have a valid baseline score.
         new_fails = sum(
             1 for cid, score in candidate.items()
-            if score < PASS_THRESHOLD and baseline.get(cid, 1.0) >= PASS_THRESHOLD
+            if score < PASS_THRESHOLD and baseline.get(cid) is not None
+            and baseline[cid] >= PASS_THRESHOLD
         )
         base_fails = sum(1 for s in baseline.values() if s < PASS_THRESHOLD)
         cand_fails = sum(1 for s in candidate.values() if s < PASS_THRESHOLD)
@@ -185,7 +191,12 @@ class AcceptanceGate:
             name="no_new_hard_fail",
             passed=passed,
             description=f"新增 hard fail ≤ {max_new}",
-            detail=f"baseline fails={base_fails}, candidate fails={cand_fails}, new(case-level)={new_fails}",
+            detail=(
+                f"baseline fails={base_fails}, candidate fails={cand_fails}, "
+                f"new(case-level)={new_fails}"
+                + (f", skipped_new_cases={sum(1 for cid in candidate if cid not in baseline)}"
+                   if any(cid not in baseline for cid in candidate) else "")
+            ),
         )
     def _check_critical_cases(
         self,

@@ -78,7 +78,12 @@ class ValidationRunner:
         for bl in val_baseline.cases:
             cp_pred = pred_map.get(bl.case_id, bl.predicted)
             cj = self._judge.evaluate(bl.case_id, bl.ground_truth, cp_pred)
-            cc = sum(1 for i,c in enumerate(cp_pred) if i<len(bl.ground_truth) and c==bl.ground_truth[i])
+            # char_correct: count matching positions, capped at shorter length.
+            # Extra chars in prediction beyond ground_truth length are not
+            # counted as correct (consistent with fake_judge._char_match_score
+            # which uses max(len(a),len(b)) as denominator for normalization).
+            cc = sum(1 for i, c in enumerate(cp_pred)
+                     if i < len(bl.ground_truth) and c == bl.ground_truth[i])
             sd = cj.score.overall - bl.score
             st = "improved" if sd>0.005 else ("regressed" if sd<-0.005 else "unchanged")
             cd = cc - bl.char_correct

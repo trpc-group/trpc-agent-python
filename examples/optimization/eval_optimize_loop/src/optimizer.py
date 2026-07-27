@@ -372,6 +372,11 @@ class OptimizationRunner:
         self.config = config or {}
         self.kwargs = kwargs
         self.max_iterations = self.config.get("max_iterations", 3)
+        if self.max_iterations < 1:
+            raise ValueError(
+                f"max_iterations must be >= 1, got {self.max_iterations}. "
+                f"At least one iteration is required for optimization."
+            )
 
         if mode == "fake":
             seed = self.config.get("random_seed", 42)

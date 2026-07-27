@@ -342,10 +342,22 @@ class BaselineRunner:
         gt_items = []
         id_to_case: dict[int, str] = {}
         for i, case in enumerate(cases_data, start=1):
+            image_field = case.get("image", "")
+            gt_field = case.get("ground_truth", "")
+            if not image_field:
+                raise KeyError(
+                    f"case[{i}] missing required 'image' field in evalset. "
+                    f"case_id={case.get('case_id', '?')}"
+                )
+            if not gt_field:
+                raise KeyError(
+                    f"case[{i}] missing required 'ground_truth' field in evalset. "
+                    f"case_id={case.get('case_id', '?')}"
+                )
             gt_items.append({
                 "id": i,
-                "image": f"eval/dataset/test_images/{case['image']}",
-                "plate_number": case["ground_truth"],
+                "image": f"eval/dataset/test_images/{image_field}",
+                "plate_number": gt_field,
                 "conditions": case.get("conditions", {}),
             })
             id_to_case[i] = case["case_id"]
@@ -360,7 +372,12 @@ class BaselineRunner:
         )
         # Assign ground_truth items to evaluator
         evaluator.ground_truth = gt_items  # NOTE: relies on PlateEvaluator internal attr; fragile if field renamed
-        assert evaluator.ground_truth is gt_items, "ground_truth assignment failed: PlateEvaluator may have changed internal API"
+        if evaluator.ground_truth is not gt_items:
+            raise RuntimeError(
+                "ground_truth assignment to PlateEvaluator failed. "
+                "The internal attribute may have been renamed in PlateEvaluator. "
+                "Expected evaluator.ground_truth to be the same object as gt_items."
+            )
 
         report = await evaluator.run(verbose=False)
 

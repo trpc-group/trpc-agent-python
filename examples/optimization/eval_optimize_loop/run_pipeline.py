@@ -154,7 +154,7 @@ async def main():
             candidate_scores=val_result.score_map,
             baseline_train_scores=train_bl.score_map,
             candidate_train_scores=candidate_train_scores,
-            baseline_cost=val_bl.summary.avg_cost * val_bl.summary.total,
+            baseline_cost=val_result.summary.total_cost_baseline,
             candidate_cost=val_result.summary.total_cost_candidate,
             critical_case_ids=critical_case_ids,
         )

@@ -176,11 +176,16 @@ class TestGateNewHardFailCaseLevel:
             f"Swapped failure should be detected as new hard fail: {hard_fail_check.detail}"
         )
 
-    def test_rejects_new_case_failing(self, gate_config):
-        """Candidate introduces a new failing case absent from baseline."""
+    def test_skips_new_case_not_in_baseline(self, gate_config):
+        """Cases absent from baseline are skipped for new-fail counting.
+
+        A case that was never evaluated in baseline cannot be a regression.
+        Callers expanding the evalset should re-baseline first so new cases
+        have valid baseline scores before gate comparison.
+        """
         gate = AcceptanceGate(gate_config)
-        # baseline: only case_A, both pass
-        # candidate: adds case_B that hard-fails
+        # baseline: only case_A = 0.90 (pass)
+        # candidate: case_A = 0.85 (pass), case_B = 0.35 (hard fail, but new)
         decision = gate.decide(
             baseline_scores={"case_A": 0.90},
             candidate_scores={"case_A": 0.85, "case_B": 0.35},
@@ -189,8 +194,9 @@ class TestGateNewHardFailCaseLevel:
             (c for c in decision.checks if c.name == "no_new_hard_fail"), None
         )
         assert hard_fail_check is not None
-        assert not hard_fail_check.passed, (
-            f"New case failing should be detected: {hard_fail_check.detail}"
+        # case_B is not in baseline -> skipped, not counted as new hard fail
+        assert hard_fail_check.passed, (
+            f"New case absent from baseline should be skipped: {hard_fail_check.detail}"
         )
 
     def test_accepts_improved_failures(self, gate_config):
