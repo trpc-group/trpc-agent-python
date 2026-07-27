@@ -65,19 +65,16 @@ def _acquire_flock(lock_path: str, pid: int, started_at: str) -> int | None:
 
 
 def _release_flock(fd: int, lock_path: str = "") -> None:
-    """Close fd (releases kernel flock), then remove the lock file.
+    """Close fd to release kernel flock.
 
-    Close before remove: deleting the file while the fd is still open
-    frees the name for a new inode, creating a window where another
-    process can acquire an independent flock on a different inode at
-    the same path.  Closing first prevents this race.
+    The lock file is intentionally NOT removed.  Removing it after close
+    creates a race: between close (flock released) and remove, another
+    process can flock the same inode, then the remove deletes it, and a
+    third process creates a new inode + independent flock at the same
+    path ? breaking mutual exclusion (two concurrent "holders").
+    Since flock is kernel-level, the file can safely persist as a marker.
     """
     _os.close(fd)
-    if lock_path:
-        try:
-            _os.remove(lock_path)
-        except FileNotFoundError:
-            pass
 
 
 # ---- Windows: PID-based lock ----
@@ -113,7 +110,10 @@ def _acquire_pid_lock_win32(lock_path: str, pid: int,
             old_pid = int(parts[0])
     except (FileNotFoundError, ValueError, IndexError):
         _cleanup_lock_file(lock_path)
-        return None
+        # Retry once after cleanup instead of failing immediately.
+        # Avoids blocking CI on a single corrupt lock file that was
+        # just repaired.
+        return _acquire_pid_lock_win32(lock_path, pid, started_at)
 
     if _pid_alive(old_pid):
         return None  # another instance is running
@@ -138,7 +138,10 @@ def _acquire_pid_lock_win32(lock_path: str, pid: int,
             return None
     except (FileNotFoundError, ValueError, IndexError):
         _cleanup_lock_file(lock_path)
-        return None
+        # Retry once after cleanup instead of failing immediately.
+        # Avoids blocking CI on a single corrupt lock file that was
+        # just repaired.
+        return _acquire_pid_lock_win32(lock_path, pid, started_at)
 
     return pid
 

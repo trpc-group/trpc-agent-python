@@ -38,6 +38,24 @@ class GateDecision:
         return [c for c in self.checks if c.passed]
 
 
+
+
+def _fmt_critical_detail(regressed: list[str], missing: list[str], unknown: list[str]) -> str:
+    """Format critical-case check detail string.
+
+    Emits all three categories so failures are never silently truncated:
+    regressed (score dropped), missing (gone from candidate), unknown (absent
+    from baseline ? config drift).
+    """
+    parts = []
+    if regressed:
+        parts.append(f"regressed: {regressed}")
+    if missing:
+        parts.append(f"missing: {missing}")
+    if unknown:
+        parts.append(f"unknown (not in baseline): {unknown}")
+    return "; ".join(parts) if parts else "all critical cases stable"
+
 class AcceptanceGate:
     """可配置的接受策略决策器。
 
@@ -169,7 +187,6 @@ class AcceptanceGate:
             description=f"新增 hard fail ≤ {max_new}",
             detail=f"baseline fails={base_fails}, candidate fails={cand_fails}, new(case-level)={new_fails}",
         )
-
     def _check_critical_cases(
         self,
         baseline: dict[str, float],
@@ -189,12 +206,13 @@ class AcceptanceGate:
             and candidate[cid] < baseline[cid] - 0.005
         ]
         missing = [cid for cid in critical_ids if cid not in candidate]
-        passed = len(regressed) == 0 and len(missing) == 0
+        unknown = [cid for cid in critical_ids if cid not in baseline]
+        passed = len(regressed) == 0 and len(missing) == 0 and len(unknown) == 0
         return GateCheck(
             name="critical_case_no_regress",
             passed=passed,
-            description="关键 case 不退步且不丢失",
-            detail=f"regressed: {regressed}; missing: {missing}" if (regressed or missing) else "all critical cases stable",
+            description="?? case ???????",
+            detail=_fmt_critical_detail(regressed, missing, unknown),
         )
 
     def _check_cost(

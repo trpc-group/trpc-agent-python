@@ -233,12 +233,12 @@ class TestLockRobustness:
     @pytest.mark.skipif(sys.platform != "win32", reason="PID lock semantics; POSIX uses flock (file content irrelevant)")
     def test_empty_lock_cleaned_not_crash(self, tmp_path):
         rc = self._run_with_lock('', tmp_path)
-        assert rc == 75, f'Expected exit 75, got {rc}'
+        assert rc == 0, f'Expected exit 0 (corrupt lock cleaned + retry succeeded), got {rc}'
     @pytest.mark.skipif(sys.platform != "win32", reason="PID lock semantics; POSIX uses flock (file content irrelevant)")
 
     def test_non_numeric_lock_cleaned_not_crash(self, tmp_path):
         rc = self._run_with_lock('not-a-pid', tmp_path)
-        assert rc == 75, f'Expected exit 75, got {rc}'
+        assert rc == 0, f'Expected exit 0 (corrupt lock cleaned + retry succeeded), got {rc}'
 
 
 # ============================================================================
