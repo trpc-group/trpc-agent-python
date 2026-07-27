@@ -116,8 +116,10 @@ class Auditor:
         w(f"**Mode**: {audit_trail.mode} | **Seed**: {audit_trail.random_seed}\n\n")
         w("## 1. Baseline Evaluation\n")
         for name in ("train","val"):
-            r = baseline.get(name)
+            r = baseline.get(name) or {}
             if r is None: continue
+        # None-safe: baseline.get(name) returns None for missing keys;
+        # r is None check below handles skipping gracefully.
             w(f"### {name}\n")
             w(f"Pass Rate: {r.summary.pass_rate:.1%} ({r.summary.passed}/{r.summary.total}) | Avg Score: {r.summary.avg_score:.3f}\n\n")
             for c in r.cases:
