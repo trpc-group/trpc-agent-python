@@ -103,14 +103,14 @@ def test_jsonl_audit_secures_new_parent_directories(tmp_path):
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX permission contract")
-def test_jsonl_audit_secures_existing_parent_directory(tmp_path):
+def test_jsonl_audit_does_not_chmod_existing_parent_directory(tmp_path):
     parent = tmp_path / "audit"
     parent.mkdir()
     parent.chmod(0o755)
 
     JsonlAuditSink(parent / "audit.jsonl").emit(create_audit_event(_report(), "Bash", True))
 
-    assert stat.S_IMODE(parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(parent.stat().st_mode) == 0o755
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX permission contract")

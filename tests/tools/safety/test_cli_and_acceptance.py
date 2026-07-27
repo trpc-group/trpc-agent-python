@@ -275,3 +275,29 @@ async def test_mcp_output_redacts_secret_values(monkeypatch):
     assert "top secret phrase" not in result["stderr"]
     assert "[REDACTED_SECRET]" in result["stdout"]
     assert "[REDACTED_SECRET]" in result["stderr"]
+
+
+@pytest.mark.asyncio
+async def test_mcp_subprocess_env_filters_sensitive_values(monkeypatch):
+
+    class _EnvProcess:
+        returncode = 0
+
+        async def communicate(self):
+            return (b"ok", b"")
+
+    captured = {}
+
+    async def create_process(*args, **kwargs):
+        del args
+        captured.update(kwargs.get("env", {}))
+        return _EnvProcess()
+
+    monkeypatch.setenv("TRPC_AGENT_API_KEY", "secret-key")
+    monkeypatch.setenv("PATH", "safe-path")
+    monkeypatch.setattr(mcp_server.asyncio, "create_subprocess_exec", create_process)
+    result = await mcp_server.execute_command("echo ok")
+
+    assert result["stdout"] == "ok"
+    assert captured["PATH"] == "safe-path"
+    assert "TRPC_AGENT_API_KEY" not in captured

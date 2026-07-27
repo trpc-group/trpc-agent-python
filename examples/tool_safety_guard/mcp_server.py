@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import os
 import shlex
 from pathlib import Path
 
@@ -26,6 +27,12 @@ POLICY_PATH = WORK_DIR / "tool_safety_policy.yaml"
 GUARD = ToolScriptSafetyGuard.from_policy(POLICY_PATH)
 MAX_OUTPUT_CHARS = 4096
 PROCESS_REAP_TIMEOUT_SECONDS = 1.0
+SUBPROCESS_ENV_KEYS = ("PATH", "SYSTEMROOT", "WINDIR")
+
+
+def _subprocess_env() -> dict[str, str]:
+    """Pass only runtime loader essentials to approved demo commands."""
+    return {key: os.environ[key] for key in SUBPROCESS_ENV_KEYS if key in os.environ}
 
 
 def _safe_response(response: dict) -> dict:
@@ -99,6 +106,7 @@ async def execute_command(command: str, timeout: float | None = None) -> dict:
     process = await asyncio.create_subprocess_exec(
         *argv,
         cwd=WORK_DIR,
+        env=_subprocess_env(),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
