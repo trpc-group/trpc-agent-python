@@ -457,10 +457,19 @@ def check_criterion_7(guard: SafetyGuard) -> Result:
 def check_criterion_8() -> Result:
     r = Result(8, "Docs must explain relationship to sandbox/Filter/Telemetry/CodeExecutor")
 
-    doc_path = PROJECT_ROOT / "docs" / "tool_safety_guard.md"
-    if not doc_path.exists():
-        r.fail(f"Documentation not found: {doc_path}")
+    # The docs live under docs/mkdocs/{en,zh}/ in the mkdocs structure.
+    # Accept any of these locations; prefer the English doc for keyword
+    # checks (the verifier looks for English terms: sandbox/filter/...).
+    doc_candidates = [
+        PROJECT_ROOT / "docs" / "tool_safety_guard.md",
+        PROJECT_ROOT / "docs" / "mkdocs" / "en" / "tool_safety_guard.md",
+        PROJECT_ROOT / "docs" / "mkdocs" / "zh" / "tool_safety_guard.md",
+    ]
+    doc_path = next((p for p in doc_candidates if p.exists()), None)
+    if doc_path is None:
+        r.fail(f"Documentation not found in any of: {[str(p) for p in doc_candidates]}")
         return r
+    r.info(f"Using documentation: {doc_path.relative_to(PROJECT_ROOT)}")
 
     content = doc_path.read_text(encoding="utf-8").lower()
 

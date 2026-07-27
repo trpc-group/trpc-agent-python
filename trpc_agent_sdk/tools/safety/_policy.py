@@ -90,14 +90,23 @@ class SafetyPolicy:
     ])
 
     # Resource limits
+    # NOTE: max_timeout_seconds and max_output_size_mb are consumed by the
+    # filter / executor layer (timeout injection and output truncation),
+    # not by individual scanner rules.
     max_timeout_seconds: int = 300
-    """Maximum allowed execution timeout."""
+    """Maximum allowed execution timeout (enforced by the filter/executor)."""
 
     max_output_size_mb: int = 50
-    """Maximum allowed command output size in megabytes."""
+    """Maximum allowed output size in MB (enforced by the filter)."""
 
     max_script_lines: int = 5000
     """Hard limit on scanned script length (lines)."""
+
+    max_sleep_seconds: int = 3600
+    """Maximum allowed sleep duration; longer sleeps are flagged for review."""
+
+    max_range_size: int = 1_000_000
+    """Maximum allowed range() iteration count; larger values are flagged."""
 
     # Secret detection patterns (regex strings)
     secret_patterns: list[str] = field(default_factory=lambda: [
@@ -149,6 +158,10 @@ class SafetyPolicy:
             policy.max_output_size_mb = int(data["max_output_size_mb"])
         if "max_script_lines" in data:
             policy.max_script_lines = int(data["max_script_lines"])
+        if "max_sleep_seconds" in data:
+            policy.max_sleep_seconds = int(data["max_sleep_seconds"])
+        if "max_range_size" in data:
+            policy.max_range_size = int(data["max_range_size"])
         if "secret_patterns" in data:
             policy.secret_patterns = list(data["secret_patterns"])
         if "redact_secrets_in_evidence" in data:
@@ -251,6 +264,8 @@ class SafetyPolicy:
             "max_timeout_seconds": self.max_timeout_seconds,
             "max_output_size_mb": self.max_output_size_mb,
             "max_script_lines": self.max_script_lines,
+            "max_sleep_seconds": self.max_sleep_seconds,
+            "max_range_size": self.max_range_size,
             "secret_patterns": list(self.secret_patterns),
             "redact_secrets_in_evidence": self.redact_secrets_in_evidence,
             "large_script_threshold": self.large_script_threshold,

@@ -101,11 +101,35 @@ _DELETE_CALLS = {
     ("pathlib", "Path"),  # used with .unlink / .rmdir below
 }
 
+# Calls that access file paths (used by PyDangerousFileOpsRule).
+_PATH_ACCESS_CALLS = {
+    ("pathlib", "Path"),
+    ("os", "listdir"), ("os", "scandir"), ("os", "walk"),
+    ("os", "stat"), ("os", "lstat"),
+    ("os.path", "exists"), ("os.path", "isfile"), ("os.path", "isdir"),
+    ("os.path", "getsize"), ("os.path", "getatime"),
+}
+
 # Dependency-install command prefixes.
 _INSTALL_PREFIXES = ("pip install", "pip3 install", "python -m pip install",
                      "npm install", "npm i ", "yarn add", "apt install",
                      "apt-get install", "brew install", "conda install",
                      "pip uninstall", "npm uninstall")
+
+# --- Taint tracking: variables that may hold secrets ---
+
+# Variable names that look like they hold secrets.
+_SECRET_NAME_RE = re.compile(
+    r"(?i)(?:api[_-]?key|secret|token|password|passwd|credential|"
+    r"private[_-]?key|access[_-]?key|auth)"
+)
+
+# Method names that write or transmit data (potential secret-leak sinks).
+_OUTPUT_METHODS = frozenset({
+    "write", "write_text", "write_bytes",
+    "send", "sendall",
+    "debug", "info", "warning", "error", "critical", "exception", "log",
+})
 
 
 def _dotted_call(node: ast.Call) -> Optional[tuple[str, str]]:
@@ -195,6 +219,122 @@ def _get_source_segment(source: str, node: ast.AST) -> str:
     return ""
 
 
+# ---------------------------------------------------------------------------
+# Taint-tracking helpers
+# ---------------------------------------------------------------------------
+
+def _str_value(node: ast.AST) -> Optional[str]:
+    """Extract a string literal from an arbitrary AST node."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        parts: list[str] = []
+        for val in node.values:
+            if isinstance(val, ast.Constant) and isinstance(val.value, str):
+                parts.append(val.value)
+            else:
+                parts.append("{...}")
+        return "".join(parts)
+    return None
+
+
+def _expr_is_sensitive(
+    node: ast.AST,
+    tainted: set[str],
+    patterns: list[re.Pattern],
+) -> bool:
+    """Return True if *node* evaluates to a sensitive value.
+
+    A value is sensitive when it is (or derives from):
+
+    * a variable already in *tainted*;
+    * a variable whose name matches :data:`_SECRET_NAME_RE`;
+    * a string literal that matches one of the compiled secret *patterns*;
+    * a call to ``os.getenv`` / ``os.environ.get`` with a secret-looking key;
+    * a subscript ``os.environ["API_KEY"]`` with a secret-looking key.
+    """
+    if isinstance(node, ast.Name):
+        return node.id in tainted or bool(_SECRET_NAME_RE.search(node.id))
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        for pat in patterns:
+            if pat.search(node.value):
+                return True
+        return "PRIVATE KEY-----" in node.value
+    if isinstance(node, ast.Call):
+        dotted = _dotted_call(node)
+        if dotted in (("os", "getenv"), ("os.environ", "get")) and node.args:
+            key = _get_str_arg(node, 0)
+            if key and _SECRET_NAME_RE.search(key):
+                return True
+        if (isinstance(node.func, ast.Name) and node.func.id == "getenv"
+                and node.args):
+            key = _get_str_arg(node, 0)
+            if key and _SECRET_NAME_RE.search(key):
+                return True
+    if isinstance(node, ast.Subscript):
+        target = node.value
+        is_environ = (
+            (isinstance(target, ast.Attribute)
+             and isinstance(target.value, ast.Name)
+             and target.value.id == "os" and target.attr == "environ")
+            or (isinstance(target, ast.Name) and target.id == "environ")
+        )
+        if is_environ:
+            key = _str_value(node.slice)
+            if key and _SECRET_NAME_RE.search(key):
+                return True
+    return any(
+        _expr_is_sensitive(child, tainted, patterns)
+        for child in ast.iter_child_nodes(node)
+    )
+
+
+def _collect_tainted_names(
+    tree: ast.AST,
+    patterns: list[re.Pattern],
+) -> set[str]:
+    """Collect names of variables that hold sensitive values.
+
+    Runs two passes so that chained assignments
+    (``a = b = os.getenv('API_KEY')``) propagate correctly.
+    """
+    tainted: set[str] = set()
+    assignments = [
+        n for n in ast.walk(tree)
+        if isinstance(n, (ast.Assign, ast.AnnAssign, ast.NamedExpr))
+    ]
+    for _ in range(2):
+        for node in assignments:
+            if not _expr_is_sensitive(node.value, tainted, patterns):
+                continue
+            if isinstance(node, ast.Assign):
+                targets = node.targets
+            else:
+                targets = [node.target]
+            for target in targets:
+                for child in ast.walk(target):
+                    if isinstance(child, ast.Name):
+                        tainted.add(child.id)
+    return tainted
+
+
+def _expr_references_tainted(node: ast.AST, tainted: set[str]) -> bool:
+    """Return True if *node* references any variable in *tainted*."""
+    for child in ast.walk(node):
+        if isinstance(child, ast.Name) and child.id in tainted:
+            return True
+    return False
+
+
+def _is_output_call(node: ast.Call) -> bool:
+    """Return True if *node* writes or transmits data (a leak sink)."""
+    if isinstance(node.func, ast.Name) and node.func.id == "print":
+        return True
+    if isinstance(node.func, ast.Attribute) and node.func.attr in _OUTPUT_METHODS:
+        return True
+    return False
+
+
 # ===========================================================================
 # Python rules
 # ===========================================================================
@@ -259,13 +399,6 @@ class PyDangerousFileOpsRule(Rule):
             is_open_call = (
                 isinstance(node.func, ast.Name) and node.func.id == "open"
             )
-            _PATH_ACCESS_CALLS = {
-                ("pathlib", "Path"),
-                ("os", "listdir"), ("os", "scandir"), ("os", "walk"),
-                ("os", "stat"), ("os", "lstat"),
-                ("os.path", "exists"), ("os.path", "isfile"), ("os.path", "isdir"),
-                ("os.path", "getsize"), ("os.path", "getatime"),
-            }
             if dotted in _PATH_ACCESS_CALLS or is_open_call:
                 path_arg = _get_str_arg(node, 0) or ""
                 if ctx.policy.is_path_forbidden(path_arg):
@@ -543,7 +676,7 @@ class PyResourceAbuseRule(Rule):
                 # Large sleep values
                 if dotted == ("time", "sleep"):
                     val = _get_str_arg(node, 0)
-                    if val and val.isdigit() and int(val) > 3600:
+                    if val and val.isdigit() and int(val) > ctx.policy.max_sleep_seconds:
                         seg = _get_source_segment(ctx.script, node)
                         findings.append(self._make_finding(
                             seg or f"time.sleep({val})",
@@ -560,7 +693,7 @@ class PyResourceAbuseRule(Rule):
                 if dotted in (("range",), ) or (isinstance(node.func, ast.Name) and node.func.id == "range"):
                     args = [a for a in node.args if isinstance(a, ast.Constant)]
                     for a in args:
-                        if isinstance(a.value, int) and a.value > 1_000_000:
+                        if isinstance(a.value, int) and a.value > ctx.policy.max_range_size:
                             seg = _get_source_segment(ctx.script, node)
                             findings.append(self._make_finding(
                                 seg or f"range({a.value})",
@@ -629,6 +762,34 @@ class PySecretLeakRule(Rule):
                             "environment variables or a secret manager instead.",
                         ))
                         break
+
+        # Third: taint tracking — detect secrets propagated through
+        # variables (e.g. ``key = os.getenv('API_KEY'); print(key)``)
+        # and then written to output sinks (print, write, send, log, ...).
+        tainted = _collect_tainted_names(tree, compiled)
+        if tainted:
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                if not _is_output_call(node):
+                    continue
+                args = list(node.args) + [kw.value for kw in node.keywords]
+                if not any(_expr_references_tainted(a, tainted) for a in args):
+                    continue
+                line_no = getattr(node, "lineno", None)
+                if line_no in seen_lines:
+                    continue
+                seen_lines.add(line_no)
+                seg = _get_source_segment(ctx.script, node)
+                findings.append(self._make_finding(
+                    self._redact(seg) if seg else
+                    f"[REDACTED sensitive value passed to output at line {line_no}]",
+                    line_no,
+                    "Sensitive value may be written or transmitted; "
+                    "pass credentials through a scoped secret provider "
+                    "instead of logging or sending them directly.",
+                    risk_level=RiskLevel.HIGH,
+                ))
         return findings
 
     @staticmethod

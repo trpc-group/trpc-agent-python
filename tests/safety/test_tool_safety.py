@@ -36,6 +36,8 @@ from trpc_agent_sdk.tools.safety import AuditEvent
 from trpc_agent_sdk.tools.safety import AuditLogger
 from trpc_agent_sdk.tools.safety import Decision
 from trpc_agent_sdk.tools.safety import RiskLevel
+from trpc_agent_sdk.tools.safety import Rule
+from trpc_agent_sdk.tools.safety import RuleRegistry
 from trpc_agent_sdk.tools.safety import SafetyGuard
 from trpc_agent_sdk.tools.safety import SafetyPolicy
 from trpc_agent_sdk.tools.safety import ScriptType
@@ -731,3 +733,718 @@ class TestToolSafetyFilter:
 
         await safety_filter._before(ctx, args, rsp)
         assert rsp.is_continue is True
+
+
+# ---------------------------------------------------------------------------
+# Telemetry (OpenTelemetry span attributes)
+# ---------------------------------------------------------------------------
+
+class TestTelemetry:
+    """OpenTelemetry span attributes should be set correctly."""
+
+    @pytest.fixture
+    def sample_report(self, guard):
+        """Generate a real SafetyReport for telemetry tests."""
+        return guard.scan(
+            "import os\nos.system('rm -rf /')\n", tool_name="test_tool"
+        )
+
+    def test_report_to_span_sets_all_attributes(self, sample_report):
+        """report_to_span should set all 8 safety attributes on the span."""
+        from trpc_agent_sdk.tools.safety import _telemetry
+        mock_span = Mock()
+        with patch.object(_telemetry, "_get_current_span", return_value=mock_span):
+            _telemetry.report_to_span(sample_report, blocked=True)
+
+        calls = {
+            c.args[0]: c.args[1] for c in mock_span.set_attribute.call_args_list
+        }
+        assert calls["tool.safety.decision"] == sample_report.decision.value
+        assert calls["tool.safety.risk_level"] == sample_report.risk_level.value
+        assert calls["tool.safety.rule_ids"] == ",".join(
+            f.rule_id for f in sample_report.findings
+        )
+        assert calls["tool.safety.scan_duration_ms"] == round(
+            sample_report.scan_duration_ms, 3
+        )
+        assert calls["tool.safety.sanitized"] == sample_report.sanitized
+        assert calls["tool.safety.blocked"] is True
+        assert calls["tool.safety.script_type"] == sample_report.script_type.value
+        assert calls["tool.safety.tool_name"] == "test_tool"
+
+    def test_report_to_span_blocked_false(self, sample_report):
+        """report_to_span should set blocked=False when not blocked."""
+        from trpc_agent_sdk.tools.safety import _telemetry
+        mock_span = Mock()
+        with patch.object(_telemetry, "_get_current_span", return_value=mock_span):
+            _telemetry.report_to_span(sample_report, blocked=False)
+
+        calls = {
+            c.args[0]: c.args[1] for c in mock_span.set_attribute.call_args_list
+        }
+        assert calls["tool.safety.blocked"] is False
+
+    def test_report_to_span_no_span_is_noop(self, sample_report):
+        """report_to_span should silently skip when no active span."""
+        from trpc_agent_sdk.tools.safety import _telemetry
+        with patch.object(_telemetry, "_get_current_span", return_value=None):
+            _telemetry.report_to_span(sample_report)  # should not raise
+
+    def test_report_to_span_exception_safe(self, sample_report):
+        """report_to_span must never crash even if set_attribute fails."""
+        from trpc_agent_sdk.tools.safety import _telemetry
+        mock_span = Mock()
+        mock_span.set_attribute.side_effect = RuntimeError("span ended")
+        with patch.object(_telemetry, "_get_current_span", return_value=mock_span):
+            _telemetry.report_to_span(sample_report, blocked=True)
+
+    def test_report_audit_to_span_sets_all_attributes(self):
+        """report_audit_to_span should set all attributes from AuditEvent."""
+        from trpc_agent_sdk.tools.safety import _telemetry
+        event = AuditEvent(
+            timestamp="2026-07-26T12:00:00Z",
+            tool_name="audit_tool",
+            decision="deny",
+            risk_level="critical",
+            rule_ids=["FILE-001", "NET-001"],
+            scan_duration_ms=3.14,
+            sanitized=True,
+            blocked=True,
+            script_hash="abc123",
+            script_type="python",
+        )
+        mock_span = Mock()
+        with patch.object(_telemetry, "_get_current_span", return_value=mock_span):
+            _telemetry.report_audit_to_span(event)
+
+        calls = {
+            c.args[0]: c.args[1] for c in mock_span.set_attribute.call_args_list
+        }
+        assert calls["tool.safety.decision"] == "deny"
+        assert calls["tool.safety.risk_level"] == "critical"
+        assert calls["tool.safety.rule_ids"] == "FILE-001,NET-001"
+        assert calls["tool.safety.scan_duration_ms"] == 3.14
+        assert calls["tool.safety.sanitized"] is True
+        assert calls["tool.safety.blocked"] is True
+        assert calls["tool.safety.script_type"] == "python"
+        assert calls["tool.safety.tool_name"] == "audit_tool"
+
+    def test_report_audit_to_span_no_span_is_noop(self):
+        """report_audit_to_span should silently skip when no active span."""
+        from trpc_agent_sdk.tools.safety import _telemetry
+        event = AuditEvent(
+            timestamp="2026-07-26T12:00:00Z",
+            tool_name="audit_tool",
+            decision="allow",
+            risk_level="none",
+        )
+        with patch.object(_telemetry, "_get_current_span", return_value=None):
+            _telemetry.report_audit_to_span(event)
+
+    def test_report_audit_to_span_exception_safe(self):
+        """report_audit_to_span must never crash even if set_attribute fails."""
+        from trpc_agent_sdk.tools.safety import _telemetry
+        event = AuditEvent(
+            timestamp="2026-07-26T12:00:00Z",
+            tool_name="audit_tool",
+            decision="allow",
+            risk_level="none",
+        )
+        mock_span = Mock()
+        mock_span.set_attribute.side_effect = RuntimeError("span closed")
+        with patch.object(_telemetry, "_get_current_span", return_value=mock_span):
+            _telemetry.report_audit_to_span(event)
+
+    def test_get_current_span_returns_none_on_exception(self):
+        """_get_current_span should return None if OTel raises."""
+        from trpc_agent_sdk.tools.safety import _telemetry
+        with patch.object(_telemetry, "_otel_trace") as mock_trace:
+            mock_trace.get_current_span.side_effect = RuntimeError("no tracer")
+            assert _telemetry._get_current_span() is None
+
+
+# ---------------------------------------------------------------------------
+# RuleRegistry edge cases
+# ---------------------------------------------------------------------------
+
+class TestRuleRegistry:
+    """Edge cases for RuleRegistry and Rule base class."""
+
+    def test_register_empty_rule_id_raises(self):
+        """Registering a rule with empty rule_id should raise ValueError."""
+        registry = RuleRegistry()
+
+        class EmptyRule(Rule):
+            rule_id = ""
+
+            def check(self, ctx):
+                return []
+
+        with pytest.raises(ValueError, match="non-empty rule_id"):
+            registry.register(EmptyRule())
+
+    def test_unregister_rule(self):
+        """unregister should remove a rule by id."""
+        registry = RuleRegistry()
+
+        class DummyRule(Rule):
+            rule_id = "DUMMY-001"
+
+            def check(self, ctx):
+                return []
+
+        rule = registry.register(DummyRule())
+        assert registry.get("DUMMY-001") is rule
+        registry.unregister("DUMMY-001")
+        assert registry.get("DUMMY-001") is None
+
+    def test_get_nonexistent_rule_returns_none(self):
+        """get should return None for unknown rule_id."""
+        registry = RuleRegistry()
+        assert registry.get("NOPE") is None
+
+    def test_all_rules_returns_in_order(self):
+        """all_rules should return all registered rules in insertion order."""
+        registry = RuleRegistry()
+
+        class RuleA(Rule):
+            rule_id = "A"
+
+            def check(self, ctx):
+                return []
+
+        class RuleB(Rule):
+            rule_id = "B"
+
+            def check(self, ctx):
+                return []
+
+        registry.register(RuleA())
+        registry.register(RuleB())
+        rules = registry.all_rules()
+        assert len(rules) == 2
+        assert rules[0].rule_id == "A"
+        assert rules[1].rule_id == "B"
+
+    def test_clear_registry(self):
+        """clear should remove all rules."""
+        registry = RuleRegistry()
+
+        class DummyRule(Rule):
+            rule_id = "DUMMY-002"
+
+            def check(self, ctx):
+                return []
+
+        registry.register(DummyRule())
+        registry.clear()
+        assert len(registry.all_rules()) == 0
+
+    def test_resolve_overrides_sets_override(self):
+        """_resolve_overrides should cache the policy override for the rule."""
+        class TestRule(Rule):
+            rule_id = "TEST-OVERRIDE"
+
+            def check(self, ctx):
+                return []
+
+        rule = TestRule()
+        policy = SafetyPolicy.default()
+        rule._resolve_overrides(policy)
+        assert hasattr(rule, "_override")
+        assert rule.is_enabled is True
+
+    def test_is_enabled_without_override_returns_true(self):
+        """is_enabled should default to True when _override is not set."""
+        class TestRule(Rule):
+            rule_id = "TEST-ENABLED"
+
+            def check(self, ctx):
+                return []
+
+        rule = TestRule()
+        assert rule.is_enabled is True
+
+    def test_make_finding_fallback_without_ctx(self):
+        """_make_finding should use _override when ctx attribute is missing."""
+        from trpc_agent_sdk.tools.safety import RuleOverride
+
+        class TestRule(Rule):
+            rule_id = "TEST-FINDING"
+            description = "Test rule for coverage"
+
+            def check(self, ctx):
+                return []
+
+        rule = TestRule()
+        # Manually set _override without calling _resolve_overrides,
+        # which would also set self.ctx = ScanContext (the class, not an
+        # instance) and trigger the hasattr(self, "ctx") branch.
+        rule._override = RuleOverride()
+        finding = rule._make_finding("dangerous_code", line_number=42)
+        assert finding.rule_id == "TEST-FINDING"
+        assert finding.evidence == "dangerous_code"
+        assert finding.line_number == 42
+
+
+# ---------------------------------------------------------------------------
+# SafetyPolicy edge cases
+# ---------------------------------------------------------------------------
+
+class TestPolicyEdgeCases:
+    """Edge cases for SafetyPolicy.from_dict and related methods."""
+
+    def test_from_dict_all_fields(self):
+        """from_dict should handle every configurable field."""
+        data = {
+            "allowed_commands": ["ls", "pwd"],
+            "protected_system_dirs": ["/custom"],
+            "max_output_size_mb": 100,
+            "max_script_lines": 2000,
+            "secret_patterns": [r"custom_secret_\d+"],
+            "redact_secrets_in_evidence": False,
+            "large_script_threshold": 500,
+            "credential_read_commands": ["cat", "less"],
+        }
+        policy = SafetyPolicy.from_dict(data)
+        assert policy.allowed_commands == ["ls", "pwd"]
+        assert policy.protected_system_dirs == ["/custom"]
+        assert policy.max_output_size_mb == 100
+        assert policy.max_script_lines == 2000
+        assert policy.secret_patterns == [r"custom_secret_\d+"]
+        assert policy.redact_secrets_in_evidence is False
+        assert policy.large_script_threshold == 500
+        assert policy.credential_read_commands == ["cat", "less"]
+
+    def test_from_dict_rule_override_non_dict_skipped(self):
+        """from_dict should skip rule overrides that are not dicts."""
+        data = {"rules": {"BAD-RULE": "not a dict"}}
+        policy = SafetyPolicy.from_dict(data)
+        assert "BAD-RULE" not in policy.rule_overrides
+
+    def test_from_dict_invalid_risk_level_ignored(self):
+        """from_dict should silently ignore invalid risk_level values."""
+        data = {"rules": {"TEST-RULE": {"enabled": True, "risk_level": "super_high"}}}
+        policy = SafetyPolicy.from_dict(data)
+        override = policy.rule_overrides["TEST-RULE"]
+        assert override.enabled is True
+        assert override.risk_level is None
+
+    def test_from_dict_invalid_decision_ignored(self):
+        """from_dict should silently ignore invalid decision values."""
+        data = {"rules": {"TEST-RULE": {"enabled": True, "decision": "maybe"}}}
+        policy = SafetyPolicy.from_dict(data)
+        override = policy.rule_overrides["TEST-RULE"]
+        assert override.enabled is True
+        assert override.decision is None
+
+    def test_from_yaml_invalid_top_level_raises(self, tmp_path):
+        """from_yaml should raise ValueError if YAML top-level is not a mapping."""
+        bad_file = tmp_path / "bad.yaml"
+        bad_file.write_text("- just\n- a\n- list\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="YAML mapping"):
+            SafetyPolicy.from_yaml(str(bad_file))
+
+    def test_is_system_dir_false_for_non_system(self):
+        """is_system_dir should return False for non-system paths."""
+        policy = SafetyPolicy.default()
+        assert policy.is_system_dir("/home/user/project") is False
+
+    def test_to_dict_roundtrip(self):
+        """to_dict should serialise all policy fields."""
+        policy = SafetyPolicy.default()
+        d = policy.to_dict()
+        assert "allowed_domains" in d
+        assert "allowed_commands" in d
+        assert "forbidden_paths" in d
+        assert "protected_system_dirs" in d
+        assert "max_timeout_seconds" in d
+        assert "max_output_size_mb" in d
+        assert "max_script_lines" in d
+        assert "secret_patterns" in d
+        assert "redact_secrets_in_evidence" in d
+        assert "large_script_threshold" in d
+        assert "credential_read_commands" in d
+        assert "rules" in d
+
+
+# ---------------------------------------------------------------------------
+# AuditLogger edge cases
+# ---------------------------------------------------------------------------
+
+class TestAuditLoggerEdgeCases:
+    """Edge cases for AuditLogger buffer and path handling."""
+
+    def test_buffer_overflow_drops_oldest(self):
+        """When buffer is full, the oldest event should be dropped."""
+        logger = AuditLogger(max_buffer=3)
+        for i in range(5):
+            logger.log(AuditEvent(
+                timestamp=f"2026-07-26T12:00:0{i}Z",
+                tool_name=f"tool_{i}",
+                decision="allow",
+                risk_level="none",
+            ))
+        events = logger.get_events()
+        assert len(events) == 3
+        assert events[0]["tool_name"] == "tool_2"
+
+    def test_clear_buffer(self):
+        """clear_buffer should remove all buffered events."""
+        logger = AuditLogger()
+        logger.log(AuditEvent(
+            timestamp="2026-07-26T12:00:00Z",
+            tool_name="test_tool",
+            decision="allow",
+            risk_level="none",
+        ))
+        assert len(logger.get_events()) == 1
+        logger.clear_buffer()
+        assert len(logger.get_events()) == 0
+
+    def test_path_property_returns_path(self, tmp_path):
+        """path property should return the audit file path."""
+        audit_path = str(tmp_path / "audit.jsonl")
+        logger = AuditLogger(path=audit_path)
+        assert logger.path == audit_path
+
+    def test_path_property_none_when_no_path(self):
+        """path property should return None when no path is set."""
+        logger = AuditLogger()
+        assert logger.path is None
+
+
+# ---------------------------------------------------------------------------
+# ToolSafetyFilter edge cases
+# ---------------------------------------------------------------------------
+
+class TestSafetyFilterEdgeCases:
+    """Edge cases for ToolSafetyFilter script extraction and blocking."""
+
+    @pytest.mark.asyncio
+    async def test_filter_nested_dict_script(self):
+        """Filter should extract scripts from nested 'input' dict."""
+        from trpc_agent_sdk.filter import FilterResult
+        guard = SafetyGuard.default()
+        safety_filter = ToolSafetyFilter(guard)
+
+        args = {"input": {"command": "rm -rf /"}}
+        rsp = FilterResult()
+        ctx = Mock()
+        await safety_filter._before(ctx, args, rsp)
+
+        assert rsp.is_continue is False
+        assert rsp.rsp["error"] == "SAFETY_GUARD_BLOCKED"
+
+    @pytest.mark.asyncio
+    async def test_filter_nested_string_input(self):
+        """Filter should extract scripts from 'input' as a plain string."""
+        from trpc_agent_sdk.filter import FilterResult
+        guard = SafetyGuard.default()
+        safety_filter = ToolSafetyFilter(guard)
+
+        args = {"input": "rm -rf /"}
+        rsp = FilterResult()
+        ctx = Mock()
+        await safety_filter._before(ctx, args, rsp)
+
+        assert rsp.is_continue is False
+        assert rsp.rsp["error"] == "SAFETY_GUARD_BLOCKED"
+
+    @pytest.mark.asyncio
+    async def test_filter_non_dict_request(self):
+        """Filter should skip when req is not a dict."""
+        from trpc_agent_sdk.filter import FilterResult
+        guard = SafetyGuard.default()
+        safety_filter = ToolSafetyFilter(guard)
+
+        rsp = FilterResult()
+        ctx = Mock()
+        await safety_filter._before(ctx, "not a dict", rsp)
+        assert rsp.is_continue is True
+
+    @pytest.mark.asyncio
+    async def test_filter_block_on_review(self):
+        """block_on_review=True should also block needs_human_review decisions."""
+        from trpc_agent_sdk.filter import FilterResult
+        guard = SafetyGuard.default()
+        safety_filter = ToolSafetyFilter(guard, block_on_review=True)
+
+        # subprocess.run with list args → needs_human_review (not deny)
+        args = {"script": "import subprocess\nsubprocess.run(['ls', '-la'])\n"}
+        rsp = FilterResult()
+        ctx = Mock()
+        await safety_filter._before(ctx, args, rsp)
+
+        assert rsp.is_continue is False
+
+    @pytest.mark.asyncio
+    async def test_filter_after_is_noop(self):
+        """_after should be a no-op returning None."""
+        from trpc_agent_sdk.filter import FilterResult
+        guard = SafetyGuard.default()
+        safety_filter = ToolSafetyFilter(guard)
+
+        ctx = Mock()
+        rsp = FilterResult()
+        result = await safety_filter._after(ctx, {}, rsp)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_filter_after_every_stream_is_noop(self):
+        """_after_every_stream should be a no-op returning None."""
+        from trpc_agent_sdk.filter import FilterResult
+        guard = SafetyGuard.default()
+        safety_filter = ToolSafetyFilter(guard)
+
+        ctx = Mock()
+        rsp = FilterResult()
+        result = await safety_filter._after_every_stream(ctx, {}, rsp)
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Taint tracking — integration tests through SafetyGuard
+# ---------------------------------------------------------------------------
+
+class TestTaintTracking:
+    """Secrets propagated through variables must be caught at output sinks."""
+
+    def test_getenv_then_print(self, guard):
+        """os.getenv secret printed directly must be denied."""
+        script = (
+            "import os\n"
+            "api_key = os.getenv('API_KEY')\n"
+            "print(api_key)\n"
+        )
+        report = guard.scan(script, tool_name="test")
+        assert any("SECRET-LEAK" in f.rule_id for f in report.findings)
+
+    def test_environ_get_then_print(self, guard):
+        """os.environ.get secret printed must be denied."""
+        script = (
+            "import os\n"
+            "key = os.environ.get('SECRET_TOKEN')\n"
+            "print(key)\n"
+        )
+        report = guard.scan(script, tool_name="test")
+        assert any("SECRET-LEAK" in f.rule_id for f in report.findings)
+
+    def test_environ_subscript_then_print(self, guard):
+        """os.environ[...] secret printed must be denied."""
+        script = (
+            "import os\n"
+            "token = os.environ['API_KEY']\n"
+            "print(token)\n"
+        )
+        report = guard.scan(script, tool_name="test")
+        assert any("SECRET-LEAK" in f.rule_id for f in report.findings)
+
+    def test_chained_assignment_propagation(self, guard):
+        """Taint must propagate through chained assignments."""
+        script = (
+            "import os\n"
+            "a = os.getenv('API_KEY')\n"
+            "b = a\n"
+            "print(b)\n"
+        )
+        report = guard.scan(script, tool_name="test")
+        assert any("SECRET-LEAK" in f.rule_id for f in report.findings)
+
+    def test_write_to_file(self, guard):
+        """Secret written via .write() must be denied."""
+        script = (
+            "import os\n"
+            "key = os.getenv('API_KEY')\n"
+            "f = open('out.txt', 'w')\n"
+            "f.write(key)\n"
+        )
+        report = guard.scan(script, tool_name="test")
+        assert any("SECRET-LEAK" in f.rule_id for f in report.findings)
+
+    def test_fstring_interpolation(self, guard):
+        """Secret inside an f-string argument must be denied."""
+        script = (
+            "import os\n"
+            "key = os.getenv('API_KEY')\n"
+            "print(f'key={key}')\n"
+        )
+        report = guard.scan(script, tool_name="test")
+        assert any("SECRET-LEAK" in f.rule_id for f in report.findings)
+
+    def test_logging_info_leak(self, guard):
+        """Secret passed to logging.info must be denied."""
+        script = (
+            "import os\n"
+            "import logging\n"
+            "key = os.getenv('API_KEY')\n"
+            "logging.info(key)\n"
+        )
+        report = guard.scan(script, tool_name="test")
+        assert any("SECRET-LEAK" in f.rule_id for f in report.findings)
+
+    def test_bare_getenv_call(self, guard):
+        """Bare getenv (from os import getenv) must be tracked."""
+        script = (
+            "from os import getenv\n"
+            "key = getenv('API_KEY')\n"
+            "print(key)\n"
+        )
+        report = guard.scan(script, tool_name="test")
+        assert any("SECRET-LEAK" in f.rule_id for f in report.findings)
+
+    def test_non_secret_env_not_flagged(self, guard):
+        """os.getenv('USER') is not a secret and must not be flagged."""
+        script = (
+            "import os\n"
+            "user = os.getenv('USER')\n"
+            "print(user)\n"
+        )
+        report = guard.scan(script, tool_name="test")
+        assert not any("SECRET-LEAK" in f.rule_id for f in report.findings)
+
+    def test_non_output_call_not_flagged(self, guard):
+        """len(key) is not an output sink and must not be flagged."""
+        script = (
+            "import os\n"
+            "key = os.getenv('API_KEY')\n"
+            "n = len(key)\n"
+        )
+        report = guard.scan(script, tool_name="test")
+        assert not any("SECRET-LEAK" in f.rule_id for f in report.findings)
+
+    def test_taint_finding_is_high_risk(self, guard):
+        """Taint-tracked findings should be HIGH risk (not CRITICAL)."""
+        script = (
+            "import os\n"
+            "key = os.getenv('API_KEY')\n"
+            "print(key)\n"
+        )
+        report = guard.scan(script, tool_name="test")
+        taint_findings = [
+            f for f in report.findings
+            if "SECRET-LEAK" in f.rule_id and "written or transmitted" in f.recommendation
+        ]
+        assert taint_findings
+        assert all(f.risk_level == RiskLevel.HIGH for f in taint_findings)
+
+
+# ---------------------------------------------------------------------------
+# Taint tracking — unit tests for helper functions
+# ---------------------------------------------------------------------------
+
+class TestTaintTrackingHelpers:
+    """Unit tests for the taint-tracking helper functions."""
+
+    def _parse(self, src: str):
+        import ast as _ast
+        return _ast.parse(src)
+
+    def test_str_value_constant(self):
+        from trpc_agent_sdk.tools.safety._python_scanner import _str_value
+        tree = self._parse("x = 'hello'")
+        node = tree.body[0].value  # Constant
+        assert _str_value(node) == "hello"
+
+    def test_str_value_joined_str(self):
+        from trpc_agent_sdk.tools.safety._python_scanner import _str_value
+        tree = self._parse("x = f'a{b}c'")
+        node = tree.body[0].value  # JoinedStr
+        assert _str_value(node) == "a{...}c"
+
+    def test_str_value_non_string(self):
+        from trpc_agent_sdk.tools.safety._python_scanner import _str_value
+        tree = self._parse("x = 42")
+        node = tree.body[0].value  # Constant int
+        assert _str_value(node) is None
+
+    def test_expr_is_sensitive_tainted_var(self):
+        from trpc_agent_sdk.tools.safety._python_scanner import _expr_is_sensitive
+        tree = self._parse("b = a")
+        node = tree.body[0].value  # Name(id='a')
+        assert _expr_is_sensitive(node, {"a"}, []) is True
+
+    def test_expr_is_sensitive_secret_name(self):
+        from trpc_agent_sdk.tools.safety._python_scanner import _expr_is_sensitive
+        tree = self._parse("x = api_key")
+        node = tree.body[0].value  # Name(id='api_key')
+        assert _expr_is_sensitive(node, set(), []) is True
+
+    def test_expr_is_sensitive_secret_literal(self):
+        import re
+        from trpc_agent_sdk.tools.safety._python_scanner import _expr_is_sensitive
+        tree = self._parse("x = 'sk-1234567890abcdef1234567890abcdef'")
+        node = tree.body[0].value
+        patterns = [re.compile(r"sk-[0-9a-f]{32}")]
+        assert _expr_is_sensitive(node, set(), patterns) is True
+
+    def test_expr_is_sensitive_getenv(self):
+        from trpc_agent_sdk.tools.safety._python_scanner import _expr_is_sensitive
+        tree = self._parse("import os\nx = os.getenv('API_KEY')")
+        node = tree.body[1].value  # Call
+        assert _expr_is_sensitive(node, set(), []) is True
+
+    def test_expr_is_sensitive_environ_subscript(self):
+        from trpc_agent_sdk.tools.safety._python_scanner import _expr_is_sensitive
+        tree = self._parse("import os\nx = os.environ['SECRET_TOKEN']")
+        node = tree.body[1].value  # Subscript
+        assert _expr_is_sensitive(node, set(), []) is True
+
+    def test_expr_is_sensitive_non_secret(self):
+        from trpc_agent_sdk.tools.safety._python_scanner import _expr_is_sensitive
+        tree = self._parse("x = 'hello'")
+        node = tree.body[0].value
+        assert _expr_is_sensitive(node, set(), []) is False
+
+    def test_collect_tainted_names_basic(self):
+        from trpc_agent_sdk.tools.safety._python_scanner import _collect_tainted_names
+        tree = self._parse("import os\nkey = os.getenv('API_KEY')")
+        tainted = _collect_tainted_names(tree, [])
+        assert "key" in tainted
+
+    def test_collect_tainted_names_chained(self):
+        from trpc_agent_sdk.tools.safety._python_scanner import _collect_tainted_names
+        tree = self._parse(
+            "import os\n"
+            "a = os.getenv('API_KEY')\n"
+            "b = a\n"
+        )
+        tainted = _collect_tainted_names(tree, [])
+        assert "a" in tainted
+        assert "b" in tainted
+
+    def test_collect_tainted_names_no_secret(self):
+        from trpc_agent_sdk.tools.safety._python_scanner import _collect_tainted_names
+        tree = self._parse("x = 'hello'\ny = x")
+        tainted = _collect_tainted_names(tree, [])
+        assert tainted == set()
+
+    def test_expr_references_tainted_hit(self):
+        from trpc_agent_sdk.tools.safety._python_scanner import _expr_references_tainted
+        tree = self._parse("print(key)")
+        node = tree.body[0].value  # Call with Name(key)
+        assert _expr_references_tainted(node, {"key"}) is True
+
+    def test_expr_references_tainted_miss(self):
+        from trpc_agent_sdk.tools.safety._python_scanner import _expr_references_tainted
+        tree = self._parse("print(name)")
+        node = tree.body[0].value
+        assert _expr_references_tainted(node, {"key"}) is False
+
+    def test_is_output_call_print(self):
+        from trpc_agent_sdk.tools.safety._python_scanner import _is_output_call
+        tree = self._parse("print('x')")
+        node = tree.body[0].value
+        assert _is_output_call(node) is True
+
+    def test_is_output_call_write(self):
+        from trpc_agent_sdk.tools.safety._python_scanner import _is_output_call
+        tree = self._parse("f.write('x')")
+        node = tree.body[0].value
+        assert _is_output_call(node) is True
+
+    def test_is_output_call_non_output(self):
+        from trpc_agent_sdk.tools.safety._python_scanner import _is_output_call
+        tree = self._parse("len('x')")
+        node = tree.body[0].value
+        assert _is_output_call(node) is False

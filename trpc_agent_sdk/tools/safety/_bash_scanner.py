@@ -75,12 +75,18 @@ class BashDangerousFileOpsRule(Rule):
     default_decision = Decision.DENY
     applies_to = (ScriptType.BASH,)
 
-    # Patterns that are almost always destructive.
-    _RM_RF_SYSTEM = re.compile(
+    # Match rm -rf with any target; specific system dirs are checked
+    # dynamically against ctx.policy.protected_system_dirs in check().
+    _RM_RF = re.compile(
         r"\brm\s+(?:-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\s+"
-        r"(?P<target>/+\s*$|/+\*|~/?\s*$|~/?\*|\$HOME/?\*|\$HOME/?\s*$|"
-        r"/etc|/usr|/bin|/sbin|/var|/boot|/sys|/proc|/dev|/root|/home|"
-        r"C:\\Windows|C:\\)",
+        r"(?P<target>\S+)",
+        re.IGNORECASE,
+    )
+
+    # Targets that are always dangerous regardless of policy config
+    # (root /, home ~, $HOME — these are structural, not configurable).
+    _RM_RF_ALWAYS_DANGEROUS = re.compile(
+        r"^(?:/+\s*$|/+\*|~/?\s*$|~/?\*|\$HOME/?\*|\$HOME/?\s*$)",
         re.IGNORECASE,
     )
 
@@ -92,16 +98,18 @@ class BashDangerousFileOpsRule(Rule):
             if not stripped or stripped.startswith("#"):
                 continue
 
-            # rm -rf on system dirs / home
-            match = self._RM_RF_SYSTEM.search(stripped)
+            # rm -rf on system dirs / home — target checked against policy
+            match = self._RM_RF.search(stripped)
             if match:
-                findings.append(self._make_finding(
-                    stripped[:200],
-                    idx,
-                    "Recursive deletion of system directories or home is "
-                    "forbidden; restrict rm to scoped project paths.",
-                ))
-                continue
+                target = match.group("target")
+                if self._RM_RF_ALWAYS_DANGEROUS.match(target) or ctx.policy.is_system_dir(target):
+                    findings.append(self._make_finding(
+                        stripped[:200],
+                        idx,
+                        "Recursive deletion of system directories or home is "
+                        "forbidden; restrict rm to scoped project paths.",
+                    ))
+                    continue
 
             # Accessing credential files — uses configurable command list from policy.
             read_cmds_pattern = r"\b(" + "|".join(
@@ -340,11 +348,12 @@ class BashResourceAbuseRule(Rule):
             sleep_match = self._SLEEP.search(stripped)
             if sleep_match:
                 seconds = int(sleep_match.group(1))
-                if seconds > 3600:
+                if seconds > ctx.policy.max_sleep_seconds:
                     findings.append(self._make_finding(
                         stripped[:200],
                         idx,
-                        f"sleep {seconds} blocks for over an hour; "
+                        f"sleep {seconds} exceeds the "
+                        f"{ctx.policy.max_sleep_seconds}s limit; "
                         "use a shorter timeout with retry logic.",
                         risk_level=RiskLevel.LOW,
                         decision=Decision.NEEDS_HUMAN_REVIEW,
