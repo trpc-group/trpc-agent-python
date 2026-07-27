@@ -23,7 +23,7 @@
       },
       "expected_behavior": "should_fail_baseline",
       "critical": false,
-      "description": "??+???"
+      "description": "noise+blur, may fail"
     },
     {
       "case_id": "val_003",
@@ -35,7 +35,7 @@
       },
       "expected_behavior": "should_fail_baseline",
       "critical": false,
-      "description": "????"
+      "description": "clear image, should pass"
     }
   ],
   "stats": {

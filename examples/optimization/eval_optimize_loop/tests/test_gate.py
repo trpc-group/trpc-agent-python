@@ -256,4 +256,4 @@ class TestLockModule:
         lock_path = str(tmp_path / '.pipeline.lock')
         token = acquire_pipeline_lock(lock_path)
         assert token is not None, 'Should acquire lock on empty dir'
-        release_pipeline_lock(token)
+        release_pipeline_lock(token, lock_path)

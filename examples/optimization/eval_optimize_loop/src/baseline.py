@@ -344,7 +344,7 @@ class BaselineRunner:
         for i, case in enumerate(cases_data, start=1):
             gt_items.append({
                 "id": i,
-                "image": f"eval/dataset/test_plates/{case['image']}",
+                "image": f"eval/dataset/test_images/{case['image']}",
                 "plate_number": case["ground_truth"],
                 "conditions": case.get("conditions", {}),
             })
