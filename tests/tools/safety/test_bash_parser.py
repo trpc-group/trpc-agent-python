@@ -199,3 +199,31 @@ class TestBashParserSecretExfiltration:
         findings = parser.parse("echo $API_TOKEN")
         for f in findings:
             assert "secret" not in f.evidence.lower() or "[SANITIZED]" in f.evidence
+
+
+class TestSensitiveWordBoundary:
+
+    def test_token_as_substring_not_flagged(self):
+        """'token' inside a larger word (e.g. my_token_id) should NOT trigger R001."""
+        policy = PolicyConfig.from_dict({"allowed_commands": ["echo"]})
+        parser = BashParser(policy)
+        findings = parser.parse("echo my_token_id")
+        rule_ids = {f.rule_id for f in findings}
+        # Word-boundary matching prevents false positive on token as substring
+        assert "R001_CREDENTIAL_FILE_ACCESS" not in rule_ids
+
+    def test_password_as_substring_not_flagged(self):
+        """'password' inside a larger word (e.g. the_password_hash) should NOT trigger R001."""
+        policy = PolicyConfig.from_dict({"allowed_commands": ["echo"]})
+        parser = BashParser(policy)
+        findings = parser.parse("echo the_password_hash")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R001_CREDENTIAL_FILE_ACCESS" not in rule_ids
+
+    def test_standalone_token_still_flagged(self):
+        """'token' as a standalone word should still be flagged."""
+        policy = PolicyConfig.from_dict({"allowed_commands": ["cat"]})
+        parser = BashParser(policy)
+        findings = parser.parse("cat /run/secrets/token")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R001_CREDENTIAL_FILE_ACCESS" in rule_ids

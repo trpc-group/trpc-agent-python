@@ -68,19 +68,23 @@ class TestSafeCodeExecutor:
     def test_aggregate_decision_blocks_on_deny(self):
         """Verify aggregate_decision with a CRITICAL finding blocks execution."""
         from trpc_agent_sdk.tools.safety._types import SafetyFinding, RiskType, aggregate_decision
-        finding = SafetyFinding(
-            rule_id="R001_TEST", rule_name="T",
-            risk_type=RiskType.DANGEROUS_FILE_OPERATION,
-            risk_level=RiskLevel.CRITICAL, evidence="e", recommendation="r")
+        finding = SafetyFinding(rule_id="R001_TEST",
+                                rule_name="T",
+                                risk_type=RiskType.DANGEROUS_FILE_OPERATION,
+                                risk_level=RiskLevel.CRITICAL,
+                                evidence="e",
+                                recommendation="r")
         decision = aggregate_decision([finding])
         assert decision == Decision.DENY
 
     def test_aggregate_decision_allows_safe(self):
         from trpc_agent_sdk.tools.safety._types import SafetyFinding, RiskType, aggregate_decision
-        finding = SafetyFinding(
-            rule_id="R001_TEST", rule_name="T",
-            risk_type=RiskType.RESOURCE_ABUSE,
-            risk_level=RiskLevel.LOW, evidence="e", recommendation="r")
+        finding = SafetyFinding(rule_id="R001_TEST",
+                                rule_name="T",
+                                risk_type=RiskType.RESOURCE_ABUSE,
+                                risk_level=RiskLevel.LOW,
+                                evidence="e",
+                                recommendation="r")
         decision = aggregate_decision([finding])
         assert decision == Decision.ALLOW
 
@@ -129,6 +133,77 @@ class TestSafeCodeExecutor:
         call_kwargs = mock_create.call_args.kwargs
         assert "blocked by safety guard" in call_kwargs.get("stderr", "")
         # Inner executor should NOT have been called
+        assert inner.called is False
+
+
+class TestSafeCodeExecutorErrors:
+
+    @patch("trpc_agent_sdk.tools.safety._wrapper.create_code_execution_result")
+    def test_scanner_exception_fail_closed(self, mock_create):
+        """Scanner exception in SafeCodeExecutor → returns blocked result, not exception."""
+        from trpc_agent_sdk.tools.safety._wrapper import SafeCodeExecutor
+
+        inner = _FakeExecutor()
+        exe = SafeCodeExecutor(inner_executor=inner, tool_name="test")
+
+        with patch.object(exe._scanner, "scan", side_effect=RuntimeError("scanner crashed")):
+            block = MagicMock()
+            block.language = "python"
+            block.code = "print('hello')"
+            inp = MagicMock()
+            inp.code_blocks = [block]
+
+            asyncio.run(exe.execute_code(MagicMock(), inp))
+
+        # Should call create_code_execution_result with stderr
+        assert mock_create.called
+        call_kwargs = mock_create.call_args.kwargs
+        assert "blocked by safety guard" in call_kwargs.get("stderr", "")
+        # Inner executor should NOT be called
+        assert inner.called is False
+
+    @patch("trpc_agent_sdk.tools.safety._wrapper.create_code_execution_result")
+    def test_block_on_review_sets_blocked_true(self, mock_create):
+        """SafeCodeExecutor with block_on_review=True → audit records blocked=True."""
+        from trpc_agent_sdk.tools.safety._wrapper import SafeCodeExecutor
+        from trpc_agent_sdk.tools.safety._types import SafetyFinding, RiskType
+
+        inner = _FakeExecutor()
+        exe = SafeCodeExecutor(inner_executor=inner, tool_name="test", block_on_review=True)
+
+        medium_finding = SafetyFinding(
+            rule_id="R004_PIP_INSTALL",
+            rule_name="Dependency Install",
+            risk_type=RiskType.DEPENDENCY_INSTALL,
+            risk_level=RiskLevel.MEDIUM,
+            evidence="pip install x",
+            recommendation="Review.",
+        )
+        with patch.object(exe._scanner, "scan") as mock_scan:
+            mock_scan.return_value = SafetyReport(
+                tool_name="test",
+                decision=Decision.NEEDS_HUMAN_REVIEW,
+                risk_level=RiskLevel.MEDIUM,
+                blocked=False,
+                sanitized=False,
+                duration_ms=1,
+                language=ScriptLanguage.PYTHON,
+                target=ScanTarget.CODE_EXECUTOR,
+                findings=[medium_finding],
+            )
+            block = MagicMock()
+            block.language = "python"
+            block.code = "pip install requests"
+            inp = MagicMock()
+            inp.code_blocks = [block]
+
+            asyncio.run(exe.execute_code(MagicMock(), inp))
+
+        # Blocked because block_on_review=True
+        assert mock_create.called
+        call_kwargs = mock_create.call_args.kwargs
+        assert "blocked by safety guard" in call_kwargs.get("stderr", "")
+        # Inner executor should NOT be called
         assert inner.called is False
 
 
@@ -186,3 +261,15 @@ class TestSafetyWrappedToolSet:
         assert len(tools2) == 1
         # Only one filter instance after two calls
         assert len(mock_tool.filters) == 1
+
+    def test_custom_policy_passed_through(self):
+        """SafetyWrappedToolSet should use the provided policy, not default."""
+        from trpc_agent_sdk.tools.safety._wrapper import SafetyWrappedToolSet
+        from trpc_agent_sdk.tools.safety._policy import PolicyConfig
+
+        custom_policy = PolicyConfig.from_dict({"allowed_commands": ["my_custom_cmd"]})
+        inner = MagicMock()
+        inner.name = "test_ts"
+
+        wrapped = SafetyWrappedToolSet(inner=inner, policy=custom_policy)
+        assert wrapped._policy.allowed_commands == ["my_custom_cmd"]

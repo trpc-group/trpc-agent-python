@@ -12,7 +12,9 @@ import re
 # ---------------------------------------------------------------------------
 # Sensitive path patterns
 # ---------------------------------------------------------------------------
-SENSITIVE_PATHS = [
+# Path-like entries: substring matching is appropriate for path containment
+# (e.g., "/etc/passwd" contains "/etc" as a directory prefix).
+SENSITIVE_PATH_PATTERNS = [
     "/etc",
     "/root",
     "/proc",
@@ -28,6 +30,11 @@ SENSITIVE_PATHS = [
     ".pypirc",
     "id_rsa",
     "id_ed25519",
+]
+
+# Word-like entries: word-boundary matching to avoid false positives.
+# (e.g., "echo reset-password" should NOT match "password" as a substring)
+SENSITIVE_WORD_PATTERNS = [
     "credentials",
     "credential",
     "secrets",
@@ -35,6 +42,9 @@ SENSITIVE_PATHS = [
     "token",
     "password",
 ]
+
+# Combined for backward compatibility (deprecated — prefer the split lists above).
+SENSITIVE_PATHS = SENSITIVE_PATH_PATTERNS + SENSITIVE_WORD_PATTERNS
 
 _SENSITIVE_SUFFIXES = {".pem", ".key", ".crt", ".cer", ".p12", ".pfx"}
 
@@ -134,6 +144,15 @@ PYTHON_DYNAMIC_EXEC_CALLS = {
     "compile": "R003_DYNAMIC_CODE_EXECUTION",
     "__import__": "R003_DYNAMIC_IMPORT",
 }
+
+# Known dangerous module prefixes for last-segment matching in _check_dynamic_exec.
+# When func_path has a prefix NOT in this set, the match is at MEDIUM instead of HIGH.
+_PYTHON_DANGEROUS_EXEC_PREFIXES = frozenset({
+    "",
+    "builtins",
+    "__builtins__",
+    "builtin",
+})
 
 PYTHON_INSTALL_PATTERNS = [
     (re.compile(r"pip\s+install"), "R004_PIP_INSTALL"),

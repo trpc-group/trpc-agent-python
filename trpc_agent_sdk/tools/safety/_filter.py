@@ -85,14 +85,17 @@ class ToolSafetyFilter(BaseFilter):
                 },
             )
 
-        # Record audit + telemetry
+        # Compute blocking decision first so audit/telemetry record the actual block status
+        should_block = (report.decision == Decision.DENY
+                        or (report.decision == Decision.NEEDS_HUMAN_REVIEW and self._block_on_review))
+        report.set_blocked(should_block)
+
+        # Record audit + telemetry (with correct blocked flag)
         if self._audit:
             self._audit.record(report)
         set_safety_telemetry(report)
 
         # Block?
-        should_block = (report.decision == Decision.DENY
-                        or (report.decision == Decision.NEEDS_HUMAN_REVIEW and self._block_on_review))
         if should_block:
             rsp.rsp = {
                 "success": False,

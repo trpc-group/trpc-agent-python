@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Optional
 
 from trpc_agent_sdk.tools import BashTool
 from trpc_agent_sdk.tools.safety import PolicyConfig
@@ -22,13 +23,17 @@ SKILL_ROOT = DEMO_DIR / "skills"
 MCP_SERVER = DEMO_DIR / "mcp_server.py"
 
 
-def create_safety_scanner() -> SafetyScanner:
-    """Create scanner from the example policy file or defaults."""
+def create_safety_scanner():
+    """Create scanner and policy from the example policy file or defaults.
+
+    Returns:
+        Tuple of (SafetyScanner, PolicyConfig).
+    """
     if POLICY_PATH.exists():
         policy = PolicyConfig.from_yaml(str(POLICY_PATH))
     else:
         policy = PolicyConfig.default()
-    return SafetyScanner(policy)
+    return SafetyScanner(policy), policy
 
 
 def create_safety_filter(
@@ -75,7 +80,7 @@ def create_code_executor(
     )
 
 
-def create_skill_toolset(safety_filter: ToolSafetyFilter):
+def create_skill_toolset(safety_filter: ToolSafetyFilter, policy: Optional[PolicyConfig] = None):
     """Create a Skill toolset with safety filter on skill_run commands.
 
     SkillToolSet does not accept BaseFilter directly, so we wrap it
@@ -87,6 +92,7 @@ def create_skill_toolset(safety_filter: ToolSafetyFilter):
     inner = SkillToolSet(paths=[str(SKILL_ROOT)])
     return SafetyWrappedToolSet(
         inner=inner,
+        policy=policy,
         audit_path=str(AUDIT_LOG),
         block_on_review=safety_filter._block_on_review,
     )

@@ -30,7 +30,7 @@ def create_agent(*, block_on_review: bool = False) -> LlmAgent:
     api_key, base_url, model_name = get_model_config()
     model = OpenAIModel(model_name=model_name, api_key=api_key, base_url=base_url)
 
-    scanner = create_safety_scanner()
+    scanner, policy = create_safety_scanner()
     safety_filter = create_safety_filter(scanner, block_on_review=block_on_review)
 
     return LlmAgent(
@@ -40,7 +40,7 @@ def create_agent(*, block_on_review: bool = False) -> LlmAgent:
         instruction=INSTRUCTION,
         tools=[
             create_bash_tool(scanner, block_on_review=block_on_review),
-            create_skill_toolset(safety_filter),
+            create_skill_toolset(safety_filter, policy=policy),
             create_mcp_toolset(safety_filter),
         ],
         code_executor=create_code_executor(scanner, block_on_review=block_on_review),

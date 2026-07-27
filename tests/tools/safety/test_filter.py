@@ -120,6 +120,31 @@ class TestToolSafetyFilterBefore:
         assert rsp.is_continue is False
         assert rsp.rsp["decision"] == "deny"
 
+    def test_block_on_review_sets_audit_blocked_true(self):
+        """When block_on_review=True and decision=NEEDS_HUMAN_REVIEW, audit records blocked=True."""
+        f = ToolSafetyFilter(block_on_review=True)
+        rsp = FilterResult()
+        with patch("trpc_agent_sdk.tools.safety._filter.get_tool_var") as mock_tool:
+            mock_tool.return_value = MagicMock(name="Bash")
+            mock_tool.return_value.name = "Bash"
+            with patch.object(f, "_audit") as mock_audit:
+                with patch.object(f._scanner, "scan") as mock_scan:
+                    mock_scan.return_value = SafetyReport(
+                        tool_name="test",
+                        decision=Decision.NEEDS_HUMAN_REVIEW,
+                        risk_level=RiskLevel.MEDIUM,
+                        blocked=False,
+                        sanitized=False,
+                        duration_ms=1,
+                        language=ScriptLanguage.BASH,
+                        target=ScanTarget.TOOL,
+                        summary="Review needed.",
+                    )
+                    asyncio.run(f._before(None, {"command": "pip install x"}, rsp))
+        assert mock_audit.record.called
+        recorded_report = mock_audit.record.call_args[0][0]
+        assert recorded_report.blocked is True
+
 
 class TestAddToolSafetyFilter:
 

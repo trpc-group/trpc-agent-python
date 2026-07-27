@@ -181,3 +181,29 @@ class TestAuditLoggerRecord:
             logger = AuditLogger(path=log_path)
             logger.record(report)
             assert Path(log_path).exists()
+
+
+class TestAuditLoggerRobustness:
+
+    def test_json_encode_error_does_not_propagate(self):
+        """Non-OSError exceptions (e.g., JSON serialization failures) must not block."""
+        from unittest.mock import patch
+
+        report = SafetyReport(
+            tool_name="test",
+            decision=Decision.ALLOW,
+            risk_level=RiskLevel.LOW,
+            blocked=False,
+            sanitized=False,
+            duration_ms=0,
+            language=ScriptLanguage.PYTHON,
+            target=ScanTarget.TOOL,
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = str(Path(tmpdir) / "audit.jsonl")
+            logger = AuditLogger(path=log_path)
+            # Simulate a json.dumps failure by mocking it
+            with patch("trpc_agent_sdk.tools.safety._audit.json.dumps", side_effect=ValueError("bad json")):
+                event = logger.record(report)
+                # Should not raise, should return an AuditEvent
+                assert isinstance(event, AuditEvent)

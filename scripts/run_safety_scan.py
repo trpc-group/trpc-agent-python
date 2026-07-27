@@ -39,20 +39,20 @@ EXPECTED = {
     "11": "deny",
     "12": "needs_human_review",
     # Extended samples (adversarial / edge cases)
-    "13": "deny",                     # alias os.system
-    "14": "deny",                     # from import subprocess.run
-    "15": "needs_human_review",       # base64 pipe
-    "16": "deny",                     # pathlib SSH access
-    "17": "deny",                     # requests.Session detected as HIGH
-    "18": "allow",                    # os.getenv without exfil
-    "19": "deny",                     # getattr builtins eval
-    "20": "deny",                     # eval + exec
-    "21": "deny",                     # find -delete
-    "22": "deny",                     # xargs rm
-    "23": "deny",                     # fork bomb
-    "24": "deny",                     # __builtins__.eval
-    "25": "deny",                     # cat server.pem
-    "26": "deny",                     # open('cert.key', 'w')
+    "13": "deny",  # alias os.system
+    "14": "deny",  # from import subprocess.run
+    "15": "needs_human_review",  # base64 pipe
+    "16": "deny",  # pathlib SSH access
+    "17": "deny",  # requests.Session detected as HIGH
+    "18": "needs_human_review",  # os.getenv + print — limitation: no AST flow tracking
+    "19": "deny",  # getattr builtins eval
+    "20": "deny",  # eval + exec
+    "21": "deny",  # find -delete
+    "22": "deny",  # xargs rm
+    "23": "deny",  # fork bomb
+    "24": "deny",  # __builtins__.eval
+    "25": "deny",  # cat server.pem
+    "26": "deny",  # open('cert.key', 'w')
 }
 
 

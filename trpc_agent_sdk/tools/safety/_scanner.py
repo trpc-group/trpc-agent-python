@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from typing import Dict
 from typing import List
@@ -15,7 +16,8 @@ from ._bash_parser import BashParser
 from ._policy import PolicyConfig
 from ._python_parser import PythonParser
 from ._rules import SENSITIVE_ENV_KEYS
-from ._rules import SENSITIVE_PATHS
+from ._rules import SENSITIVE_PATH_PATTERNS
+from ._rules import SENSITIVE_WORD_PATTERNS
 from ._rules import sanitize_text
 from ._types import Decision
 from ._types import RiskLevel
@@ -119,7 +121,7 @@ class SafetyScanner:
 
         # Check args for dangerous patterns
         for arg in request.args:
-            if any(sensitive in arg for sensitive in SENSITIVE_PATHS):
+            if any(sensitive in arg for sensitive in SENSITIVE_PATH_PATTERNS):
                 findings.append(
                     SafetyFinding(
                         rule_id="R001_CREDENTIAL_FILE_ACCESS",
@@ -128,6 +130,16 @@ class SafetyScanner:
                         risk_level=RiskLevel.HIGH,
                         evidence=sanitize_text(arg, self._policy.secret_patterns),
                         recommendation="Argument contains sensitive path. Review before execution.",
+                    ))
+            elif any(re.search(r'\b' + re.escape(word) + r'\b', arg) for word in SENSITIVE_WORD_PATTERNS):
+                findings.append(
+                    SafetyFinding(
+                        rule_id="R001_CREDENTIAL_FILE_ACCESS",
+                        rule_name="Sensitive Arg Path",
+                        risk_type=RiskType.DANGEROUS_FILE_OPERATION,
+                        risk_level=RiskLevel.HIGH,
+                        evidence=sanitize_text(arg, self._policy.secret_patterns),
+                        recommendation="Argument contains sensitive word. Review before execution.",
                     ))
 
         # Check cwd against denied paths

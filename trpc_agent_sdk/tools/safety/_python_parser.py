@@ -11,6 +11,8 @@ import ast
 from typing import List
 
 from ._policy import PolicyConfig
+import re
+
 from ._rules import (
     PYTHON_DANGEROUS_FILE_CALLS,
     PYTHON_DELETE_CALLS,
@@ -20,7 +22,10 @@ from ._rules import (
     PYTHON_NETWORK_IMPORTS,
     PYTHON_RESOURCE_PATTERNS,
     PYTHON_SYSTEM_CALLS,
-    SENSITIVE_PATHS,
+    SENSITIVE_ENV_KEYS,
+    SENSITIVE_PATH_PATTERNS,
+    SENSITIVE_WORD_PATTERNS,
+    _PYTHON_DANGEROUS_EXEC_PREFIXES,
     _SENSITIVE_SUFFIXES,
     sanitize_text,
 )
@@ -92,6 +97,7 @@ class _PythonVisitor(ast.NodeVisitor):
             self._check_network_calls(func_path, node)
             self._check_dynamic_exec(func_path, node)
             self._check_shell_true(node)
+            self._check_env_secret_access(func_path, node)
 
         # Check string arguments for sensitive paths
         for arg in node.args:
@@ -205,9 +211,21 @@ class _PythonVisitor(ast.NodeVisitor):
     def _check_dynamic_exec(self, func_path: str, node: ast.Call) -> None:
         # Match full path, e.g. "eval" or "__builtins__.eval" or "builtins.eval"
         rule_id = PYTHON_DYNAMIC_EXEC_CALLS.get(func_path)
+        risk_level = RiskLevel.HIGH
         if rule_id is None:
-            last_segment = func_path.rsplit(".", 1)[-1]
-            rule_id = PYTHON_DYNAMIC_EXEC_CALLS.get(last_segment)
+            parts = func_path.rsplit(".", 1)
+            last_segment = parts[-1]
+            prefix = parts[0] if len(parts) > 1 else ""
+            # Only trigger last-segment fallback for known dangerous prefixes
+            # (builtins variants or bare names). This prevents false positives
+            # for user-defined methods like obj.eval() or DataFrame.query().
+            if prefix in _PYTHON_DANGEROUS_EXEC_PREFIXES:
+                rule_id = PYTHON_DYNAMIC_EXEC_CALLS.get(last_segment)
+                risk_level = RiskLevel.HIGH
+            elif last_segment in PYTHON_DYNAMIC_EXEC_CALLS:
+                # Non-builtins match: flag at MEDIUM instead of HIGH
+                rule_id = PYTHON_DYNAMIC_EXEC_CALLS[last_segment]
+                risk_level = RiskLevel.MEDIUM
         if rule_id is None:
             return
         self.findings.append(
@@ -215,7 +233,7 @@ class _PythonVisitor(ast.NodeVisitor):
                 rule_id=rule_id,
                 rule_name="Dynamic Code Execution",
                 risk_type=RiskType.SYSTEM_COMMAND,
-                risk_level=RiskLevel.HIGH,
+                risk_level=risk_level,
                 evidence=sanitize_text(f"{func_path}(...)", self._secret_patterns),
                 line=node.lineno,
                 recommendation="Avoid dynamic code execution. Use safe alternatives.",
@@ -235,9 +253,46 @@ class _PythonVisitor(ast.NodeVisitor):
                         recommendation="Avoid shell=True. Pass arguments as a list instead.",
                     ))
 
+    def _check_env_secret_access(self, func_path: str, node: ast.Call) -> None:
+        """Detect os.getenv('API_KEY') or os.environ.get('SECRET') patterns."""
+        if func_path not in ("os.getenv", "os.environ.get"):
+            return
+        if not node.args:
+            return
+        first_arg = node.args[0]
+        if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
+            if SENSITIVE_ENV_KEYS.search(first_arg.value):
+                self.findings.append(
+                    SafetyFinding(
+                        rule_id="R006_SECRET_ENV_ACCESS",
+                        rule_name="Secret Environment Variable Access",
+                        risk_type=RiskType.SECRET_EXFILTRATION,
+                        risk_level=RiskLevel.MEDIUM,
+                        evidence=sanitize_text(f"{func_path}('{first_arg.value}')", self._secret_patterns),
+                        line=node.lineno,
+                        recommendation=("Accessing a secret-like environment variable. "
+                                        "Ensure the value is not printed or transmitted."),
+                    ))
+
     def _check_sensitive_path(self, text: str, lineno: int) -> None:
-        for sensitive in SENSITIVE_PATHS:
+        # Path-like patterns: substring match (e.g., "/etc/passwd" contains "/etc")
+        for sensitive in SENSITIVE_PATH_PATTERNS:
             if sensitive in text and not sensitive.startswith("*"):
+                self.findings.append(
+                    SafetyFinding(
+                        rule_id="R001_CREDENTIAL_FILE_ACCESS",
+                        rule_name="Sensitive Path Access",
+                        risk_type=RiskType.DANGEROUS_FILE_OPERATION,
+                        risk_level=RiskLevel.HIGH,
+                        evidence=sanitize_text(text, self._secret_patterns),
+                        line=lineno,
+                        recommendation="Avoid accessing sensitive file paths.",
+                    ))
+                return
+
+        # Word-like patterns: word-boundary match to avoid false positives
+        for word in SENSITIVE_WORD_PATTERNS:
+            if re.search(r'\b' + re.escape(word) + r'\b', text):
                 self.findings.append(
                     SafetyFinding(
                         rule_id="R001_CREDENTIAL_FILE_ACCESS",

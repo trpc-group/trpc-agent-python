@@ -11,6 +11,7 @@ This executor is not recommended for production use due to security concerns.
 
 from __future__ import annotations
 
+import logging
 import shutil
 import tempfile
 from pathlib import Path
@@ -28,6 +29,8 @@ from .._types import CodeBlock
 from .._types import CodeExecutionInput
 from .._types import CodeExecutionResult
 from .._types import create_code_execution_result
+
+logger = logging.getLogger(__name__)
 
 
 class UnsafeLocalCodeExecutor(BaseCodeExecutor):
@@ -120,6 +123,7 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
                         all_findings.extend(report.findings)
                 except Exception:  # pylint: disable=broad-except
                     # fail-closed: scanner error blocks execution
+                    logger.warning("Safety scanner error in _scan_code_block — execution blocked.", exc_info=True)
                     return create_code_execution_result(stderr="Safety scanner error — execution blocked.")
 
             if all_findings:

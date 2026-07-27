@@ -93,6 +93,6 @@ class AuditLogger:
                     with self.path.open("a", encoding="utf-8") as fh:
                         fh.write(line)
                         fh.flush()
-            except OSError:
+            except Exception:
                 pass
         return event

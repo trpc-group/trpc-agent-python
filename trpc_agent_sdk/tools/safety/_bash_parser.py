@@ -20,7 +20,8 @@ from ._rules import (
     BASH_SECRET_PATTERNS,
     BASH_SYSTEM_PATTERNS,
     PYTHON_INSTALL_PATTERNS,
-    SENSITIVE_PATHS,
+    SENSITIVE_PATH_PATTERNS,
+    SENSITIVE_WORD_PATTERNS,
     _SENSITIVE_SUFFIXES,
     sanitize_text,
 )
@@ -77,8 +78,23 @@ class BashParser:
                 return findings
 
         # Check for sensitive path access (e.g. cat ~/.ssh/id_rsa)
-        for sensitive in SENSITIVE_PATHS:
+        for sensitive in SENSITIVE_PATH_PATTERNS:
             if sensitive in line and not sensitive.startswith("*"):
+                findings.append(
+                    SafetyFinding(
+                        rule_id="R001_CREDENTIAL_FILE_ACCESS",
+                        rule_name="Sensitive Path Access",
+                        risk_type=RiskType.DANGEROUS_FILE_OPERATION,
+                        risk_level=RiskLevel.HIGH,
+                        evidence=sanitize_text(line, self._policy.secret_patterns),
+                        line=line_num,
+                        recommendation="Review access to sensitive file paths.",
+                    ))
+                return findings
+
+        # Check for sensitive word patterns (word-boundary match to avoid false positives)
+        for word in SENSITIVE_WORD_PATTERNS:
+            if re.search(r'\b' + re.escape(word) + r'\b', line):
                 findings.append(
                     SafetyFinding(
                         rule_id="R001_CREDENTIAL_FILE_ACCESS",

@@ -25,9 +25,13 @@ from ._policy import PolicyConfig
 from ._scanner import SafetyScanner
 from ._telemetry import set_safety_telemetry
 from ._types import Decision
+from ._types import RiskLevel
+from ._types import RiskType
 from ._types import SafetyFinding
+from ._types import SafetyReport
 from ._types import ScanRequest
 from ._types import ScanTarget
+from ._types import ScriptLanguage
 from ._types import aggregate_decision
 from ._types import normalize_language
 
@@ -62,6 +66,7 @@ class SafeCodeExecutor(BaseCodeExecutor):
         scanner = self._scanner
         audit = self._audit
         all_findings: List[SafetyFinding] = []
+        reports: List[SafetyReport] = []
 
         for block in code_execution_input.code_blocks:
             lang = normalize_language(block.language or "")
@@ -71,16 +76,58 @@ class SafeCodeExecutor(BaseCodeExecutor):
                 tool_name=self.tool_name,
                 target=ScanTarget.CODE_EXECUTOR,
             )
-            report = scanner.scan(req)
+            # Fail-closed: scanner exception → DENY report, block execution
+            try:
+                report = scanner.scan(req)
+            except Exception:
+                report = SafetyReport(
+                    tool_name=self.tool_name,
+                    decision=Decision.DENY,
+                    risk_level=RiskLevel.CRITICAL,
+                    blocked=True,
+                    sanitized=False,
+                    duration_ms=0,
+                    language=lang,
+                    target=ScanTarget.CODE_EXECUTOR,
+                    rule_ids=["SAFETY_SCANNER_ERROR"],
+                    summary="Safety scanner error — execution blocked.",
+                    findings=[
+                        SafetyFinding(
+                            rule_id="SAFETY_SCANNER_ERROR",
+                            rule_name="Safety Scanner Error",
+                            risk_type=RiskType.SYSTEM_COMMAND,
+                            risk_level=RiskLevel.CRITICAL,
+                            evidence="Scanner error",
+                            recommendation="Scanner failed; execution blocked.",
+                        ),
+                    ],
+                    telemetry_attributes={
+                        "tool.safety.decision": "deny",
+                        "tool.safety.risk_level": "critical",
+                        "tool.safety.rule_id": "SAFETY_SCANNER_ERROR",
+                    },
+                )
+                reports.append(report)
+                all_findings.extend(report.findings)
+                break  # Stop scanning further blocks on scanner error
+
+            reports.append(report)
             all_findings.extend(report.findings)
-            if audit:
-                audit.record(report)
-            set_safety_telemetry(report)
 
         # Aggregate across all blocks
         combined_decision = aggregate_decision(all_findings)
         should_block = (combined_decision == Decision.DENY
                         or (combined_decision == Decision.NEEDS_HUMAN_REVIEW and self.block_on_review))
+
+        # Set blocked flag BEFORE audit/telemetry so they record actual block status
+        if should_block:
+            for report in reports:
+                report.set_blocked(True)
+
+        for report in reports:
+            if audit:
+                audit.record(report)
+            set_safety_telemetry(report)
 
         if should_block:
             return create_code_execution_result(

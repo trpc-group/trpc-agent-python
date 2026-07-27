@@ -171,3 +171,58 @@ class TestRawDottedNameCoverage:
         rule_ids = {f.rule_id for f in findings}
         assert "R001_CREDENTIAL_FILE_ACCESS" in rule_ids
         assert "R005_LARGE_FILE_WRITE" in rule_ids
+
+
+class TestDynamicExecFallback:
+
+    def test_custom_obj_eval_not_high(self, parser):
+        """obj.eval() on a non-builtin object should not trigger HIGH DENY."""
+        findings = parser.parse("obj = SomeClass()\nobj.eval('expr')")
+        # Should not trigger R003_DYNAMIC_CODE_EXECUTION at HIGH level
+        high_exec = any(f.rule_id == "R003_DYNAMIC_CODE_EXECUTION" and f.risk_level == "high" for f in findings)
+        assert not high_exec
+
+    def test_bare_eval_still_flagged(self, parser):
+        """Bare eval() without module prefix should still be flagged HIGH."""
+        findings = parser.parse("eval('1+1')")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R003_DYNAMIC_CODE_EXECUTION" in rule_ids
+        # Bare eval should be HIGH
+        eval_findings = [f for f in findings if f.rule_id == "R003_DYNAMIC_CODE_EXECUTION"]
+        assert any(f.risk_level == "high" for f in eval_findings)
+
+    def test_builtins_eval_still_flagged(self, parser):
+        """__builtins__.eval() should still be flagged HIGH."""
+        findings = parser.parse("__builtins__.eval('print(1)')")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R003_DYNAMIC_CODE_EXECUTION" in rule_ids
+
+
+class TestEnvSecretAccess:
+
+    def test_os_getenv_secret_key_detected(self, parser):
+        """os.getenv('API_KEY') should be detected as secret env access."""
+        findings = parser.parse("""
+import os
+secret = os.getenv('API_KEY')
+""")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R006_SECRET_ENV_ACCESS" in rule_ids
+
+    def test_os_environ_get_secret_detected(self, parser):
+        """os.environ.get('SECRET_TOKEN') should be detected."""
+        findings = parser.parse("""
+import os
+secret = os.environ.get('SECRET_TOKEN')
+""")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R006_SECRET_ENV_ACCESS" in rule_ids
+
+    def test_os_getenv_non_secret_not_flagged(self, parser):
+        """os.getenv('PATH') should NOT be flagged (not a secret key name)."""
+        findings = parser.parse("""
+import os
+path = os.getenv('PATH')
+""")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R006_SECRET_ENV_ACCESS" not in rule_ids
