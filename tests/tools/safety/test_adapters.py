@@ -119,6 +119,21 @@ def test_adapt_skill_run_command():
     assert request.applicable is True
     assert request.payloads[0].language == ScriptLanguage.BASH
     assert request.timeout_arg_name == "timeout"
+    assert request.execution_home == str(Path.home())
+
+
+def test_bash_tool_family_sets_path_context():
+    for name in ("workspace_exec", "skill_run", "skill_exec"):
+        request = adapt_tool_request(
+            SimpleNamespace(name=name, description="shell"),
+            {
+                "command": "cat ~/.ssh/id_rsa",
+                "cwd": "/workspace"
+            },
+            _policy(),
+        )
+        assert request.execution_home == str(Path.home())
+        assert request.execution_root == Path("/workspace").anchor
 
 
 def test_unknown_tool_with_code_field_is_scanned_conservatively():

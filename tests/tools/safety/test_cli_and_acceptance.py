@@ -16,6 +16,7 @@ from trpc_agent_sdk.tools.safety import ToolMetadata
 from trpc_agent_sdk.tools.safety import ToolScriptSafetyGuard
 from trpc_agent_sdk.tools.safety._cli import main
 from trpc_agent_sdk.tools.safety._cli import _exit_code
+from trpc_agent_sdk.tools.safety._audit import SafetyAuditError
 from trpc_agent_sdk.tools.safety import SafetyDecision
 
 EXAMPLE_DIR = Path("examples/tool_safety_guard")
@@ -119,6 +120,29 @@ def test_cli_error_redacts_secret_path(tmp_path, capsys):
     assert exit_code == 1
     assert "top secret phrase" not in output
     assert "[REDACTED_SECRET]" in output
+
+
+def test_cli_audit_failure_returns_structured_error(monkeypatch, capsys):
+
+    def fail_audit(*args, **kwargs):
+        del args, kwargs
+        raise SafetyAuditError("audit unavailable")
+
+    monkeypatch.setattr("trpc_agent_sdk.tools.safety._cli.emit_report", fail_audit)
+    exit_code = main([
+        "--command",
+        "echo ok",
+        "--language",
+        "bash",
+        "--policy",
+        str(EXAMPLE_DIR / "tool_safety_policy.yaml"),
+        "--audit",
+        "audit.jsonl",
+    ])
+    output = capsys.readouterr().out
+    assert exit_code == 1
+    assert '"error"' in output
+    assert "Traceback" not in output
 
 
 def test_cli_exit_codes_cover_allow_and_review():

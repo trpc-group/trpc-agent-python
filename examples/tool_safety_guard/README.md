@@ -12,6 +12,9 @@
 - `manifest.yaml` 与 `samples/`：12 个公开验收样本及预期决策。
 - `real_agent.py`、`mcp_server.py` 与 `skills/`：真实 Agent 执行示例。
 
+`tool_safety_report.json` 和 `tool_safety_audit.jsonl` 是由 CLI 生成的示例产物，
+仅用于展示格式，不是固定契约；规则或归一化逻辑变更后可删除并按 CLI 命令重新生成。
+
 ## CLI
 
 ```bash
@@ -78,6 +81,8 @@ wrapper 统一执行扫描、审计、阻断、wall-clock timeout 和返回 outp
 MCP 示例使用 argv-only 的 `create_subprocess_exec`，不提供 Shell 管道、重定向或
 命令拼接语义；此类输入会在执行前进入人工审核。`mcp-review` 使用未加入命令
 白名单的 `uname -a` 演示审核路径。
+MCP handler 独立运行时只负责扫描和阻断，不写 Agent 侧审计事件；通过
+`ToolSafetyFilter` 接入 Agent 时，审计由 Filter 的 `AuditSink` 统一记录，避免重复事件。
 
 每个入口都提供 `allow`、`review`、`deny` 场景：
 

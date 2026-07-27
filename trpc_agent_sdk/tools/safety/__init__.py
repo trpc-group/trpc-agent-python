@@ -6,6 +6,7 @@
 """Tool script safety guard public API."""
 
 from ._integration import adapt_cli_request
+from ._cli import main as safety_cli_main
 from ._integration import adapt_code_execution_input
 from ._integration import adapt_tool_request
 from ._audit import AuditSink
@@ -57,4 +58,5 @@ __all__ = [
     "adapt_cli_request",
     "adapt_code_execution_input",
     "adapt_tool_request",
+    "safety_cli_main",
 ]

@@ -12,7 +12,8 @@ MAX_FILE_LINES = 1000
 MAX_FUNCTION_LINES = 80
 MAX_FUNCTION_STATEMENTS = 60
 MAX_FUNCTION_PARAMETERS = 4
-SAFETY_PACKAGE = Path("trpc_agent_sdk/tools/safety")
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SAFETY_PACKAGE = REPO_ROOT / "trpc_agent_sdk/tools/safety"
 
 
 def _functions(tree):
@@ -37,7 +38,9 @@ def _statement_count(node):
 
 def test_source_size_and_function_limits():
     failures = []
-    for path in SAFETY_PACKAGE.glob("*.py"):
+    paths = list(SAFETY_PACKAGE.glob("*.py"))
+    assert paths, f"no Python files found under {SAFETY_PACKAGE}"
+    for path in paths:
         source = path.read_text(encoding="utf-8")
         lines = source.splitlines()
         if len(lines) > MAX_FILE_LINES:

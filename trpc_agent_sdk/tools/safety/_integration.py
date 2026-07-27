@@ -111,13 +111,13 @@ def adapt_tool_request(tool: Any, args: dict[str, Any], policy: ToolSafetyPolicy
     tool_cwd = str(getattr(tool, "cwd", "") or "")
     requested_cwd = str(args.get("cwd") or "")
     cwd = requested_cwd or tool_cwd
-    if name == "bash" and cwd:
+    if name in _BASH_TOOL_NAMES and cwd:
         cwd_path = Path(cwd)
         if requested_cwd and not cwd_path.is_absolute():
             cwd_path = Path(tool_cwd) / cwd_path
         cwd = str(cwd_path.resolve())
-    local_home = str(Path.home()) if name == "bash" else None
-    local_root = Path(cwd).anchor if name == "bash" and cwd else None
+    local_home = str(Path.home()) if name in _BASH_TOOL_NAMES else None
+    local_root = Path(cwd).anchor if name in _BASH_TOOL_NAMES and cwd else None
     env = args.get("env")
     env_keys = sorted(str(key) for key in env) if isinstance(env, dict) else []
     return ScriptScanRequest(

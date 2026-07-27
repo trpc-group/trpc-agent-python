@@ -15,6 +15,7 @@ from typing import Sequence
 from ._integration import adapt_cli_request
 from ._audit import emit_report
 from ._audit import JsonlAuditSink
+from ._audit import SafetyAuditError
 from ._models import SafetyDecision
 from ._models import ScriptLanguage
 from ._models import ScriptPayload
@@ -84,11 +85,11 @@ def run_cli(args: argparse.Namespace) -> int:
     request.env_keys = sorted(set(args.env_key))
     report = guard.scan(request)
     serialized = json.dumps(report.as_dict(), ensure_ascii=False, indent=2)
-    print(serialized)
     if args.report:
         Path(args.report).write_text(serialized + "\n", encoding="utf-8")
     if args.audit:
         emit_report(JsonlAuditSink(args.audit), report, metadata.name)
+    print(serialized)
     return _exit_code(report.decision)
 
 
@@ -96,7 +97,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point."""
     try:
         return run_cli(_parser().parse_args(argv))
-    except (ValueError, OSError) as error:
+    except (ValueError, OSError, SafetyAuditError) as error:
         safe_error, _ = _CLI_SANITIZER.sanitize(error)
         print(json.dumps({"error": safe_error}, ensure_ascii=False))
         return EXIT_ERROR
