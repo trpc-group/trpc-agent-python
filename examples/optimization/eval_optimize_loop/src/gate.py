@@ -220,7 +220,7 @@ class AcceptanceGate:
         return GateCheck(
             name="critical_case_no_regress",
             passed=passed,
-            description="?? case ???????",
+            description="关键 case 不退步",
             detail=_fmt_critical_detail(regressed, missing, unknown),
         )
 

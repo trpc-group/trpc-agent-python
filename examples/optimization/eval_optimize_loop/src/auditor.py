@@ -27,7 +27,7 @@ class AuditTrail:
     pipeline_name: str; run_id: str; started_at: str
     completed_at: str = ""; mode: str = "fake"; random_seed: int = 42
     entries: list = field(default_factory=list)
-    total_cost: float = 0.0; avg_latency_ms: float = 0.0  # per-entry average (renamed from total_latency_ms)
+    total_cost: float = 0.0; avg_latency_ms: float = 0.0  # per-case average latency (from baseline_val.summary.avg_latency_ms)
     def to_dict(self):
         return {
             "pipeline_name": self.pipeline_name,
