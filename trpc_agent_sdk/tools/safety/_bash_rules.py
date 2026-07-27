@@ -66,6 +66,7 @@ _SSH_OPTIONS_WITH_VALUES = frozenset({
     "-w"
 })
 _REDIRECT_PATH_RE = re.compile(r"(?<![<>])\d*>>?\s*(?!&)([^\s;&|]+)")
+_SAFE_REDIRECT_TARGETS = frozenset({"/dev/null", "/dev/stdout", "/dev/stderr"})
 
 FILE_DELETE = RuleSpec(
     RiskCategory.FILE,
@@ -187,6 +188,10 @@ def _recursive_rm(text: str) -> str | None:
         if any(item == "--recursive" or (not item.startswith("--") and "r" in item[1:].lower()) for item in options):
             return segment.strip()
     return None
+
+
+def _is_safe_redirect_target(target: str) -> bool:
+    return target.replace("\\", "/").lower() in _SAFE_REDIRECT_TARGETS
 
 
 def _dynamic_network_command(text: str) -> str | None:
@@ -388,6 +393,8 @@ def _static_rules(text: str, policy: ToolSafetyPolicy, sanitizer: SafetySanitize
             finding, changed = make_finding("FILE003", match.group(0), FILE_WRITE_REVIEW, sanitizer)
             findings.append(finding)
             redacted = redacted or changed
+        elif _is_safe_redirect_target(target):
+            continue
         elif path_is_system_location(target, request.cwd):
             finding, changed = make_finding("FILE001", match.group(0), FILE_WRITE_DENY, sanitizer)
             findings.append(finding)

@@ -31,7 +31,22 @@ from ._common_rules import RuleSpec
 from ._sanitizer import SafetySanitizer
 
 _NETWORK_ROOTS = frozenset({"requests", "aiohttp", "socket", "urllib", "httpx"})
-_PROCESS_CALLS = frozenset({"subprocess.run", "subprocess.call", "subprocess.Popen", "os.system", "os.popen"})
+_NETWORK_METHODS = frozenset({
+    "connect",
+    "create_connection",
+    "delete",
+    "get",
+    "head",
+    "options",
+    "patch",
+    "post",
+    "put",
+    "request",
+    "urlopen",
+})
+_PROCESS_CALLS = frozenset({"os.popen", "os.system", "subprocess.Popen", "subprocess.call", "subprocess.run"})
+_PROCESS_ROOTS = frozenset({"subprocess"})
+_OS_PROCESS_PREFIXES = ("exec", "spawn")
 _DELETE_CALLS = frozenset({"shutil.rmtree", "os.remove", "os.unlink", "os.rmdir"})
 _DIRECT_FILE_CALLS = frozenset({"open", "builtins.open", "io.open", "os.open", "os.remove", "os.unlink", "os.rmdir"})
 _PATH_METHODS = frozenset({"open", "read_text", "read_bytes", "write_text", "write_bytes", "unlink", "rmdir"})
@@ -257,8 +272,20 @@ class PythonRuleVisitor(ast.NodeVisitor):
             prefix = self._name(node.value)
             return f"{prefix}.{node.attr}" if prefix else node.attr
         if isinstance(node, ast.Call):
+            dynamic_name = self._dynamic_attribute_name(node)
+            if dynamic_name:
+                return dynamic_name
             return self._name(node.func)
         return ""
+
+    def _dynamic_attribute_name(self, node: ast.Call) -> str:
+        if self._name(node.func) != "getattr" or len(node.args) < 2:
+            return ""
+        attr = self._string(node.args[1])
+        if attr is None:
+            return ""
+        prefix = self._name(node.args[0])
+        return f"{prefix}.{attr}" if prefix else ""
 
     def _string(self, node: ast.AST) -> str | None:
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
@@ -443,9 +470,9 @@ class PythonRuleVisitor(ast.NodeVisitor):
         name = self._name(node.func)
         if name in _DELETE_CALLS:
             self._add("FILE001", node, FILE_DELETE)
-        if name in _PROCESS_CALLS:
+        if self._is_process_call(name):
             self._add("PROC001", node, PROCESS_REVIEW)
-            self._scan_process_payload(node)
+            self._scan_process_payload(node, name)
         self._scan_resource(node, name)
         self._scan_file_access(node, name)
         if self._is_network_call(name):
@@ -473,10 +500,8 @@ class PythonRuleVisitor(ast.NodeVisitor):
         if (is_output or is_data_sink) and any(self._contains_secret(arg) for arg in values):
             self._add("SECRET001", node, SECRET_DENY)
 
-    def _scan_process_payload(self, node: ast.Call) -> None:
-        if not node.args:
-            return
-        command = self._command(node.args[0])
+    def _scan_process_payload(self, node: ast.Call, name: str) -> None:
+        command = self._process_command(node, name)
         if command is None:
             return
         findings, changed = scan_bash(
@@ -488,6 +513,24 @@ class PythonRuleVisitor(ast.NodeVisitor):
         self.findings.extend(findings)
         self.redacted = self.redacted or changed
 
+    def _process_command(self, node: ast.Call, name: str) -> str | None:
+        if not node.args:
+            return None
+        tail = name.split(".")[-1]
+        if tail.startswith("execv"):
+            return self._command(node.args[1]) if len(node.args) > 1 else None
+        if tail.startswith("execl"):
+            return self._command_from_parts(self._strip_exec_env(tail, node.args[1:]))
+        if tail.startswith("spawnv"):
+            return self._command(node.args[2]) if len(node.args) > 2 else None
+        if tail.startswith("spawnl"):
+            return self._command_from_parts(self._strip_exec_env(tail, node.args[2:]))
+        return self._command(node.args[0])
+
+    @staticmethod
+    def _strip_exec_env(tail: str, nodes: list[ast.AST]) -> list[ast.AST]:
+        return nodes[:-1] if tail.endswith("e") else nodes
+
     def _command(self, node: ast.AST) -> str | None:
         value = self._string(node)
         if value is not None:
@@ -498,12 +541,22 @@ class PythonRuleVisitor(ast.NodeVisitor):
                 return " ".join(shlex.quote(part or "") for part in parts)
         return None
 
+    def _command_from_parts(self, nodes: list[ast.AST]) -> str | None:
+        parts = [self._string(item) for item in nodes]
+        if parts and all(part is not None for part in parts):
+            return " ".join(shlex.quote(part or "") for part in parts)
+        return None
+
     def _is_network_call(self, name: str) -> bool:
         root = name.split(".", 1)[0]
         tail = name.split(".")[-1]
-        return root in _NETWORK_ROOTS and tail in {
-            "get", "post", "put", "request", "connect", "create_connection", "urlopen"
-        }
+        return root in _NETWORK_ROOTS and tail in _NETWORK_METHODS
+
+    def _is_process_call(self, name: str) -> bool:
+        root = name.split(".", 1)[0]
+        tail = name.split(".")[-1]
+        return (name in _PROCESS_CALLS or root in _PROCESS_ROOTS
+                or (root == "os" and tail.startswith(_OS_PROCESS_PREFIXES)))
 
     def _scan_network(self, node: ast.Call, name: str) -> None:
         target_node = self._network_target_node(node, name)
