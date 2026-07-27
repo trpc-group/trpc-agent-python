@@ -27,7 +27,23 @@ from ._models import SafetyReport
 from ._models import RiskLevel
 from ._sanitizer import SafetySanitizer
 
-_PATH_LOCKS: dict[str, threading.Lock] = {}
+
+class _PathLock:
+    """Weak-referenceable lock shared by sinks targeting one path."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+
+    def __enter__(self):
+        self._lock.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        del exc_type, exc_value, traceback
+        self._lock.release()
+
+
+_PATH_LOCKS: weakref.WeakValueDictionary[str, _PathLock] = weakref.WeakValueDictionary()
 _PATH_LOCKS_GUARD = threading.Lock()
 _SINK_LOCKS: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 _SINK_LOCKS_GUARD = threading.Lock()
@@ -116,10 +132,14 @@ class CompositeAuditSink:
         raise SafetyAuditDegradedError("primary tool safety audit sink failed")
 
 
-def _shared_path_lock(path: Path) -> threading.Lock:
+def _shared_path_lock(path: Path) -> _PathLock:
     key = str(path.resolve())
     with _PATH_LOCKS_GUARD:
-        return _PATH_LOCKS.setdefault(key, threading.Lock())
+        lock = _PATH_LOCKS.get(key)
+        if lock is None:
+            lock = _PathLock()
+            _PATH_LOCKS[key] = lock
+        return lock
 
 
 def _open_secure_file(path: Path) -> IO[str]:

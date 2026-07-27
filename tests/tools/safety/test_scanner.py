@@ -25,6 +25,7 @@ from trpc_agent_sdk.tools.safety._sanitizer import truncate_output
 from trpc_agent_sdk.tools.safety._common_rules import path_is_system_location
 from trpc_agent_sdk.tools.safety._python_rules import _PythonScanContext
 from trpc_agent_sdk.tools.safety._python_rules import PythonRuleVisitor
+from trpc_agent_sdk.tools.safety._python_rules import _static_truthy
 from trpc_agent_sdk.tools.safety._scanner import MAX_NESTED_PAYLOAD_DEPTH
 
 
@@ -309,6 +310,23 @@ def test_python_rule_fallback_helpers_are_bounded(guard):
     assert visitor._gather_is_large(gather) is True
 
 
+def test_static_truthy_handles_non_literal_conditions():
+    assert _static_truthy(ast.UnaryOp(op=ast.Not(), operand=ast.Name(id="value"))) is False
+    assert _static_truthy(ast.Name(id="value")) is False
+    comparison = ast.Compare(
+        left=ast.Name(id="value"),
+        ops=[ast.Eq()],
+        comparators=[ast.Constant(value=1)],
+    )
+    assert _static_truthy(comparison) is False
+    mixed_comparison = ast.Compare(
+        left=ast.Constant(value=1),
+        ops=[ast.Lt()],
+        comparators=[ast.Constant(value="value")],
+    )
+    assert _static_truthy(mixed_comparison) is False
+
+
 def test_nested_payload_depth_returns_policy_finding(guard):
     payload = ScriptPayload(language=ScriptLanguage.BASH, content="bash -c 'echo ok'")
     findings, redacted = guard._scan_nested(payload, _request(payload.content), MAX_NESTED_PAYLOAD_DEPTH)
@@ -321,6 +339,13 @@ def test_large_write_and_python_syntax_error_are_reported(guard):
     syntax_error = guard.scan(_request("def broken(:\n    pass"))
     assert "RES002" in _rule_ids(large_write)
     assert "PY001" in _rule_ids(syntax_error)
+
+
+@pytest.mark.parametrize("code", ["while 1:\n    pass", "while 1 == 1:\n    pass", "while not 0:\n    pass"])
+def test_python_truthy_constant_loops_are_denied(guard, code):
+    report = guard.scan(_request(code))
+    assert report.decision == SafetyDecision.DENY
+    assert "RES001" in _rule_ids(report)
 
 
 @pytest.mark.parametrize(

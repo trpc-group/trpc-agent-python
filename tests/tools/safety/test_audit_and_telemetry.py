@@ -27,6 +27,7 @@ from trpc_agent_sdk.tools.safety._audit import create_audit_event
 from trpc_agent_sdk.tools.safety._audit import emit_report
 from trpc_agent_sdk.tools.safety._audit import _shared_sink_lock
 from trpc_agent_sdk.tools.safety._audit import set_safety_span_attributes
+from trpc_agent_sdk.tools.safety._audit import _PATH_LOCKS
 
 
 def _report():
@@ -67,6 +68,13 @@ def test_jsonl_audit_has_required_fields(tmp_path):
     assert data["tool_name"] == "Bash"
     assert data["execution_blocked"] is True
     assert data["redacted"] is True
+
+
+def test_path_lock_is_weakly_held(tmp_path):
+    sink = JsonlAuditSink(tmp_path / "audit.jsonl")
+    key = str((tmp_path / "audit.jsonl").resolve())
+    assert key in _PATH_LOCKS
+    del sink
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX permission contract")

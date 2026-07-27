@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
+import operator
 import re
 import shlex
 from typing import Any
@@ -37,6 +38,41 @@ _OUTPUT_CALLS = frozenset(
     {"print", "logging.info", "logging.warning", "logging.error", "logger.info", "logger.warning", "logger.error"})
 _SECRET_NAME_RE = re.compile(
     r"(?i)(api[_-]?key|access[_-]?key|authorization|credential|token|password|passwd|secret|private[_-]?key)")
+
+
+def _static_truthy(node: ast.AST) -> bool:
+    """Return whether a literal loop condition is statically true."""
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+        try:
+            return not bool(ast.literal_eval(node.operand))
+        except (ValueError, TypeError, SyntaxError):
+            return False
+    try:
+        return bool(ast.literal_eval(node))
+    except (ValueError, TypeError, SyntaxError):
+        pass
+    if isinstance(node, ast.Compare) and len(node.ops) == 1 and len(node.comparators) == 1:
+        try:
+            left = ast.literal_eval(node.left)
+            right = ast.literal_eval(node.comparators[0])
+        except (ValueError, TypeError, SyntaxError):
+            return False
+        comparisons = {
+            ast.Eq: operator.eq,
+            ast.NotEq: operator.ne,
+            ast.Lt: operator.lt,
+            ast.LtE: operator.le,
+            ast.Gt: operator.gt,
+            ast.GtE: operator.ge,
+        }
+        for kind, compare in comparisons.items():
+            if isinstance(node.ops[0], kind):
+                try:
+                    return bool(compare(left, right))
+                except (TypeError, ValueError):
+                    return False
+    return False
+
 
 FILE_DELETE = RuleSpec(
     RiskCategory.FILE,
@@ -313,7 +349,7 @@ class PythonRuleVisitor(ast.NodeVisitor):
         return ""
 
     def visit_While(self, node: ast.While) -> Any:
-        if isinstance(node.test, ast.Constant) and node.test.value is True:
+        if _static_truthy(node.test):
             self._add("RES001", node, RESOURCE_DENY)
         self.generic_visit(node)
 
