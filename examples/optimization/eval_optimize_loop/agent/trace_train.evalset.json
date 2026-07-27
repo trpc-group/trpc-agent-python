@@ -1,0 +1,65 @@
+{
+  "eval_set_id": "shopping_train_trace",
+  "name": "Trace Train Baseline",
+  "description": "train_001 actual缺库存关键词→FAIL, train_002 actual缺差价→FAIL, train_003 actual有运费→PASS",
+  "eval_cases": [
+    {
+      "eval_id": "train_001", "eval_mode": "trace",
+      "actual_conversation": [{
+        "invocation_id": "t1_act",
+        "user_content": {"parts": [{"text": "上海的苹果多少钱，还有库存吗"}], "role": "user"},
+        "final_response": {"parts": [{"text": "上海苹果5元一斤，挺实惠的"}], "role": "model"},
+        "intermediate_data": {"tool_uses": [
+          {"id": "c1a", "name": "get_product_price", "args": {"city": "上海", "product": "苹果"}},
+          {"id": "c1b", "name": "check_stock", "args": {"product": "苹果"}}]}
+      }],
+      "conversation": [{
+        "invocation_id": "t1_exp",
+        "user_content": {"parts": [{"text": "上海的苹果多少钱，还有库存吗"}], "role": "user"},
+        "final_response": {"parts": [{"text": "库存"}], "role": "model"},
+        "intermediate_data": {"tool_uses": [
+          {"id": "c1a", "name": "get_product_price", "args": {"city": "上海", "product": "苹果"}},
+          {"id": "c1b", "name": "check_stock", "args": {"product": "苹果"}}]}
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "train_002", "eval_mode": "trace",
+      "actual_conversation": [{
+        "invocation_id": "t2_act",
+        "user_content": {"parts": [{"text": "苹果在北京和上海的价格差多少"}], "role": "user"},
+        "final_response": {"parts": [{"text": "北京苹果6元一斤，上海苹果5元一斤"}], "role": "model"},
+        "intermediate_data": {"tool_uses": [
+          {"id": "c2a", "name": "get_product_price", "args": {"city": "北京", "product": "苹果"}},
+          {"id": "c2b", "name": "get_product_price", "args": {"city": "上海", "product": "苹果"}}]}
+      }],
+      "conversation": [{
+        "invocation_id": "t2_exp",
+        "user_content": {"parts": [{"text": "苹果在北京和上海的价格差多少"}], "role": "user"},
+        "final_response": {"parts": [{"text": "差价"}], "role": "model"},
+        "intermediate_data": {"tool_uses": [
+          {"id": "c2a", "name": "get_product_price", "args": {"city": "北京", "product": "苹果"}},
+          {"id": "c2b", "name": "get_product_price", "args": {"city": "上海", "product": "苹果"}}]}
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "train_003", "eval_mode": "trace",
+      "actual_conversation": [{
+        "invocation_id": "t3_act",
+        "user_content": {"parts": [{"text": "香蕉能发到杭州吗，运费多少"}], "role": "user"},
+        "final_response": {"parts": [{"text": "可以发货，运费8元，2-3天到"}], "role": "model"},
+        "intermediate_data": {"tool_uses": [
+          {"id": "c3", "name": "get_shipping", "args": {"product": "香蕉", "city": "杭州"}}]}
+      }],
+      "conversation": [{
+        "invocation_id": "t3_exp",
+        "user_content": {"parts": [{"text": "香蕉能发到杭州吗，运费多少"}], "role": "user"},
+        "final_response": {"parts": [{"text": "运费"}], "role": "model"},
+        "intermediate_data": {"tool_uses": [
+          {"id": "c3", "name": "get_shipping", "args": {"product": "香蕉", "city": "杭州"}}]}
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "trainer", "state": {}}
+    }
+  ]
+}

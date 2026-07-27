@@ -1,0 +1,64 @@
+{
+  "eval_set_id": "shopping_val_trace_candidate",
+  "name": "Trace Val Candidate",
+  "description": "val_001 improved→PASS, val_002 stable→PASS, val_003 overfitted→FAIL",
+  "eval_cases": [
+    {
+      "eval_id": "val_001", "eval_mode": "trace",
+      "actual_conversation": [{
+        "invocation_id": "v1_cand",
+        "user_content": {"parts": [{"text": "深圳还有橘子卖吗？多少钱？"}], "role": "user"},
+        "final_response": {"parts": [{"text": "深圳橘子5.5元一斤，库存紧张还剩50件"}], "role": "model"},
+        "intermediate_data": {"tool_uses": [
+          {"id": "cv1a", "name": "get_product_price", "args": {"city": "深圳", "product": "橘子"}},
+          {"id": "cv1b", "name": "check_stock", "args": {"product": "橘子"}}]}
+      }],
+      "conversation": [{
+        "invocation_id": "v1_exp",
+        "user_content": {"parts": [{"text": "深圳还有橘子卖吗？多少钱？"}], "role": "user"},
+        "final_response": {"parts": [{"text": "库存"}], "role": "model"},
+        "intermediate_data": {"tool_uses": [
+          {"id": "cv1a", "name": "get_product_price", "args": {"city": "深圳", "product": "橘子"}},
+          {"id": "cv1b", "name": "check_stock", "args": {"product": "橘子"}}]}
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "val_002", "eval_mode": "trace",
+      "actual_conversation": [{
+        "invocation_id": "v2_cand",
+        "user_content": {"parts": [{"text": "苹果打几折，折后多少钱"}], "role": "user"},
+        "final_response": {"parts": [{"text": "苹果9折，折后4.5元"}], "role": "model"},
+        "intermediate_data": {"tool_uses": [
+          {"id": "cv2", "name": "get_discount", "args": {"product": "苹果"}}]}
+      }],
+      "conversation": [{
+        "invocation_id": "v2_exp",
+        "user_content": {"parts": [{"text": "苹果打几折，折后多少钱"}], "role": "user"},
+        "final_response": {"parts": [{"text": "折后"}], "role": "model"},
+        "intermediate_data": {"tool_uses": [
+          {"id": "cv2", "name": "get_discount", "args": {"product": "苹果"}}]}
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "val_003", "eval_mode": "trace",
+      "actual_conversation": [{
+        "invocation_id": "v3_cand",
+        "user_content": {"parts": [{"text": "香蕉还有库存吗"}], "role": "user"},
+        "final_response": {"parts": [{"text": "香蕉4.5元一斤，库存充足有300件"}], "role": "model"},
+        "intermediate_data": {"tool_uses": [
+          {"id": "cv3p", "name": "get_product_price", "args": {"product": "香蕉"}},
+          {"id": "cv3s", "name": "check_stock", "args": {"product": "香蕉"}}]}
+      }],
+      "conversation": [{
+        "invocation_id": "v3_exp",
+        "user_content": {"parts": [{"text": "香蕉还有库存吗"}], "role": "user"},
+        "final_response": {"parts": [{"text": "库存"}], "role": "model"},
+        "intermediate_data": {"tool_uses": [
+          {"id": "cv3", "name": "check_stock", "args": {"product": "香蕉"}}]}
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "validator", "state": {}}
+    }
+  ]
+}

@@ -1,0 +1,312 @@
+{
+  "baseline_pass_rate": 0.16666666666666666,
+  "candidate_pass_rate": 0.8333333333333334,
+  "delta": 0.6666666666666667,
+  "per_case": [
+    {
+      "eval_id": "val_001",
+      "baseline_status": "FAILED",
+      "candidate_status": "PASSED",
+      "change_type": "newly_passing",
+      "baseline_scores": {
+        "llm_rubric_response": 0.0
+      },
+      "candidate_scores": {
+        "llm_rubric_response": 1.0
+      },
+      "delta_scores": {
+        "llm_rubric_response": 1.0
+      },
+      "expected_tools": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "深圳",
+            "product": "橘子"
+          }
+        },
+        {
+          "name": "check_stock",
+          "args": {
+            "product": "橘子"
+          }
+        },
+        {
+          "name": "get_discount",
+          "args": {
+            "product": "橘子"
+          }
+        }
+      ],
+      "expected_response": "深圳橘子原价5.5元/斤，库存50斤紧张，8折，折后4.4元/斤",
+      "baseline_tools": [],
+      "baseline_response": "深圳橘子价格五六块吧，库存可能不多，折扣大概八折左右",
+      "candidate_tools": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "深圳",
+            "product": "橘子"
+          }
+        },
+        {
+          "name": "check_stock",
+          "args": {
+            "product": "橘子"
+          }
+        },
+        {
+          "name": "get_discount",
+          "args": {
+            "product": "橘子"
+          }
+        }
+      ],
+      "candidate_response": "深圳橘子原价5.5元/斤，库存50斤紧张，8折，折后4.4元/斤",
+      "failure_type": "",
+      "failure_reason": "优化有效：正确调用了工具，回答准确完整"
+    },
+    {
+      "eval_id": "val_002",
+      "baseline_status": "FAILED",
+      "candidate_status": "PASSED",
+      "change_type": "newly_passing",
+      "baseline_scores": {
+        "llm_rubric_response": 0.0
+      },
+      "candidate_scores": {
+        "llm_rubric_response": 1.0
+      },
+      "delta_scores": {
+        "llm_rubric_response": 1.0
+      },
+      "expected_tools": [
+        {
+          "name": "get_discount",
+          "args": {
+            "product": "苹果"
+          }
+        }
+      ],
+      "expected_response": "苹果9折，折后4.5元/斤",
+      "baseline_tools": [],
+      "baseline_response": "苹果应该有折扣吧，大概九折左右，折后四块多",
+      "candidate_tools": [
+        {
+          "name": "get_discount",
+          "args": {
+            "product": "苹果"
+          }
+        }
+      ],
+      "candidate_response": "苹果9折，折后4.5元/斤",
+      "failure_type": "",
+      "failure_reason": "优化有效：正确调用了工具，折扣信息准确"
+    },
+    {
+      "eval_id": "val_003",
+      "baseline_status": "PASSED",
+      "candidate_status": "FAILED",
+      "change_type": "newly_failing",
+      "baseline_scores": {
+        "llm_rubric_response": 1.0
+      },
+      "candidate_scores": {
+        "llm_rubric_response": 0.0
+      },
+      "delta_scores": {
+        "llm_rubric_response": -1.0
+      },
+      "expected_tools": [
+        {
+          "name": "check_stock",
+          "args": {
+            "product": "香蕉"
+          }
+        }
+      ],
+      "expected_response": "香蕉库存充足，300件",
+      "baseline_tools": [
+        {
+          "name": "check_stock",
+          "args": {
+            "product": "香蕉"
+          }
+        }
+      ],
+      "baseline_response": "香蕉库存充足，有300件",
+      "candidate_tools": [
+        {
+          "name": "check_stock",
+          "args": {
+            "product": "香蕉"
+          }
+        },
+        {
+          "name": "get_product_price",
+          "args": {
+            "product": "香蕉"
+          }
+        }
+      ],
+      "candidate_response": "香蕉库存充足300件，价格为4.5元/斤",
+      "failure_type": "overgeneralization",
+      "failure_reason": "过度泛化：候选prompt导致模型在仅需库存查询时额外调用了价格工具。这是典型的过拟合——模型从训练集学到了所有问题都要查价格的模式，在纯库存问题上做了多余操作。Gate应识别并拒绝此候选。"
+    },
+    {
+      "eval_id": "val_004",
+      "baseline_status": "FAILED",
+      "candidate_status": "PASSED",
+      "change_type": "newly_passing",
+      "baseline_scores": {
+        "llm_rubric_response": 0.0
+      },
+      "candidate_scores": {
+        "llm_rubric_response": 1.0
+      },
+      "delta_scores": {
+        "llm_rubric_response": 1.0
+      },
+      "expected_tools": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "北京",
+            "product": "香蕉"
+          }
+        },
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "上海",
+            "product": "香蕉"
+          }
+        }
+      ],
+      "expected_response": "北京香蕉4.5元/斤，上海香蕉4元/斤，北京更贵，一斤贵0.5元",
+      "baseline_tools": [],
+      "baseline_response": "北京和上海香蕉价格应该差不多，都是四块多一斤",
+      "candidate_tools": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "北京",
+            "product": "香蕉"
+          }
+        },
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "上海",
+            "product": "香蕉"
+          }
+        }
+      ],
+      "candidate_response": "北京香蕉4.5元/斤，上海香蕉4元/斤，北京更贵，一斤贵0.5元",
+      "failure_type": "",
+      "failure_reason": ""
+    },
+    {
+      "eval_id": "val_005",
+      "baseline_status": "FAILED",
+      "candidate_status": "PASSED",
+      "change_type": "newly_passing",
+      "baseline_scores": {
+        "llm_rubric_response": 0.0
+      },
+      "candidate_scores": {
+        "llm_rubric_response": 1.0
+      },
+      "delta_scores": {
+        "llm_rubric_response": 1.0
+      },
+      "expected_tools": [
+        {
+          "name": "get_discount",
+          "args": {
+            "product": "苹果"
+          }
+        },
+        {
+          "name": "get_shipping",
+          "args": {
+            "product": "苹果",
+            "city": "深圳"
+          }
+        }
+      ],
+      "expected_response": "上海苹果折后4.5元/斤x2=9元；深圳运费3元；合计12元",
+      "baseline_tools": [],
+      "baseline_response": "两斤苹果加运费大概十二三块吧",
+      "candidate_tools": [
+        {
+          "name": "get_discount",
+          "args": {
+            "product": "苹果"
+          }
+        },
+        {
+          "name": "get_shipping",
+          "args": {
+            "product": "苹果",
+            "city": "深圳"
+          }
+        }
+      ],
+      "candidate_response": "上海苹果折后4.5元/斤x2=9元；深圳运费3元；合计12元",
+      "failure_type": "",
+      "failure_reason": ""
+    },
+    {
+      "eval_id": "val_006",
+      "baseline_status": "FAILED",
+      "candidate_status": "PASSED",
+      "change_type": "newly_passing",
+      "baseline_scores": {
+        "llm_rubric_response": 0.0
+      },
+      "candidate_scores": {
+        "llm_rubric_response": 1.0
+      },
+      "delta_scores": {
+        "llm_rubric_response": 1.0
+      },
+      "expected_tools": [
+        {
+          "name": "get_shipping",
+          "args": {
+            "product": "橘子",
+            "city": "杭州"
+          }
+        },
+        {
+          "name": "get_discount",
+          "args": {
+            "product": "橘子"
+          }
+        }
+      ],
+      "expected_response": "橘子不能发到杭州；橘子折后4.4元/斤；运费不适用",
+      "baseline_tools": [],
+      "baseline_response": "橘子发杭州应该可以吧，费用不太清楚",
+      "candidate_tools": [
+        {
+          "name": "get_shipping",
+          "args": {
+            "product": "橘子",
+            "city": "杭州"
+          }
+        },
+        {
+          "name": "get_discount",
+          "args": {
+            "product": "橘子"
+          }
+        }
+      ],
+      "candidate_response": "橘子不能发到杭州；橘子折后4.4元/斤；运费不适用",
+      "failure_type": "",
+      "failure_reason": ""
+    }
+  ]
+}

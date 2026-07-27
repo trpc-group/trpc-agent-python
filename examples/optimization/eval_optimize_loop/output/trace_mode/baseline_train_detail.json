@@ -1,0 +1,129 @@
+{
+  "pass_rate": 0.3333333333333333,
+  "metric_breakdown": {
+    "tool_trajectory_avg_score": 1.0,
+    "final_response_avg_score": 0.3333333333333333
+  },
+  "per_case": [
+    {
+      "eval_id": "train_001",
+      "status": "FAILED",
+      "metric_scores": {
+        "tool_trajectory_avg_score": 1.0,
+        "final_response_avg_score": 0.0
+      },
+      "expected_response": "库存",
+      "actual_response": "上海苹果5元一斤，挺实惠的",
+      "expected_tool_calls": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "上海",
+            "product": "苹果"
+          }
+        },
+        {
+          "name": "check_stock",
+          "args": {
+            "product": "苹果"
+          }
+        }
+      ],
+      "actual_tool_calls": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "上海",
+            "product": "苹果"
+          }
+        },
+        {
+          "name": "check_stock",
+          "args": {
+            "product": "苹果"
+          }
+        }
+      ],
+      "failure_types": [
+        "missing_information"
+      ],
+      "failure_explanation": "信息遗漏：Agent 调用了正确的工具但回复中遗漏了关键信息。期望包含 '库存'，实际回复 '上海苹果5元一斤，挺实惠的'"
+    },
+    {
+      "eval_id": "train_002",
+      "status": "FAILED",
+      "metric_scores": {
+        "tool_trajectory_avg_score": 1.0,
+        "final_response_avg_score": 0.0
+      },
+      "expected_response": "差价",
+      "actual_response": "北京苹果6元一斤，上海苹果5元一斤",
+      "expected_tool_calls": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "北京",
+            "product": "苹果"
+          }
+        },
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "上海",
+            "product": "苹果"
+          }
+        }
+      ],
+      "actual_tool_calls": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "北京",
+            "product": "苹果"
+          }
+        },
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "上海",
+            "product": "苹果"
+          }
+        }
+      ],
+      "failure_types": [
+        "reasoning_failure"
+      ],
+      "failure_explanation": "推理不足：Agent 调用了正确工具但未能完成跨值计算/比较。期望回复包含 '差价'，实际回复 '北京苹果6元一斤，上海苹果5元一斤'"
+    },
+    {
+      "eval_id": "train_003",
+      "status": "PASSED",
+      "metric_scores": {
+        "tool_trajectory_avg_score": 1.0,
+        "final_response_avg_score": 1.0
+      },
+      "expected_response": "运费",
+      "actual_response": "可以发货，运费8元，2-3天到",
+      "expected_tool_calls": [
+        {
+          "name": "get_shipping",
+          "args": {
+            "product": "香蕉",
+            "city": "杭州"
+          }
+        }
+      ],
+      "actual_tool_calls": [
+        {
+          "name": "get_shipping",
+          "args": {
+            "product": "香蕉",
+            "city": "杭州"
+          }
+        }
+      ],
+      "failure_types": [],
+      "failure_explanation": ""
+    }
+  ]
+}

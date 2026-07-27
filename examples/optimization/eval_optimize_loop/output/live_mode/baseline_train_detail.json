@@ -1,0 +1,212 @@
+{
+  "pass_rate": 0.0,
+  "metric_breakdown": {
+    "llm_rubric_response": 0.0
+  },
+  "eval_set_id": "shopping_train",
+  "per_case": [
+    {
+      "eval_id": "train_001",
+      "status": "FAILED",
+      "expected_response": "上海苹果5元/斤，库存500斤充足，9折，折后4.5元/斤",
+      "actual_response": "上海苹果大概5元左右一斤吧，库存应该挺多的，折扣我不太清楚",
+      "expected_tool_calls": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "上海",
+            "product": "苹果"
+          }
+        },
+        {
+          "name": "check_stock",
+          "args": {
+            "product": "苹果"
+          }
+        },
+        {
+          "name": "get_discount",
+          "args": {
+            "product": "苹果"
+          }
+        }
+      ],
+      "actual_tool_calls": [],
+      "metric_scores": {
+        "llm_rubric_response": 0.0
+      },
+      "failure_types": [
+        "hallucination",
+        "tool_call_error"
+      ],
+      "failure_explanation": "未调用任何工具(违反不要调用工具的指令)，凭经验猜测价格和库存，信息完全不准确。"
+    },
+    {
+      "eval_id": "train_002",
+      "status": "FAILED",
+      "expected_response": "北京苹果6元/斤，上海苹果5元/斤，北京更贵，一斤贵1元",
+      "actual_response": "北京和上海苹果价格差不多吧，都是五六块的样子，具体差多少不好说",
+      "expected_tool_calls": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "北京",
+            "product": "苹果"
+          }
+        },
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "上海",
+            "product": "苹果"
+          }
+        }
+      ],
+      "actual_tool_calls": [],
+      "metric_scores": {
+        "llm_rubric_response": 0.0
+      },
+      "failure_types": [
+        "hallucination",
+        "tool_call_error",
+        "missing_information"
+      ],
+      "failure_explanation": "未调用工具，用模糊语言回避精确对比，缺少具体价格和差值数据。"
+    },
+    {
+      "eval_id": "train_003",
+      "status": "FAILED",
+      "expected_response": "可以配送，运费8元，2-3天到",
+      "actual_response": "香蕉应该能发杭州吧，运费大概10块钱左右，三四天能到",
+      "expected_tool_calls": [
+        {
+          "name": "get_shipping",
+          "args": {
+            "product": "香蕉",
+            "city": "杭州"
+          }
+        }
+      ],
+      "actual_tool_calls": [],
+      "metric_scores": {
+        "llm_rubric_response": 0.0
+      },
+      "failure_types": [
+        "hallucination",
+        "tool_call_error"
+      ],
+      "failure_explanation": "未调用工具，运费和时效数字均为编造(8元说成10元，2-3天说成三四天)。"
+    },
+    {
+      "eval_id": "train_004",
+      "status": "FAILED",
+      "expected_response": "深圳橘子折后4.4元x1=4.4元；深圳苹果折后4.5元x2=9元；合计13.4元",
+      "actual_response": "橘子大概四五块，苹果也是四五块，两斤苹果加一斤橘子总共大概十五六块吧",
+      "expected_tool_calls": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "深圳",
+            "product": "橘子"
+          }
+        },
+        {
+          "name": "get_discount",
+          "args": {
+            "product": "橘子"
+          }
+        },
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "深圳",
+            "product": "苹果"
+          }
+        },
+        {
+          "name": "get_discount",
+          "args": {
+            "product": "苹果"
+          }
+        }
+      ],
+      "actual_tool_calls": [],
+      "metric_scores": {
+        "llm_rubric_response": 0.0
+      },
+      "failure_types": [
+        "hallucination",
+        "tool_call_error",
+        "missing_information"
+      ],
+      "failure_explanation": "未调用任何工具。多商品折后总价需要精确计算，凭经验给出模糊区间。"
+    },
+    {
+      "eval_id": "train_005",
+      "status": "FAILED",
+      "expected_response": "上海香蕉原价4元/斤，库存300斤充足，无折扣",
+      "actual_response": "上海香蕉价格大概4块左右吧，库存应该充足，折扣情况不太清楚",
+      "expected_tool_calls": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "上海",
+            "product": "香蕉"
+          }
+        },
+        {
+          "name": "check_stock",
+          "args": {
+            "product": "香蕉"
+          }
+        },
+        {
+          "name": "get_discount",
+          "args": {
+            "product": "香蕉"
+          }
+        }
+      ],
+      "actual_tool_calls": [],
+      "metric_scores": {
+        "llm_rubric_response": 0.0
+      },
+      "failure_types": [
+        "hallucination",
+        "tool_call_error"
+      ],
+      "failure_explanation": "未调用工具。价格用模糊词，库存用猜测，完全未查折扣。"
+    },
+    {
+      "eval_id": "train_006",
+      "status": "FAILED",
+      "expected_response": "橘子不能发到杭州；橘子折后4.4元/斤",
+      "actual_response": "橘子能不能发杭州我不太确定，折扣情况也不清楚，大概也是打八折吧",
+      "expected_tool_calls": [
+        {
+          "name": "get_shipping",
+          "args": {
+            "product": "橘子",
+            "city": "杭州"
+          }
+        },
+        {
+          "name": "get_discount",
+          "args": {
+            "product": "橘子"
+          }
+        }
+      ],
+      "actual_tool_calls": [],
+      "metric_scores": {
+        "llm_rubric_response": 0.0
+      },
+      "failure_types": [
+        "hallucination",
+        "tool_call_error",
+        "missing_information"
+      ],
+      "failure_explanation": "未调用工具。配送状态和折扣信息均为不确定表述。"
+    }
+  ]
+}

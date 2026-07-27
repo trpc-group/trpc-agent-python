@@ -1,0 +1,48 @@
+{
+  "metrics": [
+    {
+      "metric_name": "llm_rubric_response",
+      "threshold": 0.5,
+      "criterion": {
+        "llm_judge": {
+          "judge_model": {
+            "model_name": "deepseek-v4-flash",
+            "base_url": "https://api.deepseek.com/v1",
+            "api_key": "sk-b2df4854c5e14aa4baa0a8fb61310130",
+            "num_samples": 3,
+            "generation_config": {
+              "max_tokens": 1024,
+              "temperature": 0.0
+            }
+          },
+          "rubrics": [
+            {
+              "id": "completeness",
+              "content": {
+                "text": "回答是否覆盖了用户提出的所有子问题，逐一回应，没有遗漏。如果用户问了价格和库存，回答必须两者都覆盖。"
+              },
+              "description": "完整性",
+              "type": "FINAL_RESPONSE_QUALITY"
+            },
+            {
+              "id": "no_redundancy",
+              "content": {
+                "text": "回答是否避免了重复表达相同的事实或数据。同一个信息（价格、数量等）只能出现一次，严禁用不同措辞重复说明。"
+              },
+              "description": "无冗余",
+              "type": "FINAL_RESPONSE_QUALITY"
+            },
+            {
+              "id": "no_extra",
+              "content": {
+                "text": "回答是否没有提供用户未询问的额外信息（包括推荐意见、配送建议、emoji、营销话术等）。只回答用户问的内容。"
+              },
+              "description": "不扩展",
+              "type": "FINAL_RESPONSE_QUALITY"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

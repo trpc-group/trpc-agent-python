@@ -1,0 +1,120 @@
+{
+  "eval_set_id": "shopping_val",
+  "name": "Live Val Set (v2)",
+  "description": "val_001 泛化(橘子); val_002 稳定性(仅折扣); val_003 过拟合探针(纯库存问法，若 candidate 调价格工具=过度泛化→newly_failing); val_004/005 推理+多工具调用泛化",
+  "eval_cases": [
+    {
+      "eval_id": "val_001",
+      "conversation": [{
+        "invocation_id": "v1",
+        "user_content": {
+          "role": "user", "parts": [{"text": "深圳的橘子原价多少？库存状态如何？折后每斤多少钱？"}]
+        },
+        "final_response": {
+          "role": "model", "parts": [{"text": "深圳橘子原价5.5元/斤，库存50斤紧张，8折，折后4.4元/斤"}]
+        },
+        "intermediate_data": {
+          "tool_uses": [
+            {"id": "v1a", "name": "get_product_price", "args": {"city": "深圳", "product": "橘子"}},
+            {"id": "v1b", "name": "check_stock", "args": {"product": "橘子"}},
+            {"id": "v1c", "name": "get_discount", "args": {"product": "橘子"}}
+          ]
+        }
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "val_002",
+      "conversation": [{
+        "invocation_id": "v2",
+        "user_content": {
+          "role": "user", "parts": [{"text": "苹果现在有什么优惠？打几折？折后多少钱一斤？"}]
+        },
+        "final_response": {
+          "role": "model", "parts": [{"text": "苹果9折，折后4.5元/斤"}]
+        },
+        "intermediate_data": {
+          "tool_uses": [
+            {"id": "v2a", "name": "get_discount", "args": {"product": "苹果"}}
+          ]
+        }
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "val_003",
+      "conversation": [{
+        "invocation_id": "v3",
+        "user_content": {
+          "role": "user", "parts": [{"text": "香蕉还有库存吗？库存数量是多少？"}]
+        },
+        "final_response": {
+          "role": "model", "parts": [{"text": "香蕉库存充足，300件"}]
+        },
+        "intermediate_data": {
+          "tool_uses": [
+            {"id": "v3a", "name": "check_stock", "args": {"product": "香蕉"}}
+          ]
+        }
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "val_004",
+      "conversation": [{
+        "invocation_id": "v4",
+        "user_content": {
+          "role": "user", "parts": [{"text": "北京香蕉和上海香蕉哪个更贵？一斤能差多少钱？"}]
+        },
+        "final_response": {
+          "role": "model", "parts": [{"text": "北京香蕉4.5元/斤，上海香蕉4元/斤，北京更贵，一斤贵0.5元"}]
+        },
+        "intermediate_data": {
+          "tool_uses": [
+            {"id": "v4a", "name": "get_product_price", "args": {"city": "北京", "product": "香蕉"}},
+            {"id": "v4b", "name": "get_product_price", "args": {"city": "上海", "product": "香蕉"}}
+          ]
+        }
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "val_005",
+      "conversation": [{
+        "invocation_id": "v5",
+        "user_content": {
+          "role": "user", "parts": [{"text": "买2斤上海苹果（按折后价），寄到深圳，总共需要付商品价加运费多少钱？"}]
+        },
+        "final_response": {
+          "role": "model", "parts": [{"text": "上海苹果折后4.5元/斤×2=9元；深圳运费3元；合计12元"}]
+        },
+        "intermediate_data": {
+          "tool_uses": [
+            {"id": "v5a", "name": "get_discount", "args": {"product": "苹果"}},
+            {"id": "v5b", "name": "get_shipping", "args": {"product": "苹果", "city": "深圳"}}
+          ]
+        }
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "validator", "state": {}}
+    },
+    {
+      "eval_id": "val_006",
+      "conversation": [{
+        "invocation_id": "v6",
+        "user_content": {
+          "role": "user", "parts": [{"text": "橘子能发到杭州吗？杭州买橘子的折后价和运费各是多少？"}]
+        },
+        "final_response": {
+          "role": "model", "parts": [{"text": "橘子不能发到杭州；橘子折后4.4元/斤；运费不适用"}]
+        },
+        "intermediate_data": {
+          "tool_uses": [
+            {"id": "v6a", "name": "get_shipping", "args": {"product": "橘子", "city": "杭州"}},
+            {"id": "v6b", "name": "get_discount", "args": {"product": "橘子"}}
+          ]
+        }
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "validator", "state": {}}
+    }
+  ]
+}

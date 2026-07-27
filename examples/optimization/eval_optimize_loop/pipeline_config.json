@@ -1,0 +1,35 @@
+{
+  "_comment_pipeline": [
+    "mode=auto -> 有 API Key 用 live mode，否则 trace 模式",
+    "baseline_prompt_preset 可选值: original / defective_mix / tool_call_skip / excessive_verbosity / hallucination_prone / format_broken / contradictory",
+    "  - original: 原生模糊 baseline，只会触发 missing_information（旧行为）",
+    "  - defective_mix: 同时触发 TOOL_CALL_ERROR / FORMAT_ERROR / EXCESSIVE_VERBOSITY / OVERGENERALIZATION / HALLUCINATION / CONTRADICTORY_INFORMATION —— 验证归因多样性",
+    "  - 其他单独 preset: 单次只触发单一种类错误，用于归因单测"
+  ],
+  "pipeline": {
+    "mode": "auto",
+    "seed": 42,
+    "max_rounds": 5,
+    "baseline_prompt_preset": "defective_mix",
+    "failure_case_density": 0.6
+  },
+  "_comment_gate": [
+    "过拟合拒绝规则: candidate 在训练集上提升 >= overfit_train_gain",
+    "                且 在验证集上下降 <= overfit_val_loss（负数阈值，越小越严格）",
+    "                => 强制 Gate 拒绝，不接受该候选 prompt"
+  ],
+  "gate": {
+    "min_improvement": 0.1,
+    "no_hard_regression": true,
+    "key_cases": ["val_002"],
+    "cost_budget_usd": 1.0,
+    "per_metric_floor": {
+      "final_response_avg_score": 0.3,
+      "llm_rubric_response": 0.3
+    },
+    "overfitting_warning_threshold": 0.3,
+    "reject_overfit": true,
+    "overfit_train_gain": 0.01,
+    "overfit_val_loss": -0.001
+  }
+}

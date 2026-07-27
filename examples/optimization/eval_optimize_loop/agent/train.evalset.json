@@ -1,0 +1,124 @@
+{
+  "eval_set_id": "shopping_train",
+  "name": "Live Train Set (v2)",
+  "description": "覆盖 3 工具联合查询 / 多城市对比做差 / 纯配送 / 多商品总价合计 / 折扣后总价推理。baseline 用 defective_mix 时会触发工具缺失/格式/冗余/幻觉/矛盾 等多种失败类型。",
+  "eval_cases": [
+    {
+      "eval_id": "train_001",
+      "conversation": [{
+        "invocation_id": "t1",
+        "user_content": {
+          "role": "user", "parts": [{"text": "上海苹果多少钱一斤？库存还多吗？打几折？"}]
+        },
+        "final_response": {
+          "role": "model", "parts": [{"text": "上海苹果5元/斤，库存500斤充足，9折，折后4.5元/斤"}]
+        },
+        "intermediate_data": {
+          "tool_uses": [
+            {"id": "t1a", "name": "get_product_price", "args": {"city": "上海", "product": "苹果"}},
+            {"id": "t1b", "name": "check_stock", "args": {"product": "苹果"}},
+            {"id": "t1c", "name": "get_discount", "args": {"product": "苹果"}}
+          ]
+        }
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "train_002",
+      "conversation": [{
+        "invocation_id": "t2",
+        "user_content": {
+          "role": "user", "parts": [{"text": "北京苹果贵还是上海苹果贵？具体一斤差多少钱？"}]
+        },
+        "final_response": {
+          "role": "model", "parts": [{"text": "北京苹果6元/斤，上海苹果5元/斤，北京更贵，一斤贵1元"}]
+        },
+        "intermediate_data": {
+          "tool_uses": [
+            {"id": "t2a", "name": "get_product_price", "args": {"city": "北京", "product": "苹果"}},
+            {"id": "t2b", "name": "get_product_price", "args": {"city": "上海", "product": "苹果"}}
+          ]
+        }
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "train_003",
+      "conversation": [{
+        "invocation_id": "t3",
+        "user_content": {
+          "role": "user", "parts": [{"text": "香蕉能发到杭州吗？运费多少？大概几天到？"}]
+        },
+        "final_response": {
+          "role": "model", "parts": [{"text": "可以配送，运费8元，2-3天到"}]
+        },
+        "intermediate_data": {
+          "tool_uses": [
+            {"id": "t3a", "name": "get_shipping", "args": {"product": "香蕉", "city": "杭州"}}
+          ]
+        }
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "train_004",
+      "conversation": [{
+        "invocation_id": "t4",
+        "user_content": {
+          "role": "user", "parts": [{"text": "我在深圳，买1斤橘子、2斤苹果，按折扣价算总共要花多少钱？分开列一下各自价格再算合计。"}]
+        },
+        "final_response": {
+          "role": "model", "parts": [{"text": "深圳橘子折后4.4元/斤×1=4.4元；深圳苹果折后4.5元/斤×2=9元；合计13.4元"}]
+        },
+        "intermediate_data": {
+          "tool_uses": [
+            {"id": "t4a", "name": "get_product_price", "args": {"city": "深圳", "product": "橘子"}},
+            {"id": "t4b", "name": "get_discount", "args": {"product": "橘子"}},
+            {"id": "t4c", "name": "get_product_price", "args": {"city": "深圳", "product": "苹果"}},
+            {"id": "t4d", "name": "get_discount", "args": {"product": "苹果"}}
+          ]
+        }
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "train_005",
+      "conversation": [{
+        "invocation_id": "t5",
+        "user_content": {
+          "role": "user", "parts": [{"text": "上海香蕉原价多少？库存多少？折扣力度大不大？折后每斤多少？"}]
+        },
+        "final_response": {
+          "role": "model", "parts": [{"text": "上海香蕉原价4元/斤，库存300斤充足，无折扣，折后4元/斤"}]
+        },
+        "intermediate_data": {
+          "tool_uses": [
+            {"id": "t5a", "name": "get_product_price", "args": {"city": "上海", "product": "香蕉"}},
+            {"id": "t5b", "name": "check_stock", "args": {"product": "香蕉"}},
+            {"id": "t5c", "name": "get_discount", "args": {"product": "香蕉"}}
+          ]
+        }
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "trainer", "state": {}}
+    },
+    {
+      "eval_id": "train_006",
+      "conversation": [{
+        "invocation_id": "t6",
+        "user_content": {
+          "role": "user", "parts": [{"text": "橘子发到杭州可以吗？杭州橘子的折后价和配送费分别是多少？"}]
+        },
+        "final_response": {
+          "role": "model", "parts": [{"text": "橘子不能发到杭州（杭州地区不可配送）；橘子折后4.4元/斤；运费不适用"}]
+        },
+        "intermediate_data": {
+          "tool_uses": [
+            {"id": "t6a", "name": "get_shipping", "args": {"product": "橘子", "city": "杭州"}},
+            {"id": "t6b", "name": "get_discount", "args": {"product": "橘子"}}
+          ]
+        }
+      }],
+      "session_input": {"app_name": "shopping_optimizer", "user_id": "trainer", "state": {}}
+    }
+  ]
+}

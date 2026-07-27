@@ -1,0 +1,8 @@
+{
+  "train_delta": 0.16666666666666666,
+  "val_delta": 0.0,
+  "train_val_gap_at_candidate": 0.16666666666666666,
+  "train_val_gap_at_baseline": 0.0,
+  "is_overfit": false,
+  "diagnosis": "潜在过拟合趋势：训练集提升但验证集未同步提升"
+}
