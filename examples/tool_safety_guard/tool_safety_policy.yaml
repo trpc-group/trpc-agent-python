@@ -1,0 +1,50 @@
+version: "1"
+
+network:
+  allowed_domains:
+    - "api.example.com"
+    - "localhost"
+    - "127.0.0.1"
+  allow_subdomains: false
+
+commands:
+  allowed:
+    - "ls"
+    - "pwd"
+    - "cat"
+    - "echo"
+    - "head"
+    - "tail"
+    - "wc"
+    - "grep"
+    - "find"
+    - "sort"
+    - "uniq"
+
+paths:
+  denied:
+    - "~/.ssh"
+    - "~/.aws"
+    - "~/.kube"
+    - "~/.gcloud"
+    - ".env"
+    - "/etc/shadow"
+    - "/etc/sudoers"
+  workspace_only_delete: true
+
+limits:
+  max_script_size_bytes: 1048576
+  max_script_lines: 10000
+  max_timeout_seconds: 30
+  max_output_size_bytes: 1048576
+  max_concurrency: 32
+  max_sleep_seconds: 30
+  max_static_write_size_bytes: 104857600
+
+rule_overrides:
+  FILE-002:
+    enabled: true
+    action: needs_human_review
+  DEP-001:
+    enabled: true
+    action: needs_human_review

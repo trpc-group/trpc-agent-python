@@ -382,6 +382,7 @@ root_agent = ClaudeAgent(
 - [examples/mcp_tools](./examples/mcp_tools/README.md) - MCPToolset（stdio / sse / streamable-http）
 - [examples/langchain_tools](./examples/langchain_tools/README.md) - LangChain 工具接入
 - [examples/agent_tools](./examples/agent_tools/README.md) - Agent 作为 Tool
+- [examples/tool_safety_guard](./examples/tool_safety_guard/README.md) - Tool、Skill 与 CodeExecutor 执行前安全检查
 
 相关文档：[tool.md](./docs/mkdocs/zh/tool.md)
 

