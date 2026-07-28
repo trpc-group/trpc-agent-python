@@ -1,0 +1,27 @@
+allowed_commands:
+  - python
+  - python3
+  - ruff
+  - pytest
+  - mypy
+denied_commands:
+  - rm
+  - wget
+  - chmod
+  - mkfs
+  - dd
+dangerous_arguments:
+  - -c
+  - --eval
+protected_paths:
+  - .env
+  - .ssh
+  - credentials
+allowed_environment:
+  - LANG
+  - LC_ALL
+  - PYTHONPATH
+  - PYTHONDONTWRITEBYTECODE
+allowed_network_targets: []
+max_timeout_seconds: 300
+max_memory_mb: 1024

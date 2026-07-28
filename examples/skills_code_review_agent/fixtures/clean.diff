@@ -1,0 +1,6 @@
+diff --git a/tests/test_math.py b/tests/test_math.py
+--- a/tests/test_math.py
++++ b/tests/test_math.py
+@@ -1 +1,2 @@
+ def test_add():
++    assert 1 + 1 == 2

@@ -1,0 +1,11 @@
+[
+  {
+    "task_id": "d460c8fba3e84a8189c2d0cd566241ab",
+    "command_digest": "13d6f2050de71ed06af82248fdddb87f2d648e4e82705b4564bf5de247530d44",
+    "decision": "allow",
+    "risk_level": "low",
+    "reason": "Policy check passed.",
+    "matched_rule": "allowed",
+    "created_at": "2026-07-28T07:55:45.878700+00:00"
+  }
+]

@@ -1,0 +1,14 @@
+rules:
+  - rule_id: unmanaged-resource
+    category: reliability
+    severity: low
+    detector:
+      type: regex
+    pattern:
+      - '^\s*(?!with\b).*\b(open|sqlite3\.connect|Session)\s*\('
+    message: Resource lifecycle needs verification
+    recommendation: Use a context manager or an explicit finally block to close the resource.
+    confidence: 0.66
+    validator:
+      enabled: true
+      script: validators/resource_check.py

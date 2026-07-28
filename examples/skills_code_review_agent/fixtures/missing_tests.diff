@@ -1,0 +1,6 @@
+diff --git a/discount.py b/discount.py
+--- a/discount.py
++++ b/discount.py
+@@ -0,0 +1,2 @@
++def apply_discount(amount):
++    return amount * 0.8

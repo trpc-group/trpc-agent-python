@@ -1,0 +1,15 @@
+rules:
+  - rule_id: missing-test-change
+    category: testing
+    severity: low
+    detector:
+      type: regex
+    pattern:
+      - '.+'
+    when: missing_test_change
+    message: No related test change
+    recommendation: Add or update a focused test for this behavior.
+    confidence: 0.68
+    validator:
+      enabled: true
+      script: validators/run_tests.py

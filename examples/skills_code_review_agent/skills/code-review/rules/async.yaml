@@ -1,0 +1,11 @@
+rules:
+  - rule_id: untracked-async-task
+    category: reliability
+    severity: medium
+    detector:
+      type: regex
+    pattern:
+      - '^\s*asyncio\.create_task\s*\('
+    message: Untracked asynchronous task
+    recommendation: Retain the task and await or cancel it during shutdown.
+    confidence: 0.78

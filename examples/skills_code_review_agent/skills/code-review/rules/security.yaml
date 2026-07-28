@@ -1,0 +1,43 @@
+rules:
+  - rule_id: hardcoded-secret
+    category: security
+    severity: critical
+    detector:
+      type: regex
+    pattern:
+      - '(?i)\b(api[_-]?key|password|token|secret)\s*=\s*["''][^"'']{6,}'
+      - '\bsk-[A-Za-z0-9]{20,}'
+    message: Hard-coded credential
+    recommendation: Load credentials from a secret provider and rotate the exposed value.
+    confidence: 0.98
+
+  - rule_id: unsafe-shell-execution
+    category: security
+    severity: high
+    detector:
+      type: ast
+      target:
+        - subprocess.run
+        - subprocess.call
+        - subprocess.Popen
+      keyword: shell
+      equals: true
+    message: Unsafe shell execution
+    recommendation: Pass a fixed argument vector and keep shell disabled.
+    confidence: 0.94
+    validator:
+      enabled: true
+      script: validators/security_probe.py
+
+  - rule_id: dynamic-code-execution
+    category: security
+    severity: high
+    detector:
+      type: ast
+      target:
+        - eval
+        - exec
+        - os.system
+    message: Unsafe dynamic execution
+    recommendation: Replace dynamic execution with an explicit allowlist.
+    confidence: 0.94

@@ -1,0 +1,5 @@
+diff --git a/settings.py b/settings.py
+--- a/settings.py
++++ b/settings.py
+@@ -0,0 +1 @@
++api_key = "sk-example-secret-value-123456"

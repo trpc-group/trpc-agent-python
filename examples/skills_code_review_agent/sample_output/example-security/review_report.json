@@ -1,0 +1,99 @@
+{
+  "task_id": "example-security",
+  "status": "completed",
+  "conclusion": "Found 2 actionable issue(s).",
+  "input_summary": "1 changed file(s), 1 added line(s)",
+  "findings": [
+    {
+      "severity": "high",
+      "category": "security",
+      "file": "app.py",
+      "line": 1,
+      "title": "Unsafe shell execution",
+      "evidence": "subprocess.run(user_input, shell=True)",
+      "recommendation": "Pass a fixed argument vector and keep shell disabled.",
+      "confidence": 0.94,
+      "source": "ast_detector",
+      "needs_human_review": false,
+      "dedupe_key": "599e909d031a94ab681c3315bb60216c53c0a422833a2f066db689d08bce7a8a",
+      "rule_id": "unsafe-shell-execution",
+      "rule_version": "1",
+      "validation_status": "pending"
+    },
+    {
+      "severity": "low",
+      "category": "testing",
+      "file": "app.py",
+      "line": 1,
+      "title": "No related test change",
+      "evidence": "subprocess.run(user_input, shell=True)",
+      "recommendation": "Add or update a focused test for this behavior.",
+      "confidence": 0.68,
+      "source": "regex_detector",
+      "needs_human_review": false,
+      "dedupe_key": "dd729d0f70f45c3ba64b4a53d3f7be2261b05a54a2c7abbd57cfe6094be71ee6",
+      "rule_id": "missing-test-change",
+      "rule_version": "1",
+      "validation_status": "pending"
+    }
+  ],
+  "needs_human_review": [],
+  "warnings": [],
+  "sandbox_runs": [
+    {
+      "id": "d460c8fba3e84a8189c2d0cd566241ab",
+      "runtime": "local",
+      "task_type": "custom_rule",
+      "command": [
+        "/usr/bin/python3",
+        "/tmp/ws_3f930668ab7ad7d7b60267942cb8a3ed_1785225345862387197/code-review/runner.py",
+        "/tmp/ws_3f930668ab7ad7d7b60267942cb8a3ed_1785225345862387197/review.json"
+      ],
+      "status": "completed",
+      "exit_code": 0,
+      "timed_out": false,
+      "duration_ms": 125,
+      "stdout_summary": "[{\"severity\": \"high\", \"category\": \"security\", \"file\": \"app.py\", \"line\": 1, \"title\": \"Unsafe shell execution\", \"evidence\": \"subprocess.run(user_input, shell=True)\", \"recommendation\": \"Pass a fixed argument vector and keep shell disabled.\", \"confidence\": 0.94, \"source\": \"ast_detector\", \"rule_id\": \"unsafe-shell-execution\", \"rule_version\": \"1\", \"validation_status\": \"pending\"}, {\"severity\": \"low\", \"category\": \"testing\", \"file\": \"app.py\", \"line\": 1, \"title\": \"No related test change\", \"evidence\": \"subprocess.run(user_input, shell=True)\", \"recommendation\": \"Add or update a focused test for this behavior.\", \"confidence\": 0.68, \"source\": \"regex_detector\", \"rule_id\": \"missing-test-change\", \"rule_version\": \"1\", \"validation_status\": \"pending\"}]\n",
+      "stderr_summary": "",
+      "decision": {
+        "decision": "allow",
+        "reason_code": "allowed",
+        "reason": "Policy check passed.",
+        "risk_level": "low",
+        "matched_rule": "allowed",
+        "task_id": "d460c8fba3e84a8189c2d0cd566241ab",
+        "command_digest": "13d6f2050de71ed06af82248fdddb87f2d648e4e82705b4564bf5de247530d44",
+        "created_at": "2026-07-28T07:55:45.878700Z"
+      }
+    }
+  ],
+  "filter_decisions": [
+    {
+      "decision": "allow",
+      "reason_code": "allowed",
+      "reason": "Policy check passed.",
+      "risk_level": "low",
+      "matched_rule": "allowed",
+      "task_id": "d460c8fba3e84a8189c2d0cd566241ab",
+      "command_digest": "13d6f2050de71ed06af82248fdddb87f2d648e4e82705b4564bf5de247530d44",
+      "created_at": "2026-07-28T07:55:45.878700Z"
+    }
+  ],
+  "metrics": {
+    "total_duration_ms": 262,
+    "stage_duration_ms": {
+      "custom_rule": 125
+    },
+    "tool_calls": 1,
+    "blocked_executions": 0,
+    "finding_severity": {
+      "high": 1,
+      "low": 1
+    },
+    "errors": {}
+  },
+  "dry_run": false,
+  "rule_set_digest": "daf2588b52f9ba2a84239d97305de003d2d36082a0eefb0e2c0049447674c889",
+  "skipped_checks": [],
+  "created_at": "2026-07-28T07:55:46.009786Z"
+}

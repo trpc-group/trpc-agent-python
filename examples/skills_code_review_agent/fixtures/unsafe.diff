@@ -1,0 +1,7 @@
+diff --git a/app.py b/app.py
+index e69de29..d95f3ad 100644
+--- a/app.py
++++ b/app.py
+@@ -0,0 +1,2 @@
++import subprocess
++subprocess.run(user_input, shell=True)

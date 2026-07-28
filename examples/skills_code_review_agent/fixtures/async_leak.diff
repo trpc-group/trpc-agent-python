@@ -1,0 +1,5 @@
+diff --git a/worker.py b/worker.py
+--- a/worker.py
++++ b/worker.py
+@@ -0,0 +1 @@
++asyncio.create_task(process_message(message))

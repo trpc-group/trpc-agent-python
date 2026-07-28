@@ -1,0 +1,5 @@
+diff --git a/store.py b/store.py
+--- a/store.py
++++ b/store.py
+@@ -0,0 +1 @@
++connection = sqlite3.connect(database_path)

@@ -1,0 +1,5 @@
+diff --git a/app.py b/app.py
+--- a/app.py
++++ b/app.py
+@@ -0,0 +1 @@
++subprocess.run(user_input, shell=True)
