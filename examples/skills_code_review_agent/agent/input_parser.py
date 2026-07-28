@@ -145,7 +145,7 @@ def parse_review_input(
             if relative.is_absolute() or ".." in relative.parts:
                 raise ValueError(f"unsafe path in file list: {value}")
             path = (project_root / relative).resolve()
-            if not path.is_relative_to(project_root) or path.is_symlink():
+            if not path.is_relative_to(project_root):
                 raise ValueError(f"unsafe path in file list: {value}")
             content = _read_text(path, max_input_bytes)
             total += len(content.encode())
@@ -178,7 +178,7 @@ def parse_review_input(
         if not source.is_dir():
             raise ValueError(f"repository path is not a directory: {source}")
         result = subprocess.run(
-            ["git", "-C", str(source), "diff", "--no-ext-diff", "--binary", "HEAD"],
+            ["git", "-C", str(source), "diff", "--no-ext-diff", "HEAD"],
             check=False,
             capture_output=True,
             timeout=30,

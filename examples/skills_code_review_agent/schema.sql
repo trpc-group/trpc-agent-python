@@ -35,7 +35,8 @@ CREATE TABLE finding (
   needs_human_review BOOLEAN NOT NULL, dedupe_key TEXT NOT NULL,
   rule_id TEXT NOT NULL, rule_version TEXT NOT NULL,
   validation_status TEXT NOT NULL,
-  created_at TIMESTAMP NOT NULL, UNIQUE(task_id, file, line, category)
+  created_at TIMESTAMP NOT NULL,
+  UNIQUE(task_id, file, line, category, needs_human_review)
 );
 CREATE TABLE review_report (
   id TEXT PRIMARY KEY, task_id TEXT NOT NULL UNIQUE REFERENCES review_task(id),

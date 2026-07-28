@@ -17,6 +17,7 @@ from examples.skills_code_review_agent.agent.models import (
     ExecutionRequest,
     FilterDecision,
     Finding,
+    ReviewReport,
     ReviewRequest,
     SandboxRunResult,
 )
@@ -30,6 +31,7 @@ from examples.skills_code_review_agent.sandbox.models import ResourcePolicy, San
 from examples.skills_code_review_agent.sandbox.policy import to_workspace_limits
 from examples.skills_code_review_agent.sandbox.runner import SandboxRunner
 from examples.skills_code_review_agent.sandbox.tasks import build_code_review_task
+from examples.skills_code_review_agent.run_agent import _destroy_workspace_runtime
 
 
 def _diff(tmp_path: Path) -> Path:
@@ -91,6 +93,55 @@ def test_parse_review_input_accepts_project_file_list(tmp_path: Path) -> None:
     assert parsed.source_type == "file_list"
     assert parsed.candidate_lines == {"app.py": [1]}
     assert parsed.source_path == str(tmp_path)
+
+
+def test_parse_review_input_rejects_file_list_symlink_escape(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    outside = tmp_path / "outside.py"
+    outside.write_text("print('outside')\n", encoding="utf-8")
+    (project / "linked.py").symlink_to(outside)
+    manifest = project / "files.txt"
+    manifest.write_text("linked.py\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unsafe path"):
+        parse_review_input(file_list=manifest)
+
+
+def test_parse_review_input_does_not_request_binary_git_patch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    command: list[str] = []
+
+    def fake_run(args: list[str], **_: object) -> subprocess.CompletedProcess[bytes]:
+        command.extend(args)
+        return subprocess.CompletedProcess(
+            args,
+            0,
+            stdout=(
+                b"diff --git a/app.py b/app.py\n"
+                b"--- a/app.py\n"
+                b"+++ b/app.py\n"
+                b"@@ -1 +1 @@\n"
+                b"-old\n"
+                b"+new\n"
+            ),
+            stderr=b"",
+        )
+
+    monkeypatch.setattr(
+        "examples.skills_code_review_agent.agent.input_parser.subprocess.run",
+        fake_run,
+    )
+
+    parsed = parse_review_input(repo_path=tmp_path)
+
+    assert "--binary" not in command
+    assert command[-2:] == ["--no-ext-diff", "HEAD"]
+    assert parsed.candidate_lines == {"app.py": [1]}
 
 
 def test_skill_runner_loads_yaml_and_ast_rules(tmp_path: Path) -> None:
@@ -270,6 +321,238 @@ async def test_fake_review_persists_and_writes_reports(tmp_path: Path) -> None:
         "review_report",
         "telemetry",
     } <= set(inspect(repository.engine).get_table_names())
+
+
+def test_persists_accepted_and_human_review_findings_independently(
+    tmp_path: Path,
+) -> None:
+    repository = ReviewRepository(f"sqlite:///{tmp_path / 'review.db'}")
+    repository.initialize()
+    task_id = "task_mixed_findings"
+    repository.create_task(
+        task_id,
+        input_type="diff",
+        input_digest="digest",
+        summary="summary",
+    )
+    common = {
+        "severity": "high",
+        "category": "security",
+        "file": "app.py",
+        "line": 2,
+        "title": "Unsafe subprocess call",
+        "evidence": "subprocess.run(value, shell=True)",
+        "recommendation": "Avoid shell=True",
+    }
+    report = ReviewReport(
+        task_id=task_id,
+        status="completed",
+        conclusion="Review completed",
+        input_summary="summary",
+        findings=[Finding(**common, confidence=0.9)],
+        needs_human_review=[
+            Finding(**common, confidence=0.5, needs_human_review=True)
+        ],
+    )
+
+    repository.save_review_result(report)
+
+    trace = repository.get_task(task_id)
+    assert trace is not None
+    assert len(trace["findings"]) == 2
+    assert {
+        (finding["needs_human_review"], finding["confidence"])
+        for finding in trace["findings"]
+    } == {(False, 0.9), (True, 0.5)}
+    assert {finding["status"] for finding in trace["findings"]} == {
+        "open",
+        "needs_human_review",
+    }
+
+
+def test_telemetry_sums_sandbox_run_durations(tmp_path: Path) -> None:
+    repository = ReviewRepository(f"sqlite:///{tmp_path / 'review.db'}")
+    repository.initialize()
+    task_id = "task_sandbox_duration"
+    repository.create_task(
+        task_id,
+        input_type="diff",
+        input_digest="digest",
+        summary="summary",
+    )
+    decision = FilterDecision(
+        decision=Decision.ALLOW,
+        reason_code="allowed",
+        reason="Execution allowed",
+    )
+    runs = [
+        SandboxRunResult(
+            id=f"run_{task_type}",
+            runtime="local",
+            task_type=task_type,
+            command=["true"],
+            status="completed",
+            duration_ms=duration_ms,
+            decision=decision,
+        )
+        for task_type, duration_ms in (
+            ("custom_rule", 125),
+            ("static_check", 250),
+            ("test", 375),
+        )
+    ]
+    report = ReviewReport(
+        task_id=task_id,
+        status="completed",
+        conclusion="Review completed",
+        input_summary="summary",
+        sandbox_runs=runs,
+        metrics={
+            "total_duration_ms": 1000,
+            "stage_duration_ms": {
+                run.task_type: run.duration_ms for run in runs
+            },
+        },
+    )
+
+    repository.save_review_result(report)
+
+    trace = repository.get_task(task_id)
+    assert trace is not None
+    assert trace["telemetry"]["sandbox_duration"] == pytest.approx(0.75)
+
+
+def test_stable_task_id_replaces_previous_review_trace(tmp_path: Path) -> None:
+    repository = ReviewRepository(f"sqlite:///{tmp_path / 'review.db'}")
+    repository.initialize()
+    task_id = "stable_replay_id"
+    decision = FilterDecision(
+        decision=Decision.ALLOW,
+        reason_code="allowed",
+        reason="Execution allowed",
+    )
+
+    def save(conclusion: str, duration_ms: int) -> None:
+        repository.create_task(
+            task_id,
+            input_type="diff",
+            input_digest=f"digest-{conclusion}",
+            summary=conclusion,
+        )
+        repository.save_review_result(
+            ReviewReport(
+                task_id=task_id,
+                status="completed",
+                conclusion=conclusion,
+                input_summary=conclusion,
+                sandbox_runs=[
+                    SandboxRunResult(
+                        id="stable_run_id",
+                        runtime="local",
+                        command=["true"],
+                        status="completed",
+                        duration_ms=duration_ms,
+                        decision=decision,
+                    )
+                ],
+                filter_decisions=[decision],
+                metrics={"total_duration_ms": duration_ms},
+            )
+        )
+
+    save("first review", 100)
+    save("replayed review", 250)
+
+    trace = repository.get_task(task_id)
+    assert trace is not None
+    assert trace["diff_summary"] == "replayed review"
+    assert len(trace["skill_executions"]) == 1
+    assert len(trace["sandbox_runs"]) == 1
+    assert len(trace["filter_decisions"]) == 1
+    assert json.loads(trace["report"]["summary"])["conclusion"] == "replayed review"
+    assert trace["telemetry"]["sandbox_duration"] == pytest.approx(0.25)
+
+
+@pytest.mark.asyncio
+async def test_run_review_replays_task_id_and_updates_trace(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parsed = parse_review_input(diff_file=_diff(tmp_path))
+    repository = ReviewRepository(f"sqlite:///{tmp_path / 'review.db'}")
+    repository.initialize()
+    task_id = "run_review_replay_id"
+    invocation = 0
+
+    async def fake_sandbox_checks(
+        *args: object,
+        **kwargs: object,
+    ) -> tuple[list[SandboxRunResult], list[Finding], list[str]]:
+        nonlocal invocation
+        invocation += 1
+        duration_ms = 100 * invocation
+        decision = FilterDecision(
+            decision=Decision.ALLOW,
+            reason_code="allowed",
+            reason="Execution allowed",
+        )
+        return [
+            SandboxRunResult(
+                id="stable_sandbox_run",
+                runtime="local",
+                command=["true"],
+                status="completed",
+                duration_ms=duration_ms,
+                stdout_summary=f"replay-{invocation}",
+                decision=decision,
+            )
+        ], [], []
+
+    monkeypatch.setattr(
+        "examples.skills_code_review_agent.agent.review.run_sandbox_checks",
+        fake_sandbox_checks,
+    )
+    request = ReviewRequest(
+        review_input=parsed,
+        runtime="local",
+        task_id=task_id,
+    )
+
+    await run_review(request, repository=repository)
+    replayed = await run_review(request, repository=repository)
+
+    trace = repository.get_task(task_id)
+    assert replayed.task_id == task_id
+    assert trace is not None
+    assert len(trace["sandbox_runs"]) == 1
+    assert trace["sandbox_runs"][0]["stdout"] == "replay-2"
+    assert trace["sandbox_runs"][0]["duration"] == pytest.approx(0.2)
+    assert trace["telemetry"]["sandbox_duration"] == pytest.approx(0.2)
+
+
+@pytest.mark.asyncio
+async def test_destroy_workspace_runtime_when_supported() -> None:
+    class AsyncRuntime:
+        destroyed = False
+
+        async def destroy(self) -> None:
+            self.destroyed = True
+
+    class SyncRuntime:
+        destroyed = False
+
+        def destroy(self) -> None:
+            self.destroyed = True
+
+    async_runtime = AsyncRuntime()
+    sync_runtime = SyncRuntime()
+
+    await _destroy_workspace_runtime(async_runtime)
+    await _destroy_workspace_runtime(sync_runtime)
+    await _destroy_workspace_runtime(object())
+
+    assert async_runtime.destroyed
+    assert sync_runtime.destroyed
 
 
 def test_case_clean_diff_has_no_findings(tmp_path: Path) -> None:

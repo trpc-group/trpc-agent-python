@@ -142,8 +142,12 @@ class ReviewRepository:
             Column("validation_status", String(32), nullable=False, default="not_run"),
             Column("created_at", DateTime(timezone=True), nullable=False),
             UniqueConstraint(
-                "task_id", "file", "line", "category",
-                name="uq_finding_location_category",
+                "task_id",
+                "file",
+                "line",
+                "category",
+                "needs_human_review",
+                name="uq_finding_location_category_review_status",
             ),
         )
         self.reports = Table(
@@ -191,19 +195,44 @@ class ReviewRepository:
     ) -> None:
         now = utc_now()
         with self.engine.begin() as connection:
-            connection.execute(
-                self.tasks.insert().values(
-                    id=task_id,
-                    repo_path=repo_path,
-                    commit_hash=commit_hash,
-                    input_type=input_type,
-                    input_digest=input_digest,
-                    diff_summary=summary,
-                    status="running",
-                    created_at=now,
-                    started_at=now,
+            task_values = {
+                "repo_path": repo_path,
+                "commit_hash": commit_hash,
+                "input_type": input_type,
+                "input_digest": input_digest,
+                "diff_summary": summary,
+                "status": "running",
+                "created_at": now,
+                "started_at": now,
+                "finished_at": None,
+                "error_type": None,
+            }
+            existing = connection.execute(
+                select(self.tasks.c.id).where(self.tasks.c.id == task_id)
+            ).first()
+            if existing:
+                # A stable task ID represents the latest replay, so remove the
+                # previous trace in foreign-key order before starting it again.
+                for table in (
+                    self.decisions,
+                    self.findings,
+                    self.reports,
+                    self.telemetry,
+                    self.runs,
+                    self.skill_executions,
+                ):
+                    connection.execute(
+                        table.delete().where(table.c.task_id == task_id)
+                    )
+                connection.execute(
+                    self.tasks.update()
+                    .where(self.tasks.c.id == task_id)
+                    .values(**task_values)
                 )
-            )
+            else:
+                connection.execute(
+                    self.tasks.insert().values(id=task_id, **task_values)
+                )
 
     def mark_failed(self, task_id: str, error_type: str) -> None:
         with self.engine.begin() as connection:
@@ -304,6 +333,8 @@ class ReviewRepository:
                         self.findings.c.file == finding.file,
                         self.findings.c.line == finding.line,
                         self.findings.c.category == finding.category,
+                        self.findings.c.needs_human_review
+                        == finding.needs_human_review,
                     )
                 ).first()
                 if existing and existing.confidence < finding.confidence:
@@ -332,13 +363,15 @@ class ReviewRepository:
                     created_at=report.created_at,
                 )
             )
-            stage_ms = report.metrics.get("stage_duration_ms", {})
+            sandbox_duration_ms = sum(
+                run.duration_ms for run in report.sandbox_runs
+            )
             connection.execute(
                 self.telemetry.insert().values(
                     id=_id("telemetry"),
                     task_id=report.task_id,
                     total_duration=float(report.metrics.get("total_duration_ms", 0)) / 1000,
-                    sandbox_duration=float(stage_ms.get("sandbox", 0)) / 1000,
+                    sandbox_duration=float(sandbox_duration_ms) / 1000,
                     tool_calls=int(report.metrics.get("tool_calls", 0)),
                     filter_blocks=int(report.metrics.get("blocked_executions", 0)),
                     finding_count=len(all_findings),

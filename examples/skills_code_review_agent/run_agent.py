@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import inspect
 import sys
 from pathlib import Path
+from typing import Any
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -41,6 +43,16 @@ async def create_workspace_runtime(name: str):
         sandbox_client=client,
         execute_timeout=config.execute_timeout,
     )
+
+
+async def _destroy_workspace_runtime(runtime: Any) -> None:
+    """Destroy a workspace runtime when its implementation supports cleanup."""
+    destroy = getattr(runtime, "destroy", None)
+    if not callable(destroy):
+        return
+    result = destroy()
+    if inspect.isawaitable(result):
+        await result
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -97,8 +109,7 @@ async def _main(args: argparse.Namespace) -> int:
             repository=repository,
         )
     finally:
-        if args.runtime == "cube":
-            await runtime.destroy()
+        await _destroy_workspace_runtime(runtime)
     paths = write_reports(report, args.output_dir)
     print(f"{report.conclusion}\nJSON: {paths.json_path}\nMarkdown: {paths.markdown_path}")
     return 0 if report.status in {"completed", "partial"} else 1
