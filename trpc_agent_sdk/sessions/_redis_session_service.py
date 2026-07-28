@@ -54,6 +54,35 @@ def _session_key_prefix(app_name: str, user_id: Optional[str] = None) -> str:
     return f"session:{app_name}:{user_id}:*"
 
 
+def _decode_state_hash(raw_state: Any) -> dict[str, Any]:
+    """Decode Redis Hash keys and values at the Session state boundary.
+
+    在 Session state 边界解码 Redis Hash 的键和值；仅处理 Redis 返回的
+    ``bytes``，不改变 mock、Cluster 或显式解码客户端返回的原生 Python 值。
+    """
+    if not isinstance(raw_state, dict):
+        return {}
+
+    decoded: dict[str, Any] = {}
+    for raw_key, raw_value in raw_state.items():
+        # Redis state keys are textual. Decode raw responses so a later str
+        # state_delta overwrites the same field instead of creating bytes/str
+        # duplicates in the intermediate dictionary.
+        # Redis state 键为文本；解码原始响应，避免后续 str 类型 delta 与 bytes
+        # 类型旧键并存，导致同一字段被当成两个 HSET 项。
+        key = raw_key.decode("utf-8") if isinstance(raw_key, bytes) else raw_key
+        value = raw_value
+        if isinstance(raw_value, bytes):
+            try:
+                value = raw_value.decode("utf-8")
+            except UnicodeDecodeError:
+                # Preserve non-text values rather than corrupting their bytes.
+                # 非文本值保持原始 bytes，避免错误解码造成数据损坏。
+                value = raw_value
+        decoded[str(key)] = value
+    return decoded
+
+
 class RedisSessionService(BaseSessionService):
     """A Redis implementation of the session service.
 
@@ -189,14 +218,23 @@ class RedisSessionService(BaseSessionService):
 
     @override
     async def append_event(self, session: Session, event: Event) -> Event:
-        # Skip partial events
+        """Append an event idempotently and persist the session to Redis.
+
+        以 Event ID 保证追加幂等，并将调用方 Session 快照保存到 Redis；若前次
+        仅完成本地修改，本次重试会检测 Redis 缺失并继续补写。
+        """
+        # Partial streaming events are not durable session history.
+        # 流式 partial 事件不属于可持久化的会话历史。
         if event.partial:
             return event
 
-        # Update the in-memory session
-        await super().append_event(session=session, event=event)
+        # Update the caller copy first and retain whether this invocation
+        # actually appended the ID locally.
+        # 先更新调用方副本，并记录本次是否真正向本地追加了该 Event ID。
+        event, _, appended = self._append_event_to_session(session, event)
 
-        # Update storage
+        # Resolve the Redis key scope from the caller-owned session identity.
+        # 根据调用方 Session 标识确定 Redis key 的作用域。
         app_name = session.app_name
         user_id = session.user_id
         session_id = session.id
@@ -207,27 +245,39 @@ class RedisSessionService(BaseSessionService):
         async with self._redis_storage.create_db_session() as redis_session:
             redis_session_key = session_key(app_name, user_id, session_id)
 
-            # Get storage session
+            # Read the durable snapshot before deciding whether a local
+            # duplicate can safely short-circuit.
+            # 在判断本地重复能否直接返回前，先读取 Redis 中的持久化快照。
             storage_session = await self._get_session(redis_session, redis_session_key)
             if not storage_session:
                 _warning("session not found in Redis")
                 return event
-            # Extract and apply state changes to appropriate storage buckets
+            # Local and Redis copies both contain the ID: the retry is complete.
+            # If only the caller has it, continue to repair the missing Redis write.
+            # 本地与 Redis 都有该 ID 才直接返回；仅本地存在时继续补偿 Redis 写入。
+            if not appended and any(stored.id == event.id
+                                    for stored in [*storage_session.events, *storage_session.historical_events]):
+                return event
+            # Split the delta into the same app/user/session scopes used by reads.
+            # 按读取语义拆分 delta，并分别写入 app/user/session 作用域。
             if event.actions and event.actions.state_delta:
                 state_delta = extract_state_delta(event.actions.state_delta)
 
-                # Update app state and refresh TTL
+                # Update app state and refresh TTL / 更新应用 state 并刷新 TTL。
                 if state_delta.app_state_delta:
                     await self._update_app_state(redis_session, app_name, state_delta.app_state_delta)
 
-                # Update user state and refresh TTL
+                # Update user state and refresh TTL / 更新用户 state 并刷新 TTL。
                 if state_delta.user_state_delta:
                     await self._update_user_state(redis_session, app_name, user_id, state_delta.user_state_delta)
 
-                # Update session state
+                # Update session state / 更新会话级 state。
                 if state_delta.session_state:
                     storage_session.state.update(state_delta.session_state)
 
+            # Persist the complete caller-side windows so normal writes and
+            # failure-recovery retries converge to the same Redis snapshot.
+            # 写入调用方的完整事件窗口，使首次写入与失败重试最终得到同一 Redis 快照。
             storage_session.events = session.events
             storage_session.historical_events = session.historical_events
             storage_session.conversation_count = session.conversation_count
@@ -272,11 +322,11 @@ class RedisSessionService(BaseSessionService):
 
         key = app_state_key(app_name)
         command = RedisCommand(method='hgetall', args=(key, ))
-        app_state: dict[str, Any] = await self._redis_storage.execute_command(redis_session, command)
+        app_state = _decode_state_hash(await self._redis_storage.execute_command(redis_session, command))
         if app_state:
             app_state.update(state_delta)
         else:
-            app_state = state_delta
+            app_state = dict(state_delta)
 
         if not app_state:
             return {}
@@ -285,13 +335,14 @@ class RedisSessionService(BaseSessionService):
             await self._refresh_ttl(redis_session, key)
             return app_state
 
-        # Use HSET with TTL if TTL is configured, otherwise use HSET
-        args = [key]
-        for k, v in app_state.items():
-            args.extend([k, v])
-
+        # redis-py HSET accepts multiple fields through ``mapping``. Flattened
+        # positional pairs bind the fourth argument as ``mapping`` and fail on
+        # redis-py 8 when more than one field is present.
+        # redis-py 的 HSET 通过 ``mapping`` 接收多字段；展开的位置参数在字段
+        # 超过一个时会把第 4 个参数绑定为 mapping，并在 redis-py 8 中报错。
         command = RedisCommand(method='hset',
-                               args=tuple(args),
+                               args=(key, ),
+                               kwargs={"mapping": app_state},
                                expire=RedisExpire(key=key, ttl=self._session_config.ttl))
         await self._redis_storage.execute_command(redis_session, command)
 
@@ -312,11 +363,11 @@ class RedisSessionService(BaseSessionService):
 
         key = user_state_key(app_name, user_id)
         command = RedisCommand(method='hgetall', args=(key, ))
-        user_state: dict[str, Any] = await self._redis_storage.execute_command(redis_session, command)
+        user_state = _decode_state_hash(await self._redis_storage.execute_command(redis_session, command))
         if user_state:
             user_state.update(state_delta)
         else:
-            user_state = state_delta
+            user_state = dict(state_delta)
 
         if not user_state:
             return {}
@@ -325,13 +376,11 @@ class RedisSessionService(BaseSessionService):
             await self._refresh_ttl(redis_session, key)
             return user_state
 
-        # Use HSET with TTL if TTL is configured, otherwise use HSET
-        args = [key]
-        for k, v in user_state.items():
-            args.extend([k, v])
-
+        # Keep user-scoped state on the same redis-py mapping path as app state.
+        # 用户级 state 与应用级 state 使用相同的 redis-py mapping 写入语义。
         command = RedisCommand(method='hset',
-                               args=tuple(args),
+                               args=(key, ),
+                               kwargs={"mapping": user_state},
                                expire=RedisExpire(key=key, ttl=self._session_config.ttl))
         await self._redis_storage.execute_command(redis_session, command)
 
@@ -370,7 +419,7 @@ class RedisSessionService(BaseSessionService):
         """
         key = app_state_key(app_name)
         command = RedisCommand(method='hgetall', args=(key, ))
-        app_state = await self._redis_storage.execute_command(redis_session, command)
+        app_state = _decode_state_hash(await self._redis_storage.execute_command(redis_session, command))
         if app_state:
             await self._refresh_ttl(redis_session, key)
 
@@ -391,7 +440,7 @@ class RedisSessionService(BaseSessionService):
         """
         key = user_state_key(app_name, user_id)
         command = RedisCommand(method='hgetall', args=(key, ))
-        user_state = await self._redis_storage.execute_command(redis_session, command)
+        user_state = _decode_state_hash(await self._redis_storage.execute_command(redis_session, command))
         if user_state:
             await self._refresh_ttl(redis_session, key)
         return user_state or {}

@@ -219,11 +219,18 @@ class InMemorySessionService(BaseSessionService):
 
     @override
     async def append_event(self, session: Session, event: Event) -> Event:
-        # Update the in-memory session.
+        """Append an event idempotently to the caller and stored sessions.
+
+        以 Event ID 为幂等键，同时更新调用方 Session 与内存存储副本；如果前次
+        调用只修改了调用方对象却未完成存储写入，本次重试会补齐存储数据。
+        """
+        # Partial streaming events are transient and must not enter storage.
+        # 流式 partial 事件属于临时结果，不应进入 Session 存储。
         if event.partial:
             return event
 
-        # Update the storage session
+        # Resolve the exact storage scope before mutating either representation.
+        # 在修改任一 Session 表示前，先确定准确的存储作用域。
         app_name = session.app_name
         user_id = session.user_id
         session_id = session.id
@@ -241,31 +248,49 @@ class InMemorySessionService(BaseSessionService):
             _warning(f"session_id {session_id} not in sessions[app_name][user_id]")
             return event
 
-        await super().append_event(session=session, event=event)
+        # Mutate the caller-owned session first. ``appended`` is false when
+        # this ID is already present locally, including after a failed write.
+        # 先更新调用方 Session；若该 ID 已在本地（包括上次写入失败），appended 为 false。
+        event, _, appended = self._append_event_to_session(session, event)
 
-        # Get session with TTL wrapper
+        # Fetch the independent storage copy through its TTL-aware accessor.
+        # 通过带 TTL 检查的读取方法取得与调用方隔离的存储副本。
         storage_session = self._get_session(app_name, user_id, session_id)
         if storage_session is None:
             _warning("session not found")
             return event
+        # A duplicate is complete only when storage also has the ID. If the
+        # caller has it but storage does not, continue below as failure recovery.
+        # 只有存储中也存在该 ID 才算完整重复；若仅调用方存在，则继续执行补偿写入。
+        if not appended and any(
+                stored.id == event.id
+                for stored in [*storage_session.events, *storage_session.historical_events]):
+            return event
 
-        # Add event to storage session
+        # This is either the normal first write or recovery of a write that
+        # stopped after local mutation; both paths append exactly once here.
+        # 此处既处理首次写入，也补偿“本地已改、存储未写”的失败，且只追加一次。
         storage_session.events.append(event)
 
-        # Extract and apply state changes to appropriate storage buckets
+        # Split the delta by scope so app/user/session state is stored in the
+        # same buckets used by normal reads.
+        # 按作用域拆分 delta，将 app/user/session state 写入读取逻辑对应的存储桶。
         if event.actions and event.actions.state_delta:
             state_delta = extract_state_delta(event.actions.state_delta)
 
-            # Update app state
+            # Update application-scoped state / 更新应用级 state。
             if state_delta.app_state_delta:
                 self._update_app_state(app_name, state_delta.app_state_delta)
 
-            # Update user state
+            # Update user-scoped state / 更新用户级 state。
             if state_delta.user_state_delta:
                 self._update_user_state(app_name, user_id, state_delta.user_state_delta)
+            # Update session-scoped state / 更新会话级 state。
             if state_delta.session_state:
                 storage_session.state.update(state_delta.session_state)
 
+        # Keep derived conversation metadata aligned with the caller snapshot.
+        # 让派生的对话计数与调用方快照保持一致。
         storage_session.conversation_count = session.conversation_count
 
         return event
@@ -461,24 +486,37 @@ class InMemorySessionService(BaseSessionService):
         return self._user_state[app_name][user_id].update(data)
 
     def _set_session(self, app_name: str, user_id: str, session_id: str, session: Session) -> None:
-        """Set a session to the in-memory storage.
+        """Store a deep-isolated session in the in-memory backend.
+
+        将 Session 深拷贝后写入内存后端，避免调用方与存储共享可变的事件列表或 state。
 
         Args:
-            app_name: Application name
-            user_id: User ID
-            session_id: Session ID
-            session: Session to set
+            app_name: Application name / 应用名称
+            user_id: User ID / 用户 ID
+            session_id: Session ID / 会话 ID
+            session: Session to set / 待写入的会话
         """
-        # Initialize storage structures
+        # Initialize the nested app/user/session storage hierarchy on demand.
+        # 按需初始化 app/user/session 三层存储结构。
         if app_name not in self._sessions:
             self._sessions[app_name] = {}
         if user_id not in self._sessions[app_name]:
             self._sessions[app_name][user_id] = {}
 
+        # Never share mutable event/state containers with the caller. After a
+        # summary update, a shared list would expose the next caller-side append
+        # to storage before append_event runs, so persistence would append it twice.
+        # 禁止存储与调用方共享 events/state 等可变容器。摘要更新后若列表共享，下一条
+        # 调用方事件会在 append_event 持久化前提前出现在存储中，继而被重复追加。
+        session = session.model_copy(deep=True)
         if not self._session_config.store_historical_events:
-            session = session.model_copy(update={"historical_events": []})
+            # Enforce backend configuration on the copied object without
+            # mutating the caller-owned session.
+            # 仅清理存储副本中的历史事件，遵循配置且不修改调用方对象。
+            session.historical_events = []
 
-        # Store session with TTL
+        # Wrap the isolated copy with TTL metadata before publishing it.
+        # 为隔离副本附加 TTL 元数据后再写入存储。
         session_with_ttl = SessionWithTTL(session=session, ttl=self._session_config.ttl)
         session_with_ttl.update(session)
         self._sessions[app_name][user_id][session_id] = session_with_ttl

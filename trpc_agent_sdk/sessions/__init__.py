@@ -24,6 +24,10 @@ from ._redis_cluster_session_service import RedisClusterSessionService
 from ._session import Session
 from ._session_summarizer import SessionSummarizer
 from ._session_summarizer import SessionSummary
+# Public replay API for structured summary metadata and persistent recovery.
+# 面向回放的一组公开 API，用于结构化摘要元数据及持久化恢复。
+from ._session_summarizer import SESSION_SUMMARY_METADATA_KEY
+from ._session_summarizer import session_summary_from_event
 from ._sql_session_service import SessionStorageBase
 from ._sql_session_service import SessionStorageEvent
 from ._sql_session_service import SqlSessionService
@@ -62,6 +66,8 @@ __all__ = [
     "Session",
     "SessionSummarizer",
     "SessionSummary",
+    "SESSION_SUMMARY_METADATA_KEY",
+    "session_summary_from_event",
     "SessionStorageBase",
     "SessionStorageEvent",
     "SqlSessionService",

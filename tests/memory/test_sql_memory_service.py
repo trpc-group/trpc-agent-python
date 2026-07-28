@@ -278,6 +278,38 @@ class TestSqlStoreSession:
         svc._sql_storage.add.assert_not_called()
         svc._sql_storage.commit.assert_not_called()
 
+    async def test_store_replaces_stale_session_memory(self, tmp_path):
+        """Verify a new SQL memory snapshot removes stale event rows.
+
+        验证再次保存 Session 完整快照时，SQL Memory 会删除已不在快照中的旧事件，
+        同时保留当前事件且不产生重复记录。
+        """
+        svc = SqlMemoryService(
+            db_url=f"sqlite:///{tmp_path / 'memory.sqlite3'}",
+            memory_service_config=_make_config_no_ttl(),
+        )
+        await svc._sql_storage.create_sql_engine()
+        current = _make_event("current marker", event_id="current")
+        original = _make_session(events=[
+            _make_event("obsolete marker", event_id="obsolete"),
+            current,
+        ])
+        replacement = _make_session(events=[current])
+
+        # Store the original snapshot, then replace it with one that omits obsolete.
+        # 先保存原始快照，再用不含 obsolete 事件的新快照替换。
+        await svc.store_session(original)
+        await svc.store_session(replacement)
+
+        # Search through the public API to verify stale deletion and retained uniqueness.
+        # 通过公开查询接口验证旧行已删除，保留事件仍且仅有一条。
+        obsolete = await svc.search_memory(original.save_key, "obsolete")
+        current_result = await svc.search_memory(original.save_key, "current")
+        assert obsolete.memories == []
+        assert len(current_result.memories) == 1
+        await svc.close()
+
+
 # ---------------------------------------------------------------------------
 # SqlMemoryService — search_memory
 # ---------------------------------------------------------------------------

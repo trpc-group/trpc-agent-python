@@ -191,19 +191,30 @@ class SqlMemoryService(BaseMemoryService):
 
     @override
     async def store_session(self, session: Session, agent_context: Optional[AgentContext] = None) -> None:
-        """Store a session in the memory.
+        """Replace the SQL memory rows with the session's complete snapshot.
 
-        Only stores events that are not expired based on event_ttl_seconds.
+        Treat the supplied session as the complete memory snapshot for that
+        session. Existing rows that are no longer present (for example after
+        session summarization) are removed in the same transaction.
+
+        将传入 Session 视为该会话的完整 Memory 快照。摘要压缩等操作移除的旧事件
+        会在同一事务中从 SQL 删除，从而与 InMemory/Redis 的替换语义保持一致。
         """
         async with self._sql_storage.create_db_session() as sql_session:
             is_exist = False
+            # Track only events that produce storable memory content; all other
+            # existing rows for this session become stale snapshot members.
+            # 仅记录可生成 Memory 内容的事件；该 Session 的其余已有行均属于过期快照。
+            current_event_ids: set[str] = set()
             for event in session.events:
                 if not event.content or not event.content.parts:
                     continue
                 content = sanitize_content_json(event.content.model_dump(exclude_none=True, mode="json"))
                 if content:
                     is_exist = True
-                    # Check if the event already exists
+                    current_event_ids.add(event.id)
+                    # Upsert current snapshot members by their scoped key.
+                    # 使用包含 save_key/session_id 的作用域键更新或插入当前快照成员。
                     event_key = SqlKey(key=(event.id, session.save_key, session.id), storage_cls=MemStorageEvent)
                     storage_event: Optional[MemStorageEvent] = await self._sql_storage.get(sql_session, event_key)
                     if storage_event:
@@ -211,7 +222,36 @@ class SqlMemoryService(BaseMemoryService):
                     else:
                         await self._sql_storage.add(sql_session, MemStorageEvent.from_event(session, event))
 
-            if is_exist:
+            # Read all persisted members in the same session scope, then derive
+            # the rows absent from the new complete snapshot.
+            # 查询同一 Session 作用域的全部持久化成员，再计算新完整快照中缺失的旧行。
+            filters = [
+                MemStorageEvent.save_key == session.save_key,
+                MemStorageEvent.session_id == session.id,
+            ]
+            session_event_key = SqlKey(key=(session.save_key, session.id), storage_cls=MemStorageEvent)
+            existing_events: List[MemStorageEvent] = await self._sql_storage.query(
+                sql_session,
+                session_event_key,
+                SqlCondition(filters=filters),
+            )
+            stale_event_ids = [stored.id for stored in existing_events if stored.id not in current_event_ids]
+            if stale_event_ids:
+                # Delete only the calculated IDs within the same save/session
+                # scope; the scoped filters prevent cross-session cleanup.
+                # 仅在同一 save_key/session_id 范围内删除计算出的 stale IDs，
+                # 防止清理操作影响其他 Session。
+                delete_conditions = SqlCondition(filters=[
+                    MemStorageEvent.save_key == session.save_key,
+                    MemStorageEvent.session_id == session.id,
+                    MemStorageEvent.id.in_(stale_event_ids),
+                ])
+                await self._sql_storage.delete(sql_session, session_event_key, delete_conditions)
+
+            # Commit both upserts and stale deletion together; an empty-to-empty
+            # snapshot is a true no-op and does not open an unnecessary commit.
+            # upsert 与 stale 删除一并提交；空快照替换空存储时无需额外 commit。
+            if is_exist or stale_event_ids:
                 await self._sql_storage.commit(sql_session)
 
     @override

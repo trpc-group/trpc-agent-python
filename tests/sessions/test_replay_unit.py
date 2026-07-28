@@ -86,6 +86,33 @@ class TestNormalizer:
         assert e["invocation_id"] == NORMALIZED
         assert e["author"] == "user"
 
+    def test_normalize_event_replaces_only_volatile_summary_metadata(self):
+        """Normalize generated Summary values without hiding its semantics.
+
+        归一化自动生成的 Summary 值，但保留归属、正文、版本和覆盖关系语义。
+        """
+        e = normalize_event({
+            "id": "summary-2",
+            "timestamp": 2.0,
+            "custom_metadata": {
+                "session_summary": {
+                    "summary_id": "summary-2",
+                    "summary_timestamp": 2.0,
+                    "replaces_summary_id": "summary-1",
+                    "session_id": "session-a",
+                    "summary_text": "stable text",
+                    "version": 2,
+                }
+            },
+        })
+        metadata = e["custom_metadata"]["session_summary"]
+        assert metadata["summary_id"] == NORMALIZED
+        assert metadata["summary_timestamp"] == NORMALIZED
+        assert metadata["replaces_summary_id"] == NORMALIZED
+        assert metadata["session_id"] == "session-a"
+        assert metadata["summary_text"] == "stable text"
+        assert metadata["version"] == 2
+
     def test_normalize_strips_temp_state(self):
         snap = normalize_snapshot(_snapshot(state={"app:x": 1, "temp:skip": 2, "plain": 3}))
         assert "temp:skip" not in snap.state

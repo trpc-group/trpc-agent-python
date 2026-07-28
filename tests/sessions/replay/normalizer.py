@@ -14,6 +14,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from trpc_agent_sdk.sessions import SESSION_SUMMARY_METADATA_KEY
+
 from .harness import NORMALIZED
 from .harness import ReplaySnapshot
 
@@ -27,6 +29,27 @@ def normalize_event(event: dict[str, Any]) -> dict[str, Any]:
     for key in VOLATILE_KEYS:
         if key in out:
             out[key] = NORMALIZED
+
+    # A structured Summary event repeats its generated ID and real update
+    # clock in metadata. Normalize only those volatile representations while
+    # keeping ownership, text, version and replacement presence strict.
+    # 结构化 Summary Event 会在元数据中重复自动 ID 和真实更新时间；这里只
+    # 归一化这些非业务表示，归属、正文、版本及覆盖关系是否存在仍严格比较。
+    custom_metadata = out.get("custom_metadata")
+    if isinstance(custom_metadata, dict):
+        custom_metadata = dict(custom_metadata)
+        summary_metadata = custom_metadata.get(SESSION_SUMMARY_METADATA_KEY)
+        if isinstance(summary_metadata, dict):
+            summary_metadata = dict(summary_metadata)
+            if isinstance(summary_metadata.get("summary_id"), str):
+                summary_metadata["summary_id"] = NORMALIZED
+            if isinstance(summary_metadata.get("summary_timestamp"), (int, float)):
+                summary_metadata["summary_timestamp"] = NORMALIZED
+            if isinstance(summary_metadata.get("replaces_summary_id"), str):
+                summary_metadata["replaces_summary_id"] = NORMALIZED
+            custom_metadata[SESSION_SUMMARY_METADATA_KEY] = summary_metadata
+            out["custom_metadata"] = custom_metadata
+
     # long_running_tool_ids: InMemory=None vs SQL=set() 的良性序列化差异,统一空值;
     # 一方有值一方空的真丢失仍会被检出。
     lr = out.get("long_running_tool_ids")

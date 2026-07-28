@@ -21,6 +21,7 @@ import pytest
 from trpc_agent_sdk.events import Event
 from trpc_agent_sdk.sessions._session import Session
 from trpc_agent_sdk.sessions._session_summarizer import SessionSummarizer, SessionSummary
+from trpc_agent_sdk.sessions._session_summarizer import SESSION_SUMMARY_METADATA_KEY
 from trpc_agent_sdk.sessions._summarizer_manager import SummarizerSessionManager
 from trpc_agent_sdk.types import Content, Part
 
@@ -219,6 +220,73 @@ class TestGetSessionSummary:
         session = _make_session()
         result = await manager.get_session_summary(session)
         assert result is None
+
+    async def test_get_rebuilds_cache_from_persisted_summary_event(self):
+        """Recover full version metadata after cache loss.
+
+        验证缓存丢失后可从持久化摘要事件恢复版本、覆盖链和实际更新时间。
+        """
+        model = _make_model()
+        manager = SummarizerSessionManager(model=model)
+        summary_event = Event(
+            id="summary-2",
+            invocation_id="summary",
+            author="system",
+            version=2,
+            timestamp=123.0,
+            content=Content(parts=[Part.from_text(text="Previous conversation summary: persisted")]),
+            custom_metadata={
+                SESSION_SUMMARY_METADATA_KEY: {
+                    "session_id": "s1",
+                    "summary_text": "persisted",
+                    "version": 2,
+                    "replaces_summary_id": "summary-1",
+                    "original_event_count": 8,
+                    "compressed_event_count": 3,
+                    "summary_timestamp": 456.0,
+                }
+            },
+        )
+        summary_event.set_summary_event(True)
+        session = _make_session(events=[summary_event])
+
+        result = await manager.get_session_summary(session)
+
+        assert result.summary_id == "summary-2"
+        assert result.session_id == "s1"
+        assert result.summary_text == "persisted"
+        assert result.version == 2
+        assert result.replaces_summary_id == "summary-1"
+        assert result.summary_timestamp == 456.0
+        assert manager._summarizer_cache["app"]["user"]["s1"] is result
+
+    async def test_get_rejects_summary_owned_by_another_session(self):
+        """Reject a persisted summary whose explicit owner is another session.
+
+        验证显式归属于其他会话的持久化摘要不会被当前会话错误加载。
+        """
+        model = _make_model()
+        manager = SummarizerSessionManager(model=model)
+        summary_event = Event(
+            id="summary-wrong-owner",
+            invocation_id="summary",
+            author="system",
+            content=Content(parts=[Part.from_text(text="Previous conversation summary: wrong")]),
+            custom_metadata={
+                SESSION_SUMMARY_METADATA_KEY: {
+                    "session_id": "another-session",
+                    "summary_text": "wrong",
+                    "version": 1,
+                    "original_event_count": 4,
+                    "compressed_event_count": 2,
+                    "summary_timestamp": 123.0,
+                }
+            },
+        )
+        summary_event.set_summary_event(True)
+        session = _make_session(events=[summary_event])
+
+        assert await manager.get_session_summary(session) is None
 
     async def test_get_no_summarizer(self):
         model = _make_model()

@@ -61,12 +61,14 @@ class _MockRedisStorage:
     def __init__(self):
         self._store = {}
         self._hash_store = {}
+        self.commands = []
 
     @asynccontextmanager
     async def create_db_session(self):
         yield MagicMock()
 
     async def execute_command(self, session, command):
+        self.commands.append(command)
         method = command.method
         args = command.args
 
@@ -83,11 +85,18 @@ class _MockRedisStorage:
             return [k for k in self._store.keys() if k.startswith(prefix)]
         elif method == 'hset':
             key = args[0]
-            pairs = args[1:]
             if key not in self._hash_store:
                 self._hash_store[key] = {}
-            for i in range(0, len(pairs), 2):
-                self._hash_store[key][pairs[i]] = pairs[i + 1]
+            mapping = command.kwargs.get("mapping")
+            if mapping is not None:
+                self._hash_store[key].update(mapping)
+            else:
+                # Retain legacy positional support so unrelated storage tests
+                # can still model direct single-field HSET commands.
+                # 保留旧位置参数支持，使无关存储测试仍可模拟单字段 HSET。
+                pairs = args[1:]
+                for i in range(0, len(pairs), 2):
+                    self._hash_store[key][pairs[i]] = pairs[i + 1]
             return True
         elif method == 'hgetall':
             key = args[0]
@@ -141,6 +150,33 @@ class TestRedisCreateSession:
         assert session.state["sk"] == "sv"
         assert session.state[f"{State.APP_PREFIX}ak"] == "av"
         assert session.state[f"{State.USER_PREFIX}uk"] == "uv"
+        await svc.close()
+
+    async def test_create_multiple_scoped_state_fields_uses_hset_mapping(self):
+        """Write multi-field app/user state through redis-py's mapping API.
+
+        通过 redis-py mapping API 写入多字段 app/user state。
+        """
+        svc = _create_service()
+        session = await svc.create_session(
+            app_name="app",
+            user_id="user",
+            session_id="s1",
+            state={
+                f"{State.APP_PREFIX}region": "cn",
+                f"{State.APP_PREFIX}timezone": "utc8",
+                f"{State.USER_PREFIX}language": "zh",
+                f"{State.USER_PREFIX}theme": "dark",
+            },
+        )
+
+        hset_commands = [command for command in svc._redis_storage.commands if command.method == "hset"]
+        assert len(hset_commands) == 2
+        assert all(len(command.args) == 1 for command in hset_commands)
+        assert hset_commands[0].kwargs["mapping"] == {"region": "cn", "timezone": "utc8"}
+        assert hset_commands[1].kwargs["mapping"] == {"language": "zh", "theme": "dark"}
+        assert session.state[f"{State.APP_PREFIX}region"] == "cn"
+        assert session.state[f"{State.USER_PREFIX}language"] == "zh"
         await svc.close()
 
     async def test_create_with_whitespace_id(self):
@@ -271,6 +307,28 @@ class TestRedisAppendEvent:
         assert stored.state["session_key"] == "sv"
         assert stored.state[f"{State.APP_PREFIX}app_key"] == "av"
         assert stored.state[f"{State.USER_PREFIX}user_key"] == "uv"
+        await svc.close()
+
+    async def test_append_overwrites_raw_bytes_scoped_state(self):
+        """Decode raw Redis Hash state before applying string-key deltas.
+
+        应用字符串键 delta 前先解码 Redis Hash 原始 bytes state。
+        """
+        svc = _create_service()
+        session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
+        svc._redis_storage._hash_store["app_state:app"] = {b"region": b"cn"}
+        svc._redis_storage._hash_store["user_state:app:user"] = {b"language": b"zh"}
+
+        event = _make_event(state_delta={
+            f"{State.APP_PREFIX}region": "global",
+            f"{State.USER_PREFIX}language": "en",
+        })
+        await svc.append_event(session, event)
+        stored = await svc.get_session(app_name="app", user_id="user", session_id="s1")
+
+        assert stored.state[f"{State.APP_PREFIX}region"] == "global"
+        assert stored.state[f"{State.USER_PREFIX}language"] == "en"
+        assert all("b'" not in key for key in stored.state)
         await svc.close()
 
     async def test_append_does_not_persist_merged_or_temp_state_in_session_json(self):

@@ -15,6 +15,7 @@ Covers:
 from __future__ import annotations
 
 import time
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -352,6 +353,35 @@ class TestCreateSessionSummaryByEvents:
         summary_event = next(event for event in result_events if event.is_summary_event())
         assert summary_event.author == "system"
         assert summary_event.content.role == "user"
+
+    async def test_summary_ordering_gap_survives_sql_timestamp_rounding(self):
+        """Keep the Summary anchor distinct after SQL timestamp conversion.
+
+        确保 Summary 排序锚点转换为 SQL 时间戳后仍早于首个保留事件。
+        """
+        model = _make_model_mock()
+        llm_response = MagicMock()
+        llm_response.content = Content(parts=[Part.from_text(text="summary text")])
+
+        async def mock_generate(request, stream=False, ctx=None):
+            yield llm_response
+
+        model.generate_async = mock_generate
+        summarizer = SessionSummarizer(model=model)
+        events = [_make_event(text=f"msg{i}") for i in range(4)]
+        for index, event in enumerate(events):
+            event.timestamp = 1_775_000_000.0451305 + index * 0.01
+
+        _, result_events = await summarizer.create_session_summary_by_events(
+            events, "s1", keep_recent_count=2)
+
+        # Follow the production float-to-datetime conversion and require a
+        # gap wider than SQL's one-microsecond precision.
+        # 按生产逻辑把浮点时间转换为 datetime，并要求间隔大于 SQL 的一微秒精度。
+        assert result_events[0].is_summary_event()
+        summary_storage_time = datetime.fromtimestamp(result_events[0].timestamp)
+        retained_storage_time = datetime.fromtimestamp(result_events[1].timestamp)
+        assert retained_storage_time - summary_storage_time > timedelta(microseconds=1)
 
     async def test_summary_starts_from_first_user_turn_before_recent_events(self):
         model = _make_model_mock()

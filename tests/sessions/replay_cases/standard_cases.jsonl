@@ -1,0 +1,725 @@
+{
+  "case_id": "single_turn_text",
+  "operations": [
+    {
+      "op": "create_session"
+    },
+    {
+      "op": "append_text",
+      "event_id": "single-e1",
+      "timestamp": 1001.0,
+      "author": "user",
+      "text": "Hello agent."
+    },
+    {
+      "op": "append_text",
+      "event_id": "single-e2",
+      "timestamp": 1002.0,
+      "author": "assistant",
+      "text": "Hello user."
+    }
+  ],
+  "memory_queries": [],
+  "expect": {
+    "session_id": "single-turn-session",
+    "event_ids": [
+      "single-e1",
+      "single-e2"
+    ],
+    "historical_event_ids": [],
+    "state": {},
+    "summary": null
+  }
+}
+
+{
+  "case_id": "multi_turn_text",
+  "operations": [
+    {
+      "op": "create_session"
+    },
+    {
+      "op": "append_text",
+      "event_id": "multi-e1",
+      "timestamp": 1101.0,
+      "author": "user",
+      "text": "My name is Alice."
+    },
+    {
+      "op": "append_text",
+      "event_id": "multi-e2",
+      "timestamp": 1102.0,
+      "author": "assistant",
+      "text": "Nice to meet you, Alice."
+    },
+    {
+      "op": "append_text",
+      "event_id": "multi-e3",
+      "timestamp": 1103.0,
+      "author": "user",
+      "text": "What is my name?"
+    },
+    {
+      "op": "append_text",
+      "event_id": "multi-e4",
+      "timestamp": 1104.0,
+      "author": "assistant",
+      "text": "Your name is Alice."
+    },
+    {
+      "op": "append_text",
+      "event_id": "multi-e5",
+      "timestamp": 1105.0,
+      "author": "user",
+      "text": "Remember that for later."
+    },
+    {
+      "op": "append_text",
+      "event_id": "multi-e6",
+      "timestamp": 1106.0,
+      "author": "assistant",
+      "text": "I will keep it in this session."
+    }
+  ],
+  "memory_queries": [],
+  "expect": {
+    "session_id": "multi-turn-session",
+    "event_ids": [
+      "multi-e1",
+      "multi-e2",
+      "multi-e3",
+      "multi-e4",
+      "multi-e5",
+      "multi-e6"
+    ],
+    "historical_event_ids": [],
+    "state": {},
+    "summary": null
+  }
+}
+
+{
+  "case_id": "tool_call_response",
+  "operations": [
+    {
+      "op": "create_session"
+    },
+    {
+      "op": "append_text",
+      "event_id": "tool-e1",
+      "timestamp": 1201.0,
+      "author": "user",
+      "text": "What is the weather in Beijing?"
+    },
+    {
+      "op": "function_call",
+      "event_id": "tool-e2",
+      "timestamp": 1202.0,
+      "author": "assistant",
+      "call_id": "weather-call-1",
+      "name": "get_weather",
+      "args": {
+        "city": "Beijing"
+      }
+    },
+    {
+      "op": "function_response",
+      "event_id": "tool-e3",
+      "timestamp": 1203.0,
+      "author": "assistant",
+      "call_id": "weather-call-1",
+      "name": "get_weather",
+      "response": {
+        "condition": "sunny",
+        "temperature": 30
+      }
+    },
+    {
+      "op": "append_text",
+      "event_id": "tool-e4",
+      "timestamp": 1204.0,
+      "author": "assistant",
+      "text": "Beijing is sunny and 30 degrees."
+    }
+  ],
+  "memory_queries": [],
+  "expect": {
+    "session_id": "tool-session",
+    "event_ids": [
+      "tool-e1",
+      "tool-e2",
+      "tool-e3",
+      "tool-e4"
+    ],
+    "historical_event_ids": [],
+    "state": {},
+    "summary": null
+  }
+}
+
+{
+  "case_id": "session_state_overwrite",
+  "operations": [
+    {
+      "op": "create_session",
+      "state": {
+        "counter": 0,
+        "mode": "new"
+      }
+    },
+    {
+      "op": "state_update",
+      "event_id": "state-e1",
+      "timestamp": 1301.0,
+      "author": "assistant",
+      "state_delta": {
+        "counter": 1,
+        "mode": "draft"
+      }
+    },
+    {
+      "op": "state_update",
+      "event_id": "state-e2",
+      "timestamp": 1302.0,
+      "author": "assistant",
+      "state_delta": {
+        "counter": 2,
+        "mode": "final"
+      }
+    }
+  ],
+  "memory_queries": [],
+  "expect": {
+    "session_id": "state-overwrite-session",
+    "event_ids": [
+      "state-e1",
+      "state-e2"
+    ],
+    "historical_event_ids": [],
+    "state": {
+      "counter": 2,
+      "mode": "final"
+    },
+    "summary": null
+  }
+}
+
+{
+  "case_id": "scoped_state_update",
+  "operations": [
+    {
+      "op": "create_session",
+      "state": {
+        "app:region": "cn",
+        "user:language": "zh",
+        "session_value": "initial",
+        "temp:seed": "discard"
+      }
+    },
+    {
+      "op": "state_update",
+      "event_id": "scoped-e1",
+      "timestamp": 1401.0,
+      "author": "assistant",
+      "state_delta": {
+        "app:region": "global",
+        "user:language": "en",
+        "session_value": "updated",
+        "temp:request": "secret"
+      }
+    }
+  ],
+  "memory_queries": [],
+  "expect": {
+    "session_id": "scoped-state-session",
+    "event_ids": [
+      "scoped-e1"
+    ],
+    "historical_event_ids": [],
+    "state": {
+      "app:region": "global",
+      "user:language": "en",
+      "session_value": "updated"
+    },
+    "summary": null
+  }
+}
+
+{
+  "case_id": "memory_store_search",
+  "operations": [
+    {
+      "op": "create_session"
+    },
+    {
+      "op": "append_text",
+      "event_id": "memory-e1",
+      "timestamp": 1501.0,
+      "author": "user",
+      "text": "My favorite color is blue."
+    },
+    {
+      "op": "append_text",
+      "event_id": "memory-e2",
+      "timestamp": 1502.0,
+      "author": "user",
+      "text": "I live in Paris."
+    },
+    {
+      "op": "append_text",
+      "event_id": "memory-e3",
+      "timestamp": 1503.0,
+      "author": "assistant",
+      "text": "I will remember those preferences."
+    },
+    {
+      "op": "store_memory"
+    }
+  ],
+  "memory_queries": [
+    "blue",
+    "Paris"
+  ],
+  "expect": {
+    "session_id": "memory-session",
+    "event_ids": [
+      "memory-e1",
+      "memory-e2",
+      "memory-e3"
+    ],
+    "historical_event_ids": [],
+    "state": {},
+    "summary": null,
+    "memory": {
+      "blue": [
+        "My favorite color is blue."
+      ],
+      "Paris": [
+        "I live in Paris."
+      ]
+    }
+  }
+}
+
+{
+  "case_id": "summary_create",
+  "operations": [
+    {
+      "op": "create_session"
+    },
+    {
+      "op": "append_text",
+      "event_id": "summary-create-e1",
+      "timestamp": 1601.0,
+      "author": "user",
+      "text": "We need a project plan."
+    },
+    {
+      "op": "append_text",
+      "event_id": "summary-create-e2",
+      "timestamp": 1602.0,
+      "author": "assistant",
+      "text": "Start with requirements."
+    },
+    {
+      "op": "append_text",
+      "event_id": "summary-create-e3",
+      "timestamp": 1603.0,
+      "author": "user",
+      "text": "The deadline is Friday."
+    },
+    {
+      "op": "append_text",
+      "event_id": "summary-create-e4",
+      "timestamp": 1604.0,
+      "author": "assistant",
+      "text": "I added the deadline."
+    },
+    {
+      "op": "append_text",
+      "event_id": "summary-create-e5",
+      "timestamp": 1605.0,
+      "author": "user",
+      "text": "What should we do next?"
+    },
+    {
+      "op": "append_text",
+      "event_id": "summary-create-e6",
+      "timestamp": 1606.0,
+      "author": "assistant",
+      "text": "Assign owners to tasks."
+    },
+    {
+      "op": "create_summary",
+      "summary_text": "The user planned a project with a Friday deadline."
+    },
+    {
+      "op": "clear_summary_cache"
+    },
+    {
+      "op": "reload_session"
+    }
+  ],
+  "memory_queries": [],
+  "expect": {
+    "session_id": "summary-create-session",
+    "event_ids": [
+      "summary:v1",
+      "summary-create-e5",
+      "summary-create-e6"
+    ],
+    "historical_event_ids": [
+      "summary-create-e1",
+      "summary-create-e2",
+      "summary-create-e3",
+      "summary-create-e4"
+    ],
+    "state": {},
+    "summary": {
+      "summary_id": "summary:v1",
+      "session_id": "summary-create-session",
+      "summary_text": "The user planned a project with a Friday deadline.",
+      "version": 1,
+      "replaces_summary_id": null,
+      "original_event_count": 6,
+      "compressed_event_count": 3,
+      "recovered_text": "The user planned a project with a Friday deadline."
+    }
+  }
+}
+
+{
+  "case_id": "summary_update_replace",
+  "operations": [
+    {
+      "op": "create_session"
+    },
+    {
+      "op": "append_text",
+      "event_id": "summary-update-e1",
+      "timestamp": 1701.0,
+      "author": "user",
+      "text": "Plan the launch."
+    },
+    {
+      "op": "append_text",
+      "event_id": "summary-update-e2",
+      "timestamp": 1702.0,
+      "author": "assistant",
+      "text": "We need a launch checklist."
+    },
+    {
+      "op": "append_text",
+      "event_id": "summary-update-e3",
+      "timestamp": 1703.0,
+      "author": "user",
+      "text": "Include documentation."
+    },
+    {
+      "op": "append_text",
+      "event_id": "summary-update-e4",
+      "timestamp": 1704.0,
+      "author": "assistant",
+      "text": "Documentation is included."
+    },
+    {
+      "op": "append_text",
+      "event_id": "summary-update-e5",
+      "timestamp": 1705.0,
+      "author": "user",
+      "text": "Keep the first recent item."
+    },
+    {
+      "op": "append_text",
+      "event_id": "summary-update-e6",
+      "timestamp": 1706.0,
+      "author": "assistant",
+      "text": "Keep the second recent item."
+    },
+    {
+      "op": "create_summary",
+      "summary_text": "The launch plan includes a checklist and documentation."
+    },
+    {
+      "op": "append_text",
+      "event_id": "summary-update-e7",
+      "timestamp": 1707.0,
+      "author": "user",
+      "text": "Add a security review."
+    },
+    {
+      "op": "append_text",
+      "event_id": "summary-update-e8",
+      "timestamp": 1708.0,
+      "author": "assistant",
+      "text": "Security review added."
+    },
+    {
+      "op": "append_text",
+      "event_id": "summary-update-e9",
+      "timestamp": 1709.0,
+      "author": "user",
+      "text": "Who owns the release?"
+    },
+    {
+      "op": "append_text",
+      "event_id": "summary-update-e10",
+      "timestamp": 1710.0,
+      "author": "assistant",
+      "text": "The release manager owns it."
+    },
+    {
+      "op": "create_summary",
+      "summary_text": "The launch includes documentation, security review, and release ownership."
+    },
+    {
+      "op": "clear_summary_cache"
+    },
+    {
+      "op": "reload_session"
+    }
+  ],
+  "memory_queries": [
+    "checklist"
+  ],
+  "expect": {
+    "session_id": "summary-update-session",
+    "event_ids": [
+      "summary:v2",
+      "summary-update-e9",
+      "summary-update-e10"
+    ],
+    "historical_event_ids": [
+      "summary-update-e1",
+      "summary-update-e2",
+      "summary-update-e3",
+      "summary-update-e4",
+      "summary:v1",
+      "summary-update-e5",
+      "summary-update-e6",
+      "summary-update-e7",
+      "summary-update-e8"
+    ],
+    "state": {},
+    "summary": {
+      "summary_id": "summary:v2",
+      "session_id": "summary-update-session",
+      "summary_text": "The launch includes documentation, security review, and release ownership.",
+      "version": 2,
+      "replaces_summary_id": "summary:v1",
+      "original_event_count": 7,
+      "compressed_event_count": 3,
+      "recovered_text": "The launch includes documentation, security review, and release ownership."
+    },
+    "memory": {
+      "checklist": []
+    }
+  }
+}
+
+{
+  "case_id": "summary_truncate_continue",
+  "operations": [
+    {
+      "op": "create_session"
+    },
+    {
+      "op": "append_text",
+      "event_id": "truncate-e1",
+      "timestamp": 1801.0,
+      "author": "user",
+      "text": "Old question one."
+    },
+    {
+      "op": "append_text",
+      "event_id": "truncate-e2",
+      "timestamp": 1802.0,
+      "author": "assistant",
+      "text": "Old answer one."
+    },
+    {
+      "op": "append_text",
+      "event_id": "truncate-e3",
+      "timestamp": 1803.0,
+      "author": "user",
+      "text": "Old question two."
+    },
+    {
+      "op": "append_text",
+      "event_id": "truncate-e4",
+      "timestamp": 1804.0,
+      "author": "assistant",
+      "text": "Old answer two."
+    },
+    {
+      "op": "append_text",
+      "event_id": "truncate-e5",
+      "timestamp": 1805.0,
+      "author": "user",
+      "text": "Recent question."
+    },
+    {
+      "op": "append_text",
+      "event_id": "truncate-e6",
+      "timestamp": 1806.0,
+      "author": "assistant",
+      "text": "Recent answer."
+    },
+    {
+      "op": "create_summary",
+      "summary_text": "The earlier conversation contained two resolved questions."
+    },
+    {
+      "op": "reload_session"
+    },
+    {
+      "op": "append_text",
+      "event_id": "truncate-e7",
+      "timestamp": 1807.0,
+      "author": "user",
+      "text": "Continuation question."
+    },
+    {
+      "op": "append_text",
+      "event_id": "truncate-e8",
+      "timestamp": 1808.0,
+      "author": "assistant",
+      "text": "Continuation answer."
+    },
+    {
+      "op": "store_memory"
+    },
+    {
+      "op": "clear_summary_cache"
+    },
+    {
+      "op": "reload_session"
+    }
+  ],
+  "memory_queries": [
+    "Continuation"
+  ],
+  "expect": {
+    "session_id": "summary-truncate-session",
+    "event_ids": [
+      "summary:v1",
+      "truncate-e5",
+      "truncate-e6",
+      "truncate-e7",
+      "truncate-e8"
+    ],
+    "historical_event_ids": [
+      "truncate-e1",
+      "truncate-e2",
+      "truncate-e3",
+      "truncate-e4"
+    ],
+    "state": {},
+    "summary": {
+      "summary_id": "summary:v1",
+      "session_id": "summary-truncate-session",
+      "summary_text": "The earlier conversation contained two resolved questions.",
+      "version": 1,
+      "replaces_summary_id": null,
+      "recovered_text": "The earlier conversation contained two resolved questions."
+    },
+    "memory": {
+      "Continuation": [
+        "Continuation answer.",
+        "Continuation question."
+      ]
+    }
+  }
+}
+
+{
+  "case_id": "failure_retry_duplicate",
+  "operations": [
+    {
+      "op": "create_session"
+    },
+    {
+      "op": "append_text",
+      "event_id": "failure-e1",
+      "timestamp": 1901.0,
+      "author": "user",
+      "text": "Prepare the deployment."
+    },
+    {
+      "op": "append_text",
+      "event_id": "failure-e2",
+      "timestamp": 1902.0,
+      "author": "assistant",
+      "text": "Deployment preparation started."
+    },
+    {
+      "op": "append_text",
+      "event_id": "failure-e3",
+      "timestamp": 1903.0,
+      "author": "user",
+      "text": "Run the checks."
+    },
+    {
+      "op": "append_text",
+      "event_id": "failure-e4",
+      "timestamp": 1904.0,
+      "author": "assistant",
+      "text": "Checks are ready."
+    },
+    {
+      "op": "create_summary",
+      "summary_text": "Deployment preparation and checks are ready."
+    },
+    {
+      "op": "reload_session"
+    },
+    {
+      "op": "append_with_failure_retry",
+      "event_id": "failure-e5",
+      "timestamp": 1905.0,
+      "author": "assistant",
+      "text": "Deployment completed safely.",
+      "state_delta": {
+        "deployment_status": "done"
+      }
+    },
+    {
+      "op": "clear_summary_cache"
+    },
+    {
+      "op": "reload_session"
+    }
+  ],
+  "memory_queries": [
+    "completed"
+  ],
+  "expect": {
+    "session_id": "failure-retry-session",
+    "event_ids": [
+      "summary:v1",
+      "failure-e3",
+      "failure-e4",
+      "failure-e5"
+    ],
+    "historical_event_ids": [
+      "failure-e1",
+      "failure-e2"
+    ],
+    "state": {
+      "deployment_status": "done"
+    },
+    "summary": {
+      "summary_id": "summary:v1",
+      "session_id": "failure-retry-session",
+      "summary_text": "Deployment preparation and checks are ready.",
+      "version": 1,
+      "replaces_summary_id": null,
+      "recovered_text": "Deployment preparation and checks are ready."
+    },
+    "memory": {
+      "completed": [
+        "Deployment completed safely."
+      ]
+    }
+  }
+}

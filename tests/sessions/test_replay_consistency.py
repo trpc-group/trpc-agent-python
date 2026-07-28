@@ -32,11 +32,10 @@ CASES_DIR = str(Path(__file__).parent / "replay" / "replay_cases")
 REPORT_PATH = str(Path(__file__).parent / "session_memory_summary_diff_report.json")
 LIGHTWEIGHT_TIMEOUT = 30  # 验收第 6 条:轻量模式 ≤30s
 
-KNOWN_DRIFT = {"summary_update", "summary_truncation"}
-"""已知 SQLite summary 持久化漂移:``create_session_summary`` 后 SQLite ``get_session``
-读回的 events 顺序 / historical_events / summary 与 InMemory 不一致(类 issue #163 的
-summarizer 锚点 timestamp 问题)。框架正确发现,按设计 §8「只报告不改」记录,
-不计入误报率分母,修 bug 另开 issue/PR。"""
+KNOWN_DRIFT: set[str] = set()
+"""当前没有已知漂移。原 SQLite Summary 锚点顺序问题已由版本化摘要事件、
+毫秒级排序间隔和持久化恢复语义修复；若以后发现新的真实后端差异，可在此
+显式登记并保留报告定位。"""
 
 
 def _find(case_id: str):

@@ -84,25 +84,54 @@ class BaseSessionService(SessionServiceABC):
 
     @override
     async def append_event(self, session: Session, event: Event) -> Event:
-        """Appends an event to a session object."""
+        """Append an event to the caller-owned session object.
+
+        将事件追加到调用方持有的 Session 对象；具体后端会在此基础上完成持久化。
+        """
         if event.partial:
             return event
-        event, _ = self._append_event_to_session(session, event)
+        event, _, _ = self._append_event_to_session(session, event)
         return event
 
-    def _append_event_to_session(self, session: Session, event: Event) -> tuple[Event, list[Event]]:
-        """Append an event to the in-memory session and return filtered events."""
+    def _append_event_to_session(self, session: Session, event: Event) -> tuple[Event, list[Event], bool]:
+        """Append an event and return the event, filtered events, and append status.
+
+        Event IDs are idempotency keys within a session. A retry with an ID
+        already present in either the active or historical window is a no-op.
+
+        将 Event ID 作为 Session 内的幂等键。如果重试事件已存在于活动事件或
+        历史事件中，则不重复更新 state 或追加事件。第三个返回值表示本次是否
+        确实修改了调用方 Session，供具体后端区分重复请求和失败后的补偿写入。
+        """
+        # Check both event windows because a previously persisted event may
+        # already have been moved out of the active window by TTL/count limits.
+        # 同时检查活动与历史窗口，因为已持久化事件可能已因 TTL/数量限制被移入历史。
+        existing_event = next(
+            (stored for stored in [*session.events, *session.historical_events] if stored.id == event.id),
+            None,
+        )
+        if existing_event is not None:
+            # Return the stored object without applying state again. Reapplying
+            # a duplicate event could corrupt non-idempotent state transitions.
+            # 返回已存在对象且不重复应用 state，避免非幂等状态变更被执行两次。
+            return existing_event, [], False
+
         # Apply temp-scoped state to in-memory session before trimming event delta,
         # so same-invocation consumers can still read temp values.
+        # 先把 temp state 应用到内存 Session，再从待持久化 delta 中移除，
+        # 使本次调用可读取临时值但后端不会保存它。
         self._apply_temp_state(session, event)
         event = self._trim_temp_delta_state(event)
         self.__update_session_state(session, event)
+        # Add once, then return any events evicted by TTL/count rules so
+        # persistent backends can mirror the same active/historical windows.
+        # 仅追加一次，并返回被 TTL/数量规则淘汰的事件，供持久化后端同步窗口。
         filtered_events = session._add_event_and_get_filtered_events(
             event,
             event_ttl_seconds=self._session_config.event_ttl_seconds,
             max_events=self._session_config.max_events,
             store_filtered_events=self._session_config.store_historical_events)
-        return event, filtered_events
+        return event, filtered_events, True
 
     def _apply_temp_state(self, session: Session, event: Event) -> None:
         """Apply temp-scoped state delta to in-memory session state only.

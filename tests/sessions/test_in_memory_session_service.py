@@ -394,6 +394,34 @@ class TestInMemoryUpdateSession:
         await svc.update_session(session)
         await svc.close()
 
+    async def test_append_after_update_does_not_share_event_list_with_storage(self):
+        """Verify update_session stores a deep-isolated event list.
+
+        验证 update_session 保存的是深度隔离副本，后续追加不会因调用方与存储
+        共享 events 列表而产生重复事件。
+        """
+        config = _make_session_config(store_historical_events=True)
+        svc = InMemorySessionService(session_config=config)
+        session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
+        first = _make_event(text="first")
+        first.id = "event-1"
+        second = _make_event(text="second")
+        second.id = "event-2"
+
+        # Persist an initial event and replace storage with the session snapshot.
+        # 先持久化首个事件，再用当前 Session 快照更新存储。
+        await svc.append_event(session, first)
+        await svc.update_session(session)
+        # If update_session retained a shared list, this append would appear twice.
+        # 若 update_session 保留了共享列表，此次追加会在存储中出现两次。
+        await svc.append_event(session, second)
+
+        stored = await svc.get_session(app_name="app", user_id="user", session_id="s1")
+        # Reload storage to prove both IDs exist exactly once and in order.
+        # 重新读取存储，确认两个 ID 均只出现一次且顺序正确。
+        assert [event.id for event in stored.events] == ["event-1", "event-2"]
+        await svc.close()
+
     async def test_update_nonexistent_app(self):
         svc = InMemorySessionService(session_config=_make_session_config())
         session = Session(id="s1", app_name="nonexistent", user_id="user", save_key="k")

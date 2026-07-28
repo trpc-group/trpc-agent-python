@@ -102,6 +102,25 @@ class TestBaseSessionServiceAppendEvent:
         assert len(session.events) == 1
         assert session.events[0] is event
 
+    async def test_append_event_same_id_is_idempotent(self):
+        """Verify duplicate Event IDs are appended only once.
+
+        验证同一 Session 中重复的 Event ID 只会追加一次，且重试返回已存事件。
+        """
+        svc = ConcreteSessionService()
+        session = _make_session()
+        event = _make_event()
+
+        # Append once, then retry with a distinct object carrying the same ID.
+        # 首次追加后，使用具有相同 ID 的独立对象模拟重试。
+        await svc.append_event(session, event)
+        result = await svc.append_event(session, event.model_copy(deep=True))
+
+        # The retry resolves to the stored ID without duplicating the event window.
+        # 重试返回已存 ID，且事件窗口中不会出现重复项。
+        assert result.id == event.id
+        assert [stored.id for stored in session.events] == [event.id]
+
     async def test_append_event_partial_skipped(self):
         svc = ConcreteSessionService()
         session = _make_session()

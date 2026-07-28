@@ -532,10 +532,20 @@ class SqlSessionService(BaseSessionService):
 
     @override
     async def append_event(self, session: Session, event: Event) -> Event:
+        """Append an event idempotently and persist it in SQL.
+
+        以 Session 范围内的 Event ID 保证幂等，同时同步 state、活动事件与历史
+        事件；若调用方已有事件但数据库缺失，则将本次调用视为失败重试并补写。
+        """
+        # Partial streaming events are transient and never persisted.
+        # 流式 partial 事件是临时结果，不进入持久化存储。
         if event.partial:
             return event
 
-        event, filtered_events = self._append_event_to_session(session, event)
+        # ``appended`` describes only the caller-owned object. SQL must still
+        # be queried because a previous attempt may have failed before commit.
+        # appended 仅描述调用方对象；前次调用可能在 commit 前失败，因此仍需查询 SQL。
+        event, filtered_events, appended = self._append_event_to_session(session, event)
 
         app_name = session.app_name
         user_id = session.user_id
@@ -548,17 +558,34 @@ class SqlSessionService(BaseSessionService):
                 logger.warning("Session %s not found in storage, it will be created", session_id)
                 return event
 
+            # Use the full composite identity so equal Event IDs in different
+            # applications, users, or sessions do not collide.
+            # 使用完整复合标识，避免不同应用、用户或 Session 中相同 Event ID 互相影响。
+            storage_event_key = SqlKey(
+                key=(event.id, app_name, user_id, session_id),
+                storage_cls=SessionStorageEvent,
+            )
+            existing_storage_event = await self._sql_storage.get(sql_session, storage_event_key)
+            # Both caller and SQL contain the event, so this is a completed
+            # duplicate. If SQL lacks it, continue below to repair a failed write.
+            # 调用方与 SQL 均存在时才是完整重复；SQL 缺失时继续执行以补偿失败写入。
+            if not appended and existing_storage_event is not None:
+                return event
+
             time_diff = storage_session.update_timestamp_tz - session.last_update_time
             if time_diff > 1.0:
                 logger.warning(
                     "Session %s is stale (time diff: %ss). Reloading session from database to get latest state.",
                     session_id, time_diff)
                 # The event was already appended to the caller-provided
-                # session before this reload. If another writer concurrently
-                # changed the same session, filtered_events may no longer
-                # describe the exact database window. Full conflict resolution
-                # would require versioned writes/locking; keep the existing
-                # best-effort stale-session behavior here.
+                # session before this reload. Full conflict resolution for
+                # concurrent writers would require versioned writes or locking;
+                # keep the existing best-effort stale-session behavior here.
+                # 事件在刷新前已追加到调用方 Session。并发写入的完整冲突解决需要
+                # 版本化写入或锁，因此这里维持原有的尽力刷新语义。
+                # ``filtered_events`` may no longer exactly describe the
+                # database event window after a concurrent change.
+                # 并发变更后，filtered_events 可能不再精确对应数据库事件窗口。
                 await self._sql_storage.refresh(sql_session, storage_session)
                 filters = [
                     SessionStorageEvent.app_name == app_name, SessionStorageEvent.session_id == session_id,
@@ -576,8 +603,13 @@ class SqlSessionService(BaseSessionService):
                 session.historical_events = (_events_from_storage(storage_session.historical_events)
                                              if self._session_config.store_historical_events else [])
 
+            # Mirror derived conversation metadata in the SQL session row.
+            # 将派生的对话计数同步到 SQL Session 行。
             storage_session.conversation_count = session.conversation_count
 
+            # Split state updates by scope; app/user values live in dedicated
+            # rows while session values stay on the session record.
+            # 按作用域拆分 state：app/user 写入独立记录，session state 保存在会话行。
             if event.actions and event.actions.state_delta:
                 state_entry = extract_state_delta(event.actions.state_delta)
 
@@ -592,6 +624,10 @@ class SqlSessionService(BaseSessionService):
                     session_state.update(state_entry.session_state)
                     storage_session.state = session_state  # type: ignore
 
+            # Keep SQL's active/historical windows aligned with filtering done
+            # on the caller Session by deleting evicted active rows and storing
+            # the resulting history snapshot.
+            # 删除被淘汰的活动事件并保存历史快照，使 SQL 窗口与调用方过滤结果一致。
             if filtered_events:
                 filtered_event_ids = [filtered_event.id for filtered_event in filtered_events]
                 storage_session.historical_events = (_events_to_storage(
@@ -607,8 +643,15 @@ class SqlSessionService(BaseSessionService):
             else:
                 filtered_event_ids = []
 
-            if event.id not in filtered_event_ids:
+            # Do not reinsert an event evicted from the active window, and do
+            # not insert a row that already exists. A retry with a missing row
+            # reaches this branch and performs exactly one compensating insert.
+            # 不把已被活动窗口淘汰的事件重新插回，也不重复插入已有行；数据库缺行的
+            # 重试会到达此处并只执行一次补偿插入。
+            if event.id not in filtered_event_ids and existing_storage_event is None:
                 await self._sql_storage.add(sql_session, SessionStorageEvent.from_event(session, event))
+            # State/window updates and the event insert commit atomically.
+            # state、事件窗口更新与 Event 插入在同一事务中原子提交。
             await self._sql_storage.commit(sql_session)
             await self._sql_storage.refresh(sql_session, storage_session)
 
