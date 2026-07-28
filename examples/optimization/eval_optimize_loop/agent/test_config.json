@@ -6,9 +6,9 @@
       "criterion": {
         "llm_judge": {
           "judge_model": {
-            "model_name": "deepseek-v4-flash",
-            "base_url": "https://api.deepseek.com/v1",
-            "api_key": "sk-b2df4854c5e14aa4baa0a8fb61310130",
+            "model_name": "${TRPC_AGENT_MODEL_NAME}",
+            "base_url": "${TRPC_AGENT_BASE_URL}",
+            "api_key": "${TRPC_AGENT_API_KEY}",
             "num_samples": 3,
             "generation_config": {
               "max_tokens": 1024,

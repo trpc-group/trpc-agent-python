@@ -141,5 +141,8 @@ def create_agent() -> LlmAgent:
     return _create_agent_with_prompts(_read_instruction())
 
 
-# Module-level root_agent (for AgentEvaluator with agent_module="agent")
-root_agent = create_agent()
+# Register as get_agent() so the SDK's _get_agent_for_eval calls it fresh
+# each time, reading the latest prompt from disk (critical for live-mode
+# candidate validation where Stage 4 writes a new prompt before re-eval).
+def get_agent() -> LlmAgent:
+    return create_agent()

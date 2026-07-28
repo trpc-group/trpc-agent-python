@@ -417,22 +417,24 @@ async def run_pipeline(
         if ctx.is_trace_mode:
             candidate_val_path = str(
                 Path(ctx.project_dir) / "agent" / "trace_val_candidate.evalset.json")
-            candidate_train_path = str(
-                Path(ctx.project_dir) / "agent" / "trace_train_candidate.evalset.json")
             ctx.candidate_val = await run_evaluation(
                 evalset_path=candidate_val_path,
                 eval_config_path=eval_config, print_results=False,
             )
             print(f"  Candidate val pass_rate: {ctx.candidate_val.pass_rate:.2%}")
-            try:
+            # trace_train_candidate.evalset.json is optional — not all
+            # trace-mode scenarios provide a pre-recorded train candidate.
+            candidate_train_path = Path(ctx.project_dir) / "agent" / "trace_train_candidate.evalset.json"
+            if candidate_train_path.exists():
                 ctx.candidate_train = await run_evaluation(
-                    evalset_path=candidate_train_path,
+                    evalset_path=str(candidate_train_path),
                     eval_config_path=eval_config, print_results=False,
                 )
                 print(f"  Candidate train pass_rate: {ctx.candidate_train.pass_rate:.2%}")
-            except Exception:
+            else:
                 ctx.candidate_train = ctx.baseline_train
-                print(f"  Candidate train not found — using baseline_train.")
+                print(f"  trace_train_candidate.evalset.json not found — using baseline_train."
+                      f" (train delta=0, overfit Gate disabled)")
         elif (ctx.optimize_result is not None
               and ctx.optimize_result.best_prompts
               and ctx.optimize_result.best_prompts.get("system_prompt")):
