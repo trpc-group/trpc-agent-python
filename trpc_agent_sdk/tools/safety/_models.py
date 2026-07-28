@@ -89,7 +89,6 @@ class ScriptScanRequest(BaseModel):
     payloads: list[ScriptPayload] = Field(default_factory=list)
     cwd: str = ""
     execution_home: str | None = None
-    execution_root: str | None = None
     env_keys: list[str] = Field(default_factory=list)
     metadata: ToolMetadata
     requested_timeout_seconds: float | None = None

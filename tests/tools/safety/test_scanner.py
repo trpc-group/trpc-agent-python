@@ -249,17 +249,62 @@ def test_subprocess_requires_review(guard):
         "import subprocess\nsubprocess.check_output(['rm', '-rf', '/'])",
         "import subprocess\nsubprocess.check_call(['rm', '-rf', '/'])",
         "import subprocess\nsubprocess.getoutput('rm -rf /')",
+        "import subprocess\nsubprocess.check_output(args=['rm', '-rf', '/'])",
+        "import subprocess\nsubprocess.run(args=['rm', '-rf', '/'])",
+        "import subprocess\ntarget = input()\nsubprocess.run(['rm', '-rf', target])",
+        ("import subprocess\n"
+         "subprocess.run(args=['safe-name', '-rf', '/'], executable='/bin/rm')"),
+        ("import subprocess\n"
+         "target = input()\n"
+         "subprocess.run(args=['safe-name', '-rf', target], executable='/bin/rm')"),
+        ("import subprocess\n"
+         "subprocess.run('rm -rf /', shell=True, executable='/bin/sh')"),
         "import subprocess\ngetattr(subprocess, 'check_output')(['rm', '-rf', '/'])",
+        "import asyncio\nasyncio.create_subprocess_exec('rm', '-rf', '/')",
+        "import asyncio\nasyncio.create_subprocess_shell('rm -rf /')",
+        "import anyio\nanyio.run_process(['rm', '-rf', '/'])",
+        ("import anyio\n"
+         "runner = None\n"
+         "runner = anyio.run_process\n"
+         "runner(['rm', '-rf', '/'])"),
+        "import trio\ntrio.run_process(['rm', '-rf', '/'])",
         "import os\nos.execvp('rm', ['rm', '-rf', '/'])",
+        "import os\nos.execv('/bin/rm', ['safe-name', '-rf', '/'])",
+        "import os\ntarget = input()\nos.execv('/bin/rm', ['safe-name', '-rf', target])",
         "import os\nos.execle('/bin/rm', 'rm', '-rf', '/', {})",
+        "import os\nos.posix_spawn('/bin/rm', ['safe-name', '-rf', '/'], {})",
+        "import os\nos.posix_spawnp('rm', ['safe-name', '-rf', '/'], {})",
         "import os\nos.spawnl(os.P_WAIT, '/bin/rm', 'rm', '-rf', '/')",
+        "import os\nos.spawnl(os.P_WAIT, '/bin/rm', 'safe-name', '-rf', '/')",
         "import os\nos.spawnle(os.P_WAIT, '/bin/rm', 'rm', '-rf', '/', {})",
+        "import pty\npty.spawn(['rm', '-rf', '/'])",
     ],
 )
 def test_process_call_variants_scan_nested_recursive_delete(guard, code):
     report = guard.scan(_request(code))
     assert report.decision == SafetyDecision.DENY
     assert {"PROC001", "FILE001"} <= _rule_ids(report)
+
+
+def test_unknown_shutil_call_requires_review(guard):
+    report = guard.scan(_request("import shutil\nshutil.copyfile('/tmp/a', '/tmp/b')"))
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert "FILE003" in _rule_ids(report)
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "import os\nos.fork()",
+        "import multiprocessing\nmultiprocessing.Process(target=work)",
+        ("from concurrent.futures import ProcessPoolExecutor\n"
+         "ProcessPoolExecutor(max_workers=2)"),
+    ],
+)
+def test_process_creation_variants_require_review(guard, code):
+    report = guard.scan(_request(code))
+    assert report.decision == SafetyDecision.NEEDS_HUMAN_REVIEW
+    assert "PROC001" in _rule_ids(report)
 
 
 def test_shell_injection_with_delete_denied(guard):
@@ -777,6 +822,138 @@ def test_http_method_variants_with_secret_are_denied(guard, code):
     assert "SECRET001" in _rule_ids(report)
 
 
+@pytest.mark.parametrize(
+    ("code", "rule_id", "decision"),
+    [
+        (
+            "import requests\nsession = requests.Session()\nsession.send(prepared)",
+            "NET002",
+            SafetyDecision.NEEDS_HUMAN_REVIEW,
+        ),
+        (
+            "import httpx\nhttpx.stream('GET', 'https://evil.test/item')",
+            "NET001",
+            SafetyDecision.DENY,
+        ),
+        (
+            ("import aiohttp\n"
+             "session = aiohttp.ClientSession()\n"
+             "session.ws_connect('https://evil.test/socket')"),
+            "NET001",
+            SafetyDecision.DENY,
+        ),
+        (
+            "import requests\nrequests.Session().custom_transport(payload)",
+            "NET002",
+            SafetyDecision.NEEDS_HUMAN_REVIEW,
+        ),
+    ],
+)
+def test_additional_network_entry_points_are_scanned(guard, code, rule_id, decision):
+    report = guard.scan(_request(code))
+    assert report.decision == decision
+    assert rule_id in _rule_ids(report)
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "import requests\nrequests.Session()",
+        "import httpx\nhttpx.AsyncClient()",
+        "from urllib.parse import urlparse\nurlparse('https://api.example.com/item')",
+        ("import requests\n"
+         "response = requests.get('https://api.example.com/item')\n"
+         "response.json()"),
+    ],
+)
+def test_network_constructors_and_helpers_remain_allowed(guard, code):
+    report = guard.scan(_request(code))
+    assert report.decision == SafetyDecision.ALLOW
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        ("import requests\n"
+         "requests.post('https://api.example.com/item', data=get_password())"),
+        ("import requests\n"
+         "requests.post('https://api.example.com/item', data=config.api_key)"),
+    ],
+)
+def test_inline_secret_sources_are_denied(guard, code):
+    report = guard.scan(_request(code))
+    assert report.decision == SafetyDecision.DENY
+    assert "SECRET001" in _rule_ids(report)
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        ("import httpx\n"
+         "client = None\n"
+         "client = httpx.Client()\n"
+         "password = get_password()\n"
+         "client.delete('https://api.example.com/item', data=password)"),
+        ("import httpx\n"
+         "if use_http:\n"
+         "    client = httpx.Client()\n"
+         "else:\n"
+         "    client = object()\n"
+         "password = get_password()\n"
+         "client.delete('https://api.example.com/item', data=password)"),
+    ],
+)
+def test_rebound_network_client_aliases_are_denied(guard, code):
+    report = guard.scan(_request(code))
+    assert report.decision == SafetyDecision.DENY
+    assert "SECRET001" in _rule_ids(report)
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        ("import aiohttp\n"
+         "async def send():\n"
+         "    password = get_password()\n"
+         "    async with aiohttp.ClientSession() as session:\n"
+         "        await session.delete('https://api.example.com/item', data=password)"),
+        ("import httpx\n"
+         "async def send():\n"
+         "    token = get_token()\n"
+         "    async with httpx.AsyncClient() as client:\n"
+         "        await client.patch("
+         "'https://api.example.com/item', headers={'Authorization': token})"),
+    ],
+)
+def test_async_context_network_clients_with_secret_are_denied(guard, code):
+    report = guard.scan(_request(code))
+    assert report.decision == SafetyDecision.DENY
+    assert "SECRET001" in _rule_ids(report)
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        ("import aiohttp\n"
+         "async def send(session=None):\n"
+         "    password = get_password()\n"
+         "    async with aiohttp.ClientSession() as session:\n"
+         "        await session.delete('https://api.example.com/item', data=password)"),
+        ("import httpx\n"
+         "async def send():\n"
+         "    client = None\n"
+         "    token = get_token()\n"
+         "    async with httpx.AsyncClient() as client:\n"
+         "        await client.patch("
+         "'https://api.example.com/item', headers={'Authorization': token})"),
+    ],
+)
+def test_rebound_async_context_network_clients_with_secret_are_denied(guard, code):
+    report = guard.scan(_request(code))
+    assert report.decision == SafetyDecision.DENY
+    assert "SECRET001" in _rule_ids(report)
+
+
 def test_request_method_uses_second_url_argument(guard):
     code = "import requests\nrequests.request('GET', 'https://api.example.com/v1')"
     report = guard.scan(_request(code))
@@ -812,7 +989,16 @@ def test_bash_redirection_bypasses_are_blocked(guard, command):
     assert report.decision != SafetyDecision.ALLOW
 
 
-@pytest.mark.parametrize("target", ["/dev/null", "/dev/stdout", "/dev/stderr"])
+@pytest.mark.parametrize(
+    "target",
+    [
+        "/dev/null",
+        "'/dev/null'",
+        '"/dev/null"',
+        "/dev/stdout",
+        "/dev/stderr",
+    ],
+)
 def test_safe_device_redirection_is_allowed(guard, target):
     report = guard.scan(_request(f"echo ok > {target}", ScriptLanguage.BASH))
     assert report.decision == SafetyDecision.ALLOW

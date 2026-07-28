@@ -76,7 +76,6 @@ async def execute_command(command: str, timeout: float | None = None) -> dict:
             source="mcp.execute_command",
         )],
         cwd=str(WORK_DIR),
-        execution_root=str(WORK_DIR.anchor),
         metadata=ToolMetadata(name="execute_command"),
         requested_timeout_seconds=requested_timeout,
         effective_timeout_seconds=effective_timeout,

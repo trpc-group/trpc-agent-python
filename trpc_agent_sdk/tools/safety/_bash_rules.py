@@ -191,7 +191,8 @@ def _recursive_rm(text: str) -> str | None:
 
 
 def _is_safe_redirect_target(target: str) -> bool:
-    return target.replace("\\", "/").lower() in _SAFE_REDIRECT_TARGETS
+    normalized = target.strip().strip("\"'").replace("\\", "/").lower()
+    return normalized in _SAFE_REDIRECT_TARGETS
 
 
 def _dynamic_network_command(text: str) -> str | None:

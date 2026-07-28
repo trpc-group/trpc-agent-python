@@ -37,16 +37,82 @@ _NETWORK_METHODS = frozenset({
     "delete",
     "get",
     "head",
+    "open",
     "options",
     "patch",
     "post",
     "put",
     "request",
+    "send",
+    "stream",
+    "trace",
     "urlopen",
+    "ws_connect",
 })
-_PROCESS_CALLS = frozenset({"os.popen", "os.system", "subprocess.Popen", "subprocess.call", "subprocess.run"})
+_NETWORK_CLIENT_CONSTRUCTORS = frozenset({
+    "AsyncClient",
+    "Client",
+    "ClientSession",
+    "Session",
+    "build_opener",
+    "session",
+    "socket",
+})
+_NETWORK_NON_IO_METHODS = _NETWORK_CLIENT_CONSTRUCTORS | frozenset({
+    "ClientTimeout",
+    "Cookies",
+    "FormData",
+    "Headers",
+    "Limits",
+    "PreparedRequest",
+    "QueryParams",
+    "Request",
+    "TCPConnector",
+    "Timeout",
+    "URL",
+    "aclose",
+    "build_request",
+    "close",
+    "mount",
+    "prepare_request",
+})
+_NETWORK_HELPER_PREFIXES = ("requests.auth.", "requests.cookies.", "requests.models.", "requests.utils.",
+                            "urllib.parse.")
+_PROCESS_CALLS = frozenset({
+    "asyncio.create_subprocess_exec",
+    "asyncio.create_subprocess_shell",
+    "concurrent.futures.ProcessPoolExecutor",
+    "multiprocessing.Pool",
+    "multiprocessing.Process",
+    "os.fork",
+    "os.forkpty",
+    "os.popen",
+    "os.posix_spawn",
+    "os.posix_spawnp",
+    "os.startfile",
+    "os.system",
+    "pty.spawn",
+    "anyio.open_process",
+    "anyio.run_process",
+    "subprocess.Popen",
+    "subprocess.call",
+    "subprocess.run",
+    "trio.run_process",
+})
 _PROCESS_ROOTS = frozenset({"subprocess"})
 _OS_PROCESS_PREFIXES = ("exec", "spawn")
+_PROCESS_CREATION_METHODS = frozenset({"Pool", "Process", "ProcessPoolExecutor", "fork", "forkpty"})
+_CONSERVATIVE_FILE_ROOTS = frozenset({"shutil"})
+_RISK_SYMBOL_ROOTS = _NETWORK_ROOTS | _PROCESS_ROOTS | frozenset({
+    "anyio",
+    "asyncio",
+    "concurrent",
+    "multiprocessing",
+    "os",
+    "pty",
+    "shutil",
+    "trio",
+})
 _DELETE_CALLS = frozenset({"shutil.rmtree", "os.remove", "os.unlink", "os.rmdir"})
 _DIRECT_FILE_CALLS = frozenset({"open", "builtins.open", "io.open", "os.open", "os.remove", "os.unlink", "os.rmdir"})
 _PATH_METHODS = frozenset({"open", "read_text", "read_bytes", "write_text", "write_bytes", "unlink", "rmdir"})
@@ -56,6 +122,7 @@ _SECRET_NAME_RE = re.compile(
     r"(?i)(api[_-]?key|access[_-]?key|authorization|credential|token|password|passwd|secret|private[_-]?key)")
 _UNKNOWN_VALUE = object()
 _MAX_STATIC_LITERAL_ITEMS = 256
+_DYNAMIC_COMMAND_TOKEN = "__tool_safety_dynamic_arg__"
 
 
 def _static_truthy(node: ast.AST) -> bool:
@@ -299,7 +366,10 @@ class PythonRuleVisitor(ast.NodeVisitor):
 
     def _contains_secret(self, node: ast.AST) -> bool:
         for child in ast.walk(node):
-            if isinstance(child, ast.Name) and child.id in self._secret_names:
+            if isinstance(child, ast.Name):
+                if child.id in self._secret_names or _SECRET_NAME_RE.search(child.id):
+                    return True
+            if isinstance(child, ast.Attribute) and _SECRET_NAME_RE.search(child.attr):
                 return True
             if isinstance(child, ast.Constant) and isinstance(child.value, str):
                 if _SECRET_NAME_RE.search(child.value) or "PRIVATE KEY-----" in child.value:
@@ -341,6 +411,24 @@ class PythonRuleVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     visit_AsyncFor = visit_For
+
+    def visit_With(self, node: ast.With) -> Any:
+        for item in node.items:
+            self.visit(item.context_expr)
+            if item.optional_vars is not None:
+                self._bind_target(item.optional_vars, item.context_expr)
+                self._bind_network_context_target(item.optional_vars, item.context_expr)
+        for statement in node.body:
+            self.visit(statement)
+
+    visit_AsyncWith = visit_With
+
+    def _bind_network_context_target(self, target: ast.AST, context_expr: ast.AST) -> None:
+        if not isinstance(target, ast.Name):
+            return
+        symbolic = self._symbolic_value(context_expr)
+        if symbolic.split(".", 1)[0] in _NETWORK_ROOTS:
+            self._aliases[target.id] = symbolic
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> Any:
         for item in [*node.decorator_list, *node.args.defaults, *node.args.kw_defaults]:
@@ -400,6 +488,7 @@ class PythonRuleVisitor(ast.NodeVisitor):
             self._invalidate_target(target)
             return
         was_secret = target.id in self._secret_names
+        previous_alias = self._aliases.get(target.id)
         can_track = self._invalidate_binding(target.id)
         is_secret = bool(_SECRET_NAME_RE.search(target.id))
         is_secret = is_secret or (value_node is not None and self._contains_secret(value_node))
@@ -407,16 +496,26 @@ class PythonRuleVisitor(ast.NodeVisitor):
             self._secret_names.add(target.id)
         else:
             self._secret_names.discard(target.id)
-        if not can_track or value_node is None:
+        if value_node is None:
             return
         value = self._string(value_node)
         symbolic = self._symbolic_value(value_node)
+        if self._is_risk_symbol(symbolic):
+            self._aliases[target.id] = symbolic
+        elif not can_track and self._is_risk_symbol(previous_alias):
+            self._aliases[target.id] = previous_alias or ""
+        if not can_track:
+            return
         if value is not None:
             self._constants[target.id] = value
-        if symbolic:
+        if symbolic and target.id not in self._aliases:
             self._aliases[target.id] = symbolic
         if self._is_path_constructor(value_node):
             self._path_values[target.id] = self._path_constructor_value(value_node)
+
+    @staticmethod
+    def _is_risk_symbol(symbolic: str | None) -> bool:
+        return bool(symbolic and symbolic.split(".", 1)[0] in _RISK_SYMBOL_ROOTS)
 
     def _invalidate_target(self, target: ast.AST) -> None:
         for item in ast.walk(target):
@@ -457,7 +556,7 @@ class PythonRuleVisitor(ast.NodeVisitor):
             return self._name(node)
         if isinstance(node, ast.Call):
             name = self._name(node.func)
-            if name.split(".", 1)[0] in _NETWORK_ROOTS:
+            if (name.split(".", 1)[0] in _NETWORK_ROOTS and name.split(".")[-1] in _NETWORK_CLIENT_CONSTRUCTORS):
                 return name
         return ""
 
@@ -477,6 +576,8 @@ class PythonRuleVisitor(ast.NodeVisitor):
         self._scan_file_access(node, name)
         if self._is_network_call(name):
             self._scan_network(node, name)
+        elif self._is_unknown_network_call(name):
+            self._add("NET002", node, NETWORK_REVIEW)
         self._scan_secret_sink(node, name)
         self.generic_visit(node)
 
@@ -514,18 +615,71 @@ class PythonRuleVisitor(ast.NodeVisitor):
         self.redacted = self.redacted or changed
 
     def _process_command(self, node: ast.Call, name: str) -> str | None:
-        if not node.args:
-            return None
+        root = name.split(".", 1)[0]
         tail = name.split(".")[-1]
+        if root == "subprocess":
+            command_node = node.args[0] if node.args else self._keyword_node(node, "args", "cmd")
+            executable_node = self._keyword_node(node, "executable")
+            if executable_node is not None:
+                return self._command_with_executable(executable_node, command_node)
+            return self._command(command_node) if command_node is not None else None
+        if name == "asyncio.create_subprocess_exec":
+            executable_node = node.args[0] if node.args else self._keyword_node(node, "program")
+            return self._command_with_argument_nodes(executable_node, node.args[1:])
+        if name == "asyncio.create_subprocess_shell":
+            command_node = node.args[0] if node.args else self._keyword_node(node, "cmd", "program")
+            return self._command(command_node) if command_node is not None else None
+        if name in {"anyio.open_process", "anyio.run_process", "trio.run_process"}:
+            command_node = node.args[0] if node.args else self._keyword_node(node, "command")
+            return self._command(command_node) if command_node is not None else None
+        if name in {"os.posix_spawn", "os.posix_spawnp"}:
+            executable_node = node.args[0] if node.args else self._keyword_node(node, "path", "file")
+            command_node = node.args[1] if len(node.args) > 1 else self._keyword_node(node, "argv", "args")
+            return self._command_with_executable(executable_node, command_node)
+        if name == "pty.spawn":
+            command_node = node.args[0] if node.args else self._keyword_node(node, "argv")
+            return self._command(command_node) if command_node is not None else None
+        if tail in _PROCESS_CREATION_METHODS:
+            return None
         if tail.startswith("execv"):
-            return self._command(node.args[1]) if len(node.args) > 1 else None
+            executable_node = node.args[0] if node.args else self._keyword_node(node, "path", "file")
+            command_node = node.args[1] if len(node.args) > 1 else self._keyword_node(node, "args", "argv")
+            return self._command_with_executable(executable_node, command_node)
         if tail.startswith("execl"):
-            return self._command_from_parts(self._strip_exec_env(tail, node.args[1:]))
+            executable_node = node.args[0] if node.args else self._keyword_node(node, "path", "file")
+            argument_nodes = self._strip_exec_env(tail, node.args[1:])
+            return self._command_with_argument_nodes(executable_node, argument_nodes[1:])
         if tail.startswith("spawnv"):
-            return self._command(node.args[2]) if len(node.args) > 2 else None
+            executable_node = node.args[1] if len(node.args) > 1 else self._keyword_node(node, "path", "file")
+            command_node = node.args[2] if len(node.args) > 2 else self._keyword_node(node, "args", "argv")
+            return self._command_with_executable(executable_node, command_node)
         if tail.startswith("spawnl"):
-            return self._command_from_parts(self._strip_exec_env(tail, node.args[2:]))
-        return self._command(node.args[0])
+            executable_node = node.args[1] if len(node.args) > 1 else self._keyword_node(node, "path", "file")
+            argument_nodes = self._strip_exec_env(tail, node.args[2:])
+            return self._command_with_argument_nodes(executable_node, argument_nodes[1:])
+        command_node = node.args[0] if node.args else self._keyword_node(node, "command", "cmd")
+        return self._command(command_node) if command_node is not None else None
+
+    @staticmethod
+    def _keyword_node(node: ast.Call, *names: str) -> ast.AST | None:
+        return next((item.value for item in node.keywords if item.arg in names), None)
+
+    def _command_with_executable(self, executable_node: ast.AST | None, argv_node: ast.AST | None) -> str | None:
+        if executable_node is None:
+            return self._command(argv_node) if argv_node is not None else None
+        if isinstance(argv_node, (ast.List, ast.Tuple)):
+            return self._command_with_argument_nodes(executable_node, argv_node.elts[1:])
+        executable_value = self._string(executable_node)
+        executable = shlex.quote(executable_value) if executable_value is not None else None
+        argv = self._command(argv_node) if argv_node is not None else None
+        return argv or executable
+
+    def _command_with_argument_nodes(self, executable_node: ast.AST | None,
+                                     argument_nodes: list[ast.AST]) -> str | None:
+        if executable_node is None:
+            return self._command_from_parts(argument_nodes)
+        command = self._command_from_parts([executable_node, *argument_nodes])
+        return command or self._command(executable_node)
 
     @staticmethod
     def _strip_exec_env(tail: str, nodes: list[ast.AST]) -> list[ast.AST]:
@@ -536,27 +690,33 @@ class PythonRuleVisitor(ast.NodeVisitor):
         if value is not None:
             return value
         if isinstance(node, (ast.List, ast.Tuple)):
-            parts = [self._string(item) for item in node.elts]
-            if all(part is not None for part in parts):
-                return " ".join(shlex.quote(part or "") for part in parts)
+            return self._command_from_parts(node.elts)
         return None
 
     def _command_from_parts(self, nodes: list[ast.AST]) -> str | None:
+        if not nodes:
+            return None
         parts = [self._string(item) for item in nodes]
-        if parts and all(part is not None for part in parts):
-            return " ".join(shlex.quote(part or "") for part in parts)
-        return None
+        return " ".join(shlex.quote(part) if part is not None else _DYNAMIC_COMMAND_TOKEN for part in parts)
 
     def _is_network_call(self, name: str) -> bool:
         root = name.split(".", 1)[0]
         tail = name.split(".")[-1]
         return root in _NETWORK_ROOTS and tail in _NETWORK_METHODS
 
+    def _is_unknown_network_call(self, name: str) -> bool:
+        root = name.split(".", 1)[0]
+        tail = name.split(".")[-1]
+        if root not in _NETWORK_ROOTS or tail in _NETWORK_NON_IO_METHODS:
+            return False
+        return not name.startswith(_NETWORK_HELPER_PREFIXES)
+
     def _is_process_call(self, name: str) -> bool:
         root = name.split(".", 1)[0]
         tail = name.split(".")[-1]
         return (name in _PROCESS_CALLS or root in _PROCESS_ROOTS
-                or (root == "os" and tail.startswith(_OS_PROCESS_PREFIXES)))
+                or (root == "os" and tail.startswith(_OS_PROCESS_PREFIXES))
+                or (root in {"concurrent", "multiprocessing"} and tail in _PROCESS_CREATION_METHODS))
 
     def _scan_network(self, node: ast.Call, name: str) -> None:
         target_node = self._network_target_node(node, name)
@@ -574,7 +734,9 @@ class PythonRuleVisitor(ast.NodeVisitor):
             if keyword.arg == "url":
                 return keyword.value
         tail = name.split(".")[-1]
-        index = 1 if tail == "request" else 0
+        if tail == "send":
+            return None
+        index = 1 if tail in {"request", "stream"} else 0
         return node.args[index] if len(node.args) > index else None
 
     def _network_target(self, node: ast.AST) -> str | None:
@@ -592,6 +754,9 @@ class PythonRuleVisitor(ast.NodeVisitor):
             recognized, path_node = True, node.args[0]
         elif name.split(".")[-1] in _PATH_METHODS:
             recognized, path_node = self._receiver_path(node.func)
+        elif name.split(".", 1)[0] in _CONSERVATIVE_FILE_ROOTS and name not in _DELETE_CALLS:
+            self._add("FILE003", node, FILE_REVIEW)
+            return
         if not recognized:
             return
         path = self._string(path_node) if isinstance(path_node, ast.AST) else path_node

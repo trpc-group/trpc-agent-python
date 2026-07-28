@@ -127,14 +127,12 @@ def adapt_tool_request(tool: Any, args: dict[str, Any], policy: ToolSafetyPolicy
             cwd_path = Path(tool_cwd) / cwd_path
         cwd = str(cwd_path.resolve())
     local_home = str(Path.home()) if name in _BASH_TOOL_NAMES else None
-    local_root = Path(cwd).anchor if name in _BASH_TOOL_NAMES and cwd else None
     env = args.get("env")
     env_keys = sorted(str(key) for key in env) if isinstance(env, dict) else []
     return ScriptScanRequest(
         payloads=payloads,
         cwd=cwd,
         execution_home=local_home,
-        execution_root=local_root,
         env_keys=env_keys,
         metadata=metadata,
         requested_timeout_seconds=requested,
@@ -190,7 +188,6 @@ def adapt_cli_request(
         payloads=[payload],
         cwd=resolved_cwd,
         execution_home=str(Path.home()),
-        execution_root=Path(resolved_cwd).anchor,
         metadata=metadata,
         effective_timeout_seconds=float(policy.max_timeout_seconds),
         max_output_bytes=policy.max_output_bytes,

@@ -134,7 +134,7 @@ def test_bash_tool_family_sets_path_context():
             _policy(),
         )
         assert request.execution_home == str(Path.home())
-        assert request.execution_root == Path("/workspace").resolve().anchor
+        assert request.cwd == str(Path("/workspace").resolve())
 
 
 def test_unknown_tool_with_code_field_is_scanned_conservatively():
