@@ -784,7 +784,7 @@ class ContainerProgramRunner(BaseProgramRunner):
             RuntimeError: If execution fails
         """
         spec = self._apply_provider_env(spec, ctx)
-        cwd = f"{ws.path}/{spec.cwd}" if spec.cwd else ws.path
+        cwd = _container_path(ws.path, spec.cwd) if spec.cwd else _container_path(ws.path)
 
         # Prepare directories
         skills_dir = f"{ws.path}/{DIR_SKILLS}"

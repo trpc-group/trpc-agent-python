@@ -1237,6 +1237,21 @@ class TestRunProgram:
         result = await runner.run_program(ws, spec)
         assert result.exit_code == 0
 
+    async def test_run_normalizes_container_cwd(self):
+        """验证外部传入的工作目录会在生成容器命令前转换为 POSIX 路径。"""
+        cc = _mock_container_client()
+        cc.exec_run = AsyncMock(return_value=CommandExecResult(
+            stdout="", stderr="", exit_code=0, is_timeout=False))
+        runner = ContainerProgramRunner(cc, RuntimeConfig())
+        ws = _make_ws()
+
+        spec = WorkspaceRunProgramSpec(cmd="ls", cwd=r"work\subdir")
+        await runner.run_program(ws, spec)
+
+        command = cc.exec_run.await_args.kwargs["cmd"][2]
+        assert "\\" not in command
+        assert "cd '/tmp/run/ws_test_123/work/subdir'" in command
+
     async def test_run_with_custom_env(self):
         cc = _mock_container_client()
         cc.exec_run = AsyncMock(return_value=CommandExecResult(
