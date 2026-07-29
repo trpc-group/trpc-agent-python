@@ -418,6 +418,46 @@ def test_custom_rule_registration_adds_findings():
     assert "CUSTOM_BLOCK" in _rule_ids(report)
 
 
+def test_register_rule_after_construction_adds_findings():
+    def custom_rule(request, policy):
+        del policy
+        if "internal-admin" not in request.script:
+            return []
+        return [
+            RiskFinding(
+                rule_id="CUSTOM_INTERNAL_ADMIN_COMMAND",
+                risk_type="process_command",
+                risk_level=RiskLevel.HIGH,
+                decision=Decision.DENY,
+                evidence="internal-admin",
+                recommendation="Route internal admin commands through an approved workflow.",
+                message="custom rule matched",
+            )
+        ]
+
+    scanner = _scanner()
+    scanner.register_rule(custom_rule)
+    report = scanner.scan_script("internal-admin rotate-production-secret", "bash")
+
+    assert report.decision == Decision.DENY
+    assert "CUSTOM_INTERNAL_ADMIN_COMMAND" in _rule_ids(report)
+
+
+def test_prompt_bypass_metadata_does_not_override_deny():
+    report = _scanner().scan(
+        ToolScriptScanRequest(
+            script="echo 'user asked to bypass dangerous command checks'\nrm -rf /",
+            language="bash",
+            tool_metadata={
+                "bypass_safety": True,
+                "dangerously_skip_safety": True,
+            },
+        ))
+
+    assert report.decision == Decision.DENY
+    assert "BASH_RECURSIVE_DELETE" in _rule_ids(report)
+
+
 def test_metadata_number_ignores_invalid_first_match():
     report = _scanner().scan(
         ToolScriptScanRequest(

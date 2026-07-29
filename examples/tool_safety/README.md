@@ -69,6 +69,7 @@ tRPC-Agent 的 Tool、MCP Tool、Skill 和 CodeExecutor 能让 Agent 执行脚�
 | 报告示例 | 已完成 | `examples/tool_safety/tool_safety_report.json` |
 | 40 条样例汇总报告 | 已完成 | `examples/tool_safety/all_reports.json` |
 | 审计日志示例 | 已完成 | `examples/tool_safety/tool_safety_audit.jsonl` |
+| 自定义策略和规则示例 | 已完成 | `examples/tool_safety/custom_policy_example.py` |
 | 自动化测试 | 已完成 | `tests/tools/safety/` |
 | 设计说明 | 已完成 | `examples/tool_safety/DESIGN.md` |
 | 真实 Agent 示例 | 已完成 | `examples/tool_safety/real_agent_demo/` |
@@ -220,6 +221,32 @@ long_sleep_seconds: 300
 - 依赖安装、提权、未知网络、进程执行、shell 特性的默认处理策略
 
 注意：`allowed_commands` 只是 Bash/Shell 扫描里的命令白名单配置，不是“危险命令列表”；真正的危险模式规则仍集中在 `trpc_agent_sdk/tools/safety/_rules.py`。如果需要按业务补充策略，优先改 YAML；如果需要匹配脚本内容或业务语义，可以通过 `ToolScriptSafetyScanner(custom_rules=[...])` 或 `register_rule()` 注册自定义规则。
+
+完整可运行示例见 `examples/tool_safety/custom_policy_example.py`，覆盖：
+
+- 从 YAML 加载策略：`ToolSafetyPolicy.from_file(..., strict=True)`。
+- 从 dict 创建策略：`ToolSafetyPolicy.from_dict(..., strict=True)`。
+- 在构造 scanner 时传入自定义规则：`ToolScriptSafetyScanner(policy, custom_rules=[...])`。
+- 在运行时追加自定义规则：`scanner.register_rule(...)`。
+- 用户提示词或 tool metadata 中出现类似 `bypass_safety` 的请求时，不会覆盖策略决策。
+
+运行示例：
+
+```bash
+python3 examples/tool_safety/custom_policy_example.py
+```
+
+示例中的 `prompt_bypass_attempt` 会扫描如下命令：
+
+```bash
+echo 'user asked to bypass safety checks'
+rm -rf /
+```
+
+即使扫描上下文里传入了 `tool_metadata={"bypass_safety": True}`，最终仍会命中
+`BASH_RECURSIVE_DELETE` 并返回 `deny`。Safety Guard 只信任宿主代码显式加载的
+`ToolSafetyPolicy` 和注册的 `custom_rules`，不接受 LLM 输出、用户提示词或 tool call
+参数里的“绕过安全检查”指令作为授权。
 
 ## 快速开始
 
@@ -751,6 +778,7 @@ scripts/
 
 examples/tool_safety/
 ├── README.md
+├── custom_policy_example.py
 ├── tool_safety_policy.yaml
 ├── tool_safety_report.json
 ├── tool_safety_audit.jsonl
