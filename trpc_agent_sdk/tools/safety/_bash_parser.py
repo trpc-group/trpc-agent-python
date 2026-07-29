@@ -96,6 +96,19 @@ class BashParser:
 
     def _check_dangerous_commands(self, line: str, line_num: int) -> List[SafetyFinding]:
         findings: List[SafetyFinding] = []
+        if self._is_forced_recursive_rm(line):
+            findings.append(
+                SafetyFinding(
+                    rule_id="R001_BASH_RECURSIVE_DELETE",
+                    rule_name="Dangerous Delete Operation",
+                    risk_type=RiskType.DANGEROUS_FILE_OPERATION,
+                    risk_level=RiskLevel.CRITICAL,
+                    evidence=sanitize_text(line, self._policy.secret_patterns),
+                    line=line_num,
+                    recommendation="Review delete operation. Avoid recursive deletes on system paths.",
+                ))
+            return findings
+
         for pattern, rule_id, risk in BASH_DANGEROUS_DELETE_PATTERNS:
             if pattern.search(line):
                 findings.append(
@@ -156,6 +169,37 @@ class BashParser:
                         ))
                     return findings
         return findings
+
+    @staticmethod
+    def _is_forced_recursive_rm(line: str) -> bool:
+        """Return True for rm invocations with force + recursive flags."""
+        try:
+            tokens = shlex.split(line)
+        except ValueError:
+            tokens = line.split()
+        if len(tokens) < 2 or tokens[0] != "rm":
+            return False
+
+        short_flags: set[str] = set()
+        has_long_recursive = False
+        has_long_force = False
+        for token in tokens[1:]:
+            if token == "--":
+                break
+            if token.startswith("--"):
+                option = token.split("=", 1)[0].lower()
+                if option == "--recursive":
+                    has_long_recursive = True
+                elif option == "--force":
+                    has_long_force = True
+                continue
+            if token.startswith("-") and token != "-":
+                short_flags.update(ch.lower() for ch in token[1:])
+                continue
+
+        has_recursive = "r" in short_flags or has_long_recursive
+        has_force = "f" in short_flags or has_long_force
+        return has_recursive and has_force
 
     def _check_network_egress(self, line: str, line_num: int) -> List[SafetyFinding]:
         findings: List[SafetyFinding] = []

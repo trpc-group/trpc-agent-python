@@ -57,6 +57,26 @@ class TestBashParserDangerousDelete:
         rule_ids = {f.rule_id for f in findings}
         assert "R001_BASH_RECURSIVE_DELETE" in rule_ids
 
+    def test_rm_fr_root(self, parser):
+        findings = parser.parse("rm -fr /")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R001_BASH_RECURSIVE_DELETE" in rule_ids
+
+    def test_rm_uppercase_rf_root(self, parser):
+        findings = parser.parse("rm -Rf /")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R001_BASH_RECURSIVE_DELETE" in rule_ids
+
+    def test_rm_mixed_case_rf_root(self, parser):
+        findings = parser.parse("rm -rF /")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R001_BASH_RECURSIVE_DELETE" in rule_ids
+
+    def test_rm_split_force_recursive_flags(self, parser):
+        findings = parser.parse("rm -f -r /")
+        rule_ids = {f.rule_id for f in findings}
+        assert "R001_BASH_RECURSIVE_DELETE" in rule_ids
+
 
 class TestBashParserNetworkEgress:
 

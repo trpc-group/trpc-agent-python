@@ -424,5 +424,17 @@
     ],
     "findings_count": 1,
     "summary": "Execution blocked. Risk level: critical. Rules triggered: R001_BASH_RECURSIVE_DELETE"
+  },
+  {
+    "label": "36_rm_fr_root",
+    "decision": "deny",
+    "risk_level": "critical",
+    "expected": "deny",
+    "match": true,
+    "rule_ids": [
+      "R001_BASH_RECURSIVE_DELETE"
+    ],
+    "findings_count": 1,
+    "summary": "Execution blocked. Risk level: critical. Rules triggered: R001_BASH_RECURSIVE_DELETE"
   }
 ]
