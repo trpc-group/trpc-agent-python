@@ -15,6 +15,7 @@ import re
 from typing import Any
 from typing import Dict
 from typing import List
+from urllib.parse import urlparse
 
 import yaml
 
@@ -226,5 +227,24 @@ class PolicyConfig:
         return False
 
     def is_domain_allowed(self, domain: str) -> bool:
-        """Return True if domain is in network_allowlist."""
-        return domain in self.network_allowlist
+        """Return True if domain or its subdomain is in network_allowlist."""
+        normalized = self._normalize_domain(domain)
+        if not normalized:
+            return False
+        for allowed in self.network_allowlist:
+            allowed_normalized = self._normalize_domain(allowed)
+            if not allowed_normalized:
+                continue
+            if normalized == allowed_normalized or normalized.endswith(f".{allowed_normalized}"):
+                return True
+        return False
+
+    @staticmethod
+    def _normalize_domain(domain: str) -> str:
+        """Normalize host-like policy text for allowlist comparisons."""
+        text = domain.strip().strip("'\"").lower().rstrip(".")
+        if not text:
+            return ""
+        parsed = urlparse(text if "://" in text else f"//{text}")
+        host = parsed.hostname or text
+        return host.lower().rstrip(".")

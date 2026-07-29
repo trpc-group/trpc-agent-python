@@ -23,6 +23,11 @@ from trpc_agent_sdk.types import Schema
 from trpc_agent_sdk.types import Type
 
 
+def _env_keys_only(env: dict[str, str]) -> dict[str, str]:
+    """Preserve env key visibility for scanning without carrying secret values."""
+    return {key: "" for key in env}
+
+
 class BashTool(BaseTool):
     """Tool for executing bash commands."""
 
@@ -191,7 +196,7 @@ class BashTool(BaseTool):
                             tool_name=self.name,
                             target=ScanTarget.TOOL,
                             cwd=execution_dir,
-                            env=os.environ.copy(),
+                            env=_env_keys_only(os.environ),
                             tool_metadata={"timeout": timeout},
                         ))
                 except Exception:

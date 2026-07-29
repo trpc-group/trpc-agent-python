@@ -127,9 +127,8 @@ class SafeCodeExecutor(BaseCodeExecutor):
                         or (combined_decision == Decision.NEEDS_HUMAN_REVIEW and self.block_on_review))
 
         # Set blocked flag BEFORE audit/telemetry so they record actual block status
-        if should_block:
-            for report in reports:
-                report.set_blocked(True)
+        for report in reports:
+            report.set_blocked(should_block)
 
         for report in reports:
             if audit:

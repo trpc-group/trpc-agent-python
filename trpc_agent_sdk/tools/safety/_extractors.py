@@ -98,5 +98,5 @@ def _extract_generic(tool_name: str, args: Dict[str, Any], key: str, target: Sca
         language=ScriptLanguage.BASH,
         tool_name=tool_name,
         target=target,
-        tool_metadata=args,
+        tool_metadata=args.get('metadata', {}),
     )

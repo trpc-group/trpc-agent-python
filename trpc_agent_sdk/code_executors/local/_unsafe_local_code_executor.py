@@ -119,7 +119,7 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             reports = []
             for i, block in enumerate(input_data.code_blocks):
                 try:
-                    report = self._scan_code_block(block)
+                    report = self._scan_code_block(work_dir, block)
                     if report:
                         reports.append(report)
                         all_findings.extend(report.findings)
@@ -137,9 +137,8 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
                                 or (self.block_on_review and combined == Decision.NEEDS_HUMAN_REVIEW))
 
                 # Set blocked flag BEFORE audit/telemetry so they record actual block status
-                if should_block:
-                    for report in reports:
-                        report.set_blocked(True)
+                for report in reports:
+                    report.set_blocked(should_block)
 
                 # Always audit every report — including ALLOW decisions — so every
                 # scan leaves a trace, consistent with BashTool and SafeCodeExecutor.
@@ -193,7 +192,7 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
             temp_dir = tempfile.mkdtemp(prefix=f"codeexec_{execution_id}_")
             return Path(temp_dir), self.clean_temp_files
 
-    def _scan_code_block(self, block: CodeBlock) -> Optional[Any]:
+    def _scan_code_block(self, work_dir: Path, block: CodeBlock) -> Optional[Any]:
         """Scan a single code block before execution.
 
         Always returns a SafetyReport (never None when safety guard is enabled)
@@ -204,13 +203,16 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         from trpc_agent_sdk.tools.safety import ScanRequest
         from trpc_agent_sdk.tools.safety import ScanTarget
         from trpc_agent_sdk.tools.safety import normalize_language
+        timeout = self.timeout
+        if timeout <= 0 and getattr(self.safety_scanner, "_policy", None) is not None:
+            timeout = self.safety_scanner._policy.max_timeout_seconds
         req = ScanRequest(
             script=block.code,
             language=normalize_language(block.language or ""),
             tool_name="UnsafeLocalCodeExecutor",
             target=ScanTarget.CODE_EXECUTOR,
-            cwd=self.work_dir,
-            tool_metadata={"timeout": self.timeout},
+            cwd=str(work_dir),
+            tool_metadata={"timeout": timeout},
         )
         return self.safety_scanner.scan(req)
 
@@ -237,7 +239,10 @@ class UnsafeLocalCodeExecutor(BaseCodeExecutor):
         cmd_args = self._build_command_args(block.language, file_path)
 
         # Execute command
-        result = await async_execute_command(work_dir=work_dir, cmd_args=cmd_args, timeout=self.timeout)
+        timeout = self.timeout
+        if timeout <= 0 and self.enable_safety_guard and getattr(self.safety_scanner, "_policy", None) is not None:
+            timeout = self.safety_scanner._policy.max_timeout_seconds
+        result = await async_execute_command(work_dir=work_dir, cmd_args=cmd_args, timeout=timeout)
         if result.exit_code != 0 or result.is_timeout:
             error_msg = result.stderr if result.stderr else f"Command failed with return code {result.exit_code}"
             raise RuntimeError(error_msg)

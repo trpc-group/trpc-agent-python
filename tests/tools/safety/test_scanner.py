@@ -86,9 +86,17 @@ class TestIsEnvContainsSensitiveKeys:
         env = {"SECRET_VAR": "xxx", "PATH": "/usr/bin"}
         assert scanner._is_env_contains_sensitive_keys(env) is True
 
+    @pytest.mark.parametrize("key", ["AUTH_TOKEN", "API_KEY", "SECRET_VAR"])
+    def test_sensitive_key_boundary_detected(self, scanner, key):
+        assert scanner._is_env_contains_sensitive_keys({key: "xxx"}) is True
+
     def test_no_sensitive_key(self, scanner):
         env = {"PATH": "/usr/bin", "HOME": "/home", "LANG": "en_US"}
         assert scanner._is_env_contains_sensitive_keys(env) is False
+
+    @pytest.mark.parametrize("key", ["authority", "author", "tokens", "my_token_id"])
+    def test_sensitive_key_boundary_avoids_false_positive(self, scanner, key):
+        assert scanner._is_env_contains_sensitive_keys({key: "xxx"}) is False
 
     def test_empty_env(self, scanner):
         assert scanner._is_env_contains_sensitive_keys({}) is False

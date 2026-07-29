@@ -51,7 +51,10 @@ _SENSITIVE_SUFFIXES = {".pem", ".key", ".crt", ".cer", ".p12", ".pfx"}
 # ---------------------------------------------------------------------------
 # Sensitive environment variable name patterns
 # ---------------------------------------------------------------------------
-SENSITIVE_ENV_KEYS = re.compile(r"(?i)(api[_-]?key|token|password|passwd|secret|private[_-]?key|credential|auth)", )
+SENSITIVE_ENV_KEYS = re.compile(
+    r"(?i)((^|[_-])"
+    r"(api[_-]?key|auth(?:orization)?|credential|password|passwd|private[_-]?key|secret)"
+    r"([_-]|$)|(^|[_-])token$)", )
 
 # ---------------------------------------------------------------------------
 # Secret value detection regex (for sanitization)

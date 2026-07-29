@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from trpc_agent_sdk.tools.safety._extractors import extract_tool_safety_context
+from trpc_agent_sdk.tools.safety._types import ScanTarget
 from trpc_agent_sdk.tools.safety._types import ScriptLanguage
 
 
@@ -55,6 +56,17 @@ class TestExtractGeneric:
         req = extract_tool_safety_context(tool, {"shell_command": "ls -la /tmp"})
         assert req is not None
         assert req.script == "ls -la /tmp"
+        assert req.tool_metadata == {}
+
+    def test_generic_extractor_does_not_treat_business_args_as_metadata(self):
+        tool = DummyTool()
+        req = extract_tool_safety_context(tool, {
+            "shell_command": "echo hello",
+            "timeout": 9999,
+            "max_output_bytes": 999999999,
+        })
+        assert req is not None
+        assert req.tool_metadata == {}
 
     def test_short_value_skipped(self):
         tool = DummyTool()
@@ -75,33 +87,24 @@ class TestFileToolPathInterception:
 
     def test_env_path_intercepted(self):
         """File tool operations on .env should be extracted and scannable."""
-        from trpc_agent_sdk.tools.safety._types import ScanTarget
         tool = DummyTool()
-        req = extract_tool_safety_context(tool, {
-            "command": "cat .env",
-            "target": ScanTarget.FILE_TOOL,
-        })
+        req = extract_tool_safety_context(tool, {"command": "cat .env"}, target=ScanTarget.FILE_TOOL)
         assert req is not None
         assert ".env" in req.script
+        assert req.target == ScanTarget.FILE_TOOL
 
     def test_ssh_path_intercepted(self):
         """File tool operations on ~/.ssh should be extracted."""
-        from trpc_agent_sdk.tools.safety._types import ScanTarget
         tool = DummyTool()
-        req = extract_tool_safety_context(tool, {
-            "command": "ls ~/.ssh",
-            "target": ScanTarget.FILE_TOOL,
-        })
+        req = extract_tool_safety_context(tool, {"command": "ls ~/.ssh"}, target=ScanTarget.FILE_TOOL)
         assert req is not None
         assert "~/.ssh" in req.script
+        assert req.target == ScanTarget.FILE_TOOL
 
     def test_etc_path_intercepted(self):
         """File tool operations on /etc should be extracted."""
-        from trpc_agent_sdk.tools.safety._types import ScanTarget
         tool = DummyTool()
-        req = extract_tool_safety_context(tool, {
-            "command": "cat /etc/passwd",
-            "target": ScanTarget.FILE_TOOL,
-        })
+        req = extract_tool_safety_context(tool, {"command": "cat /etc/passwd"}, target=ScanTarget.FILE_TOOL)
         assert req is not None
         assert "/etc" in req.script
+        assert req.target == ScanTarget.FILE_TOOL

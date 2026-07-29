@@ -204,6 +204,18 @@ class TestPolicyConfigQueryMethods:
     def test_is_domain_allowed_true(self, cfg):
         assert cfg.is_domain_allowed("github.com") is True
 
+    def test_is_domain_allowed_normalizes_case_and_port(self):
+        cfg = PolicyConfig(network_allowlist=["GitHub.com", "pypi.org:443"])
+        assert cfg.is_domain_allowed("github.com") is True
+        assert cfg.is_domain_allowed("pypi.org") is True
+
+    def test_is_domain_allowed_allows_subdomain(self, cfg):
+        assert cfg.is_domain_allowed("api.github.com") is True
+
+    def test_is_domain_allowed_rejects_fake_suffix(self, cfg):
+        assert cfg.is_domain_allowed("evilgithub.com") is False
+        assert cfg.is_domain_allowed("github.com.evil.com") is False
+
     def test_is_domain_allowed_false(self, cfg):
         assert cfg.is_domain_allowed("evil.com") is False
 

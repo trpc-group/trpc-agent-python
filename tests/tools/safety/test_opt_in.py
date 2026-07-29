@@ -10,10 +10,31 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock
 
-import pytest
-
+from trpc_agent_sdk.tools.safety import Decision
 from trpc_agent_sdk.tools.safety import PolicyConfig
+from trpc_agent_sdk.tools.safety import RiskLevel
+from trpc_agent_sdk.tools.safety import SafetyReport
 from trpc_agent_sdk.tools.safety import SafetyScanner
+
+
+class _CapturingScanner:
+
+    def __init__(self, policy=None):
+        self._policy = policy or PolicyConfig.default()
+        self.requests = []
+
+    def scan(self, req):
+        self.requests.append(req)
+        return SafetyReport(
+            tool_name=req.tool_name,
+            decision=Decision.ALLOW,
+            risk_level=RiskLevel.LOW,
+            blocked=False,
+            sanitized=False,
+            duration_ms=1,
+            language=req.language,
+            target=req.target,
+        )
 
 
 class TestBashToolOptIn:
@@ -77,6 +98,28 @@ class TestBashToolOptIn:
         ))
         assert "TOOL_SAFETY_BLOCKED" not in str(result)
 
+    def test_scan_env_does_not_include_secret_values(self, monkeypatch):
+        """BashTool passes env keys to the scanner without copying values."""
+        from trpc_agent_sdk.tools.file_tools._bash_tool import BashTool
+        scanner = _CapturingScanner()
+        monkeypatch.setenv("TRPC_SECRET_TOKEN", "real-secret-value")
+        tool = BashTool(enable_safety_guard=True, safety_scanner=scanner)
+        ctx = MagicMock()
+        ctx.session = MagicMock()
+        ctx.branch = "main"
+
+        asyncio.run(tool._run_async_impl(
+            tool_context=ctx,
+            args={
+                "command": "echo hello",
+                "timeout": 10
+            },
+        ))
+
+        assert scanner.requests
+        assert "TRPC_SECRET_TOKEN" in scanner.requests[0].env
+        assert scanner.requests[0].env["TRPC_SECRET_TOKEN"] == ""
+
 
 class TestUnsafeLocalCodeExecutorOptIn:
 
@@ -116,3 +159,46 @@ class TestUnsafeLocalCodeExecutorOptIn:
 
         result = asyncio.run(_run())
         assert "hello" in getattr(result, 'output', '')
+
+    def test_scan_receives_resolved_work_dir(self):
+        """Safety scan uses the temporary execution dir, not the empty config cwd."""
+        from trpc_agent_sdk.code_executors.local._unsafe_local_code_executor import (
+            UnsafeLocalCodeExecutor, )
+        from trpc_agent_sdk.code_executors._types import CodeBlock
+        from trpc_agent_sdk.code_executors._types import CodeExecutionInput
+
+        async def _fake_execute(self, work_dir, block, block_index):
+            return "ok"
+
+        async def _run():
+            scanner = _CapturingScanner()
+            executor = UnsafeLocalCodeExecutor(enable_safety_guard=True, safety_scanner=scanner)
+            executor._execute_code_block = _fake_execute.__get__(executor, UnsafeLocalCodeExecutor)
+            block = CodeBlock(language="python", code="print('hello')")
+            inp = CodeExecutionInput(code_blocks=[block], execution_id="ctx")
+            result = await executor.execute_code(MagicMock(), inp)
+            return scanner, result
+
+        scanner, result = asyncio.run(_run())
+        assert "ok" in getattr(result, 'output', '')
+        assert scanner.requests
+        assert scanner.requests[0].cwd
+        assert "codeexec_ctx_" in scanner.requests[0].cwd
+
+    def test_timeout_limit_blocks_when_executor_timeout_exceeds_policy(self):
+        """Executor timeout is included in scan metadata and enforced."""
+        from trpc_agent_sdk.code_executors.local._unsafe_local_code_executor import (
+            UnsafeLocalCodeExecutor, )
+        from trpc_agent_sdk.code_executors._types import CodeBlock
+        from trpc_agent_sdk.code_executors._types import CodeExecutionInput
+
+        async def _run():
+            policy = PolicyConfig.from_dict({"max_timeout_seconds": 1})
+            scanner = SafetyScanner(policy)
+            executor = UnsafeLocalCodeExecutor(enable_safety_guard=True, safety_scanner=scanner, timeout=2)
+            block = CodeBlock(language="python", code="print('hello')")
+            inp = CodeExecutionInput(code_blocks=[block], execution_id="timeout")
+            return await executor.execute_code(MagicMock(), inp)
+
+        result = asyncio.run(_run())
+        assert "blocked by safety guard" in getattr(result, 'output', '')

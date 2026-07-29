@@ -65,6 +65,29 @@ class TestSafeCodeExecutor:
         asyncio.run(exe.execute_code(MagicMock(), inp))
         assert inner.called is True
 
+    def test_allow_report_sets_blocked_false_before_delegate(self):
+        from trpc_agent_sdk.tools.safety._wrapper import SafeCodeExecutor
+
+        inner = _FakeExecutor()
+        exe = SafeCodeExecutor(inner_executor=inner, tool_name="test")
+        report = SafetyReport(
+            tool_name="test",
+            decision=Decision.ALLOW,
+            risk_level=RiskLevel.LOW,
+            blocked=True,
+            sanitized=False,
+            duration_ms=1,
+            language=ScriptLanguage.PYTHON,
+            target=ScanTarget.CODE_EXECUTOR,
+        )
+        with patch.object(exe._scanner, "scan", return_value=report):
+            block = CodeBlock(language="python", code="print('hello')")
+            inp = CodeExecutionInput(code_blocks=[block], execution_id="1")
+            asyncio.run(exe.execute_code(MagicMock(), inp))
+
+        assert inner.called is True
+        assert report.blocked is False
+
     def test_aggregate_decision_blocks_on_deny(self):
         """Verify aggregate_decision with a CRITICAL finding blocks execution."""
         from trpc_agent_sdk.tools.safety._types import SafetyFinding, RiskType, aggregate_decision

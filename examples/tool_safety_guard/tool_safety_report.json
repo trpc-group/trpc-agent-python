@@ -449,5 +449,15 @@
     ],
     "findings_count": 2,
     "summary": "Execution blocked. Risk level: critical. Rules triggered: R001_CREDENTIAL_FILE_ACCESS, R003_SYSTEM_COMMAND"
+  },
+  {
+    "label": "38_curl_github_subdomain",
+    "decision": "allow",
+    "risk_level": "low",
+    "expected": "allow",
+    "match": true,
+    "rule_ids": [],
+    "findings_count": 0,
+    "summary": "Safety scan passed. Risk level: low."
   }
 ]
