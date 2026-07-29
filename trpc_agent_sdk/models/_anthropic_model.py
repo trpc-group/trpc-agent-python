@@ -300,6 +300,9 @@ class AnthropicModel(LLMModel):
 
             message_blocks = []
             for part in content.parts:  # type: ignore
+                if part.thought:
+                    continue
+
                 # Image data is not supported in Claude for model turns
                 if self._is_image_part(part) and role == "assistant":
                     logger.warning("Image data is not supported in Claude for model turns.")

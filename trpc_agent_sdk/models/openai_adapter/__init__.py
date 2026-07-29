@@ -13,6 +13,7 @@ from ._base import DefaultOpenAIAdapter
 from ._base import OpenAIAdapter
 from ._base import ToolPromptTextFilterMixin
 from ._deepseek import DeepSeekAdapter
+from ._hunyuan import HunyuanHy3Adapter
 from ._hunyuan import HunyuanHy3PreviewAdapter
 
 
@@ -21,6 +22,8 @@ def get_openai_adapter(model_name: str, base_url: Optional[str] = None) -> OpenA
     model_name_lower = model_name.lower()
     if model_name_lower == "hy3-preview":
         return HunyuanHy3PreviewAdapter(model_name=model_name, base_url=base_url)
+    if model_name_lower == "hy3":
+        return HunyuanHy3Adapter(model_name=model_name, base_url=base_url)
     if model_name_lower.startswith("deepseek-"):
         return DeepSeekAdapter(model_name=model_name, base_url=base_url)
     return DefaultOpenAIAdapter(model_name=model_name, base_url=base_url)
@@ -29,6 +32,7 @@ def get_openai_adapter(model_name: str, base_url: Optional[str] = None) -> OpenA
 __all__ = [
     "DefaultOpenAIAdapter",
     "DeepSeekAdapter",
+    "HunyuanHy3Adapter",
     "HunyuanHy3PreviewAdapter",
     "OpenAIAdapter",
     "ToolPromptTextFilterMixin",
