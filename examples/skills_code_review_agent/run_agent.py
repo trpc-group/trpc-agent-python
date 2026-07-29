@@ -270,6 +270,7 @@ def _create_sdk_review_agent(
         model=model,
         workspace_runtime=selection.runtime,
         workspace_binder=sandbox,
+        review_deadline_seconds=pipeline.review_deadline_seconds,
     )
 
 

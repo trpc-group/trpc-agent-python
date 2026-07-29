@@ -70,6 +70,15 @@ class _DenyGovernance:
         }
 
 
+class _FailingGovernance:
+    """模拟治理层内部故障，验证 pipeline 失败关闭且不启动沙箱。"""
+
+    def decide(self, **_arguments: Any) -> dict[str, object]:
+        """抛出不含原始输入的数据错误，模拟 Filter 基础设施故障。"""
+
+        raise RuntimeError("synthetic_governance_failure")
+
+
 class _SecretFindingSandbox:
     """模拟在隔离任务域中检出真实格式凭据的运行时端口。"""
 
@@ -489,3 +498,65 @@ def test_pipeline_marks_task_failed_when_report_write_fails(
     bundle = store.get_task_bundle("pipeline-task-report-failure")
     assert bundle is not None
     assert bundle["task"]["status"] == "failed"
+
+
+def test_pipeline_marks_task_failed_when_input_loader_has_unexpected_error(tmp_path: Path) -> None:
+    """验证非输入契约异常不会遗留 running 任务，也不会进入治理或沙箱。"""
+
+    def failing_loader(**_arguments: Any) -> object:
+        """模拟读取阶段的底层 I/O 故障，不泄漏路径或文件内容。"""
+
+        raise OSError("synthetic_input_read_failure")
+
+    sandbox = _WarningSandbox(status="ok", error_type="", truncated=False)
+    store = SqlReviewStore(_db_url(tmp_path / "review.db"))
+    pipeline = ReviewPipeline(
+        store=store,
+        governance=_AllowGovernance(),
+        sandbox=sandbox,
+        output_dir=tmp_path / "reports",
+        input_loader=failing_loader,
+        task_id_factory=lambda: "pipeline-task-input-error",
+    )
+
+    with pytest.raises(PipelineFatalError, match="pipeline_input_load_failed"):
+        pipeline.run(
+            fixture=FixturePayload(
+                payload_type="files",
+                file_contents={"src/service.py": "value = 1\n"},
+            )
+        )
+
+    bundle = store.get_task_bundle("pipeline-task-input-error")
+    assert bundle is not None
+    assert bundle["task"]["status"] == "failed"
+    assert bundle["task"]["error_type"] == "input_load_error"
+    assert sandbox.execute_calls == 0
+
+
+def test_pipeline_fails_closed_when_governance_raises(tmp_path: Path) -> None:
+    """验证治理决策异常不会被误报为零 finding 的完成报告。"""
+
+    sandbox = _WarningSandbox(status="ok", error_type="", truncated=False)
+    store = SqlReviewStore(_db_url(tmp_path / "review.db"))
+    pipeline = ReviewPipeline(
+        store=store,
+        governance=_FailingGovernance(),
+        sandbox=sandbox,
+        output_dir=tmp_path / "reports",
+        task_id_factory=lambda: "pipeline-task-governance-error",
+    )
+
+    with pytest.raises(PipelineFatalError, match="pipeline_governance_failed"):
+        pipeline.run(
+            fixture=FixturePayload(
+                payload_type="files",
+                file_contents={"src/service.py": "value = 1\n"},
+            )
+        )
+
+    bundle = store.get_task_bundle("pipeline-task-governance-error")
+    assert bundle is not None
+    assert bundle["task"]["status"] == "failed"
+    assert bundle["task"]["error_type"] == "governance_error"
+    assert sandbox.execute_calls == 0

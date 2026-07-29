@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -164,12 +165,15 @@ def test_files_reject_traversal_absolute_and_symlink_before_reading(tmp_path: Pa
     outside_dir = outside.parent / "outside_dir"
     outside_dir.mkdir()
     (outside_dir / "secret.py").write_text("secret = 'outside'\n", encoding="utf-8")
-    subprocess.run(
-        ["cmd", "/c", "mklink", "/J", str(junction), str(outside_dir)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    if os.name == "nt":
+        subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(junction), str(outside_dir)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    else:
+        junction.symlink_to(outside_dir, target_is_directory=True)
 
     for candidate in (Path("../outside.py"), outside, Path("junction/secret.py")):
         with pytest.raises(InputValidationError):

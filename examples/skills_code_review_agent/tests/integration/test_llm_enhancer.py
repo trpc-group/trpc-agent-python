@@ -10,10 +10,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import sys
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -118,3 +121,36 @@ def test_explicit_real_mode_uses_the_same_agent_runner_path() -> None:
     assert enhanced["findings"][0]["recommendation"] == "real 建议"
     assert enhanced["final_conclusion"]["summary"] == "real 摘要"
     assert enhancer.agent_run_count == 1
+
+
+def test_enhancement_rejects_sync_call_from_a_running_event_loop() -> None:
+    """验证同步增强 API 在已有事件循环中明确失败，不创建未等待的 Runner 任务。"""
+
+    enhancer = LlmEnhancer(mode="fake")
+
+    async def invoke() -> None:
+        """在运行中的事件循环内调用同步 API，覆盖明确的边界错误。"""
+
+        with pytest.raises(RuntimeError, match="llm_enhancement_sync_api_requires_no_running_loop"):
+            enhancer.enhance(_report("ghp_" + "c" * 36))
+
+    asyncio.run(invoke())
+
+
+def test_enhancement_enforces_configured_wall_clock_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """验证等待模型/Runner 事件的增强链路受显式墙钟预算限制。"""
+
+    enhancer = LlmEnhancer(mode="fake", timeout_seconds=0.01)
+
+    async def never_returns(_prompt: str) -> dict[str, object]:
+        """模拟无响应模型，直到 wait_for 取消该协程。"""
+
+        await asyncio.Event().wait()
+        return {}
+
+    monkeypatch.setattr(enhancer, "_run_agent", never_returns)
+
+    with pytest.raises(asyncio.TimeoutError):
+        enhancer.enhance(_report("ghp_" + "d" * 36))

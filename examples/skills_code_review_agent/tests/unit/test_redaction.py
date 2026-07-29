@@ -85,6 +85,7 @@ REAL_FORMAT_SAMPLES = [
     ("secret", "secret_key: \"abcdefghijklmnopqrstuvwxyz0123456789\""),
     ("high_entropy_secret", "credential = 'fD7$kL2!qP9@wX4#zM8^rT1&vB6*eN3'"),
     ("high_entropy_secret", "value = 'aV7!qP2@xL9#rT4$wM8^kD1&zB6*eN3'"),
+    ("high_entropy_secret", "api_key = 'R9!wK3@pV7#xM2$zT8^qL4&dB6*eN1'"),
     ("huggingface_token", "hf_abcdefghijklmnopqrstuvwxyz0123456789AB"),
     ("terraform_token", "ATLAS-abcdefghijklmnopqrstuvwxyz123456"),
     ("digitalocean_token", "dop_v1_abcdefghijklmnopqrstuvwxyz0123456789"),

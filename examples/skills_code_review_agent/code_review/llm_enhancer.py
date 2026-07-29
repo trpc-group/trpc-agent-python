@@ -136,6 +136,7 @@ class LlmEnhancer:
         mode: str = "off",
         model: LLMModel | None = None,
         environ: Mapping[str, str] | None = None,
+        timeout_seconds: float = 110.0,
     ) -> None:
         """初始化显式模式；real 仅使用调用方提供的受控模型环境或进程环境。"""
 
@@ -143,9 +144,12 @@ class LlmEnhancer:
             raise ValueError("model_mode_invalid")
         if mode == "off" and model is not None:
             raise ValueError("model_mode_off_rejects_model")
+        if timeout_seconds <= 0:
+            raise ValueError("llm_timeout_seconds_invalid")
         self._mode = mode
         self._model = model
         self._environment = dict(environ) if environ is not None else None
+        self._timeout_seconds = float(timeout_seconds)
         self.last_prompt = ""
         self.agent_run_count = 0
 
@@ -161,9 +165,20 @@ class LlmEnhancer:
         baseline = deepcopy(dict(report))
         if self._mode == "off":
             return baseline
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            raise RuntimeError("llm_enhancement_sync_api_requires_no_running_loop")
         prompt = self._build_prompt(baseline)
         self.last_prompt = prompt
-        response = asyncio.run(self._run_agent(prompt))
+        response = asyncio.run(
+            asyncio.wait_for(
+                self._run_agent(prompt),
+                timeout=self._timeout_seconds,
+            )
+        )
         return self._merge_text_only(baseline, response)
 
     def _build_prompt(self, report: Mapping[str, Any]) -> str:

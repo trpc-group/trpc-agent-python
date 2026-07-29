@@ -260,7 +260,7 @@ def _analysis_mode(path: str, full_text: str | None) -> Tuple[str, str | None]:
         return "diff_heuristic", None
     try:
         ast.parse(full_text)
-    except SyntaxError:
+    except (SyntaxError, ValueError, RecursionError):
         # Never expose a parser exception because it can include source text.
         return "diff_heuristic", f"ast_parse_failed:{path}"
     return "ast_validated", None

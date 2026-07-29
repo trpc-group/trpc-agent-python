@@ -175,7 +175,8 @@ def _high_entropy_matches(text: str) -> Iterable[SecretMatch]:
     """从敏感赋值语境中提取满足高熵阈值的密钥候选。"""
 
     assignment = re.compile(
-        r"\b(?:credential|value)\s*[=:]\s*(?P<value>'[^'\n]+'|\"[^\"\n]+\")",
+        r"\b(?:credential|value|api[_-]?key|access[_-]?key|auth(?:orization)?)"
+        r"\s*[=:]\s*(?P<value>'[^'\n]+'|\"[^\"\n]+\")",
         re.IGNORECASE | re.MULTILINE,
     )
     for candidate in assignment.finditer(text):

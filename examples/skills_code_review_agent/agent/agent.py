@@ -123,10 +123,14 @@ class CodeReviewAgent:
         model: LLMModel | None = None,
         workspace_runtime: BaseWorkspaceRuntime | None = None,
         workspace_binder: AgentWorkspaceBinder | None = None,
+        review_deadline_seconds: float = 110.0,
     ) -> None:
         """组装只暴露 skill_load/skill_run 的 SkillToolSet，并保留唯一 pipeline。"""
 
+        if review_deadline_seconds <= 0:
+            raise ValueError("agent_review_deadline_invalid")
         self._pipeline = pipeline
+        self._review_deadline_seconds = float(review_deadline_seconds)
         self._requests = ReviewRequestRegistry()
         self.skill_repository = create_default_skill_repository(
             str(skill_root),
@@ -165,6 +169,12 @@ class CodeReviewAgent:
     ) -> Any:
         """登记结构化输入并执行 Agent；可选观察器仅收到脱敏、截断后的公开最终文本。"""
 
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            raise AgentExecutionError("agent_sync_api_requires_no_running_loop")
         request_id = self._requests.register(input_options, trace=trace)
         emit_trace(
             trace,
@@ -187,14 +197,20 @@ class CodeReviewAgent:
         )
         self.last_prompt = prompt
         try:
-            asyncio.run(
-                self._run_sdk_agent(
-                    prompt,
-                    request_id,
-                    trace,
-                    public_response_observer,
+            try:
+                asyncio.run(
+                    asyncio.wait_for(
+                        self._run_sdk_agent(
+                            prompt,
+                            request_id,
+                            trace,
+                            public_response_observer,
+                        ),
+                        timeout=self._review_deadline_seconds,
+                    )
                 )
-            )
+            except asyncio.TimeoutError as exc:
+                raise AgentExecutionError("agent_review_deadline_exceeded") from exc
             result, error = self._requests.outcome(request_id)
             if error:
                 raise AgentExecutionError(error)
@@ -236,6 +252,8 @@ class CodeReviewAgent:
                 for part in event.content.parts:
                     if part.function_call:
                         tool_trace.append(part.function_call.name)
+                        if len(tool_trace) > 2:
+                            raise AgentExecutionError("agent_tool_call_limit_exceeded")
                         _LOGGER.info("Agent tool call: %s", part.function_call.name)
                         emit_trace(
                             trace,
@@ -264,6 +282,7 @@ def create_review_agent(
     model: LLMModel | None = None,
     workspace_runtime: BaseWorkspaceRuntime | None = None,
     workspace_binder: AgentWorkspaceBinder | None = None,
+    review_deadline_seconds: float = 110.0,
 ) -> CodeReviewAgent:
     """构造真实调用受控 Skill 工具链的代码评审 Agent。"""
 
@@ -273,6 +292,7 @@ def create_review_agent(
         model=model,
         workspace_runtime=workspace_runtime,
         workspace_binder=workspace_binder,
+        review_deadline_seconds=review_deadline_seconds,
     )
 
 

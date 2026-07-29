@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncGenerator
 import json
 import sys
@@ -270,6 +271,40 @@ def test_agent_rejects_unknown_request_id_after_load_without_pipeline_side_effec
 
     assert pipeline.calls == []
     assert agent.last_tool_trace == ("skill_load", "skill_run")
+
+
+def test_agent_rejects_sync_review_from_a_running_event_loop() -> None:
+    """验证同步 Agent API 在异步宿主中失败关闭，不登记或消费评审请求。"""
+
+    agent = create_review_agent(pipeline=_Pipeline(), skill_root=PROJECT_ROOT / "skills")
+
+    async def invoke() -> None:
+        """在已有事件循环内触发同步入口，覆盖明确的安全边界错误。"""
+
+        with pytest.raises(AgentExecutionError, match="agent_sync_api_requires_no_running_loop"):
+            agent.review(fixture="01_clean_simple")
+
+    asyncio.run(invoke())
+
+
+def test_agent_enforces_total_review_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """验证真实模型回合无响应时，Agent 在评审总预算到期后返回固定错误码。"""
+
+    agent = create_review_agent(
+        pipeline=_Pipeline(),
+        skill_root=PROJECT_ROOT / "skills",
+        review_deadline_seconds=0.01,
+    )
+
+    async def never_returns(*_arguments: Any) -> None:
+        """模拟无响应 Runner，直到 Agent 的 wait_for 取消当前回合。"""
+
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(agent, "_run_sdk_agent", never_returns)
+
+    with pytest.raises(AgentExecutionError, match="agent_review_deadline_exceeded"):
+        agent.review(fixture="01_clean_simple")
 
 
 def test_agent_filter_deny_persists_warning_without_sandbox_execution(tmp_path: Path) -> None:

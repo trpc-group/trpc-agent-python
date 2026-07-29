@@ -253,6 +253,18 @@ def test_syntax_error_downgrades_and_records_a_sanitized_parse_warning() -> None
     assert _ast_engine().match(change_set) == ()
 
 
+def test_null_byte_ast_error_downgrades_without_aborting_review() -> None:
+    """验证 AST 的 ValueError 输入退化为启发式模式，而非中止整个评审任务。"""
+
+    change_set = build_snapshot_change_set(
+        {"src/null_byte.py": "value = 'safe'\0\n"}
+    )
+
+    assert change_set.files[0].analysis_mode == "diff_heuristic"
+    assert change_set.parse_warnings == ("ast_parse_failed:src/null_byte.py",)
+    assert _ast_engine().match(change_set) == ()
+
+
 def test_ast_rules_declare_full_file_requirement() -> None:
     rules = default_ast_rules()
 

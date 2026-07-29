@@ -433,7 +433,7 @@ def _ast_candidates(full_text: str) -> Tuple[_ASTCandidate, ...]:
 
     try:
         tree = ast.parse(full_text)
-    except SyntaxError:
+    except (SyntaxError, ValueError, RecursionError):
         # The parser normally prevents this path and records the warning there.
         return ()
     visitor = _SecurityVisitor()

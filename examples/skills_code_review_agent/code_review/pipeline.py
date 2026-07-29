@@ -258,6 +258,22 @@ def _suppressed_summary(bucketed: BucketedFindings) -> dict[str, Any]:
     }
 
 
+def _sandbox_execution_error() -> dict[str, Any]:
+    """将 sandbox 端口抛出的未知异常转为不携带异常文本的失败即数据结果。"""
+
+    return {
+        "status": "error",
+        "exit_code": None,
+        "timed_out": False,
+        "truncated": False,
+        "stdout_excerpt": "",
+        "stderr_excerpt": "",
+        "error_type": "sandbox_execute_error",
+        "duration_ms": 0,
+        "findings": [],
+    }
+
+
 def _final_conclusion(bucketed: BucketedFindings) -> dict[str, Any]:
     """仅从已脱敏、去重后的四桶结果生成确定性结论与建议。"""
 
@@ -316,7 +332,14 @@ class ReviewPipeline:
         self._llm_enhancer = llm_enhancer or LlmEnhancer(
             mode=model_mode,
             environ=model_environment,
+            timeout_seconds=float(self._config.review_deadline_seconds),
         )
+
+    @property
+    def review_deadline_seconds(self) -> int:
+        """返回本次评审的总墙钟预算，供 Agent 入口限制模型工具回合。"""
+
+        return self._config.review_deadline_seconds
 
     def run(
         self,
@@ -373,6 +396,14 @@ class ReviewPipeline:
                     error_message=_safe_code(exc.args[0] if exc.args else None, fallback="input_unavailable"),
                 )
                 raise PipelineFatalError("pipeline_input_unavailable") from exc
+            except Exception as exc:
+                self._store.update_task(
+                    task_id,
+                    status="failed",
+                    error_type="input_load_error",
+                    error_message="input_load_error",
+                )
+                raise PipelineFatalError("pipeline_input_load_failed") from exc
             change_set = input_result.change_set
             emit_trace(
                 trace,
@@ -399,11 +430,20 @@ class ReviewPipeline:
                 _warning(code, stage="parse") for code in input_result.warnings
             )
 
-            decision = self._governance.decide(
-                task_id=task_id,
-                change_set=change_set,
-                config=self._config,
-            )
+            try:
+                decision = self._governance.decide(
+                    task_id=task_id,
+                    change_set=change_set,
+                    config=self._config,
+                )
+            except Exception as exc:
+                self._store.update_task(
+                    task_id,
+                    status="failed",
+                    error_type="governance_error",
+                    error_message="governance_error",
+                )
+                raise PipelineFatalError("pipeline_governance_failed") from exc
             action = _safe_code(decision.get("action"), fallback="deny")
             if action not in _FILTER_ACTIONS:
                 action = "deny"
@@ -432,11 +472,14 @@ class ReviewPipeline:
                     runtime_type=self._sandbox.runtime_type,
                 )
                 _LOGGER.info("Sandbox started: runtime=%s", self._sandbox.runtime_type)
-                raw_sandbox_result = self._sandbox.execute(
-                    task_id=task_id,
-                    change_set=change_set,
-                    config=self._config,
-                )
+                try:
+                    raw_sandbox_result = self._sandbox.execute(
+                        task_id=task_id,
+                        change_set=change_set,
+                        config=self._config,
+                    )
+                except Exception:
+                    raw_sandbox_result = _sandbox_execution_error()
                 sandbox_run = _sanitize_sandbox_run(raw_sandbox_result)
                 if sandbox_run["duration_ms"] == 0:
                     sandbox_run["duration_ms"] = max(
@@ -479,9 +522,13 @@ class ReviewPipeline:
         except PipelineFatalError:
             raise
         except Exception as exc:
-            warnings.append(
-                _warning(_safe_code(type(exc).__name__, fallback="pipeline_error"), stage="sandbox")
+            self._store.update_task(
+                task_id,
+                status="failed",
+                error_type="pipeline_control_error",
+                error_message="pipeline_control_error",
             )
+            raise PipelineFatalError("pipeline_control_failed") from exc
         finally:
             try:
                 self._sandbox.cleanup(task_id=task_id)
@@ -489,6 +536,12 @@ class ReviewPipeline:
                 warnings.append(_warning("workspace_cleanup_error", stage="cleanup"))
 
         if change_set is None:
+            self._store.update_task(
+                task_id,
+                status="failed",
+                error_type="pipeline_change_set_missing",
+                error_message="pipeline_change_set_missing",
+            )
             raise PipelineFatalError("pipeline_change_set_missing")
 
         try:
