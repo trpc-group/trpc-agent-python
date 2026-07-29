@@ -267,9 +267,14 @@ class InMemorySessionService(BaseSessionService):
             return event
 
         # This is either the normal first write or recovery of a write that
-        # stopped after local mutation; both paths append exactly once here.
-        # 此处既处理首次写入，也补偿“本地已改、存储未写”的失败，且只追加一次。
-        storage_session.events.append(event)
+        # stopped after local mutation. Mirror the complete caller windows so
+        # TTL/max-events filtering and historical retention remain consistent.
+        # 此处处理首次写入和“本地已改、存储未写”的补偿，并镜像完整窗口，确保
+        # TTL/max_events 过滤及历史事件保留语义一致。
+        storage_session.events = list(session.events)
+        storage_session.historical_events = (list(session.historical_events)
+                                             if self._session_config.store_historical_events else [])
+        storage_session.last_update_time = session.last_update_time
 
         # Split the delta by scope so app/user/session state is stored in the
         # same buckets used by normal reads.

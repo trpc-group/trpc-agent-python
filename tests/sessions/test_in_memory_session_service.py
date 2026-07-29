@@ -379,6 +379,47 @@ class TestInMemoryAppendEvent:
         assert stored_session.conversation_count == 5
         await svc.close()
 
+    @pytest.mark.parametrize("store_historical_events", [False, True])
+    async def test_append_mirrors_filtered_event_windows_to_storage(self, store_historical_events):
+        """Keep stored active/history windows aligned after max-events filtering.
+
+        max_events 过滤后，确保存储中的活动/历史事件窗口与调用方 Session 一致。
+        """
+        config = _make_session_config(
+            max_events=2,
+            store_historical_events=store_historical_events,
+        )
+        svc = InMemorySessionService(session_config=config)
+        session = await svc.create_session(app_name="app", user_id="user", session_id="s1")
+
+        # A user event acts as the retained conversation anchor while later
+        # agent events force max_events filtering on both event windows.
+        # user 事件作为保留锚点，后续 agent 事件触发两个事件窗口的 max_events 过滤。
+        for index in range(6):
+            event = _make_event(
+                author="user" if index == 2 else "agent",
+                text=f"message-{index}",
+            )
+            event.id = f"event-{index}"
+            await svc.append_event(session, event)
+
+        expected_active_ids = ["event-2", "event-5"]
+        expected_historical_ids = (["event-0", "event-1", "event-3", "event-4"] if store_historical_events else [])
+        assert [event.id for event in session.events] == expected_active_ids
+        assert [event.id for event in session.historical_events] == expected_historical_ids
+
+        # Inspect the raw stored snapshot so get_session read-view filtering
+        # cannot conceal persistence-window drift.
+        # 直接检查原始存储快照，避免 get_session 的读取过滤掩盖持久化窗口漂移。
+        stored_session = svc._get_session("app", "user", "s1")
+        assert [event.id for event in stored_session.events] == expected_active_ids
+        assert [event.id for event in stored_session.historical_events] == expected_historical_ids
+        # Copy the list containers without sharing caller-owned windows.
+        # 复制列表容器，避免与调用方共享可变的事件窗口。
+        assert stored_session.events is not session.events
+        assert stored_session.historical_events is not session.historical_events
+        await svc.close()
+
 
 # ---------------------------------------------------------------------------
 # InMemorySessionService — update_session
