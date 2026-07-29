@@ -1,8 +1,8 @@
 {
-  "train_delta": 0.16666666666666666,
-  "val_delta": 0.0,
-  "train_val_gap_at_candidate": 0.16666666666666666,
+  "train_delta": 0.8333333333333334,
+  "val_delta": 0.6666666666666666,
+  "train_val_gap_at_candidate": 0.16666666666666674,
   "train_val_gap_at_baseline": 0.0,
   "is_overfit": false,
-  "diagnosis": "潜在过拟合趋势：训练集提升但验证集未同步提升"
+  "diagnosis": "正常：两集同步提升或均无显著变化"
 }

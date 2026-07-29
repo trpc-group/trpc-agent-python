@@ -1,14 +1,14 @@
 {
   "eval_set_id": "shopping_val_trace_candidate",
   "name": "Trace Val Candidate",
-  "description": "val_001 improved→PASS, val_002 stable→PASS, val_003 overfitted→FAIL",
+  "description": "val_001优化无效→FAIL, val_002稳定→PASS, val_003过拟合退化→FAIL",
   "eval_cases": [
     {
       "eval_id": "val_001", "eval_mode": "trace",
       "actual_conversation": [{
         "invocation_id": "v1_cand",
         "user_content": {"parts": [{"text": "深圳还有橘子卖吗？多少钱？"}], "role": "user"},
-        "final_response": {"parts": [{"text": "深圳橘子5.5元一斤，库存紧张还剩50件"}], "role": "model"},
+        "final_response": {"parts": [{"text": "深圳橘子5.5元一斤"}], "role": "model"},
         "intermediate_data": {"tool_uses": [
           {"id": "cv1a", "name": "get_product_price", "args": {"city": "深圳", "product": "橘子"}},
           {"id": "cv1b", "name": "check_stock", "args": {"product": "橘子"}}]}

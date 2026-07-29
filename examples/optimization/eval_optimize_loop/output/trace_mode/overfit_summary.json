@@ -1,0 +1,8 @@
+{
+  "train_delta": 0.6666666666666667,
+  "val_delta": -0.3333333333333333,
+  "train_val_gap_at_candidate": 0.6666666666666667,
+  "train_val_gap_at_baseline": -0.3333333333333333,
+  "is_overfit": true,
+  "diagnosis": "过拟合：训练集提升 + 验证集退化，候选 prompt 泛化能力下降"
+}

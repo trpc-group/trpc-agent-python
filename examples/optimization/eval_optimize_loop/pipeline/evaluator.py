@@ -16,6 +16,63 @@ from trpc_agent_sdk.evaluation._eval_case import get_all_tool_calls
 from .config import BaselineResult, CaseResult, CaseMetricResult
 
 
+def _validate_evaluation_completed(result) -> None:
+    """Reject incomplete SDK results instead of treating them as zero scores."""
+    incomplete: list[str] = []
+    for set_result in result.results_by_eval_set_id.values():
+        for case_id, run_results in set_result.eval_results_by_eval_id.items():
+            for run_index, case_result in enumerate(run_results, start=1):
+                if not case_result.overall_eval_metric_results:
+                    incomplete.append(f"{case_id}[run={run_index}]: no metrics")
+                    continue
+                for metric_result in case_result.overall_eval_metric_results:
+                    status = metric_result.eval_status.name
+                    if status == "NOT_EVALUATED" or metric_result.score is None:
+                        reasons = []
+                        for invocation_group in getattr(
+                            case_result,
+                            "eval_metric_result_per_invocation",
+                            [],
+                        ):
+                            for invocation_result in getattr(
+                                invocation_group,
+                                "eval_metric_results",
+                                [],
+                            ):
+                                if (
+                                    invocation_result.metric_name
+                                    != metric_result.metric_name
+                                ):
+                                    continue
+                                details = getattr(
+                                    invocation_result, "details", None
+                                )
+                                reason = getattr(details, "reason", "")
+                                if reason:
+                                    reasons.append(
+                                        " ".join(str(reason).split())[:300]
+                                    )
+                        reason_suffix = (
+                            f" ({' | '.join(reasons[:2])})"
+                            if reasons
+                            else ""
+                        )
+                        incomplete.append(
+                            f"{case_id}[run={run_index}]"
+                            f"/{metric_result.metric_name}: {status}"
+                            f"{reason_suffix}"
+                        )
+
+    if incomplete:
+        details = "; ".join(incomplete[:10])
+        if len(incomplete) > 10:
+            details += f"; ... and {len(incomplete) - 10} more"
+        raise RuntimeError(
+            "Evaluation did not complete; refusing to generate a Gate "
+            f"decision from missing scores. {details}"
+        )
+
+
 def _extract_text(content) -> str:
     """Safely extract text from a Content object."""
     if content is None:
@@ -80,6 +137,7 @@ async def run_evaluation(
     result = executer.get_result()
     if result is None:
         raise RuntimeError("Evaluation returned no result.")
+    _validate_evaluation_completed(result)
 
     # Walk the result tree
     per_case: list[CaseResult] = []
@@ -98,6 +156,7 @@ async def run_evaluation(
             expected_tool_calls: list[dict] = []
             actual_response = ""
             expected_response = ""
+            invocation_metric_details: dict[str, dict] = {}
 
             for ecr in run_results:
                 if ecr.final_eval_status.name == "PASSED":
@@ -123,6 +182,20 @@ async def run_evaluation(
                         if pi.expected_invocation
                         else None
                     )
+                    for invocation_metric in pi.eval_metric_results:
+                        details = invocation_metric.details
+                        if details is None:
+                            continue
+                        saved = invocation_metric_details.setdefault(
+                            invocation_metric.metric_name,
+                            {"reasons": [], "rubric_scores": []},
+                        )
+                        if details.reason:
+                            saved["reasons"].append(details.reason)
+                        if details.rubric_scores:
+                            saved["rubric_scores"].extend(
+                                details.rubric_scores
+                            )
 
                 for emr in ecr.overall_eval_metric_results:
                     reason = ""
@@ -132,9 +205,22 @@ async def run_evaluation(
                             reason = emr.details.reason
                         if emr.details.rubric_scores:
                             rubric_scores = list(emr.details.rubric_scores)
+                    invocation_details = invocation_metric_details.get(
+                        emr.metric_name,
+                        {},
+                    )
+                    if not reason and invocation_details.get("reasons"):
+                        reason = ";".join(invocation_details["reasons"])
+                    if (
+                        not rubric_scores
+                        and invocation_details.get("rubric_scores")
+                    ):
+                        rubric_scores = list(
+                            invocation_details["rubric_scores"]
+                        )
                     cmr = CaseMetricResult(
                         metric_name=emr.metric_name,
-                        score=emr.score or 0.0,
+                        score=emr.score,
                         threshold=emr.threshold,
                         eval_status=emr.eval_status.name,
                         reason=reason,
@@ -142,7 +228,7 @@ async def run_evaluation(
                     )
                     case_metrics[emr.metric_name] = cmr
                     metric_scores.setdefault(emr.metric_name, []).append(
-                        emr.score or 0.0
+                        emr.score
                     )
 
             if all_pass:

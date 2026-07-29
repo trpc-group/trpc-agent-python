@@ -6,11 +6,73 @@
   },
   "per_case": [
     {
+      "eval_id": "train_003",
+      "status": "PASSED",
+      "metric_scores": {
+        "tool_trajectory_avg_score": 1.0,
+        "final_response_avg_score": 1.0
+      },
+      "metric_details": {
+        "tool_trajectory_avg_score": {
+          "score": 1.0,
+          "threshold": 0.8,
+          "status": "PASSED",
+          "reason": "",
+          "rubric_scores": []
+        },
+        "final_response_avg_score": {
+          "score": 1.0,
+          "threshold": 0.6,
+          "status": "PASSED",
+          "reason": "",
+          "rubric_scores": []
+        }
+      },
+      "expected_response": "运费",
+      "actual_response": "可以发货，运费8元，2-3天到",
+      "expected_tool_calls": [
+        {
+          "name": "get_shipping",
+          "args": {
+            "product": "香蕉",
+            "city": "杭州"
+          }
+        }
+      ],
+      "actual_tool_calls": [
+        {
+          "name": "get_shipping",
+          "args": {
+            "product": "香蕉",
+            "city": "杭州"
+          }
+        }
+      ],
+      "failure_types": [],
+      "failure_explanation": ""
+    },
+    {
       "eval_id": "train_001",
       "status": "FAILED",
       "metric_scores": {
         "tool_trajectory_avg_score": 1.0,
         "final_response_avg_score": 0.0
+      },
+      "metric_details": {
+        "tool_trajectory_avg_score": {
+          "score": 1.0,
+          "threshold": 0.8,
+          "status": "PASSED",
+          "reason": "",
+          "rubric_scores": []
+        },
+        "final_response_avg_score": {
+          "score": 0.0,
+          "threshold": 0.6,
+          "status": "FAILED",
+          "reason": "",
+          "rubric_scores": []
+        }
       },
       "expected_response": "库存",
       "actual_response": "上海苹果5元一斤，挺实惠的",
@@ -47,7 +109,7 @@
       "failure_types": [
         "missing_information"
       ],
-      "failure_explanation": "信息遗漏：Agent 调用了正确的工具但回复中遗漏了关键信息。期望包含 '库存'，实际回复 '上海苹果5元一斤，挺实惠的'"
+      "failure_explanation": "[final_response_avg_score] 信息遗漏：期望 1 个关键词/数字，实际仅命中 0 个 (覆盖度 0%)。期望关键信息未出现在回复中。score=0.00"
     },
     {
       "eval_id": "train_002",
@@ -55,6 +117,22 @@
       "metric_scores": {
         "tool_trajectory_avg_score": 1.0,
         "final_response_avg_score": 0.0
+      },
+      "metric_details": {
+        "tool_trajectory_avg_score": {
+          "score": 1.0,
+          "threshold": 0.8,
+          "status": "PASSED",
+          "reason": "",
+          "rubric_scores": []
+        },
+        "final_response_avg_score": {
+          "score": 0.0,
+          "threshold": 0.6,
+          "status": "FAILED",
+          "reason": "",
+          "rubric_scores": []
+        }
       },
       "expected_response": "差价",
       "actual_response": "北京苹果6元一斤，上海苹果5元一斤",
@@ -91,39 +169,9 @@
         }
       ],
       "failure_types": [
-        "reasoning_failure"
+        "missing_information"
       ],
-      "failure_explanation": "推理不足：Agent 调用了正确工具但未能完成跨值计算/比较。期望回复包含 '差价'，实际回复 '北京苹果6元一斤，上海苹果5元一斤'"
-    },
-    {
-      "eval_id": "train_003",
-      "status": "PASSED",
-      "metric_scores": {
-        "tool_trajectory_avg_score": 1.0,
-        "final_response_avg_score": 1.0
-      },
-      "expected_response": "运费",
-      "actual_response": "可以发货，运费8元，2-3天到",
-      "expected_tool_calls": [
-        {
-          "name": "get_shipping",
-          "args": {
-            "product": "香蕉",
-            "city": "杭州"
-          }
-        }
-      ],
-      "actual_tool_calls": [
-        {
-          "name": "get_shipping",
-          "args": {
-            "product": "香蕉",
-            "city": "杭州"
-          }
-        }
-      ],
-      "failure_types": [],
-      "failure_explanation": ""
+      "failure_explanation": "[final_response_avg_score] 信息遗漏：期望 1 个关键词/数字，实际仅命中 0 个 (覆盖度 0%)。期望关键信息未出现在回复中。score=0.00"
     }
   ]
 }

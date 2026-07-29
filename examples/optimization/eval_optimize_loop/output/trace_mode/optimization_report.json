@@ -1,10 +1,30 @@
 {
   "schema_version": "v1",
   "pipeline_name": "eval_optimize_loop",
-  "run_timestamp": "2026-07-25T23:19:48.533549",
+  "run_timestamp": "2026-07-29T20:37:52.950142",
   "pipeline_config": {
     "mode": "trace",
-    "seed": 42
+    "seed": 42,
+    "max_rounds": 5,
+    "baseline_prompt_preset": "defective_mix",
+    "failure_case_density": 0.6,
+    "gate": {
+      "min_improvement": 0.1,
+      "no_hard_regression": true,
+      "key_cases": [
+        "val_002"
+      ],
+      "cost_budget_usd": 1.0,
+      "per_metric_floor": {
+        "tool_trajectory_avg_score": 1.0,
+        "final_response_avg_score": 0.3,
+        "llm_rubric_response": 0.3
+      },
+      "overfitting_warning_threshold": 0.3,
+      "reject_overfit": true,
+      "overfit_train_gain": 0.01,
+      "overfit_val_loss": -0.001
+    }
   },
   "baseline": {
     "train": {
@@ -15,11 +35,73 @@
       },
       "per_case": [
         {
+          "eval_id": "train_003",
+          "status": "PASSED",
+          "metric_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "metric_details": {
+            "tool_trajectory_avg_score": {
+              "score": 1.0,
+              "threshold": 0.8,
+              "status": "PASSED",
+              "reason": "",
+              "rubric_scores": []
+            },
+            "final_response_avg_score": {
+              "score": 1.0,
+              "threshold": 0.6,
+              "status": "PASSED",
+              "reason": "",
+              "rubric_scores": []
+            }
+          },
+          "expected_response": "运费",
+          "actual_response": "可以发货，运费8元，2-3天到",
+          "expected_tool_calls": [
+            {
+              "name": "get_shipping",
+              "args": {
+                "product": "香蕉",
+                "city": "杭州"
+              }
+            }
+          ],
+          "actual_tool_calls": [
+            {
+              "name": "get_shipping",
+              "args": {
+                "product": "香蕉",
+                "city": "杭州"
+              }
+            }
+          ],
+          "failure_types": [],
+          "failure_explanation": ""
+        },
+        {
           "eval_id": "train_001",
           "status": "FAILED",
           "metric_scores": {
             "tool_trajectory_avg_score": 1.0,
             "final_response_avg_score": 0.0
+          },
+          "metric_details": {
+            "tool_trajectory_avg_score": {
+              "score": 1.0,
+              "threshold": 0.8,
+              "status": "PASSED",
+              "reason": "",
+              "rubric_scores": []
+            },
+            "final_response_avg_score": {
+              "score": 0.0,
+              "threshold": 0.6,
+              "status": "FAILED",
+              "reason": "",
+              "rubric_scores": []
+            }
           },
           "expected_response": "库存",
           "actual_response": "上海苹果5元一斤，挺实惠的",
@@ -56,7 +138,7 @@
           "failure_types": [
             "missing_information"
           ],
-          "failure_explanation": "信息遗漏：Agent 调用了正确的工具但回复中遗漏了关键信息。期望包含 '库存'，实际回复 '上海苹果5元一斤，挺实惠的'"
+          "failure_explanation": "[final_response_avg_score] 信息遗漏：期望 1 个关键词/数字，实际仅命中 0 个 (覆盖度 0%)。期望关键信息未出现在回复中。score=0.00"
         },
         {
           "eval_id": "train_002",
@@ -64,6 +146,22 @@
           "metric_scores": {
             "tool_trajectory_avg_score": 1.0,
             "final_response_avg_score": 0.0
+          },
+          "metric_details": {
+            "tool_trajectory_avg_score": {
+              "score": 1.0,
+              "threshold": 0.8,
+              "status": "PASSED",
+              "reason": "",
+              "rubric_scores": []
+            },
+            "final_response_avg_score": {
+              "score": 0.0,
+              "threshold": 0.6,
+              "status": "FAILED",
+              "reason": "",
+              "rubric_scores": []
+            }
           },
           "expected_response": "差价",
           "actual_response": "北京苹果6元一斤，上海苹果5元一斤",
@@ -100,39 +198,9 @@
             }
           ],
           "failure_types": [
-            "reasoning_failure"
+            "missing_information"
           ],
-          "failure_explanation": "推理不足：Agent 调用了正确工具但未能完成跨值计算/比较。期望回复包含 '差价'，实际回复 '北京苹果6元一斤，上海苹果5元一斤'"
-        },
-        {
-          "eval_id": "train_003",
-          "status": "PASSED",
-          "metric_scores": {
-            "tool_trajectory_avg_score": 1.0,
-            "final_response_avg_score": 1.0
-          },
-          "expected_response": "运费",
-          "actual_response": "可以发货，运费8元，2-3天到",
-          "expected_tool_calls": [
-            {
-              "name": "get_shipping",
-              "args": {
-                "product": "香蕉",
-                "city": "杭州"
-              }
-            }
-          ],
-          "actual_tool_calls": [
-            {
-              "name": "get_shipping",
-              "args": {
-                "product": "香蕉",
-                "city": "杭州"
-              }
-            }
-          ],
-          "failure_types": [],
-          "failure_explanation": ""
+          "failure_explanation": "[final_response_avg_score] 信息遗漏：期望 1 个关键词/数字，实际仅命中 0 个 (覆盖度 0%)。期望关键信息未出现在回复中。score=0.00"
         }
       ]
     },
@@ -144,39 +212,27 @@
       },
       "per_case": [
         {
-          "eval_id": "val_003",
-          "status": "PASSED",
-          "metric_scores": {
-            "tool_trajectory_avg_score": 1.0,
-            "final_response_avg_score": 1.0
-          },
-          "expected_response": "库存",
-          "actual_response": "香蕉库存充足，有300件",
-          "expected_tool_calls": [
-            {
-              "name": "check_stock",
-              "args": {
-                "product": "香蕉"
-              }
-            }
-          ],
-          "actual_tool_calls": [
-            {
-              "name": "check_stock",
-              "args": {
-                "product": "香蕉"
-              }
-            }
-          ],
-          "failure_types": [],
-          "failure_explanation": ""
-        },
-        {
           "eval_id": "val_001",
           "status": "FAILED",
           "metric_scores": {
             "tool_trajectory_avg_score": 1.0,
             "final_response_avg_score": 0.0
+          },
+          "metric_details": {
+            "tool_trajectory_avg_score": {
+              "score": 1.0,
+              "threshold": 0.8,
+              "status": "PASSED",
+              "reason": "",
+              "rubric_scores": []
+            },
+            "final_response_avg_score": {
+              "score": 0.0,
+              "threshold": 0.6,
+              "status": "FAILED",
+              "reason": "",
+              "rubric_scores": []
+            }
           },
           "expected_response": "库存",
           "actual_response": "深圳橘子5.5元一斤，挺甜的",
@@ -213,7 +269,7 @@
           "failure_types": [
             "missing_information"
           ],
-          "failure_explanation": "信息遗漏：Agent 调用了正确的工具但回复中遗漏了关键信息。期望包含 '库存'，实际回复 '深圳橘子5.5元一斤，挺甜的'"
+          "failure_explanation": "[final_response_avg_score] 信息遗漏：期望 1 个关键词/数字，实际仅命中 0 个 (覆盖度 0%)。期望关键信息未出现在回复中。score=0.00"
         },
         {
           "eval_id": "val_002",
@@ -221,6 +277,22 @@
           "metric_scores": {
             "tool_trajectory_avg_score": 1.0,
             "final_response_avg_score": 1.0
+          },
+          "metric_details": {
+            "tool_trajectory_avg_score": {
+              "score": 1.0,
+              "threshold": 0.8,
+              "status": "PASSED",
+              "reason": "",
+              "rubric_scores": []
+            },
+            "final_response_avg_score": {
+              "score": 1.0,
+              "threshold": 0.6,
+              "status": "PASSED",
+              "reason": "",
+              "rubric_scores": []
+            }
           },
           "expected_response": "折后",
           "actual_response": "苹果9折，折后4.5元一斤",
@@ -242,6 +314,50 @@
           ],
           "failure_types": [],
           "failure_explanation": ""
+        },
+        {
+          "eval_id": "val_003",
+          "status": "PASSED",
+          "metric_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "metric_details": {
+            "tool_trajectory_avg_score": {
+              "score": 1.0,
+              "threshold": 0.8,
+              "status": "PASSED",
+              "reason": "",
+              "rubric_scores": []
+            },
+            "final_response_avg_score": {
+              "score": 1.0,
+              "threshold": 0.6,
+              "status": "PASSED",
+              "reason": "",
+              "rubric_scores": []
+            }
+          },
+          "expected_response": "库存",
+          "actual_response": "香蕉库存充足，有300件",
+          "expected_tool_calls": [
+            {
+              "name": "check_stock",
+              "args": {
+                "product": "香蕉"
+              }
+            }
+          ],
+          "actual_tool_calls": [
+            {
+              "name": "check_stock",
+              "args": {
+                "product": "香蕉"
+              }
+            }
+          ],
+          "failure_types": [],
+          "failure_explanation": ""
         }
       ]
     }
@@ -249,8 +365,7 @@
   "failure_attribution": {
     "total_failures": 3,
     "by_type": {
-      "missing_information": 2,
-      "reasoning_failure": 1
+      "missing_information": 3
     },
     "per_case": [
       {
@@ -258,7 +373,7 @@
         "failure_types": [
           "missing_information"
         ],
-        "explanation": "信息遗漏：Agent 调用了正确的工具但回复中遗漏了关键信息。期望包含 '库存'，实际回复 '上海苹果5元一斤，挺实惠的'",
+        "explanation": "[final_response_avg_score] 信息遗漏：期望 1 个关键词/数字，实际仅命中 0 个 (覆盖度 0%)。期望关键信息未出现在回复中。score=0.00",
         "metric_scores": {
           "tool_trajectory_avg_score": 1.0,
           "final_response_avg_score": 0.0
@@ -267,9 +382,9 @@
       {
         "eval_id": "train_002",
         "failure_types": [
-          "reasoning_failure"
+          "missing_information"
         ],
-        "explanation": "推理不足：Agent 调用了正确工具但未能完成跨值计算/比较。期望回复包含 '差价'，实际回复 '北京苹果6元一斤，上海苹果5元一斤'",
+        "explanation": "[final_response_avg_score] 信息遗漏：期望 1 个关键词/数字，实际仅命中 0 个 (覆盖度 0%)。期望关键信息未出现在回复中。score=0.00",
         "metric_scores": {
           "tool_trajectory_avg_score": 1.0,
           "final_response_avg_score": 0.0
@@ -280,7 +395,7 @@
         "failure_types": [
           "missing_information"
         ],
-        "explanation": "信息遗漏：Agent 调用了正确的工具但回复中遗漏了关键信息。期望包含 '库存'，实际回复 '深圳橘子5.5元一斤，挺甜的'",
+        "explanation": "[final_response_avg_score] 信息遗漏：期望 1 个关键词/数字，实际仅命中 0 个 (覆盖度 0%)。期望关键信息未出现在回复中。score=0.00",
         "metric_scores": {
           "tool_trajectory_avg_score": 1.0,
           "final_response_avg_score": 0.0
@@ -291,236 +406,497 @@
   "optimization": {
     "algorithm": "trace_simulated_gepa",
     "status": "SUCCEEDED",
+    "data_scope": {
+      "candidate_generation": [
+        "baseline_train",
+        "train_failure_attribution",
+        "train_expected_tool_patterns"
+      ],
+      "holdout_only": [
+        "baseline_val",
+        "validation_failure_attribution",
+        "candidate_val"
+      ]
+    },
     "total_rounds": 1,
     "accepted_rounds": 0,
-    "baseline_pass_rate": 0.6666666666666666,
-    "best_pass_rate": 0.6666666666666666,
-    "pass_rate_improvement": 0.0,
+    "baseline_pass_rate": 0.3333333333333333,
+    "best_pass_rate": 1.0,
+    "pass_rate_improvement": 0.6666666666666667,
     "stop_reason": "completed",
-    "rounds": []
-  },
-  "candidate_validation": {
-    "baseline_pass_rate": 0.6666666666666666,
-    "candidate_pass_rate": 0.6666666666666666,
-    "delta": 0.0,
-    "per_case": [
+    "rounds": [
       {
-        "eval_id": "val_001",
-        "baseline_status": "FAILED",
-        "candidate_status": "PASSED",
-        "change_type": "newly_passing",
-        "baseline_scores": {
-          "tool_trajectory_avg_score": 1.0,
-          "final_response_avg_score": 0.0
+        "round": 1,
+        "accepted": false,
+        "acceptance_reason": "Gate 拒绝: 通过率提升不足: val delta=-0.333, 要求 >= 0.100; 存在硬回归 (PASS→FAIL): ['val_003']; Case 'val_001' metric 'final_response_avg_score' score 0.0000 < floor 0.3000; Case 'val_003' metric 'tool_trajectory_avg_score' score 0.0000 < floor 1.0000; 过拟合（训练集提升但验证集退化）: train delta=+0.667, val delta=-0.333. Candidate prompt 在 2 个训练 case 上表现提升，但在 1 个验证 case 上出现退化（验证退化 IDs: ['val_003']）。模型过度记忆了训练集模式，泛化能力下降 — 强制拒绝。",
+        "validation_pass_rate": 0.3333333333333333,
+        "metric_breakdown": {
+          "tool_trajectory_avg_score": 0.6666666666666666,
+          "final_response_avg_score": 0.6666666666666666
         },
-        "candidate_scores": {
-          "tool_trajectory_avg_score": 1.0,
-          "final_response_avg_score": 1.0
-        },
-        "delta_scores": {
-          "tool_trajectory_avg_score": 0.0,
-          "final_response_avg_score": 1.0
-        },
-        "expected_tools": [
-          {
-            "name": "get_product_price",
-            "args": {
-              "city": "深圳",
-              "product": "橘子"
-            }
-          },
-          {
-            "name": "check_stock",
-            "args": {
-              "product": "橘子"
-            }
-          }
-        ],
-        "expected_response": "库存",
-        "baseline_tools": [
-          {
-            "name": "get_product_price",
-            "args": {
-              "city": "深圳",
-              "product": "橘子"
-            }
-          },
-          {
-            "name": "check_stock",
-            "args": {
-              "product": "橘子"
-            }
-          }
-        ],
-        "baseline_response": "深圳橘子5.5元一斤，挺甜的",
-        "candidate_tools": [
-          {
-            "name": "get_product_price",
-            "args": {
-              "city": "深圳",
-              "product": "橘子"
-            }
-          },
-          {
-            "name": "check_stock",
-            "args": {
-              "product": "橘子"
-            }
-          }
-        ],
-        "candidate_response": "深圳橘子5.5元一斤，库存紧张还剩50件",
-        "failure_type": "",
-        "failure_reason": "优化有效：候选 Prompt 修复了信息遗漏问题"
-      },
-      {
-        "eval_id": "val_002",
-        "baseline_status": "PASSED",
-        "candidate_status": "PASSED",
-        "change_type": "unchanged",
-        "baseline_scores": {
-          "tool_trajectory_avg_score": 1.0,
-          "final_response_avg_score": 1.0
-        },
-        "candidate_scores": {
-          "tool_trajectory_avg_score": 1.0,
-          "final_response_avg_score": 1.0
-        },
-        "delta_scores": {
-          "tool_trajectory_avg_score": 0.0,
-          "final_response_avg_score": 0.0
-        },
-        "expected_tools": [
-          {
-            "name": "get_discount",
-            "args": {
-              "product": "苹果"
-            }
-          }
-        ],
-        "expected_response": "折后",
-        "baseline_tools": [
-          {
-            "name": "get_discount",
-            "args": {
-              "product": "苹果"
-            }
-          }
-        ],
-        "baseline_response": "苹果9折，折后4.5元一斤",
-        "candidate_tools": [
-          {
-            "name": "get_discount",
-            "args": {
-              "product": "苹果"
-            }
-          }
-        ],
-        "candidate_response": "苹果9折，折后4.5元",
-        "failure_type": "",
-        "failure_reason": ""
-      },
-      {
-        "eval_id": "val_003",
-        "baseline_status": "PASSED",
-        "candidate_status": "FAILED",
-        "change_type": "newly_failing",
-        "baseline_scores": {
-          "tool_trajectory_avg_score": 1.0,
-          "final_response_avg_score": 1.0
-        },
-        "candidate_scores": {
-          "tool_trajectory_avg_score": 0.0,
-          "final_response_avg_score": 1.0
-        },
-        "delta_scores": {
-          "tool_trajectory_avg_score": -1.0,
-          "final_response_avg_score": 0.0
-        },
-        "expected_tools": [
-          {
-            "name": "check_stock",
-            "args": {
-              "product": "香蕉"
-            }
-          }
-        ],
-        "expected_response": "库存",
-        "baseline_tools": [
-          {
-            "name": "check_stock",
-            "args": {
-              "product": "香蕉"
-            }
-          }
-        ],
-        "baseline_response": "香蕉库存充足，有300件",
-        "candidate_tools": [
-          {
-            "name": "get_product_price",
-            "args": {
-              "product": "香蕉"
-            }
-          },
-          {
-            "name": "check_stock",
-            "args": {
-              "product": "香蕉"
-            }
-          }
-        ],
-        "candidate_response": "香蕉4.5元一斤，库存充足有300件",
-        "failure_type": "overgeneralization",
-        "failure_reason": "过度泛化：Prompt 导致 Agent 在仅需 ['check_stock'] 的场景下额外调用了 ['get_product_price']。模型过度学习了训练集的模式，在不需要时也补充了额外信息。"
+        "candidate_system_prompt": "你是一个购物助手。\n\n重要：回答用户问题时，必须覆盖用户提出的每一个子问题。如果用户同时问了价格和库存，你的回答必须包含两者。",
+        "candidate_skill": "训练/调参集里出现过的问题，严格按照当时的标准答案逐字复述。\n没有见过的问题，直接套用训练经验作答，不要调用工具。"
       }
     ]
   },
+  "candidate_validation": {
+    "val": {
+      "baseline_pass_rate": 0.6666666666666666,
+      "candidate_pass_rate": 0.3333333333333333,
+      "delta": -0.3333333333333333,
+      "per_case": [
+        {
+          "eval_id": "val_001",
+          "baseline_status": "FAILED",
+          "candidate_status": "FAILED",
+          "change_type": "unchanged",
+          "baseline_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 0.0
+          },
+          "candidate_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 0.0
+          },
+          "delta_scores": {
+            "final_response_avg_score": 0.0,
+            "tool_trajectory_avg_score": 0.0
+          },
+          "expected_tools": [
+            {
+              "name": "get_product_price",
+              "args": {
+                "city": "深圳",
+                "product": "橘子"
+              }
+            },
+            {
+              "name": "check_stock",
+              "args": {
+                "product": "橘子"
+              }
+            }
+          ],
+          "expected_response": "库存",
+          "baseline_tools": [
+            {
+              "name": "get_product_price",
+              "args": {
+                "city": "深圳",
+                "product": "橘子"
+              }
+            },
+            {
+              "name": "check_stock",
+              "args": {
+                "product": "橘子"
+              }
+            }
+          ],
+          "baseline_response": "深圳橘子5.5元一斤，挺甜的",
+          "candidate_tools": [
+            {
+              "name": "get_product_price",
+              "args": {
+                "city": "深圳",
+                "product": "橘子"
+              }
+            },
+            {
+              "name": "check_stock",
+              "args": {
+                "product": "橘子"
+              }
+            }
+          ],
+          "candidate_response": "深圳橘子5.5元一斤",
+          "failure_type": "",
+          "failure_reason": ""
+        },
+        {
+          "eval_id": "val_002",
+          "baseline_status": "PASSED",
+          "candidate_status": "PASSED",
+          "change_type": "unchanged",
+          "baseline_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "candidate_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "delta_scores": {
+            "final_response_avg_score": 0.0,
+            "tool_trajectory_avg_score": 0.0
+          },
+          "expected_tools": [
+            {
+              "name": "get_discount",
+              "args": {
+                "product": "苹果"
+              }
+            }
+          ],
+          "expected_response": "折后",
+          "baseline_tools": [
+            {
+              "name": "get_discount",
+              "args": {
+                "product": "苹果"
+              }
+            }
+          ],
+          "baseline_response": "苹果9折，折后4.5元一斤",
+          "candidate_tools": [
+            {
+              "name": "get_discount",
+              "args": {
+                "product": "苹果"
+              }
+            }
+          ],
+          "candidate_response": "苹果9折，折后4.5元",
+          "failure_type": "",
+          "failure_reason": ""
+        },
+        {
+          "eval_id": "val_003",
+          "baseline_status": "PASSED",
+          "candidate_status": "FAILED",
+          "change_type": "newly_failing",
+          "baseline_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "candidate_scores": {
+            "tool_trajectory_avg_score": 0.0,
+            "final_response_avg_score": 1.0
+          },
+          "delta_scores": {
+            "final_response_avg_score": 0.0,
+            "tool_trajectory_avg_score": -1.0
+          },
+          "expected_tools": [
+            {
+              "name": "check_stock",
+              "args": {
+                "product": "香蕉"
+              }
+            }
+          ],
+          "expected_response": "库存",
+          "baseline_tools": [
+            {
+              "name": "check_stock",
+              "args": {
+                "product": "香蕉"
+              }
+            }
+          ],
+          "baseline_response": "香蕉库存充足，有300件",
+          "candidate_tools": [
+            {
+              "name": "get_product_price",
+              "args": {
+                "product": "香蕉"
+              }
+            },
+            {
+              "name": "check_stock",
+              "args": {
+                "product": "香蕉"
+              }
+            }
+          ],
+          "candidate_response": "香蕉4.5元一斤，库存充足有300件",
+          "failure_type": "overgeneralization",
+          "failure_reason": "过度泛化：Prompt 导致 Agent 在仅需 ['check_stock'] 的场景下额外调用了 ['get_product_price']。模型过度学习了训练集的模式，在不需要时也补充了额外信息。"
+        }
+      ]
+    },
+    "train": {
+      "baseline_pass_rate": 0.3333333333333333,
+      "candidate_pass_rate": 1.0,
+      "delta": 0.6666666666666667,
+      "per_case": [
+        {
+          "eval_id": "train_001",
+          "baseline_status": "FAILED",
+          "candidate_status": "PASSED",
+          "change_type": "newly_passing",
+          "baseline_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 0.0
+          },
+          "candidate_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "delta_scores": {
+            "final_response_avg_score": 1.0,
+            "tool_trajectory_avg_score": 0.0
+          },
+          "expected_tools": [
+            {
+              "name": "get_product_price",
+              "args": {
+                "city": "上海",
+                "product": "苹果"
+              }
+            },
+            {
+              "name": "check_stock",
+              "args": {
+                "product": "苹果"
+              }
+            }
+          ],
+          "expected_response": "库存",
+          "baseline_tools": [
+            {
+              "name": "get_product_price",
+              "args": {
+                "city": "上海",
+                "product": "苹果"
+              }
+            },
+            {
+              "name": "check_stock",
+              "args": {
+                "product": "苹果"
+              }
+            }
+          ],
+          "baseline_response": "上海苹果5元一斤，挺实惠的",
+          "candidate_tools": [
+            {
+              "name": "get_product_price",
+              "args": {
+                "city": "上海",
+                "product": "苹果"
+              }
+            },
+            {
+              "name": "check_stock",
+              "args": {
+                "product": "苹果"
+              }
+            }
+          ],
+          "candidate_response": "上海苹果5元一斤，库存充足，有500斤",
+          "failure_type": "",
+          "failure_reason": "优化有效：候选 Prompt 修复了信息遗漏问题"
+        },
+        {
+          "eval_id": "train_002",
+          "baseline_status": "FAILED",
+          "candidate_status": "PASSED",
+          "change_type": "newly_passing",
+          "baseline_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 0.0
+          },
+          "candidate_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "delta_scores": {
+            "final_response_avg_score": 1.0,
+            "tool_trajectory_avg_score": 0.0
+          },
+          "expected_tools": [
+            {
+              "name": "get_product_price",
+              "args": {
+                "city": "北京",
+                "product": "苹果"
+              }
+            },
+            {
+              "name": "get_product_price",
+              "args": {
+                "city": "上海",
+                "product": "苹果"
+              }
+            }
+          ],
+          "expected_response": "差价",
+          "baseline_tools": [
+            {
+              "name": "get_product_price",
+              "args": {
+                "city": "北京",
+                "product": "苹果"
+              }
+            },
+            {
+              "name": "get_product_price",
+              "args": {
+                "city": "上海",
+                "product": "苹果"
+              }
+            }
+          ],
+          "baseline_response": "北京苹果6元一斤，上海苹果5元一斤",
+          "candidate_tools": [
+            {
+              "name": "get_product_price",
+              "args": {
+                "city": "北京",
+                "product": "苹果"
+              }
+            },
+            {
+              "name": "get_product_price",
+              "args": {
+                "city": "上海",
+                "product": "苹果"
+              }
+            }
+          ],
+          "candidate_response": "北京6元一斤，上海5元一斤，差价1元",
+          "failure_type": "",
+          "failure_reason": "优化有效：候选 Prompt 修复了信息遗漏问题"
+        },
+        {
+          "eval_id": "train_003",
+          "baseline_status": "PASSED",
+          "candidate_status": "PASSED",
+          "change_type": "unchanged",
+          "baseline_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "candidate_scores": {
+            "tool_trajectory_avg_score": 1.0,
+            "final_response_avg_score": 1.0
+          },
+          "delta_scores": {
+            "final_response_avg_score": 0.0,
+            "tool_trajectory_avg_score": 0.0
+          },
+          "expected_tools": [
+            {
+              "name": "get_shipping",
+              "args": {
+                "product": "香蕉",
+                "city": "杭州"
+              }
+            }
+          ],
+          "expected_response": "运费",
+          "baseline_tools": [
+            {
+              "name": "get_shipping",
+              "args": {
+                "product": "香蕉",
+                "city": "杭州"
+              }
+            }
+          ],
+          "baseline_response": "可以发货，运费8元，2-3天到",
+          "candidate_tools": [
+            {
+              "name": "get_shipping",
+              "args": {
+                "product": "香蕉",
+                "city": "杭州"
+              }
+            }
+          ],
+          "candidate_response": "可以发货，运费8元，2-3天到",
+          "failure_type": "",
+          "failure_reason": ""
+        }
+      ]
+    },
+    "overfit_summary": {
+      "train_delta": 0.6666666666666667,
+      "val_delta": -0.3333333333333333,
+      "train_val_gap_at_candidate": 0.6666666666666667,
+      "train_val_gap_at_baseline": -0.3333333333333333,
+      "is_overfit": true,
+      "diagnosis": "过拟合：训练集提升 + 验证集退化，候选 prompt 泛化能力下降"
+    }
+  },
   "gate_decision": {
     "accepted": false,
-    "reason": "Gate 拒绝: 通过率提升不足: delta=0.000, 要求 >= 0.100; 存在硬回归 (PASS→FAIL): ['val_003']",
+    "reason": "Gate 拒绝: 通过率提升不足: val delta=-0.333, 要求 >= 0.100; 存在硬回归 (PASS→FAIL): ['val_003']; Case 'val_001' metric 'final_response_avg_score' score 0.0000 < floor 0.3000; Case 'val_003' metric 'tool_trajectory_avg_score' score 0.0000 < floor 1.0000; 过拟合（训练集提升但验证集退化）: train delta=+0.667, val delta=-0.333. Candidate prompt 在 2 个训练 case 上表现提升，但在 1 个验证 case 上出现退化（验证退化 IDs: ['val_003']）。模型过度记忆了训练集模式，泛化能力下降 — 强制拒绝。",
     "checks": {
       "min_improvement": false,
       "no_hard_regression": false,
       "key_cases_ok": true,
       "cost_ok": true,
-      "per_metric_floor": true
+      "per_metric_floor": false,
+      "no_overfit": false
     },
-    "warnings": []
+    "warnings": [
+      "训练-验证泛化差距扩大: 候选 prompt 下 gap=66.7% （baseline gap=-33.3%），存在过拟合风险"
+    ]
   },
   "prompts": {
     "baseline": {
-      "system_prompt": "你是一个购物助手。简洁回答用户问题。",
-      "skill": "根据用户的问题类型选择合适的工具查询信息。"
+      "system_prompt": "你是一个购物助手。",
+      "skill": "训练/调参集里出现过的问题，严格按照当时的标准答案逐字复述。\n没有见过的问题，直接套用训练经验作答，不要调用工具。"
     },
     "best_candidate": {
-      "system_prompt": "你是一个购物助手。简洁回答用户问题。\n\n重要：回答用户问题时，必须覆盖用户提出的每一个子问题。如果用户同时问了价格和库存，你的回答必须包含两者。",
-      "skill": "根据用户的问题类型选择合适的工具查询信息。"
+      "system_prompt": "你是一个购物助手。\n\n重要：回答用户问题时，必须覆盖用户提出的每一个子问题。如果用户同时问了价格和库存，你的回答必须包含两者。",
+      "skill": "训练/调参集里出现过的问题，严格按照当时的标准答案逐字复述。\n没有见过的问题，直接套用训练经验作答，不要调用工具。"
     }
   },
   "audit": {
-    "duration_seconds": 0.016914844512939453,
+    "duration_seconds": 0.06872105598449707,
     "stage_timings": {
-      "baseline": 0.011144876480102539,
+      "baseline": 0.057836055755615234,
       "attribution": 0.0,
-      "optimization": 0.002009153366088867,
-      "validation": 0.003760814666748047,
-      "gate": 0.0
+      "optimization": 0.0,
+      "validation": 0.009885311126708984,
+      "gate": 0.0009996891021728516
     },
     "is_trace_mode": true,
     "cost": {
       "total": 0.0,
       "baseline": 0.0,
       "optimization": 0.0,
-      "candidate": 0.0
+      "candidate": 0.0,
+      "scope": "optimizer_only",
+      "note": "AgentEvaluator/LLM judge provider billing is not exposed by the current SDK; consult the provider dashboard."
     },
     "config_snapshot": {
       "mode": "trace",
-      "seed": 42
+      "seed": 42,
+      "max_rounds": 5,
+      "baseline_prompt_preset": "defective_mix",
+      "failure_case_density": 0.6,
+      "gate": {
+        "min_improvement": 0.1,
+        "no_hard_regression": true,
+        "key_cases": [
+          "val_002"
+        ],
+        "cost_budget_usd": 1.0,
+        "per_metric_floor": {
+          "tool_trajectory_avg_score": 1.0,
+          "final_response_avg_score": 0.3,
+          "llm_rubric_response": 0.3
+        },
+        "overfitting_warning_threshold": 0.3,
+        "reject_overfit": true,
+        "overfit_train_gain": 0.01,
+        "overfit_val_loss": -0.001
+      }
     },
     "total_tokens": {
       "prompt": 0,
       "completion": 0,
       "total": 0
     },
-    "reflection_lm_calls": 0
+    "reflection_lm_calls": 0,
+    "reproducibility": {
+      "config_sha256": "307cebc3c9d07538bcf591bb95bc1e49402ef7c90d4d8de69482f9522ca80cb8",
+      "baseline_prompt_sha256": "d5321576f973bbdcd5e2aba510593ad2f8ea0654f1dd723300705a5e966af194",
+      "candidate_prompt_sha256": "8c77ab1843ccd3b7d39e2a9bbbc3beb50c4b2f196feab5893bf33e5f1aa79eeb"
+    }
   }
 }

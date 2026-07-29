@@ -1,24 +1,24 @@
 {
   "baseline_pass_rate": 0.6666666666666666,
-  "candidate_pass_rate": 0.6666666666666666,
-  "delta": 0.0,
+  "candidate_pass_rate": 0.3333333333333333,
+  "delta": -0.3333333333333333,
   "per_case": [
     {
       "eval_id": "val_001",
       "baseline_status": "FAILED",
-      "candidate_status": "PASSED",
-      "change_type": "newly_passing",
+      "candidate_status": "FAILED",
+      "change_type": "unchanged",
       "baseline_scores": {
         "tool_trajectory_avg_score": 1.0,
         "final_response_avg_score": 0.0
       },
       "candidate_scores": {
         "tool_trajectory_avg_score": 1.0,
-        "final_response_avg_score": 1.0
+        "final_response_avg_score": 0.0
       },
       "delta_scores": {
-        "tool_trajectory_avg_score": 0.0,
-        "final_response_avg_score": 1.0
+        "final_response_avg_score": 0.0,
+        "tool_trajectory_avg_score": 0.0
       },
       "expected_tools": [
         {
@@ -67,9 +67,9 @@
           }
         }
       ],
-      "candidate_response": "深圳橘子5.5元一斤，库存紧张还剩50件",
+      "candidate_response": "深圳橘子5.5元一斤",
       "failure_type": "",
-      "failure_reason": "优化有效：候选 Prompt 修复了信息遗漏问题"
+      "failure_reason": ""
     },
     {
       "eval_id": "val_002",
@@ -85,8 +85,8 @@
         "final_response_avg_score": 1.0
       },
       "delta_scores": {
-        "tool_trajectory_avg_score": 0.0,
-        "final_response_avg_score": 0.0
+        "final_response_avg_score": 0.0,
+        "tool_trajectory_avg_score": 0.0
       },
       "expected_tools": [
         {
@@ -132,8 +132,8 @@
         "final_response_avg_score": 1.0
       },
       "delta_scores": {
-        "tool_trajectory_avg_score": -1.0,
-        "final_response_avg_score": 0.0
+        "final_response_avg_score": 0.0,
+        "tool_trajectory_avg_score": -1.0
       },
       "expected_tools": [
         {

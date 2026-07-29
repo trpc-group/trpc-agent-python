@@ -24,6 +24,7 @@
     "key_cases": ["val_002"],
     "cost_budget_usd": 1.0,
     "per_metric_floor": {
+      "tool_trajectory_avg_score": 1.0,
       "final_response_avg_score": 0.3,
       "llm_rubric_response": 0.3
     },

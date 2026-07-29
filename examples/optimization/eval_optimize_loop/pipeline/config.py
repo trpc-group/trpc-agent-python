@@ -151,8 +151,8 @@ class PipelineConfig:
 
     New attribs for failure-diversity control:
         baseline_prompt_preset: Name of preset in BASELINE_PRESETS to use
-            as the INITIAL baseline prompts (written to disk at start of
-            pipeline). Use "original" for the clean vagueness-only prompt,
+            as the INITIAL baseline prompts (snapshotted under the run output).
+            Use "original" for the clean vagueness-only prompt,
             or any defective_* / defective_mix preset to reliably trigger
             a diverse failure attribution mix.
         failure_case_density: Hint for future evalset expansion (0.0–1.0).

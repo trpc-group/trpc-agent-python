@@ -7,8 +7,8 @@ Usage:
     python run_pipeline.py
 
     # Live mode (requires TRPC_AGENT_API_KEY)
-    TRPC_AGENT_API_KEY=sk-xxx TRPC_AGENT_BASE_URL=https://api.deepseek.com/v1 \
-        TRPC_AGENT_MODEL_NAME=deepseek-chat python run_pipeline.py
+    TRPC_AGENT_API_KEY=sk-xxx TRPC_AGENT_BASE_URL=https://api.deepseek.com \
+        TRPC_AGENT_MODEL_NAME=deepseek-v4-flash python run_pipeline.py
 
 The pipeline auto-detects mode: if API key env vars are missing, it falls
 back to trace mode using pre-recorded conversations.
@@ -104,7 +104,7 @@ async def main() -> None:
           f"train_gain>={pconfig.gate.overfit_train_gain}, "
           f"val_loss<={pconfig.gate.overfit_val_loss}")
 
-    # Run pipeline (pass pconfig so Stage 0 can rewrite baseline prompts)
+    # Run pipeline (Stage 0 materializes isolated runtime prompt snapshots)
     ctx = await run_pipeline(ctx, pconfig.gate, pconfig=pconfig)
 
     # Final summary

@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -20,16 +22,61 @@ from .config import (
 )
 
 
+def _serialize_rubric_score(item: Any) -> dict[str, Any]:
+    """Convert SDK/dict rubric scores into stable report JSON."""
+    if isinstance(item, dict):
+        return dict(item)
+    if hasattr(item, "model_dump"):
+        return item.model_dump()
+    return {
+        "id": getattr(item, "id", ""),
+        "reason": getattr(item, "reason", ""),
+        "score": getattr(item, "score", 0.0),
+    }
+
+
+def _metric_details(case: Any) -> dict[str, Any]:
+    """Preserve judge evidence needed to audit failure attribution."""
+    return {
+        metric.metric_name: {
+            "score": metric.score,
+            "threshold": metric.threshold,
+            "status": metric.eval_status,
+            "reason": metric.reason,
+            "rubric_scores": [
+                _serialize_rubric_score(item)
+                for item in metric.rubric_scores
+            ],
+        }
+        for metric in case.metrics.values()
+    }
+
+
 def _build_report_dict(ctx: PipelineContext) -> dict[str, Any]:
     """Assemble the full pipeline report as a JSON-serialisable dict."""
+    try:
+        pipeline_config = PipelineConfig.from_file(ctx.pipeline_config_path)
+        config_snapshot = {
+            "mode": "trace" if ctx.is_trace_mode else "live",
+            "seed": pipeline_config.seed,
+            "max_rounds": pipeline_config.max_rounds,
+            "baseline_prompt_preset": (
+                pipeline_config.baseline_prompt_preset
+            ),
+            "failure_case_density": pipeline_config.failure_case_density,
+            "gate": asdict(pipeline_config.gate),
+        }
+    except Exception:
+        config_snapshot = {
+            "mode": "trace" if ctx.is_trace_mode else "live",
+            "seed": 42,
+        }
+
     report: dict[str, Any] = {
         "schema_version": "v1",
         "pipeline_name": "eval_optimize_loop",
         "run_timestamp": datetime.now().isoformat(),
-        "pipeline_config": {
-            "mode": "trace" if ctx.is_trace_mode else "live",
-            "seed": 42,
-        },
+        "pipeline_config": config_snapshot,
     }
 
     # ---- Baseline ----
@@ -47,6 +94,7 @@ def _build_report_dict(ctx: PipelineContext) -> dict[str, Any]:
                     "metric_scores": {
                         m.metric_name: m.score for m in c.metrics.values()
                     },
+                    "metric_details": _metric_details(c),
                     "expected_response": c.expected_response,
                     "actual_response": c.actual_response,
                     "expected_tool_calls": c.expected_tool_calls,
@@ -90,17 +138,56 @@ def _build_report_dict(ctx: PipelineContext) -> dict[str, Any]:
                 "metric_breakdown": getattr(r, "metric_breakdown", {}),
                 "candidate_system_prompt": (
                     getattr(r, "candidate_prompts", {}) or {}
-                ).get("system_prompt", "")[:500],
+                ).get("system_prompt", ""),
                 "candidate_skill": (
                     getattr(r, "candidate_prompts", {}) or {}
-                ).get("skill", "")[:500],
+                ).get("skill", ""),
             })
+
+        # The analysis-driven extension produces one candidate directly rather
+        # than SDK RoundResult objects.  Materialize that real round from the
+        # completed validation/Gate state so total_rounds, accepted_rounds and
+        # rounds cannot contradict each other in the audit report.
+        total_rounds = getattr(opt, "total_rounds", 0)
+        if not rounds_data and total_rounds and ctx.candidate_val is not None:
+            candidate_prompts = getattr(opt, "best_prompts", {}) or {}
+            accepted = bool(
+                ctx.gate_decision and ctx.gate_decision.accepted
+            )
+            rounds_data.append({
+                "round": 1,
+                "accepted": accepted,
+                "acceptance_reason": (
+                    ctx.gate_decision.reason
+                    if ctx.gate_decision
+                    else "Gate decision unavailable"
+                ),
+                "validation_pass_rate": ctx.candidate_val.pass_rate,
+                "metric_breakdown": ctx.candidate_val.metric_breakdown,
+                "candidate_system_prompt": candidate_prompts.get(
+                    "system_prompt", ""
+                ),
+                "candidate_skill": candidate_prompts.get("skill", ""),
+            })
+
         report["optimization"] = {
             "algorithm": getattr(opt, "algorithm", "unknown"),
             "status": getattr(opt, "status", "UNKNOWN"),
-            "total_rounds": getattr(opt, "total_rounds", 0),
+            "data_scope": {
+                "candidate_generation": [
+                    "baseline_train",
+                    "train_failure_attribution",
+                    "train_expected_tool_patterns",
+                ],
+                "holdout_only": [
+                    "baseline_val",
+                    "validation_failure_attribution",
+                    "candidate_val",
+                ],
+            },
+            "total_rounds": total_rounds,
             "accepted_rounds": sum(
-                1 for r in rounds if getattr(r, "accepted", False)
+                1 for r in rounds_data if r["accepted"]
             ),
             "baseline_pass_rate": getattr(opt, "baseline_pass_rate", 0.0),
             "best_pass_rate": getattr(opt, "best_pass_rate", 0.0),
@@ -248,17 +335,17 @@ def _build_report_dict(ctx: PipelineContext) -> dict[str, Any]:
         if not baseline_sys:
             baseline_sys = ctx.optimize_result.baseline_prompts.get("system_prompt", "")
             baseline_sk = ctx.optimize_result.baseline_prompts.get("skill", "")
-        # Read current disk content for candidate
-        _prompts_dir = ctx.project_dir / "agent" / "prompts"
-        try:
-            disk_sys = (_prompts_dir / "system.md").read_text(encoding="utf-8").strip()
-            disk_sk = (_prompts_dir / "skill.md").read_text(encoding="utf-8").strip()
-        except Exception:
-            disk_sys = baseline_sys
-            disk_sk = baseline_sk
+        candidate_prompts = getattr(
+            ctx.optimize_result, "best_prompts", {}
+        ) or {}
         report["prompts"] = {
             "baseline": {"system_prompt": baseline_sys, "skill": baseline_sk},
-            "best_candidate": {"system_prompt": disk_sys, "skill": disk_sk},
+            "best_candidate": {
+                "system_prompt": candidate_prompts.get(
+                    "system_prompt", baseline_sys
+                ),
+                "skill": candidate_prompts.get("skill", baseline_sk),
+            },
         }
 
     # ---- Audit ----
@@ -271,6 +358,11 @@ def _build_report_dict(ctx: PipelineContext) -> dict[str, Any]:
             "baseline": 0.0,
             "optimization": 0.0,
             "candidate": 0.0,
+            "scope": "optimizer_only",
+            "note": (
+                "AgentEvaluator/LLM judge provider billing is not exposed "
+                "by the current SDK; consult the provider dashboard."
+            ),
         },
         "config_snapshot": report.get("pipeline_config", {}),
     }
@@ -285,6 +377,28 @@ def _build_report_dict(ctx: PipelineContext) -> dict[str, Any]:
         audit_data["reflection_lm_calls"] = getattr(
             ctx.optimize_result, "total_reflection_lm_calls", 0
         )
+    try:
+        config_bytes = Path(ctx.pipeline_config_path).read_bytes()
+        baseline_prompt = report.get("prompts", {}).get("baseline", {})
+        candidate_prompt = report.get("prompts", {}).get(
+            "best_candidate", {}
+        )
+
+        def _prompt_hash(prompt_data: dict) -> str:
+            content = json.dumps(
+                prompt_data,
+                ensure_ascii=False,
+                sort_keys=True,
+            ).encode("utf-8")
+            return hashlib.sha256(content).hexdigest()
+
+        audit_data["reproducibility"] = {
+            "config_sha256": hashlib.sha256(config_bytes).hexdigest(),
+            "baseline_prompt_sha256": _prompt_hash(baseline_prompt),
+            "candidate_prompt_sha256": _prompt_hash(candidate_prompt),
+        }
+    except Exception:
+        pass
     report["audit"] = audit_data
 
     return report
@@ -398,6 +512,16 @@ def _build_markdown(report: dict[str, Any]) -> str:
         lines.append("**Optimization Details**")
         lines.append(f"- Algorithm: {opt.get('algorithm', 'N/A')}")
         lines.append(f"- Status: {opt.get('status', 'N/A')}")
+        data_scope = opt.get("data_scope", {})
+        if data_scope:
+            lines.append(
+                "- Candidate-generation data: "
+                + ", ".join(data_scope.get("candidate_generation", []))
+            )
+            lines.append(
+                "- Holdout-only data: "
+                + ", ".join(data_scope.get("holdout_only", []))
+            )
         lines.append(f"- Stop reason: {opt.get('stop_reason', 'N/A')}")
         lines.append(f"- Total rounds: {opt.get('total_rounds', 0)}")
         lines.append(f"- Accepted rounds: {opt.get('accepted_rounds', 0)}")
@@ -595,6 +719,11 @@ def generate(ctx: PipelineContext) -> tuple[str, str]:
 
     # Markdown
     md_path = out / "optimization_report.md"
-    md_path.write_text(_build_markdown(report), encoding="utf-8")
+    markdown = _build_markdown(report)
+    # Model responses may contain Markdown hard-break spaces.  Reports are
+    # tracked artifacts, so normalize line endings to keep `git diff --check`
+    # clean without altering the JSON source of truth.
+    markdown = "\n".join(line.rstrip() for line in markdown.splitlines())
+    md_path.write_text(markdown, encoding="utf-8")
 
     return str(json_path), str(md_path)

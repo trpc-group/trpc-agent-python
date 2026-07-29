@@ -6,39 +6,27 @@
   },
   "per_case": [
     {
-      "eval_id": "val_003",
-      "status": "PASSED",
-      "metric_scores": {
-        "tool_trajectory_avg_score": 1.0,
-        "final_response_avg_score": 1.0
-      },
-      "expected_response": "库存",
-      "actual_response": "香蕉库存充足，有300件",
-      "expected_tool_calls": [
-        {
-          "name": "check_stock",
-          "args": {
-            "product": "香蕉"
-          }
-        }
-      ],
-      "actual_tool_calls": [
-        {
-          "name": "check_stock",
-          "args": {
-            "product": "香蕉"
-          }
-        }
-      ],
-      "failure_types": [],
-      "failure_explanation": ""
-    },
-    {
       "eval_id": "val_001",
       "status": "FAILED",
       "metric_scores": {
         "tool_trajectory_avg_score": 1.0,
         "final_response_avg_score": 0.0
+      },
+      "metric_details": {
+        "tool_trajectory_avg_score": {
+          "score": 1.0,
+          "threshold": 0.8,
+          "status": "PASSED",
+          "reason": "",
+          "rubric_scores": []
+        },
+        "final_response_avg_score": {
+          "score": 0.0,
+          "threshold": 0.6,
+          "status": "FAILED",
+          "reason": "",
+          "rubric_scores": []
+        }
       },
       "expected_response": "库存",
       "actual_response": "深圳橘子5.5元一斤，挺甜的",
@@ -75,7 +63,7 @@
       "failure_types": [
         "missing_information"
       ],
-      "failure_explanation": "信息遗漏：Agent 调用了正确的工具但回复中遗漏了关键信息。期望包含 '库存'，实际回复 '深圳橘子5.5元一斤，挺甜的'"
+      "failure_explanation": "[final_response_avg_score] 信息遗漏：期望 1 个关键词/数字，实际仅命中 0 个 (覆盖度 0%)。期望关键信息未出现在回复中。score=0.00"
     },
     {
       "eval_id": "val_002",
@@ -83,6 +71,22 @@
       "metric_scores": {
         "tool_trajectory_avg_score": 1.0,
         "final_response_avg_score": 1.0
+      },
+      "metric_details": {
+        "tool_trajectory_avg_score": {
+          "score": 1.0,
+          "threshold": 0.8,
+          "status": "PASSED",
+          "reason": "",
+          "rubric_scores": []
+        },
+        "final_response_avg_score": {
+          "score": 1.0,
+          "threshold": 0.6,
+          "status": "PASSED",
+          "reason": "",
+          "rubric_scores": []
+        }
       },
       "expected_response": "折后",
       "actual_response": "苹果9折，折后4.5元一斤",
@@ -99,6 +103,50 @@
           "name": "get_discount",
           "args": {
             "product": "苹果"
+          }
+        }
+      ],
+      "failure_types": [],
+      "failure_explanation": ""
+    },
+    {
+      "eval_id": "val_003",
+      "status": "PASSED",
+      "metric_scores": {
+        "tool_trajectory_avg_score": 1.0,
+        "final_response_avg_score": 1.0
+      },
+      "metric_details": {
+        "tool_trajectory_avg_score": {
+          "score": 1.0,
+          "threshold": 0.8,
+          "status": "PASSED",
+          "reason": "",
+          "rubric_scores": []
+        },
+        "final_response_avg_score": {
+          "score": 1.0,
+          "threshold": 0.6,
+          "status": "PASSED",
+          "reason": "",
+          "rubric_scores": []
+        }
+      },
+      "expected_response": "库存",
+      "actual_response": "香蕉库存充足，有300件",
+      "expected_tool_calls": [
+        {
+          "name": "check_stock",
+          "args": {
+            "product": "香蕉"
+          }
+        }
+      ],
+      "actual_tool_calls": [
+        {
+          "name": "check_stock",
+          "args": {
+            "product": "香蕉"
           }
         }
       ],

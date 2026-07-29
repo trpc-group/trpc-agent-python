@@ -1,6 +1,23 @@
 {
   "metrics": [
     {
+      "metric_name": "tool_trajectory_avg_score",
+      "threshold": 1.0,
+      "criterion": {
+        "tool_trajectory": {
+          "default": {
+            "name": {
+              "match": "exact",
+              "case_insensitive": false
+            },
+            "arguments": {
+              "match": "exact"
+            }
+          }
+        }
+      }
+    },
+    {
       "metric_name": "llm_rubric_response",
       "threshold": 0.5,
       "criterion": {
@@ -9,7 +26,8 @@
             "model_name": "${TRPC_AGENT_MODEL_NAME}",
             "base_url": "${TRPC_AGENT_BASE_URL}",
             "api_key": "${TRPC_AGENT_API_KEY}",
-            "num_samples": 3,
+            "num_samples": 1,
+            "think": false,
             "generation_config": {
               "max_tokens": 1024,
               "temperature": 0.0

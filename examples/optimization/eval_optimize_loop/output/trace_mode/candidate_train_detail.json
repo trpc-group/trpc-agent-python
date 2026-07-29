@@ -1,0 +1,196 @@
+{
+  "baseline_pass_rate": 0.3333333333333333,
+  "candidate_pass_rate": 1.0,
+  "delta": 0.6666666666666667,
+  "per_case": [
+    {
+      "eval_id": "train_001",
+      "baseline_status": "FAILED",
+      "candidate_status": "PASSED",
+      "change_type": "newly_passing",
+      "baseline_scores": {
+        "tool_trajectory_avg_score": 1.0,
+        "final_response_avg_score": 0.0
+      },
+      "candidate_scores": {
+        "tool_trajectory_avg_score": 1.0,
+        "final_response_avg_score": 1.0
+      },
+      "delta_scores": {
+        "final_response_avg_score": 1.0,
+        "tool_trajectory_avg_score": 0.0
+      },
+      "expected_tools": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "上海",
+            "product": "苹果"
+          }
+        },
+        {
+          "name": "check_stock",
+          "args": {
+            "product": "苹果"
+          }
+        }
+      ],
+      "expected_response": "库存",
+      "baseline_tools": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "上海",
+            "product": "苹果"
+          }
+        },
+        {
+          "name": "check_stock",
+          "args": {
+            "product": "苹果"
+          }
+        }
+      ],
+      "baseline_response": "上海苹果5元一斤，挺实惠的",
+      "candidate_tools": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "上海",
+            "product": "苹果"
+          }
+        },
+        {
+          "name": "check_stock",
+          "args": {
+            "product": "苹果"
+          }
+        }
+      ],
+      "candidate_response": "上海苹果5元一斤，库存充足，有500斤",
+      "failure_type": "",
+      "failure_reason": "优化有效：候选 Prompt 修复了信息遗漏问题"
+    },
+    {
+      "eval_id": "train_002",
+      "baseline_status": "FAILED",
+      "candidate_status": "PASSED",
+      "change_type": "newly_passing",
+      "baseline_scores": {
+        "tool_trajectory_avg_score": 1.0,
+        "final_response_avg_score": 0.0
+      },
+      "candidate_scores": {
+        "tool_trajectory_avg_score": 1.0,
+        "final_response_avg_score": 1.0
+      },
+      "delta_scores": {
+        "final_response_avg_score": 1.0,
+        "tool_trajectory_avg_score": 0.0
+      },
+      "expected_tools": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "北京",
+            "product": "苹果"
+          }
+        },
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "上海",
+            "product": "苹果"
+          }
+        }
+      ],
+      "expected_response": "差价",
+      "baseline_tools": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "北京",
+            "product": "苹果"
+          }
+        },
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "上海",
+            "product": "苹果"
+          }
+        }
+      ],
+      "baseline_response": "北京苹果6元一斤，上海苹果5元一斤",
+      "candidate_tools": [
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "北京",
+            "product": "苹果"
+          }
+        },
+        {
+          "name": "get_product_price",
+          "args": {
+            "city": "上海",
+            "product": "苹果"
+          }
+        }
+      ],
+      "candidate_response": "北京6元一斤，上海5元一斤，差价1元",
+      "failure_type": "",
+      "failure_reason": "优化有效：候选 Prompt 修复了信息遗漏问题"
+    },
+    {
+      "eval_id": "train_003",
+      "baseline_status": "PASSED",
+      "candidate_status": "PASSED",
+      "change_type": "unchanged",
+      "baseline_scores": {
+        "tool_trajectory_avg_score": 1.0,
+        "final_response_avg_score": 1.0
+      },
+      "candidate_scores": {
+        "tool_trajectory_avg_score": 1.0,
+        "final_response_avg_score": 1.0
+      },
+      "delta_scores": {
+        "final_response_avg_score": 0.0,
+        "tool_trajectory_avg_score": 0.0
+      },
+      "expected_tools": [
+        {
+          "name": "get_shipping",
+          "args": {
+            "product": "香蕉",
+            "city": "杭州"
+          }
+        }
+      ],
+      "expected_response": "运费",
+      "baseline_tools": [
+        {
+          "name": "get_shipping",
+          "args": {
+            "product": "香蕉",
+            "city": "杭州"
+          }
+        }
+      ],
+      "baseline_response": "可以发货，运费8元，2-3天到",
+      "candidate_tools": [
+        {
+          "name": "get_shipping",
+          "args": {
+            "product": "香蕉",
+            "city": "杭州"
+          }
+        }
+      ],
+      "candidate_response": "可以发货，运费8元，2-3天到",
+      "failure_type": "",
+      "failure_reason": ""
+    }
+  ]
+}

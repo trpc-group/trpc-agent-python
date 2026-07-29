@@ -89,37 +89,16 @@ RUBRIC_TO_FAILURE = [
 
 def _classify_by_rubric_reason(
     metric_reason: str,
+    rubric_scores: list | None = None,
 ) -> list[tuple[str, str]]:
-    """Cross `(rubric_or_reason → list of (failure_type, explanation) tuples.
+    """Map failed rubric items to failure types.
 
-    1. First attempt to parse explicit rubric-ID style strings ("<rubric_id>: FAILED" or
-    "<rubric_id>: score X/Y" from tRPC SDK's typical llm_judge output.
-    2. Fall back to keyword matching against rubric keyword tuples above.
+    Structured per-rubric scores are authoritative.  The SDK's aggregate
+    ``reason`` concatenates explanations for both passed and failed rubrics, so
+    treating the mere presence of a rubric id as failure creates false
+    positives.  Text parsing is retained only for older/unstructured results.
     """
     results: list[tuple[str, str]] = []
-    if not metric_reason:
-        return results
-
-    rr = metric_reason
-    rl = rr.lower()
-
-    # 1) Explicit rubric-id style markers
-    #    e.g. "Rubric no_redundancy: FAILED (score 0/2)"
-    try:
-        explicit_rubric_hits = re.findall(
-            r"(rubric|rule|项目|维度)?\s*[:：]?\s*"
-            r"(no_redundancy|no_extra|completeness)",
-            rl,
-        )
-        # Normalise: findall returns tuples
-        explicit_rubric_hits = [m[-1] for m in explicit_rubric_hits]
-    except Exception:
-        explicit_rubric_hits = []
-    # Also simpler: just the rubric ids directly anywhere in the reason
-    for rid in ("no_redundancy", "no_extra", "completeness"):
-        if rid in rl and rid not in explicit_rubric_hits:
-            explicit_rubric_hits.append(rid)
-    # Map explicit ids via rubric table
     rid_to_ftype = {
         "no_redundancy": FAILURE_TYPE["EXCESSIVE_VERBOSITY"],
         "no_extra": FAILURE_TYPE["OVERGENERALIZATION"],
@@ -130,6 +109,48 @@ def _classify_by_rubric_reason(
         "no_extra": "judge rubric=no_extra 未通过：输出用户未询问的额外信息（过度泛化）",
         "completeness": "judge rubric=completeness 未通过：遗漏子问题/信息不完整",
     }
+
+    known_structured_scores = []
+    for item in rubric_scores or []:
+        if isinstance(item, dict):
+            rubric_id = str(item.get("id", ""))
+            score = item.get("score", 0.0)
+            item_reason = str(item.get("reason", "") or "")
+        else:
+            rubric_id = str(getattr(item, "id", ""))
+            score = getattr(item, "score", 0.0)
+            item_reason = str(getattr(item, "reason", "") or "")
+        if rubric_id not in rid_to_ftype:
+            continue
+        known_structured_scores.append(rubric_id)
+        if float(score) >= 1.0:
+            continue
+        message = rid_to_msg[rubric_id]
+        if item_reason:
+            message += f"（{item_reason}）"
+        results.append((rid_to_ftype[rubric_id], message))
+
+    if known_structured_scores:
+        return results
+    if not metric_reason:
+        return results
+
+    rr = metric_reason
+    rl = rr.lower()
+
+    # Older results may only contain text such as
+    # "Rubric no_redundancy: FAILED".  Parse those as a compatibility fallback.
+    try:
+        explicit_rubric_hits = re.findall(
+            r"(rubric|rule|项目|维度)?\s*[:：]?\s*"
+            r"(no_redundancy|no_extra|completeness)"
+            r"(?=[^\n;]*(?:failed|未通过|score\s*0))",
+            rl,
+        )
+        explicit_rubric_hits = [match[-1] for match in explicit_rubric_hits]
+    except Exception:
+        explicit_rubric_hits = []
+
     seen_types: set[str] = set()
     for rid in explicit_rubric_hits:
         ftype = rid_to_ftype.get(rid)
@@ -490,7 +511,10 @@ def _classify_case(case: CaseResult, eval_set_id: str) -> FailureRecord | None:
         # ── Response-level failures ─────────────────────────────
         elif name in ("final_response_avg_score", "llm_rubric_response"):
             # A) FIRST: use the judge's rubric reason as GROUND TRUTH (most reliable)
-            rubric_hits = _classify_by_rubric_reason(reason)
+            rubric_hits = _classify_by_rubric_reason(
+                reason,
+                metric.rubric_scores,
+            )
             for ftype, msg in rubric_hits:
                 if ftype not in failure_types:
                     failure_types.append(ftype)

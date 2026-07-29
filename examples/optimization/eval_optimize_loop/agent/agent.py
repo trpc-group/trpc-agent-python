@@ -15,11 +15,14 @@ The optimizer must learn to add output format constraints.
 
 from pathlib import Path
 from typing import Any, Dict
+import os
 
 from trpc_agent_sdk.agents import LlmAgent
 from trpc_agent_sdk.models import LLMModel, OpenAIModel
+from trpc_agent_sdk.planners import BuiltInPlanner
 from trpc_agent_sdk.tools import FunctionTool
 from trpc_agent_sdk.types import GenerateContentConfig
+from trpc_agent_sdk.types import ThinkingConfig
 
 from .config import get_model_config
 
@@ -110,8 +113,14 @@ def _create_model() -> LLMModel:
 
 def _read_instruction() -> str:
     """Read system + skill prompts from disk (re-read each call for GEPA)."""
-    system = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip()
-    skill = SKILL_PATH.read_text(encoding="utf-8").strip()
+    system_path = Path(
+        os.getenv("EVAL_OPT_SYSTEM_PROMPT_PATH", str(SYSTEM_PROMPT_PATH))
+    )
+    skill_path = Path(
+        os.getenv("EVAL_OPT_SKILL_PROMPT_PATH", str(SKILL_PATH))
+    )
+    system = system_path.read_text(encoding="utf-8").strip()
+    skill = skill_path.read_text(encoding="utf-8").strip()
     return f"{system}\n\n## 技能说明\n{skill}"
 
 
@@ -126,6 +135,14 @@ def _create_agent_with_prompts(instruction: str) -> LlmAgent:
             temperature=0.2,
             top_p=0.9,
             max_output_tokens=1024,
+        ),
+        # DeepSeek V4 enables thinking by default. This evaluation agent needs
+        # predictable tool calls and concise final answers.
+        planner=BuiltInPlanner(
+            thinking_config=ThinkingConfig(
+                include_thoughts=False,
+                thinking_budget=0,
+            ),
         ),
         tools=[
             FunctionTool(get_product_price),

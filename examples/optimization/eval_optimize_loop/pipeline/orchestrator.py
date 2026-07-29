@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-import shutil
+import os
 import time
 from pathlib import Path
 
@@ -22,56 +22,55 @@ from .gate import decide
 from .reporter import generate
 
 
-def _apply_baseline_preset(
-    ctx: PipelineContext, pconfig: PipelineConfig
-) -> tuple[str, str]:
-    """Apply the `baseline_prompt_preset` from pconfig to disk.
+_SYSTEM_PROMPT_ENV = "EVAL_OPT_SYSTEM_PROMPT_PATH"
+_SKILL_PROMPT_ENV = "EVAL_OPT_SKILL_PROMPT_PATH"
 
-    Returns (original_system, original_skill) snapshot so the caller can
-    restore prompts after the pipeline completes (or after Gate rejects).
-    """
-    _prompts_dir = ctx.project_dir / "agent" / "prompts"
-    _system_path = _prompts_dir / "system.md"
-    _skill_path = _prompts_dir / "skill.md"
 
-    # Snapshot current prompts (usually the "original" baseline but may have
-    # been altered by a prior run).
-    orig_sys = _system_path.read_text(encoding="utf-8").strip()
-    orig_sk = _skill_path.read_text(encoding="utf-8").strip()
+def _materialize_prompts(
+    ctx: PipelineContext,
+    label: str,
+    system_prompt: str,
+    skill_prompt: str,
+) -> tuple[Path, Path]:
+    """Write an immutable prompt snapshot under this run's output."""
+    prompt_dir = Path(ctx.output_dir) / "prompts" / label
+    prompt_dir.mkdir(parents=True, exist_ok=True)
+    system_path = prompt_dir / "system.md"
+    skill_path = prompt_dir / "skill.md"
+    system_path.write_text(system_prompt.strip() + "\n", encoding="utf-8")
+    skill_path.write_text(skill_prompt.strip() + "\n", encoding="utf-8")
+    return system_path, skill_path
 
-    preset_name = pconfig.baseline_prompt_preset
-    if ctx.is_trace_mode or preset_name in (None, "", "original"):
-        # Trace mode uses pre-recorded actual_conversations; prompt changes
-        # have no effect. Similarly "original" → no-op.
-        return orig_sys, orig_sk
 
-    preset = BASELINE_PRESETS.get(preset_name)
-    if preset is None:
-        raise ValueError(
-            f"Unknown baseline_prompt_preset='{preset_name}'. "
-            f"Valid options: {sorted(BASELINE_PRESETS)}"
+def _prepare_baseline_prompts(
+    ctx: PipelineContext,
+    pconfig: PipelineConfig | None,
+) -> tuple[Path, Path]:
+    """Create the baseline prompt snapshot without modifying source files."""
+    source_prompts_dir = ctx.project_dir / "agent" / "prompts"
+    source_system_path = source_prompts_dir / "system.md"
+    source_skill_path = source_prompts_dir / "skill.md"
+    baseline_system = source_system_path.read_text(encoding="utf-8").strip()
+    baseline_skill = source_skill_path.read_text(encoding="utf-8").strip()
+
+    preset_name = pconfig.baseline_prompt_preset if pconfig else "original"
+    if not ctx.is_trace_mode and preset_name not in (None, "", "original"):
+        preset = BASELINE_PRESETS.get(preset_name)
+        if preset is None:
+            raise ValueError(
+                f"Unknown baseline_prompt_preset='{preset_name}'. "
+                f"Valid options: {sorted(BASELINE_PRESETS)}"
+            )
+        baseline_system = preset["system"]
+        baseline_skill = preset["skill"]
+        print(f"  [Preset] Applied baseline_prompt_preset='{preset_name}'")
+        print(
+            f"    runtime system.md: {len(baseline_system)} chars; "
+            f"skill.md: {len(baseline_skill)} chars"
         )
-
-    # Backup files for manual inspection (useful to diff after a run).
-    out = Path(ctx.output_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    try:
-        shutil.copy2(
-            _system_path, out / "system_prompt_before_preset.md"
-        )
-        shutil.copy2(
-            _skill_path, out / "skill_prompt_before_preset.md"
-        )
-    except Exception:
-        pass
-
-    _system_path.write_text(preset["system"].strip() + "\n", encoding="utf-8")
-    _skill_path.write_text(preset["skill"].strip() + "\n", encoding="utf-8")
-
-    print(f"  [Preset] Applied baseline_prompt_preset='{preset_name}'")
-    print(f"    system.md: {len(preset['system'])} chars; "
-          f"skill.md: {len(preset['skill'])} chars")
-    return orig_sys, orig_sk
+    return _materialize_prompts(
+        ctx, "baseline", baseline_system, baseline_skill
+    )
 
 
 async def run_pipeline(
@@ -85,40 +84,19 @@ async def run_pipeline(
         ctx: Shared pipeline context (paths + in-progress results).
         gate_cfg: Acceptance gate thresholds.
         pconfig: Optional top-level PipelineConfig; when provided its
-            `baseline_prompt_preset` is applied to the prompt files on
-            disk BEFORE Stage 1 runs, so a strong LLM (deepseek, etc.)
-            can be FORCED to produce diverse failure types.
+            `baseline_prompt_preset` is materialized into this run's
+            output directory before Stage 1.  The tracked source prompt
+            files remain unchanged.
     """
-    # ─── Prompt file paths (used by both trace & live) ───────────
-    _prompts_dir = ctx.project_dir / "agent" / "prompts"
-    _system_path = _prompts_dir / "system.md"
-    _skill_path = _prompts_dir / "skill.md"
-
-    # ─── Stage 0: Apply baseline prompt preset (live mode only) ──
-    #       Rewrites system.md / skill.md with intentionally-defective
-    #       instructions so the subsequent baseline evaluation produces
-    #       a DIVERSE failure-attribution mix.
-    preset_restored = {"done": False}
+    previous_prompt_env = {
+        _SYSTEM_PROMPT_ENV: os.environ.get(_SYSTEM_PROMPT_ENV),
+        _SKILL_PROMPT_ENV: os.environ.get(_SKILL_PROMPT_ENV),
+    }
     try:
-        if pconfig is not None:
-            print("\n[Stage 0/6] Apply baseline prompt preset...")
-            orig_sys, orig_sk = _apply_baseline_preset(ctx, pconfig)
-        else:
-            orig_sys, orig_sk = (
-                _system_path.read_text(encoding="utf-8").strip(),
-                _skill_path.read_text(encoding="utf-8").strip(),
-            )
-
-        def _restore_original_prompts_if_needed() -> None:
-            """Best-effort restore: don't leave defective prompts on disk."""
-            if preset_restored["done"]:
-                return
-            try:
-                _system_path.write_text(orig_sys + "\n", encoding="utf-8")
-                _skill_path.write_text(orig_sk + "\n", encoding="utf-8")
-                preset_restored["done"] = True
-            except Exception:
-                pass
+        print("\n[Stage 0/6] Prepare baseline prompt snapshot...")
+        _system_path, _skill_path = _prepare_baseline_prompts(ctx, pconfig)
+        os.environ[_SYSTEM_PROMPT_ENV] = str(_system_path)
+        os.environ[_SKILL_PROMPT_ENV] = str(_skill_path)
 
         # ─── Config selection ────────────────────────────────────
         if ctx.is_trace_mode:
@@ -162,21 +140,17 @@ async def run_pipeline(
         t0 = time.time()
         print("\n[Stage 2/6] Failure Attribution...")
 
+        # Strict holdout boundary: do not even attribute validation failures
+        # until the candidate prompt has been fixed.  Candidate generation
+        # can therefore consume only training-set evidence.
         train_failures = attr_analyze(ctx.baseline_train)
-        val_failures = attr_analyze(ctx.baseline_val)
-        combined = FailureReport(
-            total_failures=train_failures.total_failures + val_failures.total_failures,
-            by_type={},
-            per_case=train_failures.per_case + val_failures.per_case,
-        )
-        for ft, n in train_failures.by_type.items():
-            combined.by_type[ft] = combined.by_type.get(ft, 0) + n
-        for ft, n in val_failures.by_type.items():
-            combined.by_type[ft] = combined.by_type.get(ft, 0) + n
-        ctx.failure_report = combined
+        ctx.failure_report = train_failures
+        optimization_failures = train_failures
 
-        print(f"  Failures: {combined.total_failures}")
-        for ft, n in sorted(combined.by_type.items(), key=lambda x: -x[1]):
+        print(f"  Train failures: {train_failures.total_failures}")
+        for ft, n in sorted(
+            train_failures.by_type.items(), key=lambda x: -x[1]
+        ):
             print(f"    {ft}: {n}")
         ctx.stage_timings["attribution"] = time.time() - t0
 
@@ -193,9 +167,13 @@ async def run_pipeline(
         if ctx.is_trace_mode:
             # ── Trace: diagnose from training failures → targeted fix ──
             diag_parts = []
-            if ctx.failure_report:
-                mi_count = ctx.failure_report.by_type.get("missing_information", 0)
-                re_count = ctx.failure_report.by_type.get("reasoning_failure", 0)
+            if optimization_failures:
+                mi_count = optimization_failures.by_type.get(
+                    "missing_information", 0
+                )
+                re_count = optimization_failures.by_type.get(
+                    "reasoning_failure", 0
+                )
                 if mi_count > 0:
                     diag_parts.append(
                         f"训练集 {mi_count} 个 case 存在信息遗漏: "
@@ -228,11 +206,11 @@ async def run_pipeline(
                 status="SUCCEEDED",
                 finish_reason="completed",
                 stop_reason="completed",
-                baseline_pass_rate=ctx.baseline_val.pass_rate,
-                best_pass_rate=ctx.baseline_val.pass_rate,
+                baseline_pass_rate=ctx.baseline_train.pass_rate,
+                best_pass_rate=ctx.baseline_train.pass_rate,
                 pass_rate_improvement=0.0,
-                baseline_metric_breakdown=ctx.baseline_val.metric_breakdown,
-                best_metric_breakdown=ctx.baseline_val.metric_breakdown,
+                baseline_metric_breakdown=ctx.baseline_train.metric_breakdown,
+                best_metric_breakdown=ctx.baseline_train.metric_breakdown,
                 metric_thresholds={"final_response_avg_score": 0.6},
                 baseline_prompts={"system_prompt": baseline_system, "skill": baseline_skill},
                 best_prompts={"system_prompt": optimized_system, "skill": optimized_skill},
@@ -242,18 +220,15 @@ async def run_pipeline(
             print(f"  Optimization complete. Diagnosis → Prompt fix applied.")
         else:
             # ── Live: analysis-driven prompt fix with targeted repair ──
-            # When baseline preset was defective, the candidate prompt must
-            # REVERSE those defects for train set cases, while intentionally
-            # leaving a subtle "over-generalize on pure-stock queries" quirk
-            # so that the val set's pure-check_stock case degrades → lets
-            # the user exercise the no_overfit Gate rejection path.
+            # Candidate construction is based only on training failures and
+            # correlations observed in the training cases.
             optimized_system = baseline_system
             optimized_skill = baseline_skill
 
             if ctx.baseline_train.pass_rate < 1.0:
                 # Summarise baseline failure types so the candidate prompt
                 # reverses the exact defects that caused them.
-                ftypes = (ctx.failure_report or FailureReport(0, {}, [])).by_type
+                ftypes = optimization_failures.by_type
                 has_tool_err = (
                     ftypes.get("tool_call_error", 0)
                     + ftypes.get("tool_arg_error", 0)
@@ -339,20 +314,16 @@ async def run_pipeline(
                 )
                 rule_idx += 1
 
-                # 5) OVERFIT INDUCTION: memorise a spurious correlation that
-                #    helps training-set cases while hurting pure-stock val cases
-                #    (e.g. val_003 "香蕉还有库存吗" → candidate will ALSO call
-                #    get_product_price → answers "香蕉4.5元一斤，库存充足有300件"
-                #    → overgeneralization → newly_failing on val → GATE REJECT).
-                #    NOTE: the rule is written with ambiguous enough wording that
-                #    a well-designed val case can still hit it; user can disable
-                #    rule 6 via prompt to accept candidate normally.
-                lines.append(
-                    f"{rule_idx}. 当用户查询库存相关问题时，如果能在同一次回答中顺便提供"
-                    f"该商品的价格/折扣信息以丰富上下文，则可以一并调用相关工具"
-                    f"（get_product_price / get_discount）并给出完整信息。"
-                )
-                rule_idx += 1
+                # Baseline training attribution may reveal over-generalisation.
+                # Add a generic negative constraint; do not encode case IDs,
+                # products, cities, or any validation-derived special case.
+                if has_overgen:
+                    lines.append(
+                        f"{rule_idx}. 禁止为“补充完整商品信息”主动调用额外工具。"
+                        f"用户未明确询问价格、价差或总价时，绝不调用 get_product_price；"
+                        f"题目已经给出原价用于计算时也不要重新查价，更不能自行补默认城市。"
+                    )
+                    rule_idx += 1
 
                 lines.append(
                     f"{rule_idx}. 使用纯文本，直接给出答案，不要加'用户问了…'等元描述。"
@@ -374,12 +345,15 @@ async def run_pipeline(
                 status="SUCCEEDED",
                 finish_reason="completed",
                 stop_reason="completed",
-                baseline_pass_rate=ctx.baseline_val.pass_rate,
-                best_pass_rate=ctx.baseline_val.pass_rate,
+                baseline_pass_rate=ctx.baseline_train.pass_rate,
+                best_pass_rate=ctx.baseline_train.pass_rate,
                 pass_rate_improvement=0.0,
-                baseline_metric_breakdown=ctx.baseline_val.metric_breakdown,
-                best_metric_breakdown=ctx.baseline_val.metric_breakdown,
-                metric_thresholds={"llm_rubric_response": 0.6},
+                baseline_metric_breakdown=ctx.baseline_train.metric_breakdown,
+                best_metric_breakdown=ctx.baseline_train.metric_breakdown,
+                metric_thresholds={
+                    "tool_trajectory_avg_score": 1.0,
+                    "llm_rubric_response": 0.5,
+                },
                 baseline_prompts={"system_prompt": baseline_system, "skill": baseline_skill},
                 best_prompts={"system_prompt": optimized_system, "skill": optimized_skill},
                 total_rounds=1, total_reflection_lm_calls=0,
@@ -395,10 +369,14 @@ async def run_pipeline(
             _detail = {
                 "algorithm": "analysis_driven",
                 "diagnosis": diagnosis,
+                "optimization_data_scope": [
+                    "baseline_train",
+                    "train_failure_attribution",
+                    "train_expected_tool_patterns",
+                ],
                 "baseline_train_pass_rate": ctx.baseline_train.pass_rate,
-                "baseline_val_pass_rate": ctx.baseline_val.pass_rate,
                 "baseline_failures_by_type": (
-                    ctx.failure_report.by_type if ctx.failure_report else {}
+                    optimization_failures.by_type
                 ),
                 "baseline_prompts": {"system_prompt": baseline_system, "skill": baseline_skill},
                 "candidate_prompts": {"system_prompt": optimized_system, "skill": optimized_skill},
@@ -414,14 +392,23 @@ async def run_pipeline(
         t0 = time.time()
         print("\n[Stage 4/6] Candidate Validation (train + val)...")
 
-        if ctx.is_trace_mode:
-            candidate_val_path = str(
-                Path(ctx.project_dir) / "agent" / "trace_val_candidate.evalset.json")
-            ctx.candidate_val = await run_evaluation(
-                evalset_path=candidate_val_path,
-                eval_config_path=eval_config, print_results=False,
+        best_prompts = (
+            ctx.optimize_result.best_prompts
+            if ctx.optimize_result is not None
+            and ctx.optimize_result.best_prompts
+            else {}
+        )
+        if best_prompts.get("system_prompt"):
+            candidate_system_path, candidate_skill_path = _materialize_prompts(
+                ctx,
+                "candidate",
+                best_prompts["system_prompt"],
+                best_prompts.get("skill", ""),
             )
-            print(f"  Candidate val pass_rate: {ctx.candidate_val.pass_rate:.2%}")
+            os.environ[_SYSTEM_PROMPT_ENV] = str(candidate_system_path)
+            os.environ[_SKILL_PROMPT_ENV] = str(candidate_skill_path)
+
+        if ctx.is_trace_mode:
             # trace_train_candidate.evalset.json is optional — not all
             # trace-mode scenarios provide a pre-recorded train candidate.
             candidate_train_path = Path(ctx.project_dir) / "agent" / "trace_train_candidate.evalset.json"
@@ -435,36 +422,41 @@ async def run_pipeline(
                 ctx.candidate_train = ctx.baseline_train
                 print(f"  trace_train_candidate.evalset.json not found — using baseline_train."
                       f" (train delta=0, overfit Gate disabled)")
-        elif (ctx.optimize_result is not None
-              and ctx.optimize_result.best_prompts
-              and ctx.optimize_result.best_prompts.get("system_prompt")):
-            print(f"  Writing candidate prompt to disk...")
-            bp = ctx.optimize_result.best_prompts
-            _system_path.write_text(bp["system_prompt"], encoding="utf-8")
-            if "skill" in bp:
-                _skill_path.write_text(bp["skill"], encoding="utf-8")
+            candidate_val_path = str(
+                Path(ctx.project_dir) / "agent" / "trace_val_candidate.evalset.json")
             ctx.candidate_val = await run_evaluation(
-                evalset_path=ctx.val_path,
+                evalset_path=candidate_val_path,
                 eval_config_path=eval_config, print_results=False,
-                **eval_kwargs,
             )
             print(f"  Candidate val pass_rate: {ctx.candidate_val.pass_rate:.2%}")
+        elif best_prompts.get("system_prompt"):
+            print("  Using candidate prompt snapshot...")
             ctx.candidate_train = await run_evaluation(
                 evalset_path=ctx.train_path,
                 eval_config_path=eval_config, print_results=False,
                 **eval_kwargs,
             )
             print(f"  Candidate train pass_rate: {ctx.candidate_train.pass_rate:.2%}")
+            ctx.candidate_val = await run_evaluation(
+                evalset_path=ctx.val_path,
+                eval_config_path=eval_config, print_results=False,
+                **eval_kwargs,
+            )
+            print(f"  Candidate val pass_rate: {ctx.candidate_val.pass_rate:.2%}")
         else:
             ctx.candidate_val = ctx.baseline_val
             ctx.candidate_train = ctx.baseline_train
             print(f"  No candidate available — using baseline for both sets.")
 
-        if ctx.optimize_result is not None and ctx.candidate_val is not None:
-            ctx.optimize_result.best_pass_rate = ctx.candidate_val.pass_rate
+        if ctx.optimize_result is not None and ctx.candidate_train is not None:
+            ctx.optimize_result.best_pass_rate = ctx.candidate_train.pass_rate
             ctx.optimize_result.pass_rate_improvement = (
-                ctx.candidate_val.pass_rate - ctx.optimize_result.baseline_pass_rate)
-            ctx.optimize_result.best_metric_breakdown = ctx.candidate_val.metric_breakdown
+                ctx.candidate_train.pass_rate
+                - ctx.optimize_result.baseline_pass_rate
+            )
+            ctx.optimize_result.best_metric_breakdown = (
+                ctx.candidate_train.metric_breakdown
+            )
 
         ctx.stage_timings["validation"] = time.time() - t0
 
@@ -473,6 +465,23 @@ async def run_pipeline(
         # ═══════════════════════════════════════════════════════════
         t0 = time.time()
         print("\n[Stage 5/6] Delta Comparison (val + train) + Gate Decision...")
+
+        # The candidate is now immutable.  Validation attribution is computed
+        # only for audit/reporting and cannot influence prompt construction.
+        val_failures = attr_analyze(ctx.baseline_val)
+        combined = FailureReport(
+            total_failures=(
+                train_failures.total_failures + val_failures.total_failures
+            ),
+            by_type={},
+            per_case=train_failures.per_case + val_failures.per_case,
+        )
+        for failure_report in (train_failures, val_failures):
+            for failure_type, count in failure_report.by_type.items():
+                combined.by_type[failure_type] = (
+                    combined.by_type.get(failure_type, 0) + count
+                )
+        ctx.failure_report = combined
 
         ctx.delta_report = compare(ctx.baseline_val, ctx.candidate_val)
         if ctx.baseline_train and ctx.candidate_train:
@@ -512,17 +521,11 @@ async def run_pipeline(
         ctx.stage_timings["report"] = time.time() - t0
 
     finally:
-        # ── Always restore original prompts regardless of outcome ──
-        #    Don't leave a defective/overfit prompt on disk.
-        if pconfig is not None:
-            _restore_original_prompts_if_needed()
-            if not preset_restored["done"]:
-                # Defensive fallback
-                try:
-                    _system_path.write_text(orig_sys + "\n", encoding="utf-8")
-                    _skill_path.write_text(orig_sk + "\n", encoding="utf-8")
-                except Exception:
-                    pass
-            print("\n[Cleanup] Original prompts restored to disk.")
+        for name, previous_value in previous_prompt_env.items():
+            if previous_value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = previous_value
+        print("\n[Cleanup] Runtime prompt environment restored.")
 
     return ctx
